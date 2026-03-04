@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: renly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-renly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-renly}
+      POSTGRES_DB: ${POSTGRES_DB:-renly}
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    container_name: renly-api
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./docker/api.Dockerfile
+    ports:
+      - '8000:8000'
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=${JWT_ALGORITHM}
+      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES}
+
+  web:
+    container_name: renly-web
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./docker/web.Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+
+volumes:
+  postgres_data:
+
+networks:
+  default:
+    name: renly-network

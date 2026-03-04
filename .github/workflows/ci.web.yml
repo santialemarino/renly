@@ -1,0 +1,47 @@
+name: CI Web
+
+run-name: 'CI Web by @${{ github.actor }}'
+
+on:
+  workflow_call:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'turbo.json'
+  workflow_dispatch:
+
+jobs:
+  ci-web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --filter web run lint
+
+      - name: Type check
+        run: pnpm --filter web run check-types
+
+      - name: Build UI package
+        run: pnpm build:ui
+
+      - name: Build web
+        run: pnpm build:web

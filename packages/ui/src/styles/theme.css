@@ -1,0 +1,126 @@
+/* Tailwind theme: color/font/spacing/typography tokens (used by index.css) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-body-background: var(--body-background);
+  --color-foreground-alt: var(--foreground-alt);
+  --color-primary-hover: var(--primary-hover);
+  --color-secondary-hover: var(--secondary-hover);
+  --color-accent-0: var(--accent-0);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --color-destructive-border: var(--destructive-border);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-contrast: var(--contrast);
+  --color-backdrop: var(--backdrop);
+  --color-mid: var(--mid);
+  --color-mid-alt: var(--mid-alt);
+  --color-ghost: var(--ghost);
+  --color-ghost-foreground: var(--ghost-foreground);
+  --color-ghost-hover: var(--ghost-hover);
+  --color-outline: var(--outline);
+  --color-outline-hover: var(--outline-hover);
+  --color-outline-active: var(--outline-active);
+  --color-border-0: var(--border-0);
+  --color-border-1: var(--border-1);
+  --color-border-3: var(--border-3);
+  --color-border-4: var(--border-4);
+  --color-border-5: var(--border-5);
+  --color-stone-700: var(--stone-700);
+  --color-schemes-error-container: var(--schemes-error-container);
+  --color-schemes-error: var(--schemes-error);
+
+  /* Fonts (project-specific) */
+  --font-sans:
+    'Plus Jakarta Sans', 'Helvetica Neue', Helvetica, Arial, ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+
+  /* Spacing */
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 44px);
+  --spacing-svh-safe-bottom: calc(100svh - var(--spacing-safe-bottom));
+
+  /* Typography */
+  /* Important: all custom font-sizes below should be added to the customTwMerge config in the utils.ts file */
+  /* Headings */
+  --text-heading-1: 3rem; /* 48px */
+  --text-heading-1--line-height: 1;
+  --text-heading-1--font-weight: 600;
+
+  --text-heading-2: 2rem; /* 32px */
+  --text-heading-2--line-height: 1.2;
+  --text-heading-2--font-weight: 600;
+
+  --text-heading-3: 1.5rem; /* 24px */
+  --text-heading-3--line-height: 1.2;
+  --text-heading-3--font-weight: 600;
+
+  --text-heading-4: 1.25rem; /* 20px */
+  --text-heading-4--line-height: 1.2;
+  --text-heading-4--font-weight: 600;
+
+  --text-heading-5: 1.125rem; /* 18px */
+  --text-heading-5--line-height: 1.2;
+  --text-heading-5--font-weight: 600;
+
+  /* Paragraphs */
+  --text-paragraph: 1rem; /* 16px */
+  --text-paragraph--line-height: 1.5;
+  --text-paragraph--font-weight: 400;
+
+  --text-paragraph-medium: 1rem; /* 16px */
+  --text-paragraph-medium--line-height: 1.5;
+  --text-paragraph-medium--font-weight: 500;
+
+  --text-paragraph-sm: 0.875rem; /* 14px */
+  --text-paragraph-sm--line-height: 1.5;
+  --text-paragraph-sm--font-weight: 400;
+
+  --text-paragraph-sm-medium: 0.875rem; /* 14px */
+  --text-paragraph-sm-medium--line-height: 1.5;
+  --text-paragraph-sm-medium--font-weight: 500;
+
+  --text-paragraph-mini: 0.75rem; /* 12px */
+  --text-paragraph-mini--line-height: 1.5;
+  --text-paragraph-mini--font-weight: 400;
+
+  --text-paragraph-mini-medium: 0.75rem; /* 12px */
+  --text-paragraph-mini-medium--line-height: 1.5;
+  --text-paragraph-mini-medium--font-weight: 500;
+
+  /* Radius */
+  --radius-mini: 0.125rem; /* 2px */
+  --radius-0.5xl: 0.625rem; /* 10px */
+  --radius-1.5xl: 0.875rem; /* 14px */
+}
