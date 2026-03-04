@@ -1,0 +1,11 @@
+# Generated from pyproject.toml — or use: uv sync / pip install -e .
+fastapi>=0.135.0
+uvicorn[standard]>=0.32.0
+sqlmodel>=0.0.22
+asyncpg>=0.30.0
+pydantic-settings>=2.6.0
+alembic>=1.14.0
+httpx>=0.28.0
+apscheduler>=3.10.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4

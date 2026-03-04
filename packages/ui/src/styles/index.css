@@ -1,0 +1,111 @@
+/* Shared UI styles: Tailwind entry, content scan, tokens, base & utilities */
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@import './theme.css';
+
+@source "../../../../apps/**/*.{ts,tsx}";
+@source "../../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Light mode */
+:root {
+  /* Official Shadcn variables */
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.215 27.33);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.985 0 0);
+  --ring: oklch(0.87 0 0);
+  --chart-1: oklch(0.648 0.217 37.071);
+  --chart-2: oklch(0.605 0.107 184.17);
+  --chart-3: oklch(0.397 0.07 227.19);
+  --chart-4: oklch(0.829 0.171 81.04);
+  --chart-5: oklch(0.772 0.173 65.367);
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.372 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.145 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.869 0 0);
+
+  /* Unofficial variables implemented by the design system */
+  --body-background: oklch(1 0 0);
+  --foreground-alt: oklch(0.372 0 0);
+  --primary-hover: oklch(0.3715 0 0);
+  --secondary-hover: oklch(0.9851 0 0);
+  --accent-0: oklch(0.985 0 0);
+  --accent-2: oklch(0.922 0 0);
+  --accent-3: oklch(0.87 0 0);
+  --destructive-foreground: oklch(0.577 0.215 27.33);
+  --destructive-subtle: oklch(0.971 0.013 17.38);
+  --destructive-border: oklch(0.637 0.208 25.33);
+  --border-0: oklch(0.985 0 0);
+  --border-1: oklch(0.97 0 0);
+  --border-3: oklch(0.87 0 0);
+  --border-4: oklch(0.716 0 0);
+  --border-5: oklch(0.556 0 0);
+  --contrast: oklch(0 0 0);
+  --backdrop: oklch(0 0 0 / 60%);
+  --mid: oklch(0.556 0 0);
+  --mid-alt: oklch(0.439 0 0);
+  --ghost: oklch(1 0 0 / 0.01%);
+  --ghost-foreground: oklch(0.372 0 0);
+  --ghost-hover: oklch(0 0 0 / 5%);
+  --outline: oklch(1 0 0 / 10%);
+  --outline-hover: oklch(0 0 0 / 3.33%);
+  --outline-active: oklch(0 0 0 / 5%);
+  --stone-700: oklch(0.327 0.005 55.45);
+  --schemes-error-container: oklch(0.9221 0.0301 22.78);
+  --schemes-error: oklch(0.5013 0.1783 28.7);
+}
+
+@layer base {
+  /* Pointer cursor for interactive elements */
+  button:not([disabled]),
+  [role='button']:not([disabled]) {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  /* Safe area, number inputs, scrollbar hide */
+  .min-h-safe-bottom {
+    min-height: var(--spacing-safe-bottom);
+  }
+  .no-spin-buttons {
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+  }
+  .no-spin-buttons::-webkit-outer-spin-button,
+  .no-spin-buttons::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
