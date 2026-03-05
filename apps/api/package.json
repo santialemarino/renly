@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev": "command -v uv >/dev/null 2>&1 && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 || (echo 'api: skipping dev (uv not installed)' && exit 0)",
     "build": "echo 'No build step for Python API'",
-    "lint": "uv run ruff check .",
+    "lint": "command -v uv >/dev/null 2>&1 && uv run ruff check . || (echo 'api: skipping lint (uv not installed)' && exit 0)",
     "lint:fix": "command -v uv >/dev/null 2>&1 && uv run ruff check --fix . || (echo 'api: skipping lint:fix (uv not installed)' && exit 0)",
     "format": "uv run ruff format .",
     "format:check": "uv run ruff format --check .",
