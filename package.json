@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "dev:docker": "docker compose up -d",
     "build": "turbo run build",
     "start": "turbo run start --parallel",
     "lint": "turbo run lint",
@@ -24,7 +25,9 @@
     "build:ui": "pnpm --filter @repo/ui run build",
     "build:web": "pnpm --filter web run build",
     "build:api": "pnpm --filter api run build",
-    "prepare": "husky"
+    "prepare": "husky",
+    "db:init": "node scripts/db-init.mjs",
+    "db:fork": "node scripts/db-fork.mjs"
   },
   "lint-staged": {
     "apps/web/**/*.{ts,tsx,js,jsx}": [
