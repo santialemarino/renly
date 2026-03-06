@@ -6,10 +6,17 @@
         "name": "next"
       }
     ],
+    "declaration": false,
+    "declarationMap": false,
     "strictNullChecks": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/app/*": ["./app/*"],
+      "@/components/*": ["./components/*"],
+      "@/config/*": ["./config/*"],
+      "@/hooks/*": ["./hooks/*"],
+      "@/lib/*": ["./lib/*"],
+      "@/types/*": ["./types/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],
