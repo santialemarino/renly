@@ -27,18 +27,18 @@ async def get_current_user(
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
         )
-        user_id: int | None = payload.get("sub")
+        raw_sub = payload.get("sub")
+        user_id: int | None = int(raw_sub) if raw_sub is not None else None
         token_epoch: int | None = payload.get("session_epoch")
         if user_id is None or token_epoch is None:
             raise invalid
-    except JWTError:
+    except (JWTError, ValueError):
         raise invalid
 
     user = await session.get(User, user_id)
     if user is None:
         raise invalid
 
-    # Invalidate tokens issued before the last session revocation
     if user.session_epoch != token_epoch:
         raise invalid
 
