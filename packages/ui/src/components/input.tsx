@@ -9,11 +9,22 @@ interface InputProps extends Omit<React.ComponentProps<'input'>, 'prefix'> {
   suffix?: React.ReactNode;
   containerClassName?: string;
   blue?: boolean;
+  blueEye?: boolean;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   (
-    { className, containerClassName, startIcon, prefix, suffix, type, blue = false, ...props },
+    {
+      className,
+      containerClassName,
+      startIcon,
+      prefix,
+      suffix,
+      type,
+      blue = false,
+      blueEye = false,
+      ...props
+    },
     ref,
   ) => {
     const hasError = props['aria-invalid'];
@@ -77,8 +88,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
               'absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all hover:scale-105',
               hasError
                 ? 'text-destructive'
-                : blue
-                  ? 'text-blue-700 hover:text-blue-800'
+                : blue || blueEye
+                  ? 'text-blue-800'
                   : 'text-muted-foreground hover:text-foreground',
             )}
           >

@@ -38,4 +38,9 @@ jobs:
         run: uv run ruff check .
 
       - name: Verify app imports
+        env:
+          # Dummy values — pydantic-settings requires these fields to be present at import time.
+          # No DB connection or JWT signing happens during this step.
+          DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/renly
+          JWT_SECRET: ci-secret
         run: uv run python -c "from app.main import app"
