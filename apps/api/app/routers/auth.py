@@ -21,10 +21,12 @@ def _verify_password(plain: str, hashed: str) -> bool:
 def _hash_password(plain: str) -> str:
     return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
 
+
 class RegisterRequest(BaseModel):
     name: str
     email: str
     password: str
+
 
 class LoginRequest(BaseModel):
     email: str
