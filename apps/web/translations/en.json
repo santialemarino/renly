@@ -1,6 +1,39 @@
 {
   "common": {
-    "appName": "Renly"
+    "appName": "Renly",
+    "form": {
+      "errors": {
+        "required": "This field is required",
+        "invalidEmail": "Please enter a valid email address",
+        "passwordMaxLength": "Password must be less than {length} characters"
+      }
+    }
+  },
+  "login": {
+    "metadata": {
+      "title": "Log In",
+      "description": "Log in to your account"
+    },
+    "title": "Log in",
+    "form": {
+      "email": {
+        "label": "Email",
+        "placeholder": "Enter your email"
+      },
+      "password": {
+        "label": "Password",
+        "placeholder": "Enter your password"
+      },
+      "cta": {
+        "label": "Log in",
+        "loading": "Logging in…"
+      },
+      "errors": {
+        "invalid": "Invalid email or password",
+        "authenticationFailed": "Authentication failed. Please try again.",
+        "serverError": "Service unavailable. Please try again later."
+      }
+    }
   },
   "home": {
     "title": "Renly",

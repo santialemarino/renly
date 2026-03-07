@@ -1,6 +1,39 @@
 {
   "common": {
-    "appName": "Renly"
+    "appName": "Renly",
+    "form": {
+      "errors": {
+        "required": "Este campo es requerido",
+        "invalidEmail": "Ingresa un correo electrónico válido",
+        "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres"
+      }
+    }
+  },
+  "login": {
+    "metadata": {
+      "title": "Iniciar sesión",
+      "description": "Inicia sesión en tu cuenta"
+    },
+    "title": "Iniciar sesión",
+    "form": {
+      "email": {
+        "label": "Correo electrónico",
+        "placeholder": "Ingresa tu correo electrónico"
+      },
+      "password": {
+        "label": "Contraseña",
+        "placeholder": "Ingresa tu contraseña"
+      },
+      "cta": {
+        "label": "Iniciar sesión",
+        "loading": "Iniciando sesión…"
+      },
+      "errors": {
+        "invalid": "Correo o contraseña incorrectos",
+        "authenticationFailed": "Error de autenticación. Intenta de nuevo.",
+        "serverError": "Servicio no disponible. Intenta de nuevo más tarde."
+      }
+    }
   },
   "home": {
     "title": "Renly",
