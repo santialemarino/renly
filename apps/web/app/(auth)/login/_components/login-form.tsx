@@ -42,14 +42,14 @@ export function LoginForm() {
         const message =
           res.error === 'CredentialsSignin'
             ? t('form.errors.invalid')
-            : t('form.errors.serverError');
+            : tCommon('form.errors.serverError');
         form.setError('password', { message });
         return;
       }
 
       router.push(ROUTES.home);
     } catch {
-      form.setError('password', { message: t('form.errors.authenticationFailed') });
+      form.setError('password', { message: tCommon('form.errors.serverError') });
     }
   };
 

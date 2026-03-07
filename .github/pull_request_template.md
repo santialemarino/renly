@@ -15,6 +15,6 @@
 <!--- Copy & paste from the task. Check items that pass. -->
 <!--- PR is ready for review when all items are checked -->
 
-## Screenshot & Records
+## Screenshots & Recordings
 
 <!--- Add screenshots/videos of UI changes -->

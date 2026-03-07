@@ -5,7 +5,11 @@
       "errors": {
         "required": "This field is required",
         "invalidEmail": "Please enter a valid email address",
-        "passwordMaxLength": "Password must be less than {length} characters"
+        "passwordMinLength": "Password must be at least {length} characters",
+        "passwordMaxLength": "Password must be less than {length} characters",
+        "passwordRequirements": "Password does not meet the requirements",
+        "passwordMismatch": "Passwords do not match",
+        "serverError": "Something went wrong. Please try again later."
       }
     }
   },
@@ -29,9 +33,67 @@
         "loading": "Logging in…"
       },
       "errors": {
-        "invalid": "Invalid email or password",
-        "authenticationFailed": "Authentication failed. Please try again.",
-        "serverError": "Service unavailable. Please try again later."
+        "invalid": "Invalid email or password"
+      },
+      "signup": {
+        "title": "Don't have an account?",
+        "cta": "Sign up"
+      }
+    }
+  },
+  "signup": {
+    "metadata": {
+      "title": "Sign Up",
+      "description": "Create your Renly account"
+    },
+    "title": "Create account",
+    "form": {
+      "name": {
+        "label": "Full name",
+        "placeholder": "Enter your full name"
+      },
+      "email": {
+        "label": "Email",
+        "placeholder": "Enter your email"
+      },
+      "password": {
+        "label": "Password",
+        "placeholder": "Create a password"
+      },
+      "confirmPassword": {
+        "label": "Confirm password",
+        "placeholder": "Repeat your password"
+      },
+      "cta": {
+        "label": "Create account",
+        "loading": "Creating account…"
+      },
+      "login": {
+        "title": "Already have an account?",
+        "cta": "Log in"
+      },
+      "errors": {
+        "emailTaken": "This email is already registered"
+      }
+    },
+    "redirecting": {
+      "title": "Account created!",
+      "description": "Logging you in…"
+    },
+    "passwordMeter": {
+      "title": "Strength",
+      "strength": {
+        "strong": "Strong",
+        "moderate": "Moderate",
+        "weak": "Weak"
+      },
+      "requirements": {
+        "title": "Password must include:",
+        "characters": "At least 8 characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "number": "One number",
+        "special": "One special character (!@#$%^&*)"
       }
     }
   },
