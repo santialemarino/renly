@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
 import { LoginForm } from '@/app/(auth)/login/_components/login-form';
 import { ROUTES } from '@/config/routes';
 import { getSession } from '@/lib/auth';
@@ -27,6 +27,12 @@ export default async function LoginPage() {
       <CardContent>
         <LoginForm />
       </CardContent>
+      <CardFooter className="justify-center gap-x-1 text-sm text-muted-foreground">
+        <span>{t('form.signup.title')}</span>
+        <a href={ROUTES.auth.signup} className="text-blue-700 hover:underline font-medium">
+          {t('form.signup.cta')}
+        </a>
+      </CardFooter>
     </Card>
   );
 }

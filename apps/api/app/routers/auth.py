@@ -21,6 +21,10 @@ def _verify_password(plain: str, hashed: str) -> bool:
 def _hash_password(plain: str) -> str:
     return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
 
+class RegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
 
 class LoginRequest(BaseModel):
     email: str
@@ -48,6 +52,31 @@ def _create_access_token(user: User) -> str:
         "exp": expire,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register(body: RegisterRequest, session: SessionDep) -> TokenResponse:
+    result = await session.execute(select(User).where(User.email == body.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email already registered",
+        )
+
+    user = User(
+        name=body.name,
+        email=body.email,
+        password_hash=_hash_password(body.password),
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+
+    token = _create_access_token(user)
+    return TokenResponse(
+        access_token=token,
+        expires_in=settings.jwt_expire_minutes * 60,
+    )
 
 
 @router.post("/login", response_model=TokenResponse)

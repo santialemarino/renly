@@ -5,7 +5,11 @@
       "errors": {
         "required": "Este campo es requerido",
         "invalidEmail": "Ingresa un correo electrónico válido",
-        "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres"
+        "passwordMinLength": "La contraseña debe tener al menos {length} caracteres",
+        "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
+        "passwordRequirements": "La contraseña no cumple los requisitos",
+        "passwordMismatch": "Las contraseñas no coinciden",
+        "serverError": "Algo salió mal. Intenta de nuevo más tarde."
       }
     }
   },
@@ -29,9 +33,67 @@
         "loading": "Iniciando sesión…"
       },
       "errors": {
-        "invalid": "Correo o contraseña incorrectos",
-        "authenticationFailed": "Error de autenticación. Intenta de nuevo.",
-        "serverError": "Servicio no disponible. Intenta de nuevo más tarde."
+        "invalid": "Correo o contraseña incorrectos"
+      },
+      "signup": {
+        "title": "No tienes una cuenta?",
+        "cta": "Regístrate"
+      }
+    }
+  },
+  "signup": {
+    "metadata": {
+      "title": "Registrarse",
+      "description": "Crea tu cuenta en Renly"
+    },
+    "title": "Crear cuenta",
+    "form": {
+      "name": {
+        "label": "Nombre completo",
+        "placeholder": "Ingresa tu nombre completo"
+      },
+      "email": {
+        "label": "Correo electrónico",
+        "placeholder": "Ingresa tu correo electrónico"
+      },
+      "password": {
+        "label": "Contraseña",
+        "placeholder": "Crea una contraseña"
+      },
+      "confirmPassword": {
+        "label": "Confirmar contraseña",
+        "placeholder": "Repite tu contraseña"
+      },
+      "cta": {
+        "label": "Crear cuenta",
+        "loading": "Creando cuenta…"
+      },
+      "login": {
+        "title": "Ya tienes una cuenta?",
+        "cta": "Iniciar sesión"
+      },
+      "errors": {
+        "emailTaken": "Este correo ya está registrado"
+      }
+    },
+    "redirecting": {
+      "title": "Cuenta creada!",
+      "description": "Iniciando sesión…"
+    },
+    "passwordMeter": {
+      "title": "Fortaleza",
+      "strength": {
+        "strong": "Fuerte",
+        "moderate": "Moderada",
+        "weak": "Débil"
+      },
+      "requirements": {
+        "title": "La contraseña debe incluir:",
+        "characters": "Al menos 8 caracteres",
+        "uppercase": "Una letra mayúscula",
+        "lowercase": "Una letra minúscula",
+        "number": "Un número",
+        "special": "Un carácter especial (!@#$%^&*)"
       }
     }
   },
