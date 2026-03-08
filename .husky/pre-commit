@@ -1,1 +1,3 @@
 pnpm lint-staged
+cd apps/api && uv run python -c "from app.main import app" || exit 1
+pnpm --filter web run check-types || exit 1
