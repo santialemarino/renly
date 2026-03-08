@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -18,7 +19,7 @@ class ExchangeRate(SQLModel, table=True):
     __table_args__ = (UniqueConstraint("date", "pair"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    date: date = Field(description="Rate date.")
+    date: date_type = Field(description="Rate date.")
     pair: ExchangeRatePair = Field(description="Currency pair.")
     rate: Decimal = Field(max_digits=18, decimal_places=6, description="Exchange rate.")
     source: str = Field(default="manual", max_length=50, description="Data source.")

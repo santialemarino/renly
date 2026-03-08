@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -21,7 +22,7 @@ class Transaction(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
-    date: date = Field(description="Transaction date.")
+    date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount (positive).")
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(description="Transaction kind.")

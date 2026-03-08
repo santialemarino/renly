@@ -1,4 +1,5 @@
-from datetime import date, datetime
+from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 
 from sqlmodel import Field, SQLModel, UniqueConstraint
@@ -13,7 +14,7 @@ class InvestmentSnapshot(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
-    date: date = Field(description="Snapshot date.")
+    date: date_type = Field(description="Snapshot date.")
     value: Decimal = Field(max_digits=18, decimal_places=2, description="Value on this date.")
     currency: Currency = Field(description="Value currency.")
     notes: str | None = Field(default=None)
