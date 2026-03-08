@@ -6,15 +6,16 @@ from sqlmodel import Field, SQLModel, UniqueConstraint
 from app.models.investment import Currency
 
 
+# Point-in-time value of an investment (one per investment per date).
 class InvestmentSnapshot(SQLModel, table=True):
     __tablename__ = "investment_snapshots"
     __table_args__ = (UniqueConstraint("investment_id", "date"),)
 
     id: int | None = Field(default=None, primary_key=True)
-    investment_id: int = Field(foreign_key="investments.id")
-    date: date
-    value: Decimal = Field(max_digits=18, decimal_places=2)
-    currency: Currency
+    investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
+    date: date = Field(description="Snapshot date.")
+    value: Decimal = Field(max_digits=18, decimal_places=2, description="Value on this date.")
+    currency: Currency = Field(description="Value currency.")
     notes: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
