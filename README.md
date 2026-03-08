@@ -55,21 +55,23 @@ pnpm dev
 | `pnpm lint:fix`         | ESLint — auto-fix                            |
 | `pnpm format`           | Format everything (web + api)                |
 | `pnpm format:check`     | Check formatting — fails if unformatted (CI) |
-| `pnpm format:web`       | Prettier write — JS/TS/CSS/JSON/MD           |
-| `pnpm format:check:web` | Prettier check (CI)                          |
 | `pnpm format:api`       | Ruff format on `apps/api`                    |
 | `pnpm format:check:api` | Ruff format check on `apps/api` (CI)         |
-| `pnpm check-types`      | TypeScript type check                        |
+| `pnpm format:web`       | Prettier write — JS/TS/CSS/JSON/MD           |
+| `pnpm format:check:web` | Prettier check (CI)                          |
+| `pnpm check:api`        | API app import check                         |
+| `pnpm check:web`        | Web TypeScript type check                    |
+| `pnpm check-types`      | TypeScript type check (all workspaces/turbo) |
 
 ## Code quality
 
-On every `git commit`, Husky runs lint-staged automatically:
+On every `git commit`, Husky runs:
 
-- **Prettier** formats staged JS/TS/CSS/JSON/MD files and sorts imports via `@ianvs/prettier-plugin-sort-imports`.
-- **ESLint** auto-fixes staged TS/TSX files in `apps/web` and `packages/ui`.
-- Formatted files are re-staged before the commit is finalized, so the commit always contains clean code.
+- **lint-staged** — Prettier on staged JS/TS/CSS/JSON/MD (with import sort via `@ianvs/prettier-plugin-sort-imports`); ESLint fix on staged TS/TSX in `apps/web` and `packages/ui`. Formatted files are re-staged.
+- **API** — `pnpm check:api` so the app loads (runs from `apps/api`).
+- **Web** — `pnpm check:web` so TypeScript compiles.
 
-To run manually: `pnpm format` (format everything), `pnpm lint:fix` (ESLint fix).
+To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:web`.
 
 ## Docker
 
