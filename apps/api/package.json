@@ -9,6 +9,7 @@
     "lint:fix": "command -v uv >/dev/null 2>&1 && uv run ruff check --fix . || (echo 'api: skipping lint:fix (uv not installed)' && exit 0)",
     "format": "uv run ruff format .",
     "format:check": "uv run ruff format --check .",
-    "check-types": "echo 'No typecheck for Python'"
+    "check-types": "echo 'No typecheck for Python'",
+    "check": "uv run python -c \"from app.main import app\""
   }
 }
