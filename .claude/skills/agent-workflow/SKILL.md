@@ -40,3 +40,4 @@ Docs describe **how things work now**, not “what we changed” (no changelog-s
 - **After big refactors:** Run `pnpm check:api` and `pnpm check:web` once to catch import/model/type errors before the user hits pre-commit.
 - **Hooks:** Don’t remove or weaken pre-commit checks without a clear reason; they’re there so CI and local stay aligned.
 - **Paths and config:** API uses `app.*` and `apps/api` as cwd; web uses `@/` aliases and `config/routes.ts`. Follow the structure and skills so new code lands in the right place.
+- **Empty folders:** When adding the first real file to a folder that only had a `.gitkeep`, remove the `.gitkeep` so the folder is no longer “empty” and the new file is the only content.

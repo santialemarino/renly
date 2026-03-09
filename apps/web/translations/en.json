@@ -1,6 +1,14 @@
 {
   "common": {
     "appName": "Renly",
+    "notFound": {
+      "title": "Page not available",
+      "description": "The requested information is not available at this time.\nWe invite you to return to the homepage.",
+      "goHomepage": {
+        "cta": "Go to Homepage",
+        "loading": "Redirecting to homepage..."
+      }
+    },
     "form": {
       "errors": {
         "required": "This field is required",
