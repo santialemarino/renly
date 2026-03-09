@@ -31,6 +31,10 @@ Request flow: **router → service → repository → DB**.
 
 Rule: if it’s used by one service/entity only → **helper** file next to that feature. If it’s generic and reusable across features → **utils** (under `app/utils/` or under the layer if layer-scoped).
 
+## Order in **init** and multi-export files
+
+In every `__init__.py` or file that imports/exports multiple symbols (e.g. singletons like `user_repository`, `investment_repository`), list them **alphabetically** (imports and `__all__`). Exception: when a specific order is explicitly defined for a specific file (that order will be defined in this skill), follow that order instead.
+
 ## Directory layout (apps/api/app/)
 
 ```
