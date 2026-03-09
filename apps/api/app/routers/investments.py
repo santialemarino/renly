@@ -131,9 +131,7 @@ async def list_transactions(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> list[TransactionResponse]:
-    transactions = await investment_service.list_transactions(
-        session, investment_id, current_user
-    )
+    transactions = await investment_service.list_transactions(session, investment_id, current_user)
     return [TransactionResponse.model_validate(t) for t in transactions]
 
 
@@ -193,9 +191,7 @@ async def update_transaction(
 ) -> TransactionResponse:
     payload = body.model_dump(exclude_unset=True)
     payload_rename = {"date": "transaction_date", "type": "tx_type"}
-    service_kwargs = {
-        payload_rename.get(k, k): v for k, v in payload.items()
-    }
+    service_kwargs = {payload_rename.get(k, k): v for k, v in payload.items()}
     transaction = await investment_service.update_transaction(
         session, investment_id, transaction_id, current_user, **service_kwargs
     )

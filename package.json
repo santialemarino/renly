@@ -40,6 +40,9 @@
       "pnpm --filter @repo/ui run lint:fix",
       "prettier --write"
     ],
+    "apps/api/**/*.py": [
+      "pnpm --filter api run format"
+    ],
     "**/*.{json,md,css,scss,html,yml,yaml,mjs}": [
       "prettier --write"
     ]

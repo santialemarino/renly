@@ -22,9 +22,7 @@ async def get_by_id(
     session: AsyncSession,
     transaction_id: int,
 ) -> Transaction | None:
-    result = await session.execute(
-        select(Transaction).where(Transaction.id == transaction_id)
-    )
+    result = await session.execute(select(Transaction).where(Transaction.id == transaction_id))
     return result.scalar_one_or_none()
 
 
