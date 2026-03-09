@@ -18,7 +18,7 @@ description: API method order, comments, and entity conventions (schemas, models
 ## Pattern per layer
 
 - **Router:** Validate body (schemas), call service, return response or raise HTTPException. No business logic, no DB.
-- **Service:** Orchestrate use case, call repository; pure functions for crypto/validation. No HTTP, no raw SQL.
+- **Service:** Orchestrate use case, call repository; pure functions for crypto/validation. No HTTP, no raw SQL. Raise domain errors (e.g. `app.domain.NotFoundError`); the HTTP layer (exception handler or router) maps them to status codes.
 - **Repository:** Session + model only: queries, add, commit, refresh. No business rules.
 
 ## Schemas (Pydantic)
