@@ -1,3 +1,5 @@
+# Data models
+
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_target import InvestmentTarget

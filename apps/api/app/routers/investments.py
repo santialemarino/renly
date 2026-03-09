@@ -7,6 +7,7 @@ from app.schemas.investment import (
     InvestmentResponse,
     InvestmentUpdate,
 )
+from app.schemas.snapshot import SnapshotCreate, SnapshotResponse
 from app.services import investment_service
 
 router = APIRouter(prefix="/investments", tags=["investments"])
@@ -78,3 +79,38 @@ async def delete_investment(
     session: SessionDep,
 ) -> None:
     await investment_service.delete_investment(session, investment_id, current_user)
+
+
+# Lists snapshots for an investment. Returns 404 if investment not found or not owned.
+@router.get("/{investment_id}/snapshots", response_model=list[SnapshotResponse])
+async def list_snapshots(
+    investment_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> list[SnapshotResponse]:
+    snapshots = await investment_service.list_snapshots(session, investment_id, current_user)
+    return [SnapshotResponse.model_validate(s) for s in snapshots]
+
+
+# Creates or updates a snapshot for the investment and date. One per (investment, date).
+@router.post(
+    "/{investment_id}/snapshots",
+    response_model=SnapshotResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_snapshot(
+    investment_id: int,
+    body: SnapshotCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> SnapshotResponse:
+    snapshot = await investment_service.upsert_snapshot(
+        session,
+        investment_id,
+        current_user,
+        snapshot_date=body.date,
+        value=body.value,
+        currency=body.currency,
+        notes=body.notes,
+    )
+    return SnapshotResponse.model_validate(snapshot)

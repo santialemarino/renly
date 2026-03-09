@@ -48,6 +48,7 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     await session.commit()
 
 
+# Namespace to call repository functions (e.g. investment_repository.list_by_user).
 class InvestmentRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
@@ -55,4 +56,5 @@ class InvestmentRepository:
     save = staticmethod(save)
 
 
+# Singleton used by services to access investment persistence.
 investment_repository = InvestmentRepository()

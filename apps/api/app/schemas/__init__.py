@@ -1,1 +1,1 @@
-# Schemas — auth, investments, metrics, exchange_rates
+# Schemas - HTTP contract
