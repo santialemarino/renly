@@ -10,7 +10,7 @@ description: Orchestrator workflow for agents working in this repo. Read this fi
 Before doing substantive work, read and apply the relevant skills so your changes follow repo conventions:
 
 - **api-layering** — Where to create files in `apps/api` (routers, services, repositories, schemas, etc.) and request flow.
-- **api-methods** — Method order and comments in API code.
+- **api-methods-entities** — Method order, comments, and entity conventions (schemas, models, domain) in API code.
 - **web-structure** — Where to create pages, components, and config in `apps/web`; directory layout.
 - **web-components-pages** — How to add a page or component; colocation; order and style; comments.
 
