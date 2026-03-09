@@ -1,9 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
-from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain import NotFoundError
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -25,7 +25,7 @@ async def list_investments(
     return await investment_repository.list_by_user(session, user.id, active_only=active_only)
 
 
-# Fetches one investment by id. Raises 404 if not found or not owned by user.
+# Fetches one investment by id. Raises NotFoundError if not found or not owned by user.
 async def get_investment(
     session: AsyncSession,
     investment_id: int,
@@ -33,10 +33,7 @@ async def get_investment(
 ) -> Investment:
     inv = await investment_repository.get_by_id(session, investment_id, user.id)
     if inv is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Investment not found",
-        )
+        raise NotFoundError("Investment not found")
     return inv
 
 
@@ -153,7 +150,7 @@ async def list_transactions(
     return await transaction_repository.list_by_investment(session, investment_id)
 
 
-# Fetches one transaction by id. Raises 404 if investment or transaction not found or not owned.
+# Fetches one transaction by id. Raises NotFoundError if investment/transaction not found/owned.
 async def get_transaction(
     session: AsyncSession,
     investment_id: int,
@@ -163,10 +160,7 @@ async def get_transaction(
     await get_investment(session, investment_id, user)
     tx = await transaction_repository.get_by_id(session, transaction_id)
     if tx is None or tx.investment_id != investment_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Transaction not found",
-        )
+        raise NotFoundError("Transaction not found")
     return tx
 
 

@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
+from app.domain import NotFoundError
 from app.routers import auth, investments
 
 app = FastAPI(
@@ -20,6 +22,14 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(investments.router)
+
+
+@app.exception_handler(NotFoundError)
+async def not_found_exception_handler(_request, exc: NotFoundError):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": exc.message},
+    )
 
 
 @app.get("/health")
