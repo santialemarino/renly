@@ -20,6 +20,11 @@ description: How to create a component or a page in the Renly web app (Next.js A
 - **Client interactivity:** Add `'use client'` at the top. Use for forms, hooks, event handlers, or anything that uses browser APIs or React state.
 - **Importing:** Always import components (and everything else) using aliases defined in `package.json` - not using `.` or `..` - (e.g. `@/app/(auth)/login/_components/login-form`).
 
+## Icons
+
+- **Prefer Lucide:** Use `lucide-react` when an icon exists there (e.g. `import { Check, Eye, XIcon } from 'lucide-react'`). Same usage pattern as in the repo: import by name, render as `<IconName className="..." />`.
+- **Custom SVG when needed:** When no Lucide icon fits, add a `.svg` file under `public/icons/` (or a subfolder, e.g. `public/icons/illustrations/`) and import it **as a React component**. The repo uses `@svgr/webpack` so `import MyIcon from 'public/icons/my-icon.svg'` gives a component; render as `<MyIcon className="..." />`. Do not use `<Image src="/icons/...">` for icons/illustrations that need to be styled or scaled with CSS.
+
 ## Colocate feature files
 
 Keep all feature-specific modules in the same folder as the page that uses them: `actions.ts`, `schema.ts`, `form-schema.ts`, etc. Same hierarchy as the route — e.g. `app/(auth)/login/actions.ts`, `app/(auth)/login/form-schema.ts`, `app/(protected)/dashboard/actions.ts`. Do not put them in a global `lib/` or `app/` root unless they are shared across multiple routes.
@@ -45,6 +50,22 @@ Keep all feature-specific modules in the same folder as the page that uses them:
 9. **Return** — The JSX return last.
 
 Keep the page thin: put UI in components. One main component per file; small helpers can live in the same file or a sibling. Use `ROUTES` and translation keys consistently.
+
+## Tailwind class order (className)
+
+Use this order so classes are predictable and easy to scan. Apply in `apps/web` (and in `packages/ui` when adding or editing components).
+
+1. **Display & flex** — `flex`, `grid`, `flex-col`, `flex-1`, `flex-wrap`, etc.
+2. **Sizing** — `w-*`, `min-w-*`, `max-w-*`, `h-*`, `min-h-*`, `max-h-*`, `size-*`, `min-h-screen`, etc.
+3. **Alignment** — `items-*`, `justify-*`, `self-*`, `content-*`.
+4. **Padding** — `p-*`, `px-*`, `py-*`, `pt-*`, etc.
+5. **Gap** — Prefer **`gap-x-*` or `gap-y-*`** instead of `gap-*` unless the layout truly needs the same gap on both axes (e.g. a small grid where both dimensions matter). For a flex column, use `gap-y-*`; for a row, use `gap-x-*`.
+6. **Background & border** — `bg-*`, `border`, `border-*`.
+7. **Rounded** — `rounded-*`.
+8. **State & interactive** — `hover:*`, `active:*`, `focus:*`, `focus-visible:*`, `disabled:*`, etc.
+9. **Typography & misc** — `text-*`, `font-*`, `leading-*`, `whitespace-*`, `overflow-*`, `relative`, `absolute`, etc.
+
+Example: `flex flex-col min-h-screen items-center justify-center px-6 gap-y-8 bg-muted/30 rounded-lg hover:bg-muted/50 text-foreground`.
 
 ## Comments
 

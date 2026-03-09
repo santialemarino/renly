@@ -34,7 +34,7 @@ export default async function RootLayout({
         )}
       >
         <NextIntlClientProvider messages={messages}>
-          <div className="relative flex min-h-safe-bottom md:min-h-screen flex-col overflow-x-hidden">
+          <div className="flex flex-col min-h-safe-bottom md:min-h-screen overflow-x-hidden relative">
             <div className="grid min-h-safe-bottom md:min-h-screen w-full">{children}</div>
           </div>
         </NextIntlClientProvider>
