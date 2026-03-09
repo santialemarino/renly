@@ -6,8 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
+from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
-from app.repositories import investment_repository, snapshot_repository
+from app.repositories import (
+    investment_repository,
+    snapshot_repository,
+    transaction_repository,
+)
 
 
 # Lists investments for the user. Returns only active by default.
@@ -136,3 +141,94 @@ async def upsert_snapshot(
         notes=notes,
     )
     return await snapshot_repository.create(session, snapshot)
+
+
+# Lists transactions for an investment. Raises 404 if investment not found or not owned.
+async def list_transactions(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+) -> list[Transaction]:
+    await get_investment(session, investment_id, user)
+    return await transaction_repository.list_by_investment(session, investment_id)
+
+
+# Fetches one transaction by id. Raises 404 if investment or transaction not found or not owned.
+async def get_transaction(
+    session: AsyncSession,
+    investment_id: int,
+    transaction_id: int,
+    user: User,
+) -> Transaction:
+    await get_investment(session, investment_id, user)
+    tx = await transaction_repository.get_by_id(session, transaction_id)
+    if tx is None or tx.investment_id != investment_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Transaction not found",
+        )
+    return tx
+
+
+# Creates a new transaction for the investment.
+async def create_transaction(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+    *,
+    transaction_date: date,
+    amount: Decimal,
+    currency: Currency,
+    tx_type: TransactionType,
+    notes: str | None = None,
+) -> Transaction:
+    await get_investment(session, investment_id, user)
+    transaction = Transaction(
+        investment_id=investment_id,
+        date=transaction_date,
+        amount=amount,
+        currency=currency,
+        type=tx_type,
+        notes=notes,
+    )
+    return await transaction_repository.create(session, transaction)
+
+
+# Updates an existing transaction. Only provided fields are updated. Returns updated transaction.
+async def update_transaction(
+    session: AsyncSession,
+    investment_id: int,
+    transaction_id: int,
+    user: User,
+    *,
+    transaction_date: date | None = None,
+    amount: Decimal | None = None,
+    currency: Currency | None = None,
+    tx_type: TransactionType | None = None,
+    notes: str | None = None,
+) -> Transaction:
+    tx = await get_transaction(session, investment_id, transaction_id, user)
+    if transaction_date is not None:
+        tx.date = transaction_date
+    if amount is not None:
+        tx.amount = amount
+    if currency is not None:
+        tx.currency = currency
+    if tx_type is not None:
+        tx.type = tx_type
+    if notes is not None:
+        tx.notes = notes
+    await transaction_repository.save(session, tx)
+    await session.refresh(tx)
+    return tx
+
+
+# Deletes a transaction.
+async def delete_transaction(
+    session: AsyncSession,
+    investment_id: int,
+    transaction_id: int,
+    user: User,
+) -> None:
+    tx = await get_transaction(session, investment_id, transaction_id, user)
+    await transaction_repository.delete(session, tx)
