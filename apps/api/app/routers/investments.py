@@ -8,6 +8,11 @@ from app.schemas.investment import (
     InvestmentUpdate,
 )
 from app.schemas.snapshot import SnapshotCreate, SnapshotResponse
+from app.schemas.transaction import (
+    TransactionCreate,
+    TransactionResponse,
+    TransactionUpdate,
+)
 from app.services import investment_service
 
 router = APIRouter(prefix="/investments", tags=["investments"])
@@ -114,3 +119,100 @@ async def create_snapshot(
         notes=body.notes,
     )
     return SnapshotResponse.model_validate(snapshot)
+
+
+# Lists transactions for an investment. Returns 404 if investment not found or not owned.
+@router.get(
+    "/{investment_id}/transactions",
+    response_model=list[TransactionResponse],
+)
+async def list_transactions(
+    investment_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> list[TransactionResponse]:
+    transactions = await investment_service.list_transactions(
+        session, investment_id, current_user
+    )
+    return [TransactionResponse.model_validate(t) for t in transactions]
+
+
+# Returns a single transaction by id. Returns 404 if not found or not owned.
+@router.get(
+    "/{investment_id}/transactions/{transaction_id}",
+    response_model=TransactionResponse,
+)
+async def get_transaction(
+    investment_id: int,
+    transaction_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> TransactionResponse:
+    transaction = await investment_service.get_transaction(
+        session, investment_id, transaction_id, current_user
+    )
+    return TransactionResponse.model_validate(transaction)
+
+
+# Creates a new transaction for the investment.
+@router.post(
+    "/{investment_id}/transactions",
+    response_model=TransactionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_transaction(
+    investment_id: int,
+    body: TransactionCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> TransactionResponse:
+    transaction = await investment_service.create_transaction(
+        session,
+        investment_id,
+        current_user,
+        transaction_date=body.date,
+        amount=body.amount,
+        currency=body.currency,
+        tx_type=body.type,
+        notes=body.notes,
+    )
+    return TransactionResponse.model_validate(transaction)
+
+
+# Updates a transaction. Only provided fields are updated. Returns 404 if not found.
+@router.put(
+    "/{investment_id}/transactions/{transaction_id}",
+    response_model=TransactionResponse,
+)
+async def update_transaction(
+    investment_id: int,
+    transaction_id: int,
+    body: TransactionUpdate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> TransactionResponse:
+    payload = body.model_dump(exclude_unset=True)
+    payload_rename = {"date": "transaction_date", "type": "tx_type"}
+    service_kwargs = {
+        payload_rename.get(k, k): v for k, v in payload.items()
+    }
+    transaction = await investment_service.update_transaction(
+        session, investment_id, transaction_id, current_user, **service_kwargs
+    )
+    return TransactionResponse.model_validate(transaction)
+
+
+# Deletes a transaction. Returns 204.
+@router.delete(
+    "/{investment_id}/transactions/{transaction_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_transaction(
+    investment_id: int,
+    transaction_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> None:
+    await investment_service.delete_transaction(
+        session, investment_id, transaction_id, current_user
+    )
