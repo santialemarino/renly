@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
-from app.routers import auth
+from app.routers import auth, investments
 
 app = FastAPI(
     title="Renly API",
@@ -19,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(investments.router)
 
 
 @app.get("/health")
