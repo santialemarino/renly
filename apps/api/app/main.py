@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
 from app.domain import NotFoundError
 from app.routers import auth, groups, investments
+from app.routers import settings as settings_router
 
 app = FastAPI(
     title="Renly API",
@@ -23,6 +24,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(groups.router)
 app.include_router(investments.router)
+app.include_router(settings_router.router)
 
 
 @app.exception_handler(NotFoundError)

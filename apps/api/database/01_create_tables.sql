@@ -153,6 +153,16 @@ CREATE TABLE investment_group_members (
 
 CREATE INDEX idx_investment_group_members_group_id ON investment_group_members(group_id);
 
+-- Per-user app config (display currencies, default currency; expandable later).
+CREATE TABLE user_settings (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+  settings   JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -193,4 +203,8 @@ CREATE TRIGGER trg_investment_targets_updated_at
 
 CREATE TRIGGER trg_investment_groups_updated_at
   BEFORE UPDATE ON investment_groups
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_user_settings_updated_at
+  BEFORE UPDATE ON user_settings
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

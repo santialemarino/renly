@@ -7,6 +7,7 @@ from app.models.investment_target import InvestmentTarget
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
+from app.models.user_settings import UserSettings
 
 __all__ = [
     "Currency",
@@ -21,4 +22,5 @@ __all__ = [
     "Transaction",
     "TransactionType",
     "User",
+    "UserSettings",
 ]
