@@ -1,4 +1,4 @@
-from sqlalchemy import delete
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -60,14 +60,14 @@ async def get_investment_ids_by_group(session: AsyncSession, group_id: int) -> l
     return list(result.scalars().all())
 
 
-# Replaces membership: removes all current members for the group, then adds (group_id, inv_id) for each id.
+# Replaces membership: delete all for group, then add (group_id, inv_id) for each id.
 async def set_members(
     session: AsyncSession,
     group_id: int,
     investment_ids: list[int],
 ) -> None:
     await session.execute(
-        delete(InvestmentGroupMember).where(InvestmentGroupMember.group_id == group_id)
+        sa_delete(InvestmentGroupMember).where(InvestmentGroupMember.group_id == group_id)
     )
     for inv_id in investment_ids:
         session.add(InvestmentGroupMember(group_id=group_id, investment_id=inv_id))

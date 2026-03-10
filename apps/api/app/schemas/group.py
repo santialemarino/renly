@@ -32,5 +32,5 @@ class GroupResponse(BaseModel):
 # Body for PUT /groups/{id}/investments. Replaces membership with the given list.
 class GroupSetInvestmentsBody(BaseModel):
     investment_ids: list[int] = Field(
-        description="Full list of investment ids that should belong to this group. Replaces existing membership.",
+        description="Investment ids in this group. Replaces existing membership.",
     )
