@@ -32,6 +32,10 @@
     "db:fork": "node scripts/db-fork.mjs"
   },
   "lint-staged": {
+    "apps/api/**/*.py": [
+      "bash scripts/ruff-check-fix.sh",
+      "pnpm --filter api run format"
+    ],
     "apps/web/**/*.{ts,tsx,js,jsx}": [
       "pnpm --filter web run lint:fix",
       "prettier --write"
@@ -39,9 +43,6 @@
     "packages/ui/**/*.{ts,tsx,js,jsx}": [
       "pnpm --filter @repo/ui run lint:fix",
       "prettier --write"
-    ],
-    "apps/api/**/*.py": [
-      "pnpm --filter api run format"
     ],
     "**/*.{json,md,css,scss,html,yml,yaml,mjs}": [
       "prettier --write"

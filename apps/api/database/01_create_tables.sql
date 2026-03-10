@@ -1,6 +1,5 @@
 -- Renly — PostgreSQL Schema
--- Run this on a fresh database to initialize all tables.
--- Subsequent changes should go through Alembic migrations.
+-- Run this on a fresh database to initialize all tables (rebuild from zero).
 
 -- ---------------------------------------------------------------------------
 -- Enums
@@ -133,6 +132,27 @@ CREATE TABLE investment_targets (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Investment groups
+-- User-defined groups for aggregating investments (e.g. Retirement, Kids, Trading).
+CREATE TABLE investment_groups (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name       VARCHAR(255) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_investment_groups_user_id ON investment_groups(user_id);
+
+-- Many-to-many: an investment can belong to zero, one, or several groups.
+CREATE TABLE investment_group_members (
+  investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
+  group_id      BIGINT NOT NULL REFERENCES investment_groups(id) ON DELETE CASCADE,
+  PRIMARY KEY (investment_id, group_id)
+);
+
+CREATE INDEX idx_investment_group_members_group_id ON investment_group_members(group_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -169,4 +189,8 @@ CREATE TRIGGER trg_exchange_rates_updated_at
 
 CREATE TRIGGER trg_investment_targets_updated_at
   BEFORE UPDATE ON investment_targets
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_investment_groups_updated_at
+  BEFORE UPDATE ON investment_groups
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
