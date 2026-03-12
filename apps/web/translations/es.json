@@ -105,6 +105,15 @@
       }
     }
   },
+  "sidebar": {
+    "brand": "Renly",
+    "nav": {
+      "dashboard": "Dashboard",
+      "investments": "Inversiones",
+      "snapshots": "Snapshots",
+      "settings": "Configuración"
+    }
+  },
   "home": {
     "title": "Renly",
     "subtitle": "Finanzas personales — inversiones, ingresos y gastos."

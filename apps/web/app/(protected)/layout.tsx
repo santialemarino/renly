@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 
+import { AppSidebar } from '@/app/(protected)/_components/sidebar';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSession } from '@/lib/auth';
 
@@ -11,8 +13,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-1">{children}</main>
-    </div>
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>{children}</SidebarInset>
+    </SidebarProvider>
   );
 }
