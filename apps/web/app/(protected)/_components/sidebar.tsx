@@ -1,13 +1,17 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Settings, Table2, TrendingUp } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, LogOut, Settings, Table2, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
+import { cn } from '@repo/ui/lib';
+import { userSignOut } from '@/auth';
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -15,7 +19,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { ROUTES } from '@/config/routes';
+import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
 const NAV_ITEMS = [
   { key: 'dashboard', href: ROUTES.dashboard, icon: LayoutDashboard },
@@ -26,24 +30,40 @@ const NAV_ITEMS = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const t = useTranslations('sidebar');
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await userSignOut();
+    router.push(LOGIN_ROUTE);
+  }
 
   return (
-    <Sidebar>
-      <SidebarHeader className="px-4 py-5 border-b border-sidebar-border">
-        <span className="text-heading-4 font-semibold text-blue-800">{t('brand')}</span>
+    <Sidebar className="border-sidebar-border shadow-lg">
+      <SidebarHeader className="pl-4 py-5 border-b border-sidebar-border">
+        <span className="text-heading-2 text-blue-800">{t('brand')}</span>
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
+        <SidebarGroup className="p-4">
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="gap-2">
               {NAV_ITEMS.map(({ key, href, icon: Icon }) => {
                 const isActive = pathname === href || pathname.startsWith(href + '/');
                 return (
                   <SidebarMenuItem key={key}>
-                    <SidebarMenuButton asChild isActive={isActive}>
-                      <Link href={href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      size="lg"
+                      className={cn(
+                        'text-paragraph-medium hover:bg-gray-100 data-[active=true]:bg-blue-800 data-[active=true]:text-white [&_svg]:size-5',
+                        !isActive && 'hover:[&_svg]:rotate-12',
+                      )}
+                    >
+                      <Link className="gap-2" href={href}>
                         <Icon />
                         <span>{t(`nav.${key}`)}</span>
                       </Link>
@@ -55,6 +75,25 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="p-4 border-t border-sidebar-border">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              disabled={loggingOut}
+              size="lg"
+              className={cn(
+                'text-paragraph-medium hover:text-red-500 hover:bg-transparent active:bg-transparent [&_svg]:size-5',
+                loggingOut && 'text-red-800 hover:text-red-800',
+              )}
+            >
+              <LogOut />
+              <span>{loggingOut ? t('logout.loading') : t('logout.label')}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
