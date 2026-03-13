@@ -6,6 +6,7 @@ export const ROUTES = {
   },
   dashboard: '/dashboard',
   investments: '/investments',
+  snapshots: '/snapshots',
   dataEntry: '/data-entry',
   settings: '/settings',
 } as const;

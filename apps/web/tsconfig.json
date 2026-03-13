@@ -12,6 +12,7 @@
     "baseUrl": ".",
     "paths": {
       "@/app/*": ["./app/*"],
+      "@/auth": ["./auth.ts"],
       "@/components/*": ["./components/*"],
       "@/config/*": ["./config/*"],
       "@/hooks/*": ["./hooks/*"],

@@ -40,7 +40,7 @@ export default function NotFound() {
             </p>
           </div>
           <Button blue size="lg" onClick={() => startTransition(() => router.replace(ROUTES.home))}>
-            {isPending ? t('goHomepage.loading') : t('goHomepage.cta')}
+            {isPending ? t('cta.loading') : t('cta.label')}
           </Button>
         </motion.div>
       </div>
