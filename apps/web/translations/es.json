@@ -4,8 +4,8 @@
     "notFound": {
       "title": "Página no disponible",
       "description": "La información solicitada no está disponible en este momento.\nTe invitamos a volver a la página de inicio.",
-      "goHomepage": {
-        "cta": "Ir a la página de inicio",
+      "cta": {
+        "label": "Ir a la página de inicio",
         "loading": "Redirigiendo a la página de inicio..."
       }
     },
@@ -112,10 +112,45 @@
       "investments": "Inversiones",
       "snapshots": "Snapshots",
       "settings": "Configuración"
+    },
+    "logout": {
+      "label": "Cerrar sesión",
+      "loading": "Cerrando sesión..."
     }
   },
-  "home": {
+  "dashboard": {
+    "metadata": {
+      "title": "Dashboard",
+      "description": "Ve tu dashboard"
+    },
     "title": "Renly",
-    "subtitle": "Finanzas personales — inversiones, ingresos y gastos."
+    "subtitle": {
+      "withName": "Bienvenido, {name}.",
+      "anonymous": "Bienvenido a Renly."
+    }
+  },
+  "investments": {
+    "metadata": {
+      "title": "Inversiones",
+      "description": "Gestiona tus inversiones"
+    },
+    "title": "Inversiones",
+    "subtitle": "Coming soon."
+  },
+  "snapshots": {
+    "metadata": {
+      "title": "Snapshots",
+      "description": "Gestiona tus snapshots"
+    },
+    "title": "Snapshots",
+    "subtitle": "Coming soon."
+  },
+  "settings": {
+    "metadata": {
+      "title": "Configuración",
+      "description": "Configura tu cuenta"
+    },
+    "title": "Configuración",
+    "subtitle": "Coming soon."
   }
 }
