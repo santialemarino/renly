@@ -1,6 +1,6 @@
 # Renly — Claude context
 
-Renly is a personal investment tracker (2-3 users). Monorepo: `apps/web` (Next.js), `apps/api` (FastAPI), `packages/ui`. See `arch_en.md` for the full architecture and `README.md` for all dev commands.
+Renly is a personal investment tracker (2-3 users). Monorepo: `apps/web` (Next.js), `apps/api` (FastAPI), `packages/ui`. See `README.md` for all dev commands.
 
 ## Start here
 
@@ -19,9 +19,8 @@ pnpm lint:fix     # ESLint auto-fix
 
 ## Canonical docs
 
-- **Architecture & product spec:** `arch_en.md` — read this before any new feature
 - **API setup & structure:** `apps/api/README.md`
-- **Web setup:** `apps/web/README.md` (if exists)
+- **Web setup:** `apps/web/README.md`
 - **DB schema:** `apps/api/database/01_create_tables.sql`
 
 ## Hard rules
