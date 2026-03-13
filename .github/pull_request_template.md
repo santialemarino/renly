@@ -1,6 +1,6 @@
 # Title
 
-<!--- Title format: [FEAT | FIX | ENH | REFACTOR | DOCS | X] TICKET-ID Task title -->
+<!--- Title format: [FEAT | FIX | ENH | REFACTOR | DOCS | CHORE | TEST | STYLE | X] TICKET-ID Task title -->
 
 ## Card Link
 
