@@ -58,3 +58,6 @@ yarn-error.log*
 .DS_Store
 *.pem
 
+# Claude Code — local agent memory and session data (never commit)
+.claude/projects/
+
