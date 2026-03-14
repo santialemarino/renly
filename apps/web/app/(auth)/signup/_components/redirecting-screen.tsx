@@ -21,8 +21,8 @@ export function RedirectingScreen({
       </div>
 
       <div className="flex flex-col items-center gap-y-2 text-center">
-        <p className="text-base font-semibold text-foreground">{title}</p>
-        <div className="flex items-center gap-x-2 text-sm text-muted-foreground">
+        <p className="text-paragraph-semibold text-foreground">{title}</p>
+        <div className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
           <div className="size-3.5 shrink-0 rounded-full border-2 border-muted-foreground/20 border-t-muted-foreground/70 animate-spin" />
           <span>{description}</span>
         </div>

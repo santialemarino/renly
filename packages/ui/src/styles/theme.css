@@ -127,4 +127,16 @@
   --text-paragraph-mini-medium: 0.75rem; /* 12px */
   --text-paragraph-mini-medium--line-height: 1.5;
   --text-paragraph-mini-medium--font-weight: 500;
+
+  --text-paragraph-semibold: 1rem; /* 16px */
+  --text-paragraph-semibold--line-height: 1.5;
+  --text-paragraph-semibold--font-weight: 600;
+
+  --text-paragraph-sm-semibold: 0.875rem; /* 14px */
+  --text-paragraph-sm-semibold--line-height: 1.5;
+  --text-paragraph-sm-semibold--font-weight: 600;
+
+  --text-paragraph-mini-semibold: 0.75rem; /* 12px */
+  --text-paragraph-mini-semibold--line-height: 1.5;
+  --text-paragraph-mini-semibold--font-weight: 600;
 }

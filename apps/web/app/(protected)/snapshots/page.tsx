@@ -11,7 +11,7 @@ export default async function SnapshotsPage() {
 
   return (
     <main className="flex flex-col min-h-full items-center justify-center p-8 gap-y-2">
-      <h1 className="text-2xl font-semibold text-foreground">{t('title')}</h1>
+      <h1 className="text-heading-3 text-foreground">{t('title')}</h1>
       <p className="text-muted-foreground">{t('subtitle')}</p>
     </main>
   );

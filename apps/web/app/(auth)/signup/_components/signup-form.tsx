@@ -182,7 +182,7 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
         </div>
 
         {form.formState.errors.root && (
-          <p className="text-sm text-destructive text-center">
+          <p className="text-paragraph-sm text-destructive text-center">
             {form.formState.errors.root.message}
           </p>
         )}
