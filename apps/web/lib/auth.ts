@@ -1,4 +1,4 @@
-import { auth } from '../auth';
+import { auth } from '@/auth';
 
 /**
  * Server-side helper to get the current authenticated session.
