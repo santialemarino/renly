@@ -67,6 +67,34 @@ Use this order so classes are predictable and easy to scan. Apply in `apps/web` 
 
 Example: `flex flex-col min-h-screen items-center justify-center px-6 gap-y-8 bg-muted/30 rounded-lg hover:bg-muted/50 text-foreground`.
 
+## Typography
+
+Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-xs`, `text-base`, `text-lg`, etc.) or standalone `font-*` weight utilities on paragraph text.
+
+**Paragraph scale** (size / weight):
+| Token | Size | Weight |
+|---|---|---|
+| `text-paragraph` | 16px | 400 |
+| `text-paragraph-medium` | 16px | 500 |
+| `text-paragraph-semibold` | 16px | 600 |
+| `text-paragraph-sm` | 14px | 400 |
+| `text-paragraph-sm-medium` | 14px | 500 |
+| `text-paragraph-sm-semibold` | 14px | 600 |
+| `text-paragraph-mini` | 12px | 400 |
+| `text-paragraph-mini-medium` | 12px | 500 |
+| `text-paragraph-mini-semibold` | 12px | 600 |
+
+**Heading scale** (all weight 600, line-height included):
+`text-heading-1` (48px) → `text-heading-2` (32px) → `text-heading-3` (24px) → `text-heading-4` (20px) → `text-heading-5` (18px)
+
+**Rules:**
+
+- Replace `text-sm font-medium` → `text-paragraph-sm-medium`; `text-sm font-semibold` → `text-paragraph-sm-semibold`; and so on across all sizes and weights.
+- Never add `font-bold`, `font-semibold`, or `font-medium` next to any type-scale token — the token already encodes the weight.
+- Never add `font-bold` or `font-semibold` next to a `text-heading-*` class — headings already include weight 600.
+- `shrink-0` and other flex/sizing utilities come before typography tokens in the class order.
+- **Don't repeat defaults:** `text-base` is Tailwind's default 16px class — never use it; use the type scale instead. Similarly, never write `font-normal` (weight 400 is the browser default). If an element naturally inherits the correct size from its parent, you don't need to add a type-scale token just to be explicit.
+
 ## Comments
 
 There are no strict rules. Add comments in a tidy way where they clarify something non-obvious or worth explaining — on components, types, methods, etc. Most importantly: **follow the commenting style you see in the codebase**, and in particular in that folder or feature (e.g. the same route group or set of pages). Match existing style rather than introducing a new one.

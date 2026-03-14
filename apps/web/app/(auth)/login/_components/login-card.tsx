@@ -25,9 +25,12 @@ export function LoginCard() {
         <CardContent>
           <LoginForm />
         </CardContent>
-        <CardFooter className="justify-center gap-x-1 text-sm text-muted-foreground">
+        <CardFooter className="justify-center gap-x-1 text-paragraph-sm text-muted-foreground">
           <span>{t('form.signup.title')}</span>
-          <a href={ROUTES.auth.signup} className="text-blue-700 hover:underline font-medium">
+          <a
+            href={ROUTES.auth.signup}
+            className="hover:underline text-paragraph-sm-medium text-blue-700"
+          >
             {t('form.signup.cta')}
           </a>
         </CardFooter>
