@@ -13,6 +13,7 @@
     "paths": {
       "@/app/*": ["./app/*"],
       "@/auth": ["./auth.ts"],
+      "@/auth.config": ["./auth.config.ts"],
       "@/components/*": ["./components/*"],
       "@/config/*": ["./config/*"],
       "@/hooks/*": ["./hooks/*"],

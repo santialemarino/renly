@@ -30,7 +30,7 @@ export default async function RootLayout({
     <html className={plusJakartaSans.className} lang={locale}>
       <body
         className={cn(
-          'min-h-safe-bottom md:min-h-screen w-full bg-background antialiased overflow-x-hidden',
+          'min-h-safe-bottom md:min-h-screen w-full bg-muted/30 antialiased overflow-x-hidden',
         )}
       >
         <NextIntlClientProvider messages={messages}>

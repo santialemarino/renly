@@ -27,7 +27,7 @@ export default function NotFound() {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex flex-col min-h-screen items-center justify-center px-6 gap-y-8 bg-muted/30">
+    <div className="flex flex-col min-h-screen items-center justify-center px-6 gap-y-8">
       <div className="flex flex-col items-center gap-y-8">
         <motion.div {...BLOB_ANIMATION_PROPS}>
           <NotFoundBlob />

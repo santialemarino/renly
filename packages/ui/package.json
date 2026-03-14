@@ -4,6 +4,7 @@
   "private": true,
   "exports": {
     "./components": "./src/components/index.ts",
+    "./hooks": "./src/hooks/index.ts",
     "./lib": "./src/lib/index.ts",
     "./styles": "./dist/index.css",
     "./theme": "./src/styles/theme.css"
