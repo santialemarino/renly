@@ -34,8 +34,8 @@ export default function NotFound() {
         </motion.div>
         <motion.div className="flex flex-col items-center gap-y-6" {...CONTENT_ANIMATION_PROPS}>
           <div className="flex flex-col items-center gap-y-3 text-center">
-            <h1 className="text-3xl font-bold leading-tight text-foreground">{t('title')}</h1>
-            <p className="whitespace-pre-line text-base text-muted-foreground">
+            <h1 className="text-heading-2 text-foreground">{t('title')}</h1>
+            <p className="whitespace-pre-line text-paragraph text-muted-foreground">
               {t('description')}
             </p>
           </div>
