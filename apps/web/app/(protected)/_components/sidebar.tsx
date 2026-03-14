@@ -6,8 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, LogOut, Settings, Table2, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { cn } from '@repo/ui/lib';
-import { userSignOut } from '@/auth';
 import {
   Sidebar,
   SidebarContent,
@@ -18,7 +16,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-} from '@/components/ui/sidebar';
+} from '@repo/ui/components';
+import { cn } from '@repo/ui/lib';
+import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
 const NAV_ITEMS = [

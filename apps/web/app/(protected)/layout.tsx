@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
+import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSession } from '@/lib/auth';
 
