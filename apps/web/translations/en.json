@@ -38,7 +38,7 @@
       },
       "cta": {
         "label": "Log in",
-        "loading": "Logging in…"
+        "loading": "Logging in..."
       },
       "errors": {
         "invalid": "Invalid email or password"
@@ -74,7 +74,7 @@
       },
       "cta": {
         "label": "Create account",
-        "loading": "Creating account…"
+        "loading": "Creating account..."
       },
       "login": {
         "title": "Already have an account?",
@@ -86,7 +86,7 @@
     },
     "redirecting": {
       "title": "Account created!",
-      "description": "Logging you in…"
+      "description": "Logging you in..."
     },
     "passwordMeter": {
       "title": "Strength",
@@ -112,6 +112,11 @@
       "investments": "Investments",
       "snapshots": "Snapshots",
       "settings": "Settings"
+    },
+    "currency": {
+      "label": "Currency",
+      "original": "X",
+      "note": "X = Original currency"
     },
     "logout": {
       "label": "Log out",
@@ -151,6 +156,26 @@
       "description": "Configure your account settings"
     },
     "title": "Settings",
-    "subtitle": "Coming soon."
+    "subtitle": "Configure your display preferences.",
+    "form": {
+      "primaryCurrency": {
+        "label": "Primary currency",
+        "hint": "Shown by default when you open the app.",
+        "placeholder": "Select a currency..."
+      },
+      "secondaryCurrency": {
+        "label": "Secondary currency",
+        "hint": "Shown as the second option in the sidebar switch (optional).",
+        "placeholder": "Select a currency..."
+      },
+      "searchPlaceholder": "Search currencies...",
+      "noResults": "No currencies found.",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "saveSuccess": "Settings saved.",
+      "saveError": "Failed to save settings."
+    }
   }
 }

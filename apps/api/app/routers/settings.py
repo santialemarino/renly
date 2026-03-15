@@ -2,14 +2,13 @@ from fastapi import APIRouter
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
-from app.models.investment import Currency
 from app.schemas.settings import SettingsResponse, SettingsUpdate
 from app.services import settings_service
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-# Returns current user's settings (display_currencies, default_currency).
+# Returns current user's settings (primary_currency, secondary_currency).
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
     current_user: CurrentUser,
@@ -28,11 +27,9 @@ async def update_settings(
 ) -> SettingsResponse:
     payload = body.model_dump(exclude_unset=True)
     kwargs = {}
-    if "display_currencies" in payload:
-        display = payload["display_currencies"]
-        kwargs["display_currencies"] = [Currency(c) for c in display if c in Currency.__members__]
-    if "default_currency" in payload:
-        default = payload["default_currency"]
-        kwargs["default_currency"] = Currency(default) if default in Currency.__members__ else None
+    if "primary_currency" in payload:
+        kwargs["primary_currency"] = payload["primary_currency"]
+    if "secondary_currency" in payload:
+        kwargs["secondary_currency"] = payload["secondary_currency"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

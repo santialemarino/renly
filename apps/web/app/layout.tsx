@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { Toaster } from 'sonner';
 
 import { cn } from '@repo/ui/lib';
 import { siteConfig } from '@/config/site';
@@ -37,6 +38,7 @@ export default async function RootLayout({
           <div className="flex flex-col min-h-safe-bottom md:min-h-screen overflow-x-hidden relative">
             <div className="grid min-h-safe-bottom md:min-h-screen w-full">{children}</div>
           </div>
+          <Toaster richColors />
         </NextIntlClientProvider>
       </body>
     </html>

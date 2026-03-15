@@ -35,6 +35,7 @@ So: no strict obligation to run these manually every time, since pre-commit runs
 Docs describe **how things work now**, not “what we changed” (no changelog-style “this works like this now” in READMEs).
 
 - **On every change:** If your change affects setup, structure, a specific flow or how to run/check something, update the relevant README (root, `apps/api`, `apps/web`) so it still says how things work. One source of truth; no drift.
+- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, update `apps/api/database/01_create_tables.sql` to reflect the current state. This script must always rebuild the DB from zero correctly. Never add migration-style comments ("added column X") — just keep the CREATE statements current.
 - **When to update skills:** Less often. Update a skill when you change a **convention** or **structure** (e.g. new layer, new place for components, new comment style). If you only added a feature following existing conventions, you usually don’t need to edit a skill.
 
 ## 4. What NOT to commit

@@ -1,5 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 
+import { PageHeader } from '@/app/(protected)/_components/page-header';
+import { SettingsForm } from '@/app/(protected)/settings/_components/settings-form';
+import { getSettings } from '@/lib/api/settings';
 import { generatePageMetadata } from '@/lib/utils/page';
 
 export async function generateMetadata() {
@@ -8,11 +11,12 @@ export async function generateMetadata() {
 
 export default async function SettingsPage() {
   const t = await getTranslations('settings');
+  const settings = await getSettings().catch(() => null);
 
   return (
-    <main className="flex flex-col min-h-full items-center justify-center p-8 gap-y-2">
-      <h1 className="text-heading-3 text-foreground">{t('title')}</h1>
-      <p className="text-muted-foreground">{t('subtitle')}</p>
-    </main>
+    <div className="flex flex-col flex-1 items-start p-8 gap-y-6">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      {settings && <SettingsForm initialSettings={settings} />}
+    </div>
   );
 }
