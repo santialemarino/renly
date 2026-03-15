@@ -7,6 +7,7 @@ import { LayoutDashboard, LogOut, Settings, Table2, TrendingUp } from 'lucide-re
 import { useTranslations } from 'next-intl';
 
 import {
+  Separator,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -18,6 +19,7 @@ import {
   SidebarMenuItem,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
 import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
@@ -28,7 +30,12 @@ const NAV_ITEMS = [
   { key: 'settings', href: ROUTES.settings, icon: Settings },
 ] as const;
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  displayCurrencies: string[];
+  activeCurrency: string;
+}
+
+export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations('sidebar');
@@ -49,7 +56,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup className="p-4">
           <SidebarGroupContent>
-            <SidebarMenu className="gap-2">
+            <SidebarMenu className="gap-y-2">
               {NAV_ITEMS.map(({ key, href, icon: Icon }) => {
                 const isActive = pathname === href || pathname.startsWith(href + '/');
                 return (
@@ -72,6 +79,18 @@ export function AppSidebar() {
                 );
               })}
             </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator />
+
+        <SidebarGroup className="p-4">
+          <SidebarGroupContent>
+            <CurrencySwitcher
+              key={displayCurrencies.join(',')}
+              displayCurrencies={displayCurrencies}
+              activeCurrency={activeCurrency}
+            />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

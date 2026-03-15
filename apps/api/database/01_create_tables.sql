@@ -153,7 +153,7 @@ CREATE TABLE investment_group_members (
 
 CREATE INDEX idx_investment_group_members_group_id ON investment_group_members(group_id);
 
--- Per-user app config (display currencies, default currency; expandable later).
+-- Per-user app config (primary_currency, secondary_currency; expandable later via JSONB keys).
 CREATE TABLE user_settings (
   id         BIGSERIAL PRIMARY KEY,
   user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,

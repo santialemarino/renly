@@ -96,13 +96,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             <span className="grid">
               <Eye
                 className={cn(
-                  'col-start-1 row-start-1 h-4 w-4 transition-all duration-200',
+                  'col-start-1 row-start-1 size-4 transition-all duration-200',
                   showPassword ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
                 )}
               />
               <EyeOff
                 className={cn(
-                  'col-start-1 row-start-1 h-4 w-4 transition-all duration-200',
+                  'col-start-1 row-start-1 size-4 transition-all duration-200',
                   showPassword ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
                 )}
               />

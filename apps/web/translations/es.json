@@ -38,7 +38,7 @@
       },
       "cta": {
         "label": "Iniciar sesión",
-        "loading": "Iniciando sesión…"
+        "loading": "Iniciando sesión..."
       },
       "errors": {
         "invalid": "Correo o contraseña incorrectos"
@@ -74,7 +74,7 @@
       },
       "cta": {
         "label": "Crear cuenta",
-        "loading": "Creando cuenta…"
+        "loading": "Creando cuenta..."
       },
       "login": {
         "title": "Ya tienes una cuenta?",
@@ -86,7 +86,7 @@
     },
     "redirecting": {
       "title": "Cuenta creada!",
-      "description": "Iniciando sesión…"
+      "description": "Iniciando sesión..."
     },
     "passwordMeter": {
       "title": "Fortaleza",
@@ -112,6 +112,11 @@
       "investments": "Inversiones",
       "snapshots": "Snapshots",
       "settings": "Configuración"
+    },
+    "currency": {
+      "label": "Moneda",
+      "original": "X",
+      "note": "X = Moneda original"
     },
     "logout": {
       "label": "Cerrar sesión",
@@ -151,6 +156,26 @@
       "description": "Configura tu cuenta"
     },
     "title": "Configuración",
-    "subtitle": "Coming soon."
+    "subtitle": "Configurá tus preferencias de visualización.",
+    "form": {
+      "primaryCurrency": {
+        "label": "Moneda principal",
+        "hint": "Se muestra por defecto al abrir la app.",
+        "placeholder": "Seleccioná una moneda..."
+      },
+      "secondaryCurrency": {
+        "label": "Moneda secundaria",
+        "hint": "Aparece como segunda opción en el selector del sidebar (opcional).",
+        "placeholder": "Seleccioná una moneda..."
+      },
+      "searchPlaceholder": "Buscar monedas...",
+      "noResults": "No se encontraron monedas.",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "saveSuccess": "Configuración guardada.",
+      "saveError": "No se pudo guardar la configuración."
+    }
   }
 }

@@ -30,16 +30,18 @@ Before committing (or suggesting a commit), ensure lints and checks pass. The re
 
 So: no strict obligation to run these manually every time, since pre-commit runs them; the obligation is not to commit code that would fail these checks.
 
-## 3. Keep docs current (READMEs, then skills)
+## 3. Keep docs and memory current
 
 Docs describe **how things work now**, not “what we changed” (no changelog-style “this works like this now” in READMEs).
 
 - **On every change:** If your change affects setup, structure, a specific flow or how to run/check something, update the relevant README (root, `apps/api`, `apps/web`) so it still says how things work. One source of truth; no drift.
+- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, update `apps/api/database/01_create_tables.sql` to reflect the current state. This script must always rebuild the DB from zero correctly. Never add migration-style comments (“added column X”) — just keep the CREATE statements current.
 - **When to update skills:** Less often. Update a skill when you change a **convention** or **structure** (e.g. new layer, new place for components, new comment style). If you only added a feature following existing conventions, you usually don’t need to edit a skill.
+- **Memory (`project_status.md`):** After finishing a significant piece of work, update `~/.claude/projects/{slug}/memory/project_status.md`. Add what you completed to the built section, remove it from remaining/next, and add anything new that surfaced. Skip trivial fixes. Also update `MEMORY.md` if you add a new memory file.
 
 ## 4. What NOT to commit
 
-- **Never stage `.claude/projects/`** — this directory holds local agent memory and session state; it must stay out of git. It is in `.gitignore`; do not add it explicitly.
+- **Never stage `.claude/plans/`** — agent plans are ephemeral working docs, gitignored.
 - **Never stage temporary markdown files** (e.g. scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name. When staging, always list files individually — never `git add .` or `git add -A` — so stray files are not accidentally included.
 
 ## 5. Other habits

@@ -5,31 +5,16 @@ node_modules
 .pnp
 .pnp.js
 
-# Local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Testing
-coverage
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# Turbo
-.turbo
-
-# Vercel
-.vercel
-
-# Build Outputs
+# Build outputs
 .next/
 out/
 build
 dist
+
+# JavaScript / TypeScript
+*.tsbuildinfo
+next-env.d.ts
+coverage
 
 # Python
 .venv/
@@ -40,24 +25,31 @@ __pycache__/
 *.egg
 *.egg-info/
 .eggs/
+*.so
+.Python
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .coverage
 htmlcov/
-*.so
-.Python
 
+# Environment and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
 
-# Debug
+# Tooling
+.turbo
+.vercel
+
+# OS
+.DS_Store
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Misc
-.DS_Store
-*.pem
-
-# Claude Code — local agent memory and session data (never commit)
-.claude/projects/
-
+# Claude Code — agent plans are ephemeral working docs, not repo artifacts
+.claude/plans/

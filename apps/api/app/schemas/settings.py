@@ -2,27 +2,26 @@
 
 from pydantic import BaseModel, Field
 
-from app.models.investment import Currency
 
-
-# Response for GET /settings. Current user's display and default currency.
+# Response for GET /settings. Current user's primary and secondary display currency.
 class SettingsResponse(BaseModel):
-    display_currencies: list[Currency] = Field(
-        description="Currencies shown in the global switch (order preserved).",
-    )
-    default_currency: Currency | None = Field(
+    primary_currency: str | None = Field(
         default=None,
-        description="Initial currency on load; null means use first in display_currencies.",
+        description="Primary display currency; shown first in the sidebar switch.",
+    )
+    secondary_currency: str | None = Field(
+        default=None,
+        description="Secondary display currency; shown second in the sidebar switch.",
     )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
 class SettingsUpdate(BaseModel):
-    display_currencies: list[Currency] | None = Field(
+    primary_currency: str | None = Field(
         default=None,
-        description="Currencies shown in the global switch (order preserved).",
+        description="Primary display currency.",
     )
-    default_currency: Currency | None = Field(
+    secondary_currency: str | None = Field(
         default=None,
-        description="Initial currency on load.",
+        description="Secondary display currency.",
     )
