@@ -12,5 +12,9 @@ export async function saveSettings(
     body: { primary_currency: primaryCurrency, secondary_currency: secondaryCurrency },
   });
   if (!res.ok) throw new Error('Failed to save settings');
-  return res.json();
+  const raw = await res.json();
+  return {
+    primaryCurrency: raw.primary_currency,
+    secondaryCurrency: raw.secondary_currency,
+  };
 }

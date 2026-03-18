@@ -140,7 +140,93 @@
       "description": "Manage your investments"
     },
     "title": "Investments",
-    "subtitle": "Coming soon."
+    "subtitle": "Manage your investment portfolio.",
+    "categories": {
+      "cedears": "CEDEARs",
+      "fci": "Mutual Funds",
+      "dollars": "Dollars",
+      "bonds": "Bonds",
+      "stocks": "Stocks",
+      "crypto": "Crypto",
+      "real_estate": "Real Estate",
+      "term_deposit": "Term Deposit",
+      "other": "Other"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Search investments...",
+      "allCategories": "All categories",
+      "addInvestment": "Add investment",
+      "showArchived": "Show archived"
+    },
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "groups": "Groups",
+      "category": "Category",
+      "currency": "Currency",
+      "broker": "Broker",
+      "actions": "Actions",
+      "empty": "No investments found.",
+      "total": "{total, plural, one {# investment} other {# investments}}"
+    },
+    "actions": {
+      "edit": "Edit",
+      "archive": "Archive",
+      "unarchive": "Unarchive"
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "form": {
+      "titleCreate": "Add investment",
+      "titleEdit": "Edit investment",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the name"
+      },
+      "category": {
+        "label": "Category",
+        "placeholder": "Select a category"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "broker": {
+        "label": "Broker",
+        "placeholder": "Enter the broker"
+      },
+      "groups": {
+        "label": "Groups"
+      },
+      "notes": {
+        "label": "Notes",
+        "placeholder": "Optional notes..."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Investment created.",
+      "updateSuccess": "Investment updated.",
+      "saveError": "Failed to save investment."
+    },
+    "archiveForm": {
+      "title": "Archive investment",
+      "confirm": "Are you sure you want to archive \"{name}\"?",
+      "cta": {
+        "label": "Archive",
+        "loading": "Archiving..."
+      },
+      "success": "Investment archived.",
+      "error": "Failed to archive investment."
+    },
+    "unarchiveSuccess": "Investment unarchived.",
+    "unarchiveError": "Failed to unarchive investment."
   },
   "snapshots": {
     "metadata": {

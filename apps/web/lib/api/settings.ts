@@ -2,13 +2,33 @@ import 'server-only';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
-export interface SettingsData {
+// --- Raw types (API JSON shape, snake_case) ---
+
+interface SettingsRaw {
   primary_currency: string | null;
   secondary_currency: string | null;
 }
 
+// --- Frontend types (camelCase) ---
+
+export interface SettingsData {
+  primaryCurrency: string | null;
+  secondaryCurrency: string | null;
+}
+
+// --- Mappers ---
+
+function mapSettings(raw: SettingsRaw): SettingsData {
+  return {
+    primaryCurrency: raw.primary_currency,
+    secondaryCurrency: raw.secondary_currency,
+  };
+}
+
+// --- API functions ---
+
 export async function getSettings(): Promise<SettingsData> {
   const res = await authenticatedFetch('/settings', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch settings');
-  return res.json();
+  return mapSettings(await res.json());
 }

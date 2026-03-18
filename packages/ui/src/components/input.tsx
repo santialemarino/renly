@@ -5,11 +5,13 @@ import { cn } from '@repo/ui/lib';
 
 interface InputProps extends Omit<React.ComponentProps<'input'>, 'prefix'> {
   startIcon?: React.ReactNode;
+  endIcon?: React.ReactNode;
   prefix?: React.ReactNode;
   suffix?: React.ReactNode;
   containerClassName?: string;
   blue?: boolean;
   blueEye?: boolean;
+  surface?: boolean;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -18,11 +20,13 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       className,
       containerClassName,
       startIcon,
+      endIcon,
       prefix,
       suffix,
       type,
       blue = false,
       blueEye = false,
+      surface = false,
       ...props
     },
     ref,
@@ -36,7 +40,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div
         className={cn(
-          'relative flex h-9 w-full items-center rounded-lg border bg-input',
+          'relative flex h-9 w-full items-center rounded-lg border shadow-xs',
+          surface ? 'bg-background' : 'bg-input',
           blue ? 'border-blue-700/50' : 'border-border',
           'transition-[border-color,box-shadow] duration-200 ease-in-out',
           blue
@@ -64,21 +69,27 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           type={inputType}
           data-slot="input"
           className={cn(
-            'h-full w-full min-w-0 rounded-lg border-0 bg-transparent px-3 py-1',
+            'h-full w-full min-w-0 rounded-lg border-0 bg-transparent px-3 py-1 text-ellipsis',
             'text-paragraph-sm text-foreground placeholder:text-muted-foreground',
             'outline-none transition-[color,box-shadow]',
             'file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground',
             'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
             'focus-visible:outline-none focus-visible:ring-0',
+            '[&:-webkit-autofill]:[-webkit-box-shadow:0_0_0_1000px_var(--color-input)_inset] [&:-webkit-autofill]:[transition:background-color_9999s_ease-in-out_0s]',
             'aria-invalid:ring-destructive/20',
             startIcon && !prefix && 'pl-9',
             prefix && 'pl-0',
             isPassword && 'pr-9',
+            endIcon && !isPassword && 'pr-9',
             suffix && 'pr-0',
             className,
           )}
           {...props}
         />
+
+        {endIcon && !isPassword && (
+          <div className="absolute right-2.5 top-1/2 -translate-y-1/2">{endIcon}</div>
+        )}
 
         {isPassword && (
           <button

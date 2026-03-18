@@ -7,15 +7,8 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/app/(auth)/_components/form';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { ROUTES } from '@/config/routes';
 
 export function LoginForm() {

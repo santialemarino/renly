@@ -22,7 +22,7 @@ import { cn } from '@repo/ui/lib';
 
 const CLEAR_ANIMATION_MS = 100;
 
-// Meta/test codes that are not real currencies
+// Meta/test codes that are not real currencies.
 const EXCLUDED_CODES = new Set(['XXX', 'XTS']);
 
 const ALL_CURRENCIES = cc.data
@@ -48,27 +48,37 @@ function getCurrencyFlag(code: string): string | null {
   return [...country].map((c) => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0))).join('');
 }
 
+interface CurrencyComboboxProps {
+  value: string | null;
+  exclude: string[];
+  placeholder: string;
+  searchPlaceholder: string;
+  noResults: string;
+  surface?: boolean;
+  compact?: boolean;
+  onChange: (code: string) => void;
+  onClear?: () => void;
+  'aria-invalid'?: boolean | 'true' | 'false';
+}
 export function CurrencyCombobox({
   value,
   exclude,
   placeholder,
   searchPlaceholder,
   noResults,
+  surface = false,
+  compact = false,
   onChange,
   onClear,
-}: {
-  value: string | null;
-  exclude: string[];
-  placeholder: string;
-  searchPlaceholder: string;
-  noResults: string;
-  onChange: (code: string) => void;
-  onClear?: () => void;
-}) {
+  'aria-invalid': ariaInvalid,
+}: CurrencyComboboxProps) {
+  const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const typeaheadBuffer = useRef('');
+  const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = search.toLowerCase();
   // Pass 1 — filter: drop the sibling selected currency and any non-matching entries.
   // When q is empty every currency passes (only the excluded one is dropped).
@@ -112,34 +122,78 @@ export function CurrencyCombobox({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="justify-between w-full bg-white group">
+        <Button
+          variant="outline"
+          size="lg"
+          onKeyDown={(e) => {
+            if (e.key === 'Backspace' && value && onClear) {
+              e.preventDefault();
+              setClearing(true);
+              setTimeout(() => {
+                onClear();
+                setClearing(false);
+              }, CLEAR_ANIMATION_MS);
+              return;
+            }
+            if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+            const ch = e.key.toUpperCase();
+            typeaheadBuffer.current += ch;
+            if (typeaheadTimer.current) clearTimeout(typeaheadTimer.current);
+            typeaheadTimer.current = setTimeout(() => {
+              typeaheadBuffer.current = '';
+            }, 500);
+            const q = typeaheadBuffer.current;
+            const match = ALL_CURRENCIES.find(
+              (c) => !exclude.includes(c.code) && c.code.startsWith(q),
+            );
+            if (match) onChange(match.code);
+          }}
+          className={cn(
+            'justify-between w-full min-w-0 group font-normal has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50',
+            surface
+              ? 'bg-background hover:bg-background aria-expanded:bg-background'
+              : 'bg-input hover:bg-input aria-expanded:bg-input dark:bg-input dark:hover:bg-input dark:aria-expanded:bg-input',
+            hasError &&
+              'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
+          )}
+        >
           {value ? (
             <span
               className={cn(
-                'inline-flex items-center gap-x-2 text-foreground transition-opacity duration-100',
+                'inline-flex min-w-0 items-center gap-x-2 overflow-hidden text-foreground transition-opacity duration-100',
                 clearing && 'opacity-0',
               )}
             >
-              <span className="text-paragraph-mini font-mono">{value}</span>
-              <span className="text-paragraph-sm">{getCurrencyName(value)}</span>
+              <span className="shrink-0 text-paragraph-mini font-mono">{value}</span>
+              {!compact && (
+                <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
+              )}
+              {getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>}
             </span>
           ) : (
-            <span className="text-muted-foreground animate-in fade-in duration-100">
+            <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
               {placeholder}
             </span>
           )}
-          <span className="inline-flex items-center gap-x-1 ml-auto">
+          <span className="inline-flex shrink-0 items-center gap-x-1 ml-auto">
             {onClear && value && (
               <span
                 role="button"
                 aria-label="Clear"
+                tabIndex={0}
                 onClick={handleClear}
-                className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleClear(e as unknown as React.MouseEvent);
+                  }
+                }}
+                className="shrink-0 p-0.5 rounded text-muted-foreground opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100 focus-visible:scale-110"
               >
                 <X className="size-3.5" />
               </span>
             )}
-            <ChevronDown className="size-4 shrink-0 opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <ChevronDown className="shrink-0 size-4 text-muted-foreground opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" />
           </span>
         </Button>
       </PopoverTrigger>
@@ -150,14 +204,16 @@ export function CurrencyCombobox({
       >
         <Command shouldFilter={false} className="gap-y-2">
           <CommandInput
+            autoFocus
             value={search}
             onValueChange={handleSearch}
-            placeholder={searchPlaceholder}
+            placeholder={compact ? 'Search...' : searchPlaceholder}
           />
           <Separator />
           <CommandList
             ref={listRef}
             className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+            onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>{noResults}</CommandEmpty>
             <CommandGroup>
@@ -171,7 +227,7 @@ export function CurrencyCombobox({
                   }}
                 >
                   <span className="shrink-0 text-paragraph-mini font-mono">{currency.code}</span>
-                  <span className="truncate text-paragraph-sm">{currency.name}</span>
+                  {!compact && <span className="truncate text-paragraph-sm">{currency.name}</span>}
                   {getCurrencyFlag(currency.code) && (
                     <span className="ml-auto shrink-0 pr-1">{getCurrencyFlag(currency.code)}</span>
                   )}

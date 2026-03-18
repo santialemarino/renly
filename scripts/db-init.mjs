@@ -42,11 +42,11 @@ async function waitForPostgres(maxAttempts = 15) {
 }
 
 async function main() {
-  // Start postgres if not running
+  // Start postgres if not running.
   console.log('Starting Postgres (docker compose up -d postgres)...');
   run('docker compose up -d postgres');
 
-  // Wait until we can run a query
+  // Wait until we can run a query.
   await waitForPostgres();
   console.log(' Postgres is ready.');
 

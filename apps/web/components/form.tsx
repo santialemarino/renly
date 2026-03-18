@@ -75,7 +75,13 @@ function FormItem({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-function FormLabel({ className, blue = false, ...props }: React.ComponentProps<typeof Label>) {
+function FormLabel({
+  className,
+  blue = false,
+  required,
+  children,
+  ...props
+}: React.ComponentProps<typeof Label> & { required?: boolean }) {
   const { error, formItemId } = useFormField();
   return (
     <Label
@@ -85,7 +91,14 @@ function FormLabel({ className, blue = false, ...props }: React.ComponentProps<t
       className={className}
       htmlFor={formItemId}
       {...props}
-    />
+    >
+      {children}
+      {required && (
+        <span aria-hidden="true" className="text-blue-800 -ml-1">
+          *
+        </span>
+      )}
+    </Label>
   );
 }
 

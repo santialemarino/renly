@@ -96,6 +96,82 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
 - `shrink-0` and other flex/sizing utilities come before typography tokens in the class order.
 - **Don't repeat defaults:** `text-base` is Tailwind's default 16px class — never use it; use the type scale instead. Similarly, never write `font-normal` (weight 400 is the browser default). If an element naturally inherits the correct size from its parent, you don't need to add a type-scale token just to be explicit.
 
+## API boundary and naming conventions
+
+### camelCase in TypeScript
+
+All TypeScript identifiers use camelCase — interface properties, function params, variable names, form field names, Zod schema keys. This applies to everything in `apps/web` except:
+
+- **Uppercase constants** stay as-is (e.g. `INVESTMENT_CATEGORIES`, `FALLBACK_PRIMARY`).
+- **String values that are API enum values** stay as-is (e.g. `'real_estate'`, `'term_deposit'`) since they must match the backend enum.
+- **URL param name strings** passed to `URLSearchParams` / `searchParams.getAll(...)` stay snake_case since those are API contract strings (e.g. `qs.append('group_ids', ...)`, `searchParams.getAll('group_ids')`).
+- **Request body object keys** sent to the API stay snake_case since FastAPI expects them (e.g. `{ base_currency: values.baseCurrency }`).
+
+### Mapping at the API boundary
+
+The `lib/api/` layer is the API boundary. Functions there receive raw snake_case JSON from the backend and **must return camelCase TypeScript objects**. Never return `res.json()` directly when the response contains snake_case keys — always define explicit raw types and map.
+
+#### File structure order in `lib/api/*.ts`
+
+```
+1. Raw types     — unexported, snake_case, match JSON exactly
+2. Frontend types — exported, camelCase, what the rest of the app uses
+3. Mappers       — unexported functions, one per entity
+4. API functions — exported, build query strings, fetch, call mappers
+```
+
+Full example:
+
+```ts
+// --- Raw types (API JSON shape, snake_case) ---
+
+interface InvestmentRaw {
+  id: number;
+  base_currency: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+// --- Frontend types (camelCase) ---
+
+export interface Investment {
+  id: number;
+  baseCurrency: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// --- Mappers ---
+
+function mapInvestment(raw: InvestmentRaw): Investment {
+  return {
+    id: raw.id,
+    baseCurrency: raw.base_currency,
+    isActive: raw.is_active,
+    createdAt: raw.created_at,
+  };
+}
+
+// --- API functions ---
+
+export async function getInvestments(): Promise<Investment[]> {
+  const res = await authenticatedFetch('/investments', { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to fetch investments');
+  const raw: InvestmentRaw[] = await res.json();
+  return raw.map(mapInvestment);
+}
+```
+
+Actions (`actions.ts`) construct explicit snake_case request bodies:
+
+```ts
+// app/(protected)/investments/actions.ts
+const { groupIds, baseCurrency, isActive, ...rest } = values;
+await authenticatedFetch('/investments', {
+  body: { ...rest, base_currency: baseCurrency, is_active: isActive },
+});
+```
+
 ## Comments
 
 - **Default:** Use `//`. Multiple consecutive `//` lines are fine for a sequence of independent remarks.
@@ -107,3 +183,7 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
    */
   ```
 - Add comments where they clarify something non-obvious. Don't comment the obvious.
+- **End with a period.** Every comment that is a sentence or description must end with `.`. Three exceptions:
+  - **Inline comments** on the same line as code — no period required.
+  - **Single-line `/* ... */` comments** — always exempt, they read as labels/titles by nature.
+  - **Title-style `//` labels** formatted as section headers (e.g. `// --- Auth ---`, `// Step name`) — no period required.

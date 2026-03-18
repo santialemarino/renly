@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { cn } from '../lib';
+import { cn } from '@repo/ui/lib';
 
 function Textarea({
   className,
@@ -11,7 +11,7 @@ function Textarea({
     <textarea
       data-slot="textarea"
       className={cn(
-        'text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground bg-input w-full md:w-[436px] min-w-0 rounded-lg border p-2 text-paragraph-sm outline-none shadow-xs transition-[color,box-shadow] resize-y disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+        'text-foreground placeholder:text-muted-foreground bg-input w-full min-w-0 rounded-lg border p-2 text-paragraph-sm outline-none shadow-xs transition-[color,box-shadow] resize-y disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
         'min-h-[76px]',
         'focus-visible:ring-[3px]',
         blue

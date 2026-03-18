@@ -1,60 +1,76 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
+import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Button, Hint, Label, Separator } from '@repo/ui/components';
-import { CurrencyCombobox } from '@/app/(protected)/settings/_components/currency-combobox';
-import { saveSettings } from '@/app/(protected)/settings/actions';
+import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
+import { saveSettings } from '@/app/(protected)/settings/settings-actions';
+import {
+  settingsFormSchema,
+  type SettingsFormValues,
+} from '@/app/(protected)/settings/settings-form-schema';
 import type { SettingsData } from '@/lib/api/settings';
 
 interface SettingsFormProps {
   initialSettings: SettingsData;
 }
 
+const fallbackPrimary = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
+const fallbackSecondary = process.env.NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY ?? 'USD';
+
 export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const t = useTranslations('settings');
   const router = useRouter();
 
-  const fallbackPrimary = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
-  const fallbackSecondary = process.env.NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY ?? 'USD';
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { isSubmitting },
+  } = useForm<SettingsFormValues>({
+    resolver: zodResolver(settingsFormSchema),
+    defaultValues: {
+      primaryCurrency: initialSettings.primaryCurrency ?? fallbackPrimary,
+      secondaryCurrency: initialSettings.secondaryCurrency ?? fallbackSecondary,
+    },
+  });
 
-  const [primary, setPrimary] = useState<string | null>(
-    initialSettings.primary_currency ?? fallbackPrimary,
-  );
-  const [secondary, setSecondary] = useState<string | null>(
-    initialSettings.secondary_currency ?? fallbackSecondary,
-  );
-  const [saving, setSaving] = useState(false);
+  const primaryCurrency = watch('primaryCurrency');
+  const secondaryCurrency = watch('secondaryCurrency');
 
-  async function handleSave() {
-    if (!primary) return;
-    setSaving(true);
+  async function onSubmit(values: SettingsFormValues) {
     try {
-      await saveSettings(primary, secondary);
+      await saveSettings(values.primaryCurrency, values.secondaryCurrency ?? null);
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'settings-save' });
     } catch {
       toast.error(t('form.saveError'), { id: 'settings-save' });
-    } finally {
-      setSaving(false);
     }
   }
 
   return (
-    <div className="flex flex-col w-full max-w-md gap-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full max-w-md gap-y-6">
       <div className="flex flex-col gap-y-2">
         <Label>{t('form.primaryCurrency.label')}</Label>
         <Hint>{t('form.primaryCurrency.hint')}</Hint>
-        <CurrencyCombobox
-          value={primary}
-          exclude={secondary ? [secondary] : []}
-          placeholder={t('form.primaryCurrency.placeholder')}
-          searchPlaceholder={t('form.searchPlaceholder')}
-          noResults={t('form.noResults')}
-          onChange={setPrimary}
+        <Controller
+          name="primaryCurrency"
+          control={control}
+          render={({ field }) => (
+            <CurrencyCombobox
+              value={field.value ?? null}
+              exclude={secondaryCurrency ? [secondaryCurrency] : []}
+              placeholder={t('form.primaryCurrency.placeholder')}
+              searchPlaceholder={t('form.searchPlaceholder')}
+              noResults={t('form.noResults')}
+              surface
+              onChange={(v) => field.onChange(v ?? '')}
+            />
+          )}
         />
       </div>
 
@@ -63,20 +79,27 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <div className="flex flex-col gap-y-2">
         <Label>{t('form.secondaryCurrency.label')}</Label>
         <Hint>{t('form.secondaryCurrency.hint')}</Hint>
-        <CurrencyCombobox
-          value={secondary}
-          exclude={primary ? [primary] : []}
-          placeholder={t('form.secondaryCurrency.placeholder')}
-          searchPlaceholder={t('form.searchPlaceholder')}
-          noResults={t('form.noResults')}
-          onChange={setSecondary}
-          onClear={() => setSecondary(null)}
+        <Controller
+          name="secondaryCurrency"
+          control={control}
+          render={({ field }) => (
+            <CurrencyCombobox
+              value={field.value ?? null}
+              exclude={primaryCurrency ? [primaryCurrency] : []}
+              placeholder={t('form.secondaryCurrency.placeholder')}
+              searchPlaceholder={t('form.searchPlaceholder')}
+              noResults={t('form.noResults')}
+              surface
+              onChange={field.onChange}
+              onClear={() => field.onChange(null)}
+            />
+          )}
         />
       </div>
 
-      <Button blue onClick={handleSave} disabled={saving || !primary}>
-        {saving ? t('form.cta.loading') : t('form.cta.label')}
+      <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
+        {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
       </Button>
-    </div>
+    </form>
   );
 }
