@@ -1,22 +1,75 @@
+from sqlalchemy import asc, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.models.investment import Investment
+from app.models.investment import Investment, InvestmentCategory
+from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+
+_SORT_COLUMNS = {
+    "name": Investment.name,
+    "category": Investment.category,
+    "base_currency": Investment.base_currency,
+    "broker": Investment.broker,
+}
 
 
-# Lists investments for a user, optionally and defaulted to only active. Returns list ordered by id.
-async def list_by_user(
+# Lists investments for a user with optional filters and pagination. Returns (items, total).
+async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
     *,
+    search: str | None = None,
+    group_ids: list[int] | None = None,
+    category: InvestmentCategory | None = None,
     active_only: bool = True,
-) -> list[Investment]:
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> tuple[list[Investment], int]:
     stmt = select(Investment).where(Investment.user_id == user_id)
     if active_only:
         stmt = stmt.where(Investment.is_active.is_(True))
-    stmt = stmt.order_by(Investment.id)
+    if search:
+        stmt = stmt.where(Investment.name.ilike(f"%{search}%"))
+    if category:
+        stmt = stmt.where(Investment.category == category)
+    if group_ids:
+        stmt = stmt.where(
+            Investment.id.in_(
+                select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id.in_(group_ids))
+            )
+        )
+    count_stmt = select(func.count()).select_from(stmt.subquery())
+    count_result = await session.execute(count_stmt)
+    total = count_result.scalar_one()
+    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
+    order_fn = desc if sort_order == "desc" else asc
+    order_clause = order_fn(sort_col) if sort_col is not None else Investment.id
+    items_stmt = stmt.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
+    items_result = await session.execute(items_stmt)
+    items = list(items_result.scalars().all())
+    return items, total
+
+
+# Returns groups for each investment id as {investment_id: [(group_id, group_name)]}.
+async def get_groups_by_investment_ids(
+    session: AsyncSession,
+    investment_ids: list[int],
+) -> dict[int, list[tuple[int, str]]]:
+    if not investment_ids:
+        return {}
+    stmt = (
+        select(InvestmentGroupMember.investment_id, InvestmentGroup.id, InvestmentGroup.name)
+        .join(InvestmentGroup, InvestmentGroupMember.group_id == InvestmentGroup.id)
+        .where(InvestmentGroupMember.investment_id.in_(investment_ids))
+        .order_by(InvestmentGroup.id)
+    )
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    groups_map: dict[int, list[tuple[int, str]]] = {}
+    for inv_id, group_id, group_name in result.all():
+        groups_map.setdefault(inv_id, []).append((group_id, group_name))
+    return groups_map
 
 
 # Fetches a single investment by id and user_id. Returns None if not found or not owned.
@@ -48,9 +101,10 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     await session.commit()
 
 
-# Namespace to call repository functions (e.g. investment_repository.list_by_user).
+# Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
-    list_by_user = staticmethod(list_by_user)
+    list_by_user_filtered = staticmethod(list_by_user_filtered)
+    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

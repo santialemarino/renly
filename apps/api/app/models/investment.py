@@ -1,6 +1,8 @@
 from datetime import datetime
 from enum import StrEnum
 
+from sqlalchemy import Column
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 
@@ -30,8 +32,10 @@ class Investment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", description="Owner.")
     name: str = Field(max_length=255, description="Display name.")
-    category: InvestmentCategory = Field(description="Investment type.")
-    base_currency: Currency = Field(description="Reporting currency.")
+    category: InvestmentCategory = Field(
+        sa_column=Column(SAEnum(InvestmentCategory, name="investment_category"), nullable=False)
+    )
+    base_currency: str = Field(max_length=10, description="Reporting currency (ISO 4217 code).")
     broker: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None)
     is_active: bool = Field(default=True, description="Whether to include in portfolio.")

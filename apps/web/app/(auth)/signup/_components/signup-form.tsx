@@ -8,16 +8,9 @@ import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/app/(auth)/_components/form';
 import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import { signupFormSchema, type SignupFormData } from '@/app/(auth)/signup/form-schema';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { ROUTES } from '@/config/routes';
 import { EmailTakenError, registerRequest } from '@/lib/auth-api';
 import {

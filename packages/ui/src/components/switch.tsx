@@ -3,7 +3,7 @@
 import * as React from 'react';
 import * as SwitchPrimitive from '@radix-ui/react-switch';
 
-import { cn } from '../lib';
+import { cn } from '@repo/ui/lib';
 
 interface SwitchProps extends React.ComponentProps<typeof SwitchPrimitive.Root> {
   thumbClassName?: string;

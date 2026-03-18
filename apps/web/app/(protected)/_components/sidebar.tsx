@@ -70,7 +70,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                         !isActive && 'hover:[&_svg]:rotate-12',
                       )}
                     >
-                      <Link className="gap-2" href={href}>
+                      <Link className="gap-x-2" href={href}>
                         <Icon />
                         <span>{t(`nav.${key}`)}</span>
                       </Link>

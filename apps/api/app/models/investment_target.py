@@ -10,9 +10,7 @@ class InvestmentTarget(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     investment_id: int = Field(foreign_key="investments.id", unique=True, description="Investment.")
-    target_percentage: Decimal = Field(
-        max_digits=5, decimal_places=2, ge=0, le=100, description="Target % (0–100)."
-    )
+    target_percentage: Decimal = Field(max_digits=5, decimal_places=2, ge=0, le=100, description="Target % (0–100).")
     notes: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

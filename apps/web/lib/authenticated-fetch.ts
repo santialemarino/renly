@@ -11,7 +11,7 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL as string;
 export async function authenticatedFetch(
   endpoint: string,
   options: {
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
     body?: unknown;
   },
 ): Promise<Response> {

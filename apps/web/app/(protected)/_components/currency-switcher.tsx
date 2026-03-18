@@ -49,7 +49,7 @@ export function CurrencySwitcher({
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <span className="text-paragraph-mini text-blue-400">*{t('currency.note')}</span>
+      <span className="text-paragraph-mini text-blue-400">* {t('currency.note')}</span>
     </div>
   );
 }

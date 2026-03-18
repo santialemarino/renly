@@ -63,7 +63,7 @@ function Button({
       className={cn(
         buttonVariants({ variant, size }),
         blue &&
-          'bg-blue-800 text-white hover:bg-blue-900 focus-visible:ring-blue-800/50 focus-visible:border-blue-800/40 border-transparent',
+          'bg-blue-800 text-white hover:bg-blue-900 hover:text-white focus-visible:ring-blue-800/50 focus-visible:border-blue-800/40 border-transparent',
         className,
       )}
       {...props}

@@ -21,8 +21,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const settings = await getSettings().catch(() => null);
   const cookieStore = await cookies();
 
-  const primary = settings?.primary_currency ?? FALLBACK_PRIMARY;
-  const secondary = settings?.secondary_currency ?? FALLBACK_SECONDARY;
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
+  const secondary = settings?.secondaryCurrency ?? FALLBACK_SECONDARY;
   const displayCurrencies = secondary
     ? [primary, secondary, ORIGINAL_CURRENCY]
     : [primary, ORIGINAL_CURRENCY];
@@ -34,8 +34,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <SidebarProvider>
       <AppSidebar displayCurrencies={displayCurrencies} activeCurrency={activeCurrency} />
-      <SidebarInset>
-        <main className="flex flex-col min-h-full">{children}</main>
+      <SidebarInset className="min-w-0">
+        <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

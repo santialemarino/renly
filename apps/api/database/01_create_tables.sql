@@ -60,7 +60,7 @@ CREATE TABLE investments (
   user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name          VARCHAR(255) NOT NULL,
   category      investment_category NOT NULL,
-  base_currency currency NOT NULL,
+  base_currency VARCHAR(10) NOT NULL,
   broker        VARCHAR(100),
   notes         TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,

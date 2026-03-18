@@ -17,7 +17,7 @@ function parseEnv(filePath) {
   const match = content.match(/^DATABASE_URL\s*=\s*(.+)$/m);
   if (!match) throw new Error('DATABASE_URL not found in apps/api/.env');
 
-  // Strip driver suffix (e.g. +asyncpg) so pg tools can parse it
+  // Strip driver suffix (e.g. +asyncpg) so pg tools can parse it.
   const raw = match[1].trim().replace(/^postgresql\+\w+:\/\//, 'postgresql://');
 
   const url = new URL(raw);
@@ -37,9 +37,10 @@ async function run() {
     const creds = parseEnv(ENV_PATH);
     console.log(`Read credentials from apps/api/.env`);
 
-    // When the source is on the host machine, the throwaway pg_dump container
-    // can't reach localhost — use host.docker.internal instead.
-    // --add-host is required on Linux; Docker Desktop on Mac resolves it automatically.
+    /* When the source is on the host machine, the throwaway pg_dump container
+     * can't reach localhost — use host.docker.internal instead.
+     * --add-host is required on Linux; Docker Desktop on Mac resolves it automatically.
+     */
     const isLocalSource = LOCAL_HOSTS.has(creds.host);
     const dumpHost = isLocalSource ? 'host.docker.internal' : creds.host;
 
@@ -74,7 +75,7 @@ async function run() {
       }
     }
 
-    // Wait for PostgreSQL to be ready
+    // Wait for PostgreSQL to be ready.
     console.log(`Waiting for PostgreSQL to be ready...`);
     let retries = 0;
     while (retries < 15) {
@@ -129,17 +130,17 @@ async function run() {
       'renly',
     ]);
 
-    // Pipe pg_dump stdout to psql stdin
+    // Pipe pg_dump stdout to psql stdin.
     pgDump.stdout.pipe(psqlImport.stdin);
 
-    // Forward stderr for both processes
+    // Forward stderr for both processes.
     pgDump.stderr.pipe(process.stderr);
     psqlImport.stderr.pipe(process.stderr);
 
-    // Forward psql stdout
+    // Forward psql stdout.
     psqlImport.stdout.pipe(process.stdout);
 
-    // Wait for both processes to complete
+    // Wait for both processes to complete.
     await new Promise((resolve, reject) => {
       let dumpExited = false;
       let importExited = false;

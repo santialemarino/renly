@@ -1,4 +1,6 @@
+export * from './custom/pill';
 export * from './custom/hint';
+export * from './custom/search-input';
 export * from './button';
 export * from './card';
 export * from './checkbox';
@@ -6,6 +8,7 @@ export * from './command';
 export * from './dialog';
 export * from './input';
 export * from './label';
+export * from './pagination';
 export * from './popover';
 export * from './radio-group';
 export * from './select';

@@ -23,7 +23,7 @@ def _to_response(group, investment_ids: list[int]) -> GroupResponse:
     )
 
 
-# Lists groups for the current user. Each group includes its investment ids.
+# Lists groups for the user. Each group includes its investment ids.
 @router.get("", response_model=list[GroupResponse])
 async def list_groups(
     current_user: CurrentUser,
@@ -44,7 +44,7 @@ async def get_group(
     return _to_response(group, ids)
 
 
-# Creates a new group for the current user.
+# Creates a new group for the user.
 @router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
 async def create_group(
     body: GroupCreate,

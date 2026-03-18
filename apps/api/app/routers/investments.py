@@ -1,10 +1,13 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.models.investment import InvestmentCategory
 from app.schemas.investment import (
     InvestmentCreate,
+    InvestmentListResponse,
     InvestmentResponse,
+    InvestmentSetGroupsBody,
     InvestmentUpdate,
 )
 from app.schemas.snapshot import SnapshotCreate, SnapshotResponse
@@ -17,18 +20,36 @@ from app.services import investment_service
 
 router = APIRouter(prefix="/investments", tags=["investments"])
 
+DEFAULT_PAGE_SIZE = 20
+MAX_PAGE_SIZE = 100
 
-# Lists investments for the current user. Returns only active by default.
-@router.get("", response_model=list[InvestmentResponse])
+
+# Lists investments for the user with optional search, group, category filters and pagination.
+@router.get("", response_model=InvestmentListResponse)
 async def list_investments(
     current_user: CurrentUser,
     session: SessionDep,
-    active_only: bool = True,
-) -> list[InvestmentResponse]:
-    investments = await investment_service.list_investments(
-        session, current_user, active_only=active_only
+    search: str | None = Query(default=None, description="Filter by name (case-insensitive)."),
+    group_ids: list[int] | None = Query(default=None, description="Filter by group ids (union)."),
+    category: InvestmentCategory | None = Query(default=None, description="Filter by category."),
+    active_only: bool = Query(default=True, description="Return only active investments."),
+    page: int = Query(default=1, ge=1, description="Page number (1-based)."),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    sort_by: str | None = Query(default=None, description="Sort field: name, category, base_currency, broker."),
+    sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
+) -> InvestmentListResponse:
+    return await investment_service.list_investments(
+        session,
+        current_user,
+        search=search,
+        group_ids=group_ids,
+        category=category,
+        active_only=active_only,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
-    return [InvestmentResponse.model_validate(i) for i in investments]
 
 
 # Returns a single investment by id. Returns 404 if not found or not owned.
@@ -42,7 +63,7 @@ async def get_investment(
     return InvestmentResponse.model_validate(investment)
 
 
-# Creates a new investment for the current user.
+# Creates a new investment for the user.
 @router.post("", response_model=InvestmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_investment(
     body: InvestmentCreate,
@@ -70,20 +91,39 @@ async def update_investment(
     session: SessionDep,
 ) -> InvestmentResponse:
     payload = body.model_dump(exclude_unset=True)
-    investment = await investment_service.update_investment(
-        session, investment_id, current_user, **payload
-    )
+    investment = await investment_service.update_investment(session, investment_id, current_user, **payload)
     return InvestmentResponse.model_validate(investment)
 
 
-# Soft-deletes an investment (sets is_active = false). Returns 204.
-@router.delete("/{investment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_investment(
+# Archives an investment (sets is_active = false). Returns 204.
+@router.patch("/{investment_id}/archive", status_code=status.HTTP_204_NO_CONTENT)
+async def archive_investment(
     investment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> None:
-    await investment_service.delete_investment(session, investment_id, current_user)
+    await investment_service.archive_investment(session, investment_id, current_user)
+
+
+# Unarchives an investment (sets is_active = true). Returns 204.
+@router.patch("/{investment_id}/unarchive", status_code=status.HTTP_204_NO_CONTENT)
+async def unarchive_investment(
+    investment_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> None:
+    await investment_service.unarchive_investment(session, investment_id, current_user)
+
+
+# Replaces group membership for the investment. Returns 204.
+@router.put("/{investment_id}/groups", status_code=status.HTTP_204_NO_CONTENT)
+async def set_investment_groups(
+    investment_id: int,
+    body: InvestmentSetGroupsBody,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> None:
+    await investment_service.set_investment_groups(session, investment_id, current_user, body.group_ids)
 
 
 # Lists snapshots for an investment. Returns 404 if investment not found or not owned.
@@ -146,9 +186,7 @@ async def get_transaction(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> TransactionResponse:
-    transaction = await investment_service.get_transaction(
-        session, investment_id, transaction_id, current_user
-    )
+    transaction = await investment_service.get_transaction(session, investment_id, transaction_id, current_user)
     return TransactionResponse.model_validate(transaction)
 
 
@@ -209,6 +247,4 @@ async def delete_transaction(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> None:
-    await investment_service.delete_transaction(
-        session, investment_id, transaction_id, current_user
-    )
+    await investment_service.delete_transaction(session, investment_id, transaction_id, current_user)

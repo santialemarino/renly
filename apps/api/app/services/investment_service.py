@@ -9,20 +9,68 @@ from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.repositories import (
+    group_repository,
     investment_repository,
     snapshot_repository,
     transaction_repository,
 )
+from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, InvestmentResponse
 
 
-# Lists investments for the user. Returns only active by default.
+def _build_response(
+    inv: Investment,
+    groups_map: dict[int, list[tuple[int, str]]],
+) -> InvestmentResponse:
+    # Assembles InvestmentResponse, enriching it with group info from the lookup map.
+    groups = [InvestmentGroupInfo(id=gid, name=gname) for gid, gname in groups_map.get(inv.id or 0, [])]
+    return InvestmentResponse(
+        id=inv.id or 0,
+        name=inv.name,
+        category=inv.category,
+        base_currency=inv.base_currency,
+        broker=inv.broker,
+        notes=inv.notes,
+        is_active=inv.is_active,
+        created_at=inv.created_at,
+        updated_at=inv.updated_at,
+        groups=groups,
+    )
+
+
+# Lists investments for the user with filters and pagination. Returns InvestmentListResponse.
 async def list_investments(
     session: AsyncSession,
     user: User,
     *,
+    search: str | None = None,
+    group_ids: list[int] | None = None,
+    category: InvestmentCategory | None = None,
     active_only: bool = True,
-) -> list[Investment]:
-    return await investment_repository.list_by_user(session, user.id, active_only=active_only)
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> InvestmentListResponse:
+    items, total = await investment_repository.list_by_user_filtered(
+        session,
+        user.id,
+        search=search,
+        group_ids=group_ids,
+        category=category,
+        active_only=active_only,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    inv_ids = [inv.id for inv in items if inv.id is not None]
+    groups_map = await investment_repository.get_groups_by_investment_ids(session, inv_ids)
+    return InvestmentListResponse(
+        items=[_build_response(inv, groups_map) for inv in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Fetches one investment by id. Raises NotFoundError if not found or not owned by user.
@@ -43,7 +91,7 @@ async def create_investment(
     user: User,
     name: str,
     category: InvestmentCategory,
-    base_currency: Currency,
+    base_currency: str,
     broker: str | None = None,
     notes: str | None = None,
 ) -> Investment:
@@ -66,7 +114,7 @@ async def update_investment(
     *,
     name: str | None = None,
     category: InvestmentCategory | None = None,
-    base_currency: Currency | None = None,
+    base_currency: str | None = None,
     broker: str | None = None,
     notes: str | None = None,
     is_active: bool | None = None,
@@ -89,13 +137,39 @@ async def update_investment(
     return inv
 
 
-# Soft-deletes an investment (sets is_active = False).
-async def delete_investment(
+# Archives an investment (sets is_active = False).
+async def archive_investment(
     session: AsyncSession,
     investment_id: int,
     user: User,
 ) -> None:
     await update_investment(session, investment_id, user, is_active=False)
+
+
+# Unarchives an investment (sets is_active = True).
+async def unarchive_investment(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+) -> None:
+    await update_investment(session, investment_id, user, is_active=True)
+
+
+# Sets which groups this investment belongs to. Validates group ownership. Raises NotFoundError.
+async def set_investment_groups(
+    session: AsyncSession,
+    investment_id: int,
+    user: User,
+    group_ids: list[int],
+) -> None:
+    await get_investment(session, investment_id, user)
+    if group_ids:
+        user_groups = await group_repository.list_by_user(session, user.id)
+        user_group_ids = {g.id for g in user_groups}
+        invalid = set(group_ids) - user_group_ids
+        if invalid:
+            raise NotFoundError(f"Groups not found: {sorted(invalid)}")
+    await group_repository.set_groups_for_investment(session, investment_id, group_ids)
 
 
 # Lists snapshots for an investment. Raises 404 if investment not found or not owned.
@@ -120,9 +194,7 @@ async def upsert_snapshot(
     notes: str | None = None,
 ) -> InvestmentSnapshot:
     await get_investment(session, investment_id, user)
-    existing = await snapshot_repository.get_by_investment_and_date(
-        session, investment_id, snapshot_date
-    )
+    existing = await snapshot_repository.get_by_investment_and_date(session, investment_id, snapshot_date)
     if existing is not None:
         existing.value = value
         existing.currency = currency

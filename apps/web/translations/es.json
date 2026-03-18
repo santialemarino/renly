@@ -140,7 +140,93 @@
       "description": "Gestiona tus inversiones"
     },
     "title": "Inversiones",
-    "subtitle": "Coming soon."
+    "subtitle": "Gestioná tu cartera de inversiones.",
+    "categories": {
+      "cedears": "CEDEARs",
+      "fci": "Fondos Comunes",
+      "dollars": "Dólares",
+      "bonds": "Bonos",
+      "stocks": "Acciones",
+      "crypto": "Cripto",
+      "real_estate": "Inmuebles",
+      "term_deposit": "Plazo Fijo",
+      "other": "Otro"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Buscar inversiones...",
+      "allCategories": "Todas las categorías",
+      "addInvestment": "Agregar inversión",
+      "showArchived": "Ver archivadas"
+    },
+    "table": {
+      "id": "ID",
+      "name": "Nombre",
+      "groups": "Grupos",
+      "category": "Categoría",
+      "currency": "Moneda",
+      "broker": "Broker",
+      "actions": "Acciones",
+      "empty": "No se encontraron inversiones.",
+      "total": "{total, plural, one {# inversión} other {# inversiones}}"
+    },
+    "actions": {
+      "edit": "Editar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar"
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "form": {
+      "titleCreate": "Agregar inversión",
+      "titleEdit": "Editar inversión",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresa el nombre"
+      },
+      "category": {
+        "label": "Categoría",
+        "placeholder": "Selecciona una categoría"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Selecciona una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "broker": {
+        "label": "Broker",
+        "placeholder": "Ingresa el broker"
+      },
+      "groups": {
+        "label": "Grupos"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Inversión creada.",
+      "updateSuccess": "Inversión actualizada.",
+      "saveError": "No se pudo guardar la inversión."
+    },
+    "archiveForm": {
+      "title": "Archivar inversión",
+      "confirm": "¿Seguro querés archivar \"{name}\"?",
+      "cta": {
+        "label": "Archivar",
+        "loading": "Archivando..."
+      },
+      "success": "Inversión archivada.",
+      "error": "No se pudo archivar la inversión."
+    },
+    "unarchiveSuccess": "Inversión desarchivada.",
+    "unarchiveError": "No se pudo desarchivar la inversión."
   },
   "snapshots": {
     "metadata": {

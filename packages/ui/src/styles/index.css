@@ -9,6 +9,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Width at which the investments toolbar actions row switches from column to row */
+@custom-variant toolbar-actions {
+  @container (min-width: 510px) {
+    @slot;
+  }
+}
+
 /* Light mode */
 :root {
   /* Official Shadcn variables */
@@ -82,6 +89,28 @@
   [role='button']:not([disabled]) {
     cursor: pointer;
   }
+
+  /* Grey text selection across the whole app */
+  ::selection {
+    background-color: var(--accent-3);
+    color: var(--foreground);
+  }
+}
+
+/* Focus bump animation */
+@keyframes focus-bump {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+/* @utility (not @layer utilities) so Tailwind generates focus-visible: and other variants for it */
+@utility animate-focus-bump {
+  animation: focus-bump 0.3s ease-in-out;
 }
 
 @layer utilities {

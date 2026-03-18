@@ -44,3 +44,5 @@ Use **`#`** block comments **above** the definition (no docstrings inside).
 - **Domain:** One `#` above class when the role isn’t obvious (value objects, enums, errors).
 
 One or two lines per comment. No docstrings in the function body.
+
+**End with a period.** Every comment that is a sentence or description must end with `.`. Two exceptions: inline comments on the same line as code, and title-style labels used as short noun-phrase section headers (e.g. `# Business logic`, `# --- Auth ---`).
