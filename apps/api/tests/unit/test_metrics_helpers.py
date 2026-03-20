@@ -6,6 +6,7 @@ from app.models.transaction import Transaction, TransactionType
 from app.services.metrics_helpers import (
     build_irr_cashflows,
     compute_period_returns,
+    convert_value,
     invested_capital,
     net_cash_flow,
     period_return,
@@ -218,3 +219,24 @@ class TestBuildIRRCashflows:
         cfs = build_irr_cashflows(snaps, [])
         # Only one snapshot, first == last, so only the initial outflow.
         assert len(cfs) == 1
+
+
+# --- convert_value ---
+
+
+class TestConvertValue:
+    def test_usd_to_ars(self):
+        result = convert_value(Decimal("100"), "USD", "ARS", Decimal("1400"))
+        assert result == Decimal("140000")
+
+    def test_ars_to_usd(self):
+        result = convert_value(Decimal("140000"), "ARS", "USD", Decimal("1400"))
+        assert result == Decimal("100")
+
+    def test_same_currency(self):
+        result = convert_value(Decimal("100"), "USD", "USD", Decimal("1400"))
+        assert result == Decimal("100")
+
+    def test_unsupported_pair_returns_unchanged(self):
+        result = convert_value(Decimal("100"), "EUR", "BRL", Decimal("1400"))
+        assert result == Decimal("100")
