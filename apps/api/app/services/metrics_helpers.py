@@ -159,3 +159,20 @@ def group_transactions_by_investment(
     for t in transactions:
         grouped[t.investment_id].append(t)
     return dict(grouped)
+
+
+# Converts a value from one currency to another using the USD/ARS rate.
+# Returns the value unchanged if currencies match or the pair is unsupported.
+def convert_value(
+    value: Decimal,
+    from_currency: str,
+    to_currency: str,
+    usd_ars_rate: Decimal,
+) -> Decimal:
+    if from_currency == to_currency:
+        return value
+    if from_currency == "USD" and to_currency == "ARS":
+        return value * usd_ars_rate
+    if from_currency == "ARS" and to_currency == "USD":
+        return value / usd_ars_rate
+    return value

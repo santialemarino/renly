@@ -62,6 +62,7 @@ pnpm dev
 | `pnpm check:api`        | API app import check                         |
 | `pnpm check:web`        | Web TypeScript type check                    |
 | `pnpm check-types`      | TypeScript type check (all workspaces/turbo) |
+| `pnpm test:api`         | Run API unit tests (pytest)                  |
 
 ## Code quality
 
@@ -69,6 +70,7 @@ On every `git commit`, Husky runs:
 
 - **lint-staged** — Prettier on staged JS/TS/CSS/JSON/MD (with import sort via `@ianvs/prettier-plugin-sort-imports`); ESLint fix on staged TS/TSX in `apps/web` and `packages/ui`. Formatted files are re-staged.
 - **API** — `pnpm check:api` so the app loads (runs from `apps/api`).
+- **API tests** — `pnpm test:api` runs pytest unit tests.
 - **Web** — `pnpm check:web` so TypeScript compiles.
 
 To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:web`.

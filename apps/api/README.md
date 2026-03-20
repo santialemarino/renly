@@ -27,6 +27,11 @@ From repo root: `pnpm check:api` — same as pre-commit/CI; catches import and m
 
 Request flow: **router → service → repository → DB**. Routers are HTTP-only; services hold business logic; repositories do data access. Schemas for request/response; `deps/` for FastAPI dependencies.
 
+## Test
+
+From repo root: `pnpm test:api`
+From here: `uv run pytest tests/ -v`
+
 ## Env
 
-`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`. Copy from `.env.example`.
+`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`, `DOLARAPI_URL` (defaults to `https://dolarapi.com/v1`). Copy from `.env.example`.

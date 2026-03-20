@@ -28,6 +28,7 @@ class InvestmentMetricsResponse(BaseModel):
     twr: Decimal | None = Field(default=None, description="Time-weighted return since inception.")
     irr: Decimal | None = Field(default=None, description="Money-weighted return (annualised XIRR).")
     period_returns: list[PeriodReturnItem] = Field(default_factory=list, description="Return per snapshot period.")
+    currency: str = Field(description="Currency of the monetary values.")
 
 
 # Summary metrics for the entire portfolio.
@@ -40,7 +41,9 @@ class PortfolioMetricsResponse(BaseModel):
     )
     month_change: Decimal | None = Field(default=None, description="Absolute change vs previous month.")
     month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
-    currency: str | None = Field(default=None, description="Currency of the values (null if mixed/original).")
+    currency: str | None = Field(
+        default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
+    )
 
 
 # One slice of the allocation distribution.
