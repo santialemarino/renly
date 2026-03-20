@@ -29,7 +29,7 @@ jobs:
         run: pip install uv
 
       - name: Install dependencies
-        run: uv sync --no-install-project
+        run: uv sync --no-install-project --extra dev
 
       - name: Ruff format check
         run: uv run ruff format --check .
