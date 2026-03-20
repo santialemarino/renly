@@ -1,16 +1,28 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
 from app.domain import NotFoundError
-from app.routers import auth, groups, investments, metrics
+from app.routers import auth, exchange_rates, groups, investments, metrics
 from app.routers import settings as settings_router
+from app.scheduler import start_scheduler, stop_scheduler
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    start_scheduler()
+    yield
+    stop_scheduler()
+
 
 app = FastAPI(
     title="Renly API",
     description="Renly backend — personal finance (investments, metrics, exchange rates)",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -22,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(exchange_rates.router)
 app.include_router(groups.router)
 app.include_router(investments.router)
 app.include_router(metrics.router)
