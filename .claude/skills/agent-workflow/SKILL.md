@@ -27,6 +27,7 @@ Before committing (or suggesting a commit), ensure lints and checks pass. The re
 - `pnpm format:check` (or `pnpm format` to fix)
 - `pnpm check:api`
 - `pnpm check:web`
+- `pnpm test:api`
 
 So: no strict obligation to run these manually every time, since pre-commit runs them; the obligation is not to commit code that would fail these checks.
 

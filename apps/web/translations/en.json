@@ -19,7 +19,19 @@
         "passwordMismatch": "Passwords do not match",
         "serverError": "Something went wrong. Please try again later."
       }
-    }
+    },
+    "categories": {
+      "cedears": "CEDEARs",
+      "fci": "Mutual Funds",
+      "dollars": "Dollars",
+      "bonds": "Bonds",
+      "stocks": "Stocks",
+      "crypto": "Crypto",
+      "real_estate": "Real Estate",
+      "term_deposit": "Term Deposit",
+      "other": "Other"
+    },
+    "allCategories": "All categories"
   },
   "login": {
     "metadata": {
@@ -141,20 +153,8 @@
     },
     "title": "Investments",
     "subtitle": "Manage your investment portfolio.",
-    "categories": {
-      "cedears": "CEDEARs",
-      "fci": "Mutual Funds",
-      "dollars": "Dollars",
-      "bonds": "Bonds",
-      "stocks": "Stocks",
-      "crypto": "Crypto",
-      "real_estate": "Real Estate",
-      "term_deposit": "Term Deposit",
-      "other": "Other"
-    },
     "toolbar": {
       "searchPlaceholder": "Search investments...",
-      "allCategories": "All categories",
       "addInvestment": "Add investment",
       "showArchived": "Show archived"
     },
@@ -234,7 +234,47 @@
       "description": "Manage your snapshots"
     },
     "title": "Snapshots",
-    "subtitle": "Coming soon."
+    "subtitle": "Investment values by month.",
+    "toolbar": {
+      "searchPlaceholder": "Search investments..."
+    },
+    "grid": {
+      "investment": "Investment",
+      "empty": "No snapshots found.",
+      "addSnapshot": "Add snapshot",
+      "actions": "Actions"
+    },
+    "form": {
+      "titleCreate": "Add snapshot",
+      "titleEdit": "Edit snapshot",
+      "date": {
+        "label": "Date",
+        "duplicate": "A snapshot already exists for this month. Click the cell to edit it."
+      },
+      "value": {
+        "label": "Value",
+        "placeholder": "0.00"
+      },
+      "transaction": {
+        "include": "Include a transaction for this period",
+        "amount": "Amount",
+        "type": "Type",
+        "types": {
+          "deposit": "Deposit",
+          "buy": "Buy",
+          "sell": "Sell",
+          "withdrawal": "Withdrawal"
+        }
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Snapshot created.",
+      "updateSuccess": "Snapshot updated.",
+      "saveError": "Failed to save snapshot."
+    }
   },
   "settings": {
     "metadata": {

@@ -194,6 +194,7 @@ export function InvestmentsDataTable({
   groups: InvestmentGroup[];
 }) {
   const t = useTranslations('investments');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -319,7 +320,7 @@ export function InvestmentsDataTable({
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell>{t(`categories.${investment.category}`)}</TableCell>
+                  <TableCell>{tCommon(`categories.${investment.category}`)}</TableCell>
                   <TableCell>{investment.baseCurrency}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {investment.broker ?? '—'}

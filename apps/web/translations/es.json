@@ -19,7 +19,19 @@
         "passwordMismatch": "Las contraseñas no coinciden",
         "serverError": "Algo salió mal. Intenta de nuevo más tarde."
       }
-    }
+    },
+    "categories": {
+      "cedears": "CEDEARs",
+      "fci": "Fondos Comunes",
+      "dollars": "Dólares",
+      "bonds": "Bonos",
+      "stocks": "Acciones",
+      "crypto": "Cripto",
+      "real_estate": "Inmuebles",
+      "term_deposit": "Plazo Fijo",
+      "other": "Otro"
+    },
+    "allCategories": "Todas las categorías"
   },
   "login": {
     "metadata": {
@@ -141,20 +153,8 @@
     },
     "title": "Inversiones",
     "subtitle": "Gestioná tu cartera de inversiones.",
-    "categories": {
-      "cedears": "CEDEARs",
-      "fci": "Fondos Comunes",
-      "dollars": "Dólares",
-      "bonds": "Bonos",
-      "stocks": "Acciones",
-      "crypto": "Cripto",
-      "real_estate": "Inmuebles",
-      "term_deposit": "Plazo Fijo",
-      "other": "Otro"
-    },
     "toolbar": {
       "searchPlaceholder": "Buscar inversiones...",
-      "allCategories": "Todas las categorías",
       "addInvestment": "Agregar inversión",
       "showArchived": "Ver archivadas"
     },
@@ -234,7 +234,47 @@
       "description": "Gestiona tus snapshots"
     },
     "title": "Snapshots",
-    "subtitle": "Coming soon."
+    "subtitle": "Valores de inversiones por mes.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar inversiones..."
+    },
+    "grid": {
+      "investment": "Inversión",
+      "empty": "No se encontraron snapshots.",
+      "addSnapshot": "Agregar snapshot",
+      "actions": "Acciones"
+    },
+    "form": {
+      "titleCreate": "Agregar snapshot",
+      "titleEdit": "Editar snapshot",
+      "date": {
+        "label": "Fecha",
+        "duplicate": "Ya existe un snapshot para este mes. Hacé click en la celda para editarlo."
+      },
+      "value": {
+        "label": "Valor",
+        "placeholder": "0.00"
+      },
+      "transaction": {
+        "include": "Incluir una transacción para este período",
+        "amount": "Monto",
+        "type": "Tipo",
+        "types": {
+          "deposit": "Depósito",
+          "buy": "Compra",
+          "sell": "Venta",
+          "withdrawal": "Retiro"
+        }
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Snapshot creado.",
+      "updateSuccess": "Snapshot actualizado.",
+      "saveError": "Error al guardar el snapshot."
+    }
   },
   "settings": {
     "metadata": {

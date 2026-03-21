@@ -7,18 +7,18 @@ description: Where tests live, how to run them, and what to test in the Renly re
 
 ## Current state
 
-- **API tests:** `apps/api/tests/` — pytest. No tests written yet; the folder exists.
+- **API tests:** `apps/api/tests/unit/` — pytest. 28 unit tests for metrics helpers (period return, TWR, XIRR, invested capital, currency conversion).
 - **Web tests:** None planned for MVP.
-- **Priority:** The metrics service (period return, TWR, IRR) is the first area that needs unit tests — pure calculation functions, easy to test, high risk if wrong.
+- **Pre-commit:** `pnpm test:api` runs on every commit. Also runs in CI (`ci.api.yml`).
 
 ## Running tests
 
 ```bash
 # From apps/api
-uv run pytest
+uv run pytest tests/ -v
 
 # From repo root
-pnpm test   # runs turbo test (currently no-ops until tests exist)
+pnpm test:api
 ```
 
 ## What to test (API)

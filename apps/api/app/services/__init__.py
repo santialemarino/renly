@@ -7,6 +7,7 @@ from app.services import (
     investment_service,
     metrics_service,
     settings_service,
+    snapshot_grid_service,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "investment_service",
     "metrics_service",
     "settings_service",
+    "snapshot_grid_service",
 ]

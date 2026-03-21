@@ -97,6 +97,11 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         />
       </div>
 
+      {/* TODO: §11.4.1 — Add warning icon next to currencies without exchange rate support
+          in each CurrencyCombobox. Below this separator, add a hint row with the warning icon
+          + explanation: "Currencies marked with ⚠ don't have exchange rate support yet.
+          Conversion will be available soon." Show warning toast on selection. */}
+
       <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
       </Button>
