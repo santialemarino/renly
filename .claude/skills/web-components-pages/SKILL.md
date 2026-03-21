@@ -172,6 +172,12 @@ await authenticatedFetch('/investments', {
 });
 ```
 
+## Translations
+
+- **Page-specific translations** live under the page's namespace (e.g. `investments.toolbar.searchPlaceholder`, `snapshots.form.titleCreate`).
+- **Shared translations** (used by multiple pages) live under `common` (e.g. `common.categories.cedears`, `common.allCategories`). Use `useTranslations('common')` or `tCommon` for these.
+- **Rule:** If a translation key is needed by more than one page, move it to `common`. Never import another page's namespace from a different page (e.g. don't use `useTranslations('investments')` inside the snapshots page).
+
 ## Comments
 
 - **Default:** Use `//`. Multiple consecutive `//` lines are fine for a sequence of independent remarks.

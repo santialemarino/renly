@@ -23,6 +23,9 @@ export function CurrencySwitcher({
     useCurrencyStore.setState({ activeCurrency: initialActive });
   }, [initialActive]);
 
+  // TODO: §11.4.1 — When switching to a currency without exchange rate support,
+  // show a warning toast: "Conversion to {CURRENCY} is not available yet.
+  // Showing values in original currency. Support coming soon."
   function handleChange(v: string) {
     setActive(v);
     setActiveCurrency(v);

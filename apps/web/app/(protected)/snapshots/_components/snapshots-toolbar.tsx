@@ -2,11 +2,9 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
-  Button,
   Pill,
   SearchInput,
   Select,
@@ -14,7 +12,6 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@repo/ui/components';
-import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
@@ -22,26 +19,22 @@ import type { InvestmentGroup } from '@/lib/api/investments';
 const DEBOUNCE_MS = 300;
 const CATEGORY_ALL = '__all__';
 
-export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
-  const t = useTranslations('investments');
+export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
+  const t = useTranslations('snapshots');
   const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Ref keeps searchParams current inside the debounced navigate callback without adding it to the effect dependency array.
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
 
   const [, startTransition] = useTransition();
-  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
   const selectedGroupIds = searchParams.getAll('group_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
-  const showArchived = searchParams.get('show_archived') === 'true';
 
   function navigate(overrides: Record<string, string | string[] | null>) {
     const params = new URLSearchParams(searchParamsRef.current.toString());
-    params.delete('page');
     for (const [key, val] of Object.entries(overrides)) {
       if (val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
         params.delete(key);
@@ -52,7 +45,7 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
         params.set(key, val);
       }
     }
-    startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
+    startTransition(() => router.push(`${ROUTES.snapshots}?${params.toString()}`));
   }
 
   useEffect(() => {
@@ -99,47 +92,23 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
         </div>
       )}
 
-      <div className="flex flex-col gap-y-2 toolbar-actions:flex-row toolbar-actions:items-center toolbar-actions:gap-x-3">
-        <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-          <SelectTrigger className="w-full toolbar-actions:w-auto" surface>
-            <span className="truncate">
-              {selectedCategory === CATEGORY_ALL
-                ? tCommon('allCategories')
-                : tCommon(`categories.${selectedCategory}`)}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={CATEGORY_ALL}>{tCommon('allCategories')}</SelectItem>
-            {INVESTMENT_CATEGORIES.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {tCommon(`categories.${cat}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Pill
-          active={showArchived}
-          aria-pressed={showArchived}
-          onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
-          className="w-full toolbar-actions:w-auto"
-        >
-          <Archive className="size-4" />
-          {t('toolbar.showArchived')}
-        </Pill>
-
-        <Button blue onClick={() => setCreateOpen(true)} className="w-full toolbar-actions:w-auto">
-          <Plus className="size-4" />
-          {t('toolbar.addInvestment')}
-        </Button>
-      </div>
-
-      <InvestmentFormDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        groups={groups}
-        onSuccess={() => router.refresh()}
-      />
+      <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+        <SelectTrigger className="w-full sm:w-auto" surface>
+          <span className="truncate">
+            {selectedCategory === CATEGORY_ALL
+              ? tCommon('allCategories')
+              : tCommon(`categories.${selectedCategory}`)}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={CATEGORY_ALL}>{tCommon('allCategories')}</SelectItem>
+          {INVESTMENT_CATEGORIES.map((cat) => (
+            <SelectItem key={cat} value={cat}>
+              {tCommon(`categories.${cat}`)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
 from app.domain import NotFoundError
-from app.routers import auth, exchange_rates, groups, investments, metrics
+from app.routers import auth, exchange_rates, groups, investments, metrics, snapshot_grid
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
 
@@ -39,6 +39,7 @@ app.include_router(groups.router)
 app.include_router(investments.router)
 app.include_router(metrics.router)
 app.include_router(settings_router.router)
+app.include_router(snapshot_grid.router)
 
 
 @app.exception_handler(NotFoundError)

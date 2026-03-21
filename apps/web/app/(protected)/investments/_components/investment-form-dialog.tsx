@@ -147,7 +147,7 @@ export function InvestmentFormDialog({
                       <SelectContent>
                         {INVESTMENT_CATEGORIES.map((cat) => (
                           <SelectItem key={cat} value={cat}>
-                            {t(`categories.${cat}`)}
+                            {tCommon(`categories.${cat}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>
