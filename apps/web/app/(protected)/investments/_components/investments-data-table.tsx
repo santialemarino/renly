@@ -204,10 +204,10 @@ export function InvestmentsDataTable({
 
   function navigate(overrides: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
-    for (const [key, val] of Object.entries(overrides)) {
+    Object.entries(overrides).forEach(([key, val]) => {
       if (val === null) params.delete(key);
       else params.set(key, val);
-    }
+    });
     startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
   }
 

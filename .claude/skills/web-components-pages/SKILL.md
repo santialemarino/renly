@@ -26,6 +26,10 @@ description: How to create a component or a page in the Renly web app (Next.js A
 - **Prefer Lucide:** Use `lucide-react` when an icon exists there (e.g. `import { Check, Eye, XIcon } from 'lucide-react'`). Same usage pattern as in the repo: import by name, render as `<IconName className="..." />`.
 - **Custom SVG when needed:** When no Lucide icon fits, add a `.svg` file under `public/icons/` (or a subfolder, e.g. `public/icons/illustrations/`) and import it **as a React component**. The repo uses `@svgr/webpack` so `import MyIcon from 'public/icons/my-icon.svg'` gives a component; render as `<MyIcon className="..." />`. Do not use `<Image src="/icons/...">` for icons/illustrations that need to be styled or scaled with CSS.
 
+## Iteration
+
+Prefer higher-order functions (`forEach`, `map`, `filter`, `reduce`, `some`, `every`, `find`, `flatMap`) over `for` / `for...of` loops when the intent maps naturally to one of those operations. Use a loop only when you need early `break`/`continue`, async-sequential iteration (`for await`), or when a loop is genuinely clearer (e.g. building multiple outputs in one pass).
+
 ## Colocate feature files
 
 Keep all feature-specific modules in the same folder as the page that uses them: `actions.ts`, `schema.ts`, `form-schema.ts`, etc. Same hierarchy as the route — e.g. `app/(auth)/login/actions.ts`, `app/(auth)/login/form-schema.ts`, `app/(protected)/dashboard/actions.ts`. Do not put them in a global `lib/` or `app/` root unless they are shared across multiple routes.

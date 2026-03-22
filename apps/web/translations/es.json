@@ -31,7 +31,12 @@
       "term_deposit": "Plazo Fijo",
       "other": "Otro"
     },
-    "allCategories": "Todas las categorías"
+    "allCategories": "Todas las categorías",
+    "currency": {
+      "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
+      "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
+      "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Mostrando valores en moneda original. Soporte disponible pronto."
+    }
   },
   "login": {
     "metadata": {

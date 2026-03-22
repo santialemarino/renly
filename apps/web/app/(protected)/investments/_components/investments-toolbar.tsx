@@ -42,7 +42,7 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
   function navigate(overrides: Record<string, string | string[] | null>) {
     const params = new URLSearchParams(searchParamsRef.current.toString());
     params.delete('page');
-    for (const [key, val] of Object.entries(overrides)) {
+    Object.entries(overrides).forEach(([key, val]) => {
       if (val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
         params.delete(key);
       } else if (Array.isArray(val)) {
@@ -51,7 +51,7 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
       } else {
         params.set(key, val);
       }
-    }
+    });
     startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
   }
 

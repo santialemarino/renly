@@ -22,15 +22,19 @@ async def _update_exchange_rates() -> None:
 
 
 def start_scheduler() -> None:
+    from datetime import datetime
+
+    # Run immediately on startup, then every 6 hours.
     scheduler.add_job(
         _update_exchange_rates,
         "interval",
         hours=6,
         id="update_exchange_rates",
         replace_existing=True,
+        next_run_time=datetime.now(),
     )
     scheduler.start()
-    logger.info("Scheduler started (exchange rate update every 6 hours).")
+    logger.info("Scheduler started (exchange rate update: now + every 6 hours).")
 
 
 def stop_scheduler() -> None:

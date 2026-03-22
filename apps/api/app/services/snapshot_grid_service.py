@@ -1,8 +1,12 @@
 # Business logic for building the snapshots grid (investments × months).
 
+from decimal import Decimal
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.exchange_rate import ExchangeRatePair
 from app.models.investment import InvestmentCategory
+from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.snapshot_grid import (
     SnapshotGridCell,
@@ -15,6 +19,7 @@ from app.services import metrics_helpers as mh
 
 # Builds the snapshots grid for a user's investments.
 # Returns rows (investments) with snapshot cells, period returns, and transaction details.
+# When currency is provided, converts cell values using the latest MEP rate.
 async def get_snapshot_grid(
     session: AsyncSession,
     user_id: int,
@@ -22,6 +27,9 @@ async def get_snapshot_grid(
     search: str | None = None,
     group_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
+    currency: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
 ) -> SnapshotGridResponse:
     investments = await metrics_repository.list_active_investments(session, user_id)
 
@@ -38,9 +46,14 @@ async def get_snapshot_grid(
         group_set = set(group_ids)
         investments = [i for i in investments if any(gid in group_set for gid, _ in groups_map.get(i.id, []))]
 
+    # Sort.
+    if sort_by == "name":
+        investments = sorted(investments, key=lambda i: i.name.lower(), reverse=sort_order == "desc")
+
     if not investments:
         return SnapshotGridResponse(rows=[], months=[])
 
+    rate = await _get_conversion_rate(session) if currency else None
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -66,10 +79,13 @@ async def get_snapshot_grid(
         cells: list[SnapshotGridCell] = []
         for snap in snaps:
             tx = tx_by_period.get(snap.date)
+            value = snap.value
+            if currency and rate:
+                value = mh.convert_value(value, inv.base_currency, currency, rate)
             cells.append(
                 SnapshotGridCell(
                     date=snap.date,
-                    value=snap.value,
+                    value=value,
                     period_return_pct=pr_map.get(snap.date),
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
@@ -93,6 +109,18 @@ async def get_snapshot_grid(
         )
 
     return SnapshotGridResponse(rows=rows, months=all_dates)
+
+
+# Returns the latest USD/ARS MEP rate. Falls back to oficial if MEP unavailable.
+async def _get_conversion_rate(session: AsyncSession) -> Decimal | None:
+    latest_map = await exchange_rate_repository.get_latest_all(session)
+    mep = latest_map.get(ExchangeRatePair.USD_ARS_MEP)
+    if mep:
+        return mep.rate
+    oficial = latest_map.get(ExchangeRatePair.USD_ARS_OFICIAL)
+    if oficial:
+        return oficial.rate
+    return None
 
 
 # Returns {snapshot_date: latest_transaction} for periods that had transactions.

@@ -151,10 +151,6 @@ function CellContent({ cell }: CellContentProps) {
   );
 }
 
-// TODO: §11.4.1 — Read activeCurrency from Zustand store and pass it to the grid endpoint
-// as a ?currency= param. When conversion is not available for the selected currency,
-// fall back to original values (same as "Original" mode).
-
 interface SnapshotsGridProps {
   grid: SnapshotGridResponse;
 }
@@ -169,44 +165,37 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
   const [selectedRow, setSelectedRow] = useState<SnapshotGridRow | null>(null);
   const [selectedCell, setSelectedCell] = useState<SnapshotGridCell | undefined>(undefined);
 
-  // Sorting (client-side — small dataset).
+  // Sorting (server-side via URL params).
   const sortOrder = (searchParams.get('sort_order') as 'asc' | 'desc' | null) ?? 'asc';
   const sortBy = searchParams.get('sort_by');
   const isSortActive = sortBy === 'name';
 
-  function handleSortChange() {
+  function navigate(overrides: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams.toString());
-    if (!isSortActive) {
-      params.set('sort_by', 'name');
-      params.set('sort_order', 'asc');
-    } else if (sortOrder === 'asc') {
-      params.set('sort_order', 'desc');
-    } else {
-      params.delete('sort_by');
-      params.delete('sort_order');
-    }
+    Object.entries(overrides).forEach(([key, val]) => {
+      if (val === null) params.delete(key);
+      else params.set(key, val);
+    });
     startTransition(() => router.push(`${ROUTES.snapshots}?${params.toString()}`));
+  }
+
+  function handleSortChange() {
+    if (!isSortActive) {
+      navigate({ sort_by: 'name', sort_order: 'asc' });
+    } else if (sortOrder === 'asc') {
+      navigate({ sort_by: 'name', sort_order: 'desc' });
+    } else {
+      navigate({ sort_by: null, sort_order: null });
+    }
   }
 
   // Generate all year-month keys between global min and max (fill gaps).
   const allYearMonths = useMemo(() => generateAllYearMonths(grid.months), [grid.months]);
 
-  // Sort rows client-side.
-  const sortedRows = useMemo(() => {
-    if (!isSortActive) return grid.rows;
-    const sorted = [...grid.rows].sort((a, b) => a.name.localeCompare(b.name));
-    return sortOrder === 'desc' ? sorted.reverse() : sorted;
-  }, [grid.rows, isSortActive, sortOrder]);
-
   // Build cell lookup per row: year-month → cell.
   const cellMaps = useMemo(
-    () =>
-      sortedRows.map((row) => {
-        const map = new Map<string, SnapshotGridCell>();
-        for (const cell of row.cells) map.set(toYearMonth(cell.date), cell);
-        return map;
-      }),
-    [sortedRows],
+    () => grid.rows.map((row) => new Map(row.cells.map((cell) => [toYearMonth(cell.date), cell]))),
+    [grid.rows],
   );
 
   function handleCellClick(row: SnapshotGridRow, cell: SnapshotGridCell, e: React.MouseEvent) {
@@ -254,7 +243,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedRows.map((row, rowIdx) => (
+            {grid.rows.map((row, rowIdx) => (
               <TableRow key={row.investmentId}>
                 <TableCell className="sticky left-0 z-10 bg-background">
                   <div className="flex flex-col">

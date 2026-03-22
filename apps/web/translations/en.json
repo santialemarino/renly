@@ -31,7 +31,12 @@
       "term_deposit": "Term Deposit",
       "other": "Other"
     },
-    "allCategories": "All categories"
+    "allCategories": "All categories",
+    "currency": {
+      "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
+      "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
+      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon."
+    }
   },
   "login": {
     "metadata": {

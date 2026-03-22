@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { LoginCard } from '@/app/(auth)/login/_components/login-card';
 import { ROUTES } from '@/config/routes';
 import { getSession } from '@/lib/auth';
-import { generatePageMetadata } from '@/lib/utils/page';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
   return await generatePageMetadata('login');
