@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -221,53 +222,69 @@ export function SnapshotFormDialog({
                   {t('form.transaction.include')}
                 </Label>
               </div>
-              <WarningHint show={isEarliestSnapshot && !includeTransaction}>
+              <WarningHint show={isEarliestSnapshot} parentGap={8}>
                 {t('form.transaction.initialHint')}
               </WarningHint>
             </div>
 
-            {includeTransaction && (
-              <div className="flex min-w-0 items-start gap-x-3">
-                <FormField
-                  control={form.control}
-                  name="transactionAmount"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>{t('form.transaction.amount')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="number" step="0.01" min="0" placeholder="0.00" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <AnimatePresence initial={false}>
+              {includeTransaction && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{ overflow: 'hidden', marginTop: -16 }}
+                >
+                  <div className="flex min-w-0 items-start gap-x-3 pt-4">
+                    <FormField
+                      control={form.control}
+                      name="transactionAmount"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>{t('form.transaction.amount')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              placeholder="0.00"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="transactionType"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>{t('form.transaction.type')}</FormLabel>
-                      <Select value={field.value ?? 'deposit'} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {TRANSACTION_TYPES.map((type) => (
-                            <SelectItem key={type} value={type}>
-                              {t(`form.transaction.types.${type}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
+                    <FormField
+                      control={form.control}
+                      name="transactionType"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel>{t('form.transaction.type')}</FormLabel>
+                          <Select value={field.value ?? 'deposit'} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {TRANSACTION_TYPES.map((type) => (
+                                <SelectItem key={type} value={type}>
+                                  {t(`form.transaction.types.${type}`)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 

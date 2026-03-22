@@ -1,6 +1,6 @@
 interface PageHeaderProps {
   title: string;
-  subtitle: string;
+  subtitle: React.ReactNode;
 }
 
 export function PageHeader({ title, subtitle }: PageHeaderProps) {

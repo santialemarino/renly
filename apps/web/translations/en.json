@@ -149,8 +149,10 @@
     "subtitle": "Your investment portfolio at a glance.",
     "cards": {
       "totalValue": "Total Value",
-      "totalReturn": "Total Return",
-      "monthChange": "Month Change"
+      "twr": "TWR",
+      "irr": "IRR",
+      "gain": "Gain",
+      "vsLastMonth": "vs last month"
     },
     "period": {
       "1m": "1M",
@@ -163,6 +165,8 @@
       "tooltipValue": "Value"
     },
     "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
+    "skippedInvestments": "Some investments were excluded because their currency can't be converted: {names}.",
+    "loadError": "Unable to load dashboard data. This may be caused by missing exchange rates or a temporary server issue. Please try again later.",
     "noData": "No data available yet. Add snapshots to see your portfolio evolution.",
     "distribution": {
       "title": "Distribution",
@@ -177,6 +181,31 @@
       "invested": "Invested",
       "gain": "Gain",
       "monthChange": "Month"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Search investments...",
+      "backToFull": "All investments"
+    },
+    "filtered": {
+      "subtitle": "Showing filtered results.",
+      "investment": "Showing metrics for <bold>{name}</bold>:",
+      "group": "Showing investments in <bold>{name}</bold>:",
+      "category": "Showing investments of type <bold>{name}</bold>:"
+    },
+    "search": {
+      "placeholder": "Search investments, groups, or categories...",
+      "inputPlaceholder": "Type to search...",
+      "noResults": "No results found.",
+      "investments": "Investments",
+      "groups": "Groups",
+      "categories": "Categories"
+    },
+    "detail": {
+      "title": "Investment Details",
+      "invested": "Invested Capital",
+      "baseCurrency": "Currency",
+      "category": "Category",
+      "dataPoints": "Snapshots"
     }
   },
   "investments": {

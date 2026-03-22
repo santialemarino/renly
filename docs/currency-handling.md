@@ -120,6 +120,35 @@ Only USD and ARS have exchange rate support. When a user selects any other curre
 
 **Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'ARS']`.
 
+### 8. Unconvertible investments in metrics
+
+When the dashboard requests metrics in a specific currency (e.g. ARS), investments with a base currency that can't be converted (e.g. EUR) are **excluded** from all aggregated metrics to avoid silently summing mixed currencies.
+
+**Backend flow:**
+
+1. `can_convert(from, to)` in `metrics_helpers.py` checks if the pair is supported (same currency or USD↔ARS).
+2. `_split_by_convertibility()` in `metrics_service.py` splits investments into convertible and skipped lists.
+3. Only convertible investments are used for computation. Skipped investments are returned in `skipped_investments` on every response.
+4. If conversion is needed but no exchange rates exist in the DB, `ExchangeRateUnavailableError` (503) is raised.
+
+**Frontend handling:**
+
+- The dashboard shows a `WarningHint` listing skipped investments: _"Some investments were excluded because their currency can't be converted: Name (EUR)."_
+- If the API returns 503 (no rates at all), the dashboard shows a generic error fallback: _"Unable to load dashboard data."_
+
+### 9. Edge cases summary
+
+| Scenario                         | Behaviour                                           |
+| -------------------------------- | --------------------------------------------------- |
+| All investments USD, display ARS | All converted via MEP rate                          |
+| Mixed USD+ARS, display ARS       | Both converted correctly                            |
+| EUR investment, display ARS      | EUR investment excluded, warning shown              |
+| Display currency EUR             | USD and ARS investments excluded, warning lists all |
+| All investments same as display  | No conversion needed, no rate fetched               |
+| No exchange rates in DB          | 503 error, dashboard shows load error fallback      |
+| "Original" selected on dashboard | Falls back to primary currency, hint shown          |
+| "Original" on snapshots page     | No conversion, values in base currency              |
+
 ## Data model
 
 ```sql

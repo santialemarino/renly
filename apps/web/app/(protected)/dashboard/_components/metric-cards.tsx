@@ -24,6 +24,20 @@ function formatPct(pct: number): string {
   return pct >= 0 ? `+${s}%` : `${s}%`;
 }
 
+// Formats a number with explicit +/- sign.
+function formatSignedValue(value: number): string {
+  const formatted = formatValue(Math.abs(value));
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `-${formatted}`;
+  return formatted;
+}
+
+// Returns the color class: green for positive, red for negative, grey for zero/null.
+function valueColor(value: number | null): string {
+  if (value === null || value === 0) return 'text-muted-foreground';
+  return value > 0 ? 'text-emerald-600' : 'text-red-500';
+}
+
 interface MetricCardsProps {
   metrics: PortfolioMetrics;
 }
@@ -31,28 +45,24 @@ interface MetricCardsProps {
 export function MetricCards({ metrics }: MetricCardsProps) {
   const t = useTranslations('dashboard');
 
-  const isReturnPositive = (metrics.totalReturnPct ?? 0) >= 0;
-  const isChangePositive = (metrics.monthChangePct ?? 0) >= 0;
-
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* Total Value */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalValue')}</span>
         <p className="text-heading-3">{formatValue(metrics.totalValue)}</p>
       </Card>
 
-      {/* Total Return */}
+      {/* TWR */}
       <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalReturn')}</span>
+        <span className="text-paragraph-sm text-muted-foreground">{t('cards.twr')}</span>
         <div className="flex items-center gap-x-2">
-          <p
-            className={cn('text-heading-3', isReturnPositive ? 'text-emerald-600' : 'text-red-500')}
-          >
-            {metrics.totalReturnPct !== null ? formatPct(metrics.totalReturnPct) : '—'}
+          <p className={cn('text-heading-3', valueColor(metrics.twr))}>
+            {metrics.twr !== null ? formatPct(metrics.twr) : '—'}
           </p>
-          {metrics.totalReturnPct !== null &&
-            (isReturnPositive ? (
+          {metrics.twr !== null &&
+            metrics.twr !== 0 &&
+            (metrics.twr > 0 ? (
               <TrendingUp className="size-5 text-emerald-600" />
             ) : (
               <TrendingDown className="size-5 text-red-500" />
@@ -60,26 +70,45 @@ export function MetricCards({ metrics }: MetricCardsProps) {
         </div>
       </Card>
 
-      {/* Month Change */}
+      {/* IRR */}
       <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.monthChange')}</span>
+        <span className="text-paragraph-sm text-muted-foreground">{t('cards.irr')}</span>
         <div className="flex items-center gap-x-2">
-          <p
-            className={cn('text-heading-3', isChangePositive ? 'text-emerald-600' : 'text-red-500')}
-          >
-            {metrics.monthChange !== null ? formatValue(metrics.monthChange) : '—'}
+          <p className={cn('text-heading-3', valueColor(metrics.irr))}>
+            {metrics.irr !== null ? formatPct(metrics.irr) : '—'}
           </p>
-          {metrics.monthChangePct !== null && (
-            <span
-              className={cn(
-                'text-paragraph-sm',
-                isChangePositive ? 'text-emerald-600' : 'text-red-500',
-              )}
-            >
-              {formatPct(metrics.monthChangePct)}
+          {metrics.irr !== null &&
+            metrics.irr !== 0 &&
+            (metrics.irr > 0 ? (
+              <TrendingUp className="size-5 text-emerald-600" />
+            ) : (
+              <TrendingDown className="size-5 text-red-500" />
+            ))}
+        </div>
+      </Card>
+
+      {/* Gain + simple return % + month change subtext */}
+      <Card compact>
+        <span className="text-paragraph-sm text-muted-foreground">{t('cards.gain')}</span>
+        <div className="flex items-center gap-x-2">
+          <p className={cn('text-heading-3', valueColor(metrics.absoluteGain))}>
+            {formatValue(metrics.absoluteGain)}
+          </p>
+          {metrics.totalReturnPct !== null && metrics.totalReturnPct !== 0 && (
+            <span className={cn('text-paragraph-sm', valueColor(metrics.totalReturnPct))}>
+              {formatPct(metrics.totalReturnPct)}
             </span>
           )}
         </div>
+        {metrics.monthChange !== null && (
+          <span className={cn('text-paragraph-mini', valueColor(metrics.monthChange))}>
+            {formatSignedValue(metrics.monthChange)}
+            {metrics.monthChangePct !== null && metrics.monthChangePct !== 0 && (
+              <> ({formatPct(metrics.monthChangePct)})</>
+            )}{' '}
+            {t('cards.vsLastMonth')}
+          </span>
+        )}
       </Card>
     </div>
   );

@@ -140,8 +140,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         />
       </div>
 
-      {(primaryUnsupported || secondaryUnsupported) && <Separator />}
-      <WarningHint show={!!(primaryUnsupported || secondaryUnsupported)}>
+      <WarningHint show={!!(primaryUnsupported || secondaryUnsupported)} separator parentGap={24}>
         {tCommon.rich('currency.unsupportedHint', {
           bold: (chunks) => <strong>{chunks}</strong>,
         })}

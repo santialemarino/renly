@@ -14,6 +14,8 @@ import {
 } from '@repo/ui/components';
 import type { AllocationResponse, GroupAllocationResponse } from '@/lib/api/metrics';
 import {
+  CHART_ANIMATION_DURATION,
+  CHART_ANIMATION_EASING,
   DONUT_COLORS,
   DONUT_HEIGHT,
   DONUT_INNER_RADIUS,
@@ -21,6 +23,7 @@ import {
   DONUT_PADDING_ANGLE,
   FORMAT_THRESHOLD_MILLION,
   FORMAT_THRESHOLD_THOUSAND,
+  TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
   TOOLTIP_BORDER_RADIUS,
@@ -45,17 +48,21 @@ function formatValue(value: number): string {
 interface DistributionSectionProps {
   categoryAllocation: AllocationResponse;
   groupAllocation: GroupAllocationResponse;
+  forcedMode?: Mode;
 }
 
 export function DistributionSection({
   categoryAllocation,
   groupAllocation,
+  forcedMode,
 }: DistributionSectionProps) {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
-  const [mode, setMode] = useState<Mode>('category');
+  const [mode, setMode] = useState<Mode>(forcedMode ?? 'category');
 
-  const isCategoryMode = mode === 'category';
+  // When forcedMode is set, it overrides the user's toggle selection.
+  const activeMode = forcedMode ?? mode;
+  const isCategoryMode = activeMode === 'category';
 
   const chartData = isCategoryMode
     ? categoryAllocation.items.map((item) => ({
@@ -77,18 +84,20 @@ export function DistributionSection({
         <CardTitle className="text-paragraph-sm text-muted-foreground">
           {t('distribution.title')}
         </CardTitle>
-        <ToggleGroup
-          type="single"
-          value={mode}
-          onValueChange={(v) => {
-            if (v) setMode(v as Mode);
-          }}
-          variant="outline"
-          size="sm"
-        >
-          <ToggleGroupItem value="category">{t('distribution.byCategory')}</ToggleGroupItem>
-          <ToggleGroupItem value="group">{t('distribution.byGroup')}</ToggleGroupItem>
-        </ToggleGroup>
+        {!forcedMode && (
+          <ToggleGroup
+            type="single"
+            value={mode}
+            onValueChange={(v) => {
+              if (v) setMode(v as Mode);
+            }}
+            variant="outline"
+            size="sm"
+          >
+            <ToggleGroupItem value="category">{t('distribution.byCategory')}</ToggleGroupItem>
+            <ToggleGroupItem value="group">{t('distribution.byGroup')}</ToggleGroupItem>
+          </ToggleGroup>
+        )}
       </CardHeader>
       <CardContent className="px-6 pb-6">
         {hasData ? (
@@ -102,6 +111,8 @@ export function DistributionSection({
                     nameKey="name"
                     innerRadius={DONUT_INNER_RADIUS}
                     outerRadius={DONUT_OUTER_RADIUS}
+                    animationDuration={CHART_ANIMATION_DURATION}
+                    animationEasing={CHART_ANIMATION_EASING}
                     paddingAngle={DONUT_PADDING_ANGLE}
                     strokeWidth={0}
                   >
@@ -110,6 +121,7 @@ export function DistributionSection({
                     ))}
                   </Pie>
                   <Tooltip
+                    animationDuration={TOOLTIP_ANIMATION_DURATION}
                     formatter={(value) => formatValue(Number(value))}
                     contentStyle={{
                       backgroundColor: TOOLTIP_BG,
@@ -136,7 +148,7 @@ export function DistributionSection({
                   <span className="min-w-0 truncate text-paragraph-mini text-muted-foreground">
                     {entry.name}
                   </span>
-                  <span className="ml-auto shrink-0 text-paragraph-mini-semibold">
+                  <span className="shrink-0 ml-auto text-paragraph-mini-semibold">
                     {entry.percentage.toFixed(1)}%
                   </span>
                 </div>

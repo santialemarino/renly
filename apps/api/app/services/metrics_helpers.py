@@ -161,6 +161,15 @@ def group_transactions_by_investment(
     return dict(grouped)
 
 
+# Returns True if the currency pair can be converted.
+# Same currency always converts (identity). Otherwise only USD ↔ ARS is supported.
+def can_convert(from_currency: str, to_currency: str) -> bool:
+    if from_currency == to_currency:
+        return True
+    pair = frozenset({from_currency, to_currency})
+    return pair == frozenset({"USD", "ARS"})
+
+
 # Converts a value from one currency to another using the USD/ARS rate.
 # Returns the value unchanged if currencies match or the pair is unsupported.
 def convert_value(
