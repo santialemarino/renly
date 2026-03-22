@@ -11,14 +11,16 @@ from app.models.investment import InvestmentCategory
 # Transaction details embedded in a grid cell (latest transaction in the period, if any).
 class SnapshotGridTransaction(BaseModel):
     id: int = Field(description="Transaction id.")
-    amount: Decimal = Field(description="Transaction amount.")
+    amount: Decimal = Field(description="Transaction amount (display currency).")
+    original_amount: Decimal = Field(description="Transaction amount (base currency, for editing).")
     type: str = Field(description="Transaction kind (buy, sell, deposit, withdrawal).")
 
 
 # One cell in the snapshots grid (a snapshot for an investment on a given date).
 class SnapshotGridCell(BaseModel):
     date: date_type = Field(description="Snapshot date.")
-    value: Decimal = Field(description="Snapshot value.")
+    value: Decimal = Field(description="Snapshot value (display currency).")
+    original_value: Decimal = Field(description="Snapshot value (base currency, for editing).")
     period_return_pct: Decimal | None = Field(
         default=None, description="Period return vs previous snapshot (null for first)."
     )

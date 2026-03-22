@@ -7,12 +7,14 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 interface SnapshotGridTransactionRaw {
   id: number;
   amount: string;
+  original_amount: string;
   type: string;
 }
 
 interface SnapshotGridCellRaw {
   date: string;
   value: string;
+  original_value: string;
   period_return_pct: string | null;
   has_transaction: boolean;
   transaction: SnapshotGridTransactionRaw | null;
@@ -36,12 +38,14 @@ interface SnapshotGridResponseRaw {
 export interface SnapshotGridTransaction {
   id: number;
   amount: number;
+  originalAmount: number;
   type: string;
 }
 
 export interface SnapshotGridCell {
   date: string;
   value: number;
+  originalValue: number;
   periodReturnPct: number | null;
   hasTransaction: boolean;
   transaction: SnapshotGridTransaction | null;
@@ -75,12 +79,14 @@ function mapCell(raw: SnapshotGridCellRaw): SnapshotGridCell {
   return {
     date: raw.date,
     value: Number(raw.value),
+    originalValue: Number(raw.original_value),
     periodReturnPct: raw.period_return_pct !== null ? Number(raw.period_return_pct) : null,
     hasTransaction: raw.has_transaction,
     transaction: raw.transaction
       ? {
           id: raw.transaction.id,
           amount: Number(raw.transaction.amount),
+          originalAmount: Number(raw.transaction.original_amount),
           type: raw.transaction.type,
         }
       : null,

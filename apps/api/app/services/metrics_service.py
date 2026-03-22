@@ -12,13 +12,18 @@ from app.models.investment import Investment
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
 from app.repositories.exchange_rate_repository import exchange_rate_repository
+from app.repositories.group_repository import group_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.metrics import (
     AllocationItem,
     AllocationResponse,
     EvolutionPoint,
+    GroupAllocationItem,
+    GroupAllocationResponse,
     InvestmentMetricsResponse,
+    InvestmentsSummaryResponse,
+    InvestmentSummaryItem,
     PeriodReturnItem,
     PortfolioEvolutionResponse,
     PortfolioMetricsResponse,
@@ -235,6 +240,124 @@ async def get_allocation(
         items.append(AllocationItem(category=category, value=value, percentage=pct))
 
     return AllocationResponse(items=items, total_value=total_value)
+
+
+# Computes allocation by investment group.
+# Investments not in any group are bucketed under "Ungrouped".
+async def get_allocation_by_group(
+    session: AsyncSession,
+    user_id: int,
+    currency: str | None = None,
+) -> GroupAllocationResponse:
+    investments = await metrics_repository.list_active_investments(session, user_id)
+    if not investments:
+        return GroupAllocationResponse(items=[], total_value=ZERO)
+
+    rate = await _get_conversion_rate(session) if currency else None
+    inv_ids = [i.id for i in investments]
+    inv_currency = {i.id: i.base_currency for i in investments}
+    latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
+
+    # Build {investment_id: converted_value} for investments with snapshots.
+    inv_values: dict[int, Decimal] = {}
+    for inv_id, snapshot in latest_map.items():
+        v = snapshot.value
+        if currency and rate:
+            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate)
+        inv_values[inv_id] = v
+
+    # Load groups and their memberships.
+    groups = await group_repository.list_by_user(session, user_id)
+    grouped_inv_ids: set[int] = set()
+    group_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
+
+    for group in groups:
+        member_ids = await group_repository.get_investment_ids_by_group(session, group.id)
+        for mid in member_ids:
+            if mid in inv_values:
+                group_values[group.name] += inv_values[mid]
+                grouped_inv_ids.add(mid)
+
+    # Ungrouped bucket.
+    ungrouped = ZERO
+    for inv_id, val in inv_values.items():
+        if inv_id not in grouped_inv_ids:
+            ungrouped += val
+    if ungrouped > ZERO:
+        group_values["Ungrouped"] = ungrouped
+
+    total_value = sum(group_values.values(), ZERO)
+
+    items = []
+    for name, value in sorted(group_values.items(), key=lambda x: x[1], reverse=True):
+        pct = (value / total_value * 100) if total_value != ZERO else ZERO
+        items.append(GroupAllocationItem(group_name=name, value=value, percentage=pct))
+
+    return GroupAllocationResponse(items=items, total_value=total_value)
+
+
+# Computes lightweight per-investment metrics for the dashboard compact table.
+# Returns current value, invested capital, absolute gain, and month-over-month change.
+async def get_investments_summary(
+    session: AsyncSession,
+    user_id: int,
+    currency: str | None = None,
+) -> InvestmentsSummaryResponse:
+    investments = await metrics_repository.list_active_investments(session, user_id)
+    if not investments:
+        return InvestmentsSummaryResponse(items=[])
+
+    rate = await _get_conversion_rate(session) if currency else None
+    inv_ids = [i.id for i in investments]
+
+    all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
+    all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
+
+    snap_by_inv = mh.group_snapshots_by_investment(all_snapshots)
+    tx_by_inv = mh.group_transactions_by_investment(all_transactions)
+
+    items: list[InvestmentSummaryItem] = []
+    for inv in investments:
+        snaps = snap_by_inv.get(inv.id, [])
+        txs = tx_by_inv.get(inv.id, [])
+        base = inv.base_currency
+
+        current_value = snaps[-1].value if snaps else None
+        cap = mh.invested_capital(txs)
+        absolute_gain = (current_value - cap) if current_value is not None else None
+
+        # Month-over-month change.
+        month_change_pct = None
+        if len(snaps) >= 2:
+            curr_v = snaps[-1].value
+            prev_v = snaps[-2].value
+            if prev_v != ZERO:
+                month_change_pct = (curr_v - prev_v) / prev_v
+
+        # Convert absolute values.
+        if currency and rate:
+            if current_value is not None:
+                current_value = mh.convert_value(current_value, base, currency, rate)
+            cap = mh.convert_value(cap, base, currency, rate)
+            absolute_gain = (current_value - cap) if current_value is not None else None
+
+        items.append(
+            InvestmentSummaryItem(
+                investment_id=inv.id,
+                name=inv.name,
+                category=inv.category,
+                current_value=current_value,
+                invested_capital=cap,
+                absolute_gain=absolute_gain,
+                month_change_pct=month_change_pct,
+                currency=currency or base,
+            )
+        )
+
+    # Sort by current value descending (None values last).
+    items.sort(key=lambda x: x.current_value or ZERO, reverse=True)
+
+    return InvestmentsSummaryResponse(items=items)
 
 
 # Returns the latest USD/ARS MEP rate. Falls back to oficial if MEP unavailable.

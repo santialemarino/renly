@@ -15,6 +15,7 @@ import {
   settingsFormSchema,
   type SettingsFormValues,
 } from '@/app/(protected)/settings/settings-form-schema';
+import { WarningHint } from '@/components/warning-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { isCurrencySupported } from '@/lib/utils/currency';
 
@@ -139,27 +140,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         />
       </div>
 
-      <AnimatePresence>
-        {(primaryUnsupported || secondaryUnsupported) && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
-            className="flex flex-col overflow-hidden gap-y-6"
-          >
-            <Separator />
-            <div className="flex items-center gap-x-2">
-              <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-              <Hint className="whitespace-pre-line">
-                {tCommon.rich('currency.unsupportedHint', {
-                  bold: (chunks) => <strong>{chunks}</strong>,
-                })}
-              </Hint>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {(primaryUnsupported || secondaryUnsupported) && <Separator />}
+      <WarningHint show={!!(primaryUnsupported || secondaryUnsupported)}>
+        {tCommon.rich('currency.unsupportedHint', {
+          bold: (chunks) => <strong>{chunks}</strong>,
+        })}
+      </WarningHint>
 
       <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}

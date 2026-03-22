@@ -162,7 +162,22 @@
       "title": "Portfolio Evolution",
       "tooltipValue": "Value"
     },
-    "noData": "No data available yet. Add snapshots to see your portfolio evolution."
+    "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
+    "noData": "No data available yet. Add snapshots to see your portfolio evolution.",
+    "distribution": {
+      "title": "Distribution",
+      "byCategory": "By category",
+      "byGroup": "By group",
+      "ungrouped": "Ungrouped"
+    },
+    "investmentsTable": {
+      "title": "Investments",
+      "name": "Name",
+      "value": "Value",
+      "invested": "Invested",
+      "gain": "Gain",
+      "monthChange": "Month"
+    }
   },
   "investments": {
     "metadata": {
