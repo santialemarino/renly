@@ -5,13 +5,15 @@ import { cn } from '@repo/ui/lib';
 function Card({
   className,
   blue = false,
+  compact = false,
   ...props
-}: React.ComponentProps<'div'> & { blue?: boolean }) {
+}: React.ComponentProps<'div'> & { blue?: boolean; compact?: boolean }) {
   return (
     <div
       data-slot="card"
       className={cn(
-        'bg-card text-card-foreground flex flex-col gap-5 rounded-1.5xl border pb-6 pt-8 w-full min-w-0',
+        'bg-card text-card-foreground flex flex-col rounded-1.5xl border w-full min-w-0',
+        compact ? 'gap-y-1 p-5 rounded-xl' : 'gap-5 pb-6 pt-8',
         blue ? 'border-blue-800/50' : 'border-neutral-200',
         className,
       )}

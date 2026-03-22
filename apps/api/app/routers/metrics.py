@@ -7,6 +7,7 @@ from app.deps.db import SessionDep
 from app.schemas.metrics import (
     AllocationResponse,
     InvestmentMetricsResponse,
+    PortfolioEvolutionResponse,
     PortfolioMetricsResponse,
 )
 from app.services import metrics_service
@@ -23,6 +24,17 @@ async def get_portfolio_metrics(
     currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> PortfolioMetricsResponse:
     return await metrics_service.get_portfolio_metrics(session, current_user.id, currency=currency)
+
+
+# Returns monthly portfolio value series for the evolution chart.
+# Pass currency to convert all values (e.g. currency=USD).
+@router.get("/portfolio/evolution", response_model=PortfolioEvolutionResponse)
+async def get_portfolio_evolution(
+    current_user: CurrentUser,
+    session: SessionDep,
+    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+) -> PortfolioEvolutionResponse:
+    return await metrics_service.get_portfolio_evolution(session, current_user.id, currency=currency)
 
 
 # Returns metrics for a single investment (TWR, IRR, period returns).

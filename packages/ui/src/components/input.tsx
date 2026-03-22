@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Calendar, Eye, EyeOff } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
 
@@ -33,9 +33,21 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ) => {
     const hasError = props['aria-invalid'];
     const [showPassword, setShowPassword] = React.useState(false);
+    const internalRef = React.useRef<HTMLInputElement | null>(null);
 
     const isPassword = type === 'password';
+    const isDate = type === 'date';
     const inputType = isPassword && showPassword ? 'text' : type;
+
+    // Merge forwarded ref with internal ref for date picker access.
+    const setRefs = React.useCallback(
+      (node: HTMLInputElement | null) => {
+        internalRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLInputElement | null>).current = node;
+      },
+      [ref],
+    );
 
     return (
       <div
@@ -65,7 +77,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         )}
 
         <input
-          ref={ref}
+          ref={setRefs}
           type={inputType}
           data-slot="input"
           className={cn(
@@ -77,17 +89,18 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             'focus-visible:outline-none focus-visible:ring-0',
             '[&:-webkit-autofill]:[-webkit-box-shadow:0_0_0_1000px_var(--color-input)_inset] [&:-webkit-autofill]:[transition:background-color_9999s_ease-in-out_0s]',
             'aria-invalid:ring-destructive/20',
+            isDate && '[&::-webkit-calendar-picker-indicator]:hidden',
             startIcon && !prefix && 'pl-9',
             prefix && 'pl-0',
-            isPassword && 'pr-9',
-            endIcon && !isPassword && 'pr-9',
+            (isPassword || isDate) && 'pr-9',
+            endIcon && !isPassword && !isDate && 'pr-9',
             suffix && 'pr-0',
             className,
           )}
           {...props}
         />
 
-        {endIcon && !isPassword && (
+        {endIcon && !isPassword && !isDate && (
           <div className="absolute right-2.5 top-1/2 -translate-y-1/2">{endIcon}</div>
         )}
 
@@ -118,6 +131,20 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
                 )}
               />
             </span>
+          </button>
+        )}
+
+        {isDate && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => internalRef.current?.showPicker()}
+            className={cn(
+              'absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all hover:scale-105',
+              hasError ? 'text-destructive' : 'text-blue-800',
+            )}
+          >
+            <Calendar className="size-4" />
           </button>
         )}
 

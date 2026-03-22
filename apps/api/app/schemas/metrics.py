@@ -46,6 +46,20 @@ class PortfolioMetricsResponse(BaseModel):
     )
 
 
+# Single data point for portfolio value over time.
+class EvolutionPoint(BaseModel):
+    date: date_type = Field(description="Month date (first day of month).")
+    total_value: Decimal = Field(description="Aggregated portfolio value at this date.")
+
+
+# Monthly portfolio value series for the evolution chart.
+class PortfolioEvolutionResponse(BaseModel):
+    points: list[EvolutionPoint] = Field(description="Monthly portfolio totals, chronological.")
+    currency: str | None = Field(
+        default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
+    )
+
+
 # One slice of the allocation distribution.
 class AllocationItem(BaseModel):
     category: InvestmentCategory = Field(description="Investment category.")

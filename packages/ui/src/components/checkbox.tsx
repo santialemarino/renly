@@ -9,11 +9,28 @@ import { cn } from '@repo/ui/lib';
 function Checkbox({
   className,
   blue = false,
+  onKeyDown,
+  onCheckedChange,
   ...props
 }: React.ComponentProps<typeof CheckboxPrimitive.Root> & { blue?: boolean }) {
+  // Radix checkbox only responds to Space. Add Enter key support.
+  const handleKeyDown = React.useCallback(
+    (e: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const current = (e.currentTarget as HTMLButtonElement).dataset.state === 'checked';
+        onCheckedChange?.(!current);
+      }
+      onKeyDown?.(e);
+    },
+    [onCheckedChange, onKeyDown],
+  );
+
   return (
     <CheckboxPrimitive.Root
       data-slot="checkbox"
+      onKeyDown={handleKeyDown}
+      onCheckedChange={onCheckedChange}
       className={cn(
         'peer bg-input dark:bg-input/30 size-4 shrink-0 rounded-sm border shadow-xs transition-all duration-200 outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
         blue

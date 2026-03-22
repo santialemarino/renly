@@ -1,6 +1,7 @@
 # Business logic for investment and portfolio metrics.
 
 from collections import defaultdict
+from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,8 +17,10 @@ from app.repositories.metrics_repository import metrics_repository
 from app.schemas.metrics import (
     AllocationItem,
     AllocationResponse,
+    EvolutionPoint,
     InvestmentMetricsResponse,
     PeriodReturnItem,
+    PortfolioEvolutionResponse,
     PortfolioMetricsResponse,
 )
 from app.services import metrics_helpers as mh
@@ -91,8 +94,9 @@ async def get_portfolio_metrics(
 
     absolute_gain = total_value - total_invested
 
+    # Simple return is only meaningful when invested capital is positive.
     total_return_pct = None
-    if total_invested != ZERO:
+    if total_invested > ZERO:
         total_return_pct = total_value / total_invested - ONE
 
     # Month-over-month change.
@@ -126,6 +130,77 @@ async def get_portfolio_metrics(
         month_change_pct=month_change_pct,
         currency=currency,
     )
+
+
+# Computes monthly portfolio value series for the evolution chart.
+# Forward-fills missing months so each investment contributes its last known value.
+async def get_portfolio_evolution(
+    session: AsyncSession,
+    user_id: int,
+    currency: str | None = None,
+) -> PortfolioEvolutionResponse:
+    investments = await metrics_repository.list_active_investments(session, user_id)
+    if not investments:
+        return PortfolioEvolutionResponse(points=[], currency=currency)
+
+    rate = await _get_conversion_rate(session) if currency else None
+    inv_ids = [i.id for i in investments]
+    inv_currency = {i.id: i.base_currency for i in investments}
+
+    all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
+    snap_by_inv = mh.group_snapshots_by_investment(all_snapshots)
+
+    # Build {investment_id: {date: value}} lookup.
+    inv_date_value: dict[int, dict[date_type, Decimal]] = {}
+    all_dates: set[date_type] = set()
+    for inv_id, snaps in snap_by_inv.items():
+        date_map: dict[date_type, Decimal] = {}
+        for s in snaps:
+            date_map[s.date] = s.value
+            all_dates.add(s.date)
+        inv_date_value[inv_id] = date_map
+
+    if not all_dates:
+        return PortfolioEvolutionResponse(points=[], currency=currency)
+
+    # Generate all months from earliest to latest snapshot date.
+    min_date = min(all_dates)
+    max_date = max(all_dates)
+    all_months: list[date_type] = []
+    cursor = date_type(min_date.year, min_date.month, 1)
+    end = date_type(max_date.year, max_date.month, 1)
+    while cursor <= end:
+        all_months.append(cursor)
+        if cursor.month == 12:
+            cursor = date_type(cursor.year + 1, 1, 1)
+        else:
+            cursor = date_type(cursor.year, cursor.month + 1, 1)
+
+    # Remap snapshots to their month (first of month) for lookup.
+    inv_month_value: dict[int, dict[date_type, Decimal]] = {}
+    for inv_id, date_map in inv_date_value.items():
+        month_map: dict[date_type, Decimal] = {}
+        for d, v in date_map.items():
+            month_key = date_type(d.year, d.month, 1)
+            month_map[month_key] = v
+        inv_month_value[inv_id] = month_map
+
+    # For each month, sum values across investments (forward-fill missing months).
+    points: list[EvolutionPoint] = []
+    last_known: dict[int, Decimal] = {}
+    for month in all_months:
+        total = ZERO
+        for inv_id in inv_ids:
+            month_map = inv_month_value.get(inv_id, {})
+            if month in month_map:
+                last_known[inv_id] = month_map[month]
+            val = last_known.get(inv_id, ZERO)
+            if currency and rate:
+                val = mh.convert_value(val, inv_currency.get(inv_id, ""), currency, rate)
+            total += val
+        points.append(EvolutionPoint(date=month, total_value=total))
+
+    return PortfolioEvolutionResponse(points=points, currency=currency)
 
 
 # Computes allocation by investment category.
