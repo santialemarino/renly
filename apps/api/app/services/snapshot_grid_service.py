@@ -86,11 +86,15 @@ async def get_snapshot_grid(
                 SnapshotGridCell(
                     date=snap.date,
                     value=value,
+                    original_value=snap.value,
                     period_return_pct=pr_map.get(snap.date),
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
                         id=tx.id,
-                        amount=tx.amount,
+                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate)
+                        if currency and rate
+                        else tx.amount,
+                        original_amount=tx.amount,
                         type=tx.type,
                     )
                     if tx
@@ -124,11 +128,25 @@ async def _get_conversion_rate(session: AsyncSession) -> Decimal | None:
 
 
 # Returns {snapshot_date: latest_transaction} for periods that had transactions.
+# The first snapshot maps transactions on or before its date.
+# Subsequent snapshots map transactions between (prev_date, curr_date].
 def _build_transaction_period_map(snaps, txs):
     if not snaps or not txs:
         return {}
 
     result = {}
+
+    # First snapshot: transactions on or before its date.
+    first_date = snaps[0].date
+    first_tx = None
+    for tx in txs:
+        if tx.date <= first_date:
+            if first_tx is None or tx.date > first_tx.date:
+                first_tx = tx
+    if first_tx:
+        result[first_date] = first_tx
+
+    # Subsequent snapshots: transactions between (prev_date, curr_date].
     for i in range(1, len(snaps)):
         prev_date = snaps[i - 1].date
         curr_date = snaps[i].date

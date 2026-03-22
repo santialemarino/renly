@@ -71,3 +71,33 @@ class AllocationItem(BaseModel):
 class AllocationResponse(BaseModel):
     items: list[AllocationItem] = Field(description="Allocation per category.")
     total_value: Decimal = Field(description="Total portfolio value.")
+
+
+# One slice of the allocation distribution by group.
+class GroupAllocationItem(BaseModel):
+    group_name: str = Field(description="Investment group name.")
+    value: Decimal = Field(description="Total value for this group.")
+    percentage: Decimal = Field(description="Percentage of total portfolio.")
+
+
+# Distribution of portfolio by investment group.
+class GroupAllocationResponse(BaseModel):
+    items: list[GroupAllocationItem] = Field(description="Allocation per group.")
+    total_value: Decimal = Field(description="Total portfolio value.")
+
+
+# Lightweight per-investment metrics for the compact dashboard table.
+class InvestmentSummaryItem(BaseModel):
+    investment_id: int = Field(description="Investment id.")
+    name: str = Field(description="Investment name.")
+    category: InvestmentCategory = Field(description="Investment category.")
+    current_value: Decimal | None = Field(default=None, description="Latest snapshot value.")
+    invested_capital: Decimal = Field(description="Net capital invested.")
+    absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
+    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
+    currency: str = Field(description="Currency of the monetary values.")
+
+
+# Bulk per-investment metrics for the dashboard compact table.
+class InvestmentsSummaryResponse(BaseModel):
+    items: list[InvestmentSummaryItem] = Field(description="Per-investment summary, sorted by value desc.")

@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertTriangle } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -16,7 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Hint,
   Input,
   Label,
   Select,
@@ -37,6 +34,7 @@ import {
   upsertSnapshot,
 } from '@/app/(protected)/snapshots/snapshots-actions';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { WarningHint } from '@/components/warning-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 
 interface SnapshotFormDialogProps {
@@ -110,11 +108,12 @@ export function SnapshotFormDialog({
   // Reset form values when the dialog opens.
   useEffect(() => {
     if (open) {
+      // Always use original (base currency) values for editing to avoid currency mismatch on save.
       form.reset({
         date: cell?.date ?? '',
-        value: cell ? String(cell.value) : '',
+        value: cell ? String(cell.originalValue) : '',
         includeTransaction: !!existingTx,
-        transactionAmount: existingTx ? String(existingTx.amount) : '',
+        transactionAmount: existingTx ? String(existingTx.originalAmount) : '',
         transactionType: (existingTx?.type as SnapshotFormValues['transactionType']) ?? 'deposit',
       });
     }
@@ -222,24 +221,9 @@ export function SnapshotFormDialog({
                   {t('form.transaction.include')}
                 </Label>
               </div>
-              <AnimatePresence>
-                {isEarliestSnapshot && !includeTransaction && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="flex items-center gap-x-2">
-                      <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-                      <Hint className="text-amber-600 whitespace-pre-line">
-                        {t('form.transaction.initialHint')}
-                      </Hint>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <WarningHint show={isEarliestSnapshot && !includeTransaction}>
+                {t('form.transaction.initialHint')}
+              </WarningHint>
             </div>
 
             {includeTransaction && (
