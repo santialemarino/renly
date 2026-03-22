@@ -1,6 +1,11 @@
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
-import { getSession } from '@/lib/auth';
+import { PageHeader } from '@/app/(protected)/_components/page-header';
+import { EvolutionSection } from '@/app/(protected)/dashboard/_components/evolution-section';
+import { MetricCards } from '@/app/(protected)/dashboard/_components/metric-cards';
+import { getPortfolioEvolution, getPortfolioMetrics } from '@/lib/api/metrics';
+import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -8,17 +13,22 @@ export async function generateMetadata() {
 }
 
 export default async function DashboardPage() {
-  const session = await getSession();
+  const cookieStore = await cookies();
   const t = await getTranslations('dashboard');
 
+  const activeCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+
+  const [metrics, evolution] = await Promise.all([
+    getPortfolioMetrics(currency),
+    getPortfolioEvolution(currency),
+  ]);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center p-8 gap-y-2">
-      <h1 className="text-heading-3 text-foreground">{t('title')}</h1>
-      <p className="text-muted-foreground">
-        {session?.user?.name
-          ? t('subtitle.withName', { name: session?.user?.name })
-          : t('subtitle.anonymous')}
-      </p>
+    <div className="flex flex-col flex-1 p-8 gap-y-6">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <MetricCards metrics={metrics} />
+      <EvolutionSection evolution={evolution} />
     </div>
   );
 }

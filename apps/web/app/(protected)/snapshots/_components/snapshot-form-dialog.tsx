@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AlertTriangle } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -14,6 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Hint,
   Input,
   Label,
   Select,
@@ -90,6 +93,19 @@ export function SnapshotFormDialog({
   });
 
   const includeTransaction = form.watch('includeTransaction');
+  const watchedDate = form.watch('date');
+
+  const MIN_REASONABLE_YEAR = 1900;
+
+  // True when the snapshot being created would be the earliest for this investment.
+  // Only evaluates once the date has a reasonable year to avoid flickering during input.
+  const isEarliestSnapshot = useMemo(() => {
+    if (isEdit || !watchedDate) return false;
+    const year = new Date(watchedDate).getFullYear();
+    if (isNaN(year) || year < MIN_REASONABLE_YEAR) return false;
+    if (existingDates.length === 0) return true;
+    return existingDates.every((d) => watchedDate < d);
+  }, [isEdit, watchedDate, existingDates]);
 
   // Reset form values when the dialog opens.
   useEffect(() => {
@@ -159,7 +175,7 @@ export function SnapshotFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
-            <div className="flex min-w-0 gap-x-3">
+            <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
                 name="date"
@@ -195,19 +211,39 @@ export function SnapshotFormDialog({
               />
             </div>
 
-            <div className="flex items-center gap-x-2">
-              <Checkbox
-                id="include-transaction"
-                checked={includeTransaction}
-                onCheckedChange={(val) => form.setValue('includeTransaction', !!val)}
-              />
-              <Label htmlFor="include-transaction" className="cursor-pointer text-paragraph-sm">
-                {t('form.transaction.include')}
-              </Label>
+            <div className="flex flex-col gap-y-2">
+              <div className="flex items-center gap-x-2">
+                <Checkbox
+                  id="include-transaction"
+                  checked={includeTransaction}
+                  onCheckedChange={(val) => form.setValue('includeTransaction', !!val)}
+                />
+                <Label htmlFor="include-transaction" className="cursor-pointer text-paragraph-sm">
+                  {t('form.transaction.include')}
+                </Label>
+              </div>
+              <AnimatePresence>
+                {isEarliestSnapshot && !includeTransaction && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center gap-x-2">
+                      <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+                      <Hint className="text-amber-600 whitespace-pre-line">
+                        {t('form.transaction.initialHint')}
+                      </Hint>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {includeTransaction && (
-              <div className="flex min-w-0 gap-x-3">
+              <div className="flex min-w-0 items-start gap-x-3">
                 <FormField
                   control={form.control}
                   name="transactionAmount"

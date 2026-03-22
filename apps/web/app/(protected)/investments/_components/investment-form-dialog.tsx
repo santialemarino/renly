@@ -131,7 +131,7 @@ export function InvestmentFormDialog({
               )}
             />
 
-            <div className="flex min-w-0 gap-x-3">
+            <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
                 name="category"

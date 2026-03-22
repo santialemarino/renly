@@ -12,12 +12,12 @@
     "form": {
       "errors": {
         "required": "Este campo es requerido",
-        "invalidEmail": "Ingresa un correo electrónico válido",
+        "invalidEmail": "Ingresá un correo electrónico válido",
         "passwordMinLength": "La contraseña debe tener al menos {length} caracteres",
         "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
         "passwordRequirements": "La contraseña no cumple los requisitos",
         "passwordMismatch": "Las contraseñas no coinciden",
-        "serverError": "Algo salió mal. Intenta de nuevo más tarde."
+        "serverError": "Algo salió mal. Intentá de nuevo más tarde."
       }
     },
     "categories": {
@@ -41,17 +41,17 @@
   "login": {
     "metadata": {
       "title": "Iniciar sesión",
-      "description": "Inicia sesión en tu cuenta"
+      "description": "Iniciá sesión en tu cuenta"
     },
     "title": "Iniciar sesión",
     "form": {
       "email": {
         "label": "Correo electrónico",
-        "placeholder": "Ingresa tu correo electrónico"
+        "placeholder": "Ingresá tu correo electrónico"
       },
       "password": {
         "label": "Contraseña",
-        "placeholder": "Ingresa tu contraseña"
+        "placeholder": "Ingresá tu contraseña"
       },
       "cta": {
         "label": "Iniciar sesión",
@@ -61,40 +61,40 @@
         "invalid": "Correo o contraseña incorrectos"
       },
       "signup": {
-        "title": "No tienes una cuenta?",
-        "cta": "Regístrate"
+        "title": "¿No tenés una cuenta?",
+        "cta": "Registrate"
       }
     }
   },
   "signup": {
     "metadata": {
       "title": "Registrarse",
-      "description": "Crea tu cuenta en Renly"
+      "description": "Creá tu cuenta en Renly"
     },
     "title": "Crear cuenta",
     "form": {
       "name": {
         "label": "Nombre completo",
-        "placeholder": "Ingresa tu nombre completo"
+        "placeholder": "Ingresá tu nombre completo"
       },
       "email": {
         "label": "Correo electrónico",
-        "placeholder": "Ingresa tu correo electrónico"
+        "placeholder": "Ingresá tu correo electrónico"
       },
       "password": {
         "label": "Contraseña",
-        "placeholder": "Crea una contraseña"
+        "placeholder": "Creá una contraseña"
       },
       "confirmPassword": {
         "label": "Confirmar contraseña",
-        "placeholder": "Repite tu contraseña"
+        "placeholder": "Repetí tu contraseña"
       },
       "cta": {
         "label": "Crear cuenta",
         "loading": "Creando cuenta..."
       },
       "login": {
-        "title": "Ya tienes una cuenta?",
+        "title": "¿Ya tenés una cuenta?",
         "cta": "Iniciar sesión"
       },
       "errors": {
@@ -145,16 +145,29 @@
       "title": "Dashboard",
       "description": "Ve tu dashboard"
     },
-    "title": "Renly",
-    "subtitle": {
-      "withName": "Bienvenido, {name}.",
-      "anonymous": "Bienvenido a Renly."
-    }
+    "title": "Dashboard",
+    "subtitle": "Tu cartera de inversiones de un vistazo.",
+    "cards": {
+      "totalValue": "Valor Total",
+      "totalReturn": "Retorno Total",
+      "monthChange": "Cambio Mensual"
+    },
+    "period": {
+      "1m": "1M",
+      "3m": "3M",
+      "ytd": "YTD",
+      "all": "Todo"
+    },
+    "chart": {
+      "title": "Evolución del Portfolio",
+      "tooltipValue": "Valor"
+    },
+    "noData": "No hay datos disponibles aún. Agregá snapshots para ver la evolución de tu portfolio."
   },
   "investments": {
     "metadata": {
       "title": "Inversiones",
-      "description": "Gestiona tus inversiones"
+      "description": "Gestioná tus inversiones"
     },
     "title": "Inversiones",
     "subtitle": "Gestioná tu cartera de inversiones.",
@@ -188,21 +201,21 @@
       "titleEdit": "Editar inversión",
       "name": {
         "label": "Nombre",
-        "placeholder": "Ingresa el nombre"
+        "placeholder": "Ingresá el nombre"
       },
       "category": {
         "label": "Categoría",
-        "placeholder": "Selecciona una categoría"
+        "placeholder": "Seleccioná una categoría"
       },
       "currency": {
         "label": "Moneda",
-        "placeholder": "Selecciona una moneda",
+        "placeholder": "Seleccioná una moneda",
         "searchPlaceholder": "Buscar monedas...",
         "noResults": "No se encontraron monedas."
       },
       "broker": {
         "label": "Broker",
-        "placeholder": "Ingresa el broker"
+        "placeholder": "Ingresá el broker"
       },
       "groups": {
         "label": "Grupos"
@@ -236,7 +249,7 @@
   "snapshots": {
     "metadata": {
       "title": "Snapshots",
-      "description": "Gestiona tus snapshots"
+      "description": "Gestioná tus snapshots"
     },
     "title": "Snapshots",
     "subtitle": "Valores de inversiones por mes.",
@@ -262,6 +275,7 @@
       },
       "transaction": {
         "include": "Incluir una transacción para este período",
+        "initialHint": "Este es el primer snapshot de esta inversión.\nConsiderá agregar una transacción de depósito o compra para registrar tu capital inicial invertido.",
         "amount": "Monto",
         "type": "Tipo",
         "types": {
@@ -284,7 +298,7 @@
   "settings": {
     "metadata": {
       "title": "Configuración",
-      "description": "Configura tu cuenta"
+      "description": "Configurá tu cuenta"
     },
     "title": "Configuración",
     "subtitle": "Configurá tus preferencias de visualización.",

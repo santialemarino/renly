@@ -145,11 +145,24 @@
       "title": "Dashboard",
       "description": "See your dashboard"
     },
-    "title": "Renly",
-    "subtitle": {
-      "withName": "Welcome, {name}.",
-      "anonymous": "Welcome to Renly."
-    }
+    "title": "Dashboard",
+    "subtitle": "Your investment portfolio at a glance.",
+    "cards": {
+      "totalValue": "Total Value",
+      "totalReturn": "Total Return",
+      "monthChange": "Month Change"
+    },
+    "period": {
+      "1m": "1M",
+      "3m": "3M",
+      "ytd": "YTD",
+      "all": "All"
+    },
+    "chart": {
+      "title": "Portfolio Evolution",
+      "tooltipValue": "Value"
+    },
+    "noData": "No data available yet. Add snapshots to see your portfolio evolution."
   },
   "investments": {
     "metadata": {
@@ -262,6 +275,7 @@
       },
       "transaction": {
         "include": "Include a transaction for this period",
+        "initialHint": "This is the first snapshot for this investment.\nConsider adding a deposit or buy transaction to track your initial invested capital.",
         "amount": "Amount",
         "type": "Type",
         "types": {

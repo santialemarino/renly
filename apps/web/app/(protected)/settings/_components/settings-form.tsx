@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AlertTriangle } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -70,7 +71,18 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <div className="flex flex-col gap-y-2">
         <div className="flex items-center gap-x-2">
           <Label>{t('form.primaryCurrency.label')}</Label>
-          {primaryUnsupported && <AlertTriangle className="size-4 text-amber-500" />}
+          <AnimatePresence>
+            {primaryUnsupported && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.25 }}
+              >
+                <AlertTriangle className="size-4 text-amber-500" />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         <Hint>{t('form.primaryCurrency.hint')}</Hint>
         <Controller
@@ -95,7 +107,18 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <div className="flex flex-col gap-y-2">
         <div className="flex items-center gap-x-2">
           <Label>{t('form.secondaryCurrency.label')}</Label>
-          {secondaryUnsupported && <AlertTriangle className="size-4 text-amber-500" />}
+          <AnimatePresence>
+            {secondaryUnsupported && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.8 }}
+                transition={{ duration: 0.25 }}
+              >
+                <AlertTriangle className="size-4 text-amber-500" />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
         <Hint>{t('form.secondaryCurrency.hint')}</Hint>
         <Controller
@@ -116,19 +139,27 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         />
       </div>
 
-      {(primaryUnsupported || secondaryUnsupported) && (
-        <>
-          <Separator />
-          <div className="flex items-center gap-x-2">
-            <AlertTriangle className="size-4 shrink-0 text-amber-500" />
-            <Hint className="whitespace-pre-line">
-              {tCommon.rich('currency.unsupportedHint', {
-                bold: (chunks) => <strong>{chunks}</strong>,
-              })}
-            </Hint>
-          </div>
-        </>
-      )}
+      <AnimatePresence>
+        {(primaryUnsupported || secondaryUnsupported) && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="flex flex-col overflow-hidden gap-y-6"
+          >
+            <Separator />
+            <div className="flex items-center gap-x-2">
+              <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+              <Hint className="whitespace-pre-line">
+                {tCommon.rich('currency.unsupportedHint', {
+                  bold: (chunks) => <strong>{chunks}</strong>,
+                })}
+              </Hint>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   Controller,
   FormProvider,
@@ -127,19 +128,25 @@ function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
   );
 }
 
-function FormMessage({ className, ...props }: React.ComponentProps<'p'>) {
+function FormMessage({ className, children }: { className?: string; children?: React.ReactNode }) {
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message ?? '') : props.children;
-  if (!body) return null;
+  const body = error ? String(error?.message ?? '') : children;
   return (
-    <p
-      data-slot="form-message"
-      id={formMessageId}
-      className={cn('text-destructive text-paragraph-mini', className)}
-      {...props}
-    >
-      {body}
-    </p>
+    <AnimatePresence>
+      {body && (
+        <motion.p
+          data-slot="form-message"
+          id={formMessageId}
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.25 }}
+          className={cn('overflow-hidden text-destructive text-paragraph-mini', className)}
+        >
+          {body}
+        </motion.p>
+      )}
+    </AnimatePresence>
   );
 }
 

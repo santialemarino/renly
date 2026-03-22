@@ -2,6 +2,7 @@ export * from './custom/pill';
 export * from './custom/hint';
 export * from './custom/search-input';
 export * from './button';
+export * from './chart';
 export * from './card';
 export * from './checkbox';
 export * from './command';
