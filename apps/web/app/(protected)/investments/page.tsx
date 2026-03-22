@@ -4,7 +4,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InvestmentsDataTable } from '@/app/(protected)/investments/_components/investments-data-table';
 import { InvestmentsToolbar } from '@/app/(protected)/investments/_components/investments-toolbar';
 import { getGroups, getInvestments } from '@/lib/api/investments';
-import { generatePageMetadata } from '@/lib/utils/page';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
   return await generatePageMetadata('investments');

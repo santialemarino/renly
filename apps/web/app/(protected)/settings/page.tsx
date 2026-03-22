@@ -3,7 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SettingsForm } from '@/app/(protected)/settings/_components/settings-form';
 import { getSettings } from '@/lib/api/settings';
-import { generatePageMetadata } from '@/lib/utils/page';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
   return await generatePageMetadata('settings');

@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
 import { PageHeader } from '@/app/(protected)/_components/page-header';
@@ -5,7 +6,8 @@ import { SnapshotsGrid } from '@/app/(protected)/snapshots/_components/snapshots
 import { SnapshotsToolbar } from '@/app/(protected)/snapshots/_components/snapshots-toolbar';
 import { getGroups } from '@/lib/api/investments';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
-import { generatePageMetadata } from '@/lib/utils/page';
+import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
   return await generatePageMetadata('snapshots');
@@ -16,23 +18,32 @@ interface SnapshotsPageProps {
     search?: string;
     group_ids?: string | string[];
     category?: string;
+    sort_by?: string;
+    sort_order?: string;
   }>;
 }
 
 export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps) {
   const t = await getTranslations('snapshots');
   const params = await searchParams;
+  const cookieStore = await cookies();
 
   const groupIdsRaw = params.group_ids;
   const groupIds = groupIdsRaw
     ? (Array.isArray(groupIdsRaw) ? groupIdsRaw : [groupIdsRaw]).map(Number).filter(Boolean)
     : undefined;
 
+  const activeCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+
   const [grid, groups] = await Promise.all([
     getSnapshotGrid({
       search: params.search,
       groupIds,
       category: params.category,
+      currency,
+      sortBy: params.sort_by,
+      sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
     getGroups(),
   ]);

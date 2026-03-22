@@ -64,6 +64,9 @@ export interface GetSnapshotGridParams {
   search?: string;
   groupIds?: number[];
   category?: string;
+  currency?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // --- Mappers ---
@@ -103,9 +106,12 @@ export async function getSnapshotGrid(
 
   if (params?.search) qs.append('search', params.search);
   if (params?.groupIds) {
-    for (const id of params.groupIds) qs.append('group_ids', String(id));
+    params.groupIds.forEach((id) => qs.append('group_ids', String(id)));
   }
   if (params?.category) qs.append('category', params.category);
+  if (params?.currency) qs.append('currency', params.currency);
+  if (params?.sortBy) qs.append('sort_by', params.sortBy);
+  if (params?.sortOrder) qs.append('sort_order', params.sortOrder);
 
   const query = qs.toString();
   const url = `/snapshots/grid${query ? `?${query}` : ''}`;

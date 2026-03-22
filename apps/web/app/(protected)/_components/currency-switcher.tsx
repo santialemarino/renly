@@ -1,10 +1,13 @@
 'use client';
 
 import { useLayoutEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 
 import { ToggleGroup, ToggleGroupItem } from '@repo/ui/components';
 import { ORIGINAL_CURRENCY, useCurrencyStore } from '@/lib/stores/currency-store';
+import { isCurrencySupported } from '@/lib/utils/currency';
 
 interface CurrencySwitcherProps {
   displayCurrencies: string[];
@@ -16,6 +19,8 @@ export function CurrencySwitcher({
   activeCurrency: initialActive,
 }: CurrencySwitcherProps) {
   const t = useTranslations('sidebar');
+  const tCommon = useTranslations('common');
+  const router = useRouter();
   const setActiveCurrency = useCurrencyStore((s) => s.setActiveCurrency);
   const [activeCurrency, setActive] = useState(initialActive);
 
@@ -23,12 +28,16 @@ export function CurrencySwitcher({
     useCurrencyStore.setState({ activeCurrency: initialActive });
   }, [initialActive]);
 
-  // TODO: §11.4.1 — When switching to a currency without exchange rate support,
-  // show a warning toast: "Conversion to {CURRENCY} is not available yet.
-  // Showing values in original currency. Support coming soon."
   function handleChange(v: string) {
     setActive(v);
     setActiveCurrency(v);
+
+    if (v !== ORIGINAL_CURRENCY && !isCurrencySupported(v)) {
+      toast.warning(tCommon('currency.unsupportedSwitch', { currency: v }));
+    }
+
+    // Re-fetch server components so pages that read the currency cookie get the new value.
+    router.refresh();
   }
 
   return (

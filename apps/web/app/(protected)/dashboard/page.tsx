@@ -1,7 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 
 import { getSession } from '@/lib/auth';
-import { generatePageMetadata } from '@/lib/utils/page';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
   return await generatePageMetadata('dashboard');

@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AlertTriangle } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -14,6 +15,7 @@ import {
   type SettingsFormValues,
 } from '@/app/(protected)/settings/settings-form-schema';
 import type { SettingsData } from '@/lib/api/settings';
+import { isCurrencySupported } from '@/lib/utils/currency';
 
 interface SettingsFormProps {
   initialSettings: SettingsData;
@@ -24,6 +26,7 @@ const fallbackSecondary = process.env.NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY ??
 
 export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const t = useTranslations('settings');
+  const tCommon = useTranslations('common');
   const router = useRouter();
 
   const {
@@ -42,6 +45,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const primaryCurrency = watch('primaryCurrency');
   const secondaryCurrency = watch('secondaryCurrency');
 
+  const primaryUnsupported = primaryCurrency && !isCurrencySupported(primaryCurrency);
+  const secondaryUnsupported = secondaryCurrency && !isCurrencySupported(secondaryCurrency);
+
+  function handleCurrencyChange(value: string | null, onChange: (v: string | null) => void) {
+    onChange(value);
+    if (value && !isCurrencySupported(value)) {
+      toast.warning(tCommon('currency.unsupportedSelect', { currency: value }));
+    }
+  }
+
   async function onSubmit(values: SettingsFormValues) {
     try {
       await saveSettings(values.primaryCurrency, values.secondaryCurrency ?? null);
@@ -55,7 +68,10 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full max-w-md gap-y-6">
       <div className="flex flex-col gap-y-2">
-        <Label>{t('form.primaryCurrency.label')}</Label>
+        <div className="flex items-center gap-x-2">
+          <Label>{t('form.primaryCurrency.label')}</Label>
+          {primaryUnsupported && <AlertTriangle className="size-4 text-amber-500" />}
+        </div>
         <Hint>{t('form.primaryCurrency.hint')}</Hint>
         <Controller
           name="primaryCurrency"
@@ -68,7 +84,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               searchPlaceholder={t('form.searchPlaceholder')}
               noResults={t('form.noResults')}
               surface
-              onChange={(v) => field.onChange(v ?? '')}
+              onChange={(v) => handleCurrencyChange(v ?? '', (val) => field.onChange(val ?? ''))}
             />
           )}
         />
@@ -77,7 +93,10 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       <Separator />
 
       <div className="flex flex-col gap-y-2">
-        <Label>{t('form.secondaryCurrency.label')}</Label>
+        <div className="flex items-center gap-x-2">
+          <Label>{t('form.secondaryCurrency.label')}</Label>
+          {secondaryUnsupported && <AlertTriangle className="size-4 text-amber-500" />}
+        </div>
         <Hint>{t('form.secondaryCurrency.hint')}</Hint>
         <Controller
           name="secondaryCurrency"
@@ -90,17 +109,26 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               searchPlaceholder={t('form.searchPlaceholder')}
               noResults={t('form.noResults')}
               surface
-              onChange={field.onChange}
+              onChange={(v) => handleCurrencyChange(v, field.onChange)}
               onClear={() => field.onChange(null)}
             />
           )}
         />
       </div>
 
-      {/* TODO: §11.4.1 — Add warning icon next to currencies without exchange rate support
-          in each CurrencyCombobox. Below this separator, add a hint row with the warning icon
-          + explanation: "Currencies marked with ⚠ don't have exchange rate support yet.
-          Conversion will be available soon." Show warning toast on selection. */}
+      {(primaryUnsupported || secondaryUnsupported) && (
+        <>
+          <Separator />
+          <div className="flex items-center gap-x-2">
+            <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+            <Hint className="whitespace-pre-line">
+              {tCommon.rich('currency.unsupportedHint', {
+                bold: (chunks) => <strong>{chunks}</strong>,
+              })}
+            </Hint>
+          </div>
+        </>
+      )}
 
       <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
