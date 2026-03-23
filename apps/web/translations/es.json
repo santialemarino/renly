@@ -149,8 +149,10 @@
     "subtitle": "Tu cartera de inversiones de un vistazo.",
     "cards": {
       "totalValue": "Valor Total",
-      "totalReturn": "Retorno Total",
-      "monthChange": "Cambio Mensual"
+      "twr": "TWR",
+      "irr": "IRR",
+      "gain": "Ganancia",
+      "vsLastMonth": "vs mes anterior"
     },
     "period": {
       "1m": "1M",
@@ -163,6 +165,8 @@
       "tooltipValue": "Valor"
     },
     "currencyFallback": "El dashboard requiere una moneda común. <bold>Mostrando valores en {currency}.</bold>",
+    "skippedInvestments": "Algunas inversiones fueron excluidas porque su moneda no puede convertirse: {names}.",
+    "loadError": "No se pudieron cargar los datos del dashboard. Esto puede deberse a tipos de cambio faltantes o un problema temporal del servidor. Intentá de nuevo más tarde.",
     "noData": "No hay datos disponibles aún. Agregá snapshots para ver la evolución de tu portfolio.",
     "distribution": {
       "title": "Distribución",
@@ -177,6 +181,31 @@
       "invested": "Invertido",
       "gain": "Ganancia",
       "monthChange": "Mes"
+    },
+    "toolbar": {
+      "searchPlaceholder": "Buscar inversiones...",
+      "backToFull": "Todas las inversiones"
+    },
+    "filtered": {
+      "subtitle": "Mostrando resultados filtrados.",
+      "investment": "Mostrando métricas de <bold>{name}</bold>:",
+      "group": "Mostrando inversiones en <bold>{name}</bold>:",
+      "category": "Mostrando inversiones de tipo <bold>{name}</bold>:"
+    },
+    "search": {
+      "placeholder": "Buscar inversiones, grupos o categorías...",
+      "inputPlaceholder": "Escribí para buscar...",
+      "noResults": "No se encontraron resultados.",
+      "investments": "Inversiones",
+      "groups": "Grupos",
+      "categories": "Categorías"
+    },
+    "detail": {
+      "title": "Detalle de Inversión",
+      "invested": "Capital Invertido",
+      "baseCurrency": "Moneda",
+      "category": "Categoría",
+      "dataPoints": "Snapshots"
     }
   },
   "investments": {

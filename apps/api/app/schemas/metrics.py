@@ -8,6 +8,13 @@ from pydantic import BaseModel, Field
 from app.models.investment import InvestmentCategory
 
 
+# An investment excluded from aggregated metrics because its currency can't be converted.
+class SkippedInvestment(BaseModel):
+    investment_id: int = Field(description="Investment id.")
+    name: str = Field(description="Investment name.")
+    base_currency: str = Field(description="Investment currency that could not be converted.")
+
+
 # Period return for a single snapshot.
 class PeriodReturnItem(BaseModel):
     date: date_type = Field(description="Snapshot date.")
@@ -39,10 +46,15 @@ class PortfolioMetricsResponse(BaseModel):
     total_return_pct: Decimal | None = Field(
         default=None, description="Simple return: (total_value / total_invested) - 1."
     )
+    twr: Decimal | None = Field(default=None, description="Portfolio time-weighted return.")
+    irr: Decimal | None = Field(default=None, description="Portfolio money-weighted return (annualised XIRR).")
     month_change: Decimal | None = Field(default=None, description="Absolute change vs previous month.")
     month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
     currency: str | None = Field(
         default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
+    )
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list, description="Investments excluded because their currency can't be converted."
     )
 
 
@@ -58,6 +70,9 @@ class PortfolioEvolutionResponse(BaseModel):
     currency: str | None = Field(
         default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
     )
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list, description="Investments excluded because their currency can't be converted."
+    )
 
 
 # One slice of the allocation distribution.
@@ -71,6 +86,9 @@ class AllocationItem(BaseModel):
 class AllocationResponse(BaseModel):
     items: list[AllocationItem] = Field(description="Allocation per category.")
     total_value: Decimal = Field(description="Total portfolio value.")
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list, description="Investments excluded because their currency can't be converted."
+    )
 
 
 # One slice of the allocation distribution by group.
@@ -84,6 +102,9 @@ class GroupAllocationItem(BaseModel):
 class GroupAllocationResponse(BaseModel):
     items: list[GroupAllocationItem] = Field(description="Allocation per group.")
     total_value: Decimal = Field(description="Total portfolio value.")
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list, description="Investments excluded because their currency can't be converted."
+    )
 
 
 # Lightweight per-investment metrics for the compact dashboard table.
@@ -101,3 +122,6 @@ class InvestmentSummaryItem(BaseModel):
 # Bulk per-investment metrics for the dashboard compact table.
 class InvestmentsSummaryResponse(BaseModel):
     items: list[InvestmentSummaryItem] = Field(description="Per-investment summary, sorted by value desc.")
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list, description="Investments excluded because their currency can't be converted."
+    )

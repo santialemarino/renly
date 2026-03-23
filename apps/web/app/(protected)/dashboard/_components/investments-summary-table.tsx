@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -16,6 +17,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ROUTES } from '@/config/routes';
 import type { InvestmentsSummaryResponse } from '@/lib/api/metrics';
 
 // Formats a number as a compact currency value.
@@ -41,8 +43,13 @@ interface InvestmentsSummaryTableProps {
 
 export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProps) {
   const t = useTranslations('dashboard');
+  const router = useRouter();
 
   const hasData = summary.items.length > 0;
+
+  function handleRowClick(investmentId: number) {
+    router.push(`${ROUTES.dashboard}?investment_ids=${investmentId}`, { scroll: false });
+  }
 
   return (
     <Card className="flex-1">
@@ -65,12 +72,15 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
             </TableHeader>
             <TableBody>
               {summary.items.map((item) => {
-                const isGainPositive = (item.absoluteGain ?? 0) >= 0;
-                const isChangePositive = (item.monthChangePct ?? 0) >= 0;
+                const isGainZero = item.absoluteGain === null || item.absoluteGain === 0;
                 const isChangeZero = item.monthChangePct === null || item.monthChangePct === 0;
 
                 return (
-                  <TableRow key={item.investmentId}>
+                  <TableRow
+                    key={item.investmentId}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleRowClick(item.investmentId)}
+                  >
                     <TableCell className="text-paragraph-sm-medium">{item.name}</TableCell>
                     <TableCell className="text-right text-paragraph-sm tabular-nums">
                       {item.currentValue !== null ? formatValue(item.currentValue) : '—'}
@@ -81,7 +91,11 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
                     <TableCell
                       className={cn(
                         'text-right text-paragraph-sm tabular-nums',
-                        isGainPositive ? 'text-emerald-600' : 'text-red-500',
+                        isGainZero
+                          ? 'text-muted-foreground'
+                          : (item.absoluteGain ?? 0) > 0
+                            ? 'text-emerald-600'
+                            : 'text-red-500',
                       )}
                     >
                       {item.absoluteGain !== null ? formatValue(item.absoluteGain) : '—'}
@@ -92,14 +106,14 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
                           'flex items-center justify-end gap-x-1 text-paragraph-sm tabular-nums',
                           isChangeZero
                             ? 'text-muted-foreground'
-                            : isChangePositive
+                            : (item.monthChangePct ?? 0) > 0
                               ? 'text-emerald-600'
                               : 'text-red-500',
                         )}
                       >
                         {item.monthChangePct !== null ? formatPct(item.monthChangePct) : '—'}
                         {!isChangeZero &&
-                          (isChangePositive ? (
+                          ((item.monthChangePct ?? 0) > 0 ? (
                             <ArrowUp className="size-3.5" />
                           ) : (
                             <ArrowDown className="size-3.5" />

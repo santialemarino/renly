@@ -68,6 +68,12 @@ export const DONUT_COLORS = [
 export const DONUT_CENTER_FONT_SIZE = 14;
 export const DONUT_CENTER_VALUE_FONT_SIZE = 20;
 
+// --- Animation ---
+
+export const CHART_ANIMATION_DURATION = 800;
+export const CHART_ANIMATION_EASING = 'ease-in-out' as const;
+export const TOOLTIP_ANIMATION_DURATION = 150;
+
 // --- Value formatting thresholds ---
 
 export const FORMAT_THRESHOLD_MILLION = 1_000_000;

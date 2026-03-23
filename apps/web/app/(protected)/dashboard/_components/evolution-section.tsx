@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Area,
@@ -33,6 +33,8 @@ import {
   AXIS_LINE,
   AXIS_TICK_LINE,
   AXIS_TICK_MARGIN,
+  CHART_ANIMATION_DURATION,
+  CHART_ANIMATION_EASING,
   CHART_COLOR_PRIMARY,
   CHART_HEIGHT,
   CHART_MARGIN,
@@ -40,6 +42,7 @@ import {
   FORMAT_THRESHOLD_THOUSAND,
   GRID_STROKE_DASHARRAY,
   GRID_VERTICAL,
+  TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
   TOOLTIP_BORDER_RADIUS,
@@ -48,9 +51,6 @@ import {
   TOOLTIP_TEXT,
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
-
-const MONTHS_1 = 1;
-const MONTHS_3 = 3;
 
 type Period = '1m' | '3m' | 'ytd' | 'all';
 
@@ -68,40 +68,33 @@ function formatAxisValue(value: number): string {
   return value.toFixed(0);
 }
 
-// Filters evolution points based on the selected period.
-function filterByPeriod(
-  points: PortfolioEvolution['points'],
-  period: Period,
-): PortfolioEvolution['points'] {
-  if (period === 'all' || points.length === 0) return points;
-
-  const now = new Date();
-
-  if (period === 'ytd') {
-    const yearStart = `${now.getFullYear()}-01-01`;
-    return points.filter((p) => p.date >= yearStart);
-  }
-
-  const months = period === '1m' ? MONTHS_1 : MONTHS_3;
-  const cutoff = new Date(now.getFullYear(), now.getMonth() - months, 1);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  return points.filter((p) => p.date >= cutoffStr);
-}
-
 interface EvolutionSectionProps {
   evolution: PortfolioEvolution;
 }
 
 export function EvolutionSection({ evolution }: EvolutionSectionProps) {
   const t = useTranslations('dashboard');
-  const [period, setPeriod] = useState<Period>('all');
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const filteredPoints = useMemo(
-    () => filterByPeriod(evolution.points, period),
-    [evolution.points, period],
-  );
+  const currentPeriod = (searchParams.get('period') as Period) ?? 'all';
 
-  const hasData = filteredPoints.length > 0;
+  function handlePeriodChange(value: string) {
+    if (!value) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (value === 'all') {
+      params.delete('period');
+      params.delete('start_date');
+      params.delete('end_date');
+    } else {
+      params.set('period', value);
+      params.delete('start_date');
+      params.delete('end_date');
+    }
+    router.push(`/dashboard?${params.toString()}`, { scroll: false });
+  }
+
+  const hasData = evolution.points.length > 0;
 
   return (
     <Card>
@@ -111,10 +104,8 @@ export function EvolutionSection({ evolution }: EvolutionSectionProps) {
         </CardTitle>
         <ToggleGroup
           type="single"
-          value={period}
-          onValueChange={(v) => {
-            if (v) setPeriod(v as Period);
-          }}
+          value={currentPeriod}
+          onValueChange={handlePeriodChange}
           variant="outline"
           size="sm"
         >
@@ -128,7 +119,7 @@ export function EvolutionSection({ evolution }: EvolutionSectionProps) {
         {hasData ? (
           <div style={{ height: CHART_HEIGHT }} className="w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={filteredPoints} margin={CHART_MARGIN}>
+              <AreaChart data={evolution.points} margin={CHART_MARGIN}>
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
@@ -147,6 +138,7 @@ export function EvolutionSection({ evolution }: EvolutionSectionProps) {
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <Tooltip
+                  animationDuration={TOOLTIP_ANIMATION_DURATION}
                   labelFormatter={(label) => formatMonth(String(label))}
                   formatter={(value) => [formatAxisValue(Number(value)), t('chart.tooltipValue')]}
                   contentStyle={{
@@ -180,6 +172,8 @@ export function EvolutionSection({ evolution }: EvolutionSectionProps) {
                   stroke={CHART_COLOR_PRIMARY}
                   fill={`url(#${AREA_FILL_GRADIENT_ID})`}
                   strokeWidth={AREA_STROKE_WIDTH}
+                  animationDuration={CHART_ANIMATION_DURATION}
+                  animationEasing={CHART_ANIMATION_EASING}
                 />
               </AreaChart>
             </ResponsiveContainer>

@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import ExchangeRateUnavailableError, NotFoundError
 from app.models.exchange_rate import ExchangeRatePair
 from app.models.investment import Investment
 from app.models.snapshot import InvestmentSnapshot
@@ -27,11 +27,75 @@ from app.schemas.metrics import (
     PeriodReturnItem,
     PortfolioEvolutionResponse,
     PortfolioMetricsResponse,
+    SkippedInvestment,
 )
 from app.services import metrics_helpers as mh
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
+
+
+# Splits investments into convertible and skipped based on currency support.
+# When no currency is requested, all investments are convertible (no conversion needed).
+def _split_by_convertibility(
+    investments: list[Investment],
+    currency: str | None,
+) -> tuple[list[Investment], list[SkippedInvestment]]:
+    if not currency:
+        return investments, []
+    convertible: list[Investment] = []
+    skipped: list[SkippedInvestment] = []
+    for inv in investments:
+        if mh.can_convert(inv.base_currency, currency):
+            convertible.append(inv)
+        else:
+            skipped.append(
+                SkippedInvestment(
+                    investment_id=inv.id,
+                    name=inv.name,
+                    base_currency=inv.base_currency,
+                )
+            )
+    return convertible, skipped
+
+
+# Resolves the filtered list of active investments based on optional filters.
+# When no filters are provided, returns all active investments for the user.
+async def _resolve_filtered_investments(
+    session: AsyncSession,
+    user_id: int,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
+) -> list[Investment]:
+    investments = await metrics_repository.list_active_investments(session, user_id)
+    if not investments:
+        return []
+
+    # Filter by specific investment IDs.
+    if investment_ids:
+        allowed = set(investment_ids)
+        investments = [i for i in investments if i.id in allowed]
+
+    # Filter by group membership (union of all groups).
+    if group_ids:
+        member_ids: set[int] = set()
+        for gid in group_ids:
+            ids = await group_repository.get_investment_ids_by_group(session, gid)
+            member_ids.update(ids)
+        investments = [i for i in investments if i.id in member_ids]
+
+    # Filter by category.
+    if category:
+        investments = [i for i in investments if i.category == category]
+
+    # Filter by name (case-insensitive).
+    if search:
+        term = search.lower()
+        investments = [i for i in investments if term in i.name.lower()]
+
+    return investments
 
 
 # Computes metrics for a single investment (TWR, IRR, period returns, etc.).
@@ -49,7 +113,7 @@ async def get_investment_metrics(
     snapshots = await metrics_repository.list_snapshots_by_investments(session, [investment_id])
     transactions = await metrics_repository.list_transactions_by_investments(session, [investment_id])
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, [inv])
     return _build_investment_metrics(inv, snapshots, transactions, currency, rate)
 
 
@@ -59,17 +123,25 @@ async def get_portfolio_metrics(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
 ) -> PortfolioMetricsResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    investments, skipped = _split_by_convertibility(all_investments, currency)
     if not investments:
         return PortfolioMetricsResponse(
             total_value=ZERO,
             total_invested=ZERO,
             absolute_gain=ZERO,
             currency=currency,
+            skipped_investments=skipped,
         )
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, investments)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -126,14 +198,82 @@ async def get_portfolio_metrics(
     if has_prev and prev_total != ZERO:
         month_change_pct = (curr_for_change - prev_total) / prev_total
 
+    # Portfolio TWR: compute monthly portfolio-level returns, then chain.
+    # For each unique date, sum all investment values (forward-fill + convert).
+    # Then compute period return between consecutive portfolio totals.
+    all_dates: set[date_type] = set()
+    inv_date_value: dict[int, dict[date_type, Decimal]] = {}
+    for inv_id, snaps in snap_by_inv.items():
+        dv: dict[date_type, Decimal] = {}
+        for s in snaps:
+            v = s.value
+            if currency and rate:
+                v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate)
+            dv[s.date] = v
+            all_dates.add(s.date)
+        inv_date_value[inv_id] = dv
+
+    sorted_dates = sorted(all_dates)
+
+    # Build portfolio totals per date (forward-fill).
+    last_known: dict[int, Decimal] = {}
+    portfolio_totals: list[tuple[date_type, Decimal]] = []
+    for d in sorted_dates:
+        total = ZERO
+        for inv_id in inv_ids:
+            dv = inv_date_value.get(inv_id, {})
+            if d in dv:
+                last_known[inv_id] = dv[d]
+            total += last_known.get(inv_id, ZERO)
+        portfolio_totals.append((d, total))
+
+    # Compute net cash flows per period and chain returns.
+    portfolio_returns: list[Decimal] = []
+    for i in range(1, len(portfolio_totals)):
+        prev_date, prev_val = portfolio_totals[i - 1]
+        curr_date, curr_val = portfolio_totals[i]
+        # Sum net cash flows across all investments in this period.
+        period_ncf = ZERO
+        for inv_id in inv_ids:
+            ncf = mh.net_cash_flow(tx_by_inv.get(inv_id, []), prev_date, curr_date)
+            if currency and rate:
+                ncf = mh.convert_value(ncf, inv_currency.get(inv_id, ""), currency, rate)
+            period_ncf += ncf
+        r = mh.period_return(prev_val, curr_val, period_ncf)
+        if r is not None:
+            if start_date and curr_date < start_date:
+                continue
+            if end_date and curr_date > end_date:
+                continue
+            portfolio_returns.append(r)
+    portfolio_twr = mh.twr(portfolio_returns)
+
+    # Portfolio IRR: combined cashflow series across all investments.
+    # Convert each cashflow to the display currency so mixed-currency portfolios are meaningful.
+    all_cashflows: list[tuple[date_type, float]] = []
+    for inv_id in inv_ids:
+        snaps = snap_by_inv.get(inv_id, [])
+        txs = tx_by_inv.get(inv_id, [])
+        cfs = mh.build_irr_cashflows(snaps, txs)
+        base = inv_currency.get(inv_id, "")
+        if currency and rate:
+            cfs = [(d, float(mh.convert_value(Decimal(str(a)), base, currency, rate))) for d, a in cfs]
+        if start_date or end_date:
+            cfs = [(d, a) for d, a in cfs if (not start_date or d >= start_date) and (not end_date or d <= end_date)]
+        all_cashflows.extend(cfs)
+    portfolio_irr = mh.xirr(all_cashflows) if len(all_cashflows) >= 2 else None
+
     return PortfolioMetricsResponse(
         total_value=total_value,
         total_invested=total_invested,
         absolute_gain=absolute_gain,
         total_return_pct=total_return_pct,
+        twr=portfolio_twr,
+        irr=portfolio_irr,
         month_change=month_change,
         month_change_pct=month_change_pct,
         currency=currency,
+        skipped_investments=skipped,
     )
 
 
@@ -143,12 +283,19 @@ async def get_portfolio_evolution(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
 ) -> PortfolioEvolutionResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    investments, skipped = _split_by_convertibility(all_investments, currency)
     if not investments:
-        return PortfolioEvolutionResponse(points=[], currency=currency)
+        return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, investments)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
 
@@ -205,7 +352,13 @@ async def get_portfolio_evolution(
             total += val
         points.append(EvolutionPoint(date=month, total_value=total))
 
-    return PortfolioEvolutionResponse(points=points, currency=currency)
+    # Filter points by date range if provided.
+    if start_date:
+        points = [p for p in points if p.date >= start_date]
+    if end_date:
+        points = [p for p in points if p.date <= end_date]
+
+    return PortfolioEvolutionResponse(points=points, currency=currency, skipped_investments=skipped)
 
 
 # Computes allocation by investment category.
@@ -214,12 +367,17 @@ async def get_allocation(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
 ) -> AllocationResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    investments, skipped = _split_by_convertibility(all_investments, currency)
     if not investments:
-        return AllocationResponse(items=[], total_value=ZERO)
+        return AllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, investments)
     inv_ids = [i.id for i in investments]
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
 
@@ -239,7 +397,7 @@ async def get_allocation(
         pct = (value / total_value * 100) if total_value != ZERO else ZERO
         items.append(AllocationItem(category=category, value=value, percentage=pct))
 
-    return AllocationResponse(items=items, total_value=total_value)
+    return AllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
 
 
 # Computes allocation by investment group.
@@ -248,12 +406,17 @@ async def get_allocation_by_group(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
 ) -> GroupAllocationResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    investments, skipped = _split_by_convertibility(all_investments, currency)
     if not investments:
-        return GroupAllocationResponse(items=[], total_value=ZERO)
+        return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, investments)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
@@ -293,7 +456,7 @@ async def get_allocation_by_group(
         pct = (value / total_value * 100) if total_value != ZERO else ZERO
         items.append(GroupAllocationItem(group_name=name, value=value, percentage=pct))
 
-    return GroupAllocationResponse(items=items, total_value=total_value)
+    return GroupAllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
 
 
 # Computes lightweight per-investment metrics for the dashboard compact table.
@@ -302,12 +465,17 @@ async def get_investments_summary(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    investment_ids: list[int] | None = None,
+    group_ids: list[int] | None = None,
+    category: str | None = None,
+    search: str | None = None,
 ) -> InvestmentsSummaryResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    investments, skipped = _split_by_convertibility(all_investments, currency)
     if not investments:
-        return InvestmentsSummaryResponse(items=[])
+        return InvestmentsSummaryResponse(items=[], skipped_investments=skipped)
 
-    rate = await _get_conversion_rate(session) if currency else None
+    rate = await _get_required_conversion_rate(session, currency, investments)
     inv_ids = [i.id for i in investments]
 
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -357,7 +525,7 @@ async def get_investments_summary(
     # Sort by current value descending (None values last).
     items.sort(key=lambda x: x.current_value or ZERO, reverse=True)
 
-    return InvestmentsSummaryResponse(items=items)
+    return InvestmentsSummaryResponse(items=items, skipped_investments=skipped)
 
 
 # Returns the latest USD/ARS MEP rate. Falls back to oficial if MEP unavailable.
@@ -370,6 +538,24 @@ async def _get_conversion_rate(session: AsyncSession) -> Decimal | None:
     if oficial:
         return oficial.rate
     return None
+
+
+# Returns the conversion rate. Raises ExchangeRateUnavailableError if conversion is needed
+# but no rate is available. Returns None when currency is None (no conversion requested).
+async def _get_required_conversion_rate(
+    session: AsyncSession,
+    currency: str | None,
+    investments: list[Investment],
+) -> Decimal | None:
+    if not currency:
+        return None
+    needs_conversion = any(inv.base_currency != currency for inv in investments)
+    if not needs_conversion:
+        return None
+    rate = await _get_conversion_rate(session)
+    if rate is None:
+        raise ExchangeRateUnavailableError(currency)
+    return rate
 
 
 # Builds InvestmentMetricsResponse from raw data.
