@@ -157,8 +157,15 @@
     "period": {
       "1m": "1M",
       "3m": "3M",
+      "6m": "6M",
       "ytd": "YTD",
-      "all": "Todo"
+      "1y": "1A",
+      "2y": "2A",
+      "3y": "3A",
+      "all": "Todo",
+      "custom": "Personalizado",
+      "cancel": "Cancelar",
+      "apply": "Aplicar"
     },
     "chart": {
       "title": "Evolución del Portfolio",
@@ -311,6 +318,7 @@
       "titleEdit": "Editar snapshot",
       "date": {
         "label": "Fecha",
+        "placeholder": "Elegí una fecha",
         "duplicate": "Ya existe un snapshot para este mes. Hacé click en la celda para editarlo."
       },
       "value": {

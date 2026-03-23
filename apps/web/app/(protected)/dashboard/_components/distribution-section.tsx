@@ -30,6 +30,7 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
+import { UNGROUPED_LABEL } from '@/lib/constants/db-constraints';
 
 type Mode = 'category' | 'group';
 
@@ -71,7 +72,7 @@ export function DistributionSection({
         percentage: item.percentage,
       }))
     : groupAllocation.items.map((item) => ({
-        name: item.groupName === 'Ungrouped' ? t('distribution.ungrouped') : item.groupName,
+        name: item.groupName === UNGROUPED_LABEL ? t('distribution.ungrouped') : item.groupName,
         value: item.value,
         percentage: item.percentage,
       }));
@@ -93,9 +94,20 @@ export function DistributionSection({
             }}
             variant="outline"
             size="sm"
+            className="border border-border bg-white rounded-full overflow-hidden shadow-xs"
           >
-            <ToggleGroupItem value="category">{t('distribution.byCategory')}</ToggleGroupItem>
-            <ToggleGroupItem value="group">{t('distribution.byGroup')}</ToggleGroupItem>
+            <ToggleGroupItem
+              value="category"
+              className="border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
+            >
+              {t('distribution.byCategory')}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="group"
+              className="border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
+            >
+              {t('distribution.byGroup')}
+            </ToggleGroupItem>
           </ToggleGroup>
         )}
       </CardHeader>

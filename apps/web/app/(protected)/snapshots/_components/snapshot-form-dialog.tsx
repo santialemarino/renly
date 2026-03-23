@@ -34,6 +34,7 @@ import {
   updateTransaction,
   upsertSnapshot,
 } from '@/app/(protected)/snapshots/snapshots-actions';
+import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { WarningHint } from '@/components/warning-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
@@ -94,14 +95,9 @@ export function SnapshotFormDialog({
   const includeTransaction = form.watch('includeTransaction');
   const watchedDate = form.watch('date');
 
-  const MIN_REASONABLE_YEAR = 1900;
-
   // True when the snapshot being created would be the earliest for this investment.
-  // Only evaluates once the date has a reasonable year to avoid flickering during input.
   const isEarliestSnapshot = useMemo(() => {
     if (isEdit || !watchedDate) return false;
-    const year = new Date(watchedDate).getFullYear();
-    if (isNaN(year) || year < MIN_REASONABLE_YEAR) return false;
     if (existingDates.length === 0) return true;
     return existingDates.every((d) => watchedDate < d);
   }, [isEdit, watchedDate, existingDates]);
@@ -183,7 +179,12 @@ export function SnapshotFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.date.label')}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="date" disabled={isEdit} />
+                      <DatePickerInput
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={isEdit}
+                        placeholder={t('form.date.placeholder')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

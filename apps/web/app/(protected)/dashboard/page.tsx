@@ -2,7 +2,10 @@ import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
 import { PageHeader } from '@/app/(protected)/_components/page-header';
-import { AnimatedDashboardHeader } from '@/app/(protected)/dashboard/_components/animated-dashboard-header';
+import {
+  AnimatedDashboardHeader,
+  AnimatedDashboardToolbar,
+} from '@/app/(protected)/dashboard/_components/animated-dashboard-header';
 import { DashboardSearch } from '@/app/(protected)/dashboard/_components/dashboard-search';
 import { DashboardToolbar } from '@/app/(protected)/dashboard/_components/dashboard-toolbar';
 import { DistributionSection } from '@/app/(protected)/dashboard/_components/distribution-section';
@@ -10,6 +13,7 @@ import { EvolutionSection } from '@/app/(protected)/dashboard/_components/evolut
 import { InvestmentDetailCard } from '@/app/(protected)/dashboard/_components/investment-detail-card';
 import { InvestmentsSummaryTable } from '@/app/(protected)/dashboard/_components/investments-summary-table';
 import { MetricCards } from '@/app/(protected)/dashboard/_components/metric-cards';
+import { PeriodPicker } from '@/app/(protected)/dashboard/_components/period-picker';
 import { WarningHint } from '@/components/warning-hint';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import {
@@ -23,6 +27,7 @@ import {
 } from '@/lib/api/metrics';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/db-constraints';
+import { presetToStartDate } from '@/lib/constants/period-presets';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -34,8 +39,8 @@ export async function generateMetadata() {
 
 interface DashboardPageProps {
   searchParams: Promise<{
-    investment_ids?: string | string[];
-    group_ids?: string | string[];
+    investment_id?: string;
+    group_id?: string;
     category?: string;
     period?: string;
     start_date?: string;
@@ -61,18 +66,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     currency = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
   }
 
-  // Parse filter params.
-  const investmentIdsRaw = params.investment_ids;
-  const investmentIds = investmentIdsRaw
-    ? (Array.isArray(investmentIdsRaw) ? investmentIdsRaw : [investmentIdsRaw])
-        .map(Number)
-        .filter(Boolean)
+  // Parse filter params (singular from URL, wrapped in arrays for the API).
+  const investmentIds = params.investment_id
+    ? [Number(params.investment_id)].filter(Boolean)
     : undefined;
-
-  const groupIdsRaw = params.group_ids;
-  const groupIds = groupIdsRaw
-    ? (Array.isArray(groupIdsRaw) ? groupIdsRaw : [groupIdsRaw]).map(Number).filter(Boolean)
-    : undefined;
+  const groupIds = params.group_id ? [Number(params.group_id)].filter(Boolean) : undefined;
 
   const category = params.category || undefined;
 
@@ -85,17 +83,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     startDate = params.start_date;
     endDate = params.end_date;
   } else if (period && period !== 'all') {
-    const now = new Date();
-    endDate = now.toISOString().slice(0, 10);
-    if (period === '1m') {
-      const d = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      startDate = d.toISOString().slice(0, 10);
-    } else if (period === '3m') {
-      const d = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-      startDate = d.toISOString().slice(0, 10);
-    } else if (period === 'ytd') {
-      startDate = `${now.getFullYear()}-01-01`;
-    }
+    startDate = presetToStartDate(period);
+    endDate = new Date().toISOString().slice(0, 10);
   }
 
   const isSingleInvestment = investmentIds?.length === 1;
@@ -214,8 +203,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             </WarningHint>
           </>
         }
+      />
+      <AnimatedDashboardToolbar
         backButton={<DashboardToolbar isFiltered={isFiltered} />}
         search={<DashboardSearch investments={searchableInvestments} groups={groups} />}
+        periodPicker={<PeriodPicker />}
       />
 
       <MetricCards metrics={metrics} />

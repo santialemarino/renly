@@ -58,10 +58,10 @@ export function SmartSearch({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            'flex h-9 w-full min-w-48 items-center px-3 gap-x-2 border rounded-lg shadow-xs',
+            'flex h-9 w-full items-center px-3 gap-x-2 border rounded-lg shadow-xs',
             'transition-[border-color,box-shadow] duration-200 ease-in-out',
             'hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-            'text-paragraph-sm text-muted-foreground',
+            'text-paragraph-sm text-muted-foreground overflow-hidden',
             surface ? 'bg-background' : 'bg-input',
             'border-border',
             className,
@@ -69,7 +69,7 @@ export function SmartSearch({
           onClick={() => setOpen(true)}
         >
           <Search className="size-4 shrink-0 text-muted-foreground" />
-          {placeholder}
+          <span className="truncate">{placeholder}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">

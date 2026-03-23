@@ -157,8 +157,15 @@
     "period": {
       "1m": "1M",
       "3m": "3M",
+      "6m": "6M",
       "ytd": "YTD",
-      "all": "All"
+      "1y": "1Y",
+      "2y": "2Y",
+      "3y": "3Y",
+      "all": "All",
+      "custom": "Custom",
+      "cancel": "Cancel",
+      "apply": "Apply"
     },
     "chart": {
       "title": "Portfolio Evolution",
@@ -311,6 +318,7 @@
       "titleEdit": "Edit snapshot",
       "date": {
         "label": "Date",
+        "placeholder": "Pick a date",
         "duplicate": "A snapshot already exists for this month. Click the cell to edit it."
       },
       "value": {

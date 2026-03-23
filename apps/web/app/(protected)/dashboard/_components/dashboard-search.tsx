@@ -60,9 +60,9 @@ export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
 
   function handleSelect(groupIndex: number, itemId: string) {
     if (groupIndex === GROUP_INVESTMENTS) {
-      router.push(`${ROUTES.dashboard}?investment_ids=${itemId}`, { scroll: false });
+      router.push(`${ROUTES.dashboard}?investment_id=${itemId}`, { scroll: false });
     } else if (groupIndex === GROUP_GROUPS) {
-      router.push(`${ROUTES.dashboard}?group_ids=${itemId}`, { scroll: false });
+      router.push(`${ROUTES.dashboard}?group_id=${itemId}`, { scroll: false });
     } else if (groupIndex === GROUP_CATEGORIES) {
       router.push(`${ROUTES.dashboard}?category=${itemId}`, { scroll: false });
     }

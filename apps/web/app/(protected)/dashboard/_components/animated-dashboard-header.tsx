@@ -8,47 +8,65 @@ interface AnimatedDashboardHeaderProps {
   subtitleKey: string;
   subtitle: React.ReactNode;
   warnings: React.ReactNode;
-  backButton: React.ReactNode;
-  search: React.ReactNode;
 }
 
-// Animates subtitle transitions (fade in/out when filter changes) and toolbar layout shifts
-// (search bar smoothly resizes when back button appears/disappears).
+// Animates subtitle transitions (fade in/out when filter changes).
+// Uses initial={false} so the first render is static — no animation on page load.
 export function AnimatedDashboardHeader({
   subtitleKey,
   subtitle,
   warnings,
-  backButton,
-  search,
 }: AnimatedDashboardHeaderProps) {
   return (
-    <div className="flex flex-col gap-y-2">
-      <div className="flex flex-col gap-y-1">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={subtitleKey}
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            transition={{ duration: ANIMATION_DURATION }}
-          >
-            {subtitle}
-          </motion.div>
-        </AnimatePresence>
-        {warnings}
-      </div>
-      <LayoutGroup>
-        <div className="flex items-center gap-x-2">
-          {backButton}
-          <motion.div
-            layout
-            transition={{ duration: ANIMATION_DURATION }}
-            className="flex-1 min-w-0"
-          >
-            {search}
-          </motion.div>
-        </div>
-      </LayoutGroup>
+    <div className="flex flex-col gap-y-1">
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={subtitleKey}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 4 }}
+          transition={{ duration: ANIMATION_DURATION }}
+        >
+          {subtitle}
+        </motion.div>
+      </AnimatePresence>
+      {warnings}
     </div>
+  );
+}
+
+interface AnimatedDashboardToolbarProps {
+  backButton: React.ReactNode;
+  search: React.ReactNode;
+  periodPicker: React.ReactNode;
+}
+
+// Animates toolbar layout shifts: search bar smoothly resizes when back button appears/disappears,
+// and period presets shift when custom picker expands.
+export function AnimatedDashboardToolbar({
+  backButton,
+  search,
+  periodPicker,
+}: AnimatedDashboardToolbarProps) {
+  return (
+    <LayoutGroup>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+        {backButton}
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DURATION }}
+          className="min-w-92 flex-1"
+        >
+          {search}
+        </motion.div>
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DURATION }}
+          className="basis-full xl:basis-auto"
+        >
+          {periodPicker}
+        </motion.div>
+      </div>
+    </LayoutGroup>
   );
 }
