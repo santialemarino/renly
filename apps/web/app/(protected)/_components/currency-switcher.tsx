@@ -55,7 +55,7 @@ export function CurrencySwitcher({
           <ToggleGroupItem
             key={code}
             value={code}
-            className="flex-1 border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 text-paragraph-mini font-mono"
+            className="flex-1 border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 text-paragraph-mini font-mono focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
           >
             {code === ORIGINAL_CURRENCY ? t('currency.original') : code}
           </ToggleGroupItem>

@@ -19,6 +19,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
+import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshot-form-schema';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 
@@ -138,7 +139,7 @@ function CellContent({ cell }: CellContentProps) {
           <TooltipTrigger asChild>
             <span className="flex items-center gap-x-0.5 text-paragraph-mini text-blue-500 shrink-0">
               <CircleDollarSign className="size-3.5" />
-              {cell.transaction.type === 'sell' || cell.transaction.type === 'withdrawal'
+              {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
                 ? '-'
                 : '+'}
               {formatValue(cell.transaction.amount)}

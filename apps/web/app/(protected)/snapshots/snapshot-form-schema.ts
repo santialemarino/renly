@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const TRANSACTION_TYPES = ['deposit', 'buy', 'sell', 'withdrawal'] as const;
+export const TRANSACTION_TYPES_OUTGOING = ['sell', 'withdrawal'] as const;
 
 // existingYearMonths: set of "YYYY-MM" strings for months that already have a snapshot.
 // Only validated when adding (not editing).

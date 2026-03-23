@@ -126,6 +126,9 @@ async def set_investment_groups(
     await investment_service.set_investment_groups(session, investment_id, current_user, body.group_ids)
 
 
+# --- Snapshots ---
+
+
 # Lists snapshots for an investment. Returns 404 if investment not found or not owned.
 @router.get("/{investment_id}/snapshots", response_model=list[SnapshotResponse])
 async def list_snapshots(
@@ -159,6 +162,9 @@ async def create_snapshot(
         notes=body.notes,
     )
     return SnapshotResponse.model_validate(snapshot)
+
+
+# --- Transactions ---
 
 
 # Lists transactions for an investment. Returns 404 if investment not found or not owned.

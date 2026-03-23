@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
   Area,
@@ -12,14 +11,7 @@ import {
   YAxis,
 } from 'recharts';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@repo/ui/components';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import type { PortfolioEvolution } from '@/lib/api/metrics';
 import {
   AREA_CURVE_TYPE,
@@ -52,8 +44,6 @@ import {
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
 
-type Period = '1m' | '3m' | 'ytd' | 'all';
-
 // Formats a date string (YYYY-MM-DD) as "Jan 25".
 function formatMonth(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
@@ -74,46 +64,15 @@ interface EvolutionSectionProps {
 
 export function EvolutionSection({ evolution }: EvolutionSectionProps) {
   const t = useTranslations('dashboard');
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const currentPeriod = (searchParams.get('period') as Period) ?? 'all';
-
-  function handlePeriodChange(value: string) {
-    if (!value) return;
-    const params = new URLSearchParams(searchParams.toString());
-    if (value === 'all') {
-      params.delete('period');
-      params.delete('start_date');
-      params.delete('end_date');
-    } else {
-      params.set('period', value);
-      params.delete('start_date');
-      params.delete('end_date');
-    }
-    router.push(`/dashboard?${params.toString()}`, { scroll: false });
-  }
 
   const hasData = evolution.points.length > 0;
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between px-6">
+      <CardHeader className="px-6">
         <CardTitle className="text-paragraph-sm text-muted-foreground">
           {t('chart.title')}
         </CardTitle>
-        <ToggleGroup
-          type="single"
-          value={currentPeriod}
-          onValueChange={handlePeriodChange}
-          variant="outline"
-          size="sm"
-        >
-          <ToggleGroupItem value="1m">{t('period.1m')}</ToggleGroupItem>
-          <ToggleGroupItem value="3m">{t('period.3m')}</ToggleGroupItem>
-          <ToggleGroupItem value="ytd">{t('period.ytd')}</ToggleGroupItem>
-          <ToggleGroupItem value="all">{t('period.all')}</ToggleGroupItem>
-        </ToggleGroup>
       </CardHeader>
       <CardContent className="px-6 pb-6">
         {hasData ? (

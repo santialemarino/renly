@@ -21,11 +21,11 @@ class TransactionCreate(BaseModel):
 
 # Body for PUT /investments/{id}/transactions/{tx_id}. Partial update; only updates provided fields.
 class TransactionUpdate(BaseModel):
-    date: date_type | None = None
-    amount: Decimal | None = Field(default=None, max_digits=18, decimal_places=2)
-    currency: Currency | None = None
-    type: TransactionType | None = None
-    notes: str | None = None
+    date: date_type | None = Field(default=None, description="Transaction date.")
+    amount: Decimal | None = Field(default=None, description="Amount (positive).", max_digits=18, decimal_places=2)
+    currency: Currency | None = Field(default=None, description="Amount currency.")
+    type: TransactionType | None = Field(default=None, description="Transaction kind.")
+    notes: str | None = Field(default=None, description="Optional notes.")
 
 
 # Response for GET list, GET one, POST and PUT.

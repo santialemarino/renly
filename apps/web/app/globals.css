@@ -9,6 +9,19 @@
 
 @plugin "@tailwindcss/typography";
 
+/* Pulse-scale animation for focus-visible feedback on toggle items */
+@keyframes pulse-scale {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* Theme-aware image visibility (light/dark) */
 .imgDark {
   display: none;

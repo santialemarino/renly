@@ -48,7 +48,7 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
   const hasData = summary.items.length > 0;
 
   function handleRowClick(investmentId: number) {
-    router.push(`${ROUTES.dashboard}?investment_ids=${investmentId}`, { scroll: false });
+    router.push(`${ROUTES.dashboard}?investment_id=${investmentId}`, { scroll: false });
   }
 
   return (

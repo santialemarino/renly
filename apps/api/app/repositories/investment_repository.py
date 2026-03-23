@@ -52,6 +52,21 @@ async def list_by_user_filtered(
     return items, total
 
 
+# Fetches a single investment by id and user_id. Returns None if not found or not owned.
+async def get_by_id(
+    session: AsyncSession,
+    investment_id: int,
+    user_id: int,
+) -> Investment | None:
+    result = await session.execute(
+        select(Investment).where(
+            Investment.id == investment_id,
+            Investment.user_id == user_id,
+        ),
+    )
+    return result.scalar_one_or_none()
+
+
 # Returns groups for each investment id as {investment_id: [(group_id, group_name)]}.
 async def get_groups_by_investment_ids(
     session: AsyncSession,
@@ -72,21 +87,6 @@ async def get_groups_by_investment_ids(
     return groups_map
 
 
-# Fetches a single investment by id and user_id. Returns None if not found or not owned.
-async def get_by_id(
-    session: AsyncSession,
-    investment_id: int,
-    user_id: int,
-) -> Investment | None:
-    result = await session.execute(
-        select(Investment).where(
-            Investment.id == investment_id,
-            Investment.user_id == user_id,
-        ),
-    )
-    return result.scalar_one_or_none()
-
-
 # Persists investment, commits, refreshes, and returns it (with id set).
 async def create(session: AsyncSession, investment: Investment) -> Investment:
     session.add(investment)
@@ -104,8 +104,8 @@ async def save(session: AsyncSession, investment: Investment) -> None:
 # Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
     list_by_user_filtered = staticmethod(list_by_user_filtered)
-    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     get_by_id = staticmethod(get_by_id)
+    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     create = staticmethod(create)
     save = staticmethod(save)
 
