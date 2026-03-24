@@ -18,8 +18,8 @@ import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/
 import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
+import { DEBOUNCE_MS } from '@/lib/constants/animations';
 
-const DEBOUNCE_MS = 300;
 const CATEGORY_ALL = '__all__';
 
 export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {

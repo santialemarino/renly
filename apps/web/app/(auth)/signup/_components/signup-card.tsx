@@ -8,12 +8,13 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/c
 import { RedirectingScreen } from '@/app/(auth)/signup/_components/redirecting-screen';
 import { SignupForm } from '@/app/(auth)/signup/_components/signup-form';
 import { ROUTES } from '@/config/routes';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 const FADE_PROPS = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.25 },
+  transition: { duration: ANIMATION_DEFAULT },
 };
 
 export function SignupCard() {

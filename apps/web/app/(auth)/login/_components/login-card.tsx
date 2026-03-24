@@ -6,11 +6,12 @@ import { useTranslations } from 'next-intl';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
 import { LoginForm } from '@/app/(auth)/login/_components/login-form';
 import { ROUTES } from '@/config/routes';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 const FADE_PROPS = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
-  transition: { duration: 0.25 },
+  transition: { duration: ANIMATION_DEFAULT },
 };
 
 export function LoginCard() {

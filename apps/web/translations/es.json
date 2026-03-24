@@ -127,6 +127,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "investments": "Inversiones",
+      "groups": "Grupos",
       "snapshots": "Snapshots",
       "settings": "Configuración"
     },
@@ -296,6 +297,62 @@
     },
     "unarchiveSuccess": "Inversión desarchivada.",
     "unarchiveError": "No se pudo desarchivar la inversión."
+  },
+  "groups": {
+    "metadata": {
+      "title": "Grupos",
+      "description": "Gestioná tus grupos de inversiones"
+    },
+    "title": "Grupos",
+    "subtitle": "Organizá tus inversiones en grupos.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar grupos...",
+      "addGroup": "Nuevo grupo"
+    },
+    "table": {
+      "id": "ID",
+      "name": "Nombre",
+      "investments": "Inversiones",
+      "actions": "Acciones",
+      "noInvestments": "—",
+      "empty": "No se encontraron grupos."
+    },
+    "form": {
+      "createTitle": "Nuevo grupo",
+      "editTitle": "Editar grupo",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre del grupo"
+      },
+      "investments": {
+        "label": "Inversiones",
+        "placeholder": "Buscar inversiones...",
+        "empty": "No se encontraron inversiones."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "success": {
+        "create": "Grupo creado.",
+        "edit": "Grupo actualizado."
+      },
+      "error": {
+        "create": "No se pudo crear el grupo.",
+        "edit": "No se pudo actualizar el grupo."
+      }
+    },
+    "delete": {
+      "title": "Eliminar grupo",
+      "description": "¿Estás seguro de que querés eliminar {name}? {count, plural, =0 {No hay inversiones vinculadas a este grupo.} =1 {1 inversión será desvinculada de este grupo.} other {# inversiones serán desvinculadas de este grupo.}} Las inversiones en sí no serán eliminadas.",
+      "cancel": "Cancelar",
+      "confirm": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Grupo eliminado.",
+      "error": "No se pudo eliminar el grupo."
+    },
+    "softLimit": "Tenés {count} de {max} grupos. Considerá consolidar antes de crear más."
   },
   "snapshots": {
     "metadata": {

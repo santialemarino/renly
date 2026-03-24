@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
@@ -23,13 +23,18 @@ def _to_response(group, investment_ids: list[int]) -> GroupResponse:
     )
 
 
-# Lists groups for the user. Each group includes its investment ids.
+# Lists groups for the user with optional search and sorting. Each group includes its investment ids.
 @router.get("", response_model=list[GroupResponse])
 async def list_groups(
     current_user: CurrentUser,
     session: SessionDep,
+    search: str | None = Query(default=None, description="Filter groups by name (case-insensitive substring match)."),
+    sort_by: str | None = Query(default=None, description="Column to sort by (name)."),
+    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
 ) -> list[GroupResponse]:
-    pairs = await group_service.list_groups(session, current_user)
+    pairs = await group_service.list_groups(
+        session, current_user, search=search, sort_by=sort_by, sort_order=sort_order
+    )
     return [_to_response(g, ids) for g, ids in pairs]
 
 

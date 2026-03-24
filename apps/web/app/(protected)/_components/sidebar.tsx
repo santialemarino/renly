@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, LogOut, Settings, Table2, TrendingUp } from 'lucide-react';
+import { FolderOpen, LayoutDashboard, LogOut, Settings, Table2, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -26,6 +26,7 @@ import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 const NAV_ITEMS = [
   { key: 'dashboard', href: ROUTES.dashboard, icon: LayoutDashboard },
   { key: 'investments', href: ROUTES.investments, icon: TrendingUp },
+  { key: 'groups', href: ROUTES.groups, icon: FolderOpen },
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
   { key: 'settings', href: ROUTES.settings, icon: Settings },
 ] as const;

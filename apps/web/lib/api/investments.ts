@@ -131,8 +131,17 @@ export async function getInvestments(
   };
 }
 
-export async function getGroups(): Promise<InvestmentGroup[]> {
-  const res = await authenticatedFetch('/groups', { method: 'GET' });
+export async function getGroups(params?: {
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}): Promise<InvestmentGroup[]> {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set('search', params.search);
+  if (params?.sortBy) qs.set('sort_by', params.sortBy);
+  if (params?.sortOrder) qs.set('sort_order', params.sortOrder);
+  const endpoint = qs.toString() ? `/groups?${qs.toString()}` : '/groups';
+  const res = await authenticatedFetch(endpoint, { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch groups');
   const raw: InvestmentGroupRaw[] = await res.json();
   return raw.map(mapGroup);

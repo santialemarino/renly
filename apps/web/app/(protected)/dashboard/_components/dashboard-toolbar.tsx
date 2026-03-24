@@ -7,8 +7,7 @@ import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
-
-const ANIMATION_DURATION = 0.25;
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 interface DashboardToolbarProps {
   isFiltered: boolean;
@@ -26,7 +25,7 @@ export function DashboardToolbar({ isFiltered }: DashboardToolbarProps) {
           initial={{ opacity: 0, width: 0 }}
           animate={{ opacity: 1, width: 'auto' }}
           exit={{ opacity: 0, width: 0 }}
-          transition={{ duration: ANIMATION_DURATION }}
+          transition={{ duration: ANIMATION_DEFAULT }}
           className="shrink-0 overflow-hidden"
         >
           <Button

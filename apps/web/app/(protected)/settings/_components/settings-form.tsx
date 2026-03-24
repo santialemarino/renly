@@ -17,6 +17,7 @@ import {
 } from '@/app/(protected)/settings/settings-form-schema';
 import { WarningHint } from '@/components/warning-hint';
 import type { SettingsData } from '@/lib/api/settings';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { isCurrencySupported } from '@/lib/utils/currency';
 
 interface SettingsFormProps {
@@ -78,7 +79,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: ANIMATION_DEFAULT }}
               >
                 <AlertTriangle className="size-4 text-amber-500" />
               </motion.div>
@@ -114,7 +115,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: 0.25 }}
+                transition={{ duration: ANIMATION_DEFAULT }}
               >
                 <AlertTriangle className="size-4 text-amber-500" />
               </motion.div>
