@@ -5,8 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { Hint, Separator } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-
-const ANIMATION_DURATION = 0.25;
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 interface WarningHintProps {
   show: boolean;
@@ -32,7 +31,7 @@ export function WarningHint({
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: ANIMATION_DURATION }}
+          transition={{ duration: ANIMATION_DEFAULT }}
           style={{ overflow: 'hidden', marginTop: -parentGap }}
         >
           <div className="flex flex-col" style={{ paddingTop: parentGap, gap: parentGap }}>

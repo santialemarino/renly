@@ -2,7 +2,7 @@
 
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 
-const ANIMATION_DURATION = 0.25;
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 interface AnimatedDashboardHeaderProps {
   subtitleKey: string;
@@ -25,7 +25,7 @@ export function AnimatedDashboardHeader({
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 4 }}
-          transition={{ duration: ANIMATION_DURATION }}
+          transition={{ duration: ANIMATION_DEFAULT }}
         >
           {subtitle}
         </motion.div>
@@ -52,16 +52,12 @@ export function AnimatedDashboardToolbar({
     <LayoutGroup>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         {backButton}
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DURATION }}
-          className="min-w-92 flex-1"
-        >
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-92 flex-1">
           {search}
         </motion.div>
         <motion.div
           layout
-          transition={{ duration: ANIMATION_DURATION }}
+          transition={{ duration: ANIMATION_DEFAULT }}
           className="basis-full xl:basis-auto"
         >
           {periodPicker}

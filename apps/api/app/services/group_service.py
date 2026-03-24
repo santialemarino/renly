@@ -6,9 +6,18 @@ from app.models.user import User
 from app.repositories import group_repository, investment_repository
 
 
-# Lists groups for the user. Returns each group with its investment ids.
-async def list_groups(session: AsyncSession, user: User) -> list[tuple[InvestmentGroup, list[int]]]:
-    groups = await group_repository.list_by_user(session, user.id)
+# Lists groups for the user with optional search and sorting. Returns each group with its investment ids.
+async def list_groups(
+    session: AsyncSession,
+    user: User,
+    *,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> list[tuple[InvestmentGroup, list[int]]]:
+    groups = await group_repository.list_by_user(
+        session, user.id, search=search, sort_by=sort_by, sort_order=sort_order
+    )
     out = []
     for g in groups:
         ids = await group_repository.get_investment_ids_by_group(session, g.id)

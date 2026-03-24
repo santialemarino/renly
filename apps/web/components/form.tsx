@@ -15,6 +15,7 @@ import {
 
 import { Label } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 const Form = FormProvider;
 
@@ -140,7 +141,7 @@ function FormMessage({ className, children }: { className?: string; children?: R
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.25 }}
+          transition={{ duration: ANIMATION_DEFAULT }}
           className={cn('overflow-hidden text-destructive text-paragraph-mini', className)}
         >
           {body}

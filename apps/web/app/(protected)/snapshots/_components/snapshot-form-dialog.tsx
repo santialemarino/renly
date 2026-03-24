@@ -24,20 +24,21 @@ import {
   SelectValue,
 } from '@repo/ui/components';
 import {
-  buildSnapshotFormSchema,
-  TRANSACTION_TYPES,
-  type SnapshotFormValues,
-} from '@/app/(protected)/snapshots/snapshot-form-schema';
-import {
   createTransaction,
   deleteTransaction,
   updateTransaction,
   upsertSnapshot,
 } from '@/app/(protected)/snapshots/snapshots-actions';
+import {
+  buildSnapshotFormSchema,
+  TRANSACTION_TYPES,
+  type SnapshotFormValues,
+} from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { WarningHint } from '@/components/warning-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 interface SnapshotFormDialogProps {
   open: boolean;
@@ -234,7 +235,7 @@ export function SnapshotFormDialog({
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.25 }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
                   style={{ overflow: 'hidden', marginTop: -16 }}
                 >
                   <div className="flex min-w-0 items-start gap-x-3 pt-4">

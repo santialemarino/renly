@@ -1,13 +1,31 @@
+from sqlalchemy import asc, desc
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
 
+_SORT_COLUMNS = {
+    "name": InvestmentGroup.name,
+}
 
-# Lists groups for a user. Returns list ordered by id.
-async def list_by_user(session: AsyncSession, user_id: int) -> list[InvestmentGroup]:
-    stmt = select(InvestmentGroup).where(InvestmentGroup.user_id == user_id).order_by(InvestmentGroup.id)
+
+# Lists groups for a user with optional search and sorting.
+async def list_by_user(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> list[InvestmentGroup]:
+    stmt = select(InvestmentGroup).where(InvestmentGroup.user_id == user_id)
+    if search:
+        stmt = stmt.where(InvestmentGroup.name.ilike(f"%{search}%"))
+    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
+    order_fn = desc if sort_order == "desc" else asc
+    order_clause = order_fn(sort_col) if sort_col is not None else InvestmentGroup.id
+    stmt = stmt.order_by(order_clause)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

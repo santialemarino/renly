@@ -19,9 +19,8 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ROUTES } from '@/config/routes';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
-
-const ANIMATION_DURATION = 0.25;
 
 const DATE_FORMAT = 'MMM d, yyyy';
 
@@ -77,7 +76,7 @@ export function PeriodPicker({ className }: PeriodPickerProps) {
   return (
     <LayoutGroup>
       <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-2', className)}>
-        <motion.div layout transition={{ duration: ANIMATION_DURATION }} className="flex-1">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="flex-1">
           <ToggleGroup
             type="single"
             value={activePreset ?? ''}
@@ -98,7 +97,7 @@ export function PeriodPicker({ className }: PeriodPickerProps) {
           </ToggleGroup>
         </motion.div>
 
-        <motion.div layout transition={{ duration: ANIMATION_DURATION }} className="flex-1">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="flex-1">
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button

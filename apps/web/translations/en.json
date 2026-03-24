@@ -127,6 +127,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "investments": "Investments",
+      "groups": "Groups",
       "snapshots": "Snapshots",
       "settings": "Settings"
     },
@@ -297,6 +298,62 @@
     "unarchiveSuccess": "Investment unarchived.",
     "unarchiveError": "Failed to unarchive investment."
   },
+  "groups": {
+    "metadata": {
+      "title": "Groups",
+      "description": "Manage your investment groups"
+    },
+    "title": "Groups",
+    "subtitle": "Organize your investments into groups.",
+    "toolbar": {
+      "searchPlaceholder": "Search groups...",
+      "addGroup": "New group"
+    },
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "investments": "Investments",
+      "actions": "Actions",
+      "noInvestments": "—",
+      "empty": "No groups found."
+    },
+    "form": {
+      "createTitle": "New group",
+      "editTitle": "Edit group",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the group name"
+      },
+      "investments": {
+        "label": "Investments",
+        "placeholder": "Search investments...",
+        "empty": "No investments found."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "success": {
+        "create": "Group created.",
+        "edit": "Group updated."
+      },
+      "error": {
+        "create": "Failed to create group.",
+        "edit": "Failed to update group."
+      }
+    },
+    "delete": {
+      "title": "Delete group",
+      "description": "Are you sure you want to delete {name}? {count, plural, =0 {No investments are linked to this group.} =1 {1 investment will be unlinked from this group.} other {# investments will be unlinked from this group.}} The investments themselves will not be deleted.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "deleting": "Deleting...",
+      "success": "Group deleted.",
+      "error": "Failed to delete group."
+    },
+    "softLimit": "You have {count} of {max} groups. Consider consolidating before creating more."
+  },
   "snapshots": {
     "metadata": {
       "title": "Snapshots",
@@ -318,7 +375,7 @@
       "titleEdit": "Edit snapshot",
       "date": {
         "label": "Date",
-        "placeholder": "Pick a date",
+        "placeholder": "Select a date",
         "duplicate": "A snapshot already exists for this month. Click the cell to edit it."
       },
       "value": {
