@@ -469,6 +469,8 @@ async def get_investments_summary(
     group_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
 ) -> InvestmentsSummaryResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
     investments, skipped = _split_by_convertibility(all_investments, currency)
@@ -489,6 +491,13 @@ async def get_investments_summary(
         snaps = snap_by_inv.get(inv.id, [])
         txs = tx_by_inv.get(inv.id, [])
         base = inv.base_currency
+
+        # Check if the investment has any snapshots within the selected date range.
+        has_snapshots_in_period = True
+        if start_date or end_date:
+            has_snapshots_in_period = any(
+                (start_date is None or s.date >= start_date) and (end_date is None or s.date <= end_date) for s in snaps
+            )
 
         current_value = snaps[-1].value if snaps else None
         cap = mh.invested_capital(txs)
@@ -518,6 +527,7 @@ async def get_investments_summary(
                 invested_capital=cap,
                 absolute_gain=absolute_gain,
                 month_change_pct=month_change_pct,
+                has_snapshots_in_period=has_snapshots_in_period,
                 currency=currency or base,
             )
         )

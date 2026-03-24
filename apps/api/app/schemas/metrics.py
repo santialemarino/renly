@@ -116,6 +116,9 @@ class InvestmentSummaryItem(BaseModel):
     invested_capital: Decimal = Field(description="Net capital invested.")
     absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
     month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
+    has_snapshots_in_period: bool = Field(
+        default=True, description="Whether this investment has snapshots within the selected date range."
+    )
     currency: str = Field(description="Currency of the monetary values.")
 
 

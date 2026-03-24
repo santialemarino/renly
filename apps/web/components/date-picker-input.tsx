@@ -15,12 +15,13 @@ interface DatePickerInputProps {
   onChange?: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  surface?: boolean;
   className?: string;
 }
 
 // A form-compatible date picker that stores the value as a YYYY-MM-DD string.
 const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
-  ({ value, onChange, placeholder, disabled, className }, ref) => {
+  ({ value, onChange, placeholder, disabled, surface = false, className }, ref) => {
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
 
@@ -38,9 +39,10 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             variant="outline"
             disabled={disabled}
             className={cn(
-              'h-9 w-full justify-start gap-x-2 border-border bg-background px-3 shadow-xs',
+              'h-9 w-full justify-start gap-x-2 border-border px-3 shadow-xs',
               'text-paragraph-sm font-normal',
-              'hover:bg-background hover:border-ring',
+              surface ? 'bg-background' : 'bg-input',
+              'hover:border-ring',
               'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
               !isValidDate && 'text-muted-foreground',
               className,

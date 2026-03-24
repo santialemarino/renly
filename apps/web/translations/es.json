@@ -32,6 +32,16 @@
       "other": "Otro"
     },
     "allCategories": "Todas las categorías",
+    "groupFilter": {
+      "all": "Todos los grupos",
+      "selected": "Grupos ({count})",
+      "search": "Buscar grupos...",
+      "empty": "No se encontraron grupos."
+    },
+    "period": {
+      "monthSuffix": "M",
+      "yearSuffix": "A"
+    },
     "currency": {
       "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
       "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
@@ -156,13 +166,7 @@
       "vsLastMonth": "vs mes anterior"
     },
     "period": {
-      "1m": "1M",
-      "3m": "3M",
-      "6m": "6M",
       "ytd": "YTD",
-      "1y": "1A",
-      "2y": "2A",
-      "3y": "3A",
       "all": "Todo",
       "custom": "Personalizado",
       "cancel": "Cancelar",
@@ -188,7 +192,8 @@
       "value": "Valor",
       "invested": "Invertido",
       "gain": "Ganancia",
-      "monthChange": "Mes"
+      "monthChange": "Mes",
+      "hideInactive": "Ocultar inactivas"
     },
     "toolbar": {
       "searchPlaceholder": "Buscar inversiones...",
@@ -270,7 +275,9 @@
         "placeholder": "Ingresá el broker"
       },
       "groups": {
-        "label": "Grupos"
+        "label": "Grupos",
+        "placeholder": "Buscar grupos...",
+        "empty": "No se encontraron grupos."
       },
       "notes": {
         "label": "Notas",
@@ -352,7 +359,10 @@
       "success": "Grupo eliminado.",
       "error": "No se pudo eliminar el grupo."
     },
-    "softLimit": "Tenés {count} de {max} grupos. Considerá consolidar antes de crear más."
+    "softLimit": {
+      "approaching": "Tenés {count} de {max} grupos. Considerá consolidar antes de crear más.",
+      "reached": "Alcanzaste el máximo de {max} grupos. Eliminá o consolidá grupos existentes para crear nuevos."
+    }
   },
   "snapshots": {
     "metadata": {
@@ -424,6 +434,14 @@
       },
       "searchPlaceholder": "Buscar monedas...",
       "noResults": "No se encontraron monedas.",
+      "periodPresets": {
+        "label": "Presets de periodo del dashboard",
+        "hint": "Configurá los botones de acceso rápido de periodo en el dashboard.",
+        "format": "Formato: 1M, 3M, 6M, 1A, YTD. \"Todo\" se agrega siempre.",
+        "invalidFormat": "Formato inválido. Usá NM (meses), NA (años) o YTD.",
+        "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
+        "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
+      },
       "cta": {
         "label": "Guardar",
         "loading": "Guardando..."

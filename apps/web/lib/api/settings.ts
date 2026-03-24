@@ -7,6 +7,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 interface SettingsRaw {
   primary_currency: string | null;
   secondary_currency: string | null;
+  period_presets: string[] | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -14,6 +15,7 @@ interface SettingsRaw {
 export interface SettingsData {
   primaryCurrency: string | null;
   secondaryCurrency: string | null;
+  periodPresets: string[] | null;
 }
 
 // --- Mappers ---
@@ -22,6 +24,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,
+    periodPresets: raw.period_presets,
   };
 }
 

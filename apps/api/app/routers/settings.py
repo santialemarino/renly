@@ -8,7 +8,7 @@ from app.services import settings_service
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 
-# Returns current user's settings (primary_currency, secondary_currency).
+# Returns current user's settings (currencies, period presets).
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
     current_user: CurrentUser,
@@ -31,5 +31,7 @@ async def update_settings(
         kwargs["primary_currency"] = payload["primary_currency"]
     if "secondary_currency" in payload:
         kwargs["secondary_currency"] = payload["secondary_currency"]
+    if "period_presets" in payload:
+        kwargs["period_presets"] = payload["period_presets"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

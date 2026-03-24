@@ -36,7 +36,7 @@ import {
 } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
-import { WarningHint } from '@/components/warning-hint';
+import { WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 

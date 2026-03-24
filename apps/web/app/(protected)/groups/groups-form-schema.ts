@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { GROUP_NAME_MAX } from '@/lib/constants/db-constraints';
+import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
 
 export function buildGroupFormSchema(requiredMsg: string) {
   return z.object({

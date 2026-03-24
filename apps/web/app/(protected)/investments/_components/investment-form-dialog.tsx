@@ -8,14 +8,12 @@ import { toast } from 'sonner';
 
 import {
   Button,
-  Checkbox,
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
@@ -33,6 +31,7 @@ import {
   INVESTMENT_CATEGORIES,
   type InvestmentFormValues,
 } from '@/app/(protected)/investments/investments-form-schema';
+import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
 
@@ -201,33 +200,20 @@ export function InvestmentFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t('form.groups.label')}</FormLabel>
-                    <div className="flex flex-col gap-y-2">
-                      {groups.map((group) => {
-                        const checked = (field.value ?? []).includes(group.id);
-                        return (
-                          <div key={group.id} className="flex items-center gap-x-2">
-                            <Checkbox
-                              id={`group-${group.id}`}
-                              checked={checked}
-                              onCheckedChange={(val) => {
-                                const current = field.value ?? [];
-                                field.onChange(
-                                  val
-                                    ? [...current, group.id]
-                                    : current.filter((id) => id !== group.id),
-                                );
-                              }}
-                            />
-                            <Label
-                              htmlFor={`group-${group.id}`}
-                              className="cursor-pointer text-paragraph-sm"
-                            >
-                              {group.name}
-                            </Label>
-                          </div>
+                    <ComboboxMultiSelect
+                      items={groups.map((g) => ({ id: g.id, label: g.name }))}
+                      selectedIds={field.value ?? []}
+                      onToggle={(id) => {
+                        const current = field.value ?? [];
+                        field.onChange(
+                          current.includes(id) ? current.filter((i) => i !== id) : [...current, id],
                         );
-                      })}
-                    </div>
+                      }}
+                      placeholder={t('form.groups.placeholder')}
+                      searchPlaceholder={t('form.groups.placeholder')}
+                      emptyMessage={t('form.groups.empty')}
+                      showChips
+                    />
                     <FormMessage />
                   </FormItem>
                 )}

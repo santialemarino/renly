@@ -150,6 +150,8 @@ async def get_investments_summary(
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
+    start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
+    end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> InvestmentsSummaryResponse:
     return await metrics_service.get_investments_summary(
         session,
@@ -159,4 +161,6 @@ async def get_investments_summary(
         group_ids=group_ids,
         category=category,
         search=search,
+        start_date=start_date,
+        end_date=end_date,
     )

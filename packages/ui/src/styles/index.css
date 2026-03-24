@@ -9,13 +9,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Width at which the investments toolbar actions row switches from column to row */
-@custom-variant toolbar-actions {
-  @container (min-width: 510px) {
-    @slot;
-  }
-}
-
 /* Light mode */
 :root {
   /* Official Shadcn variables */

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { ToggleGroup, ToggleGroupItem } from '@repo/ui/components';
+import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ORIGINAL_CURRENCY, useCurrencyStore } from '@/lib/stores/currency-store';
 import { isCurrencySupported } from '@/lib/utils/currency';
 
@@ -43,24 +43,16 @@ export function CurrencySwitcher({
   return (
     <div className="flex flex-col p-3 gap-y-2 bg-blue-50 rounded-lg">
       <span className="text-paragraph-sm-medium text-blue-800">{t('currency.label')}</span>
-      <ToggleGroup
-        type="single"
+      <PillToggleGroup
+        items={displayCurrencies.map((code) => ({
+          value: code,
+          label: code === ORIGINAL_CURRENCY ? t('currency.original') : code,
+        }))}
         value={activeCurrency}
-        onValueChange={(v) => v && handleChange(v)}
-        variant="outline"
-        size="sm"
-        className="w-full border border-blue-100 bg-white rounded-full overflow-hidden"
-      >
-        {displayCurrencies.map((code) => (
-          <ToggleGroupItem
-            key={code}
-            value={code}
-            className="flex-1 border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 text-paragraph-mini font-mono focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
-          >
-            {code === ORIGINAL_CURRENCY ? t('currency.original') : code}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+        onValueChange={handleChange}
+        itemClassName="flex-1 text-paragraph-mini font-mono"
+        className="w-full border-blue-100 shadow-none"
+      />
       <span className="text-paragraph-mini text-blue-400">* {t('currency.note')}</span>
     </div>
   );

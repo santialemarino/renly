@@ -2,26 +2,19 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import {
-  Pill,
-  SearchInput,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@repo/ui/components';
-import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
+import { SearchInput } from '@repo/ui/components';
+import { CategorySelect } from '@/components/category-select';
+import { GroupMultiSelect } from '@/components/group-multi-select';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
-
-const DEBOUNCE_MS = 300;
-const CATEGORY_ALL = '__all__';
+import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
+import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
   const t = useTranslations('snapshots');
-  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsRef = useRef(searchParams);
@@ -66,49 +59,41 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
   }
 
   return (
-    <div className="@container flex flex-col gap-y-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
-      <SearchInput
-        aria-label={t('toolbar.searchPlaceholder')}
-        placeholder={t('toolbar.searchPlaceholder')}
-        value={search}
-        surface
-        onChange={(e) => setSearch(e.target.value)}
-        onClear={() => setSearch('')}
-        containerClassName="w-full sm:flex-1"
-      />
+    <LayoutGroup>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
+          <SearchInput
+            aria-label={t('toolbar.searchPlaceholder')}
+            placeholder={t('toolbar.searchPlaceholder')}
+            value={search}
+            surface
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch('')}
+          />
+        </motion.div>
 
-      {groups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-          {groups.map((group) => (
-            <Pill
-              key={group.id}
-              active={selectedGroupIds.includes(group.id)}
-              aria-pressed={selectedGroupIds.includes(group.id)}
-              onClick={() => handleGroupToggle(group.id)}
-            >
-              {group.name}
-            </Pill>
-          ))}
-        </div>
-      )}
-
-      <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-        <SelectTrigger className="w-full sm:w-auto" surface>
-          <span className="truncate">
-            {selectedCategory === CATEGORY_ALL
-              ? tCommon('allCategories')
-              : tCommon(`categories.${selectedCategory}`)}
-          </span>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value={CATEGORY_ALL}>{tCommon('allCategories')}</SelectItem>
-          {INVESTMENT_CATEGORIES.map((cat) => (
-            <SelectItem key={cat} value={cat}>
-              {tCommon(`categories.${cat}`)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DEFAULT }}
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
+        >
+          {groups.length > 0 && (
+            <GroupMultiSelect
+              groups={groups}
+              selectedIds={selectedGroupIds}
+              onToggle={handleGroupToggle}
+              surface
+              className="min-w-fit flex-1"
+            />
+          )}
+          <CategorySelect
+            value={selectedCategory}
+            onValueChange={handleCategoryChange}
+            surface
+            className="min-w-fit flex-1"
+          />
+        </motion.div>
+      </div>
+    </LayoutGroup>
   );
 }

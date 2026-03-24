@@ -14,7 +14,7 @@ import { InvestmentDetailCard } from '@/app/(protected)/dashboard/_components/in
 import { InvestmentsSummaryTable } from '@/app/(protected)/dashboard/_components/investments-summary-table';
 import { MetricCards } from '@/app/(protected)/dashboard/_components/metric-cards';
 import { PeriodPicker } from '@/app/(protected)/dashboard/_components/period-picker';
-import { WarningHint } from '@/components/warning-hint';
+import { WarningHint } from '@/components/styled-hint';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import {
   getAllocation,
@@ -26,8 +26,8 @@ import {
   type MetricsFilterParams,
 } from '@/lib/api/metrics';
 import { getSettings } from '@/lib/api/settings';
-import { API_MAX_PAGE_SIZE } from '@/lib/constants/db-constraints';
-import { presetToStartDate } from '@/lib/constants/period-presets';
+import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { buildPresets, presetToStartDate } from '@/lib/constants/period-presets';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -56,15 +56,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const activeCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
 
-  // Aggregated portfolio metrics need a common currency.
+  // Always fetch settings — needed for currency fallback and period presets.
+  const settings = await getSettings().catch(() => null);
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
-  let currency: string;
-  if (!isOriginalSelected) {
-    currency = activeCurrency;
-  } else {
-    const settings = await getSettings().catch(() => null);
-    currency = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
-  }
+  const currency = isOriginalSelected
+    ? (settings?.primaryCurrency ?? FALLBACK_PRIMARY)
+    : activeCurrency;
+  const userPresets = buildPresets(settings?.periodPresets);
 
   // Parse filter params (singular from URL, wrapped in arrays for the API).
   const investmentIds = params.investment_id
@@ -130,7 +128,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ]);
   } catch {
     return (
-      <div className="flex flex-col flex-1 items-center justify-center p-8 gap-y-4">
+      <div className="flex flex-col flex-1 p-8 gap-y-2">
         <PageHeader title={t('title')} subtitle={t('subtitle')} />
         <WarningHint show>{t('loadError')}</WarningHint>
       </div>
@@ -172,7 +170,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const skippedInvestments = metrics.skippedInvestments;
 
   return (
-    <div className="flex flex-col flex-1 p-8 gap-y-6">
+    <div className="flex flex-col flex-1 p-8 gap-y-4">
       <AnimatedDashboardHeader
         subtitleKey={subtitleKey}
         subtitle={
@@ -207,7 +205,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <AnimatedDashboardToolbar
         backButton={<DashboardToolbar isFiltered={isFiltered} />}
         search={<DashboardSearch investments={searchableInvestments} groups={groups} />}
-        periodPicker={<PeriodPicker />}
+        periodPicker={<PeriodPicker presets={userPresets} />}
       />
 
       <MetricCards metrics={metrics} />

@@ -32,6 +32,16 @@
       "other": "Other"
     },
     "allCategories": "All categories",
+    "groupFilter": {
+      "all": "All groups",
+      "selected": "Groups ({count})",
+      "search": "Search groups...",
+      "empty": "No groups found."
+    },
+    "period": {
+      "monthSuffix": "M",
+      "yearSuffix": "Y"
+    },
     "currency": {
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
       "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
@@ -156,13 +166,7 @@
       "vsLastMonth": "vs last month"
     },
     "period": {
-      "1m": "1M",
-      "3m": "3M",
-      "6m": "6M",
       "ytd": "YTD",
-      "1y": "1Y",
-      "2y": "2Y",
-      "3y": "3Y",
       "all": "All",
       "custom": "Custom",
       "cancel": "Cancel",
@@ -188,7 +192,8 @@
       "value": "Value",
       "invested": "Invested",
       "gain": "Gain",
-      "monthChange": "Month"
+      "monthChange": "Month",
+      "hideInactive": "Hide inactive"
     },
     "toolbar": {
       "searchPlaceholder": "Search investments...",
@@ -270,7 +275,9 @@
         "placeholder": "Enter the broker"
       },
       "groups": {
-        "label": "Groups"
+        "label": "Groups",
+        "placeholder": "Search groups...",
+        "empty": "No groups found."
       },
       "notes": {
         "label": "Notes",
@@ -352,7 +359,10 @@
       "success": "Group deleted.",
       "error": "Failed to delete group."
     },
-    "softLimit": "You have {count} of {max} groups. Consider consolidating before creating more."
+    "softLimit": {
+      "approaching": "You have {count} of {max} groups. Consider consolidating before creating more.",
+      "reached": "You've reached the maximum of {max} groups. Delete or consolidate existing groups to create new ones."
+    }
   },
   "snapshots": {
     "metadata": {
@@ -424,6 +434,14 @@
       },
       "searchPlaceholder": "Search currencies...",
       "noResults": "No currencies found.",
+      "periodPresets": {
+        "label": "Dashboard period presets",
+        "hint": "Configure the quick-access period buttons on the dashboard.",
+        "format": "Format: 1M, 3M, 6M, 1Y, YTD. \"All\" is always added.",
+        "invalidFormat": "Invalid format. Use NM (months), NY (years) or YTD.",
+        "emptyDefault": "Leave all fields empty to use the default presets.",
+        "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
+      },
       "cta": {
         "label": "Save",
         "loading": "Saving..."

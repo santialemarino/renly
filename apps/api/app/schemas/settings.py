@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 
-# Response for GET /settings. Current user's primary and secondary display currency.
+# Response for GET /settings. Current user's display currencies and dashboard period presets.
 class SettingsResponse(BaseModel):
     primary_currency: str | None = Field(
         default=None,
@@ -12,6 +12,10 @@ class SettingsResponse(BaseModel):
     secondary_currency: str | None = Field(
         default=None,
         description="Secondary display currency; shown second in the sidebar switch.",
+    )
+    period_presets: list[str] | None = Field(
+        default=None,
+        description="Dashboard period presets (e.g. ['1M', '3M', '6M', 'YTD']). Null means use env defaults.",
     )
 
 
@@ -24,4 +28,8 @@ class SettingsUpdate(BaseModel):
     secondary_currency: str | None = Field(
         default=None,
         description="Secondary display currency.",
+    )
+    period_presets: list[str] | None = Field(
+        default=None,
+        description="Dashboard period presets (up to 4 codes like '3M', '1Y', 'YTD').",
     )

@@ -13,7 +13,7 @@ function Pill({ active = false, className, ...props }: PillProps) {
       type="button"
       variant="outline"
       blue={active}
-      className={cn('overflow-hidden rounded-md', className)}
+      className={cn('rounded-md', className)}
       {...props}
     />
   );

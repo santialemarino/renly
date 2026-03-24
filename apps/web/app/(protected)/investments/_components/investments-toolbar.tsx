@@ -3,28 +3,20 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Archive, Plus } from 'lucide-react';
+import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import {
-  Button,
-  Pill,
-  SearchInput,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from '@repo/ui/components';
+import { Button, Pill, SearchInput } from '@repo/ui/components';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
-import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
+import { CategorySelect } from '@/components/category-select';
+import { GroupMultiSelect } from '@/components/group-multi-select';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
-import { DEBOUNCE_MS } from '@/lib/constants/animations';
-
-const CATEGORY_ALL = '__all__';
+import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
+import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
   const t = useTranslations('investments');
-  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   // Ref keeps searchParams current inside the debounced navigate callback without adding it to the effect dependency array.
@@ -73,73 +65,68 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
   }
 
   return (
-    <div className="@container flex flex-col gap-y-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
-      <SearchInput
-        aria-label={t('toolbar.searchPlaceholder')}
-        placeholder={t('toolbar.searchPlaceholder')}
-        value={search}
-        surface
-        onChange={(e) => setSearch(e.target.value)}
-        onClear={() => setSearch('')}
-        containerClassName="w-full sm:flex-1"
-      />
+    <LayoutGroup>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
+          <SearchInput
+            aria-label={t('toolbar.searchPlaceholder')}
+            placeholder={t('toolbar.searchPlaceholder')}
+            value={search}
+            surface
+            onChange={(e) => setSearch(e.target.value)}
+            onClear={() => setSearch('')}
+          />
+        </motion.div>
 
-      {groups.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5">
-          {groups.map((group) => (
-            <Pill
-              key={group.id}
-              active={selectedGroupIds.includes(group.id)}
-              aria-pressed={selectedGroupIds.includes(group.id)}
-              onClick={() => handleGroupToggle(group.id)}
-            >
-              {group.name}
-            </Pill>
-          ))}
-        </div>
-      )}
-
-      <div className="flex flex-col gap-y-2 toolbar-actions:flex-row toolbar-actions:items-center toolbar-actions:gap-x-3">
-        <Select value={selectedCategory} onValueChange={handleCategoryChange}>
-          <SelectTrigger className="w-full toolbar-actions:w-auto" surface>
-            <span className="truncate">
-              {selectedCategory === CATEGORY_ALL
-                ? tCommon('allCategories')
-                : tCommon(`categories.${selectedCategory}`)}
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={CATEGORY_ALL}>{tCommon('allCategories')}</SelectItem>
-            {INVESTMENT_CATEGORIES.map((cat) => (
-              <SelectItem key={cat} value={cat}>
-                {tCommon(`categories.${cat}`)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Pill
-          active={showArchived}
-          aria-pressed={showArchived}
-          onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
-          className="w-full toolbar-actions:w-auto"
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DEFAULT }}
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
         >
-          <Archive className="size-4" />
-          {t('toolbar.showArchived')}
-        </Pill>
+          {groups.length > 0 && (
+            <GroupMultiSelect
+              groups={groups}
+              selectedIds={selectedGroupIds}
+              onToggle={handleGroupToggle}
+              surface
+              className="min-w-fit flex-1"
+            />
+          )}
+          <CategorySelect
+            value={selectedCategory}
+            onValueChange={handleCategoryChange}
+            surface
+            className="min-w-fit flex-1"
+          />
+        </motion.div>
 
-        <Button blue onClick={() => setCreateOpen(true)} className="w-full toolbar-actions:w-auto">
-          <Plus className="size-4" />
-          {t('toolbar.addInvestment')}
-        </Button>
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DEFAULT }}
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full md:basis-auto"
+        >
+          <Pill
+            active={showArchived}
+            aria-pressed={showArchived}
+            onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
+            className="min-w-fit flex-1"
+          >
+            <Archive className="size-4" />
+            {t('toolbar.showArchived')}
+          </Pill>
+          <Button blue onClick={() => setCreateOpen(true)} className="min-w-fit flex-1">
+            <Plus className="size-4" />
+            {t('toolbar.addInvestment')}
+          </Button>
+        </motion.div>
+
+        <InvestmentFormDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
+          groups={groups}
+          onSuccess={() => router.refresh()}
+        />
       </div>
-
-      <InvestmentFormDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-        groups={groups}
-        onSuccess={() => router.refresh()}
-      />
-    </div>
+    </LayoutGroup>
   );
 }

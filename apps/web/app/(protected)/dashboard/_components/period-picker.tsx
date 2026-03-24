@@ -8,28 +8,27 @@ import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import type { DateRange } from 'react-day-picker';
 
-import {
-  Button,
-  Calendar,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@repo/ui/components';
+import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
+import {
+  formatPresetLabel,
+  PERIOD_PRESETS,
+  type PeriodPreset,
+} from '@/lib/constants/period-presets';
 
 const DATE_FORMAT = 'MMM d, yyyy';
 
 interface PeriodPickerProps {
+  presets?: PeriodPreset[];
   className?: string;
 }
 
-export function PeriodPicker({ className }: PeriodPickerProps) {
+export function PeriodPicker({ presets = PERIOD_PRESETS, className }: PeriodPickerProps) {
   const t = useTranslations('dashboard');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -77,24 +76,21 @@ export function PeriodPicker({ className }: PeriodPickerProps) {
     <LayoutGroup>
       <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-2', className)}>
         <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="flex-1">
-          <ToggleGroup
-            type="single"
+          <PillToggleGroup
+            items={presets.map((preset) => ({
+              value: preset.code,
+              label: formatPresetLabel(preset.code, {
+                ytd: t('period.ytd'),
+                all: t('period.all'),
+                monthSuffix: tCommon('period.monthSuffix'),
+                yearSuffix: tCommon('period.yearSuffix'),
+              }),
+            }))}
             value={activePreset ?? ''}
             onValueChange={handlePresetChange}
-            variant="outline"
-            size="sm"
-            className="w-full border border-border bg-white rounded-full overflow-hidden shadow-xs"
-          >
-            {PERIOD_PRESETS.map((preset) => (
-              <ToggleGroupItem
-                key={preset.code}
-                value={preset.code}
-                className="flex-1 border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
-              >
-                {t(preset.translationKey)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+            itemClassName="flex-1"
+            className="w-full"
+          />
         </motion.div>
 
         <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="flex-1">

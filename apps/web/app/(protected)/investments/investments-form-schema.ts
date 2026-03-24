@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { INVESTMENT_BROKER_MAX, INVESTMENT_NAME_MAX } from '@/lib/constants/db-constraints';
+import { INVESTMENT_BROKER_MAX, INVESTMENT_NAME_MAX } from '@/lib/constants/api-constants';
 
 export const INVESTMENT_CATEGORIES = [
   'cedears',

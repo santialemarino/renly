@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 
 import {
@@ -13,6 +13,9 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 
@@ -47,55 +50,74 @@ export function SmartSearch({
   className,
 }: SmartSearchProps) {
   const [open, setOpen] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+  const textRef = useRef<HTMLSpanElement>(null);
+
+  function checkTruncation() {
+    const el = textRef.current;
+    if (el) setIsTruncated(el.scrollWidth > el.clientWidth);
+  }
 
   function handleSelect(groupIndex: number, itemId: string) {
     setOpen(false);
     onSelect(groupIndex, itemId);
   }
 
+  // Only show tooltip when text is truncated and the popover is closed.
+  const showTooltip = isTruncated && !open;
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          className={cn(
-            'flex h-9 w-full items-center px-3 gap-x-2 border rounded-lg shadow-xs',
-            'transition-[border-color,box-shadow] duration-200 ease-in-out',
-            'hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
-            'text-paragraph-sm text-muted-foreground overflow-hidden',
-            surface ? 'bg-background' : 'bg-input',
-            'border-border',
-            className,
-          )}
-          onClick={() => setOpen(true)}
-        >
-          <Search className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{placeholder}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
-        <Command>
-          <CommandInput placeholder={inputPlaceholder} />
-          <CommandList>
-            <CommandEmpty>{emptyMessage}</CommandEmpty>
-            {groups.map((group, groupIndex) =>
-              group.items.length > 0 ? (
-                <CommandGroup key={group.heading} heading={group.heading}>
-                  {group.items.map((item) => (
-                    <CommandItem
-                      key={item.id}
-                      value={`${group.heading} ${item.label}`}
-                      onSelect={() => handleSelect(groupIndex, item.id)}
-                    >
-                      {item.icon}
-                      {item.label}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ) : null,
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <Tooltip open={showTooltip && tooltipOpen} onOpenChange={setTooltipOpen}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              className={cn(
+                'flex h-9 w-full min-w-0 items-center px-3 gap-x-2 border rounded-lg shadow-xs',
+                'transition-[border-color,box-shadow] duration-200 ease-in-out',
+                'hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                'text-paragraph-sm text-muted-foreground overflow-hidden',
+                surface ? 'bg-background' : 'bg-input',
+                'border-border',
+                className,
+              )}
+              onClick={() => setOpen(true)}
+              onMouseEnter={checkTruncation}
+            >
+              <Search className="size-4 shrink-0 text-muted-foreground" />
+              <span ref={textRef} className="truncate">
+                {placeholder}
+              </span>
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{placeholder}</TooltipContent>
+        <PopoverContent className="w-(--radix-popover-trigger-width) p-0" align="start">
+          <Command>
+            <CommandInput placeholder={inputPlaceholder} />
+            <CommandList>
+              <CommandEmpty>{emptyMessage}</CommandEmpty>
+              {groups.map((group, groupIndex) =>
+                group.items.length > 0 ? (
+                  <CommandGroup key={group.heading} heading={group.heading}>
+                    {group.items.map((item) => (
+                      <CommandItem
+                        key={item.id}
+                        value={`${group.heading} ${item.label}`}
+                        onSelect={() => handleSelect(groupIndex, item.id)}
+                      >
+                        {item.icon}
+                        {item.label}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                ) : null,
+              )}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </Tooltip>
   );
 }

@@ -14,7 +14,7 @@ export default async function SettingsPage() {
   const settings = await getSettings().catch(() => null);
 
   return (
-    <div className="flex flex-col flex-1 items-start p-8 gap-y-6">
+    <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       {settings && <SettingsForm initialSettings={settings} />}
     </div>
