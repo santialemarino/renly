@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, FolderOpen, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -58,14 +58,23 @@ export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
     },
   ];
 
+  const searchParams = useSearchParams();
+
   function handleSelect(groupIndex: number, itemId: string) {
-    if (groupIndex === GROUP_INVESTMENTS) {
-      router.push(`${ROUTES.dashboard}?investment_id=${itemId}`, { scroll: false });
-    } else if (groupIndex === GROUP_GROUPS) {
-      router.push(`${ROUTES.dashboard}?group_id=${itemId}`, { scroll: false });
-    } else if (groupIndex === GROUP_CATEGORIES) {
-      router.push(`${ROUTES.dashboard}?category=${itemId}`, { scroll: false });
-    }
+    // Preserve existing date range params when navigating to a filter.
+    const qs = new URLSearchParams();
+    const period = searchParams.get('period');
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+    if (period) qs.set('period', period);
+    if (startDate) qs.set('start_date', startDate);
+    if (endDate) qs.set('end_date', endDate);
+
+    if (groupIndex === GROUP_INVESTMENTS) qs.set('investment_id', itemId);
+    else if (groupIndex === GROUP_GROUPS) qs.set('group_id', itemId);
+    else if (groupIndex === GROUP_CATEGORIES) qs.set('category', itemId);
+
+    router.push(`${ROUTES.dashboard}?${qs.toString()}`, { scroll: false });
   }
 
   return (

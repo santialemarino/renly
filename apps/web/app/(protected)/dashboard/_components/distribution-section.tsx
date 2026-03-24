@@ -4,15 +4,10 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  ToggleGroup,
-  ToggleGroupItem,
-} from '@repo/ui/components';
+import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
+import { PillToggleGroup } from '@/components/pill-toggle-group';
 import type { AllocationResponse, GroupAllocationResponse } from '@/lib/api/metrics';
+import { UNGROUPED_LABEL } from '@/lib/constants/api-constants';
 import {
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
@@ -30,7 +25,6 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
-import { UNGROUPED_LABEL } from '@/lib/constants/db-constraints';
 
 type Mode = 'category' | 'group';
 
@@ -86,29 +80,14 @@ export function DistributionSection({
           {t('distribution.title')}
         </CardTitle>
         {!forcedMode && (
-          <ToggleGroup
-            type="single"
+          <PillToggleGroup
+            items={[
+              { value: 'category', label: t('distribution.byCategory') },
+              { value: 'group', label: t('distribution.byGroup') },
+            ]}
             value={mode}
-            onValueChange={(v) => {
-              if (v) setMode(v as Mode);
-            }}
-            variant="outline"
-            size="sm"
-            className="border border-border bg-white rounded-full overflow-hidden shadow-xs"
-          >
-            <ToggleGroupItem
-              value="category"
-              className="border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
-            >
-              {t('distribution.byCategory')}
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="group"
-              className="border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]"
-            >
-              {t('distribution.byGroup')}
-            </ToggleGroupItem>
-          </ToggleGroup>
+            onValueChange={(v) => setMode(v as Mode)}
+          />
         )}
       </CardHeader>
       <CardContent className="px-6 pb-6">

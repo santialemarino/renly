@@ -8,17 +8,24 @@ import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { Button, Hint, Label, Separator } from '@repo/ui/components';
+import { Button, Hint, Input, Label, Separator } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import { saveSettings } from '@/app/(protected)/settings/settings-actions';
 import {
-  settingsFormSchema,
+  buildSettingsFormSchema,
   type SettingsFormValues,
 } from '@/app/(protected)/settings/settings-form-schema';
-import { WarningHint } from '@/components/warning-hint';
+import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { PERIOD_DEFAULTS } from '@/lib/constants/period-presets';
 import { isCurrencySupported } from '@/lib/utils/currency';
+
+// Localizes a canonical preset code (e.g. "1Y") for display using the year suffix from translations.
+function localizePreset(code: string | undefined, yearSuffix: string): string {
+  if (!code) return '';
+  return code.replace(/Y$/i, yearSuffix);
+}
 
 interface SettingsFormProps {
   initialSettings: SettingsData;
@@ -32,16 +39,24 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const tCommon = useTranslations('common');
   const router = useRouter();
 
+  const yearSuffix = tCommon('period.yearSuffix');
+  const schema = buildSettingsFormSchema(t('form.periodPresets.invalidFormat'));
+
   const {
     control,
     handleSubmit,
     watch,
-    formState: { isSubmitting },
+    reset,
+    formState: { isSubmitting, errors },
   } = useForm<SettingsFormValues>({
-    resolver: zodResolver(settingsFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       primaryCurrency: initialSettings.primaryCurrency ?? fallbackPrimary,
       secondaryCurrency: initialSettings.secondaryCurrency ?? fallbackSecondary,
+      periodPreset1: localizePreset(initialSettings.periodPresets?.[0], yearSuffix),
+      periodPreset2: localizePreset(initialSettings.periodPresets?.[1], yearSuffix),
+      periodPreset3: localizePreset(initialSettings.periodPresets?.[2], yearSuffix),
+      periodPreset4: localizePreset(initialSettings.periodPresets?.[3], yearSuffix),
     },
   });
 
@@ -60,7 +75,28 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
 
   async function onSubmit(values: SettingsFormValues) {
     try {
-      await saveSettings(values.primaryCurrency, values.secondaryCurrency ?? null);
+      const presets = [
+        values.periodPreset1,
+        values.periodPreset2,
+        values.periodPreset3,
+        values.periodPreset4,
+      ]
+        .filter((v): v is string => !!v)
+        .map((v) => v.toUpperCase().replace(/A$/, 'Y'));
+      await saveSettings(
+        values.primaryCurrency,
+        values.secondaryCurrency ?? null,
+        presets.length > 0 ? presets : null,
+      );
+      // Reset form with localized canonical values so inputs update immediately.
+      reset({
+        primaryCurrency: values.primaryCurrency,
+        secondaryCurrency: values.secondaryCurrency,
+        periodPreset1: localizePreset(presets[0], yearSuffix),
+        periodPreset2: localizePreset(presets[1], yearSuffix),
+        periodPreset3: localizePreset(presets[2], yearSuffix),
+        periodPreset4: localizePreset(presets[3], yearSuffix),
+      });
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'settings-save' });
     } catch {
@@ -146,6 +182,47 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           bold: (chunks) => <strong>{chunks}</strong>,
         })}
       </WarningHint>
+
+      <Separator />
+
+      <div className="flex flex-col gap-y-3">
+        <div className="flex flex-col gap-y-2">
+          <Label>{t('form.periodPresets.label')}</Label>
+          <Hint>{t('form.periodPresets.hint')}</Hint>
+        </div>
+        <div className="grid grid-cols-4 gap-x-2">
+          {(['periodPreset1', 'periodPreset2', 'periodPreset3', 'periodPreset4'] as const).map(
+            (name, i) => (
+              <Controller
+                key={name}
+                name={name}
+                control={control}
+                render={({ field, fieldState }) => (
+                  <Input
+                    {...field}
+                    placeholder={localizePreset(PERIOD_DEFAULTS[i], yearSuffix)}
+                    aria-invalid={!!fieldState.error}
+                    containerClassName="text-center"
+                    className="uppercase"
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                  />
+                )}
+              />
+            ),
+          )}
+        </div>
+        {(errors.periodPreset1 ||
+          errors.periodPreset2 ||
+          errors.periodPreset3 ||
+          errors.periodPreset4) && (
+          <p className="text-paragraph-mini text-destructive">
+            {t('form.periodPresets.invalidFormat')}
+          </p>
+        )}
+        <InfoHint>{t('form.periodPresets.format')}</InfoHint>
+        <InfoHint>{t('form.periodPresets.emptyDefault')}</InfoHint>
+        <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
+      </div>
 
       <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}

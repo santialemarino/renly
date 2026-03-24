@@ -67,8 +67,8 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       isActive={isActive}
                       size="lg"
                       className={cn(
-                        'text-paragraph-medium hover:bg-gray-100 data-[active=true]:bg-blue-800 data-[active=true]:text-white [&_svg]:size-5',
-                        !isActive && 'hover:[&_svg]:rotate-12',
+                        'text-paragraph-medium hover:bg-gray-100 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:hover:bg-blue-900 data-[active=true]:focus-visible:bg-blue-900 data-[active=true]:text-white [&_svg]:size-5',
+                        !isActive && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
                       )}
                     >
                       <Link className="gap-x-2" href={href}>
@@ -104,7 +104,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
               disabled={loggingOut}
               size="lg"
               className={cn(
-                'text-paragraph-medium hover:text-red-500 hover:bg-transparent active:bg-transparent [&_svg]:size-5',
+                'text-paragraph-medium hover:text-red-500 hover:bg-transparent focus-visible:text-red-500 focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 active:bg-transparent [&_svg]:size-5',
                 loggingOut && 'text-red-800 hover:text-red-800',
               )}
             >

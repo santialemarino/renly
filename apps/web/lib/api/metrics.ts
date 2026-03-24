@@ -66,6 +66,7 @@ interface InvestmentSummaryItemRaw {
   invested_capital: string;
   absolute_gain: string | null;
   month_change_pct: string | null;
+  has_snapshots_in_period: boolean;
   currency: string;
 }
 
@@ -159,6 +160,7 @@ export interface InvestmentSummaryItem {
   investedCapital: number;
   absoluteGain: number | null;
   monthChangePct: number | null;
+  hasSnapshotsInPeriod: boolean;
   currency: string;
 }
 
@@ -245,6 +247,7 @@ function mapInvestmentSummaryItem(raw: InvestmentSummaryItemRaw): InvestmentSumm
     investedCapital: Number(raw.invested_capital),
     absoluteGain: raw.absolute_gain !== null ? Number(raw.absolute_gain) : null,
     monthChangePct: raw.month_change_pct !== null ? Number(raw.month_change_pct) : null,
+    hasSnapshotsInPeriod: raw.has_snapshots_in_period,
     currency: raw.currency,
   };
 }

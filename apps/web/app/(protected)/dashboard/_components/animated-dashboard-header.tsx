@@ -52,7 +52,7 @@ export function AnimatedDashboardToolbar({
     <LayoutGroup>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
         {backButton}
-        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-92 flex-1">
+        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
           {search}
         </motion.div>
         <motion.div

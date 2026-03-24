@@ -3,13 +3,21 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
+import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Button, SearchInput } from '@repo/ui/components';
 import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
-import { WarningHint } from '@/components/warning-hint';
+import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
-import { DEBOUNCE_MS } from '@/lib/constants/animations';
+import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
+
+// Fallback for when we don't have any env vars set for the group limit warning percentage.
+
+const GROUP_LIMIT_WARNING_PCT_DEFAULT = 80;
+const GROUP_LIMIT_WARNING_PCT = Number(
+  process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT ?? GROUP_LIMIT_WARNING_PCT_DEFAULT,
+);
 
 interface GroupsToolbarProps {
   investments: { id: number; name: string }[];
@@ -28,7 +36,7 @@ export function GroupsToolbar({ investments, groupCount, maxGroups }: GroupsTool
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
-  const nearLimit = groupCount >= maxGroups * 0.8;
+  const nearLimit = groupCount >= maxGroups * (GROUP_LIMIT_WARNING_PCT / 100);
   const atLimit = groupCount >= maxGroups;
 
   function navigate(overrides: Record<string, string | null>) {
@@ -48,31 +56,36 @@ export function GroupsToolbar({ investments, groupCount, maxGroups }: GroupsTool
 
   return (
     <div className="flex flex-col gap-y-2">
-      <div className="@container flex flex-col gap-y-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3">
-        <SearchInput
-          aria-label={t('toolbar.searchPlaceholder')}
-          placeholder={t('toolbar.searchPlaceholder')}
-          value={search}
-          surface
-          onChange={(e) => setSearch(e.target.value)}
-          onClear={() => setSearch('')}
-          containerClassName="w-full sm:flex-1"
-        />
+      <LayoutGroup>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <motion.div
+            layout
+            transition={{ duration: ANIMATION_DEFAULT }}
+            className="min-w-0 flex-1"
+          >
+            <SearchInput
+              aria-label={t('toolbar.searchPlaceholder')}
+              placeholder={t('toolbar.searchPlaceholder')}
+              value={search}
+              surface
+              onChange={(e) => setSearch(e.target.value)}
+              onClear={() => setSearch('')}
+            />
+          </motion.div>
 
-        <Button
-          blue
-          onClick={() => setCreateOpen(true)}
-          disabled={atLimit}
-          className="w-full sm:w-auto"
-        >
-          <Plus className="size-4" />
-          {t('toolbar.addGroup')}
-        </Button>
-      </div>
+          <motion.div layout transition={{ duration: ANIMATION_DEFAULT }}>
+            <Button blue onClick={() => setCreateOpen(true)} disabled={atLimit}>
+              <Plus className="size-4" />
+              {t('toolbar.addGroup')}
+            </Button>
+          </motion.div>
+        </div>
+      </LayoutGroup>
 
-      <WarningHint show={nearLimit}>
-        {t('softLimit', { count: groupCount, max: maxGroups })}
+      <WarningHint show={nearLimit && !atLimit}>
+        {t('softLimit.approaching', { count: groupCount, max: maxGroups })}
       </WarningHint>
+      <WarningHint show={atLimit}>{t('softLimit.reached', { max: maxGroups })}</WarningHint>
 
       <GroupFormDialog
         open={createOpen}

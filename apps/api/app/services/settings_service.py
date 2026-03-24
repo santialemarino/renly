@@ -6,6 +6,7 @@ from app.repositories import user_settings_repository
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
+SETTINGS_KEY_PERIOD_PRESETS = "period_presets"
 
 _NOT_SET = object()
 
@@ -15,9 +16,12 @@ def _settings_to_response(settings: dict) -> dict:
     primary_currency = raw_primary if isinstance(raw_primary, str) and raw_primary else None
     raw_secondary = settings.get(SETTINGS_KEY_SECONDARY)
     secondary_currency = raw_secondary if isinstance(raw_secondary, str) and raw_secondary else None
+    raw_presets = settings.get(SETTINGS_KEY_PERIOD_PRESETS)
+    period_presets = raw_presets if isinstance(raw_presets, list) else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
+        "period_presets": period_presets,
     }
 
 
@@ -38,6 +42,7 @@ async def update_settings(
     user: User,
     primary_currency: str | None = _NOT_SET,
     secondary_currency: str | None = _NOT_SET,
+    period_presets: list[str] | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -48,6 +53,8 @@ async def update_settings(
         settings[SETTINGS_KEY_PRIMARY] = primary_currency
     if secondary_currency is not _NOT_SET:
         settings[SETTINGS_KEY_SECONDARY] = secondary_currency
+    if period_presets is not _NOT_SET:
+        settings[SETTINGS_KEY_PERIOD_PRESETS] = period_presets
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.refresh(row)

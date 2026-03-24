@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowDown, ArrowUp, EyeOff, Minus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -9,6 +10,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Pill,
   Table,
   TableBody,
   TableCell,
@@ -44,19 +46,43 @@ interface InvestmentsSummaryTableProps {
 export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProps) {
   const t = useTranslations('dashboard');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [hideInactive, setHideInactive] = useState(false);
 
-  const hasData = summary.items.length > 0;
+  const hasInactive = summary.items.some((item) => !item.hasSnapshotsInPeriod);
+  const visibleItems = hideInactive
+    ? summary.items.filter((item) => item.hasSnapshotsInPeriod)
+    : summary.items;
+  const hasData = visibleItems.length > 0;
 
   function handleRowClick(investmentId: number) {
-    router.push(`${ROUTES.dashboard}?investment_id=${investmentId}`, { scroll: false });
+    const qs = new URLSearchParams();
+    qs.set('investment_id', String(investmentId));
+    const period = searchParams.get('period');
+    const startDate = searchParams.get('start_date');
+    const endDate = searchParams.get('end_date');
+    if (period) qs.set('period', period);
+    if (startDate) qs.set('start_date', startDate);
+    if (endDate) qs.set('end_date', endDate);
+    router.push(`${ROUTES.dashboard}?${qs.toString()}`, { scroll: false });
   }
 
   return (
     <Card className="flex-1">
-      <CardHeader className="px-6">
+      <CardHeader className="flex flex-row items-center justify-between px-6">
         <CardTitle className="text-paragraph-sm text-muted-foreground">
           {t('investmentsTable.title')}
         </CardTitle>
+        {hasInactive && (
+          <Pill
+            active={hideInactive}
+            aria-pressed={hideInactive}
+            onClick={() => setHideInactive((prev) => !prev)}
+          >
+            <EyeOff className="size-3.5" />
+            {t('investmentsTable.hideInactive')}
+          </Pill>
+        )}
       </CardHeader>
       <CardContent className="px-6 pb-6">
         {hasData ? (
@@ -71,14 +97,15 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
               </TableRow>
             </TableHeader>
             <TableBody>
-              {summary.items.map((item) => {
+              {visibleItems.map((item) => {
                 const isGainZero = item.absoluteGain === null || item.absoluteGain === 0;
                 const isChangeZero = item.monthChangePct === null || item.monthChangePct === 0;
+                const isInactive = !item.hasSnapshotsInPeriod;
 
                 return (
                   <TableRow
                     key={item.investmentId}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={cn('cursor-pointer hover:bg-muted/50', isInactive && 'opacity-40')}
                     onClick={() => handleRowClick(item.investmentId)}
                   >
                     <TableCell className="text-paragraph-sm-medium">{item.name}</TableCell>

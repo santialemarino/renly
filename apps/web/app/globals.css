@@ -22,6 +22,32 @@
   }
 }
 
+/* Subtle pulse-scale for chart focus (less visible than the toggle pulse-scale). */
+@keyframes pulse-scale-subtle {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.99);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Replace browser focus outline on Recharts elements with a subtle scale animation. */
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper *:focus,
+.recharts-wrapper *:focus-visible,
+.recharts-surface:focus,
+.recharts-surface:focus-visible,
+.recharts-surface *:focus,
+.recharts-surface *:focus-visible {
+  outline: none;
+  animation: pulse-scale-subtle 0.3s ease-in-out;
+}
+
 /* Theme-aware image visibility (light/dark) */
 .imgDark {
   display: none;

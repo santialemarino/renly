@@ -5,10 +5,13 @@ import { GroupsDataTable } from '@/app/(protected)/groups/_components/groups-dat
 import { GroupsToolbar } from '@/app/(protected)/groups/_components/groups-toolbar';
 import { getGroups } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
-import { API_MAX_PAGE_SIZE } from '@/lib/constants/db-constraints';
+import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
-const MAX_GROUPS = Number(process.env.NEXT_PUBLIC_MAX_GROUPS ?? 50);
+// Fallback for when we don't have any env vars set for the max groups.
+const MAX_GROUPS_DEFAULT = 50;
+
+const MAX_GROUPS = Number(process.env.NEXT_PUBLIC_MAX_GROUPS ?? MAX_GROUPS_DEFAULT);
 
 export async function generateMetadata() {
   return await generatePageMetadata('groups');
@@ -39,7 +42,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   const investments = investmentsList.items.map((inv) => ({ id: inv.id, name: inv.name }));
 
   return (
-    <div className="flex flex-col flex-1 p-8 gap-y-6">
+    <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <GroupsToolbar
         investments={investments}
