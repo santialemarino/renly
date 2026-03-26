@@ -1,5 +1,5 @@
+from datetime import UTC, datetime
 from datetime import date as date_type
-from datetime import datetime
 from decimal import Decimal
 
 from sqlmodel import Field, SQLModel, UniqueConstraint
@@ -16,7 +16,10 @@ class InvestmentSnapshot(SQLModel, table=True):
     investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
     date: date_type = Field(description="Snapshot date.")
     value: Decimal = Field(max_digits=18, decimal_places=2, description="Value on this date.")
+    quantity: Decimal | None = Field(
+        default=None, max_digits=18, decimal_places=6, description="Shares/units (for ticker-linked investments)."
+    )
     currency: Currency = Field(description="Value currency.")
     notes: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -92,6 +92,7 @@ async def get_snapshot_grid(
                     date=snap.date,
                     value=value,
                     original_value=snap.value,
+                    quantity=snap.quantity,
                     period_return_pct=pr_map.get(snap.date),
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
@@ -100,6 +101,7 @@ async def get_snapshot_grid(
                         if currency and rate_map
                         else tx.amount,
                         original_amount=tx.amount,
+                        quantity=tx.quantity,
                         type=tx.type,
                     )
                     if tx
@@ -113,6 +115,7 @@ async def get_snapshot_grid(
                 name=inv.name,
                 category=inv.category,
                 base_currency=inv.base_currency,
+                ticker=inv.ticker,
                 cells=cells,
             )
         )

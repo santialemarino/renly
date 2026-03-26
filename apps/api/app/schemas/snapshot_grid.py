@@ -13,6 +13,7 @@ class SnapshotGridTransaction(BaseModel):
     id: int = Field(description="Transaction id.")
     amount: Decimal = Field(description="Transaction amount (display currency).")
     original_amount: Decimal = Field(description="Transaction amount (base currency, for editing).")
+    quantity: Decimal | None = Field(default=None, description="Number of shares/units transacted.")
     type: str = Field(description="Transaction kind (buy, sell, deposit, withdrawal).")
 
 
@@ -21,6 +22,7 @@ class SnapshotGridCell(BaseModel):
     date: date_type = Field(description="Snapshot date.")
     value: Decimal = Field(description="Snapshot value (display currency).")
     original_value: Decimal = Field(description="Snapshot value (base currency, for editing).")
+    quantity: Decimal | None = Field(default=None, description="Number of shares/units.")
     period_return_pct: Decimal | None = Field(
         default=None, description="Period return vs previous snapshot (null for first)."
     )
@@ -36,6 +38,7 @@ class SnapshotGridRow(BaseModel):
     name: str = Field(description="Investment name.")
     category: InvestmentCategory = Field(description="Investment category.")
     base_currency: str = Field(description="Investment currency.")
+    ticker: str | None = Field(default=None, description="Ticker symbol (null if not ticker-linked).")
     cells: list[SnapshotGridCell] = Field(default_factory=list, description="Snapshot cells sorted by date.")
 
 

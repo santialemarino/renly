@@ -4,14 +4,16 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import RequestBase
+
 
 # Body for POST /groups. Creates a new group.
-class GroupCreate(BaseModel):
+class GroupCreate(RequestBase):
     name: str = Field(description="Display name of the group.", max_length=255)
 
 
 # Body for PUT /groups/{id}. Partial update; only provided fields are updated.
-class GroupUpdate(BaseModel):
+class GroupUpdate(RequestBase):
     name: str | None = Field(default=None, description="Display name of the group.", max_length=255)
 
 
@@ -30,7 +32,7 @@ class GroupResponse(BaseModel):
 
 
 # Body for PUT /groups/{id}/investments. Replaces membership with the given list.
-class GroupSetInvestmentsBody(BaseModel):
+class GroupSetInvestmentsBody(RequestBase):
     investment_ids: list[int] = Field(
         description="Investment ids in this group. Replaces existing membership.",
     )

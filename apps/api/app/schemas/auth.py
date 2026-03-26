@@ -2,16 +2,18 @@
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import RequestBase
+
 
 # Body for POST /auth/register. Creates a new user.
-class RegisterRequest(BaseModel):
+class RegisterRequest(RequestBase):
     name: str = Field(description="Full name of the user.")
     email: str = Field(description="Email address (unique).")
     password: str = Field(description="Plain password (will be hashed).")
 
 
 # Body for POST /auth/login. Authenticates an existing user.
-class LoginRequest(BaseModel):
+class LoginRequest(RequestBase):
     email: str = Field(description="User email.")
     password: str = Field(description="Plain password.")
 

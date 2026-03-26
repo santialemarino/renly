@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from sqlalchemy import Column
@@ -40,5 +40,5 @@ class Investment(SQLModel, table=True):
     broker: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None)
     is_active: bool = Field(default=True, description="Whether to include in portfolio.")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

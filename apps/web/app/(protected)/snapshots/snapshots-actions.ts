@@ -4,31 +4,39 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 export async function upsertSnapshot(
   investmentId: number,
-  data: { date: string; value: string; currency: string },
+  data: { date: string; value: string; quantity?: string; currency: string },
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    date: data.date,
+    value: data.value,
+    currency: data.currency,
+  };
+  if (data.quantity) {
+    body.quantity = data.quantity;
+  }
   const res = await authenticatedFetch(`/investments/${investmentId}/snapshots`, {
     method: 'POST',
-    body: {
-      date: data.date,
-      value: data.value,
-      currency: data.currency,
-    },
+    body,
   });
   if (!res.ok) throw new Error('Failed to save snapshot');
 }
 
 export async function createTransaction(
   investmentId: number,
-  data: { date: string; amount: string; currency: string; type: string },
+  data: { date: string; amount: string; quantity?: string; currency: string; type: string },
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    date: data.date,
+    amount: data.amount,
+    currency: data.currency,
+    type: data.type,
+  };
+  if (data.quantity) {
+    body.quantity = data.quantity;
+  }
   const res = await authenticatedFetch(`/investments/${investmentId}/transactions`, {
     method: 'POST',
-    body: {
-      date: data.date,
-      amount: data.amount,
-      currency: data.currency,
-      type: data.type,
-    },
+    body,
   });
   if (!res.ok) throw new Error('Failed to create transaction');
 }
@@ -36,16 +44,20 @@ export async function createTransaction(
 export async function updateTransaction(
   investmentId: number,
   transactionId: number,
-  data: { amount: string; type: string },
+  data: { amount: string; quantity?: string; type: string },
 ): Promise<void> {
+  const body: Record<string, unknown> = {
+    amount: data.amount,
+    type: data.type,
+  };
+  if (data.quantity) {
+    body.quantity = data.quantity;
+  }
   const res = await authenticatedFetch(
     `/investments/${investmentId}/transactions/${transactionId}`,
     {
       method: 'PUT',
-      body: {
-        amount: data.amount,
-        type: data.type,
-      },
+      body,
     },
   );
   if (!res.ok) throw new Error('Failed to update transaction');

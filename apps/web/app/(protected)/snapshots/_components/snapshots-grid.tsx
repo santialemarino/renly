@@ -301,6 +301,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
           investmentId={selectedRow.investmentId}
           investmentName={selectedRow.name}
           baseCurrency={selectedRow.baseCurrency}
+          ticker={selectedRow.ticker}
           existingDates={selectedRow.cells.map((c) => c.date)}
           cell={selectedCell}
           onSuccess={() => router.refresh()}

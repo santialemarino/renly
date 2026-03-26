@@ -1,5 +1,5 @@
+from datetime import UTC, datetime
 from datetime import date as date_type
-from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -30,5 +30,5 @@ class ExchangeRate(SQLModel, table=True):
     )
     rate: Decimal = Field(max_digits=18, decimal_places=6, description="Exchange rate.")
     source: str = Field(default="manual", max_length=50, description="Data source.")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

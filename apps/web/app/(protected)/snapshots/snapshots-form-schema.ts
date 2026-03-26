@@ -24,8 +24,10 @@ export function buildSnapshotFormSchema(
         { message: duplicateMsg },
       ),
     value: z.string().min(1, requiredMsg),
+    quantity: z.string().optional(),
     includeTransaction: z.boolean(),
     transactionAmount: z.string().optional(),
+    transactionQuantity: z.string().optional(),
     transactionType: z.enum(TRANSACTION_TYPES).optional(),
   });
 }

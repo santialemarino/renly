@@ -23,6 +23,7 @@ description: API method order, comments, and entity conventions (schemas, models
 
 ## Schemas (Pydantic)
 
+- **Request schemas** inherit from `RequestBase` (`schemas/base.py`). It auto-strips strings and converts empty optionals to `None`. **Response schemas** inherit from `BaseModel`.
 - Every field: `Field(description="...")`. Optional: `Field(default=None, description="...")`. Str: add `max_length` when relevant; Decimal: `max_digits`, `decimal_places`. Enums: reuse from models (e.g. `Currency`, `InvestmentCategory`).
 - Response schemas that map from ORM: `model_config = {"from_attributes": True}`.
 - Avoid name clash with types: e.g. `from datetime import date as date_type` if a field is named `date`.
@@ -30,7 +31,7 @@ description: API method order, comments, and entity conventions (schemas, models
 ## Models (SQLModel, table=True)
 
 - Set `__tablename__` to snake_case plural. Use `__table_args__` for UniqueConstraint etc. when needed.
-- Every field: `Field(...)`. PK: `id: int | None = Field(default=None, primary_key=True)`. FKs: `Field(foreign_key="table.id", description="...")`. Str: `max_length` where relevant. Optional: `Field(default=None)` or `Field(default=True, description="...")`. Timestamps: `Field(default_factory=datetime.utcnow)`. Add `description="..."` for non-obvious columns.
+- Every field: `Field(...)`. PK: `id: int | None = Field(default=None, primary_key=True)`. FKs: `Field(foreign_key="table.id", description="...")`. Str: `max_length` where relevant. Optional: `Field(default=None)` or `Field(default=True, description="...")`. Timestamps: `Field(default_factory=lambda: datetime.now(UTC))` (import `UTC` from `datetime`). Add `description="..."` for non-obvious columns.
 
 ## Comments (routers, services, repositories)
 

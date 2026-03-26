@@ -52,7 +52,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             {isValidDate ? format(date, DATE_FORMAT_DISPLAY) : placeholder}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
+        <PopoverContent className="w-auto" align="start">
           <Calendar
             blue
             mode="single"
