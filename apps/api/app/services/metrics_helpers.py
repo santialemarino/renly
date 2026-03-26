@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.currency import base_currency, parse_currency
+from app.domain.currency import base_currency, is_supported, parse_currency
 from app.models.exchange_rate import ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -165,63 +165,74 @@ def group_transactions_by_investment(
     return dict(grouped)
 
 
-# Returns True if the currency pair can be converted.
-# Same currency always converts (identity). Otherwise only USD ↔ ARS is supported.
-# Accepts USD variants (USD, USD_MEP, USD_BLUE) — they all resolve to base "USD".
+# Returns True if both currencies are supported (can be converted via USD pivot).
+# Same base currency always converts (identity).
 def can_convert(from_currency: str, to_currency: str) -> bool:
     from_base = base_currency(from_currency)
     to_base = base_currency(to_currency)
     if from_base == to_base:
         return True
-    pair = frozenset({from_base, to_base})
-    return pair == frozenset({"USD", "ARS"})
+    return is_supported(from_currency) and is_supported(to_currency)
 
 
-# Converts a value from one currency to another using the USD/ARS rate.
-# Returns the value unchanged if currencies match or the pair is unsupported.
-# Accepts USD variants (USD, USD_MEP, USD_BLUE) — the caller picks the right rate.
+# Converts a value between any two supported currencies via USD as pivot.
+# rate_map: {base_currency: Decimal} where each value is "1 USD = X <currency>".
+# USD itself has an implicit rate of 1. Returns value unchanged if same base or unsupported.
 def convert_value(
     value: Decimal,
     from_currency: str,
     to_currency: str,
-    usd_ars_rate: Decimal,
+    rate_map: dict[str, Decimal],
 ) -> Decimal:
     from_base = base_currency(from_currency)
     to_base = base_currency(to_currency)
     if from_base == to_base:
         return value
-    if from_base == "USD" and to_base == "ARS":
-        return value * usd_ars_rate
-    if from_base == "ARS" and to_base == "USD":
-        return value / usd_ars_rate
-    return value
+    # Pivot: from_currency → USD → to_currency.
+    # "1 USD = rate <currency>", so <currency> → USD = value / rate, USD → <currency> = value * rate.
+    from_rate = rate_map.get(from_base)
+    to_rate = rate_map.get(to_base)
+    if from_rate is None or to_rate is None:
+        return value
+    # from → USD: divide by from_rate. USD → to: multiply by to_rate.
+    return value / from_rate * to_rate
 
 
-# Resolves the USD/ARS rate for the requested currency.
-# Parses USD variants (USD → oficial, USD_MEP → MEP, USD_BLUE → blue) and picks the right pair.
-# Falls back to oficial when the specific pair is unavailable.
-# Returns None when no rate exists.
-async def get_conversion_rate(
+# Builds a rate map {base_currency: Decimal} from the latest exchange rates in the DB.
+# Each entry means "1 USD = X <currency>". USD itself is always 1.
+# For USD variants (USD_MEP, USD_BLUE), picks the variant-specific ARS rate.
+async def get_rate_map(
     session: AsyncSession,
-    currency: str,
-) -> Decimal | None:
+    target_currency: str,
+) -> dict[str, Decimal] | None:
     from app.repositories.exchange_rate_repository import exchange_rate_repository
 
-    _, preferred_pair = parse_currency(currency)
-    if preferred_pair is None:
-        # Non-USD target — need a generic USD/ARS rate. Default to oficial.
-        preferred_pair = ExchangeRatePair.USD_ARS_OFICIAL
+    latest = await exchange_rate_repository.get_latest_all(session)
+    if not latest:
+        return None
 
-    latest_map = await exchange_rate_repository.get_latest_all(session)
+    rate_map: dict[str, Decimal] = {"USD": ONE}
 
-    rate_obj = latest_map.get(preferred_pair)
-    if rate_obj:
-        return rate_obj.rate
+    # Determine which ARS rate to use based on the target currency.
+    _, preferred_pair = parse_currency(target_currency)
+    ars_pair = preferred_pair if preferred_pair and "ARS" in preferred_pair.value else ExchangeRatePair.USD_ARS_OFICIAL
 
-    # Fallback: try oficial when the preferred pair is missing.
-    if preferred_pair != ExchangeRatePair.USD_ARS_OFICIAL:
-        oficial = latest_map.get(ExchangeRatePair.USD_ARS_OFICIAL)
-        if oficial:
-            return oficial.rate
+    ars_rate = latest.get(ars_pair)
+    if ars_rate is None:
+        # Fallback to oficial if the preferred ARS pair is missing.
+        ars_rate = latest.get(ExchangeRatePair.USD_ARS_OFICIAL)
+    if ars_rate:
+        rate_map["ARS"] = ars_rate.rate
 
-    return None
+    # Add non-ARS currencies (EUR, GBP, BRL).
+    _NON_ARS_PAIRS = {
+        "BRL": ExchangeRatePair.USD_BRL,
+        "EUR": ExchangeRatePair.USD_EUR,
+        "GBP": ExchangeRatePair.USD_GBP,
+    }
+    for currency_code, pair in _NON_ARS_PAIRS.items():
+        rate_obj = latest.get(pair)
+        if rate_obj:
+            rate_map[currency_code] = rate_obj.rate
+
+    return rate_map

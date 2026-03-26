@@ -12,12 +12,10 @@ import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 
-// Fallback for when we don't have any env vars set for the group limit warning percentage.
-
-const GROUP_LIMIT_WARNING_PCT_DEFAULT = 80;
-const GROUP_LIMIT_WARNING_PCT = Number(
-  process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT ?? GROUP_LIMIT_WARNING_PCT_DEFAULT,
-);
+// Parsed from env var. Null when unset (no warning shown).
+const GROUP_LIMIT_WARNING_PCT = process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT
+  ? Number(process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT)
+  : null;
 
 interface GroupsToolbarProps {
   investments: { id: number; name: string }[];
@@ -36,7 +34,8 @@ export function GroupsToolbar({ investments, groupCount, maxGroups }: GroupsTool
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
-  const nearLimit = groupCount >= maxGroups * (GROUP_LIMIT_WARNING_PCT / 100);
+  const nearLimit =
+    GROUP_LIMIT_WARNING_PCT !== null && groupCount >= maxGroups * (GROUP_LIMIT_WARNING_PCT / 100);
   const atLimit = groupCount >= maxGroups;
 
   function navigate(overrides: Record<string, string | null>) {

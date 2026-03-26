@@ -182,12 +182,17 @@ USD appears as three virtual currency codes, each mapped to a different exchange
 
 **Frontend:** Variants are defined in `lib/constants/currency.ts` (`USD_VARIANTS`). The `CurrencyCombobox` shows them as a grouped section at the top with badge tags. The sidebar `PillToggleGroup` shows short labels (USD, USD M, USD B). `lib/utils/currency.ts` provides `isUsdVariant()`, `baseCurrency()`, and `isCurrencySupported()`.
 
-## Future: additional rate sources
+## Multi-currency pivot conversion
 
-To support currencies beyond ARS/USD:
+Beyond ARS/USD, the app supports **EUR**, **GBP**, and **BRL** via Frankfurter (frankfurter.dev, free ECB data). All rates are stored against USD; any pair converts through USD as pivot.
 
-1. Add a new rate source (e.g. European Central Bank for EUR, Open Exchange Rates for broad coverage).
-2. Add new `ExchangeRatePair` enum values.
-3. Extend `convert_value()` to handle multi-hop conversions (e.g. EUR → USD → ARS).
-4. Update `isCurrencySupported()` to include the new currencies.
-5. Remove the warning icons/toasts for the newly supported currencies.
+**Rate sources:**
+
+- **DolarApi** → USD/ARS (oficial, MEP, blue) — fetched on startup + every 6h.
+- **Frankfurter** → USD/EUR, USD/GBP, USD/BRL — fetched on the same schedule.
+
+**Pivot example:** BRL → ARS = BRL → USD (divide by USD/BRL rate) → ARS (multiply by USD/ARS rate).
+
+**Rate map:** `get_rate_map(session, target_currency)` builds a `{base_currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The target currency determines which ARS rate pair to use (oficial/MEP/blue based on the virtual code).
+
+**Combobox:** ARS, EUR, BRL, GBP are pinned at the top of the "Other currencies" group for quick access. USD variants remain in their own group above.

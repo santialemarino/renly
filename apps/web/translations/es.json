@@ -48,6 +48,8 @@
       "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Mostrando valores en moneda original. Soporte disponible pronto.",
       "usdVariants": {
         "groupLabel": "Variantes de Dólar",
+        "arsGroupLabel": "Peso Argentino",
+        "preferredGroupLabel": "Monedas principales",
         "otherGroupLabel": "Otras monedas",
         "oficial": "Dólar (Oficial)",
         "mep": "Dólar (MEP)",
@@ -56,6 +58,11 @@
           "oficial": "Oficial",
           "mep": "MEP",
           "blue": "Blue"
+        },
+        "tagShort": {
+          "oficial": "O",
+          "mep": "M",
+          "blue": "B"
         }
       }
     }

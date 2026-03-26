@@ -1,25 +1,34 @@
-# Currency code parsing for USD variants (USD, USD_MEP, USD_BLUE).
-# "USD" = oficial rate (default), "USD_MEP" = MEP/bolsa rate, "USD_BLUE" = blue/parallel rate.
-# Non-USD codes pass through unchanged.
+# Currency code parsing and supported-currency registry.
+# USD variants: "USD" = oficial, "USD_MEP" = MEP, "USD_BLUE" = blue.
+# All rates are stored against USD; any pair converts via USD as pivot.
 
 from app.models.exchange_rate import ExchangeRatePair
 
-# Maps virtual currency suffix to the exchange rate pair used for ARS conversion.
-_USD_VARIANT_PAIRS: dict[str, ExchangeRatePair] = {
+# Maps every supported currency code to its USD-based ExchangeRatePair.
+# USD variants map to their specific ARS pair; other currencies map to their USD pair.
+_CURRENCY_PAIRS: dict[str, ExchangeRatePair] = {
     "USD": ExchangeRatePair.USD_ARS_OFICIAL,
     "USD_MEP": ExchangeRatePair.USD_ARS_MEP,
     "USD_BLUE": ExchangeRatePair.USD_ARS_BLUE,
+    "ARS": ExchangeRatePair.USD_ARS_OFICIAL,
+    "BRL": ExchangeRatePair.USD_BRL,
+    "EUR": ExchangeRatePair.USD_EUR,
+    "GBP": ExchangeRatePair.USD_GBP,
 }
 
 # All virtual currency codes that resolve to USD.
-USD_VARIANTS = frozenset(_USD_VARIANT_PAIRS.keys())
+USD_VARIANTS = frozenset({"USD", "USD_MEP", "USD_BLUE"})
+
+# All currency codes with exchange rate support (including USD variants).
+SUPPORTED_CURRENCIES = frozenset(_CURRENCY_PAIRS.keys())
 
 
 def parse_currency(code: str) -> tuple[str, ExchangeRatePair | None]:
-    """Returns (base_currency, preferred_pair). Non-USD codes return (code, None)."""
-    if code in _USD_VARIANT_PAIRS:
-        return "USD", _USD_VARIANT_PAIRS[code]
-    return code, None
+    """Returns (base_currency, preferred_pair). Unknown codes return (code, None)."""
+    pair = _CURRENCY_PAIRS.get(code)
+    if code in USD_VARIANTS:
+        return "USD", pair
+    return code, pair
 
 
 def base_currency(code: str) -> str:
@@ -31,3 +40,7 @@ def base_currency(code: str) -> str:
 
 def is_usd_variant(code: str) -> bool:
     return code in USD_VARIANTS
+
+
+def is_supported(code: str) -> bool:
+    return code in SUPPORTED_CURRENCIES

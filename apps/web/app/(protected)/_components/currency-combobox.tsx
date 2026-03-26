@@ -29,11 +29,23 @@ const CLEAR_ANIMATION_MS = 100;
 // Meta/test codes that are not real currencies.
 const EXCLUDED_CODES = new Set(['XXX', 'XTS']);
 
-// Exclude plain "USD" from the regular list — it's shown in the USD variants group.
-const ALL_CURRENCIES = cc.data
+// Preferred currencies shown in their own group. Comma-separated env var, e.g. "EUR,BRL,GBP".
+const PREFERRED_CODES = new Set(
+  (process.env.NEXT_PUBLIC_PREFERRED_CURRENCIES ?? '').split(',').filter(Boolean),
+);
+
+// Grouped currency lists — USD and ARS are handled separately.
+const ALL_ISO = cc.data
   .filter((c) => !EXCLUDED_CODES.has(c.code) && c.code !== 'USD')
-  .map((c) => ({ code: c.code, name: c.currency }))
-  .sort((a, b) => a.code.localeCompare(b.code));
+  .map((c) => ({ code: c.code, name: c.currency }));
+
+const ARS_ENTRY = ALL_ISO.find((c) => c.code === 'ARS')!;
+const PREFERRED_CURRENCIES = ALL_ISO.filter((c) => PREFERRED_CODES.has(c.code)).sort((a, b) =>
+  a.code.localeCompare(b.code),
+);
+const OTHER_CURRENCIES = ALL_ISO.filter(
+  (c) => c.code !== 'ARS' && !PREFERRED_CODES.has(c.code),
+).sort((a, b) => a.code.localeCompare(b.code));
 
 function getCurrencyName(code: string): string {
   return cc.code(code)?.currency ?? code;
@@ -42,11 +54,17 @@ function getCurrencyName(code: string): string {
 // Allowlist of currently active ISO 3166-1 alpha-2 codes; dissolved regions are excluded.
 const VALID_REGIONS = new Set(iso31661.map((c) => c.alpha2));
 
+// Override flags for currencies whose ISO code doesn't map to a country (e.g. EUR → EU flag).
+const FLAG_OVERRIDES: Record<string, string> = {
+  EUR: '🇪🇺',
+};
+
 /*
  * Derives the flag emoji from the first two letters of the currency code (e.g. "USD" → "US" → 🇺🇸).
  * Returns null for supranational codes (X*) and any region not in the current ISO 3166-1 list.
  */
 function getCurrencyFlag(code: string): string | null {
+  if (FLAG_OVERRIDES[code]) return FLAG_OVERRIDES[code];
   if (code.startsWith('X')) return null;
   const country = code.slice(0, 2).toUpperCase();
   if (!VALID_REGIONS.has(country)) return null;
@@ -114,16 +132,16 @@ export function CurrencyCombobox({
         'dolar'.includes(q)),
   );
 
-  // Pass 1 — filter: drop the sibling selected currency and any non-matching entries.
-  // When q is empty every currency passes (only the excluded one is dropped).
-  const filtered = ALL_CURRENCIES.filter(
-    (c) =>
-      !exclude.includes(c.code) &&
-      (!q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)),
-  ).sort((a, b) => {
-    // Pass 2 — sort: no query → keep original alphabetical order from ALL_CURRENCIES.
-    // With a query, score each match so the most relevant results bubble to the top:
-    // 4 = exact code match, 3 = code prefix, 2 = name prefix, 1 = contains anywhere.
+  // Filter helper — excludes sibling currency and non-matching search entries.
+  const matchesCurrency = (c: { code: string; name: string }) =>
+    !exclude.includes(c.code) &&
+    (!q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
+
+  // Grouped filtered lists.
+  const filteredArs = !exclude.includes('ARS') && matchesCurrency(ARS_ENTRY) ? [ARS_ENTRY] : [];
+  const filteredPreferred = PREFERRED_CURRENCIES.filter(matchesCurrency);
+  const filteredOther = OTHER_CURRENCIES.filter(matchesCurrency).sort((a, b) => {
+    // With a query, score matches so the most relevant results bubble to the top.
     if (!q) return 0;
     const score = (c: typeof a) => {
       const code = c.code.toLowerCase();
@@ -151,6 +169,25 @@ export function CurrencyCombobox({
       onClear!();
       setClearing(false);
     }, CLEAR_ANIMATION_MS);
+  }
+
+  function renderCurrencyItem(currency: { code: string; name: string }) {
+    return (
+      <CommandItem
+        key={currency.code}
+        value={`${currency.code} ${currency.name}`}
+        onSelect={() => {
+          onChange(currency.code);
+          setOpen(false);
+        }}
+      >
+        <span className="shrink-0 text-paragraph-xs font-mono">{currency.code}</span>
+        {!compact && <span className="truncate text-paragraph-sm">{currency.name}</span>}
+        {getCurrencyFlag(currency.code) && (
+          <span className="ml-auto shrink-0 pr-1">{getCurrencyFlag(currency.code)}</span>
+        )}
+      </CommandItem>
+    );
   }
 
   return (
@@ -185,9 +222,7 @@ export function CurrencyCombobox({
               onChange(variantMatch.code);
               return;
             }
-            const match = ALL_CURRENCIES.find(
-              (c) => !exclude.includes(c.code) && c.code.startsWith(q),
-            );
+            const match = ALL_ISO.find((c) => !exclude.includes(c.code) && c.code.startsWith(q));
             if (match) onChange(match.code);
           }}
           className={cn(
@@ -248,7 +283,7 @@ export function CurrencyCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-(--radix-popover-trigger-width) p-0"
+        className="w-(--radix-popover-trigger-width) p-0 @container"
         align="start"
         sideOffset={8}
       >
@@ -266,6 +301,11 @@ export function CurrencyCombobox({
             onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>{noResults}</CommandEmpty>
+            {filteredArs.length > 0 && (
+              <CommandGroup heading={tVariants('arsGroupLabel')}>
+                {filteredArs.map((c) => renderCurrencyItem(c))}
+              </CommandGroup>
+            )}
             {filteredVariants.length > 0 && (
               <CommandGroup heading={tVariants('groupLabel')}>
                 {filteredVariants.map((variant) => (
@@ -284,8 +324,13 @@ export function CurrencyCombobox({
                       </span>
                     )}
                     <span className="ml-auto inline-flex shrink-0 items-center gap-x-1.5 pr-1">
-                      <Badge variant="square" className="text-paragraph-mini px-1.5 py-0">
-                        {tVariants(`tag.${variant.labelKey}`)}
+                      <Badge variant="square" className="text-paragraph-mini px-1.5">
+                        <span className="@xs:hidden">
+                          {tVariants(`tagShort.${variant.labelKey}`)}
+                        </span>
+                        <span className="hidden @xs:inline">
+                          {tVariants(`tag.${variant.labelKey}`)}
+                        </span>
                       </Badge>
                       <span>{getCurrencyFlag('USD')}</span>
                     </span>
@@ -293,26 +338,16 @@ export function CurrencyCombobox({
                 ))}
               </CommandGroup>
             )}
-            <CommandGroup
-              heading={filteredVariants.length > 0 ? tVariants('otherGroupLabel') : undefined}
-            >
-              {filtered.map((currency) => (
-                <CommandItem
-                  key={currency.code}
-                  value={`${currency.code} ${currency.name}`}
-                  onSelect={() => {
-                    onChange(currency.code);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="shrink-0 text-paragraph-xs font-mono">{currency.code}</span>
-                  {!compact && <span className="truncate text-paragraph-sm">{currency.name}</span>}
-                  {getCurrencyFlag(currency.code) && (
-                    <span className="ml-auto shrink-0 pr-1">{getCurrencyFlag(currency.code)}</span>
-                  )}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+            {filteredPreferred.length > 0 && (
+              <CommandGroup heading={tVariants('preferredGroupLabel')}>
+                {filteredPreferred.map((c) => renderCurrencyItem(c))}
+              </CommandGroup>
+            )}
+            {filteredOther.length > 0 && (
+              <CommandGroup heading={tVariants('otherGroupLabel')}>
+                {filteredOther.map((c) => renderCurrencyItem(c))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

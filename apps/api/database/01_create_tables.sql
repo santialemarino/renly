@@ -32,7 +32,10 @@ CREATE TYPE transaction_type AS ENUM (
 CREATE TYPE exchange_rate_pair AS ENUM (
   'USD_ARS_OFICIAL',
   'USD_ARS_MEP',
-  'USD_ARS_BLUE'
+  'USD_ARS_BLUE',
+  'USD_BRL',
+  'USD_EUR',
+  'USD_GBP'
 );
 
 -- ---------------------------------------------------------------------------

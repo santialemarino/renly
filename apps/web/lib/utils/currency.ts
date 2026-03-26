@@ -14,9 +14,16 @@ export function baseCurrency(code: string): string {
   return code;
 }
 
-// Currencies with exchange rate support (DolarApi provides USD/ARS rates).
-// All USD variants are supported, plus ARS (identity conversion).
-const SUPPORTED_CONVERSION_CURRENCIES = new Set(['USD', 'USD_MEP', 'USD_BLUE', 'ARS']);
+// All currencies with exchange rate support (USD variants + ARS + Frankfurter currencies).
+const SUPPORTED_CONVERSION_CURRENCIES = new Set([
+  'USD',
+  'USD_MEP',
+  'USD_BLUE',
+  'ARS',
+  'BRL',
+  'EUR',
+  'GBP',
+]);
 
 export function isCurrencySupported(code: string): boolean {
   return SUPPORTED_CONVERSION_CURRENCIES.has(code);

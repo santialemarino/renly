@@ -17,7 +17,7 @@ from app.services import metrics_helpers as mh
 
 # Builds the snapshots grid for a user's investments.
 # Returns rows (investments) with snapshot cells, period returns, and transaction details.
-# When currency is provided, converts cell values using the latest MEP rate.
+# When currency is provided, converts cell values via USD pivot.
 async def get_snapshot_grid(
     session: AsyncSession,
     user_id: int,
@@ -51,13 +51,13 @@ async def get_snapshot_grid(
     if not investments:
         return SnapshotGridResponse(rows=[], months=[])
 
-    rate = None
+    rate_map = None
     if currency:
         target_base = mh.base_currency(currency)
         needs_conversion = any(inv.base_currency != target_base for inv in investments)
         if needs_conversion:
-            rate = await mh.get_conversion_rate(session, currency)
-            if rate is None:
+            rate_map = await mh.get_rate_map(session, currency)
+            if rate_map is None:
                 raise ExchangeRateUnavailableError(currency)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -85,8 +85,8 @@ async def get_snapshot_grid(
         for snap in snaps:
             tx = tx_by_period.get(snap.date)
             value = snap.value
-            if currency and rate:
-                value = mh.convert_value(value, inv.base_currency, currency, rate)
+            if currency and rate_map:
+                value = mh.convert_value(value, inv.base_currency, currency, rate_map)
             cells.append(
                 SnapshotGridCell(
                     date=snap.date,
@@ -96,8 +96,8 @@ async def get_snapshot_grid(
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
                         id=tx.id,
-                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate)
-                        if currency and rate
+                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate_map)
+                        if currency and rate_map
                         else tx.amount,
                         original_amount=tx.amount,
                         type=tx.type,

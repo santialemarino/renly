@@ -22,9 +22,6 @@ export interface PeriodPreset {
   code: PresetCode;
 }
 
-// Fallback for when we don't have any env vars set for the period presets.
-export const PERIOD_DEFAULTS: PresetCode[] = ['1M', '3M', '6M', PRESET_YTD];
-
 const ENV_KEYS = [
   process.env.NEXT_PUBLIC_PERIOD_PRESET_1,
   process.env.NEXT_PUBLIC_PERIOD_PRESET_2,
@@ -44,8 +41,7 @@ function parseCodes(raw: (string | undefined)[]): PeriodPreset[] {
 
 function parsePresets(): PeriodPreset[] {
   const envCodes = ENV_KEYS.filter((v): v is string => !!v && PRESET_PATTERN.test(v));
-  const codes = envCodes.length > 0 ? envCodes : PERIOD_DEFAULTS;
-  return parseCodes(codes);
+  return parseCodes(envCodes);
 }
 
 export const PERIOD_PRESETS = parsePresets();
