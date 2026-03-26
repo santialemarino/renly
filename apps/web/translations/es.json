@@ -49,7 +49,7 @@
       "usdVariants": {
         "groupLabel": "Variantes de Dólar",
         "arsGroupLabel": "Peso Argentino",
-        "preferredGroupLabel": "Monedas principales",
+        "preferredGroupLabel": "Preferidas",
         "otherGroupLabel": "Otras monedas",
         "oficial": "Dólar (Oficial)",
         "mep": "Dólar (MEP)",
@@ -453,13 +453,33 @@
       },
       "searchPlaceholder": "Buscar monedas...",
       "noResults": "No se encontraron monedas.",
+      "preferredCurrencies": {
+        "label": "Monedas preferidas",
+        "hint": "Se muestran en un grupo separado en el selector de monedas.",
+        "placeholder": "Buscar monedas...",
+        "empty": "No se encontraron monedas.",
+        "format": "Códigos ISO separados por coma, ej. BRL, EUR, GBP.",
+        "emptyDefault": "Dejá vacío para usar los valores predeterminados del entorno."
+      },
+      "sectionCurrencies": "Monedas",
+      "sectionDashboard": "Dashboard y Límites",
       "periodPresets": {
-        "label": "Presets de periodo del dashboard",
-        "hint": "Configurá los botones de acceso rápido de periodo en el dashboard.",
+        "label": "Presets de periodo",
+        "hint": "Botones de acceso rápido de periodo en el dashboard.",
         "format": "Formato: 1M, 3M, 6M, 1A, YTD. \"Todo\" se agrega siempre.",
         "invalidFormat": "Formato inválido. Usá NM (meses), NA (años) o YTD.",
         "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
         "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
+      },
+      "maxGroups": {
+        "label": "Máximo de grupos",
+        "hint": "Cantidad máxima de grupos de inversiones permitidos.",
+        "default": "Por defecto 50 si se deja vacío."
+      },
+      "groupWarningPct": {
+        "label": "Umbral de advertencia",
+        "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
+        "default": "Por defecto 80% si se deja vacío. Dejá vacío para desactivar la advertencia."
       },
       "cta": {
         "label": "Guardar",

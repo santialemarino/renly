@@ -224,7 +224,7 @@ async def get_rate_map(
     if ars_rate:
         rate_map["ARS"] = ars_rate.rate
 
-    # Add non-ARS currencies (EUR, GBP, BRL).
+    # Add non-ARS currencies (BRL, EUR, GBP).
     _NON_ARS_PAIRS = {
         "BRL": ExchangeRatePair.USD_BRL,
         "EUR": ExchangeRatePair.USD_EUR,

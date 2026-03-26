@@ -78,10 +78,12 @@ function SortIcon({
 function RowActions({
   investment,
   groups,
+  preferredCurrencies,
   onSuccess,
 }: {
   investment: Investment;
   groups: InvestmentGroup[];
+  preferredCurrencies?: string[];
   onSuccess: () => void;
 }) {
   const t = useTranslations('investments');
@@ -170,6 +172,7 @@ function RowActions({
           onOpenChange={setEditOpen}
           investment={investment}
           groups={groups}
+          preferredCurrencies={preferredCurrencies}
           onSuccess={onSuccess}
         />
       )}
@@ -189,9 +192,11 @@ function RowActions({
 export function InvestmentsDataTable({
   data,
   groups,
+  preferredCurrencies,
 }: {
   data: InvestmentListResponse;
   groups: InvestmentGroup[];
+  preferredCurrencies?: string[];
 }) {
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
@@ -329,6 +334,7 @@ export function InvestmentsDataTable({
                     <RowActions
                       investment={investment}
                       groups={groups}
+                      preferredCurrencies={preferredCurrencies}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>

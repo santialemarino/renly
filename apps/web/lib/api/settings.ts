@@ -7,7 +7,10 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 interface SettingsRaw {
   primary_currency: string | null;
   secondary_currency: string | null;
+  preferred_currencies: string[] | null;
   period_presets: string[] | null;
+  max_groups: number | null;
+  group_warning_pct: number | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -15,7 +18,10 @@ interface SettingsRaw {
 export interface SettingsData {
   primaryCurrency: string | null;
   secondaryCurrency: string | null;
+  preferredCurrencies: string[] | null;
   periodPresets: string[] | null;
+  maxGroups: number | null;
+  groupWarningPct: number | null;
 }
 
 // --- Mappers ---
@@ -24,7 +30,10 @@ function mapSettings(raw: SettingsRaw): SettingsData {
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,
+    preferredCurrencies: raw.preferred_currencies,
     periodPresets: raw.period_presets,
+    maxGroups: raw.max_groups,
+    groupWarningPct: raw.group_warning_pct,
   };
 }
 

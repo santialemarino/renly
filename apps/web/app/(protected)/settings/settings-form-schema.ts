@@ -13,10 +13,13 @@ export function buildSettingsFormSchema(presetInvalidMsg: string) {
   return z.object({
     primaryCurrency: z.string().min(1),
     secondaryCurrency: z.string().nullable().optional(),
+    preferredCurrencies: z.string().optional(),
     periodPreset1: presetField(presetInvalidMsg),
     periodPreset2: presetField(presetInvalidMsg),
     periodPreset3: presetField(presetInvalidMsg),
     periodPreset4: presetField(presetInvalidMsg),
+    maxGroups: z.string().optional(),
+    groupWarningPct: z.string().optional(),
   });
 }
 

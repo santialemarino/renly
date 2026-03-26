@@ -40,6 +40,7 @@ interface InvestmentFormDialogProps {
   onOpenChange: (open: boolean) => void;
   investment?: Investment;
   groups: InvestmentGroup[];
+  preferredCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -48,6 +49,7 @@ export function InvestmentFormDialog({
   onOpenChange,
   investment,
   groups,
+  preferredCurrencies,
   onSuccess,
 }: InvestmentFormDialogProps) {
   const t = useTranslations('investments');
@@ -167,6 +169,7 @@ export function InvestmentFormDialog({
                         compact
                         value={field.value || null}
                         exclude={[]}
+                        preferredCurrencies={preferredCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}

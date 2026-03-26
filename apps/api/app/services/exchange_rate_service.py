@@ -125,7 +125,7 @@ async def _fetch_frankfurter() -> dict | None:
         return None
 
 
-# Parses Frankfurter response and upserts EUR, GBP, BRL rates.
+# Parses Frankfurter response and upserts BRL, EUR, GBP rates.
 # Frankfurter returns rates as "1 USD = X <currency>", which matches our storage convention.
 async def _store_frankfurter_rates(
     session: AsyncSession,

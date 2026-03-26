@@ -53,15 +53,26 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     defaultValues: {
       primaryCurrency: initialSettings.primaryCurrency ?? fallbackPrimary,
       secondaryCurrency: initialSettings.secondaryCurrency ?? fallbackSecondary,
+      preferredCurrencies: initialSettings.preferredCurrencies?.join(', ') ?? '',
       periodPreset1: localizePreset(initialSettings.periodPresets?.[0], yearSuffix),
       periodPreset2: localizePreset(initialSettings.periodPresets?.[1], yearSuffix),
       periodPreset3: localizePreset(initialSettings.periodPresets?.[2], yearSuffix),
       periodPreset4: localizePreset(initialSettings.periodPresets?.[3], yearSuffix),
+      maxGroups: initialSettings.maxGroups?.toString() ?? '',
+      groupWarningPct: initialSettings.groupWarningPct?.toString() ?? '',
     },
   });
 
   const primaryCurrency = watch('primaryCurrency');
   const secondaryCurrency = watch('secondaryCurrency');
+
+  const watchedPreferred = watch('preferredCurrencies');
+  const livePreferredCurrencies = watchedPreferred
+    ? watchedPreferred
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean)
+    : undefined;
 
   const primaryUnsupported = primaryCurrency && !isCurrencySupported(primaryCurrency);
   const secondaryUnsupported = secondaryCurrency && !isCurrencySupported(secondaryCurrency);
@@ -83,19 +94,36 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       ]
         .filter((v): v is string => !!v)
         .map((v) => v.toUpperCase().replace(/A$/, 'Y'));
-      await saveSettings(
-        values.primaryCurrency,
-        values.secondaryCurrency ?? null,
-        presets.length > 0 ? presets : null,
-      );
-      // Reset form with localized canonical values so inputs update immediately.
+
+      const preferredRaw =
+        values.preferredCurrencies
+          ?.split(',')
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean) ?? [];
+
+      const maxGroupsNum = values.maxGroups ? parseInt(values.maxGroups, 10) : null;
+      const warningPctNum = values.groupWarningPct ? parseInt(values.groupWarningPct, 10) : null;
+
+      await saveSettings({
+        primaryCurrency: values.primaryCurrency,
+        secondaryCurrency: values.secondaryCurrency ?? null,
+        preferredCurrencies: preferredRaw.length > 0 ? preferredRaw : null,
+        periodPresets: presets.length > 0 ? presets : null,
+        maxGroups: !isNaN(maxGroupsNum!) ? maxGroupsNum : null,
+        groupWarningPct: !isNaN(warningPctNum!) ? warningPctNum : null,
+      });
+
+      // Reset form with normalized values so inputs update immediately.
       reset({
         primaryCurrency: values.primaryCurrency,
         secondaryCurrency: values.secondaryCurrency,
+        preferredCurrencies: preferredRaw.join(', '),
         periodPreset1: localizePreset(presets[0], yearSuffix),
         periodPreset2: localizePreset(presets[1], yearSuffix),
         periodPreset3: localizePreset(presets[2], yearSuffix),
         periodPreset4: localizePreset(presets[3], yearSuffix),
+        maxGroups: maxGroupsNum?.toString() ?? '',
+        groupWarningPct: warningPctNum?.toString() ?? '',
       });
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'settings-save' });
@@ -105,126 +133,202 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full max-w-md gap-y-6">
-      <div className="flex flex-col gap-y-2">
-        <div className="flex items-center gap-x-2">
-          <Label>{t('form.primaryCurrency.label')}</Label>
-          <AnimatePresence>
-            {primaryUnsupported && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: ANIMATION_DEFAULT }}
-              >
-                <AlertTriangle className="size-4 text-amber-500" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        <Hint>{t('form.primaryCurrency.hint')}</Hint>
-        <Controller
-          name="primaryCurrency"
-          control={control}
-          render={({ field }) => (
-            <CurrencyCombobox
-              value={field.value ?? null}
-              exclude={secondaryCurrency ? [secondaryCurrency] : []}
-              placeholder={t('form.primaryCurrency.placeholder')}
-              searchPlaceholder={t('form.searchPlaceholder')}
-              noResults={t('form.noResults')}
-              surface
-              onChange={(v) => handleCurrencyChange(v ?? '', (val) => field.onChange(val ?? ''))}
-            />
-          )}
-        />
-      </div>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full gap-y-6 lg:gap-y-10">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-12 gap-y-8">
+        {/* Left column — Currencies */}
+        <div className="flex flex-col max-w-md gap-y-3">
+          <h3 className="text-paragraph-sm-semibold text-muted-foreground">
+            {t('form.sectionCurrencies')}
+          </h3>
 
-      <Separator />
-
-      <div className="flex flex-col gap-y-2">
-        <div className="flex items-center gap-x-2">
-          <Label>{t('form.secondaryCurrency.label')}</Label>
-          <AnimatePresence>
-            {secondaryUnsupported && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                transition={{ duration: ANIMATION_DEFAULT }}
-              >
-                <AlertTriangle className="size-4 text-amber-500" />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        <Hint>{t('form.secondaryCurrency.hint')}</Hint>
-        <Controller
-          name="secondaryCurrency"
-          control={control}
-          render={({ field }) => (
-            <CurrencyCombobox
-              value={field.value ?? null}
-              exclude={primaryCurrency ? [primaryCurrency] : []}
-              placeholder={t('form.secondaryCurrency.placeholder')}
-              searchPlaceholder={t('form.searchPlaceholder')}
-              noResults={t('form.noResults')}
-              surface
-              onChange={(v) => handleCurrencyChange(v, field.onChange)}
-              onClear={() => field.onChange(null)}
-            />
-          )}
-        />
-      </div>
-
-      <WarningHint show={!!(primaryUnsupported || secondaryUnsupported)} separator parentGap={24}>
-        {tCommon.rich('currency.unsupportedHint', {
-          bold: (chunks) => <strong>{chunks}</strong>,
-        })}
-      </WarningHint>
-
-      <Separator />
-
-      <div className="flex flex-col gap-y-3">
-        <div className="flex flex-col gap-y-2">
-          <Label>{t('form.periodPresets.label')}</Label>
-          <Hint>{t('form.periodPresets.hint')}</Hint>
-        </div>
-        <div className="grid grid-cols-4 gap-x-2">
-          {(['periodPreset1', 'periodPreset2', 'periodPreset3', 'periodPreset4'] as const).map(
-            (name, i) => (
-              <Controller
-                key={name}
-                name={name}
-                control={control}
-                render={({ field, fieldState }) => (
-                  <Input
-                    {...field}
-                    placeholder={localizePreset(PERIOD_PRESETS[i]?.code, yearSuffix)}
-                    aria-invalid={!!fieldState.error}
-                    containerClassName="text-center"
-                    className="uppercase"
-                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                  />
+          <div className="flex flex-col gap-y-2">
+            <div className="flex items-center gap-x-2">
+              <Label>{t('form.primaryCurrency.label')}</Label>
+              <AnimatePresence>
+                {primaryUnsupported && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                  >
+                    <AlertTriangle className="size-4 text-amber-500" />
+                  </motion.div>
                 )}
-              />
-            ),
-          )}
+              </AnimatePresence>
+            </div>
+            <Hint>{t('form.primaryCurrency.hint')}</Hint>
+            <Controller
+              name="primaryCurrency"
+              control={control}
+              render={({ field }) => (
+                <CurrencyCombobox
+                  value={field.value ?? null}
+                  exclude={secondaryCurrency ? [secondaryCurrency] : []}
+                  preferredCurrencies={livePreferredCurrencies}
+                  placeholder={t('form.primaryCurrency.placeholder')}
+                  searchPlaceholder={t('form.searchPlaceholder')}
+                  noResults={t('form.noResults')}
+                  surface
+                  onChange={(v) =>
+                    handleCurrencyChange(v ?? '', (val) => field.onChange(val ?? ''))
+                  }
+                />
+              )}
+            />
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <div className="flex items-center gap-x-2">
+              <Label>{t('form.secondaryCurrency.label')}</Label>
+              <AnimatePresence>
+                {secondaryUnsupported && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                  >
+                    <AlertTriangle className="size-4 text-amber-500" />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            <Hint>{t('form.secondaryCurrency.hint')}</Hint>
+            <Controller
+              name="secondaryCurrency"
+              control={control}
+              render={({ field }) => (
+                <CurrencyCombobox
+                  value={field.value ?? null}
+                  exclude={primaryCurrency ? [primaryCurrency] : []}
+                  preferredCurrencies={livePreferredCurrencies}
+                  placeholder={t('form.secondaryCurrency.placeholder')}
+                  searchPlaceholder={t('form.searchPlaceholder')}
+                  noResults={t('form.noResults')}
+                  surface
+                  onChange={(v) => handleCurrencyChange(v, field.onChange)}
+                  onClear={() => field.onChange(null)}
+                />
+              )}
+            />
+          </div>
+
+          <WarningHint
+            show={!!(primaryUnsupported || secondaryUnsupported)}
+            separator
+            parentGap={24}
+          >
+            {tCommon.rich('currency.unsupportedHint', {
+              bold: (chunks) => <strong>{chunks}</strong>,
+            })}
+          </WarningHint>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.preferredCurrencies.label')}</Label>
+            <Hint>{t('form.preferredCurrencies.hint')}</Hint>
+            <Controller
+              name="preferredCurrencies"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  {...field}
+                  placeholder="BRL, EUR, GBP"
+                  className="uppercase"
+                  onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                />
+              )}
+            />
+            <InfoHint>{t('form.preferredCurrencies.format')}</InfoHint>
+            <InfoHint>{t('form.preferredCurrencies.emptyDefault')}</InfoHint>
+          </div>
         </div>
-        {(errors.periodPreset1 ||
-          errors.periodPreset2 ||
-          errors.periodPreset3 ||
-          errors.periodPreset4) && (
-          <p className="text-paragraph-xs text-destructive">
-            {t('form.periodPresets.invalidFormat')}
-          </p>
-        )}
-        <InfoHint>{t('form.periodPresets.format')}</InfoHint>
-        <InfoHint>{t('form.periodPresets.emptyDefault')}</InfoHint>
-        <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
+
+        {/* Right column — Dashboard & Limits */}
+        <div className="flex flex-col max-w-md gap-y-3">
+          <h3 className="text-paragraph-sm-semibold text-muted-foreground">
+            {t('form.sectionDashboard')}
+          </h3>
+
+          <div className="flex flex-col gap-y-3">
+            <div className="flex flex-col gap-y-2">
+              <Label>{t('form.periodPresets.label')}</Label>
+              <Hint>{t('form.periodPresets.hint')}</Hint>
+            </div>
+            <div className="grid grid-cols-4 gap-x-2">
+              {(['periodPreset1', 'periodPreset2', 'periodPreset3', 'periodPreset4'] as const).map(
+                (name, i) => (
+                  <Controller
+                    key={name}
+                    name={name}
+                    control={control}
+                    render={({ field, fieldState }) => (
+                      <Input
+                        {...field}
+                        placeholder={localizePreset(PERIOD_PRESETS[i]?.code, yearSuffix)}
+                        aria-invalid={!!fieldState.error}
+                        containerClassName="text-center"
+                        className="uppercase"
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    )}
+                  />
+                ),
+              )}
+            </div>
+            {(errors.periodPreset1 ||
+              errors.periodPreset2 ||
+              errors.periodPreset3 ||
+              errors.periodPreset4) && (
+              <p className="text-paragraph-xs text-destructive">
+                {t('form.periodPresets.invalidFormat')}
+              </p>
+            )}
+            <InfoHint>{t('form.periodPresets.format')}</InfoHint>
+            <InfoHint>{t('form.periodPresets.emptyDefault')}</InfoHint>
+            <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.maxGroups.label')}</Label>
+            <Hint>{t('form.maxGroups.hint')}</Hint>
+            <Controller
+              name="maxGroups"
+              control={control}
+              render={({ field }) => <Input {...field} type="number" min={1} placeholder="50" />}
+            />
+            <InfoHint>{t('form.maxGroups.default')}</InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.groupWarningPct.label')}</Label>
+            <Hint>{t('form.groupWarningPct.hint')}</Hint>
+            <Controller
+              name="groupWarningPct"
+              control={control}
+              render={({ field }) => (
+                <Input {...field} type="number" min={1} max={100} placeholder="80" />
+              )}
+            />
+            <InfoHint>{t('form.groupWarningPct.default')}</InfoHint>
+          </div>
+        </div>
       </div>
 
-      <Button blue type="submit" disabled={isSubmitting || !primaryCurrency}>
+      <Button
+        blue
+        type="submit"
+        className="w-full max-w-md lg:max-w-full"
+        disabled={isSubmitting || !primaryCurrency}
+      >
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
       </Button>
     </form>

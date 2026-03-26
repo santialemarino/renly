@@ -16,7 +16,9 @@ export default async function SettingsPage() {
   return (
     <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      {settings && <SettingsForm initialSettings={settings} />}
+      <div className="flex w-full justify-center lg:justify-start">
+        {settings && <SettingsForm initialSettings={settings} />}
+      </div>
     </div>
   );
 }
