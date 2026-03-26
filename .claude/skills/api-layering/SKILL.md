@@ -12,7 +12,7 @@ Request flow: **router → service → repository → DB**.
 - **routers/** — HTTP only: validate body, call service, return response or raise HTTPException. Use **schemas** for request/response.
 - **services/** — Business logic: orchestrate use cases, call repositories. Use **domain** types and **models**; no HTTP or raw SQL.
 - **repositories/** — Data access: run queries, add/commit. Use **models** and session only.
-- **schemas/** — Pydantic request/response DTOs (HTTP contract).
+- **schemas/** — Pydantic request/response DTOs (HTTP contract). Request bodies inherit from `RequestBase` (`schemas/base.py`) which auto-strips strings and converts empty optionals to `None`. Response schemas inherit from `BaseModel`.
 - **domain/** — Types used by services only (value objects, enums, errors). Not HTTP, not DB.
 - **models/** — SQLModel tables (DB entities).
 - **deps/** — FastAPI dependencies (e.g. SessionDep, CurrentUser). Injected by the framework.

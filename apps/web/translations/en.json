@@ -416,10 +416,15 @@
         "label": "Value",
         "placeholder": "0.00"
       },
+      "quantity": {
+        "label": "Quantity (shares/units)",
+        "placeholder": "0"
+      },
       "transaction": {
         "include": "Include a transaction for this period",
         "initialHint": "This is the first snapshot for this investment.\nConsider adding a deposit or buy transaction to track your initial invested capital.",
         "amount": "Amount",
+        "quantity": "Shares/units",
         "type": "Type",
         "types": {
           "deposit": "Deposit",

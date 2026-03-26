@@ -2,6 +2,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.schemas.base import RequestBase
+
 
 # Response for GET /settings. User display preferences and app configuration.
 class SettingsResponse(BaseModel):
@@ -32,7 +34,7 @@ class SettingsResponse(BaseModel):
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
-class SettingsUpdate(BaseModel):
+class SettingsUpdate(RequestBase):
     primary_currency: str | None = Field(
         default=None,
         description="Primary display currency.",

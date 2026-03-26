@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlmodel import Field, SQLModel
 
@@ -12,5 +12,5 @@ class User(SQLModel, table=True):
     email: str = Field(max_length=255, unique=True, description="Unique email.")
     password_hash: str = Field(max_length=255, description="Bcrypt hash.")
     session_epoch: int = Field(default=0, description="Bumped on logout; JWT must match.")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

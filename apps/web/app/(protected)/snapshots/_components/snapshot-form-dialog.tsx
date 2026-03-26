@@ -46,6 +46,7 @@ interface SnapshotFormDialogProps {
   investmentId: number;
   investmentName: string;
   baseCurrency: string;
+  ticker: string | null;
   existingDates: string[];
   cell?: SnapshotGridCell;
   onSuccess: () => void;
@@ -57,6 +58,7 @@ export function SnapshotFormDialog({
   investmentId,
   investmentName,
   baseCurrency,
+  ticker,
   existingDates,
   cell,
   onSuccess,
@@ -87,8 +89,10 @@ export function SnapshotFormDialog({
     defaultValues: {
       date: '',
       value: '',
+      quantity: '',
       includeTransaction: false,
       transactionAmount: '',
+      transactionQuantity: '',
       transactionType: 'deposit',
     },
   });
@@ -110,8 +114,10 @@ export function SnapshotFormDialog({
       form.reset({
         date: cell?.date ?? '',
         value: cell ? String(cell.originalValue) : '',
+        quantity: cell?.quantity != null ? String(cell.quantity) : '',
         includeTransaction: !!existingTx,
         transactionAmount: existingTx ? String(existingTx.originalAmount) : '',
+        transactionQuantity: existingTx?.quantity != null ? String(existingTx.quantity) : '',
         transactionType: (existingTx?.type as SnapshotFormValues['transactionType']) ?? 'deposit',
       });
     }
@@ -122,6 +128,7 @@ export function SnapshotFormDialog({
       await upsertSnapshot(investmentId, {
         date: values.date,
         value: values.value,
+        quantity: values.quantity || undefined,
         currency: baseCurrency,
       });
 
@@ -132,6 +139,7 @@ export function SnapshotFormDialog({
         // Update existing transaction.
         await updateTransaction(investmentId, existingTx.id, {
           amount: values.transactionAmount!,
+          quantity: values.transactionQuantity || undefined,
           type: values.transactionType!,
         });
       } else if (wantsTx && !existingTx) {
@@ -139,6 +147,7 @@ export function SnapshotFormDialog({
         await createTransaction(investmentId, {
           date: values.date,
           amount: values.transactionAmount!,
+          quantity: values.transactionQuantity || undefined,
           currency: baseCurrency,
           type: values.transactionType!,
         });
@@ -158,7 +167,7 @@ export function SnapshotFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
-        <DialogHeader>
+        <DialogHeader className="text-left">
           <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
           <p className="text-paragraph-sm text-muted-foreground">
             {investmentName} ({baseCurrency})
@@ -172,31 +181,31 @@ export function SnapshotFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
-            <div className="flex min-w-0 items-start gap-x-3">
-              <FormField
-                control={form.control}
-                name="date"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.date.label')}</FormLabel>
-                    <FormControl>
-                      <DatePickerInput
-                        value={field.value}
-                        onChange={field.onChange}
-                        disabled={isEdit}
-                        placeholder={t('form.date.placeholder')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormControl>
+                    <DatePickerInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={isEdit}
+                      placeholder={t('form.date.placeholder')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
+            <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
                 name="value"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
+                  <FormItem className="flex-1 min-w-0">
                     <FormLabel required>{t('form.value.label')}</FormLabel>
                     <FormControl>
                       <Input
@@ -211,6 +220,28 @@ export function SnapshotFormDialog({
                   </FormItem>
                 )}
               />
+
+              {ticker && (
+                <FormField
+                  control={form.control}
+                  name="quantity"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-0">
+                      <FormLabel>{t('form.quantity.label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="any"
+                          min="0"
+                          placeholder={t('form.quantity.placeholder')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <div className="flex flex-col gap-y-2">
@@ -232,18 +263,18 @@ export function SnapshotFormDialog({
             <AnimatePresence initial={false}>
               {includeTransaction && (
                 <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                   transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ overflow: 'hidden', marginTop: -16 }}
+                  style={{ marginTop: -16 }}
                 >
-                  <div className="flex min-w-0 items-start gap-x-3 pt-4">
+                  <div className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-4 pt-4">
                     <FormField
                       control={form.control}
                       name="transactionAmount"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
+                        <FormItem className="flex-1 min-w-0">
                           <FormLabel>{t('form.transaction.amount')}</FormLabel>
                           <FormControl>
                             <Input
@@ -258,6 +289,22 @@ export function SnapshotFormDialog({
                         </FormItem>
                       )}
                     />
+
+                    {ticker && (
+                      <FormField
+                        control={form.control}
+                        name="transactionQuantity"
+                        render={({ field }) => (
+                          <FormItem className="flex-1 min-w-0">
+                            <FormLabel>{t('form.transaction.quantity')}</FormLabel>
+                            <FormControl>
+                              <Input {...field} type="number" step="any" min="0" placeholder="0" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
                     <FormField
                       control={form.control}

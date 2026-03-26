@@ -8,6 +8,7 @@ interface SnapshotGridTransactionRaw {
   id: number;
   amount: string;
   original_amount: string;
+  quantity: string | null;
   type: string;
 }
 
@@ -15,6 +16,7 @@ interface SnapshotGridCellRaw {
   date: string;
   value: string;
   original_value: string;
+  quantity: string | null;
   period_return_pct: string | null;
   has_transaction: boolean;
   transaction: SnapshotGridTransactionRaw | null;
@@ -25,6 +27,7 @@ interface SnapshotGridRowRaw {
   name: string;
   category: string;
   base_currency: string;
+  ticker: string | null;
   cells: SnapshotGridCellRaw[];
 }
 
@@ -39,6 +42,7 @@ export interface SnapshotGridTransaction {
   id: number;
   amount: number;
   originalAmount: number;
+  quantity: number | null;
   type: string;
 }
 
@@ -46,6 +50,7 @@ export interface SnapshotGridCell {
   date: string;
   value: number;
   originalValue: number;
+  quantity: number | null;
   periodReturnPct: number | null;
   hasTransaction: boolean;
   transaction: SnapshotGridTransaction | null;
@@ -56,6 +61,7 @@ export interface SnapshotGridRow {
   name: string;
   category: string;
   baseCurrency: string;
+  ticker: string | null;
   cells: SnapshotGridCell[];
 }
 
@@ -80,6 +86,7 @@ function mapCell(raw: SnapshotGridCellRaw): SnapshotGridCell {
     date: raw.date,
     value: Number(raw.value),
     originalValue: Number(raw.original_value),
+    quantity: raw.quantity !== null ? Number(raw.quantity) : null,
     periodReturnPct: raw.period_return_pct !== null ? Number(raw.period_return_pct) : null,
     hasTransaction: raw.has_transaction,
     transaction: raw.transaction
@@ -87,6 +94,7 @@ function mapCell(raw: SnapshotGridCellRaw): SnapshotGridCell {
           id: raw.transaction.id,
           amount: Number(raw.transaction.amount),
           originalAmount: Number(raw.transaction.original_amount),
+          quantity: raw.transaction.quantity !== null ? Number(raw.transaction.quantity) : null,
           type: raw.transaction.type,
         }
       : null,
@@ -99,6 +107,7 @@ function mapRow(raw: SnapshotGridRowRaw): SnapshotGridRow {
     name: raw.name,
     category: raw.category,
     baseCurrency: raw.base_currency,
+    ticker: raw.ticker,
     cells: raw.cells.map(mapCell),
   };
 }

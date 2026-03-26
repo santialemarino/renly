@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.models.investment import InvestmentCategory
+from app.schemas.base import RequestBase
 
 
 # Minimal group info embedded in investment responses.
@@ -16,7 +17,7 @@ class InvestmentGroupInfo(BaseModel):
 
 
 # Body for POST /investments. Creates a new investment.
-class InvestmentCreate(BaseModel):
+class InvestmentCreate(RequestBase):
     name: str = Field(description="Display name of the investment.", max_length=255)
     category: InvestmentCategory = Field(description="Investment type (e.g. cedears, fci).")
     base_currency: str = Field(description="Reporting currency (ISO 4217 code).", max_length=10)
@@ -26,7 +27,7 @@ class InvestmentCreate(BaseModel):
 
 
 # Body for PUT /investments/{id}. Partial update; only provided fields are updated.
-class InvestmentUpdate(BaseModel):
+class InvestmentUpdate(RequestBase):
     name: str | None = Field(default=None, description="Display name.", max_length=255)
     category: InvestmentCategory | None = Field(default=None, description="Investment type.")
     base_currency: str | None = Field(default=None, description="Reporting currency (ISO 4217 code).", max_length=10)
@@ -36,7 +37,7 @@ class InvestmentUpdate(BaseModel):
 
 
 # Body for PUT /investments/{id}/groups. Replaces group membership for this investment.
-class InvestmentSetGroupsBody(BaseModel):
+class InvestmentSetGroupsBody(RequestBase):
     group_ids: list[int] = Field(
         description="Group ids to assign to this investment. Replaces existing membership.",
     )

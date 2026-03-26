@@ -196,6 +196,7 @@ async def upsert_snapshot(
     *,
     snapshot_date: date,
     value: Decimal,
+    quantity: Decimal | None = None,
     currency: Currency,
     notes: str | None = None,
 ) -> InvestmentSnapshot:
@@ -203,6 +204,7 @@ async def upsert_snapshot(
     existing = await snapshot_repository.get_by_investment_and_date(session, investment_id, snapshot_date)
     if existing is not None:
         existing.value = value
+        existing.quantity = quantity
         existing.currency = currency
         existing.notes = notes
         await snapshot_repository.save(session, existing)
@@ -212,6 +214,7 @@ async def upsert_snapshot(
         investment_id=investment_id,
         date=snapshot_date,
         value=value,
+        quantity=quantity,
         currency=currency,
         notes=notes,
     )
@@ -250,6 +253,7 @@ async def create_transaction(
     *,
     transaction_date: date,
     amount: Decimal,
+    quantity: Decimal | None = None,
     currency: Currency,
     tx_type: TransactionType,
     notes: str | None = None,
@@ -259,6 +263,7 @@ async def create_transaction(
         investment_id=investment_id,
         date=transaction_date,
         amount=amount,
+        quantity=quantity,
         currency=currency,
         type=tx_type,
         notes=notes,
@@ -275,6 +280,7 @@ async def update_transaction(
     *,
     transaction_date: date | None = None,
     amount: Decimal | None = None,
+    quantity: Decimal | None = None,
     currency: Currency | None = None,
     tx_type: TransactionType | None = None,
     notes: str | None = None,
@@ -284,6 +290,8 @@ async def update_transaction(
         tx.date = transaction_date
     if amount is not None:
         tx.amount = amount
+    if quantity is not None:
+        tx.quantity = quantity
     if currency is not None:
         tx.currency = currency
     if tx_type is not None:

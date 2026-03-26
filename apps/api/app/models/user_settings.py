@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Column, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -20,4 +20,4 @@ class UserSettings(SQLModel, table=True):
         ),
         description="JSON config (e.g. display_currencies, default_currency).",
     )
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

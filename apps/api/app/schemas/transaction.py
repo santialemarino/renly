@@ -8,21 +8,28 @@ from pydantic import BaseModel, Field
 
 from app.models.investment import Currency
 from app.models.transaction import TransactionType
+from app.schemas.base import RequestBase
 
 
 # Body for POST /investments/{id}/transactions.
-class TransactionCreate(BaseModel):
+class TransactionCreate(RequestBase):
     date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(description="Amount (positive).", max_digits=18, decimal_places=2)
+    quantity: Decimal | None = Field(
+        default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6
+    )
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(description="Transaction kind (buy, sell, deposit, withdrawal).")
     notes: str | None = Field(default=None, description="Optional notes.")
 
 
 # Body for PUT /investments/{id}/transactions/{tx_id}. Partial update; only updates provided fields.
-class TransactionUpdate(BaseModel):
+class TransactionUpdate(RequestBase):
     date: date_type | None = Field(default=None, description="Transaction date.")
     amount: Decimal | None = Field(default=None, description="Amount (positive).", max_digits=18, decimal_places=2)
+    quantity: Decimal | None = Field(
+        default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6
+    )
     currency: Currency | None = Field(default=None, description="Amount currency.")
     type: TransactionType | None = Field(default=None, description="Transaction kind.")
     notes: str | None = Field(default=None, description="Optional notes.")
@@ -34,6 +41,7 @@ class TransactionResponse(BaseModel):
     investment_id: int = Field(description="Parent investment id.")
     date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(description="Amount.")
+    quantity: Decimal | None = Field(default=None, description="Number of shares/units.")
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(description="Transaction kind.")
     notes: str | None = Field(default=None, description="Optional notes.")

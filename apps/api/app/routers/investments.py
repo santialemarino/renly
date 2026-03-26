@@ -159,6 +159,7 @@ async def create_snapshot(
         current_user,
         snapshot_date=body.date,
         value=body.value,
+        quantity=body.quantity,
         currency=body.currency,
         notes=body.notes,
     )
@@ -215,6 +216,7 @@ async def create_transaction(
         current_user,
         transaction_date=body.date,
         amount=body.amount,
+        quantity=body.quantity,
         currency=body.currency,
         tx_type=body.type,
         notes=body.notes,

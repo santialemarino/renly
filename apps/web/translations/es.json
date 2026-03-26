@@ -416,10 +416,15 @@
         "label": "Valor",
         "placeholder": "0.00"
       },
+      "quantity": {
+        "label": "Cantidad (acciones/unidades)",
+        "placeholder": "0"
+      },
       "transaction": {
         "include": "Incluir una transacción para este período",
         "initialHint": "Este es el primer snapshot de esta inversión.\nConsiderá agregar una transacción de depósito o compra para registrar tu capital inicial invertido.",
         "amount": "Monto",
+        "quantity": "Acciones/unidades",
         "type": "Tipo",
         "types": {
           "deposit": "Depósito",
