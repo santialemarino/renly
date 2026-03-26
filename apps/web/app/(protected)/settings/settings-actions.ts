@@ -5,17 +5,31 @@ import { revalidatePath } from 'next/cache';
 import type { SettingsData } from '@/lib/api/settings';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
-export async function saveSettings(
-  primaryCurrency: string,
-  secondaryCurrency: string | null,
-  periodPresets?: string[] | null,
-): Promise<SettingsData> {
+interface SaveSettingsParams {
+  primaryCurrency: string;
+  secondaryCurrency: string | null;
+  preferredCurrencies?: string[] | null;
+  periodPresets?: string[] | null;
+  maxGroups?: number | null;
+  groupWarningPct?: number | null;
+}
+
+export async function saveSettings(params: SaveSettingsParams): Promise<SettingsData> {
   const body: Record<string, unknown> = {
-    primary_currency: primaryCurrency,
-    secondary_currency: secondaryCurrency,
+    primary_currency: params.primaryCurrency,
+    secondary_currency: params.secondaryCurrency,
   };
-  if (periodPresets !== undefined) {
-    body.period_presets = periodPresets;
+  if (params.preferredCurrencies !== undefined) {
+    body.preferred_currencies = params.preferredCurrencies;
+  }
+  if (params.periodPresets !== undefined) {
+    body.period_presets = params.periodPresets;
+  }
+  if (params.maxGroups !== undefined) {
+    body.max_groups = params.maxGroups;
+  }
+  if (params.groupWarningPct !== undefined) {
+    body.group_warning_pct = params.groupWarningPct;
   }
   const res = await authenticatedFetch('/settings', {
     method: 'PUT',
@@ -26,12 +40,14 @@ export async function saveSettings(
 
   // Invalidate the client-side router cache so all pages (dashboard, layout, etc.)
   // re-fetch settings on next navigation instead of serving stale data.
-  // Route groups like (protected) are not real URL paths, so revalidate from root.
   revalidatePath('/', 'layout');
 
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,
+    preferredCurrencies: raw.preferred_currencies ?? null,
     periodPresets: raw.period_presets ?? null,
+    maxGroups: raw.max_groups ?? null,
+    groupWarningPct: raw.group_warning_pct ?? null,
   };
 }

@@ -4,6 +4,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InvestmentsDataTable } from '@/app/(protected)/investments/_components/investments-data-table';
 import { InvestmentsToolbar } from '@/app/(protected)/investments/_components/investments-toolbar';
 import { getGroups, getInvestments } from '@/lib/api/investments';
+import { getSettings } from '@/lib/api/settings';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -31,7 +32,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
     ? (Array.isArray(groupIdsRaw) ? groupIdsRaw : [groupIdsRaw]).map(Number).filter(Boolean)
     : undefined;
 
-  const [data, groups] = await Promise.all([
+  const [data, groups, settings] = await Promise.all([
     getInvestments({
       search: params.search,
       groupIds,
@@ -42,13 +43,16 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
     getGroups(),
+    getSettings().catch(() => null),
   ]);
+
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <InvestmentsToolbar groups={groups} />
-      <InvestmentsDataTable data={data} groups={groups} />
+      <InvestmentsToolbar groups={groups} preferredCurrencies={preferredCurrencies} />
+      <InvestmentsDataTable data={data} groups={groups} preferredCurrencies={preferredCurrencies} />
     </div>
   );
 }

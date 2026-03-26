@@ -49,7 +49,7 @@
       "usdVariants": {
         "groupLabel": "US Dollar variants",
         "arsGroupLabel": "Argentine Peso",
-        "preferredGroupLabel": "Major currencies",
+        "preferredGroupLabel": "Preferred",
         "otherGroupLabel": "Other currencies",
         "oficial": "Dollar (Official)",
         "mep": "Dollar (MEP)",
@@ -453,13 +453,33 @@
       },
       "searchPlaceholder": "Search currencies...",
       "noResults": "No currencies found.",
+      "preferredCurrencies": {
+        "label": "Preferred currencies",
+        "hint": "Shown in a separate group at the top of the currency selector.",
+        "placeholder": "Search currencies...",
+        "empty": "No currencies found.",
+        "format": "Comma-separated ISO codes, e.g. BRL, EUR, GBP.",
+        "emptyDefault": "Leave empty to use the defaults from the environment configuration."
+      },
+      "sectionCurrencies": "Currencies",
+      "sectionDashboard": "Dashboard & Limits",
       "periodPresets": {
-        "label": "Dashboard period presets",
-        "hint": "Configure the quick-access period buttons on the dashboard.",
+        "label": "Period presets",
+        "hint": "Quick-access period buttons on the dashboard.",
         "format": "Format: 1M, 3M, 6M, 1Y, YTD. \"All\" is always added.",
         "invalidFormat": "Invalid format. Use NM (months), NY (years) or YTD.",
         "emptyDefault": "Leave all fields empty to use the default presets.",
         "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
+      },
+      "maxGroups": {
+        "label": "Max groups",
+        "hint": "Maximum number of investment groups allowed.",
+        "default": "Defaults to 50 if left empty."
+      },
+      "groupWarningPct": {
+        "label": "Warning threshold",
+        "hint": "Show a warning when this percentage of max groups is reached.",
+        "default": "Defaults to 80% if left empty. Leave empty to disable the warning."
       },
       "cta": {
         "label": "Save",

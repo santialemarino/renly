@@ -12,18 +12,19 @@ import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 
-// Parsed from env var. Null when unset (no warning shown).
-const GROUP_LIMIT_WARNING_PCT = process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT
-  ? Number(process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT)
-  : null;
-
 interface GroupsToolbarProps {
   investments: { id: number; name: string }[];
   groupCount: number;
   maxGroups: number;
+  groupWarningPct: number | null;
 }
 
-export function GroupsToolbar({ investments, groupCount, maxGroups }: GroupsToolbarProps) {
+export function GroupsToolbar({
+  investments,
+  groupCount,
+  maxGroups,
+  groupWarningPct,
+}: GroupsToolbarProps) {
   const t = useTranslations('groups');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -34,8 +35,7 @@ export function GroupsToolbar({ investments, groupCount, maxGroups }: GroupsTool
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
-  const nearLimit =
-    GROUP_LIMIT_WARNING_PCT !== null && groupCount >= maxGroups * (GROUP_LIMIT_WARNING_PCT / 100);
+  const nearLimit = groupWarningPct !== null && groupCount >= maxGroups * (groupWarningPct / 100);
   const atLimit = groupCount >= maxGroups;
 
   function navigate(overrides: Record<string, string | null>) {

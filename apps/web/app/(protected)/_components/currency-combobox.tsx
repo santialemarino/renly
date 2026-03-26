@@ -29,23 +29,29 @@ const CLEAR_ANIMATION_MS = 100;
 // Meta/test codes that are not real currencies.
 const EXCLUDED_CODES = new Set(['XXX', 'XTS']);
 
-// Preferred currencies shown in their own group. Comma-separated env var, e.g. "EUR,BRL,GBP".
-const PREFERRED_CODES = new Set(
-  (process.env.NEXT_PUBLIC_PREFERRED_CURRENCIES ?? '').split(',').filter(Boolean),
-);
+// Default preferred currencies from env var. Comma-separated, e.g. "BRL,EUR,GBP".
+const ENV_PREFERRED_CODES = (process.env.NEXT_PUBLIC_PREFERRED_CURRENCIES ?? '')
+  .split(',')
+  .filter(Boolean);
 
-// Grouped currency lists — USD and ARS are handled separately.
+// Full ISO list — USD and ARS handled separately in grouped sections.
 const ALL_ISO = cc.data
   .filter((c) => !EXCLUDED_CODES.has(c.code) && c.code !== 'USD')
   .map((c) => ({ code: c.code, name: c.currency }));
 
 const ARS_ENTRY = ALL_ISO.find((c) => c.code === 'ARS')!;
-const PREFERRED_CURRENCIES = ALL_ISO.filter((c) => PREFERRED_CODES.has(c.code)).sort((a, b) =>
-  a.code.localeCompare(b.code),
-);
-const OTHER_CURRENCIES = ALL_ISO.filter(
-  (c) => c.code !== 'ARS' && !PREFERRED_CODES.has(c.code),
-).sort((a, b) => a.code.localeCompare(b.code));
+
+// Splits the currency list into preferred and other based on the given codes.
+function splitByPreferred(preferredCodes: string[]) {
+  const preferredSet = new Set(preferredCodes);
+  const preferred = ALL_ISO.filter((c) => preferredSet.has(c.code)).sort((a, b) =>
+    a.code.localeCompare(b.code),
+  );
+  const other = ALL_ISO.filter((c) => c.code !== 'ARS' && !preferredSet.has(c.code)).sort((a, b) =>
+    a.code.localeCompare(b.code),
+  );
+  return { preferred, other };
+}
 
 function getCurrencyName(code: string): string {
   return cc.code(code)?.currency ?? code;
@@ -94,6 +100,7 @@ interface CurrencyComboboxProps {
   noResults: string;
   surface?: boolean;
   compact?: boolean;
+  preferredCurrencies?: string[];
   onChange: (code: string) => void;
   onClear?: () => void;
   'aria-invalid'?: boolean | 'true' | 'false';
@@ -106,6 +113,7 @@ export function CurrencyCombobox({
   noResults,
   surface = false,
   compact = false,
+  preferredCurrencies,
   onChange,
   onClear,
   'aria-invalid': ariaInvalid,
@@ -119,6 +127,11 @@ export function CurrencyCombobox({
   const typeaheadBuffer = useRef('');
   const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = search.toLowerCase();
+
+  // Split currencies into preferred and other groups. Prop overrides env var.
+  const { preferred: PREFERRED_CURRENCIES, other: OTHER_CURRENCIES } = splitByPreferred(
+    preferredCurrencies ?? ENV_PREFERRED_CODES,
+  );
 
   // USD variants group — filtered by search and exclusions.
   const filteredVariants = USD_VARIANTS.filter(

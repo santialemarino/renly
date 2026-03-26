@@ -15,7 +15,13 @@ import type { InvestmentGroup } from '@/lib/api/investments';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
-export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
+export function InvestmentsToolbar({
+  groups,
+  preferredCurrencies,
+}: {
+  groups: InvestmentGroup[];
+  preferredCurrencies?: string[];
+}) {
   const t = useTranslations('investments');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -124,6 +130,7 @@ export function InvestmentsToolbar({ groups }: { groups: InvestmentGroup[] }) {
           open={createOpen}
           onOpenChange={setCreateOpen}
           groups={groups}
+          preferredCurrencies={preferredCurrencies}
           onSuccess={() => router.refresh()}
         />
       </div>

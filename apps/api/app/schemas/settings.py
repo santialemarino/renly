@@ -3,7 +3,7 @@
 from pydantic import BaseModel, Field
 
 
-# Response for GET /settings. Current user's display currencies and dashboard period presets.
+# Response for GET /settings. User display preferences and app configuration.
 class SettingsResponse(BaseModel):
     primary_currency: str | None = Field(
         default=None,
@@ -13,9 +13,21 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Secondary display currency; shown second in the sidebar switch.",
     )
+    preferred_currencies: list[str] | None = Field(
+        default=None,
+        description="Preferred currencies shown in their own group in the currency combobox.",
+    )
     period_presets: list[str] | None = Field(
         default=None,
         description="Dashboard period presets (e.g. ['1M', '3M', '6M', 'YTD']). Null means use env defaults.",
+    )
+    max_groups: int | None = Field(
+        default=None,
+        description="Maximum number of investment groups (soft limit). Null means use env default.",
+    )
+    group_warning_pct: int | None = Field(
+        default=None,
+        description="Percentage of max groups at which the approaching-limit warning appears.",
     )
 
 
@@ -29,7 +41,19 @@ class SettingsUpdate(BaseModel):
         default=None,
         description="Secondary display currency.",
     )
+    preferred_currencies: list[str] | None = Field(
+        default=None,
+        description="Preferred currencies for combobox grouping.",
+    )
     period_presets: list[str] | None = Field(
         default=None,
         description="Dashboard period presets (up to 4 codes like '3M', '1Y', 'YTD').",
+    )
+    max_groups: int | None = Field(
+        default=None,
+        description="Maximum number of investment groups.",
+    )
+    group_warning_pct: int | None = Field(
+        default=None,
+        description="Percentage of max groups for approaching-limit warning.",
     )

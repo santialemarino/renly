@@ -184,15 +184,15 @@ USD appears as three virtual currency codes, each mapped to a different exchange
 
 ## Multi-currency pivot conversion
 
-Beyond ARS/USD, the app supports **EUR**, **GBP**, and **BRL** via Frankfurter (frankfurter.dev, free ECB data). All rates are stored against USD; any pair converts through USD as pivot.
+Beyond ARS/USD, the app supports **BRL**, **EUR**, and **GBP** via Frankfurter (frankfurter.dev, free ECB data). All rates are stored against USD; any pair converts through USD as pivot.
 
 **Rate sources:**
 
 - **DolarApi** → USD/ARS (oficial, MEP, blue) — fetched on startup + every 6h.
-- **Frankfurter** → USD/EUR, USD/GBP, USD/BRL — fetched on the same schedule.
+- **Frankfurter** → USD/BRL, USD/EUR, USD/GBP — fetched on the same schedule.
 
 **Pivot example:** BRL → ARS = BRL → USD (divide by USD/BRL rate) → ARS (multiply by USD/ARS rate).
 
 **Rate map:** `get_rate_map(session, target_currency)` builds a `{base_currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The target currency determines which ARS rate pair to use (oficial/MEP/blue based on the virtual code).
 
-**Combobox:** ARS, EUR, BRL, GBP are pinned at the top of the "Other currencies" group for quick access. USD variants remain in their own group above.
+**Combobox:** ARS, BRL, EUR, GBP are pinned at the top of the "Other currencies" group for quick access. USD variants remain in their own group above.
