@@ -258,6 +258,7 @@
       "groups": "Groups",
       "category": "Category",
       "currency": "Currency",
+      "ticker": "Ticker",
       "broker": "Broker",
       "actions": "Actions",
       "empty": "No investments found.",
@@ -288,6 +289,10 @@
         "placeholder": "Select a currency",
         "searchPlaceholder": "Search currencies...",
         "noResults": "No currencies found."
+      },
+      "ticker": {
+        "label": "Ticker",
+        "placeholder": "Enter the ticker (e.g. AAPL, BTC)"
       },
       "broker": {
         "label": "Broker",

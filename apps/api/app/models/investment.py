@@ -36,6 +36,7 @@ class Investment(SQLModel, table=True):
         sa_column=Column(SAEnum(InvestmentCategory, name="investment_category"), nullable=False)
     )
     base_currency: str = Field(max_length=10, description="Reporting currency (ISO 4217 code).")
+    ticker: str | None = Field(default=None, max_length=20, description="Symbol for auto-price-fetching (e.g. AAPL).")
     broker: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None)
     is_active: bool = Field(default=True, description="Whether to include in portfolio.")

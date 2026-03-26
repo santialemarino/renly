@@ -9,6 +9,7 @@ interface InvestmentRaw {
   name: string;
   category: string;
   base_currency: string;
+  ticker: string | null;
   broker: string | null;
   notes: string | null;
   is_active: boolean;
@@ -42,6 +43,7 @@ export interface Investment {
   name: string;
   category: string;
   baseCurrency: string;
+  ticker: string | null;
   broker: string | null;
   notes: string | null;
   isActive: boolean;
@@ -85,6 +87,7 @@ function mapInvestment(raw: InvestmentRaw): Investment {
     name: raw.name,
     category: raw.category,
     baseCurrency: raw.base_currency,
+    ticker: raw.ticker,
     broker: raw.broker,
     notes: raw.notes,
     isActive: raw.is_active,

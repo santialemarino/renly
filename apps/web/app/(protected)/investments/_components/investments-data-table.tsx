@@ -277,6 +277,7 @@ export function InvestmentsDataTable({
                   <SortIcon column="base_currency" sortBy={sortBy} sortOrder={sortOrder} />
                 </button>
               </TableHead>
+              <TableHead>{t('table.ticker')}</TableHead>
               <TableHead>
                 <button
                   type="button"
@@ -294,7 +295,7 @@ export function InvestmentsDataTable({
             {items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-10 rounded-sm text-center text-muted-foreground"
                 >
                   {t('table.empty')}
@@ -327,6 +328,9 @@ export function InvestmentsDataTable({
                   </TableCell>
                   <TableCell>{tCommon(`categories.${investment.category}`)}</TableCell>
                   <TableCell>{investment.baseCurrency}</TableCell>
+                  <TableCell className="text-muted-foreground font-mono">
+                    {investment.ticker ?? '—'}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {investment.broker ?? '—'}
                   </TableCell>

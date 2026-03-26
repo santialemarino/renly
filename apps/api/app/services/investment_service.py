@@ -28,6 +28,7 @@ def _build_response(
         name=inv.name,
         category=inv.category,
         base_currency=inv.base_currency,
+        ticker=inv.ticker,
         broker=inv.broker,
         notes=inv.notes,
         is_active=inv.is_active,
@@ -92,6 +93,7 @@ async def create_investment(
     name: str,
     category: InvestmentCategory,
     base_currency: str,
+    ticker: str | None = None,
     broker: str | None = None,
     notes: str | None = None,
 ) -> Investment:
@@ -100,6 +102,7 @@ async def create_investment(
         name=name,
         category=category,
         base_currency=base_currency,
+        ticker=ticker,
         broker=broker,
         notes=notes,
     )
@@ -115,6 +118,7 @@ async def update_investment(
     name: str | None = None,
     category: InvestmentCategory | None = None,
     base_currency: str | None = None,
+    ticker: str | None = None,
     broker: str | None = None,
     notes: str | None = None,
     is_active: bool | None = None,
@@ -126,6 +130,8 @@ async def update_investment(
         inv.category = category
     if base_currency is not None:
         inv.base_currency = base_currency
+    if ticker is not None:
+        inv.ticker = ticker
     if broker is not None:
         inv.broker = broker
     if notes is not None:
