@@ -120,13 +120,29 @@
   --text-paragraph-sm-medium--line-height: 1.5;
   --text-paragraph-sm-medium--font-weight: 500;
 
-  --text-paragraph-mini: 0.75rem; /* 12px */
+  --text-paragraph-xs: 0.75rem; /* 12px */
+  --text-paragraph-xs--line-height: 1.5;
+  --text-paragraph-xs--font-weight: 400;
+
+  --text-paragraph-xs-medium: 0.75rem; /* 12px */
+  --text-paragraph-xs-medium--line-height: 1.5;
+  --text-paragraph-xs-medium--font-weight: 500;
+
+  --text-paragraph-xs-semibold: 0.75rem; /* 12px */
+  --text-paragraph-xs-semibold--line-height: 1.5;
+  --text-paragraph-xs-semibold--font-weight: 600;
+
+  --text-paragraph-mini: 0.625rem; /* 10px */
   --text-paragraph-mini--line-height: 1.5;
   --text-paragraph-mini--font-weight: 400;
 
-  --text-paragraph-mini-medium: 0.75rem; /* 12px */
+  --text-paragraph-mini-medium: 0.625rem; /* 10px */
   --text-paragraph-mini-medium--line-height: 1.5;
   --text-paragraph-mini-medium--font-weight: 500;
+
+  --text-paragraph-mini-semibold: 0.625rem; /* 10px */
+  --text-paragraph-mini-semibold--line-height: 1.5;
+  --text-paragraph-mini-semibold--font-weight: 600;
 
   --text-paragraph-semibold: 1rem; /* 16px */
   --text-paragraph-semibold--line-height: 1.5;
@@ -135,8 +151,4 @@
   --text-paragraph-sm-semibold: 0.875rem; /* 14px */
   --text-paragraph-sm-semibold--line-height: 1.5;
   --text-paragraph-sm-semibold--font-weight: 600;
-
-  --text-paragraph-mini-semibold: 0.75rem; /* 12px */
-  --text-paragraph-mini-semibold--line-height: 1.5;
-  --text-paragraph-mini-semibold--font-weight: 600;
 }

@@ -310,7 +310,7 @@ export function InvestmentsDataTable({
                         {investment.groups.map((g) => (
                           <span
                             key={g.id}
-                            className="px-1.5 py-0.5 rounded text-paragraph-mini bg-muted text-muted-foreground"
+                            className="px-1.5 py-0.5 rounded text-paragraph-xs bg-muted text-muted-foreground"
                           >
                             {g.name}
                           </span>

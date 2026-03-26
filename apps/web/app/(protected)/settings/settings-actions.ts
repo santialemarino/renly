@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 import type { SettingsData } from '@/lib/api/settings';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
@@ -21,6 +23,12 @@ export async function saveSettings(
   });
   if (!res.ok) throw new Error('Failed to save settings');
   const raw = await res.json();
+
+  // Invalidate the client-side router cache so all pages (dashboard, layout, etc.)
+  // re-fetch settings on next navigation instead of serving stale data.
+  // Route groups like (protected) are not real URL paths, so revalidate from root.
+  revalidatePath('/', 'layout');
+
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,

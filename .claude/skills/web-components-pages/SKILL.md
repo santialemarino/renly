@@ -38,7 +38,7 @@ Keep all feature-specific modules in the same folder as the page that uses them:
 
 **Outside the component (file-level order):**
 
-1. **Consts** — Module-level constants at the top of the file. **Every magic number must be a named const** — no raw literals in logic. Common cases: timeouts (`CLEAR_ANIMATION_MS = 100`), cookie durations (`COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365`), scoring values, size thresholds, etc.
+1. **Consts** — Module-level constants at the top of the file. **Every magic number must be a named const** — no raw literals in logic. Common cases: timeouts (`CLEAR_ANIMATION_MS = 100`), cookie durations (`COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365`), scoring values, size thresholds, etc. **Single-file constants** (only used where they're defined) stay in-file. **Multi-file constants** (imported by 2+ files) go in `lib/constants/<topic>.ts` — one file per topic (e.g. `animations.ts`, `currency.ts`, `charts.ts`).
 2. **Metadata** — For pages only: `export const metadata = { ... }` or `export async function generateMetadata() { ... }`.
 3. **Props type** — Always place it immediately above the component. Define it for every component that receives props/params; omit only when the component has no props.
 
@@ -85,9 +85,12 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
 | `text-paragraph-sm` | 14px | 400 |
 | `text-paragraph-sm-medium` | 14px | 500 |
 | `text-paragraph-sm-semibold` | 14px | 600 |
-| `text-paragraph-mini` | 12px | 400 |
-| `text-paragraph-mini-medium` | 12px | 500 |
-| `text-paragraph-mini-semibold` | 12px | 600 |
+| `text-paragraph-xs` | 12px | 400 |
+| `text-paragraph-xs-medium` | 12px | 500 |
+| `text-paragraph-xs-semibold` | 12px | 600 |
+| `text-paragraph-mini` | 10px | 400 |
+| `text-paragraph-mini-medium` | 10px | 500 |
+| `text-paragraph-mini-semibold` | 10px | 600 |
 
 **Heading scale** (all weight 600, line-height included):
 `text-heading-1` (48px) → `text-heading-2` (32px) → `text-heading-3` (24px) → `text-heading-4` (20px) → `text-heading-5` (18px)

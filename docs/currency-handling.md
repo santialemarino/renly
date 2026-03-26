@@ -7,12 +7,12 @@ The global currency switcher in the sidebar offers three options (configured in 
 | Option                            | What the user sees                                                                                                                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Primary currency** (e.g. ARS)   | All values converted to ARS                                                                                                                                                                |
-| **Secondary currency** (e.g. USD) | All values converted to USD                                                                                                                                                                |
+| **Secondary currency** (e.g. USD) | All values converted to USD. For USD, three variants are available: USD (oficial), USD MEP, USD Blue — each uses a different exchange rate.                                                |
 | **Original (X)**                  | Per-investment pages show each investment in its `base_currency`. The dashboard falls back to the primary currency (since aggregated metrics can't sum mixed currencies) and shows a hint. |
 
 ### Supported conversion pairs
 
-Only **ARS ↔ USD** conversion is currently supported (via DolarApi — oficial, MEP, blue rates). Other ISO 4217 currencies can be configured in Settings but will display a warning icon and toast. Values fall back to original currency when conversion is not available.
+Only **ARS ↔ USD** conversion is currently supported (via DolarApi — oficial, MEP, blue rates). USD appears as three selectable variants in the currency combobox: **USD (Official)** uses the oficial rate, **USD (MEP)** uses the MEP/bolsa rate, and **USD (Blue)** uses the blue/parallel rate. Other ISO 4217 currencies can be configured in Settings but will display a warning icon and toast. Values fall back to original currency when conversion is not available.
 
 ## Architecture
 
@@ -46,16 +46,17 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 All conversion happens at query time in the service layer. Stored values are never modified.
 
 ```
-Service function receives currency param
-  → _get_conversion_rate(session) fetches latest MEP rate (fallback: oficial)
+Service function receives currency param (e.g. "USD", "USD_MEP", "USD_BLUE")
+  → mh.get_conversion_rate(session, currency) resolves the right USD/ARS pair
   → mh.convert_value(value, from_currency, to_currency, rate)
      → USD → ARS: value × rate
      → ARS → USD: value ÷ rate
      → Same currency or unsupported pair: return unchanged
 ```
 
-- **Helpers**: `services/metrics_helpers.py` — `convert_value()`.
-- **Rate resolution**: `_get_conversion_rate()` in each service — prefers MEP, falls back to oficial.
+- **Helpers**: `services/metrics_helpers.py` — `convert_value()`, `get_conversion_rate()`.
+- **Domain**: `domain/currency.py` — `parse_currency()` maps virtual codes to `(base_currency, ExchangeRatePair)`.
+- **Rate resolution**: `get_conversion_rate()` is centralized in `metrics_helpers.py`. It parses the currency code to determine which rate pair to use (USD → oficial, USD_MEP → MEP, USD_BLUE → blue), with fallback to oficial if the preferred pair is unavailable.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
 
 ### 4. Original values for editing
@@ -89,7 +90,7 @@ The Settings page (`/settings`) lets the user configure primary and secondary cu
 - **Primary currency**: required. The default display currency (shown first in the switcher, used as fallback when "Original" is selected on the dashboard).
 - **Secondary currency**: optional. Shown as the second option in the sidebar switcher.
 
-Both fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. The backend stores them in `user_settings` (fields: `primary_currency`, `secondary_currency`) via `PUT /settings`.
+Both fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. USD appears as three variants (Official, MEP, Blue) in a separate group at the top of the combobox, each with a badge tag. The backend stores the selected code (e.g. `USD`, `USD_MEP`, `USD_BLUE`) in `user_settings` (fields: `primary_currency`, `secondary_currency`) via `PUT /settings`.
 
 **How the switcher options are built** (in `(protected)/layout.tsx`):
 
@@ -118,7 +119,7 @@ Only USD and ARS have exchange rate support. When a user selects any other curre
 
 - When conversion is not possible, all monetary values fall back to their `base_currency` (same as "Original" mode). No error — the page renders normally, just without conversion.
 
-**Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'ARS']`.
+**Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'USD_MEP', 'USD_BLUE', 'ARS']`.
 
 ### 8. Unconvertible investments in metrics
 
@@ -167,17 +168,19 @@ exchange_rates.rate   -- e.g. 1250.50 (1 USD = 1250.50 ARS)
 exchange_rates.date   -- rate date
 ```
 
-## Pending: dollar type selection
+## USD variant system
 
-The app stores three USD/ARS rates (oficial, MEP, blue) but currently treats "USD" as a single currency — it always picks MEP (fallback: oficial) for conversion. The user cannot choose which dollar type to use.
+USD appears as three virtual currency codes, each mapped to a different exchange rate:
 
-A future enhancement should:
+| Code       | Label             | Rate pair         |
+| ---------- | ----------------- | ----------------- |
+| `USD`      | Dollar (Official) | `USD_ARS_OFICIAL` |
+| `USD_MEP`  | Dollar (MEP)      | `USD_ARS_MEP`     |
+| `USD_BLUE` | Dollar (Blue)     | `USD_ARS_BLUE`    |
 
-1. Add a "Preferred dollar rate" setting in Settings (MEP / Oficial / Blue).
-2. Pass the preference to `_get_conversion_rate()` so it picks the right rate.
-3. Show the selected rate type somewhere in the UI (e.g. next to values or in the switcher tooltip).
+**Backend:** `domain/currency.py` defines `parse_currency()` which maps a virtual code to `(base_currency, ExchangeRatePair)`. `metrics_helpers.get_conversion_rate()` uses this to pick the right rate. `can_convert()` and `convert_value()` resolve variants to base `"USD"` via `base_currency()`.
 
-Until then, all ARS ↔ USD conversions use the MEP rate.
+**Frontend:** Variants are defined in `lib/constants/currency.ts` (`USD_VARIANTS`). The `CurrencyCombobox` shows them as a grouped section at the top with badge tags. The sidebar `PillToggleGroup` shows short labels (USD, USD M, USD B). `lib/utils/currency.ts` provides `isUsdVariant()`, `baseCurrency()`, and `isCurrencySupported()`.
 
 ## Future: additional rate sources
 

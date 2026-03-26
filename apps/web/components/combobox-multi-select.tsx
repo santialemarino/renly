@@ -74,7 +74,7 @@ export function ComboboxMultiSelect({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
                       transition={{ duration: ANIMATION_FAST }}
-                      className="inline-flex items-center gap-x-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-paragraph-mini"
+                      className="inline-flex items-center gap-x-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-paragraph-xs"
                     >
                       {itemMap.get(id) ?? `#${id}`}
                       <button

@@ -7,11 +7,9 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import ExchangeRateUnavailableError, NotFoundError
-from app.models.exchange_rate import ExchangeRatePair
 from app.models.investment import Investment
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
-from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.group_repository import group_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.metrics_repository import metrics_repository
@@ -538,20 +536,9 @@ async def get_investments_summary(
     return InvestmentsSummaryResponse(items=items, skipped_investments=skipped)
 
 
-# Returns the latest USD/ARS MEP rate. Falls back to oficial if MEP unavailable.
-async def _get_conversion_rate(session: AsyncSession) -> Decimal | None:
-    latest_map = await exchange_rate_repository.get_latest_all(session)
-    mep = latest_map.get(ExchangeRatePair.USD_ARS_MEP)
-    if mep:
-        return mep.rate
-    oficial = latest_map.get(ExchangeRatePair.USD_ARS_OFICIAL)
-    if oficial:
-        return oficial.rate
-    return None
-
-
-# Returns the conversion rate. Raises ExchangeRateUnavailableError if conversion is needed
-# but no rate is available. Returns None when currency is None (no conversion requested).
+# Returns the conversion rate for the requested currency.
+# Raises ExchangeRateUnavailableError if conversion is needed but no rate is available.
+# Returns None when currency is None (no conversion requested).
 async def _get_required_conversion_rate(
     session: AsyncSession,
     currency: str | None,
@@ -559,10 +546,11 @@ async def _get_required_conversion_rate(
 ) -> Decimal | None:
     if not currency:
         return None
-    needs_conversion = any(inv.base_currency != currency for inv in investments)
+    target_base = mh.base_currency(currency)
+    needs_conversion = any(inv.base_currency != target_base for inv in investments)
     if not needs_conversion:
         return None
-    rate = await _get_conversion_rate(session)
+    rate = await mh.get_conversion_rate(session, currency)
     if rate is None:
         raise ExchangeRateUnavailableError(currency)
     return rate
