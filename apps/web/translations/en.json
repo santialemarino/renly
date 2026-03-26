@@ -45,7 +45,19 @@
     "currency": {
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
       "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
-      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon."
+      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
+      "usdVariants": {
+        "groupLabel": "US Dollar variants",
+        "otherGroupLabel": "Other currencies",
+        "oficial": "Dollar (Official)",
+        "mep": "Dollar (MEP)",
+        "blue": "Dollar (Blue)",
+        "tag": {
+          "oficial": "Official",
+          "mep": "MEP",
+          "blue": "Blue"
+        }
+      }
     }
   },
   "login": {

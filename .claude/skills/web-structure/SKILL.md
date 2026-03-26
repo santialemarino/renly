@@ -21,7 +21,8 @@ description: Frontend app structure and where to create files (pages, components
 - **Server mutations:** `actions.ts` colocated with the page (`'use server'`). Called from client components. Feature-specific; do not put in `lib/`.
 - **Used on multiple pages (this app only):** Put in the app's `components/` folder.
 - **Reusable across apps (design system):** Put in `packages/ui/src/components`, add to the package's `index.ts`, and import from `@repo/ui/components` in the web app.
-- **Routes and constants:** `config/routes.ts` for `ROUTES`, `AUTH_ROUTES`, `LOGIN_ROUTE`. Form validation constants (e.g. max length) can live in `lib/constants/`.
+- **Routes:** `config/routes.ts` for `ROUTES`, `AUTH_ROUTES`, `LOGIN_ROUTE`.
+- **Constants:** `lib/constants/<topic>.ts` — one file per topic (e.g. `animations.ts`, `currency.ts`, `charts.ts`). Only for constants imported by 2+ files. Single-file constants stay in the file that uses them.
 
 ## Directory layout (apps/web/)
 

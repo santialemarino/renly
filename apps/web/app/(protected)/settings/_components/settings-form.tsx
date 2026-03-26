@@ -215,7 +215,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           errors.periodPreset2 ||
           errors.periodPreset3 ||
           errors.periodPreset4) && (
-          <p className="text-paragraph-mini text-destructive">
+          <p className="text-paragraph-xs text-destructive">
             {t('form.periodPresets.invalidFormat')}
           </p>
         )}

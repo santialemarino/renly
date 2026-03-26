@@ -142,7 +142,7 @@ function FormMessage({ className, children }: { className?: string; children?: R
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: ANIMATION_DEFAULT }}
-          className={cn('overflow-hidden text-destructive text-paragraph-mini', className)}
+          className={cn('overflow-hidden text-destructive text-paragraph-xs', className)}
         >
           {body}
         </motion.p>

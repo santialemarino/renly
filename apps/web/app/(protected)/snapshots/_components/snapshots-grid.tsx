@@ -115,7 +115,7 @@ function CellContent({ cell }: CellContentProps) {
 
       {cell.periodReturnPct !== null && (
         <span
-          className={`flex items-center gap-x-0.5 text-paragraph-mini tabular-nums ${
+          className={`flex items-center gap-x-0.5 text-paragraph-xs tabular-nums ${
             cell.periodReturnPct > 0
               ? 'text-emerald-600'
               : cell.periodReturnPct < 0
@@ -137,7 +137,7 @@ function CellContent({ cell }: CellContentProps) {
       {cell.hasTransaction && cell.transaction && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="flex items-center gap-x-0.5 text-paragraph-mini text-blue-500 shrink-0">
+            <span className="flex items-center gap-x-0.5 text-paragraph-xs text-blue-500 shrink-0">
               <CircleDollarSign className="size-3.5" />
               {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
                 ? '-'
@@ -234,7 +234,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                 </button>
               </TableHead>
               {allYearMonths.map((month) => (
-                <TableHead key={month} className="min-w-[140px] text-center text-paragraph-mini">
+                <TableHead key={month} className="min-w-[140px] text-center text-paragraph-xs">
                   {formatMonth(month)}
                 </TableHead>
               ))}
@@ -251,7 +251,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                     <span className="text-paragraph-sm-medium truncate max-w-[200px]">
                       {row.name}
                     </span>
-                    <span className="text-paragraph-mini text-muted-foreground">
+                    <span className="text-paragraph-xs text-muted-foreground">
                       {row.baseCurrency}
                     </span>
                   </div>

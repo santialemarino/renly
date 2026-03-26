@@ -43,7 +43,7 @@ const CheckItem = ({
     </div>
     <span
       className={cn(
-        'text-paragraph-mini text-neutral-600',
+        'text-paragraph-xs text-neutral-600',
         isInvalid && !checked && 'text-destructive',
       )}
     >
@@ -91,7 +91,7 @@ export function PasswordMeter({
   return (
     <div className={cn('w-full flex flex-col gap-y-3', className)}>
       <div className="flex items-center gap-x-2 text-paragraph-sm">
-        <span className="shrink-0 text-paragraph-mini-medium text-neutral-700">{t('title')}</span>
+        <span className="shrink-0 text-paragraph-xs-medium text-neutral-700">{t('title')}</span>
         <div className="flex-1 h-1.5 rounded-full bg-neutral-200 overflow-hidden">
           <div
             className={cn(
@@ -102,16 +102,14 @@ export function PasswordMeter({
           />
         </div>
         {strength !== 'empty' && (
-          <span className={cn('shrink-0 text-paragraph-mini-medium', strengthTextColors[strength])}>
+          <span className={cn('shrink-0 text-paragraph-xs-medium', strengthTextColors[strength])}>
             {t(`strength.${strength}`)}
           </span>
         )}
       </div>
 
       <div className="flex flex-col gap-y-1.5">
-        <span className="text-paragraph-mini-medium text-neutral-600">
-          {t('requirements.title')}
-        </span>
+        <span className="text-paragraph-xs-medium text-neutral-600">{t('requirements.title')}</span>
         <div className="flex flex-col gap-y-1">
           {(Object.keys(passingChecks) as PasswordCheck[]).map((check) => (
             <CheckItem

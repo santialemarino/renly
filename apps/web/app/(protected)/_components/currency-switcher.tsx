@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
+import { getCurrencyPillLabel } from '@/app/(protected)/_components/currency-combobox';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ORIGINAL_CURRENCY, useCurrencyStore } from '@/lib/stores/currency-store';
 import { isCurrencySupported } from '@/lib/utils/currency';
@@ -46,14 +47,14 @@ export function CurrencySwitcher({
       <PillToggleGroup
         items={displayCurrencies.map((code) => ({
           value: code,
-          label: code === ORIGINAL_CURRENCY ? t('currency.original') : code,
+          label: code === ORIGINAL_CURRENCY ? t('currency.original') : getCurrencyPillLabel(code),
         }))}
         value={activeCurrency}
         onValueChange={handleChange}
-        itemClassName="flex-1 text-paragraph-mini font-mono"
+        itemClassName="flex-1 text-paragraph-xs font-mono"
         className="w-full border-blue-100 shadow-none"
       />
-      <span className="text-paragraph-mini text-blue-400">* {t('currency.note')}</span>
+      <span className="text-paragraph-xs text-blue-400">* {t('currency.note')}</span>
     </div>
   );
 }

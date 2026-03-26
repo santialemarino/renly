@@ -54,14 +54,21 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const tCommon = await getTranslations('common');
   const params = await searchParams;
 
-  const activeCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
 
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
+  const secondary = settings?.secondaryCurrency ?? null;
+  const displayCurrencies = secondary
+    ? [primary, secondary, ORIGINAL_CURRENCY]
+    : [primary, ORIGINAL_CURRENCY];
+
+  // Validate saved cookie against current settings — fall back to primary if stale.
+  const activeCurrency =
+    savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
-  const currency = isOriginalSelected
-    ? (settings?.primaryCurrency ?? FALLBACK_PRIMARY)
-    : activeCurrency;
+  const currency = isOriginalSelected ? primary : activeCurrency;
   const userPresets = buildPresets(settings?.periodPresets);
 
   // Parse filter params (singular from URL, wrapped in arrays for the API).

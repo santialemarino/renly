@@ -4,8 +4,10 @@ import { useRef, useState } from 'react';
 import cc from 'currency-codes';
 import { iso31661 } from 'iso-3166';
 import { ChevronDown, X } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import {
+  Badge,
   Button,
   Command,
   CommandEmpty,
@@ -19,14 +21,17 @@ import {
   Separator,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { USD_VARIANTS } from '@/lib/constants/currency';
+import { isUsdVariant } from '@/lib/utils/currency';
 
 const CLEAR_ANIMATION_MS = 100;
 
 // Meta/test codes that are not real currencies.
 const EXCLUDED_CODES = new Set(['XXX', 'XTS']);
 
+// Exclude plain "USD" from the regular list — it's shown in the USD variants group.
 const ALL_CURRENCIES = cc.data
-  .filter((c) => !EXCLUDED_CODES.has(c.code))
+  .filter((c) => !EXCLUDED_CODES.has(c.code) && c.code !== 'USD')
   .map((c) => ({ code: c.code, name: c.currency }))
   .sort((a, b) => a.code.localeCompare(b.code));
 
@@ -46,6 +51,21 @@ function getCurrencyFlag(code: string): string | null {
   const country = code.slice(0, 2).toUpperCase();
   if (!VALID_REGIONS.has(country)) return null;
   return [...country].map((c) => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0))).join('');
+}
+
+// Returns the display name for a currency code (handles USD variants).
+function getDisplayName(code: string, tVariants: ReturnType<typeof useTranslations>): string {
+  const variant = USD_VARIANTS.find((v) => v.code === code);
+  if (variant) return tVariants(variant.labelKey);
+  return getCurrencyName(code);
+}
+
+// Returns a short label for the pill toggle (e.g. "USD", "USD M", "USD B").
+export function getCurrencyPillLabel(code: string): string {
+  if (code === 'USD') return 'USD';
+  if (code === 'USD_MEP') return 'USD M';
+  if (code === 'USD_BLUE') return 'USD B';
+  return code;
 }
 
 interface CurrencyComboboxProps {
@@ -72,6 +92,7 @@ export function CurrencyCombobox({
   onClear,
   'aria-invalid': ariaInvalid,
 }: CurrencyComboboxProps) {
+  const tVariants = useTranslations('common.currency.usdVariants');
   const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -80,6 +101,19 @@ export function CurrencyCombobox({
   const typeaheadBuffer = useRef('');
   const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = search.toLowerCase();
+
+  // USD variants group — filtered by search and exclusions.
+  const filteredVariants = USD_VARIANTS.filter(
+    (v) =>
+      !exclude.includes(v.code) &&
+      (!q ||
+        v.code.toLowerCase().includes(q) ||
+        tVariants(v.labelKey).toLowerCase().includes(q) ||
+        'usd'.includes(q) ||
+        'dollar'.includes(q) ||
+        'dolar'.includes(q)),
+  );
+
   // Pass 1 — filter: drop the sibling selected currency and any non-matching entries.
   // When q is empty every currency passes (only the excluded one is dropped).
   const filtered = ALL_CURRENCIES.filter(
@@ -143,13 +177,21 @@ export function CurrencyCombobox({
               typeaheadBuffer.current = '';
             }, 500);
             const q = typeaheadBuffer.current;
+            // Check USD variants first, then regular currencies.
+            const variantMatch = USD_VARIANTS.find(
+              (v) => !exclude.includes(v.code) && v.code.startsWith(q),
+            );
+            if (variantMatch) {
+              onChange(variantMatch.code);
+              return;
+            }
             const match = ALL_CURRENCIES.find(
               (c) => !exclude.includes(c.code) && c.code.startsWith(q),
             );
             if (match) onChange(match.code);
           }}
           className={cn(
-            'justify-between w-full min-w-0 group font-normal has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50',
+            'w-full min-w-0 justify-between group has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50 font-normal',
             surface
               ? 'bg-background hover:bg-background aria-expanded:bg-background'
               : 'bg-input hover:bg-input aria-expanded:bg-input dark:bg-input dark:hover:bg-input dark:aria-expanded:bg-input',
@@ -164,11 +206,19 @@ export function CurrencyCombobox({
                 clearing && 'opacity-0',
               )}
             >
-              <span className="shrink-0 text-paragraph-mini font-mono">{value}</span>
+              <span className="shrink-0 text-paragraph-xs font-mono">
+                {isUsdVariant(value) ? 'USD' : value}
+              </span>
               {!compact && (
-                <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
+                <span className="text-paragraph-sm truncate">
+                  {getDisplayName(value, tVariants)}
+                </span>
               )}
-              {getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>}
+              {isUsdVariant(value) ? (
+                <span className="shrink-0">{getCurrencyFlag('USD')}</span>
+              ) : (
+                getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>
+              )}
             </span>
           ) : (
             <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
@@ -216,7 +266,36 @@ export function CurrencyCombobox({
             onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>{noResults}</CommandEmpty>
-            <CommandGroup>
+            {filteredVariants.length > 0 && (
+              <CommandGroup heading={tVariants('groupLabel')}>
+                {filteredVariants.map((variant) => (
+                  <CommandItem
+                    key={variant.code}
+                    value={`${variant.code} USD dollar ${tVariants(variant.labelKey)}`}
+                    onSelect={() => {
+                      onChange(variant.code);
+                      setOpen(false);
+                    }}
+                  >
+                    <span className="shrink-0 text-paragraph-xs font-mono">USD</span>
+                    {!compact && (
+                      <span className="truncate text-paragraph-sm">
+                        {tVariants(variant.labelKey)}
+                      </span>
+                    )}
+                    <span className="ml-auto inline-flex shrink-0 items-center gap-x-1.5 pr-1">
+                      <Badge variant="square" className="text-paragraph-mini px-1.5 py-0">
+                        {tVariants(`tag.${variant.labelKey}`)}
+                      </Badge>
+                      <span>{getCurrencyFlag('USD')}</span>
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            <CommandGroup
+              heading={filteredVariants.length > 0 ? tVariants('otherGroupLabel') : undefined}
+            >
               {filtered.map((currency) => (
                 <CommandItem
                   key={currency.code}
@@ -226,7 +305,7 @@ export function CurrencyCombobox({
                     setOpen(false);
                   }}
                 >
-                  <span className="shrink-0 text-paragraph-mini font-mono">{currency.code}</span>
+                  <span className="shrink-0 text-paragraph-xs font-mono">{currency.code}</span>
                   {!compact && <span className="truncate text-paragraph-sm">{currency.name}</span>}
                   {getCurrencyFlag(currency.code) && (
                     <span className="ml-auto shrink-0 pr-1">{getCurrencyFlag(currency.code)}</span>

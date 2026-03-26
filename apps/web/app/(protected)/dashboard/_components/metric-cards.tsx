@@ -101,7 +101,7 @@ export function MetricCards({ metrics }: MetricCardsProps) {
           )}
         </div>
         {metrics.monthChange !== null && (
-          <span className={cn('text-paragraph-mini', valueColor(metrics.monthChange))}>
+          <span className={cn('text-paragraph-xs', valueColor(metrics.monthChange))}>
             {formatSignedValue(metrics.monthChange)}
             {metrics.monthChangePct !== null && metrics.monthChangePct !== 0 && (
               <> ({formatPct(metrics.monthChangePct)})</>

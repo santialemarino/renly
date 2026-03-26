@@ -34,21 +34,19 @@ export function InvestmentDetailCard({ metrics }: InvestmentDetailCardProps) {
       <CardContent className="grid grid-cols-2 gap-4 px-6 pb-6 md:grid-cols-4">
         {/* Invested Capital */}
         <div className="flex flex-col gap-y-1">
-          <span className="text-paragraph-mini text-muted-foreground">{t('detail.invested')}</span>
+          <span className="text-paragraph-xs text-muted-foreground">{t('detail.invested')}</span>
           <span className="text-paragraph-semibold">{formatValue(metrics.investedCapital)}</span>
         </div>
 
         {/* Snapshots */}
         <div className="flex flex-col gap-y-1">
-          <span className="text-paragraph-mini text-muted-foreground">
-            {t('detail.dataPoints')}
-          </span>
+          <span className="text-paragraph-xs text-muted-foreground">{t('detail.dataPoints')}</span>
           <span className="text-paragraph-semibold">{metrics.periodReturns.length}</span>
         </div>
 
         {/* Category */}
         <div className="flex flex-col gap-y-1">
-          <span className="text-paragraph-mini text-muted-foreground">{t('detail.category')}</span>
+          <span className="text-paragraph-xs text-muted-foreground">{t('detail.category')}</span>
           <span className="text-paragraph-semibold">
             {tCommon(`categories.${metrics.category}`)}
           </span>
@@ -56,7 +54,7 @@ export function InvestmentDetailCard({ metrics }: InvestmentDetailCardProps) {
 
         {/* Base Currency */}
         <div className="flex flex-col gap-y-1">
-          <span className="text-paragraph-mini text-muted-foreground">
+          <span className="text-paragraph-xs text-muted-foreground">
             {t('detail.baseCurrency')}
           </span>
           <span className="text-paragraph-semibold">{metrics.baseCurrency}</span>

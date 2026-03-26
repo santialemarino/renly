@@ -1,13 +1,10 @@
 # Business logic for building the snapshots grid (investments × months).
 
-from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import ExchangeRateUnavailableError
-from app.models.exchange_rate import ExchangeRatePair
 from app.models.investment import InvestmentCategory
-from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.snapshot_grid import (
     SnapshotGridCell,
@@ -56,10 +53,12 @@ async def get_snapshot_grid(
 
     rate = None
     if currency:
-        rate = await _get_conversion_rate(session)
-        needs_conversion = any(inv.base_currency != currency for inv in investments)
-        if needs_conversion and rate is None:
-            raise ExchangeRateUnavailableError(currency)
+        target_base = mh.base_currency(currency)
+        needs_conversion = any(inv.base_currency != target_base for inv in investments)
+        if needs_conversion:
+            rate = await mh.get_conversion_rate(session, currency)
+            if rate is None:
+                raise ExchangeRateUnavailableError(currency)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -119,18 +118,6 @@ async def get_snapshot_grid(
         )
 
     return SnapshotGridResponse(rows=rows, months=all_dates)
-
-
-# Returns the latest USD/ARS MEP rate. Falls back to oficial if MEP unavailable.
-async def _get_conversion_rate(session: AsyncSession) -> Decimal | None:
-    latest_map = await exchange_rate_repository.get_latest_all(session)
-    mep = latest_map.get(ExchangeRatePair.USD_ARS_MEP)
-    if mep:
-        return mep.rate
-    oficial = latest_map.get(ExchangeRatePair.USD_ARS_OFICIAL)
-    if oficial:
-        return oficial.rate
-    return None
 
 
 # Returns {snapshot_date: latest_transaction} for periods that had transactions.

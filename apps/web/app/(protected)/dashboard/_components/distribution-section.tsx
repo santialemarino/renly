@@ -136,10 +136,10 @@ export function DistributionSection({
                     className="size-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
                   />
-                  <span className="min-w-0 truncate text-paragraph-mini text-muted-foreground">
+                  <span className="min-w-0 truncate text-paragraph-xs text-muted-foreground">
                     {entry.name}
                   </span>
-                  <span className="shrink-0 ml-auto text-paragraph-mini-semibold">
+                  <span className="shrink-0 ml-auto text-paragraph-xs-semibold">
                     {entry.percentage.toFixed(1)}%
                   </span>
                 </div>
