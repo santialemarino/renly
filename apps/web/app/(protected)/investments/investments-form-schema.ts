@@ -21,6 +21,7 @@ export function buildInvestmentFormSchema(requiredMsg: string) {
     name: z.string().min(1, { message: requiredMsg }).max(INVESTMENT_NAME_MAX),
     category: z.enum(INVESTMENT_CATEGORIES, { message: requiredMsg }),
     baseCurrency: z.string().min(1, { message: requiredMsg }),
+    ticker: z.string().max(20).optional(),
     broker: z.string().max(INVESTMENT_BROKER_MAX).optional(),
     notes: z.string().optional(),
     groupIds: z.array(z.number()).optional(),

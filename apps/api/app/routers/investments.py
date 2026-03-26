@@ -76,6 +76,7 @@ async def create_investment(
         name=body.name,
         category=body.category,
         base_currency=body.base_currency,
+        ticker=body.ticker,
         broker=body.broker,
         notes=body.notes,
     )

@@ -20,6 +20,7 @@ class InvestmentCreate(BaseModel):
     name: str = Field(description="Display name of the investment.", max_length=255)
     category: InvestmentCategory = Field(description="Investment type (e.g. cedears, fci).")
     base_currency: str = Field(description="Reporting currency (ISO 4217 code).", max_length=10)
+    ticker: str | None = Field(default=None, description="Symbol for auto-price-fetching (e.g. AAPL).", max_length=20)
     broker: str | None = Field(default=None, description="Broker or account name.", max_length=100)
     notes: str | None = Field(default=None, description="Optional notes.")
 
@@ -29,6 +30,7 @@ class InvestmentUpdate(BaseModel):
     name: str | None = Field(default=None, description="Display name.", max_length=255)
     category: InvestmentCategory | None = Field(default=None, description="Investment type.")
     base_currency: str | None = Field(default=None, description="Reporting currency (ISO 4217 code).", max_length=10)
+    ticker: str | None = Field(default=None, description="Symbol for auto-price-fetching.", max_length=20)
     broker: str | None = Field(default=None, description="Broker or account name.", max_length=100)
     notes: str | None = Field(default=None, description="Optional notes.")
 
@@ -46,6 +48,7 @@ class InvestmentResponse(BaseModel):
     name: str = Field(description="Display name.")
     category: InvestmentCategory = Field(description="Investment type.")
     base_currency: str = Field(description="Reporting currency (ISO 4217 code).")
+    ticker: str | None = Field(default=None, description="Symbol for auto-price-fetching.")
     broker: str | None = Field(default=None, description="Broker or account name.")
     notes: str | None = Field(default=None, description="Optional notes.")
     is_active: bool = Field(description="Whether included in portfolio.")

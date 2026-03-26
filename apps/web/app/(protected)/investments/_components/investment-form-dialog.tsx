@@ -67,6 +67,7 @@ export function InvestmentFormDialog({
       name: '',
       category: undefined as unknown as InvestmentFormValues['category'],
       baseCurrency: '',
+      ticker: '',
       broker: '',
       notes: '',
       groupIds: [],
@@ -81,6 +82,7 @@ export function InvestmentFormDialog({
         category: (investment?.category ??
           undefined) as unknown as InvestmentFormValues['category'],
         baseCurrency: investment?.baseCurrency ?? '',
+        ticker: investment?.ticker ?? '',
         broker: investment?.broker ?? '',
         notes: investment?.notes ?? '',
         groupIds: investment?.groups.map((g) => g.id) ?? [],
@@ -182,19 +184,39 @@ export function InvestmentFormDialog({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="broker"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.broker.label')}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder={t('form.broker.placeholder')} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="ticker"
+                render={({ field }) => (
+                  <FormItem className="flex-1 min-w-0">
+                    <FormLabel>{t('form.ticker.label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        placeholder={t('form.ticker.placeholder')}
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="broker"
+                render={({ field }) => (
+                  <FormItem className="flex-1 min-w-0">
+                    <FormLabel>{t('form.broker.label')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder={t('form.broker.placeholder')} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {groups.length > 0 && (
               <FormField

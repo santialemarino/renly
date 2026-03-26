@@ -64,6 +64,7 @@ CREATE TABLE investments (
   name          VARCHAR(255) NOT NULL,
   category      investment_category NOT NULL,
   base_currency VARCHAR(10) NOT NULL,
+  ticker        VARCHAR(20),
   broker        VARCHAR(100),
   notes         TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
