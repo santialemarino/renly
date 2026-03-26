@@ -48,6 +48,8 @@
       "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
       "usdVariants": {
         "groupLabel": "US Dollar variants",
+        "arsGroupLabel": "Argentine Peso",
+        "preferredGroupLabel": "Major currencies",
         "otherGroupLabel": "Other currencies",
         "oficial": "Dollar (Official)",
         "mep": "Dollar (MEP)",
@@ -56,6 +58,11 @@
           "oficial": "Official",
           "mep": "MEP",
           "blue": "Blue"
+        },
+        "tagShort": {
+          "oficial": "O",
+          "mep": "M",
+          "blue": "B"
         }
       }
     }

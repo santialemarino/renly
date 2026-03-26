@@ -8,11 +8,14 @@ from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 
-# Exchange rate pair (e.g. USD/ARS official, MEP, blue).
+# Exchange rate pair — all rates stored against USD.
 class ExchangeRatePair(StrEnum):
     USD_ARS_OFICIAL = "USD_ARS_OFICIAL"
     USD_ARS_MEP = "USD_ARS_MEP"
     USD_ARS_BLUE = "USD_ARS_BLUE"
+    USD_BRL = "USD_BRL"
+    USD_EUR = "USD_EUR"
+    USD_GBP = "USD_GBP"
 
 
 # Daily exchange rate for a pair (one row per date per pair).

@@ -8,10 +8,8 @@ import { getInvestments } from '@/lib/api/investments';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
-// Fallback for when we don't have any env vars set for the max groups.
-const MAX_GROUPS_DEFAULT = 50;
-
-const MAX_GROUPS = Number(process.env.NEXT_PUBLIC_MAX_GROUPS ?? MAX_GROUPS_DEFAULT);
+// Parsed from env var. Defaults to 50 if unset.
+const MAX_GROUPS = Number(process.env.NEXT_PUBLIC_MAX_GROUPS ?? 50);
 
 export async function generateMetadata() {
   return await generatePageMetadata('groups');

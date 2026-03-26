@@ -5,6 +5,7 @@ from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.services.metrics_helpers import (
     build_irr_cashflows,
+    can_convert,
     compute_period_returns,
     convert_value,
     invested_capital,
@@ -221,22 +222,81 @@ class TestBuildIRRCashflows:
         assert len(cfs) == 1
 
 
+# --- can_convert ---
+
+
+class TestCanConvert:
+    def test_same_currency(self):
+        assert can_convert("USD", "USD") is True
+
+    def test_same_base_usd_variant(self):
+        assert can_convert("USD_MEP", "USD") is True
+
+    def test_usd_ars(self):
+        assert can_convert("USD", "ARS") is True
+
+    def test_eur_ars_via_pivot(self):
+        assert can_convert("EUR", "ARS") is True
+
+    def test_brl_gbp_via_pivot(self):
+        assert can_convert("BRL", "GBP") is True
+
+    def test_unsupported_currency(self):
+        assert can_convert("CHF", "ARS") is False
+
+    def test_both_unsupported(self):
+        assert can_convert("CHF", "JPY") is False
+
+
 # --- convert_value ---
 
 
 class TestConvertValue:
+    # Rate map: 1 USD = 1400 ARS, 1 USD = 0.92 EUR, 1 USD = 5.5 BRL, 1 USD = 0.79 GBP.
+    RATE_MAP = {
+        "USD": Decimal("1"),
+        "ARS": Decimal("1400"),
+        "EUR": Decimal("0.92"),
+        "BRL": Decimal("5.5"),
+        "GBP": Decimal("0.79"),
+    }
+
     def test_usd_to_ars(self):
-        result = convert_value(Decimal("100"), "USD", "ARS", Decimal("1400"))
+        result = convert_value(Decimal("100"), "USD", "ARS", self.RATE_MAP)
         assert result == Decimal("140000")
 
     def test_ars_to_usd(self):
-        result = convert_value(Decimal("140000"), "ARS", "USD", Decimal("1400"))
+        result = convert_value(Decimal("140000"), "ARS", "USD", self.RATE_MAP)
         assert result == Decimal("100")
 
     def test_same_currency(self):
-        result = convert_value(Decimal("100"), "USD", "USD", Decimal("1400"))
+        result = convert_value(Decimal("100"), "USD", "USD", self.RATE_MAP)
         assert result == Decimal("100")
 
     def test_unsupported_pair_returns_unchanged(self):
-        result = convert_value(Decimal("100"), "EUR", "BRL", Decimal("1400"))
+        # CHF is not in the rate map, so no conversion possible.
+        result = convert_value(Decimal("100"), "CHF", "ARS", self.RATE_MAP)
         assert result == Decimal("100")
+
+    def test_eur_to_ars_via_pivot(self):
+        # 100 EUR → USD: 100 / 0.92. USD → ARS: * 1400.
+        result = convert_value(Decimal("100"), "EUR", "ARS", self.RATE_MAP)
+        expected = Decimal("100") / Decimal("0.92") * Decimal("1400")
+        assert result == expected
+
+    def test_brl_to_gbp_via_pivot(self):
+        # 550 BRL → USD: 550 / 5.5 = 100. USD → GBP: 100 * 0.79 = 79.
+        result = convert_value(Decimal("550"), "BRL", "GBP", self.RATE_MAP)
+        expected = Decimal("550") / Decimal("5.5") * Decimal("0.79")
+        assert result == expected
+
+    def test_usd_variant_to_ars(self):
+        # USD_MEP resolves to base "USD", so 100 USD_MEP → ARS = 100 * 1400.
+        result = convert_value(Decimal("100"), "USD_MEP", "ARS", self.RATE_MAP)
+        assert result == Decimal("140000")
+
+    def test_eur_to_usd(self):
+        # 100 EUR → USD: 100 / 0.92.
+        result = convert_value(Decimal("100"), "EUR", "USD", self.RATE_MAP)
+        expected = Decimal("100") / Decimal("0.92") * Decimal("1")
+        assert result == expected

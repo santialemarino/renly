@@ -17,7 +17,7 @@ const badgeVariants = cva(
           'rounded-full border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         ghost: 'rounded-full [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
         link: 'rounded-full text-primary underline-offset-4 [a&]:hover:underline',
-        square: 'rounded border-border text-muted-foreground font-mono',
+        square: 'py-0 rounded border-border text-muted-foreground font-mono',
       },
     },
     defaultVariants: {

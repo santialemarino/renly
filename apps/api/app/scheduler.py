@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
 
 
-# Fetches latest exchange rates from DolarApi and stores them.
+# Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them.
 async def _update_exchange_rates() -> None:
     try:
         async with AsyncSessionLocal() as session:

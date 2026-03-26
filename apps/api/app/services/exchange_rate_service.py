@@ -1,4 +1,4 @@
-# Business logic for exchange rates: querying stored rates and fetching from DolarApi.
+# Business logic for exchange rates: querying stored rates, fetching from DolarApi and Frankfurter.
 
 import logging
 from datetime import date as date_type
@@ -21,6 +21,14 @@ _CASA_TO_PAIR = {
     "bolsa": ExchangeRatePair.USD_ARS_MEP,
 }
 
+# Frankfurter currency symbols and their ExchangeRatePair.
+FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
+_FRANKFURTER_PAIRS = {
+    "BRL": ExchangeRatePair.USD_BRL,
+    "EUR": ExchangeRatePair.USD_EUR,
+    "GBP": ExchangeRatePair.USD_GBP,
+}
+
 
 # Returns the latest rates from the DB for all pairs.
 async def get_latest_rates(session: AsyncSession) -> LatestRatesResponse:
@@ -39,13 +47,20 @@ async def get_rates_by_date(
     return [ExchangeRateResponse.model_validate(r) for r in rates]
 
 
-# Fetches latest rates from DolarApi and stores them in the DB.
+# Fetches latest rates from all sources (DolarApi + Frankfurter) and stores them.
 async def fetch_and_store_latest(session: AsyncSession) -> list[ExchangeRate]:
-    data = await _fetch_dolarapi()
-    if data is None:
-        return []
     today = date_type.today()
-    return await _store_dolarapi_rates(session, data, today)
+    stored: list[ExchangeRate] = []
+
+    dolar_data = await _fetch_dolarapi()
+    if dolar_data is not None:
+        stored.extend(await _store_dolarapi_rates(session, dolar_data, today))
+
+    frankfurter_data = await _fetch_frankfurter()
+    if frankfurter_data is not None:
+        stored.extend(await _store_frankfurter_rates(session, frankfurter_data, today))
+
+    return stored
 
 
 # Calls DolarApi GET /v1/dolares. Returns the parsed JSON array or None on failure.
@@ -92,5 +107,48 @@ async def _store_dolarapi_rates(
 
     if stored:
         logger.info("Stored %d DolarApi rates for %s.", len(stored), rate_date)
+
+    return stored
+
+
+# Calls Frankfurter GET /v1/latest?base=USD. Returns parsed JSON or None on failure.
+async def _fetch_frankfurter() -> dict | None:
+    symbols = ",".join(_FRANKFURTER_PAIRS.keys())
+    url = f"{FRANKFURTER_URL}?base=USD&symbols={symbols}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError:
+        logger.exception("Failed to fetch from Frankfurter: %s", url)
+        return None
+
+
+# Parses Frankfurter response and upserts EUR, GBP, BRL rates.
+# Frankfurter returns rates as "1 USD = X <currency>", which matches our storage convention.
+async def _store_frankfurter_rates(
+    session: AsyncSession,
+    data: dict,
+    rate_date: date_type,
+) -> list[ExchangeRate]:
+    stored: list[ExchangeRate] = []
+    rates = data.get("rates", {})
+
+    for symbol, pair in _FRANKFURTER_PAIRS.items():
+        value = rates.get(symbol)
+        if value is None:
+            continue
+
+        rate = ExchangeRate(
+            date=rate_date,
+            pair=pair,
+            rate=Decimal(str(value)),
+            source="frankfurter",
+        )
+        stored.append(await exchange_rate_repository.upsert(session, rate))
+
+    if stored:
+        logger.info("Stored %d Frankfurter rates for %s.", len(stored), rate_date)
 
     return stored

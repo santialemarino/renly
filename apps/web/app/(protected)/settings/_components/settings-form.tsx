@@ -18,7 +18,7 @@ import {
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PERIOD_DEFAULTS } from '@/lib/constants/period-presets';
+import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
 import { isCurrencySupported } from '@/lib/utils/currency';
 
 // Localizes a canonical preset code (e.g. "1Y") for display using the year suffix from translations.
@@ -200,7 +200,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 render={({ field, fieldState }) => (
                   <Input
                     {...field}
-                    placeholder={localizePreset(PERIOD_DEFAULTS[i], yearSuffix)}
+                    placeholder={localizePreset(PERIOD_PRESETS[i]?.code, yearSuffix)}
                     aria-invalid={!!fieldState.error}
                     containerClassName="text-center"
                     className="uppercase"

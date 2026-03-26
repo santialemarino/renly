@@ -97,7 +97,7 @@ async def _resolve_filtered_investments(
 
 
 # Computes metrics for a single investment (TWR, IRR, period returns, etc.).
-# When currency is provided, converts absolute values using the latest MEP rate.
+# When currency is provided, converts absolute values via USD pivot.
 async def get_investment_metrics(
     session: AsyncSession,
     investment_id: int,
@@ -111,12 +111,12 @@ async def get_investment_metrics(
     snapshots = await metrics_repository.list_snapshots_by_investments(session, [investment_id])
     transactions = await metrics_repository.list_transactions_by_investments(session, [investment_id])
 
-    rate = await _get_required_conversion_rate(session, currency, [inv])
-    return _build_investment_metrics(inv, snapshots, transactions, currency, rate)
+    rate_map = await _get_required_rate_map(session, currency, [inv])
+    return _build_investment_metrics(inv, snapshots, transactions, currency, rate_map)
 
 
 # Computes portfolio-level metrics (total value, invested, gain, month change).
-# When currency is provided, converts all monetary values using the latest MEP rate.
+# When currency is provided, converts all monetary values via USD pivot.
 async def get_portfolio_metrics(
     session: AsyncSession,
     user_id: int,
@@ -139,7 +139,7 @@ async def get_portfolio_metrics(
             skipped_investments=skipped,
         )
 
-    rate = await _get_required_conversion_rate(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -155,16 +155,16 @@ async def get_portfolio_metrics(
     total_value = ZERO
     for inv_id, snap in latest_map.items():
         v = snap.value
-        if currency and rate:
-            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate)
+        if currency and rate_map:
+            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
         total_value += v
 
     # Total invested capital.
     total_invested = ZERO
     for inv_id in inv_ids:
         cap = mh.invested_capital(tx_by_inv.get(inv_id, []))
-        if currency and rate:
-            cap = mh.convert_value(cap, inv_currency.get(inv_id, ""), currency, rate)
+        if currency and rate_map:
+            cap = mh.convert_value(cap, inv_currency.get(inv_id, ""), currency, rate_map)
         total_invested += cap
 
     absolute_gain = total_value - total_invested
@@ -183,10 +183,10 @@ async def get_portfolio_metrics(
         if len(snaps) >= 2:
             curr_v = snaps[-1].value
             prev_v = snaps[-2].value
-            if currency and rate:
+            if currency and rate_map:
                 base = inv_currency.get(inv_id, "")
-                curr_v = mh.convert_value(curr_v, base, currency, rate)
-                prev_v = mh.convert_value(prev_v, base, currency, rate)
+                curr_v = mh.convert_value(curr_v, base, currency, rate_map)
+                prev_v = mh.convert_value(prev_v, base, currency, rate_map)
             curr_for_change += curr_v
             prev_total += prev_v
             has_prev = True
@@ -205,8 +205,8 @@ async def get_portfolio_metrics(
         dv: dict[date_type, Decimal] = {}
         for s in snaps:
             v = s.value
-            if currency and rate:
-                v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate)
+            if currency and rate_map:
+                v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
             dv[s.date] = v
             all_dates.add(s.date)
         inv_date_value[inv_id] = dv
@@ -234,8 +234,8 @@ async def get_portfolio_metrics(
         period_ncf = ZERO
         for inv_id in inv_ids:
             ncf = mh.net_cash_flow(tx_by_inv.get(inv_id, []), prev_date, curr_date)
-            if currency and rate:
-                ncf = mh.convert_value(ncf, inv_currency.get(inv_id, ""), currency, rate)
+            if currency and rate_map:
+                ncf = mh.convert_value(ncf, inv_currency.get(inv_id, ""), currency, rate_map)
             period_ncf += ncf
         r = mh.period_return(prev_val, curr_val, period_ncf)
         if r is not None:
@@ -254,8 +254,8 @@ async def get_portfolio_metrics(
         txs = tx_by_inv.get(inv_id, [])
         cfs = mh.build_irr_cashflows(snaps, txs)
         base = inv_currency.get(inv_id, "")
-        if currency and rate:
-            cfs = [(d, float(mh.convert_value(Decimal(str(a)), base, currency, rate))) for d, a in cfs]
+        if currency and rate_map:
+            cfs = [(d, float(mh.convert_value(Decimal(str(a)), base, currency, rate_map))) for d, a in cfs]
         if start_date or end_date:
             cfs = [(d, a) for d, a in cfs if (not start_date or d >= start_date) and (not end_date or d <= end_date)]
         all_cashflows.extend(cfs)
@@ -293,7 +293,7 @@ async def get_portfolio_evolution(
     if not investments:
         return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
-    rate = await _get_required_conversion_rate(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
 
@@ -345,8 +345,8 @@ async def get_portfolio_evolution(
             if month in month_map:
                 last_known[inv_id] = month_map[month]
             val = last_known.get(inv_id, ZERO)
-            if currency and rate:
-                val = mh.convert_value(val, inv_currency.get(inv_id, ""), currency, rate)
+            if currency and rate_map:
+                val = mh.convert_value(val, inv_currency.get(inv_id, ""), currency, rate_map)
             total += val
         points.append(EvolutionPoint(date=month, total_value=total))
 
@@ -360,7 +360,7 @@ async def get_portfolio_evolution(
 
 
 # Computes allocation by investment category.
-# When currency is provided, converts values using the latest MEP rate.
+# When currency is provided, converts values via USD pivot.
 async def get_allocation(
     session: AsyncSession,
     user_id: int,
@@ -375,7 +375,7 @@ async def get_allocation(
     if not investments:
         return AllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate = await _get_required_conversion_rate(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments)
     inv_ids = [i.id for i in investments]
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
 
@@ -384,8 +384,8 @@ async def get_allocation(
         snapshot = latest_map.get(inv.id)
         if snapshot:
             v = snapshot.value
-            if currency and rate:
-                v = mh.convert_value(v, inv.base_currency, currency, rate)
+            if currency and rate_map:
+                v = mh.convert_value(v, inv.base_currency, currency, rate_map)
             cat_values[inv.category] += v
 
     total_value = sum(cat_values.values(), ZERO)
@@ -414,7 +414,7 @@ async def get_allocation_by_group(
     if not investments:
         return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate = await _get_required_conversion_rate(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
@@ -423,8 +423,8 @@ async def get_allocation_by_group(
     inv_values: dict[int, Decimal] = {}
     for inv_id, snapshot in latest_map.items():
         v = snapshot.value
-        if currency and rate:
-            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate)
+        if currency and rate_map:
+            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
         inv_values[inv_id] = v
 
     # Load groups and their memberships.
@@ -475,7 +475,7 @@ async def get_investments_summary(
     if not investments:
         return InvestmentsSummaryResponse(items=[], skipped_investments=skipped)
 
-    rate = await _get_required_conversion_rate(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments)
     inv_ids = [i.id for i in investments]
 
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -510,10 +510,10 @@ async def get_investments_summary(
                 month_change_pct = (curr_v - prev_v) / prev_v
 
         # Convert absolute values.
-        if currency and rate:
+        if currency and rate_map:
             if current_value is not None:
-                current_value = mh.convert_value(current_value, base, currency, rate)
-            cap = mh.convert_value(cap, base, currency, rate)
+                current_value = mh.convert_value(current_value, base, currency, rate_map)
+            cap = mh.convert_value(cap, base, currency, rate_map)
             absolute_gain = (current_value - cap) if current_value is not None else None
 
         items.append(
@@ -536,34 +536,34 @@ async def get_investments_summary(
     return InvestmentsSummaryResponse(items=items, skipped_investments=skipped)
 
 
-# Returns the conversion rate for the requested currency.
-# Raises ExchangeRateUnavailableError if conversion is needed but no rate is available.
+# Returns a rate map for pivot conversion.
+# Raises ExchangeRateUnavailableError if conversion is needed but no rates are available.
 # Returns None when currency is None (no conversion requested).
-async def _get_required_conversion_rate(
+async def _get_required_rate_map(
     session: AsyncSession,
     currency: str | None,
     investments: list[Investment],
-) -> Decimal | None:
+) -> dict[str, Decimal] | None:
     if not currency:
         return None
     target_base = mh.base_currency(currency)
     needs_conversion = any(inv.base_currency != target_base for inv in investments)
     if not needs_conversion:
         return None
-    rate = await mh.get_conversion_rate(session, currency)
-    if rate is None:
+    rate_map = await mh.get_rate_map(session, currency)
+    if rate_map is None:
         raise ExchangeRateUnavailableError(currency)
-    return rate
+    return rate_map
 
 
 # Builds InvestmentMetricsResponse from raw data.
-# When currency and rate are provided, converts absolute values.
+# When currency and rate_map_map are provided, converts absolute values via USD pivot.
 def _build_investment_metrics(
     investment: Investment,
     snapshots: list[InvestmentSnapshot],
     transactions: list[Transaction],
     currency: str | None = None,
-    rate: Decimal | None = None,
+    rate_map: dict[str, Decimal] | None = None,
 ) -> InvestmentMetricsResponse:
     cap = mh.invested_capital(transactions)
     current_value = snapshots[-1].value if snapshots else None
@@ -586,16 +586,16 @@ def _build_investment_metrics(
 
     # Convert absolute values if currency requested.
     base = investment.base_currency
-    if currency and rate:
+    if currency and rate_map:
         if current_value is not None:
-            current_value = mh.convert_value(current_value, base, currency, rate)
-        cap = mh.convert_value(cap, base, currency, rate)
+            current_value = mh.convert_value(current_value, base, currency, rate_map)
+        cap = mh.convert_value(cap, base, currency, rate_map)
         absolute_gain = (current_value - cap) if current_value is not None else None
 
     period_returns = [
         PeriodReturnItem(
             date=d,
-            value=mh.convert_value(v, base, currency, rate) if currency and rate else v,
+            value=mh.convert_value(v, base, currency, rate_map) if currency and rate_map else v,
             return_pct=r,
         )
         for d, v, r in pr_data
