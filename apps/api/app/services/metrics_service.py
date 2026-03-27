@@ -103,6 +103,7 @@ async def get_investment_metrics(
     investment_id: int,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
 ) -> InvestmentMetricsResponse:
     inv = await investment_repository.get_by_id(session, investment_id, user_id)
     if inv is None:
@@ -111,7 +112,7 @@ async def get_investment_metrics(
     snapshots = await metrics_repository.list_snapshots_by_investments(session, [investment_id])
     transactions = await metrics_repository.list_transactions_by_investments(session, [investment_id])
 
-    rate_map = await _get_required_rate_map(session, currency, [inv])
+    rate_map = await _get_required_rate_map(session, currency, [inv], dollar_preference)
     return _build_investment_metrics(inv, snapshots, transactions, currency, rate_map)
 
 
@@ -121,6 +122,7 @@ async def get_portfolio_metrics(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -139,7 +141,7 @@ async def get_portfolio_metrics(
             skipped_investments=skipped,
         )
 
-    rate_map = await _get_required_rate_map(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -281,6 +283,7 @@ async def get_portfolio_evolution(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -293,7 +296,7 @@ async def get_portfolio_evolution(
     if not investments:
         return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
-    rate_map = await _get_required_rate_map(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
 
@@ -365,6 +368,7 @@ async def get_allocation(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -375,7 +379,7 @@ async def get_allocation(
     if not investments:
         return AllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate_map = await _get_required_rate_map(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
 
@@ -404,6 +408,7 @@ async def get_allocation_by_group(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -414,7 +419,7 @@ async def get_allocation_by_group(
     if not investments:
         return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    rate_map = await _get_required_rate_map(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
@@ -463,6 +468,7 @@ async def get_investments_summary(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -475,7 +481,7 @@ async def get_investments_summary(
     if not investments:
         return InvestmentsSummaryResponse(items=[], skipped_investments=skipped)
 
-    rate_map = await _get_required_rate_map(session, currency, investments)
+    rate_map = await _get_required_rate_map(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
 
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -543,14 +549,14 @@ async def _get_required_rate_map(
     session: AsyncSession,
     currency: str | None,
     investments: list[Investment],
+    dollar_preference: str | None = None,
 ) -> dict[str, Decimal] | None:
     if not currency:
         return None
-    target_base = mh.base_currency(currency)
-    needs_conversion = any(inv.base_currency != target_base for inv in investments)
+    needs_conversion = any(inv.base_currency != currency for inv in investments)
     if not needs_conversion:
         return None
-    rate_map = await mh.get_rate_map(session, currency)
+    rate_map = await mh.get_rate_map(session, dollar_preference)
     if rate_map is None:
         raise ExchangeRateUnavailableError(currency)
     return rate_map
@@ -563,6 +569,7 @@ def _build_investment_metrics(
     snapshots: list[InvestmentSnapshot],
     transactions: list[Transaction],
     currency: str | None = None,
+    dollar_preference: str | None = None,
     rate_map: dict[str, Decimal] | None = None,
 ) -> InvestmentMetricsResponse:
     cap = mh.invested_capital(transactions)

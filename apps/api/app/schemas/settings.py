@@ -31,6 +31,10 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Percentage of max groups at which the approaching-limit warning appears.",
     )
+    dollar_rate_preference: str | None = Field(
+        default=None,
+        description="Which USD/ARS rate to use: oficial, mep, or blue. Default: mep.",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -58,4 +62,8 @@ class SettingsUpdate(RequestBase):
     group_warning_pct: int | None = Field(
         default=None,
         description="Percentage of max groups for approaching-limit warning.",
+    )
+    dollar_rate_preference: str | None = Field(
+        default=None,
+        description="Which USD/ARS rate to use: oficial, mep, or blue.",
     )

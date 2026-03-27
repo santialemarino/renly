@@ -78,11 +78,13 @@ function SortIcon({
 function RowActions({
   investment,
   groups,
+  pinnedCurrencies,
   preferredCurrencies,
   onSuccess,
 }: {
   investment: Investment;
   groups: InvestmentGroup[];
+  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
   onSuccess: () => void;
 }) {
@@ -172,6 +174,7 @@ function RowActions({
           onOpenChange={setEditOpen}
           investment={investment}
           groups={groups}
+          pinnedCurrencies={pinnedCurrencies}
           preferredCurrencies={preferredCurrencies}
           onSuccess={onSuccess}
         />
@@ -192,10 +195,12 @@ function RowActions({
 export function InvestmentsDataTable({
   data,
   groups,
+  pinnedCurrencies,
   preferredCurrencies,
 }: {
   data: InvestmentListResponse;
   groups: InvestmentGroup[];
+  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
 }) {
   const t = useTranslations('investments');
@@ -338,6 +343,7 @@ export function InvestmentsDataTable({
                     <RowActions
                       investment={investment}
                       groups={groups}
+                      pinnedCurrencies={pinnedCurrencies}
                       preferredCurrencies={preferredCurrencies}
                       onSuccess={() => router.refresh()}
                     />

@@ -46,25 +46,9 @@
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
       "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
       "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
-      "usdVariants": {
-        "groupLabel": "US Dollar variants",
-        "arsGroupLabel": "Argentine Peso",
-        "preferredGroupLabel": "Preferred",
-        "otherGroupLabel": "Other currencies",
-        "oficial": "Dollar (Official)",
-        "mep": "Dollar (MEP)",
-        "blue": "Dollar (Blue)",
-        "tag": {
-          "oficial": "Official",
-          "mep": "MEP",
-          "blue": "Blue"
-        },
-        "tagShort": {
-          "oficial": "O",
-          "mep": "M",
-          "blue": "B"
-        }
-      }
+      "pinnedGroupLabel": "Common",
+      "preferredGroupLabel": "Preferred",
+      "otherGroupLabel": "Other currencies"
     }
   },
   "login": {
@@ -480,9 +464,11 @@
         "label": "Preferred currencies",
         "hint": "Shown in a separate group at the top of the currency selector.",
         "placeholder": "Search currencies...",
+        "inputPlaceholder": "Enter ISO codes (e.g. BRL, EUR)",
         "empty": "No currencies found.",
-        "format": "Comma-separated ISO codes, e.g. BRL, EUR, GBP.",
-        "emptyDefault": "Leave empty to use the defaults from the environment configuration."
+        "format": "Comma-separated ISO codes.",
+        "formatWithExample": "Comma-separated ISO codes, e.g. {example}.",
+        "emptyDefault": "Leave empty to use the environment defaults."
       },
       "sectionCurrencies": "Currencies",
       "sectionDashboard": "Dashboard & Limits",
@@ -492,17 +478,28 @@
         "format": "Format: 1M, 3M, 6M, 1Y, YTD. \"All\" is always added.",
         "invalidFormat": "Invalid format. Use NM (months), NY (years) or YTD.",
         "emptyDefault": "Leave all fields empty to use the default presets.",
+        "emptyDefaultWithValues": "Leave all fields empty to use the defaults ({defaults}).",
         "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
       },
       "maxGroups": {
         "label": "Max groups",
         "hint": "Maximum number of investment groups allowed.",
-        "default": "Defaults to 50 if left empty."
+        "default": "Defaults to {value} if left empty."
       },
       "groupWarningPct": {
         "label": "Warning threshold",
         "hint": "Show a warning when this percentage of max groups is reached.",
-        "default": "Defaults to 80% if left empty. Leave empty to disable the warning."
+        "default": "Defaults to {value}% if left empty. Leave empty to disable the warning."
+      },
+      "dollarRate": {
+        "label": "Dollar rate",
+        "hint": "Which USD/ARS exchange rate to use for all conversions.",
+        "default": "Defaults to {value} if not set.",
+        "options": {
+          "oficial": "Official",
+          "mep": "MEP (financial)",
+          "blue": "Blue (parallel)"
+        }
       },
       "cta": {
         "label": "Save",

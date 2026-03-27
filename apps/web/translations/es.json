@@ -46,25 +46,9 @@
       "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
       "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
       "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Mostrando valores en moneda original. Soporte disponible pronto.",
-      "usdVariants": {
-        "groupLabel": "Variantes de Dólar",
-        "arsGroupLabel": "Peso Argentino",
-        "preferredGroupLabel": "Preferidas",
-        "otherGroupLabel": "Otras monedas",
-        "oficial": "Dólar (Oficial)",
-        "mep": "Dólar (MEP)",
-        "blue": "Dólar (Blue)",
-        "tag": {
-          "oficial": "Oficial",
-          "mep": "MEP",
-          "blue": "Blue"
-        },
-        "tagShort": {
-          "oficial": "O",
-          "mep": "M",
-          "blue": "B"
-        }
-      }
+      "pinnedGroupLabel": "Comunes",
+      "preferredGroupLabel": "Preferidas",
+      "otherGroupLabel": "Otras monedas"
     }
   },
   "login": {
@@ -480,8 +464,10 @@
         "label": "Monedas preferidas",
         "hint": "Se muestran en un grupo separado en el selector de monedas.",
         "placeholder": "Buscar monedas...",
+        "inputPlaceholder": "Ingresá códigos ISO (ej. BRL, EUR)",
         "empty": "No se encontraron monedas.",
-        "format": "Códigos ISO separados por coma, ej. BRL, EUR, GBP.",
+        "format": "Códigos ISO separados por coma.",
+        "formatWithExample": "Códigos ISO separados por coma, ej. {example}.",
         "emptyDefault": "Dejá vacío para usar los valores predeterminados del entorno."
       },
       "sectionCurrencies": "Monedas",
@@ -492,17 +478,28 @@
         "format": "Formato: 1M, 3M, 6M, 1A, YTD. \"Todo\" se agrega siempre.",
         "invalidFormat": "Formato inválido. Usá NM (meses), NA (años) o YTD.",
         "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
+        "emptyDefaultWithValues": "Dejá todos los campos vacíos para usar los presets predeterminados ({defaults}).",
         "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
       },
       "maxGroups": {
         "label": "Máximo de grupos",
         "hint": "Cantidad máxima de grupos de inversiones permitidos.",
-        "default": "Por defecto 50 si se deja vacío."
+        "default": "Por defecto {value} si se deja vacío."
       },
       "groupWarningPct": {
         "label": "Umbral de advertencia",
         "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
-        "default": "Por defecto 80% si se deja vacío. Dejá vacío para desactivar la advertencia."
+        "default": "Por defecto {value}% si se deja vacío. Dejá vacío para desactivar la advertencia."
+      },
+      "dollarRate": {
+        "label": "Cotización del dólar",
+        "hint": "Qué tipo de cambio USD/ARS usar para todas las conversiones.",
+        "default": "Por defecto {value} si no se configura.",
+        "options": {
+          "oficial": "Oficial",
+          "mep": "MEP (financiero)",
+          "blue": "Blue (paralelo)"
+        }
       },
       "cta": {
         "label": "Guardar",

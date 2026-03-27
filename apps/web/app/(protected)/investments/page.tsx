@@ -46,13 +46,25 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
     getSettings().catch(() => null),
   ]);
 
+  const pinnedCurrencies = [settings?.primaryCurrency, settings?.secondaryCurrency].filter(
+    (c): c is string => !!c,
+  );
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <InvestmentsToolbar groups={groups} preferredCurrencies={preferredCurrencies} />
-      <InvestmentsDataTable data={data} groups={groups} preferredCurrencies={preferredCurrencies} />
+      <InvestmentsToolbar
+        groups={groups}
+        pinnedCurrencies={pinnedCurrencies}
+        preferredCurrencies={preferredCurrencies}
+      />
+      <InvestmentsDataTable
+        data={data}
+        groups={groups}
+        pinnedCurrencies={pinnedCurrencies}
+        preferredCurrencies={preferredCurrencies}
+      />
     </div>
   );
 }

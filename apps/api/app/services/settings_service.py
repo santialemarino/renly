@@ -10,6 +10,10 @@ SETTINGS_KEY_PREFERRED_CURRENCIES = "preferred_currencies"
 SETTINGS_KEY_PERIOD_PRESETS = "period_presets"
 SETTINGS_KEY_MAX_GROUPS = "max_groups"
 SETTINGS_KEY_GROUP_WARNING_PCT = "group_warning_pct"
+SETTINGS_KEY_DOLLAR_RATE_PREFERENCE = "dollar_rate_preference"
+
+# Valid values for dollar rate preference.
+DOLLAR_RATE_DEFAULT = "mep"
 
 _NOT_SET = object()
 
@@ -27,6 +31,8 @@ def _settings_to_response(settings: dict) -> dict:
     max_groups = raw_max_groups if isinstance(raw_max_groups, int) else None
     raw_warning_pct = settings.get(SETTINGS_KEY_GROUP_WARNING_PCT)
     group_warning_pct = raw_warning_pct if isinstance(raw_warning_pct, int) else None
+    raw_dollar_pref = settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+    dollar_rate_preference = raw_dollar_pref if isinstance(raw_dollar_pref, str) and raw_dollar_pref else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -34,6 +40,7 @@ def _settings_to_response(settings: dict) -> dict:
         "period_presets": period_presets,
         "max_groups": max_groups,
         "group_warning_pct": group_warning_pct,
+        "dollar_rate_preference": dollar_rate_preference,
     }
 
 
@@ -58,6 +65,7 @@ async def update_settings(
     period_presets: list[str] | None = _NOT_SET,
     max_groups: int | None = _NOT_SET,
     group_warning_pct: int | None = _NOT_SET,
+    dollar_rate_preference: str | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -76,6 +84,8 @@ async def update_settings(
         settings[SETTINGS_KEY_MAX_GROUPS] = max_groups
     if group_warning_pct is not _NOT_SET:
         settings[SETTINGS_KEY_GROUP_WARNING_PCT] = group_warning_pct
+    if dollar_rate_preference is not _NOT_SET:
+        settings[SETTINGS_KEY_DOLLAR_RATE_PREFERENCE] = dollar_rate_preference
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.refresh(row)

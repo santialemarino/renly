@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { getCurrencyPillLabel } from '@/app/(protected)/_components/currency-combobox';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ORIGINAL_CURRENCY, useCurrencyStore } from '@/lib/stores/currency-store';
 import { isCurrencySupported } from '@/lib/utils/currency';
@@ -37,7 +36,6 @@ export function CurrencySwitcher({
       toast.warning(tCommon('currency.unsupportedSwitch', { currency: v }));
     }
 
-    // Re-fetch server components so pages that read the currency cookie get the new value.
     router.refresh();
   }
 
@@ -47,7 +45,7 @@ export function CurrencySwitcher({
       <PillToggleGroup
         items={displayCurrencies.map((code) => ({
           value: code,
-          label: code === ORIGINAL_CURRENCY ? t('currency.original') : getCurrencyPillLabel(code),
+          label: code === ORIGINAL_CURRENCY ? t('currency.original') : code,
         }))}
         value={activeCurrency}
         onValueChange={handleChange}

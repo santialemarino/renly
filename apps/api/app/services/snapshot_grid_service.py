@@ -28,6 +28,7 @@ async def get_snapshot_grid(
     group_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
     currency: str | None = None,
+    dollar_preference: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> SnapshotGridResponse:
@@ -55,10 +56,9 @@ async def get_snapshot_grid(
 
     rate_map = None
     if currency:
-        target_base = mh.base_currency(currency)
-        needs_conversion = any(inv.base_currency != target_base for inv in investments)
+        needs_conversion = any(inv.base_currency != currency for inv in investments)
         if needs_conversion:
-            rate_map = await mh.get_rate_map(session, currency)
+            rate_map = await mh.get_rate_map(session, dollar_preference)
             if rate_map is None:
                 raise ExchangeRateUnavailableError(currency)
     inv_ids = [i.id for i in investments]

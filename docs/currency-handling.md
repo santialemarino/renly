@@ -7,12 +7,22 @@ The global currency switcher in the sidebar offers three options (configured in 
 | Option                            | What the user sees                                                                                                                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Primary currency** (e.g. ARS)   | All values converted to ARS                                                                                                                                                                |
-| **Secondary currency** (e.g. USD) | All values converted to USD. For USD, three variants are available: USD (oficial), USD MEP, USD Blue — each uses a different exchange rate.                                                |
+| **Secondary currency** (e.g. USD) | All values converted to USD                                                                                                                                                                |
 | **Original (X)**                  | Per-investment pages show each investment in its `base_currency`. The dashboard falls back to the primary currency (since aggregated metrics can't sum mixed currencies) and shows a hint. |
 
-### Supported conversion pairs
+### Supported currencies
 
-Only **ARS ↔ USD** conversion is currently supported (via DolarApi — oficial, MEP, blue rates). USD appears as three selectable variants in the currency combobox: **USD (Official)** uses the oficial rate, **USD (MEP)** uses the MEP/bolsa rate, and **USD (Blue)** uses the blue/parallel rate. Other ISO 4217 currencies can be configured in Settings but will display a warning icon and toast. Values fall back to original currency when conversion is not available.
+Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). Other ISO 4217 currencies can be stored as an investment's `base_currency` but will display a warning icon and toast when selected in the currency combobox. Values fall back to original currency when conversion is not available.
+
+### Dollar rate preference
+
+The app stores three USD/ARS exchange rates (oficial, MEP, blue). A single user setting — **dollar rate preference** — controls which one is used for all USD↔ARS conversions. Default: MEP (the standard financial market rate in Argentina). This is a background preference, not a visible currency variant — the switcher shows plain `USD`.
+
+| Preference | Rate pair         | Use case                        |
+| ---------- | ----------------- | ------------------------------- |
+| `oficial`  | `USD_ARS_OFICIAL` | Government/official rate        |
+| `mep`      | `USD_ARS_MEP`     | Financial market rate (default) |
+| `blue`     | `USD_ARS_BLUE`    | Informal/parallel market rate   |
 
 ## Architecture
 
@@ -25,7 +35,7 @@ User clicks switcher → Zustand store updates → Cookie persisted (active-curr
 
 - **Store**: `lib/stores/currency-store.ts` — Zustand with `activeCurrency` state.
 - **Cookie**: `ACTIVE_CURRENCY_COOKIE = 'active-currency'` — read by server components.
-- **Switcher**: `_components/currency-switcher.tsx` — ToggleGroup of `displayCurrencies`.
+- **Switcher**: `_components/currency-switcher.tsx` — ToggleGroup of `displayCurrencies`. Shows plain currency codes (e.g. `ARS`, `USD`).
 - **Layout**: `(protected)/layout.tsx` — reads Settings API for primary/secondary, resolves `displayCurrencies` array, reads cookie for active selection.
 
 ### 2. Server component data flow
@@ -39,24 +49,27 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 ```
 
 - **Snapshots page**: passes `currency` to `getSnapshotGrid({ currency })`.
-- **Dashboard page**: passes `currency` to all 5 metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
+- **Dashboard page**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
 
 ### 3. Backend conversion
 
 All conversion happens at query time in the service layer. Stored values are never modified.
 
 ```
-Service function receives currency param (e.g. "USD", "USD_MEP", "USD_BLUE")
-  → mh.get_conversion_rate(session, currency) resolves the right USD/ARS pair
-  → mh.convert_value(value, from_currency, to_currency, rate)
-     → USD → ARS: value × rate
-     → ARS → USD: value ÷ rate
-     → Same currency or unsupported pair: return unchanged
+Router reads user's dollar_rate_preference from settings
+  → passes dollar_preference to service function
+  → service calls mh.get_rate_map(session, dollar_preference)
+  → rate_map: {currency: Decimal} where each value is "1 USD = X currency"
+  → mh.convert_value(value, from_currency, to_currency, rate_map)
+     → Converts through USD as pivot:
+       from → USD (divide by from_rate) → to (multiply by to_rate)
+     → Same currency: return unchanged
+     → Unsupported pair: return unchanged
 ```
 
-- **Helpers**: `services/metrics_helpers.py` — `convert_value()`, `get_conversion_rate()`.
-- **Domain**: `domain/currency.py` — `parse_currency()` maps virtual codes to `(base_currency, ExchangeRatePair)`.
-- **Rate resolution**: `get_conversion_rate()` is centralized in `metrics_helpers.py`. It parses the currency code to determine which rate pair to use (USD → oficial, USD_MEP → MEP, USD_BLUE → blue), with fallback to oficial if the preferred pair is unavailable.
+- **Helpers**: `services/metrics_helpers.py` — `convert_value()`, `can_convert()`, `get_rate_map()`.
+- **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
+- **Rate map**: `get_rate_map(session, dollar_preference)` fetches the latest rates for all pairs. The dollar preference determines which USD/ARS rate pair to include. Returns `{currency: rate}` where rate means "1 USD = X currency". USD itself has an implicit rate of 1.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
 
 ### 4. Original values for editing
@@ -74,23 +87,28 @@ The snapshot form always uses `original_value` / `original_amount` to populate f
 
 ### 5. Exchange rate fetching
 
-Rates are fetched from [DolarApi](https://dolarapi.com) on a schedule:
+Rates are fetched from two sources on a schedule:
+
+- **DolarApi** (`dolarapi.com/v1/dolares`) → USD/ARS oficial, MEP, blue rates. Average of buy/sell.
+- **Frankfurter** (`frankfurter.dev`) → USD/BRL, USD/EUR, USD/GBP rates. ECB data.
+
+Schedule:
 
 - **On startup**: immediate fetch (`next_run_time=datetime.now()`).
-- **Every 6 hours**: APScheduler cron job.
-- **Endpoint**: `GET https://dolarapi.com/v1/dolares` — returns oficial, blue, MEP rates.
+- **Every 6 hours**: APScheduler interval job.
 - **Storage**: `exchange_rates` table with unique constraint on `(date, pair)`. Upsert on each fetch.
-- **Pairs**: `USD_ARS_OFICIAL`, `USD_ARS_MEP`, `USD_ARS_BLUE` (enum `ExchangeRatePair`).
-- **Rate value**: average of buy and sell prices from the API response.
+- **Pairs**: `USD_ARS_OFICIAL`, `USD_ARS_MEP`, `USD_ARS_BLUE`, `USD_BRL`, `USD_EUR`, `USD_GBP` (enum `ExchangeRatePair`).
 
 ### 6. Settings form — currency configuration
 
-The Settings page (`/settings`) lets the user configure primary and secondary currencies:
+The Settings page (`/settings`) has a two-column layout. The left column handles currency configuration:
 
 - **Primary currency**: required. The default display currency (shown first in the switcher, used as fallback when "Original" is selected on the dashboard).
 - **Secondary currency**: optional. Shown as the second option in the sidebar switcher.
+- **Dollar rate**: dropdown with Oficial / MEP / Blue. Controls which USD/ARS rate is used for all conversions. Default: MEP (from env var `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`).
+- **Preferred currencies**: comma-separated ISO codes. Shown in their own group at the top of the currency combobox.
 
-Both fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. USD appears as three variants (Official, MEP, Blue) in a separate group at the top of the combobox, each with a badge tag. The backend stores the selected code (e.g. `USD`, `USD_MEP`, `USD_BLUE`) in `user_settings` (fields: `primary_currency`, `secondary_currency`) via `PUT /settings`.
+Both primary/secondary fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. The user's primary and secondary currencies are pinned at the top in a "Common" group (falls back to env vars `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY` / `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` if no settings exist). The backend stores the selected codes in `user_settings` via `PUT /settings`.
 
 **How the switcher options are built** (in `(protected)/layout.tsx`):
 
@@ -101,9 +119,9 @@ Both fields use a `CurrencyCombobox` with flag emoji, ranked search, and the ful
 
 If no settings exist yet (first login), fallback env vars are used: `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY` (default `ARS`) and `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` (default `USD`).
 
-### 7. Unsupported currency warnings (§11.4.1)
+### 7. Unsupported currency warnings
 
-Only USD and ARS have exchange rate support. When a user selects any other currency, warnings appear at three points:
+Only USD, ARS, BRL, EUR, and GBP have exchange rate support. When a user selects any other currency, warnings appear at three points:
 
 **Settings form (passive + on selection):**
 
@@ -119,15 +137,15 @@ Only USD and ARS have exchange rate support. When a user selects any other curre
 
 - When conversion is not possible, all monetary values fall back to their `base_currency` (same as "Original" mode). No error — the page renders normally, just without conversion.
 
-**Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'USD_MEP', 'USD_BLUE', 'ARS']`.
+**Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'ARS', 'BRL', 'EUR', 'GBP']`.
 
 ### 8. Unconvertible investments in metrics
 
-When the dashboard requests metrics in a specific currency (e.g. ARS), investments with a base currency that can't be converted (e.g. EUR) are **excluded** from all aggregated metrics to avoid silently summing mixed currencies.
+When the dashboard requests metrics in a specific currency (e.g. ARS), investments with a base currency that can't be converted (e.g. CHF) are **excluded** from all aggregated metrics to avoid silently summing mixed currencies.
 
 **Backend flow:**
 
-1. `can_convert(from, to)` in `metrics_helpers.py` checks if the pair is supported (same currency or USD↔ARS).
+1. `can_convert(from, to)` in `metrics_helpers.py` checks if both currencies are in `SUPPORTED_CURRENCIES`.
 2. `_split_by_convertibility()` in `metrics_service.py` splits investments into convertible and skipped lists.
 3. Only convertible investments are used for computation. Skipped investments are returned in `skipped_investments` on every response.
 4. If conversion is needed but no exchange rates exist in the DB, `ExchangeRateUnavailableError` (503) is raised.
@@ -137,54 +155,9 @@ When the dashboard requests metrics in a specific currency (e.g. ARS), investmen
 - The dashboard shows a `WarningHint` listing skipped investments: _"Some investments were excluded because their currency can't be converted: Name (EUR)."_
 - If the API returns 503 (no rates at all), the dashboard shows a generic error fallback: _"Unable to load dashboard data."_
 
-### 9. Edge cases summary
+### 9. Multi-currency pivot conversion
 
-| Scenario                         | Behaviour                                           |
-| -------------------------------- | --------------------------------------------------- |
-| All investments USD, display ARS | All converted via MEP rate                          |
-| Mixed USD+ARS, display ARS       | Both converted correctly                            |
-| EUR investment, display ARS      | EUR investment excluded, warning shown              |
-| Display currency EUR             | USD and ARS investments excluded, warning lists all |
-| All investments same as display  | No conversion needed, no rate fetched               |
-| No exchange rates in DB          | 503 error, dashboard shows load error fallback      |
-| "Original" selected on dashboard | Falls back to primary currency, hint shown          |
-| "Original" on snapshots page     | No conversion, values in base currency              |
-
-## Data model
-
-```sql
--- Each investment has a base currency
-investments.base_currency  -- e.g. 'USD', 'ARS'
-
--- Snapshots and transactions store values in the investment's base currency
-investment_snapshots.value     -- always in base_currency
-investment_snapshots.currency  -- same as investment.base_currency
-transactions.amount            -- always in base_currency
-transactions.currency          -- same as investment.base_currency
-
--- Exchange rates fetched from DolarApi
-exchange_rates.pair   -- USD_ARS_OFICIAL | USD_ARS_MEP | USD_ARS_BLUE
-exchange_rates.rate   -- e.g. 1250.50 (1 USD = 1250.50 ARS)
-exchange_rates.date   -- rate date
-```
-
-## USD variant system
-
-USD appears as three virtual currency codes, each mapped to a different exchange rate:
-
-| Code       | Label             | Rate pair         |
-| ---------- | ----------------- | ----------------- |
-| `USD`      | Dollar (Official) | `USD_ARS_OFICIAL` |
-| `USD_MEP`  | Dollar (MEP)      | `USD_ARS_MEP`     |
-| `USD_BLUE` | Dollar (Blue)     | `USD_ARS_BLUE`    |
-
-**Backend:** `domain/currency.py` defines `parse_currency()` which maps a virtual code to `(base_currency, ExchangeRatePair)`. `metrics_helpers.get_conversion_rate()` uses this to pick the right rate. `can_convert()` and `convert_value()` resolve variants to base `"USD"` via `base_currency()`.
-
-**Frontend:** Variants are defined in `lib/constants/currency.ts` (`USD_VARIANTS`). The `CurrencyCombobox` shows them as a grouped section at the top with badge tags. The sidebar `PillToggleGroup` shows short labels (USD, USD M, USD B). `lib/utils/currency.ts` provides `isUsdVariant()`, `baseCurrency()`, and `isCurrencySupported()`.
-
-## Multi-currency pivot conversion
-
-Beyond ARS/USD, the app supports **BRL**, **EUR**, and **GBP** via Frankfurter (frankfurter.dev, free ECB data). All rates are stored against USD; any pair converts through USD as pivot.
+All rates are stored against USD; any pair converts through USD as pivot.
 
 **Rate sources:**
 
@@ -193,6 +166,38 @@ Beyond ARS/USD, the app supports **BRL**, **EUR**, and **GBP** via Frankfurter (
 
 **Pivot example:** BRL → ARS = BRL → USD (divide by USD/BRL rate) → ARS (multiply by USD/ARS rate).
 
-**Rate map:** `get_rate_map(session, target_currency)` builds a `{base_currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The target currency determines which ARS rate pair to use (oficial/MEP/blue based on the virtual code).
+**Rate map:** `get_rate_map(session, dollar_preference)` builds a `{currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The `dollar_preference` param determines which USD/ARS rate pair to use.
 
-**Combobox:** ARS, BRL, EUR, GBP are pinned at the top of the "Other currencies" group for quick access. USD variants remain in their own group above.
+**Combobox:** The user's primary and secondary currencies are pinned at the top in a "Common" group (dynamic, from settings or env fallbacks). User-configured preferred currencies appear in a "Preferred" group below. All other currencies appear in an "Other currencies" group.
+
+### 10. Edge cases summary
+
+| Scenario                         | Behaviour                                      |
+| -------------------------------- | ---------------------------------------------- |
+| All investments USD, display ARS | All converted via the preferred dollar rate    |
+| Mixed USD+ARS, display ARS       | Both converted correctly                       |
+| EUR investment, display ARS      | Converted via pivot (EUR→USD→ARS)              |
+| CHF investment, display ARS      | CHF investment excluded, warning shown         |
+| Display currency CHF             | All investments excluded, warning lists all    |
+| All investments same as display  | No conversion needed, no rate fetched          |
+| No exchange rates in DB          | 503 error, dashboard shows load error fallback |
+| "Original" selected on dashboard | Falls back to primary currency, hint shown     |
+| "Original" on snapshots page     | No conversion, values in base currency         |
+
+## Data model
+
+```sql
+-- Each investment has a base currency
+investments.base_currency  -- e.g. 'USD', 'ARS', 'BRL'
+
+-- Snapshots and transactions store values in the investment's base currency
+investment_snapshots.value     -- always in base_currency
+investment_snapshots.currency  -- same as investment.base_currency
+transactions.amount            -- always in base_currency
+transactions.currency          -- same as investment.base_currency
+
+-- Exchange rates fetched from DolarApi and Frankfurter
+exchange_rates.pair   -- USD_ARS_OFICIAL | USD_ARS_MEP | USD_ARS_BLUE | USD_BRL | USD_EUR | USD_GBP
+exchange_rates.rate   -- e.g. 1250.50 (1 USD = 1250.50 ARS)
+exchange_rates.date   -- rate date
+```

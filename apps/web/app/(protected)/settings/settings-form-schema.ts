@@ -20,6 +20,7 @@ export function buildSettingsFormSchema(presetInvalidMsg: string) {
     periodPreset4: presetField(presetInvalidMsg),
     maxGroups: z.string().optional(),
     groupWarningPct: z.string().optional(),
+    dollarRatePreference: z.string().optional(),
   });
 }
 
