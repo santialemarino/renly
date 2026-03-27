@@ -5,9 +5,11 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.models.investment import InvestmentCategory
+from app.repositories import user_settings_repository
 from app.schemas.asset_price import AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
 from app.services import asset_price_service
 from app.services import metrics_helpers as mh
+from app.services.settings_service import DOLLAR_RATE_DEFAULT, SETTINGS_KEY_DOLLAR_RATE_PREFERENCE
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
 
@@ -31,7 +33,13 @@ async def lookup_price(
     converted_currency = None
 
     if convert_to and convert_to != price.currency:
-        rate_map = await mh.get_rate_map(session, convert_to)
+        row = await user_settings_repository.get_by_user_id(session, current_user.id)
+        dp = DOLLAR_RATE_DEFAULT
+        if row and row.settings:
+            pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+            if isinstance(pref, str) and pref:
+                dp = pref
+        rate_map = await mh.get_rate_map(session, dp)
         if rate_map and mh.can_convert(price.currency, convert_to):
             converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
             converted_currency = convert_to

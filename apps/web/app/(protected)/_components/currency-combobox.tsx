@@ -7,7 +7,6 @@ import { ChevronDown, X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
-  Badge,
   Button,
   Command,
   CommandEmpty,
@@ -21,41 +20,24 @@ import {
   Separator,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { USD_VARIANTS } from '@/lib/constants/currency';
-import { isUsdVariant } from '@/lib/utils/currency';
+import {
+  ENV_PREFERRED_CURRENCIES,
+  FALLBACK_PRIMARY_CURRENCY,
+  FALLBACK_SECONDARY_CURRENCY,
+} from '@/lib/constants/currency';
 
 const CLEAR_ANIMATION_MS = 100;
 
 // Meta/test codes that are not real currencies.
 const EXCLUDED_CODES = new Set(['XXX', 'XTS']);
 
-// Default preferred currencies from env var. Comma-separated, e.g. "BRL,EUR,GBP".
-const ENV_PREFERRED_CODES = (process.env.NEXT_PUBLIC_PREFERRED_CURRENCIES ?? '')
-  .split(',')
-  .filter(Boolean);
-
-// Full ISO list — USD and ARS handled separately in grouped sections.
+// Full ISO currency list.
 const ALL_ISO = cc.data
-  .filter((c) => !EXCLUDED_CODES.has(c.code) && c.code !== 'USD')
+  .filter((c) => !EXCLUDED_CODES.has(c.code))
   .map((c) => ({ code: c.code, name: c.currency }));
 
-const ARS_ENTRY = ALL_ISO.find((c) => c.code === 'ARS')!;
-
-// Splits the currency list into preferred and other based on the given codes.
-function splitByPreferred(preferredCodes: string[]) {
-  const preferredSet = new Set(preferredCodes);
-  const preferred = ALL_ISO.filter((c) => preferredSet.has(c.code)).sort((a, b) =>
-    a.code.localeCompare(b.code),
-  );
-  const other = ALL_ISO.filter((c) => c.code !== 'ARS' && !preferredSet.has(c.code)).sort((a, b) =>
-    a.code.localeCompare(b.code),
-  );
-  return { preferred, other };
-}
-
-function getCurrencyName(code: string): string {
-  return cc.code(code)?.currency ?? code;
-}
+// Fallback pinned currencies from env (primary + secondary).
+const DEFAULT_PINNED_CODES = [FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY];
 
 // Allowlist of currently active ISO 3166-1 alpha-2 codes; dissolved regions are excluded.
 const VALID_REGIONS = new Set(iso31661.map((c) => c.alpha2));
@@ -64,6 +46,24 @@ const VALID_REGIONS = new Set(iso31661.map((c) => c.alpha2));
 const FLAG_OVERRIDES: Record<string, string> = {
   EUR: '🇪🇺',
 };
+
+// Splits currencies into pinned, preferred, and other groups.
+function splitGroups(pinnedCodes: string[], preferredCodes: string[]) {
+  const pinnedSet = new Set(pinnedCodes);
+  const preferredSet = new Set(preferredCodes);
+  const pinned = pinnedCodes.map((code) => ALL_ISO.find((c) => c.code === code)!).filter(Boolean);
+  const preferred = ALL_ISO.filter((c) => !pinnedSet.has(c.code) && preferredSet.has(c.code)).sort(
+    (a, b) => a.code.localeCompare(b.code),
+  );
+  const other = ALL_ISO.filter((c) => !pinnedSet.has(c.code) && !preferredSet.has(c.code)).sort(
+    (a, b) => a.code.localeCompare(b.code),
+  );
+  return { pinned, preferred, other };
+}
+
+function getCurrencyName(code: string): string {
+  return cc.code(code)?.currency ?? code;
+}
 
 /*
  * Derives the flag emoji from the first two letters of the currency code (e.g. "USD" → "US" → 🇺🇸).
@@ -77,21 +77,6 @@ function getCurrencyFlag(code: string): string | null {
   return [...country].map((c) => String.fromCodePoint(0x1f1e6 - 65 + c.charCodeAt(0))).join('');
 }
 
-// Returns the display name for a currency code (handles USD variants).
-function getDisplayName(code: string, tVariants: ReturnType<typeof useTranslations>): string {
-  const variant = USD_VARIANTS.find((v) => v.code === code);
-  if (variant) return tVariants(variant.labelKey);
-  return getCurrencyName(code);
-}
-
-// Returns a short label for the pill toggle (e.g. "USD", "USD M", "USD B").
-export function getCurrencyPillLabel(code: string): string {
-  if (code === 'USD') return 'USD';
-  if (code === 'USD_MEP') return 'USD M';
-  if (code === 'USD_BLUE') return 'USD B';
-  return code;
-}
-
 interface CurrencyComboboxProps {
   value: string | null;
   exclude: string[];
@@ -100,6 +85,7 @@ interface CurrencyComboboxProps {
   noResults: string;
   surface?: boolean;
   compact?: boolean;
+  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
   onChange: (code: string) => void;
   onClear?: () => void;
@@ -113,12 +99,13 @@ export function CurrencyCombobox({
   noResults,
   surface = false,
   compact = false,
+  pinnedCurrencies,
   preferredCurrencies,
   onChange,
   onClear,
   'aria-invalid': ariaInvalid,
 }: CurrencyComboboxProps) {
-  const tVariants = useTranslations('common.currency.usdVariants');
+  const t = useTranslations('common.currency');
   const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -128,21 +115,14 @@ export function CurrencyCombobox({
   const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = search.toLowerCase();
 
-  // Split currencies into preferred and other groups. Prop overrides env var.
-  const { preferred: PREFERRED_CURRENCIES, other: OTHER_CURRENCIES } = splitByPreferred(
-    preferredCurrencies ?? ENV_PREFERRED_CODES,
-  );
-
-  // USD variants group — filtered by search and exclusions.
-  const filteredVariants = USD_VARIANTS.filter(
-    (v) =>
-      !exclude.includes(v.code) &&
-      (!q ||
-        v.code.toLowerCase().includes(q) ||
-        tVariants(v.labelKey).toLowerCase().includes(q) ||
-        'usd'.includes(q) ||
-        'dollar'.includes(q) ||
-        'dolar'.includes(q)),
+  // Split currencies into pinned, preferred, and other groups. Props override env defaults.
+  const {
+    pinned: pinnedGroup,
+    preferred: preferredGroup,
+    other: otherGroup,
+  } = splitGroups(
+    pinnedCurrencies ?? DEFAULT_PINNED_CODES,
+    preferredCurrencies ?? ENV_PREFERRED_CURRENCIES,
   );
 
   // Filter helper — excludes sibling currency and non-matching search entries.
@@ -151,10 +131,9 @@ export function CurrencyCombobox({
     (!q || c.code.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
 
   // Grouped filtered lists.
-  const filteredArs = !exclude.includes('ARS') && matchesCurrency(ARS_ENTRY) ? [ARS_ENTRY] : [];
-  const filteredPreferred = PREFERRED_CURRENCIES.filter(matchesCurrency);
-  const filteredOther = OTHER_CURRENCIES.filter(matchesCurrency).sort((a, b) => {
-    // With a query, score matches so the most relevant results bubble to the top.
+  const filteredPinned = pinnedGroup.filter(matchesCurrency);
+  const filteredPreferred = preferredGroup.filter(matchesCurrency);
+  const filteredOther = otherGroup.filter(matchesCurrency).sort((a, b) => {
     if (!q) return 0;
     const score = (c: typeof a) => {
       const code = c.code.toLowerCase();
@@ -226,16 +205,10 @@ export function CurrencyCombobox({
             typeaheadTimer.current = setTimeout(() => {
               typeaheadBuffer.current = '';
             }, 500);
-            const q = typeaheadBuffer.current;
-            // Check USD variants first, then regular currencies.
-            const variantMatch = USD_VARIANTS.find(
-              (v) => !exclude.includes(v.code) && v.code.startsWith(q),
+            const prefix = typeaheadBuffer.current;
+            const match = ALL_ISO.find(
+              (c) => !exclude.includes(c.code) && c.code.startsWith(prefix),
             );
-            if (variantMatch) {
-              onChange(variantMatch.code);
-              return;
-            }
-            const match = ALL_ISO.find((c) => !exclude.includes(c.code) && c.code.startsWith(q));
             if (match) onChange(match.code);
           }}
           className={cn(
@@ -254,19 +227,11 @@ export function CurrencyCombobox({
                 clearing && 'opacity-0',
               )}
             >
-              <span className="shrink-0 text-paragraph-xs font-mono">
-                {isUsdVariant(value) ? 'USD' : value}
-              </span>
+              <span className="shrink-0 text-paragraph-xs font-mono">{value}</span>
               {!compact && (
-                <span className="text-paragraph-sm truncate">
-                  {getDisplayName(value, tVariants)}
-                </span>
+                <span className="text-paragraph-sm truncate">{getCurrencyName(value)}</span>
               )}
-              {isUsdVariant(value) ? (
-                <span className="shrink-0">{getCurrencyFlag('USD')}</span>
-              ) : (
-                getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>
-              )}
+              {getCurrencyFlag(value) && <span className="shrink-0">{getCurrencyFlag(value)}</span>}
             </span>
           ) : (
             <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
@@ -296,7 +261,7 @@ export function CurrencyCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-(--radix-popover-trigger-width) p-0 @container"
+        className="w-(--radix-popover-trigger-width) p-0"
         align="start"
         sideOffset={8}
       >
@@ -314,50 +279,18 @@ export function CurrencyCombobox({
             onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>{noResults}</CommandEmpty>
-            {filteredArs.length > 0 && (
-              <CommandGroup heading={tVariants('arsGroupLabel')}>
-                {filteredArs.map((c) => renderCurrencyItem(c))}
-              </CommandGroup>
-            )}
-            {filteredVariants.length > 0 && (
-              <CommandGroup heading={tVariants('groupLabel')}>
-                {filteredVariants.map((variant) => (
-                  <CommandItem
-                    key={variant.code}
-                    value={`${variant.code} USD dollar ${tVariants(variant.labelKey)}`}
-                    onSelect={() => {
-                      onChange(variant.code);
-                      setOpen(false);
-                    }}
-                  >
-                    <span className="shrink-0 text-paragraph-xs font-mono">USD</span>
-                    {!compact && (
-                      <span className="truncate text-paragraph-sm">
-                        {tVariants(variant.labelKey)}
-                      </span>
-                    )}
-                    <span className="ml-auto inline-flex shrink-0 items-center gap-x-1.5 pr-1">
-                      <Badge variant="square" className="text-paragraph-mini px-1.5">
-                        <span className="@xs:hidden">
-                          {tVariants(`tagShort.${variant.labelKey}`)}
-                        </span>
-                        <span className="hidden @xs:inline">
-                          {tVariants(`tag.${variant.labelKey}`)}
-                        </span>
-                      </Badge>
-                      <span>{getCurrencyFlag('USD')}</span>
-                    </span>
-                  </CommandItem>
-                ))}
+            {filteredPinned.length > 0 && (
+              <CommandGroup heading={t('pinnedGroupLabel')}>
+                {filteredPinned.map((c) => renderCurrencyItem(c))}
               </CommandGroup>
             )}
             {filteredPreferred.length > 0 && (
-              <CommandGroup heading={tVariants('preferredGroupLabel')}>
+              <CommandGroup heading={t('preferredGroupLabel')}>
                 {filteredPreferred.map((c) => renderCurrencyItem(c))}
               </CommandGroup>
             )}
             {filteredOther.length > 0 && (
-              <CommandGroup heading={tVariants('otherGroupLabel')}>
+              <CommandGroup heading={t('otherGroupLabel')}>
                 {filteredOther.map((c) => renderCurrencyItem(c))}
               </CommandGroup>
             )}

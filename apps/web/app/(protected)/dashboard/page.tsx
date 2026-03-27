@@ -27,9 +27,9 @@ import {
 } from '@/lib/api/metrics';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
-import { buildPresets, presetToStartDate } from '@/lib/constants/period-presets';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
 
 const FALLBACK_PRIMARY = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
 

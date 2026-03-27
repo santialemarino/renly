@@ -39,5 +39,7 @@ async def update_settings(
         kwargs["max_groups"] = payload["max_groups"]
     if "group_warning_pct" in payload:
         kwargs["group_warning_pct"] = payload["group_warning_pct"]
+    if "dollar_rate_preference" in payload:
+        kwargs["dollar_rate_preference"] = payload["dollar_rate_preference"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

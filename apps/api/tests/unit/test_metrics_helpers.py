@@ -229,9 +229,6 @@ class TestCanConvert:
     def test_same_currency(self):
         assert can_convert("USD", "USD") is True
 
-    def test_same_base_usd_variant(self):
-        assert can_convert("USD_MEP", "USD") is True
-
     def test_usd_ars(self):
         assert can_convert("USD", "ARS") is True
 
@@ -289,11 +286,6 @@ class TestConvertValue:
         result = convert_value(Decimal("550"), "BRL", "GBP", self.RATE_MAP)
         expected = Decimal("550") / Decimal("5.5") * Decimal("0.79")
         assert result == expected
-
-    def test_usd_variant_to_ars(self):
-        # USD_MEP resolves to base "USD", so 100 USD_MEP → ARS = 100 * 1400.
-        result = convert_value(Decimal("100"), "USD_MEP", "ARS", self.RATE_MAP)
-        assert result == Decimal("140000")
 
     def test_eur_to_usd(self):
         # 100 EUR → USD: 100 / 0.92.

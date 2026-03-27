@@ -12,6 +12,7 @@ interface SaveSettingsParams {
   periodPresets?: string[] | null;
   maxGroups?: number | null;
   groupWarningPct?: number | null;
+  dollarRatePreference?: string | null;
 }
 
 export async function saveSettings(params: SaveSettingsParams): Promise<SettingsData> {
@@ -31,6 +32,9 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
   if (params.groupWarningPct !== undefined) {
     body.group_warning_pct = params.groupWarningPct;
   }
+  if (params.dollarRatePreference !== undefined) {
+    body.dollar_rate_preference = params.dollarRatePreference;
+  }
   const res = await authenticatedFetch('/settings', {
     method: 'PUT',
     body,
@@ -49,5 +53,6 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     periodPresets: raw.period_presets ?? null,
     maxGroups: raw.max_groups ?? null,
     groupWarningPct: raw.group_warning_pct ?? null,
+    dollarRatePreference: raw.dollar_rate_preference ?? null,
   };
 }

@@ -144,7 +144,15 @@ async def fetch_comafi_ratios() -> RatioResult:
         return []
 
     def _parse(data: bytes) -> RatioResult:
+        import sys
+
+        # openpyxl 3.1.x crashes if numpy 2.x is importable (uses removed numpy.short).
+        # Temporarily hide numpy so openpyxl skips its numpy compat path.
+        _np = sys.modules.pop("numpy", None)
         from openpyxl import load_workbook
+
+        if _np is not None:
+            sys.modules["numpy"] = _np
 
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         ws = wb.active

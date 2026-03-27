@@ -11,6 +11,7 @@ interface SettingsRaw {
   period_presets: string[] | null;
   max_groups: number | null;
   group_warning_pct: number | null;
+  dollar_rate_preference: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -22,6 +23,7 @@ export interface SettingsData {
   periodPresets: string[] | null;
   maxGroups: number | null;
   groupWarningPct: number | null;
+  dollarRatePreference: string | null;
 }
 
 // --- Mappers ---
@@ -34,6 +36,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     periodPresets: raw.period_presets,
     maxGroups: raw.max_groups,
     groupWarningPct: raw.group_warning_pct,
+    dollarRatePreference: raw.dollar_rate_preference,
   };
 }
 

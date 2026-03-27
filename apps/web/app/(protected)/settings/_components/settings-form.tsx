@@ -8,7 +8,18 @@ import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import { Button, Hint, Input, Label, Separator } from '@repo/ui/components';
+import {
+  Button,
+  Hint,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
+} from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import { saveSettings } from '@/app/(protected)/settings/settings-actions';
 import {
@@ -18,21 +29,22 @@ import {
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PERIOD_PRESETS } from '@/lib/constants/period-presets';
+import {
+  DOLLAR_RATE_DEFAULT,
+  DOLLAR_RATE_OPTIONS,
+  ENV_PREFERRED_CURRENCIES,
+  FALLBACK_PRIMARY_CURRENCY,
+  FALLBACK_SECONDARY_CURRENCY,
+} from '@/lib/constants/currency';
+import { ENV_PERIOD_PRESETS, ENV_PRESET_CODES } from '@/lib/constants/period-presets';
 import { isCurrencySupported } from '@/lib/utils/currency';
+import { localizePreset } from '@/lib/utils/period-presets';
 
-// Localizes a canonical preset code (e.g. "1Y") for display using the year suffix from translations.
-function localizePreset(code: string | undefined, yearSuffix: string): string {
-  if (!code) return '';
-  return code.replace(/Y$/i, yearSuffix);
-}
+const ENV_PREFERRED = ENV_PREFERRED_CURRENCIES.join(', ');
 
 interface SettingsFormProps {
   initialSettings: SettingsData;
 }
-
-const fallbackPrimary = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
-const fallbackSecondary = process.env.NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY ?? 'USD';
 
 export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const t = useTranslations('settings');
@@ -51,8 +63,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   } = useForm<SettingsFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      primaryCurrency: initialSettings.primaryCurrency ?? fallbackPrimary,
-      secondaryCurrency: initialSettings.secondaryCurrency ?? fallbackSecondary,
+      primaryCurrency: initialSettings.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY,
+      secondaryCurrency: initialSettings.secondaryCurrency ?? FALLBACK_SECONDARY_CURRENCY,
       preferredCurrencies: initialSettings.preferredCurrencies?.join(', ') ?? '',
       periodPreset1: localizePreset(initialSettings.periodPresets?.[0], yearSuffix),
       periodPreset2: localizePreset(initialSettings.periodPresets?.[1], yearSuffix),
@@ -60,6 +72,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       periodPreset4: localizePreset(initialSettings.periodPresets?.[3], yearSuffix),
       maxGroups: initialSettings.maxGroups?.toString() ?? '',
       groupWarningPct: initialSettings.groupWarningPct?.toString() ?? '',
+      dollarRatePreference: initialSettings.dollarRatePreference ?? DOLLAR_RATE_DEFAULT,
     },
   });
 
@@ -111,6 +124,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         periodPresets: presets.length > 0 ? presets : null,
         maxGroups: !isNaN(maxGroupsNum!) ? maxGroupsNum : null,
         groupWarningPct: !isNaN(warningPctNum!) ? warningPctNum : null,
+        dollarRatePreference: values.dollarRatePreference || null,
       });
 
       // Reset form with normalized values so inputs update immediately.
@@ -124,6 +138,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         periodPreset4: localizePreset(presets[3], yearSuffix),
         maxGroups: maxGroupsNum?.toString() ?? '',
         groupWarningPct: warningPctNum?.toString() ?? '',
+        dollarRatePreference: values.dollarRatePreference,
       });
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'settings-save' });
@@ -165,6 +180,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 <CurrencyCombobox
                   value={field.value ?? null}
                   exclude={secondaryCurrency ? [secondaryCurrency] : []}
+                  pinnedCurrencies={[primaryCurrency, secondaryCurrency].filter(
+                    (c): c is string => !!c,
+                  )}
                   preferredCurrencies={livePreferredCurrencies}
                   placeholder={t('form.primaryCurrency.placeholder')}
                   searchPlaceholder={t('form.searchPlaceholder')}
@@ -204,6 +222,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 <CurrencyCombobox
                   value={field.value ?? null}
                   exclude={primaryCurrency ? [primaryCurrency] : []}
+                  pinnedCurrencies={[primaryCurrency, secondaryCurrency].filter(
+                    (c): c is string => !!c,
+                  )}
                   preferredCurrencies={livePreferredCurrencies}
                   placeholder={t('form.secondaryCurrency.placeholder')}
                   searchPlaceholder={t('form.searchPlaceholder')}
@@ -229,6 +250,34 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           <Separator />
 
           <div className="flex flex-col gap-y-2">
+            <Label>{t('form.dollarRate.label')}</Label>
+            <Hint>{t('form.dollarRate.hint')}</Hint>
+            <Controller
+              name="dollarRatePreference"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value ?? DOLLAR_RATE_DEFAULT} onValueChange={field.onChange}>
+                  <SelectTrigger className="w-full" surface>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DOLLAR_RATE_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {t(`form.dollarRate.options.${opt.labelKey}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <InfoHint>
+              {t('form.dollarRate.default', { value: DOLLAR_RATE_DEFAULT.toUpperCase() })}
+            </InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
             <Label>{t('form.preferredCurrencies.label')}</Label>
             <Hint>{t('form.preferredCurrencies.hint')}</Hint>
             <Controller
@@ -237,13 +286,17 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               render={({ field }) => (
                 <Input
                   {...field}
-                  placeholder="BRL, EUR, GBP"
-                  className="uppercase"
+                  surface
+                  placeholder={ENV_PREFERRED || t('form.preferredCurrencies.inputPlaceholder')}
                   onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                 />
               )}
             />
-            <InfoHint>{t('form.preferredCurrencies.format')}</InfoHint>
+            <InfoHint>
+              {ENV_PREFERRED
+                ? t('form.preferredCurrencies.formatWithExample', { example: ENV_PREFERRED })
+                : t('form.preferredCurrencies.format')}
+            </InfoHint>
             <InfoHint>{t('form.preferredCurrencies.emptyDefault')}</InfoHint>
           </div>
         </div>
@@ -269,7 +322,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                     render={({ field, fieldState }) => (
                       <Input
                         {...field}
-                        placeholder={localizePreset(PERIOD_PRESETS[i]?.code, yearSuffix)}
+                        surface
+                        placeholder={localizePreset(ENV_PRESET_CODES[i]?.code, yearSuffix)}
                         aria-invalid={!!fieldState.error}
                         containerClassName="text-center"
                         className="uppercase"
@@ -289,7 +343,11 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               </p>
             )}
             <InfoHint>{t('form.periodPresets.format')}</InfoHint>
-            <InfoHint>{t('form.periodPresets.emptyDefault')}</InfoHint>
+            <InfoHint>
+              {ENV_PERIOD_PRESETS
+                ? t('form.periodPresets.emptyDefaultWithValues', { defaults: ENV_PERIOD_PRESETS })
+                : t('form.periodPresets.emptyDefault')}
+            </InfoHint>
             <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
           </div>
 
@@ -301,9 +359,11 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             <Controller
               name="maxGroups"
               control={control}
-              render={({ field }) => <Input {...field} type="number" min={1} placeholder="50" />}
+              render={({ field }) => (
+                <Input {...field} surface type="number" min={1} placeholder="50" />
+              )}
             />
-            <InfoHint>{t('form.maxGroups.default')}</InfoHint>
+            <InfoHint>{t('form.maxGroups.default', { value: '50' })}</InfoHint>
           </div>
 
           <Separator />
@@ -315,10 +375,10 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               name="groupWarningPct"
               control={control}
               render={({ field }) => (
-                <Input {...field} type="number" min={1} max={100} placeholder="80" />
+                <Input {...field} surface type="number" min={1} max={100} placeholder="80" />
               )}
             />
-            <InfoHint>{t('form.groupWarningPct.default')}</InfoHint>
+            <InfoHint>{t('form.groupWarningPct.default', { value: '80' })}</InfoHint>
           </div>
         </div>
       </div>

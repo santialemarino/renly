@@ -13,11 +13,8 @@ import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import {
-  formatPresetLabel,
-  PERIOD_PRESETS,
-  type PeriodPreset,
-} from '@/lib/constants/period-presets';
+import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/constants/period-presets';
+import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 const DATE_FORMAT = 'MMM d, yyyy';
 
