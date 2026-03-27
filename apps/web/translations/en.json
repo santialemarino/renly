@@ -405,7 +405,7 @@
         "placeholder": "0.00"
       },
       "quantity": {
-        "label": "Quantity (shares/units)",
+        "label": "Shares/units",
         "placeholder": "0"
       },
       "price": {

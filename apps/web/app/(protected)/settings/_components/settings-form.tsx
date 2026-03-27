@@ -180,9 +180,6 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 <CurrencyCombobox
                   value={field.value ?? null}
                   exclude={secondaryCurrency ? [secondaryCurrency] : []}
-                  pinnedCurrencies={[primaryCurrency, secondaryCurrency].filter(
-                    (c): c is string => !!c,
-                  )}
                   preferredCurrencies={livePreferredCurrencies}
                   placeholder={t('form.primaryCurrency.placeholder')}
                   searchPlaceholder={t('form.searchPlaceholder')}
@@ -222,9 +219,6 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 <CurrencyCombobox
                   value={field.value ?? null}
                   exclude={primaryCurrency ? [primaryCurrency] : []}
-                  pinnedCurrencies={[primaryCurrency, secondaryCurrency].filter(
-                    (c): c is string => !!c,
-                  )}
                   preferredCurrencies={livePreferredCurrencies}
                   placeholder={t('form.secondaryCurrency.placeholder')}
                   searchPlaceholder={t('form.searchPlaceholder')}

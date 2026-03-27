@@ -405,7 +405,7 @@
         "placeholder": "0.00"
       },
       "quantity": {
-        "label": "Cantidad (acciones/unidades)",
+        "label": "Acciones/unidades",
         "placeholder": "0"
       },
       "price": {

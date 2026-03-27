@@ -39,7 +39,7 @@ function SortIcon({
   const isAsc = active && sortOrder === 'asc';
   const isDesc = active && sortOrder === 'desc';
   return (
-    <span className="grid shrink-0">
+    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
       <ChevronsUpDown
         className={cn(
           'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
@@ -105,7 +105,7 @@ export function GroupsDataTable({ groups, investments, sortBy, sortOrder }: Grou
             <button
               type="button"
               onClick={() => handleSortChange('name')}
-              className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+              className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
             >
               {t('table.name')}
               <SortIcon column="name" sortBy={activeSortBy} sortOrder={activeSortOrder} />
