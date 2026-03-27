@@ -101,6 +101,17 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     await session.commit()
 
 
+# Returns all active investments that have a ticker set.
+async def list_with_ticker(session: AsyncSession) -> list[Investment]:
+    result = await session.execute(
+        select(Investment).where(
+            Investment.is_active == True,  # noqa: E712
+            Investment.ticker.is_not(None),
+        )
+    )
+    return list(result.scalars().all())
+
+
 # Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
     list_by_user_filtered = staticmethod(list_by_user_filtered)
@@ -108,6 +119,7 @@ class InvestmentRepository:
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     create = staticmethod(create)
     save = staticmethod(save)
+    list_with_ticker = staticmethod(list_with_ticker)
 
 
 # Singleton used by services to access investment persistence.

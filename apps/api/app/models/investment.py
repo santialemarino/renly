@@ -1,9 +1,11 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 
 from sqlalchemy import Column
 from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
+
+from app.models.utils import utcnow
 
 
 # Investment category (CEDEARs, FCI, dollars, bonds, etc.).
@@ -40,5 +42,5 @@ class Investment(SQLModel, table=True):
     broker: str | None = Field(default=None, max_length=100)
     notes: str | None = Field(default=None)
     is_active: bool = Field(default=True, description="Whether to include in portfolio.")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

@@ -159,6 +159,41 @@ CREATE TABLE investment_group_members (
 
 CREATE INDEX idx_investment_group_members_group_id ON investment_group_members(group_id);
 
+-- Asset prices
+-- Historical prices for publicly traded assets, fetched from external APIs.
+-- source tracks the provider (yfinance, coingecko, cafci, manual).
+CREATE TABLE asset_prices (
+  id         BIGSERIAL PRIMARY KEY,
+  ticker     VARCHAR(20) NOT NULL,
+  date       DATE NOT NULL,
+  price      NUMERIC(18, 6) NOT NULL,
+  currency   VARCHAR(10) NOT NULL,
+  source     VARCHAR(50) NOT NULL DEFAULT 'manual',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (ticker, date)
+);
+
+CREATE INDEX idx_asset_prices_ticker_date ON asset_prices(ticker, date DESC);
+
+-- CEDEAR ratios
+-- Conversion ratio between CEDEARs and their underlying stock.
+-- e.g. 10 CEDEARs of AAPL.BA = 1 AAPL share (ratio = 10).
+-- Ratios change only on stock splits; stored by effective_date.
+CREATE TABLE cedear_ratios (
+  id              BIGSERIAL PRIMARY KEY,
+  ticker          VARCHAR(20) NOT NULL,
+  underlying      VARCHAR(20) NOT NULL,
+  ratio           NUMERIC(10, 4) NOT NULL,
+  effective_date  DATE NOT NULL,
+  source          VARCHAR(50) NOT NULL DEFAULT 'manual',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (ticker, effective_date)
+);
+
+CREATE INDEX idx_cedear_ratios_ticker ON cedear_ratios(ticker, effective_date DESC);
+
 -- Per-user app config (primary_currency, secondary_currency; expandable later via JSONB keys).
 CREATE TABLE user_settings (
   id         BIGSERIAL PRIMARY KEY,
@@ -209,6 +244,14 @@ CREATE TRIGGER trg_investment_targets_updated_at
 
 CREATE TRIGGER trg_investment_groups_updated_at
   BEFORE UPDATE ON investment_groups
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_asset_prices_updated_at
+  BEFORE UPDATE ON asset_prices
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_cedear_ratios_updated_at
+  BEFORE UPDATE ON cedear_ratios
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_user_settings_updated_at

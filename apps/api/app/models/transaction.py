@@ -1,5 +1,5 @@
-from datetime import UTC, datetime
 from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
@@ -8,6 +8,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 from app.models.investment import Currency
+from app.models.utils import utcnow
 
 
 # Kind of transaction (buy, sell, deposit, withdrawal).
@@ -32,5 +33,5 @@ class Transaction(SQLModel, table=True):
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(sa_column=Column(SAEnum(TransactionType, name="transaction_type"), nullable=False))
     notes: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

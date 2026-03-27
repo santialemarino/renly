@@ -7,12 +7,13 @@ from decimal import Decimal
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse
 
 logger = logging.getLogger(__name__)
+
+DOLARAPI_URL = "https://dolarapi.com/v1"
 
 # Maps DolarApi "casa" field to our ExchangeRatePair enum.
 _CASA_TO_PAIR = {
@@ -65,7 +66,7 @@ async def fetch_and_store_latest(session: AsyncSession) -> list[ExchangeRate]:
 
 # Calls DolarApi GET /v1/dolares. Returns the parsed JSON array or None on failure.
 async def _fetch_dolarapi() -> list[dict] | None:
-    url = f"{settings.dolarapi_url}/dolares"
+    url = f"{DOLARAPI_URL}/dolares"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url)

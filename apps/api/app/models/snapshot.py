@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
 from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 
 from sqlmodel import Field, SQLModel, UniqueConstraint
 
 from app.models.investment import Currency
+from app.models.utils import utcnow
 
 
 # Point-in-time value of an investment (one per investment per date).
@@ -21,5 +22,5 @@ class InvestmentSnapshot(SQLModel, table=True):
     )
     currency: Currency = Field(description="Value currency.")
     notes: str | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

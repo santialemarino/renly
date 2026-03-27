@@ -31,7 +31,7 @@ description: API method order, comments, and entity conventions (schemas, models
 ## Models (SQLModel, table=True)
 
 - Set `__tablename__` to snake_case plural. Use `__table_args__` for UniqueConstraint etc. when needed.
-- Every field: `Field(...)`. PK: `id: int | None = Field(default=None, primary_key=True)`. FKs: `Field(foreign_key="table.id", description="...")`. Str: `max_length` where relevant. Optional: `Field(default=None)` or `Field(default=True, description="...")`. Timestamps: `Field(default_factory=lambda: datetime.now(UTC))` (import `UTC` from `datetime`). Add `description="..."` for non-obvious columns.
+- Every field: `Field(...)`. PK: `id: int | None = Field(default=None, primary_key=True)`. FKs: `Field(foreign_key="table.id", description="...")`. Str: `max_length` where relevant. Optional: `Field(default=None)` or `Field(default=True, description="...")`. Timestamps: `Field(default_factory=utcnow)` (import from `app.models.utils`). Returns naive UTC datetime — required because SQLModel maps `datetime` to `TIMESTAMP WITHOUT TIME ZONE`. Add `description="..."` for non-obvious columns.
 
 ## Comments (routers, services, repositories)
 
