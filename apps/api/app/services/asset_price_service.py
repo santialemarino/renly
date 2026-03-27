@@ -48,6 +48,22 @@ async def get_price_history(
     return await asset_price_repository.get_history(session, ticker, start_date, end_date)
 
 
+# Returns the price for a ticker on a date. Fetches from provider if not in DB.
+# Best-effort: returns None if the provider has no data for that date.
+async def get_or_fetch_price(
+    session: AsyncSession,
+    ticker: str,
+    category: InvestmentCategory,
+    price_date: date_type,
+) -> AssetPrice | None:
+    existing = await asset_price_repository.get_by_ticker_and_date(session, ticker, price_date)
+    if existing is not None:
+        return existing
+    # Not in DB — try to fetch from provider for that date range.
+    await fetch_and_store_prices(session, ticker, category, price_date, price_date)
+    return await asset_price_repository.get_by_ticker_and_date(session, ticker, price_date)
+
+
 # Fetches prices from the appropriate provider and stores them in the DB.
 # Returns the number of prices stored.
 async def fetch_and_store_prices(

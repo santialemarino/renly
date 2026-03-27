@@ -40,6 +40,7 @@ class SnapshotGridRow(BaseModel):
     category: InvestmentCategory = Field(description="Investment category.")
     base_currency: str = Field(description="Investment currency.")
     ticker: str | None = Field(default=None, description="Ticker symbol (null if not ticker-linked).")
+    cedear_ratio: Decimal | None = Field(default=None, description="CEDEARs per 1 underlying share.")
     cells: list[SnapshotGridCell] = Field(default_factory=list, description="Snapshot cells sorted by date.")
 
 

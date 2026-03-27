@@ -29,6 +29,7 @@ interface SnapshotGridRowRaw {
   category: string;
   base_currency: string;
   ticker: string | null;
+  cedear_ratio: string | null;
   cells: SnapshotGridCellRaw[];
 }
 
@@ -64,6 +65,7 @@ export interface SnapshotGridRow {
   category: string;
   baseCurrency: string;
   ticker: string | null;
+  cedearRatio: number | null;
   cells: SnapshotGridCell[];
 }
 
@@ -111,6 +113,7 @@ function mapRow(raw: SnapshotGridRowRaw): SnapshotGridRow {
     category: raw.category,
     baseCurrency: raw.base_currency,
     ticker: raw.ticker,
+    cedearRatio: raw.cedear_ratio !== null ? Number(raw.cedear_ratio) : null,
     cells: raw.cells.map(mapCell),
   };
 }
