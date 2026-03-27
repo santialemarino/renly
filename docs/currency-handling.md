@@ -108,7 +108,7 @@ The Settings page (`/settings`) has a two-column layout. The left column handles
 - **Dollar rate**: dropdown with Oficial / MEP / Blue. Controls which USD/ARS rate is used for all conversions. Default: MEP (from env var `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`).
 - **Preferred currencies**: comma-separated ISO codes. Shown in their own group at the top of the currency combobox.
 
-Both primary/secondary fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. The user's primary and secondary currencies are pinned at the top in a "Common" group (falls back to env vars `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY` / `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` if no settings exist). The backend stores the selected codes in `user_settings` via `PUT /settings`.
+Both primary/secondary fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. The env fallback currencies (`NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY` / `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY`) are pinned at the top in a stable "Common" group. The backend stores the selected codes in `user_settings` via `PUT /settings`.
 
 **How the switcher options are built** (in `(protected)/layout.tsx`):
 
@@ -168,7 +168,7 @@ All rates are stored against USD; any pair converts through USD as pivot.
 
 **Rate map:** `get_rate_map(session, dollar_preference)` builds a `{currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The `dollar_preference` param determines which USD/ARS rate pair to use.
 
-**Combobox:** The user's primary and secondary currencies are pinned at the top in a "Common" group (dynamic, from settings or env fallbacks). User-configured preferred currencies appear in a "Preferred" group below. All other currencies appear in an "Other currencies" group.
+**Combobox:** The env fallback currencies are pinned at the top in a stable "Common" group. User-configured preferred currencies appear in a "Preferred" group below. All other currencies appear in an "Other currencies" group.
 
 ### 10. Edge cases summary
 

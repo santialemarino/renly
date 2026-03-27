@@ -81,7 +81,7 @@ function SortIcon({ active, order }: { active: boolean; order: 'asc' | 'desc' })
   const isAsc = active && order === 'asc';
   const isDesc = active && order === 'desc';
   return (
-    <span className="grid shrink-0">
+    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
       <ChevronsUpDown
         className={cn(
           'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
@@ -230,33 +230,36 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
 
   return (
     <>
-      <div className="overflow-auto">
+      <div className="overflow-auto rounded-lg border border-border-3 shadow-xs">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="sticky left-0 z-10 min-w-[180px] bg-background">
+            <TableRow className="group">
+              <TableHead className="sticky left-0 z-10 min-w-[120px] bg-background">
                 <button
                   type="button"
                   onClick={handleSortChange}
-                  className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('grid.investment')}
                   <SortIcon active={isSortActive} order={sortOrder} />
                 </button>
               </TableHead>
               {allYearMonths.map((month) => (
-                <TableHead key={month} className="min-w-[140px] text-center text-paragraph-xs">
+                <TableHead
+                  key={month}
+                  className="min-w-[140px] text-center text-paragraph-xs bg-background transition-colors group-hover:bg-muted/50"
+                >
                   {formatMonth(month)}
                 </TableHead>
               ))}
-              <TableHead className="sticky right-0 z-10 w-[50px] bg-background text-center">
+              <TableHead className="sticky right-0 z-10 min-w-[70px] bg-background text-center">
                 {t('grid.actions')}
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {grid.rows.map((row, rowIdx) => (
-              <TableRow key={row.investmentId}>
+              <TableRow key={row.investmentId} className="group">
                 <TableCell className="sticky left-0 z-10 bg-background">
                   <div className="flex flex-col">
                     <span className="text-paragraph-sm-medium truncate max-w-[200px]">
@@ -272,7 +275,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                   return (
                     <TableCell
                       key={month}
-                      className={`text-center ${cell ? 'cursor-pointer hover:bg-muted/50' : ''}`}
+                      className={`text-center bg-background transition-colors group-hover:bg-muted/50 ${cell ? 'cursor-pointer' : ''}`}
                       onClick={cell ? (e) => handleCellClick(row, cell, e) : undefined}
                     >
                       {cell ? (

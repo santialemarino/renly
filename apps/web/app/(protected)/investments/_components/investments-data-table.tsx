@@ -52,7 +52,7 @@ function SortIcon({
   const isDesc = active && sortOrder === 'desc';
   // All three icons share the same grid cell; only one is visible at a time via opacity/scale.
   return (
-    <span className="grid shrink-0">
+    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
       <ChevronsUpDown
         className={cn(
           'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
@@ -78,13 +78,11 @@ function SortIcon({
 function RowActions({
   investment,
   groups,
-  pinnedCurrencies,
   preferredCurrencies,
   onSuccess,
 }: {
   investment: Investment;
   groups: InvestmentGroup[];
-  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
   onSuccess: () => void;
 }) {
@@ -174,7 +172,6 @@ function RowActions({
           onOpenChange={setEditOpen}
           investment={investment}
           groups={groups}
-          pinnedCurrencies={pinnedCurrencies}
           preferredCurrencies={preferredCurrencies}
           onSuccess={onSuccess}
         />
@@ -195,12 +192,10 @@ function RowActions({
 export function InvestmentsDataTable({
   data,
   groups,
-  pinnedCurrencies,
   preferredCurrencies,
 }: {
   data: InvestmentListResponse;
   groups: InvestmentGroup[];
-  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
 }) {
   const t = useTranslations('investments');
@@ -255,7 +250,7 @@ export function InvestmentsDataTable({
                 <button
                   type="button"
                   onClick={() => handleSortChange('name')}
-                  className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('table.name')}
                   <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
@@ -266,7 +261,7 @@ export function InvestmentsDataTable({
                 <button
                   type="button"
                   onClick={() => handleSortChange('category')}
-                  className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('table.category')}
                   <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} />
@@ -276,7 +271,7 @@ export function InvestmentsDataTable({
                 <button
                   type="button"
                   onClick={() => handleSortChange('base_currency')}
-                  className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('table.currency')}
                   <SortIcon column="base_currency" sortBy={sortBy} sortOrder={sortOrder} />
@@ -287,7 +282,7 @@ export function InvestmentsDataTable({
                 <button
                   type="button"
                   onClick={() => handleSortChange('broker')}
-                  className="flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none focus-visible:animate-focus-bump"
+                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('table.broker')}
                   <SortIcon column="broker" sortBy={sortBy} sortOrder={sortOrder} />
@@ -343,7 +338,6 @@ export function InvestmentsDataTable({
                     <RowActions
                       investment={investment}
                       groups={groups}
-                      pinnedCurrencies={pinnedCurrencies}
                       preferredCurrencies={preferredCurrencies}
                       onSuccess={() => router.refresh()}
                     />

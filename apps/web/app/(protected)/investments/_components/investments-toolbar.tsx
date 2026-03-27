@@ -17,11 +17,9 @@ import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 export function InvestmentsToolbar({
   groups,
-  pinnedCurrencies,
   preferredCurrencies,
 }: {
   groups: InvestmentGroup[];
-  pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
 }) {
   const t = useTranslations('investments');
@@ -132,7 +130,6 @@ export function InvestmentsToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           groups={groups}
-          pinnedCurrencies={pinnedCurrencies}
           preferredCurrencies={preferredCurrencies}
           onSuccess={() => router.refresh()}
         />
