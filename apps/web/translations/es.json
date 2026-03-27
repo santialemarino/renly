@@ -396,7 +396,11 @@
     "title": "Snapshots",
     "subtitle": "Valores de inversiones por mes.",
     "toolbar": {
-      "searchPlaceholder": "Buscar inversiones..."
+      "searchPlaceholder": "Buscar inversiones...",
+      "refresh": "Actualizar precios",
+      "refreshing": "Actualizando...",
+      "refreshSuccess": "{prices} precios actualizados.",
+      "refreshError": "No se pudieron actualizar los precios."
     },
     "grid": {
       "investment": "Inversión",

@@ -85,6 +85,7 @@ CREATE TABLE investment_snapshots (
   value         NUMERIC(18, 2) NOT NULL,
   quantity      NUMERIC(18, 6),
   currency      currency NOT NULL,
+  source        VARCHAR(20) NOT NULL DEFAULT 'manual',
   notes         TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),

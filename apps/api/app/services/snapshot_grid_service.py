@@ -93,6 +93,7 @@ async def get_snapshot_grid(
                     value=value,
                     original_value=snap.value,
                     quantity=snap.quantity,
+                    source=snap.source,
                     period_return_pct=pr_map.get(snap.date),
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
