@@ -8,17 +8,27 @@ import { cn } from '@repo/ui/lib';
 interface SwitchProps extends React.ComponentProps<typeof SwitchPrimitive.Root> {
   thumbClassName?: string;
   blue?: boolean;
+  surface?: boolean;
 }
 
-function Switch({ className, thumbClassName, blue = false, ...props }: SwitchProps) {
+function Switch({
+  className,
+  thumbClassName,
+  blue = false,
+  surface = false,
+  ...props
+}: SwitchProps) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        'peer data-[state=unchecked]:bg-input dark:data-[state=unchecked]:bg-input/80 inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50',
+        'peer inline-flex h-[1.15rem] w-8 shrink-0 items-center rounded-full border shadow-xs transition-all outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:border-ring disabled:cursor-not-allowed disabled:opacity-50',
+        surface
+          ? 'data-[state=unchecked]:bg-muted data-[state=unchecked]:border-border'
+          : 'data-[state=unchecked]:bg-input data-[state=unchecked]:border-transparent dark:data-[state=unchecked]:bg-input/80',
         blue
-          ? 'data-[state=checked]:bg-blue-800 focus-visible:border-blue-800 focus-visible:ring-blue-800/50'
-          : 'data-[state=checked]:bg-primary focus-visible:border-ring focus-visible:ring-ring/50',
+          ? 'data-[state=checked]:bg-blue-800 data-[state=checked]:border-blue-800 data-[state=checked]:focus-visible:ring-blue-800/20 data-[state=checked]:focus-visible:border-blue-800/50'
+          : 'data-[state=checked]:bg-primary data-[state=checked]:border-primary',
         className,
       )}
       {...props}

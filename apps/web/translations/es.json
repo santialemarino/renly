@@ -424,6 +424,15 @@
         "label": "Cantidad (acciones/unidades)",
         "placeholder": "0"
       },
+      "price": {
+        "loading": "Obteniendo precio...",
+        "found": "Precio: {price} {currency}",
+        "converted": "Precio: {price} {currency} (de {originalPrice} {originalCurrency})",
+        "noConversion": "Precio: {price} {currency} — conversión no disponible, ingresá los valores manualmente.",
+        "notFound": "No hay precio disponible para esta fecha."
+      },
+      "quantityMode": "Ingresar como cantidad",
+      "cedearEquivalent": "{quantity} {ticker}.BA = {shares} acciones de {ticker}",
       "transaction": {
         "include": "Incluir una transacción para este período",
         "initialHint": "Este es el primer snapshot de esta inversión.\nConsiderá agregar una transacción de depósito o compra para registrar tu capital inicial invertido.",

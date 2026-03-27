@@ -113,8 +113,18 @@ On the last day of each month (at 23:00 UTC, after the daily price fetch), the s
 
 The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`) — it does not create auto-snapshots (those only come from the monthly scheduled job). Auto-generated snapshots show an "auto" badge in the grid and can be edited like any other snapshot.
 
+### 7. Historical price lookup
+
+When the user picks a date in the snapshot form, the frontend calls `GET /asset-prices/{ticker}/lookup?date=DATE&category=CATEGORY`. The backend checks the DB first; if the price isn't stored, it fetches from the provider (yfinance/CoinGecko) and stores it before returning. This is a get-or-fetch pattern — the `asset_prices` table acts as a cache.
+
+The form shows a loading state while fetching ("Fetching price..."), then displays the result ("Price: 195.50 USD") or "No price available." The price enables value ↔ quantity derivation.
+
+### 8. Value ↔ quantity derivation
+
+When the investment has a ticker and a price is available, a Switch toggle appears: "Enter as quantity." When enabled, the user types quantity (shares) and value auto-derives (`quantity × price`). When disabled (default), the user types value and quantity auto-derives (`value ÷ price`). The derived field is read-only with a formula hint.
+
+For CEDEAR investments with a ratio, the form also shows the equivalent underlying shares (`quantity ÷ ratio`).
+
 ## Pending
 
 - **FCI prices:** CAFCI API integration for mutual fund NAVs (undocumented but stable endpoints at `api.cafci.org.ar`).
-- **Historical price lookup:** When creating a past snapshot, fetch the historical price for that date to pre-fill the form.
-- **Value ↔ quantity derivation:** Auto-calculate one from the other using the fetched price.

@@ -6,7 +6,6 @@ import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Minus, Plus } fro
 import { useTranslations } from 'next-intl';
 
 import {
-  Badge,
   Button,
   Table,
   TableBody,
@@ -112,11 +111,17 @@ interface CellContentProps {
 function CellContent({ cell }: CellContentProps) {
   return (
     <div className="flex items-center justify-center gap-x-1.5">
-      <span className="text-paragraph-sm tabular-nums">{formatValue(cell.value)}</span>
-      {cell.source === 'auto' && (
-        <Badge variant="square" className="text-paragraph-mini px-1 py-0">
-          auto
-        </Badge>
+      {cell.quantity !== null ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="text-paragraph-sm tabular-nums cursor-default">
+              {formatValue(cell.value)}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{cell.quantity} shares</TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="text-paragraph-sm tabular-nums">{formatValue(cell.value)}</span>
       )}
 
       {cell.periodReturnPct !== null && (
@@ -308,6 +313,8 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
           investmentName={selectedRow.name}
           baseCurrency={selectedRow.baseCurrency}
           ticker={selectedRow.ticker}
+          category={selectedRow.category}
+          cedearRatio={selectedRow.cedearRatio}
           existingDates={selectedRow.cells.map((c) => c.date)}
           cell={selectedCell}
           onSuccess={() => router.refresh()}

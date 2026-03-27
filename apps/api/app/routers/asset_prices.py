@@ -4,10 +4,47 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
-from app.schemas.asset_price import AssetPriceResponse, RefreshPricesResponse
+from app.models.investment import InvestmentCategory
+from app.schemas.asset_price import AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
 from app.services import asset_price_service
+from app.services import metrics_helpers as mh
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
+
+
+# Returns the price for a ticker on a specific date. Fetches from provider if not in DB.
+# When convert_to is provided, converts the price to the target currency using the rate map.
+@router.get("/{ticker}/lookup", response_model=PriceLookupResponse | None)
+async def lookup_price(
+    ticker: str,
+    current_user: CurrentUser,
+    session: SessionDep,
+    date: date_type = Query(description="Price date."),
+    category: InvestmentCategory = Query(description="Investment category (determines provider)."),
+    convert_to: str | None = Query(default=None, description="Target currency for conversion."),
+) -> PriceLookupResponse | None:
+    price = await asset_price_service.get_or_fetch_price(session, ticker, category, date)
+    if price is None:
+        return None
+
+    converted_price = None
+    converted_currency = None
+
+    if convert_to and convert_to != price.currency:
+        rate_map = await mh.get_rate_map(session, convert_to)
+        if rate_map and mh.can_convert(price.currency, convert_to):
+            converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
+            converted_currency = convert_to
+
+    return PriceLookupResponse(
+        ticker=price.ticker,
+        date=price.date,
+        price=price.price,
+        currency=price.currency,
+        converted_price=converted_price,
+        converted_currency=converted_currency,
+        source=price.source,
+    )
 
 
 # Returns the latest stored price for a ticker.

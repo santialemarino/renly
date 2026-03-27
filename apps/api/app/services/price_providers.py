@@ -29,11 +29,14 @@ async def fetch_yfinance(
     import yfinance as yf
 
     def _fetch() -> PriceResult:
+        from datetime import timedelta
+
         t = yf.Ticker(ticker)
         kwargs: dict = {}
         if start_date and end_date:
             kwargs["start"] = start_date.isoformat()
-            kwargs["end"] = end_date.isoformat()
+            # yfinance end date is exclusive — add one day to include the target date.
+            kwargs["end"] = (end_date + timedelta(days=1)).isoformat()
         else:
             kwargs["period"] = "5d"
         hist = t.history(**kwargs)

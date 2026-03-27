@@ -1,10 +1,12 @@
 # Business logic for building the snapshots grid (investments × months).
 
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import ExchangeRateUnavailableError
 from app.models.investment import InvestmentCategory
+from app.repositories.cedear_ratio_repository import cedear_ratio_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.snapshot_grid import (
     SnapshotGridCell,
@@ -69,6 +71,14 @@ async def get_snapshot_grid(
     # Collect all unique dates.
     all_dates = sorted({s.date for s in all_snapshots})
 
+    # Build CEDEAR ratio lookup for CEDEAR investments.
+    cedear_ratios: dict[str, Decimal] = {}
+    cedear_tickers = [inv.ticker for inv in investments if inv.ticker and inv.category == InvestmentCategory.cedears]
+    for ct in cedear_tickers:
+        ratio = await cedear_ratio_repository.get_latest(session, ct)
+        if ratio:
+            cedear_ratios[ct] = ratio.ratio
+
     rows: list[SnapshotGridRow] = []
     for inv in investments:
         snaps = snap_by_inv.get(inv.id, [])
@@ -117,6 +127,7 @@ async def get_snapshot_grid(
                 category=inv.category,
                 base_currency=inv.base_currency,
                 ticker=inv.ticker,
+                cedear_ratio=cedear_ratios.get(inv.ticker) if inv.ticker else None,
                 cells=cells,
             )
         )

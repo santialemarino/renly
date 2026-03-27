@@ -76,6 +76,33 @@ export async function deleteTransaction(
   if (!res.ok) throw new Error('Failed to delete transaction');
 }
 
+// Fetches the price for a ticker on a specific date (get from DB or fetch from provider).
+// When convertTo is provided, the backend converts the price to the target currency.
+export async function fetchPriceForDate(
+  ticker: string,
+  date: string,
+  category: string,
+  convertTo?: string,
+): Promise<{
+  price: number;
+  currency: string;
+  convertedPrice: number | null;
+  convertedCurrency: string | null;
+} | null> {
+  const qs = new URLSearchParams({ date, category });
+  if (convertTo) qs.append('convert_to', convertTo);
+  const res = await authenticatedFetch(`/asset-prices/${ticker}/lookup?${qs}`, { method: 'GET' });
+  if (!res.ok) return null;
+  const raw = await res.json();
+  if (!raw) return null;
+  return {
+    price: Number(raw.price),
+    currency: raw.currency,
+    convertedPrice: raw.converted_price !== null ? Number(raw.converted_price) : null,
+    convertedCurrency: raw.converted_currency,
+  };
+}
+
 // Triggers on-demand price refresh for all ticker-linked investments.
 export async function refreshPrices(): Promise<{ pricesStored: number }> {
   const res = await authenticatedFetch('/asset-prices/refresh', { method: 'POST' });
