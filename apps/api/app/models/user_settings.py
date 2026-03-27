@@ -1,8 +1,10 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import Column, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
+
+from app.models.utils import utcnow
 
 
 # Per-user app config (display currencies, default currency; expandable later).
@@ -20,4 +22,4 @@ class UserSettings(SQLModel, table=True):
         ),
         description="JSON config (e.g. display_currencies, default_currency).",
     )
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=utcnow)

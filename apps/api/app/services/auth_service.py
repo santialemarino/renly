@@ -49,5 +49,5 @@ async def register_user(session: AsyncSession, name: str, email: str, password: 
 # Increments user session_epoch and saves; invalidates all existing JWTs for this user.
 async def bump_session_epoch(session: AsyncSession, user: User) -> None:
     user.session_epoch += 1
-    user.updated_at = datetime.now(UTC)
+    user.updated_at = datetime.now(UTC).replace(tzinfo=None)
     await user_repository.save(session, user)

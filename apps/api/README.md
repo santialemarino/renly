@@ -34,4 +34,4 @@ From here: `uv run pytest tests/ -v`
 
 ## Env
 
-`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`, `DOLARAPI_URL` (defaults to `https://dolarapi.com/v1`). Copy from `.env.example`.
+`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`. Copy from `.env.example`. External API URLs (DolarApi, Frankfurter, CoinGecko, Comafi) are constants in the service layer.

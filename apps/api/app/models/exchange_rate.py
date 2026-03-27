@@ -1,11 +1,13 @@
-from datetime import UTC, datetime
 from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import Column
 from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel, UniqueConstraint
+
+from app.models.utils import utcnow
 
 
 # Exchange rate pair — all rates stored against USD.
@@ -30,5 +32,5 @@ class ExchangeRate(SQLModel, table=True):
     )
     rate: Decimal = Field(max_digits=18, decimal_places=6, description="Exchange rate.")
     source: str = Field(default="manual", max_length=50, description="Data source.")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)

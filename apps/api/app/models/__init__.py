@@ -1,5 +1,7 @@
-# Data models
+# Data models.
 
+from app.models.asset_price import AssetPrice
+from app.models.cedear_ratio import CedearRatio
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
@@ -10,6 +12,8 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 
 __all__ = [
+    "AssetPrice",
+    "CedearRatio",
     "Currency",
     "ExchangeRate",
     "ExchangeRatePair",
