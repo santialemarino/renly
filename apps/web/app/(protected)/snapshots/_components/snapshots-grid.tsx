@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Minus, Plus } fro
 import { useTranslations } from 'next-intl';
 
 import {
+  Badge,
   Button,
   Table,
   TableBody,
@@ -112,6 +113,11 @@ function CellContent({ cell }: CellContentProps) {
   return (
     <div className="flex items-center justify-center gap-x-1.5">
       <span className="text-paragraph-sm tabular-nums">{formatValue(cell.value)}</span>
+      {cell.source === 'auto' && (
+        <Badge variant="square" className="text-paragraph-mini px-1 py-0">
+          auto
+        </Badge>
+      )}
 
       {cell.periodReturnPct !== null && (
         <span

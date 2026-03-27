@@ -17,6 +17,7 @@ interface SnapshotGridCellRaw {
   value: string;
   original_value: string;
   quantity: string | null;
+  source: string;
   period_return_pct: string | null;
   has_transaction: boolean;
   transaction: SnapshotGridTransactionRaw | null;
@@ -51,6 +52,7 @@ export interface SnapshotGridCell {
   value: number;
   originalValue: number;
   quantity: number | null;
+  source: string;
   periodReturnPct: number | null;
   hasTransaction: boolean;
   transaction: SnapshotGridTransaction | null;
@@ -87,6 +89,7 @@ function mapCell(raw: SnapshotGridCellRaw): SnapshotGridCell {
     value: Number(raw.value),
     originalValue: Number(raw.original_value),
     quantity: raw.quantity !== null ? Number(raw.quantity) : null,
+    source: raw.source,
     periodReturnPct: raw.period_return_pct !== null ? Number(raw.period_return_pct) : null,
     hasTransaction: raw.has_transaction,
     transaction: raw.transaction

@@ -23,6 +23,7 @@ class SnapshotGridCell(BaseModel):
     value: Decimal = Field(description="Snapshot value (display currency).")
     original_value: Decimal = Field(description="Snapshot value (base currency, for editing).")
     quantity: Decimal | None = Field(default=None, description="Number of shares/units.")
+    source: str = Field(description="Origin: manual or auto.")
     period_return_pct: Decimal | None = Field(
         default=None, description="Period return vs previous snapshot (null for first)."
     )

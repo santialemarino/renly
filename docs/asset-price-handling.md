@@ -60,13 +60,14 @@ CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.B
 
 ### 4. Scheduled jobs
 
-| Job            | Frequency                         | Trigger    | What it does                                                            |
-| -------------- | --------------------------------- | ---------- | ----------------------------------------------------------------------- |
-| Exchange rates | Every 6 hours + startup           | `interval` | DolarApi + Frankfurter → `exchange_rates`                               |
-| Asset prices   | Weekly (Sun 20:00 UTC)            | `cron`     | yfinance + CoinGecko → `asset_prices` for all ticker-linked investments |
-| CEDEAR ratios  | Monthly (1st 12:00 UTC) + startup | `cron`     | Comafi Excel → `cedear_ratios` for all ~338 programs                    |
+| Job            | Frequency                                          | Trigger    | What it does                                                            |
+| -------------- | -------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| Exchange rates | Every 6 hours + startup                            | `interval` | DolarApi + Frankfurter → `exchange_rates`                               |
+| Asset prices   | Daily at 22:00 UTC (after market close)            | `cron`     | yfinance + CoinGecko → `asset_prices` for all ticker-linked investments |
+| Auto-snapshots | Last day of month at 23:00 UTC (after price fetch) | `cron`     | Latest quantity × price → `investment_snapshots` with `source: 'auto'`  |
+| CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel → `cedear_ratios` for all ~338 programs                    |
 
-The asset prices job iterates all active investments with a ticker set, calls the appropriate provider for each, and stores results. If a provider fails for one ticker, that investment is skipped (not the entire job).
+All schedule constants are defined at the top of `scheduler.py`. The asset prices job iterates all active investments with a ticker set, calls the appropriate provider for each, and stores results. If a provider fails for one ticker, that investment is skipped (not the entire job).
 
 ### 5. API endpoints
 
@@ -99,9 +100,21 @@ The `source` field values: `yfinance`, `coingecko`, `comafi`, `manual`.
 - **Comafi Excel unavailable:** CEDEAR ratios are not updated. Existing ratios in the DB remain valid (ratios change only on stock splits, which are rare).
 - **Ticker not found:** yfinance returns an empty DataFrame; CoinGecko returns an empty response. The service stores 0 prices and moves on. No error is raised.
 
+### 6. Auto-snapshots
+
+On the last day of each month (at 23:00 UTC, after the daily price fetch), the scheduler generates auto-snapshots for ticker-linked investments:
+
+1. For each investment with a ticker: get the latest price from `asset_prices`.
+2. Get the last known `quantity` from the most recent snapshot.
+3. Compute `value = quantity × price` (or just the price if no quantity).
+4. Create a snapshot with `source: 'auto'` for today's date.
+5. Skip if a snapshot already exists for today (manual or auto).
+6. Skip if no price data is available for the ticker.
+
+The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`) — it does not create auto-snapshots (those only come from the monthly scheduled job). Auto-generated snapshots show an "auto" badge in the grid and can be edited like any other snapshot.
+
 ## Pending
 
 - **FCI prices:** CAFCI API integration for mutual fund NAVs (undocumented but stable endpoints at `api.cafci.org.ar`).
-- **Auto-snapshots:** Weekly job that uses the latest price + last known quantity to auto-generate snapshots with `source: 'auto'` (PR 4).
-- **Historical price lookup:** When creating a past snapshot, fetch the historical price for that date to pre-fill the form (PR 5).
-- **Value ↔ quantity derivation:** Auto-calculate one from the other using the fetched price (PR 5).
+- **Historical price lookup:** When creating a past snapshot, fetch the historical price for that date to pre-fill the form.
+- **Value ↔ quantity derivation:** Auto-calculate one from the other using the fetched price.

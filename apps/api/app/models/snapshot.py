@@ -21,6 +21,7 @@ class InvestmentSnapshot(SQLModel, table=True):
         default=None, max_digits=18, decimal_places=6, description="Shares/units (for ticker-linked investments)."
     )
     currency: Currency = Field(description="Value currency.")
+    source: str = Field(default="manual", max_length=20, description="Origin: manual or auto.")
     notes: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

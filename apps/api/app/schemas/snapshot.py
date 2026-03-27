@@ -27,6 +27,7 @@ class SnapshotResponse(BaseModel):
     value: Decimal = Field(description="Value on this date.")
     quantity: Decimal | None = Field(default=None, description="Number of shares/units.")
     currency: Currency = Field(description="Currency of the value.")
+    source: str = Field(description="Origin: manual or auto.")
     notes: str | None = Field(default=None, description="Optional notes.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

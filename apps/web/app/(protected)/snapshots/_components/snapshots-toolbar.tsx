@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { RefreshCw } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 
-import { SearchInput } from '@repo/ui/components';
+import { Button, SearchInput } from '@repo/ui/components';
+import { refreshPrices } from '@/app/(protected)/snapshots/snapshots-actions';
 import { CategorySelect } from '@/components/category-select';
 import { GroupMultiSelect } from '@/components/group-multi-select';
 import { ROUTES } from '@/config/routes';
@@ -22,6 +25,20 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
 
   const [, startTransition] = useTransition();
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      const result = await refreshPrices();
+      toast.success(t('toolbar.refreshSuccess', { prices: result.pricesStored }));
+      router.refresh();
+    } catch {
+      toast.error(t('toolbar.refreshError'));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const selectedGroupIds = searchParams.getAll('group_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
@@ -92,6 +109,22 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
             surface
             className="min-w-fit flex-1"
           />
+        </motion.div>
+
+        <motion.div
+          layout
+          transition={{ duration: ANIMATION_DEFAULT }}
+          className="basis-full lg:basis-auto"
+        >
+          <Button
+            variant="outline"
+            disabled={refreshing}
+            onClick={handleRefresh}
+            className="w-full lg:w-auto gap-x-1.5"
+          >
+            <RefreshCw className={`size-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? t('toolbar.refreshing') : t('toolbar.refresh')}
+          </Button>
         </motion.div>
       </div>
     </LayoutGroup>

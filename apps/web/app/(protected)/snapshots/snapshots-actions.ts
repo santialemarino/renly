@@ -75,3 +75,11 @@ export async function deleteTransaction(
   );
   if (!res.ok) throw new Error('Failed to delete transaction');
 }
+
+// Triggers on-demand price refresh for all ticker-linked investments.
+export async function refreshPrices(): Promise<{ pricesStored: number }> {
+  const res = await authenticatedFetch('/asset-prices/refresh', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to refresh prices');
+  const raw = await res.json();
+  return { pricesStored: raw.prices_stored };
+}

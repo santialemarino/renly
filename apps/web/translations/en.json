@@ -396,7 +396,11 @@
     "title": "Snapshots",
     "subtitle": "Investment values by month.",
     "toolbar": {
-      "searchPlaceholder": "Search investments..."
+      "searchPlaceholder": "Search investments...",
+      "refresh": "Refresh prices",
+      "refreshing": "Refreshing...",
+      "refreshSuccess": "{prices} prices updated.",
+      "refreshError": "Failed to refresh prices."
     },
     "grid": {
       "investment": "Investment",
