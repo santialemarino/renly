@@ -8,17 +8,18 @@ from sqlmodel import Field, SQLModel
 from app.models.utils import utcnow
 
 
-# Investment category (CEDEARs, FCI, dollars, bonds, etc.).
+# Investment category (CEDEARs, FCI, dollars, government bonds, corporate bonds, etc.).
 class InvestmentCategory(StrEnum):
     cedears = "cedears"
-    fci = "fci"
-    dollars = "dollars"
-    bonds = "bonds"
-    stocks = "stocks"
+    corporate_bonds = "corporate_bonds"
     crypto = "crypto"
-    real_estate = "real_estate"
-    term_deposit = "term_deposit"
+    dollars = "dollars"
+    fci = "fci"
+    government_bonds = "government_bonds"
     other = "other"
+    real_estate = "real_estate"
+    stocks = "stocks"
+    term_deposit = "term_deposit"
 
 
 # Currency code.

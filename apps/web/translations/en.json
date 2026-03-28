@@ -22,14 +22,15 @@
     },
     "categories": {
       "cedears": "CEDEARs",
-      "fci": "Mutual Funds",
-      "dollars": "Dollars",
-      "bonds": "Bonds",
-      "stocks": "Stocks",
+      "corporate_bonds": "Corporate Bonds",
       "crypto": "Crypto",
+      "dollars": "Dollars",
+      "fci": "Mutual Funds",
+      "government_bonds": "Government Bonds",
+      "other": "Other",
       "real_estate": "Real Estate",
-      "term_deposit": "Term Deposit",
-      "other": "Other"
+      "stocks": "Stocks",
+      "term_deposit": "Term Deposit"
     },
     "allCategories": "All categories",
     "groupFilter": {

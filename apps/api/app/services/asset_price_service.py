@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 
 # Maps investment category to the provider function and source name.
 _CATEGORY_PROVIDERS = {
-    InvestmentCategory.stocks: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
     InvestmentCategory.cedears: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
     InvestmentCategory.crypto: (SOURCE_COINGECKO, price_providers.fetch_coingecko),
+    InvestmentCategory.government_bonds: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
+    InvestmentCategory.stocks: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
 }
 
 

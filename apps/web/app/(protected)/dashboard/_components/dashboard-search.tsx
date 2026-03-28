@@ -4,10 +4,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, FolderOpen, Tag } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
 import { SmartSearch, type SmartSearchGroup } from '@/components/smart-search';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
+import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 const ICON_CLASS = 'size-4 shrink-0 text-muted-foreground';
 
@@ -50,7 +50,7 @@ export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
     },
     {
       heading: t('search.categories'),
-      items: INVESTMENT_CATEGORIES.map((cat) => ({
+      items: sortCategoriesByLabel(tCommon).map((cat) => ({
         id: cat,
         label: tCommon(`categories.${cat}`),
         icon: <Tag className={ICON_CLASS} />,

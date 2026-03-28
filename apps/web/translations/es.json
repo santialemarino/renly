@@ -22,14 +22,15 @@
     },
     "categories": {
       "cedears": "CEDEARs",
-      "fci": "Fondos Comunes",
-      "dollars": "Dólares",
-      "bonds": "Bonos",
-      "stocks": "Acciones",
+      "corporate_bonds": "Obligaciones Negociables",
       "crypto": "Cripto",
+      "dollars": "Dólares",
+      "fci": "Fondos Comunes",
+      "government_bonds": "Bonos Soberanos",
+      "other": "Otro",
       "real_estate": "Inmuebles",
-      "term_deposit": "Plazo Fijo",
-      "other": "Otro"
+      "stocks": "Acciones",
+      "term_deposit": "Plazo Fijo"
     },
     "allCategories": "Todas las categorías",
     "groupFilter": {
