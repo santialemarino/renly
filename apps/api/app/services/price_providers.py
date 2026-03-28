@@ -1,23 +1,48 @@
 # Price provider implementations for fetching asset prices from external APIs.
-# Each provider returns a list of (date, price, currency) tuples.
+# Each provider has the same signature: (ticker, start_date?, end_date?) -> PriceResult.
 # Providers are stateless — they fetch and return, the service handles storage.
+# To swap a provider, change the mapping in asset_price_service._CATEGORY_PROVIDERS.
 
 import logging
+from collections.abc import Awaitable, Callable
 from datetime import date as date_type
 from decimal import Decimal
+from typing import NamedTuple
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
-# Source name constants (stored in the source column of asset_prices/cedear_ratios).
-SOURCE_YFINANCE = "yfinance"
-SOURCE_COINGECKO = "coingecko"
+# --- Result types ---
 
 PriceResult = list[tuple[date_type, Decimal, str]]
 
+# CEDEAR ratio result: (ticker, underlying, ratio).
+RatioResult = list[tuple[str, str, Decimal]]
 
-# Fetches prices from Yahoo Finance via yfinance for stocks and CEDEARs.
+
+# --- Provider metadata ---
+
+
+# Describes a price provider: its source name, fetch function, and capabilities.
+class PriceProviderInfo(NamedTuple):
+    source: str
+    fetch: Callable[..., Awaitable[PriceResult]]
+    supports_history: bool
+
+
+# --- Source name constants (stored in the source column of asset_prices/cedear_ratios) ---
+
+SOURCE_YFINANCE = "yfinance"
+SOURCE_COINGECKO = "coingecko"
+SOURCE_CAFCI = "cafci"
+COMAFI_SOURCE = "comafi"
+
+
+# --- Price providers ---
+
+
+# Fetches prices from Yahoo Finance via yfinance for stocks, CEDEARs, and government bonds.
 # Returns daily closing prices for the given period.
 async def fetch_yfinance(
     ticker: str,
@@ -64,12 +89,15 @@ async def fetch_yfinance(
 
 # Fetches prices from CoinGecko for crypto assets.
 # ticker should be a CoinGecko coin id (e.g. "bitcoin", "ethereum").
+# start_date/end_date are accepted for signature uniformity but ignored — CoinGecko
+# always returns the last 7 days via the market_chart endpoint.
 async def fetch_coingecko(
     ticker: str,
-    vs_currency: str = "usd",
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
 ) -> PriceResult:
     url = f"https://api.coingecko.com/api/v3/coins/{ticker}/market_chart"
-    params = {"vs_currency": vs_currency, "days": "7", "interval": "daily"}
+    params = {"vs_currency": "usd", "days": "7", "interval": "daily"}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(url, params=params)
@@ -81,40 +109,13 @@ async def fetch_coingecko(
 
     prices = data.get("prices", [])
     results: PriceResult = []
-    currency = vs_currency.upper()
     for timestamp_ms, price in prices:
         price_date = date_type.fromtimestamp(timestamp_ms / 1000)
-        results.append((price_date, Decimal(str(round(price, 6))), currency))
+        results.append((price_date, Decimal(str(round(price, 6))), "USD"))
     return results
 
 
-# Fetches current price from CoinGecko simple API for a single coin.
-async def fetch_coingecko_current(
-    ticker: str,
-    vs_currency: str = "usd",
-) -> tuple[Decimal, str] | None:
-    url = "https://api.coingecko.com/api/v3/simple/price"
-    params = {"ids": ticker, "vs_currencies": vs_currency}
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
-    except httpx.HTTPError:
-        logger.exception("CoinGecko current price fetch failed for %s.", ticker)
-        return None
-
-    coin_data = data.get(ticker)
-    if not coin_data:
-        return None
-    price = coin_data.get(vs_currency)
-    if price is None:
-        return None
-    return Decimal(str(price)), vs_currency.upper()
-
-
-# CEDEAR ratio result: (ticker, underlying, ratio).
-RatioResult = list[tuple[str, str, Decimal]]
+# --- CEDEAR ratio provider ---
 
 # Banco Comafi Excel configuration.
 COMAFI_CEDEAR_URL = "https://www.comafi.com.ar/Multimedios/otros/7279.xlsx"
@@ -124,7 +125,6 @@ COMAFI_TICKER_HEADER_KEYWORD = "mercado"
 COMAFI_TICKER_HEADER_KEYWORD_2 = "identif"
 COMAFI_RATIO_HEADER_KEYWORD = "ratio"
 COMAFI_BYMA_SUFFIX = ".BA"
-COMAFI_SOURCE = "comafi"
 COMAFI_RATIO_SEPARATOR = ":"
 
 

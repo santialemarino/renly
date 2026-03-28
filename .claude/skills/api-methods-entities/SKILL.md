@@ -18,8 +18,61 @@ description: API method order, comments, and entity conventions (schemas, models
 ## Pattern per layer
 
 - **Router:** Validate body (schemas), call service, return response or raise HTTPException. No business logic, no DB.
-- **Service:** Orchestrate use case, call repository; pure functions for crypto/validation. No HTTP, no raw SQL. Raise domain errors (e.g. `app.domain.NotFoundError`); the HTTP layer (exception handler or router) maps them to status codes.
-- **Repository:** Session + model only: queries, add, commit, refresh. No business rules.
+- **Service:** Orchestrate use case, call repository; pure functions for crypto/validation. No HTTP, no raw SQL. Raise domain errors (e.g. `app.domain.NotFoundError`); the HTTP layer (exception handler or router) maps them to status codes. Owns the transaction boundary — call `session.commit()` once at the end.
+- **Repository:** Session + model only: queries, `session.add()`, `session.flush()`. No business rules. Never call `session.commit()`.
+
+## Repository query patterns
+
+### Always provide batch variants
+
+Every repository method that fetches by a single ID should have a batch sibling that accepts a list:
+
+```python
+# Single
+async def get_by_id(session, id) -> Model | None
+# Batch — always add this when the single version will be called in a loop
+async def get_by_ids(session, ids: list[int]) -> list[Model]
+```
+
+Use `Model.id.in_(ids)` for batch queries. Return a list or dict keyed by ID.
+
+### Use ON CONFLICT for upserts
+
+Never do SELECT + INSERT/UPDATE manually. Use PostgreSQL's `ON CONFLICT DO UPDATE`:
+
+```python
+from sqlalchemy.dialects.postgresql import insert
+
+stmt = insert(Model).values(rows).on_conflict_do_update(
+    index_elements=["ticker", "date"],
+    set_={"price": insert(Model).excluded.price, "updated_at": utcnow()},
+)
+await session.execute(stmt)
+```
+
+### Commit at the service level, not repository level
+
+Repositories call `session.add()` / `session.flush()`. The service calls `session.commit()` once at the end of the use case. See the transaction rules in the api-layering skill.
+
+## Service patterns
+
+### Batch-load before loops
+
+When a service function iterates over a list and needs related data, load all related data **before** the loop:
+
+```python
+# Load everything upfront
+ids_by_group = await group_repo.get_investment_ids_by_groups(session, group_ids)
+ratios = await cedear_repo.get_latest_by_tickers(session, tickers)
+
+# Then iterate in-memory only
+for group in groups:
+    member_ids = ids_by_group.get(group.id, [])
+```
+
+### Parallelize independent async calls
+
+Use `asyncio.gather()` for independent external HTTP requests. Never `await` them sequentially in a loop. See performance rules in the api-layering skill for the pattern.
 
 ## Schemas (Pydantic)
 
@@ -42,7 +95,7 @@ Use **`#`** block comments **above** the definition (no docstrings inside).
 - **Repository:** 1–2 lines above `async def` — what it does; optional "Returns: …". One `#` above the namespace class (e.g. "Namespace to call repository functions (e.g. investment_repository.list_by_user).") and one above the singleton (e.g. "Singleton used by services to access investment persistence."). Only repositories use this class + singleton pattern; services and routers do not.
 - **Schemas:** One `#` above each class describing endpoint/role in one line. Style: "Body for POST /investments.", "Body for PUT /investments/{id}. Partial update; only provided fields are updated.", "Response for GET list and GET one, POST and PUT.", "Response for GET list and POST." Every field: `Field(description="...")`; optional/defaults and `from_attributes` for responses — see § Schemas (Pydantic).
 - **Models:** One `#` above each class and each enum. Style: "User account; auth via password_hash and session_epoch for token invalidation.", "Investment category (CEDEARs, FCI, dollars, …).", "Point-in-time value of an investment (one per investment per date)." Every field: `Field(...)` with PK/FK/description/max_length/default_factory as needed — see § Models (SQLModel).
-- **Domain:** One `#` above class when the role isn’t obvious (value objects, enums, errors).
+- **Domain:** One `#` above class when the role isn't obvious (value objects, enums, errors).
 
 One or two lines per comment. No docstrings in the function body.
 

@@ -17,14 +17,18 @@ Investments without a ticker function as manual-entry — the user enters snapsh
 
 ## Architecture
 
-### 1. Price providers
+### 1. Provider pattern
 
-Price providers are stateless functions in `services/price_providers.py`. Each returns a list of `(date, price, currency)` tuples. The service layer handles storage.
+See [external-providers.md](external-providers.md) for the standardized provider pattern used across all external data fetching.
 
-**yfinance** (stocks + CEDEARs):
+Price providers live in `services/price_providers.py`. The category-to-provider mapping is in `services/asset_price_service.py`. To swap or add a price provider, see the "Adding a new provider" section in the external providers doc.
+
+### 2. Price provider implementations
+
+**yfinance** (stocks, CEDEARs, government bonds):
 
 - Python library that wraps Yahoo Finance data.
-- Supports `.BA` tickers for Argentine CEDEARs (returns ARS prices).
+- Supports `.BA` tickers for Argentine CEDEARs and government bonds (returns ARS prices).
 - Fetches daily closing prices. Default period: last 5 days; supports custom date ranges.
 - Runs in a thread pool (`asyncio.to_thread`) since yfinance is synchronous.
 - No API key required. Rate limits are informal (Yahoo can throttle aggressive scraping).
@@ -33,21 +37,9 @@ Price providers are stateless functions in `services/price_providers.py`. Each r
 
 - REST API at `api.coingecko.com/api/v3`.
 - Uses coin ids (e.g. `bitcoin`, `ethereum`), not ticker symbols.
-- `/coins/{id}/market_chart` for historical daily prices.
-- `/simple/price` for current price.
+- `/coins/{id}/market_chart` for last 7 days of daily prices.
+- Accepts `start_date`/`end_date` for signature uniformity but ignores them.
 - No API key required (Demo plan: ~30 req/min).
-
-### 2. Source resolver
-
-The service layer (`services/asset_price_service.py`) maps investment categories to providers:
-
-```
-category == stocks or cedears or government_bonds → yfinance
-category == crypto → CoinGecko
-other categories → no provider (manual entry)
-```
-
-The router calls `fetch_and_store_prices(session, ticker, category)` and the service selects the right provider. Results are stored in `asset_prices` uniformly regardless of source.
 
 ### 3. CEDEAR ratios
 
@@ -128,4 +120,4 @@ For CEDEAR investments with a ratio, the form also shows the equivalent underlyi
 
 ## Pending
 
-- **FCI prices:** CAFCI API integration for mutual fund NAVs (undocumented but stable endpoints at `api.cafci.org.ar`).
+- **FCI prices:** CAFCI API integration for mutual fund NAVs. Blocked — the API at `api.cafci.org.ar` now returns 401 Unauthorized (was previously public, no longer accessible). Ticker format would be `fondoId/claseId` (e.g., `847/2409`). FCI investments remain manual-entry until an alternative source is found or CAFCI access is restored.

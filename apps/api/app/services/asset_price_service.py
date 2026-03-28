@@ -9,16 +9,33 @@ from app.models.asset_price import AssetPrice
 from app.models.investment import InvestmentCategory
 from app.repositories.asset_price_repository import asset_price_repository
 from app.services import price_providers
-from app.services.price_providers import SOURCE_COINGECKO, SOURCE_YFINANCE
+from app.services.price_providers import PriceProviderInfo
 
 logger = logging.getLogger(__name__)
 
-# Maps investment category to the provider function and source name.
-_CATEGORY_PROVIDERS = {
-    InvestmentCategory.cedears: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
-    InvestmentCategory.crypto: (SOURCE_COINGECKO, price_providers.fetch_coingecko),
-    InvestmentCategory.government_bonds: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
-    InvestmentCategory.stocks: (SOURCE_YFINANCE, price_providers.fetch_yfinance),
+# Maps investment category to its price provider.
+# To swap a provider for a category, change the entry here.
+_CATEGORY_PROVIDERS: dict[InvestmentCategory, PriceProviderInfo] = {
+    InvestmentCategory.cedears: PriceProviderInfo(
+        source=price_providers.SOURCE_YFINANCE,
+        fetch=price_providers.fetch_yfinance,
+        supports_history=True,
+    ),
+    InvestmentCategory.crypto: PriceProviderInfo(
+        source=price_providers.SOURCE_COINGECKO,
+        fetch=price_providers.fetch_coingecko,
+        supports_history=False,
+    ),
+    InvestmentCategory.government_bonds: PriceProviderInfo(
+        source=price_providers.SOURCE_YFINANCE,
+        fetch=price_providers.fetch_yfinance,
+        supports_history=True,
+    ),
+    InvestmentCategory.stocks: PriceProviderInfo(
+        source=price_providers.SOURCE_YFINANCE,
+        fetch=price_providers.fetch_yfinance,
+        supports_history=True,
+    ),
 }
 
 
@@ -74,20 +91,15 @@ async def fetch_and_store_prices(
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> int:
-    provider_info = _CATEGORY_PROVIDERS.get(category)
-    if provider_info is None:
+    provider = _CATEGORY_PROVIDERS.get(category)
+    if provider is None:
         logger.warning("No price provider for category %s (ticker: %s).", category, ticker)
         return 0
 
-    source_name, fetch_fn = provider_info
-
-    if source_name == SOURCE_COINGECKO:
-        results = await fetch_fn(ticker)
-    else:
-        results = await fetch_fn(ticker, start_date, end_date)
+    results = await provider.fetch(ticker, start_date, end_date)
 
     if not results:
-        logger.info("No prices returned for %s from %s.", ticker, source_name)
+        logger.info("No prices returned for %s from %s.", ticker, provider.source)
         return 0
 
     count = 0
@@ -97,12 +109,12 @@ async def fetch_and_store_prices(
             date=price_date,
             price=price,
             currency=currency,
-            source=source_name,
+            source=provider.source,
         )
         await asset_price_repository.upsert(session, asset_price)
         count += 1
 
-    logger.info("Stored %d prices for %s from %s.", count, ticker, source_name)
+    logger.info("Stored %d prices for %s from %s.", count, ticker, provider.source)
     return count
 
 
