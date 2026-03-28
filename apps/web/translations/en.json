@@ -277,7 +277,14 @@
       },
       "ticker": {
         "label": "Ticker",
-        "placeholder": "Enter the ticker (e.g. AAPL, BTC)"
+        "placeholder": "Enter the ticker",
+        "hints": {
+          "cedears": "e.g., AAPL.BA, GOOGL.BA",
+          "crypto": "e.g., bitcoin, ethereum",
+          "fci": "e.g., 847/2409 (CAFCI fund/class ID)",
+          "government_bonds": "e.g., AL30.BA, GD30.BA",
+          "stocks": "e.g., AAPL, MSFT"
+        }
       },
       "broker": {
         "label": "Broker",

@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -33,6 +33,7 @@ import {
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
+import { CATEGORY_CAPABILITIES, type InvestmentCategory } from '@/lib/constants/categories';
 import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 interface InvestmentFormDialogProps {
@@ -89,6 +90,25 @@ export function InvestmentFormDialog({
       });
     }
   }, [open, investment, form]);
+
+  const watchedCategory = useWatch({ control: form.control, name: 'category' }) as
+    | InvestmentCategory
+    | undefined;
+  const capabilities = watchedCategory ? CATEGORY_CAPABILITIES[watchedCategory] : null;
+  const showTicker = capabilities?.hasTicker ?? false;
+
+  // Clear ticker when switching to a category that doesn't support it.
+  useEffect(() => {
+    if (!showTicker && form.getValues('ticker')) {
+      form.setValue('ticker', '');
+    }
+  }, [showTicker, form]);
+
+  // Build the ticker placeholder from category-specific hints.
+  const tickerPlaceholder =
+    watchedCategory && showTicker
+      ? t(`form.ticker.hints.${watchedCategory}`)
+      : t('form.ticker.placeholder');
 
   async function onSubmit(values: InvestmentFormValues) {
     try {
@@ -185,23 +205,25 @@ export function InvestmentFormDialog({
             </div>
 
             <div className="flex min-w-0 items-start gap-x-3">
-              <FormField
-                control={form.control}
-                name="ticker"
-                render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel>{t('form.ticker.label')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        placeholder={t('form.ticker.placeholder')}
-                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {showTicker && (
+                <FormField
+                  control={form.control}
+                  name="ticker"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-0">
+                      <FormLabel>{t('form.ticker.label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder={tickerPlaceholder}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

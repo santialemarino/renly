@@ -87,12 +87,14 @@ The snapshot form always uses `original_value` / `original_amount` to populate f
 
 ### 5. Exchange rate fetching
 
-Rates are fetched from two sources on a schedule:
+Exchange rate providers follow the standardized provider pattern — see [external-providers.md](external-providers.md). Provider-specific logic (URLs, response parsing, field mapping) lives in `services/exchange_rate_providers.py`. The service layer (`services/exchange_rate_service.py`) iterates registered providers and stores results with zero provider knowledge.
+
+**Current providers:**
 
 - **DolarApi** (`dolarapi.com/v1/dolares`) → USD/ARS oficial, MEP, blue rates. Average of buy/sell.
 - **Frankfurter** (`frankfurter.dev`) → USD/BRL, USD/EUR, USD/GBP rates. ECB data.
 
-Schedule:
+**Schedule:**
 
 - **On startup**: immediate fetch (`next_run_time=datetime.now()`).
 - **Every 6 hours**: APScheduler interval job.
