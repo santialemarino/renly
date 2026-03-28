@@ -28,12 +28,12 @@ import {
 } from '@/app/(protected)/investments/investments-actions';
 import {
   buildInvestmentFormSchema,
-  INVESTMENT_CATEGORIES,
   type InvestmentFormValues,
 } from '@/app/(protected)/investments/investments-form-schema';
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
+import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 interface InvestmentFormDialogProps {
   open: boolean;
@@ -148,7 +148,7 @@ export function InvestmentFormDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {INVESTMENT_CATEGORIES.map((cat) => (
+                        {sortCategoriesByLabel(tCommon).map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {tCommon(`categories.${cat}`)}
                           </SelectItem>

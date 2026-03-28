@@ -4,13 +4,14 @@
 
 Investments with a `ticker` field get automatic price fetching. The ticker determines the data source based on the investment's category:
 
-| Category  | Source    | Ticker format               | Price currency |
-| --------- | --------- | --------------------------- | -------------- |
-| `stocks`  | yfinance  | US symbols (AAPL, MSFT)     | USD            |
-| `cedears` | yfinance  | .BA suffix (AAPL.BA)        | ARS            |
-| `crypto`  | CoinGecko | coin id (bitcoin, ethereum) | USD            |
-| `fci`     | TBD       | fund code                   | ARS            |
-| `bonds`   | TBD       | ISIN                        | —              |
+| Category           | Source    | Ticker format                 | Price currency |
+| ------------------ | --------- | ----------------------------- | -------------- |
+| `stocks`           | yfinance  | US symbols (AAPL, MSFT)       | USD            |
+| `cedears`          | yfinance  | .BA suffix (AAPL.BA)          | ARS            |
+| `crypto`           | CoinGecko | coin id (bitcoin, ethereum)   | USD            |
+| `fci`              | TBD       | fund code                     | ARS            |
+| `government_bonds` | yfinance  | .BA suffix (AL30.BA, GD30.BA) | ARS            |
+| `corporate_bonds`  | Manual    | —                             | —              |
 
 Investments without a ticker function as manual-entry — the user enters snapshot values directly.
 
@@ -41,7 +42,7 @@ Price providers are stateless functions in `services/price_providers.py`. Each r
 The service layer (`services/asset_price_service.py`) maps investment categories to providers:
 
 ```
-category == stocks or cedears → yfinance
+category == stocks or cedears or government_bonds → yfinance
 category == crypto → CoinGecko
 other categories → no provider (manual entry)
 ```
@@ -111,7 +112,7 @@ On the last day of each month (at 23:00 UTC, after the daily price fetch), the s
 5. Skip if a snapshot already exists for today (manual or auto).
 6. Skip if no price data is available for the ticker.
 
-The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`) — it does not create auto-snapshots (those only come from the monthly scheduled job). Auto-generated snapshots show an "auto" badge in the grid and can be edited like any other snapshot.
+The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`) — it does not create auto-snapshots (those only come from the monthly scheduled job). Auto-generated snapshots can be edited like any other snapshot. The `source` field is stored but not displayed in the grid.
 
 ### 7. Historical price lookup
 

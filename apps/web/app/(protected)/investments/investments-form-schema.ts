@@ -1,20 +1,9 @@
 import { z } from 'zod';
 
 import { INVESTMENT_BROKER_MAX, INVESTMENT_NAME_MAX } from '@/lib/constants/api-constants';
+import { INVESTMENT_CATEGORIES } from '@/lib/constants/categories';
 
-export const INVESTMENT_CATEGORIES = [
-  'cedears',
-  'fci',
-  'dollars',
-  'bonds',
-  'stocks',
-  'crypto',
-  'real_estate',
-  'term_deposit',
-  'other',
-] as const;
-
-export type InvestmentCategory = (typeof INVESTMENT_CATEGORIES)[number];
+export { INVESTMENT_CATEGORIES, type InvestmentCategory } from '@/lib/constants/categories';
 
 export function buildInvestmentFormSchema(requiredMsg: string) {
   return z.object({

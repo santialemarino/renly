@@ -16,8 +16,8 @@ import {
   PopoverTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { INVESTMENT_CATEGORIES } from '@/app/(protected)/investments/investments-form-schema';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 interface CategorySelectProps {
   value: string;
@@ -38,7 +38,7 @@ export function CategorySelect({
   const isAll = value === CATEGORY_ALL;
   const label = isAll ? tCommon('allCategories') : tCommon(`categories.${value}`);
 
-  const items = [CATEGORY_ALL, ...INVESTMENT_CATEGORIES];
+  const items = [CATEGORY_ALL, ...sortCategoriesByLabel(tCommon)];
 
   function handleSelect(selected: string) {
     onValueChange(selected);
