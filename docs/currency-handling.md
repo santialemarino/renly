@@ -85,6 +85,10 @@ The snapshot grid returns both converted and original values:
 
 The snapshot form always uses `original_value` / `original_amount` to populate fields, ensuring edits are saved in the investment's `base_currency` regardless of the display currency.
 
+### 4.1 Investment currency lock
+
+An investment's `base_currency` cannot be changed once snapshots exist — changing it would silently corrupt all stored values (e.g., 50 USD becomes 50 ARS). The backend rejects currency changes with 409 Conflict when snapshots exist. The frontend disables the currency combobox on the edit form (with a tooltip explaining why). Investments with zero snapshots can freely change currency.
+
 ### 5. Exchange rate fetching
 
 Exchange rate providers follow the standardized provider pattern — see [external-providers.md](external-providers.md). Provider-specific logic (URLs, response parsing, field mapping) lives in `services/exchange_rate_providers.py`. The service layer (`services/exchange_rate_service.py`) iterates registered providers and stores results with zero provider knowledge.

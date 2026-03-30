@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
-from app.domain import ExchangeRateUnavailableError, NotFoundError
+from app.domain import CurrencyChangeBlockedError, ExchangeRateUnavailableError, NotFoundError
 from app.routers import asset_prices, auth, exchange_rates, groups, investments, metrics, snapshot_grid
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
@@ -41,6 +41,14 @@ app.include_router(investments.router)
 app.include_router(metrics.router)
 app.include_router(settings_router.router)
 app.include_router(snapshot_grid.router)
+
+
+@app.exception_handler(CurrencyChangeBlockedError)
+async def currency_change_blocked_handler(_request, exc: CurrencyChangeBlockedError):
+    return JSONResponse(
+        status_code=409,
+        content={"detail": exc.message},
+    )
 
 
 @app.exception_handler(NotFoundError)

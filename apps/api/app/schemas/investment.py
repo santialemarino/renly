@@ -53,6 +53,7 @@ class InvestmentResponse(BaseModel):
     broker: str | None = Field(default=None, description="Broker or account name.")
     notes: str | None = Field(default=None, description="Optional notes.")
     is_active: bool = Field(description="Whether included in portfolio.")
+    has_snapshots: bool = Field(description="Whether the investment has any snapshots. Used to lock currency changes.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
     groups: list[InvestmentGroupInfo] = Field(

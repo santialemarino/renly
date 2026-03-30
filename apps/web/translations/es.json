@@ -273,7 +273,8 @@
         "label": "Moneda",
         "placeholder": "Seleccioná una moneda",
         "searchPlaceholder": "Buscar monedas...",
-        "noResults": "No se encontraron monedas."
+        "noResults": "No se encontraron monedas.",
+        "locked": "La moneda no puede cambiarse porque esta inversión tiene snapshots."
       },
       "ticker": {
         "label": "Ticker",

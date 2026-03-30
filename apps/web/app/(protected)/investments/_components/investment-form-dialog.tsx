@@ -20,6 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
@@ -55,7 +58,6 @@ export function InvestmentFormDialog({
 }: InvestmentFormDialogProps) {
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
-  const isEdit = !!investment;
 
   const schema = useMemo(
     () => buildInvestmentFormSchema(tCommon('form.errors.required')),
@@ -75,6 +77,17 @@ export function InvestmentFormDialog({
     },
   });
 
+  const watchedCategory = useWatch({ control: form.control, name: 'category' }) as
+    | InvestmentCategory
+    | undefined;
+
+  const isEdit = !!investment;
+  const currencyLocked = isEdit && (investment?.hasSnapshots ?? false);
+  const capabilities = watchedCategory ? CATEGORY_CAPABILITIES[watchedCategory] : null;
+  const showTicker = capabilities?.hasTicker ?? false;
+  const tickerHint =
+    watchedCategory && showTicker ? t(`form.ticker.hints.${watchedCategory}`) : null;
+
   // Reset form values when the dialog opens or the target investment changes.
   useEffect(() => {
     if (open) {
@@ -91,24 +104,12 @@ export function InvestmentFormDialog({
     }
   }, [open, investment, form]);
 
-  const watchedCategory = useWatch({ control: form.control, name: 'category' }) as
-    | InvestmentCategory
-    | undefined;
-  const capabilities = watchedCategory ? CATEGORY_CAPABILITIES[watchedCategory] : null;
-  const showTicker = capabilities?.hasTicker ?? false;
-
   // Clear ticker when switching to a category that doesn't support it.
   useEffect(() => {
     if (!showTicker && form.getValues('ticker')) {
       form.setValue('ticker', '');
     }
   }, [showTicker, form]);
-
-  // Build the ticker placeholder from category-specific hints.
-  const tickerPlaceholder =
-    watchedCategory && showTicker
-      ? t(`form.ticker.hints.${watchedCategory}`)
-      : t('form.ticker.placeholder');
 
   async function onSubmit(values: InvestmentFormValues) {
     try {
@@ -187,16 +188,26 @@ export function InvestmentFormDialog({
                   <FormItem className="flex-1 min-w-0">
                     <FormLabel required>{t('form.currency.label')}</FormLabel>
                     <FormControl>
-                      <CurrencyCombobox
-                        compact
-                        value={field.value || null}
-                        exclude={[]}
-                        preferredCurrencies={preferredCurrencies}
-                        placeholder={t('form.currency.placeholder')}
-                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                        noResults={t('form.currency.noResults')}
-                        onChange={field.onChange}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <CurrencyCombobox
+                              compact
+                              value={field.value || null}
+                              exclude={[]}
+                              preferredCurrencies={preferredCurrencies}
+                              disabled={currencyLocked}
+                              placeholder={t('form.currency.placeholder')}
+                              searchPlaceholder={t('form.currency.searchPlaceholder')}
+                              noResults={t('form.currency.noResults')}
+                              onChange={field.onChange}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {currencyLocked && (
+                          <TooltipContent>{t('form.currency.locked')}</TooltipContent>
+                        )}
+                      </Tooltip>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -213,11 +224,16 @@ export function InvestmentFormDialog({
                     <FormItem className="flex-1 min-w-0">
                       <FormLabel>{t('form.ticker.label')}</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          placeholder={tickerPlaceholder}
-                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                        />
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Input
+                              {...field}
+                              placeholder={t('form.ticker.placeholder')}
+                              onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                            />
+                          </TooltipTrigger>
+                          {tickerHint && <TooltipContent>{tickerHint}</TooltipContent>}
+                        </Tooltip>
                       </FormControl>
                       <FormMessage />
                     </FormItem>

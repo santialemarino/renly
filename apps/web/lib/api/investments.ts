@@ -13,6 +13,7 @@ interface InvestmentRaw {
   broker: string | null;
   notes: string | null;
   is_active: boolean;
+  has_snapshots: boolean;
   created_at: string;
   updated_at: string;
   groups: InvestmentGroupInfo[];
@@ -47,6 +48,7 @@ export interface Investment {
   broker: string | null;
   notes: string | null;
   isActive: boolean;
+  hasSnapshots: boolean;
   createdAt: string;
   updatedAt: string;
   groups: InvestmentGroupInfo[];
@@ -91,6 +93,7 @@ function mapInvestment(raw: InvestmentRaw): Investment {
     broker: raw.broker,
     notes: raw.notes,
     isActive: raw.is_active,
+    hasSnapshots: raw.has_snapshots,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     groups: raw.groups,
