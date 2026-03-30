@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import CurrencyChangeBlockedError, NotFoundError
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -20,8 +20,9 @@ from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, 
 def _build_response(
     inv: Investment,
     groups_map: dict[int, list[tuple[int, str]]],
+    snapshots_set: set[int],
 ) -> InvestmentResponse:
-    # Assembles InvestmentResponse, enriching it with group info from the lookup map.
+    # Assembles InvestmentResponse, enriching it with group info and snapshot presence.
     groups = [InvestmentGroupInfo(id=gid, name=gname) for gid, gname in groups_map.get(inv.id or 0, [])]
     return InvestmentResponse(
         id=inv.id or 0,
@@ -32,6 +33,7 @@ def _build_response(
         broker=inv.broker,
         notes=inv.notes,
         is_active=inv.is_active,
+        has_snapshots=(inv.id or 0) in snapshots_set,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
         groups=groups,
@@ -66,8 +68,9 @@ async def list_investments(
     )
     inv_ids = [inv.id for inv in items if inv.id is not None]
     groups_map = await investment_repository.get_groups_by_investment_ids(session, inv_ids)
+    snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, inv_ids)
     return InvestmentListResponse(
-        items=[_build_response(inv, groups_map) for inv in items],
+        items=[_build_response(inv, groups_map, snapshots_set) for inv in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -124,6 +127,10 @@ async def update_investment(
     is_active: bool | None = None,
 ) -> Investment:
     inv = await get_investment(session, investment_id, user)
+    # Prevent currency change when snapshots exist — would corrupt stored values.
+    if base_currency is not None and base_currency != inv.base_currency:
+        if await snapshot_repository.has_snapshots(session, investment_id):
+            raise CurrencyChangeBlockedError()
     if name is not None:
         inv.name = name
     if category is not None:

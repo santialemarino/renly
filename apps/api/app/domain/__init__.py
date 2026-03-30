@@ -5,9 +5,10 @@ from app.domain.currency import (
     get_ars_pair,
     is_supported,
 )
-from app.domain.errors import ExchangeRateUnavailableError, NotFoundError
+from app.domain.errors import CurrencyChangeBlockedError, ExchangeRateUnavailableError, NotFoundError
 
 __all__ = [
+    "CurrencyChangeBlockedError",
     "ExchangeRateUnavailableError",
     "NotFoundError",
     "SUPPORTED_CURRENCIES",

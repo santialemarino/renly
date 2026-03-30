@@ -87,6 +87,7 @@ interface CurrencyComboboxProps {
   compact?: boolean;
   pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
+  disabled?: boolean;
   onChange: (code: string) => void;
   onClear?: () => void;
   'aria-invalid'?: boolean | 'true' | 'false';
@@ -101,6 +102,7 @@ export function CurrencyCombobox({
   compact = false,
   pinnedCurrencies,
   preferredCurrencies,
+  disabled = false,
   onChange,
   onClear,
   'aria-invalid': ariaInvalid,
@@ -183,11 +185,12 @@ export function CurrencyCombobox({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={disabled ? false : open} onOpenChange={disabled ? undefined : setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           size="lg"
+          disabled={disabled}
           onKeyDown={(e) => {
             if (e.key === 'Backspace' && value && onClear) {
               e.preventDefault();

@@ -1,9 +1,31 @@
 from datetime import date
 
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.snapshot import InvestmentSnapshot
+
+
+# Returns True if the investment has at least one snapshot.
+async def has_snapshots(session: AsyncSession, investment_id: int) -> bool:
+    result = await session.execute(
+        select(func.count())
+        .select_from(InvestmentSnapshot)
+        .where(InvestmentSnapshot.investment_id == investment_id)
+        .limit(1)
+    )
+    return (result.scalar() or 0) > 0
+
+
+# Returns the set of investment IDs that have at least one snapshot.
+async def get_ids_with_snapshots(session: AsyncSession, investment_ids: list[int]) -> set[int]:
+    if not investment_ids:
+        return set()
+    result = await session.execute(
+        select(InvestmentSnapshot.investment_id).where(InvestmentSnapshot.investment_id.in_(investment_ids)).distinct()
+    )
+    return {row[0] for row in result.all()}
 
 
 # Lists snapshots for an investment, most recent first.
@@ -50,6 +72,8 @@ async def save(session: AsyncSession, snapshot: InvestmentSnapshot) -> None:
 
 # Namespace to call repository functions (e.g. snapshot_repository.list_by_investment).
 class SnapshotRepository:
+    has_snapshots = staticmethod(has_snapshots)
+    get_ids_with_snapshots = staticmethod(get_ids_with_snapshots)
     list_by_investment = staticmethod(list_by_investment)
     get_by_investment_and_date = staticmethod(get_by_investment_and_date)
     create = staticmethod(create)

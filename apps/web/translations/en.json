@@ -273,7 +273,8 @@
         "label": "Currency",
         "placeholder": "Select a currency",
         "searchPlaceholder": "Search currencies...",
-        "noResults": "No currencies found."
+        "noResults": "No currencies found.",
+        "locked": "Currency cannot be changed because this investment has snapshots."
       },
       "ticker": {
         "label": "Ticker",
