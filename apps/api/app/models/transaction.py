@@ -27,9 +27,7 @@ class Transaction(SQLModel, table=True):
     investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
     date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount (positive).")
-    quantity: Decimal | None = Field(
-        default=None, max_digits=18, decimal_places=6, description="Shares/units transacted."
-    )
+    quantity: Decimal | None = Field(default=None, max_digits=18, decimal_places=6, description="Shares/units transacted.")
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(sa_column=Column(SAEnum(TransactionType, name="transaction_type"), nullable=False))
     notes: str | None = Field(default=None)

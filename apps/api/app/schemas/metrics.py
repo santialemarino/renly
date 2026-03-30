@@ -43,16 +43,12 @@ class PortfolioMetricsResponse(BaseModel):
     total_value: Decimal = Field(description="Sum of latest snapshot values.")
     total_invested: Decimal = Field(description="Sum of net invested capital across all investments.")
     absolute_gain: Decimal = Field(description="Total value minus total invested.")
-    total_return_pct: Decimal | None = Field(
-        default=None, description="Simple return: (total_value / total_invested) - 1."
-    )
+    total_return_pct: Decimal | None = Field(default=None, description="Simple return: (total_value / total_invested) - 1.")
     twr: Decimal | None = Field(default=None, description="Portfolio time-weighted return.")
     irr: Decimal | None = Field(default=None, description="Portfolio money-weighted return (annualised XIRR).")
     month_change: Decimal | None = Field(default=None, description="Absolute change vs previous month.")
     month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
-    currency: str | None = Field(
-        default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
-    )
+    currency: str | None = Field(default=None, description="Display currency (null if no conversion requested and currencies are mixed).")
     skipped_investments: list[SkippedInvestment] = Field(
         default_factory=list, description="Investments excluded because their currency can't be converted."
     )
@@ -67,9 +63,7 @@ class EvolutionPoint(BaseModel):
 # Monthly portfolio value series for the evolution chart.
 class PortfolioEvolutionResponse(BaseModel):
     points: list[EvolutionPoint] = Field(description="Monthly portfolio totals, chronological.")
-    currency: str | None = Field(
-        default=None, description="Display currency (null if no conversion requested and currencies are mixed)."
-    )
+    currency: str | None = Field(default=None, description="Display currency (null if no conversion requested and currencies are mixed).")
     skipped_investments: list[SkippedInvestment] = Field(
         default_factory=list, description="Investments excluded because their currency can't be converted."
     )
@@ -116,9 +110,7 @@ class InvestmentSummaryItem(BaseModel):
     invested_capital: Decimal = Field(description="Net capital invested.")
     absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
     month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
-    has_snapshots_in_period: bool = Field(
-        default=True, description="Whether this investment has snapshots within the selected date range."
-    )
+    has_snapshots_in_period: bool = Field(default=True, description="Whether this investment has snapshots within the selected date range.")
     currency: str = Field(description="Currency of the monetary values.")
 
 

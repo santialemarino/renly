@@ -32,9 +32,7 @@ async def list_groups(
     sort_by: str | None = Query(default=None, description="Column to sort by (name)."),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
 ) -> list[GroupResponse]:
-    pairs = await group_service.list_groups(
-        session, current_user, search=search, sort_by=sort_by, sort_order=sort_order
-    )
+    pairs = await group_service.list_groups(session, current_user, search=search, sort_by=sort_by, sort_order=sort_order)
     return [_to_response(g, ids) for g, ids in pairs]
 
 

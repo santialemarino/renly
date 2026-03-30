@@ -15,9 +15,7 @@ from app.schemas.base import RequestBase
 class TransactionCreate(RequestBase):
     date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(description="Amount (positive).", max_digits=18, decimal_places=2)
-    quantity: Decimal | None = Field(
-        default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6
-    )
+    quantity: Decimal | None = Field(default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6)
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(description="Transaction kind (buy, sell, deposit, withdrawal).")
     notes: str | None = Field(default=None, description="Optional notes.")
@@ -27,9 +25,7 @@ class TransactionCreate(RequestBase):
 class TransactionUpdate(RequestBase):
     date: date_type | None = Field(default=None, description="Transaction date.")
     amount: Decimal | None = Field(default=None, description="Amount (positive).", max_digits=18, decimal_places=2)
-    quantity: Decimal | None = Field(
-        default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6
-    )
+    quantity: Decimal | None = Field(default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6)
     currency: Currency | None = Field(default=None, description="Amount currency.")
     type: TransactionType | None = Field(default=None, description="Transaction kind.")
     notes: str | None = Field(default=None, description="Optional notes.")

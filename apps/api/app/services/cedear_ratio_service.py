@@ -32,7 +32,6 @@ async def fetch_and_store_ratios(session: AsyncSession) -> int:
         return 0
 
     today = date_type.today()
-    count = 0
     for cedear_ticker, underlying, ratio_val in results:
         ratio = CedearRatio(
             ticker=cedear_ticker,
@@ -42,7 +41,7 @@ async def fetch_and_store_ratios(session: AsyncSession) -> int:
             source=COMAFI_SOURCE,
         )
         await cedear_ratio_repository.upsert(session, ratio)
-        count += 1
 
-    logger.info("Stored %d CEDEAR ratios from Comafi.", count)
-    return count
+    await session.commit()
+    logger.info("Stored %d CEDEAR ratios from Comafi.", len(results))
+    return len(results)

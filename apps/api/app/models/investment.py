@@ -35,9 +35,7 @@ class Investment(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", description="Owner.")
     name: str = Field(max_length=255, description="Display name.")
-    category: InvestmentCategory = Field(
-        sa_column=Column(SAEnum(InvestmentCategory, name="investment_category"), nullable=False)
-    )
+    category: InvestmentCategory = Field(sa_column=Column(SAEnum(InvestmentCategory, name="investment_category"), nullable=False))
     base_currency: str = Field(max_length=10, description="Reporting currency (ISO 4217 code).")
     ticker: str | None = Field(default=None, max_length=20, description="Symbol for auto-price-fetching (e.g. AAPL).")
     broker: str | None = Field(default=None, max_length=100)

@@ -109,7 +109,9 @@ async def create_investment(
         broker=broker,
         notes=notes,
     )
-    return await investment_repository.create(session, investment)
+    investment = await investment_repository.create(session, investment)
+    await session.commit()
+    return investment
 
 
 # Updates an existing investment. Only provided fields are updated. Returns updated investment.
@@ -146,6 +148,7 @@ async def update_investment(
     if is_active is not None:
         inv.is_active = is_active
     await investment_repository.save(session, inv)
+    await session.commit()
     await session.refresh(inv)
     return inv
 
@@ -183,6 +186,7 @@ async def set_investment_groups(
         if invalid:
             raise NotFoundError(f"Groups not found: {sorted(invalid)}")
     await group_repository.set_groups_for_investment(session, investment_id, group_ids)
+    await session.commit()
 
 
 # Lists snapshots for an investment. Raises 404 if investment not found or not owned.
@@ -215,6 +219,7 @@ async def upsert_snapshot(
         existing.currency = currency
         existing.notes = notes
         await snapshot_repository.save(session, existing)
+        await session.commit()
         await session.refresh(existing)
         return existing
     snapshot = InvestmentSnapshot(
@@ -225,7 +230,9 @@ async def upsert_snapshot(
         currency=currency,
         notes=notes,
     )
-    return await snapshot_repository.create(session, snapshot)
+    snapshot = await snapshot_repository.create(session, snapshot)
+    await session.commit()
+    return snapshot
 
 
 # Lists transactions for an investment. Raises 404 if investment not found or not owned.
@@ -275,7 +282,9 @@ async def create_transaction(
         type=tx_type,
         notes=notes,
     )
-    return await transaction_repository.create(session, transaction)
+    transaction = await transaction_repository.create(session, transaction)
+    await session.commit()
+    return transaction
 
 
 # Updates an existing transaction. Only provided fields are updated. Returns updated transaction.
@@ -306,6 +315,7 @@ async def update_transaction(
     if notes is not None:
         tx.notes = notes
     await transaction_repository.save(session, tx)
+    await session.commit()
     await session.refresh(tx)
     return tx
 
@@ -319,3 +329,4 @@ async def delete_transaction(
 ) -> None:
     tx = await get_transaction(session, investment_id, transaction_id, user)
     await transaction_repository.delete(session, tx)
+    await session.commit()

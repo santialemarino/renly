@@ -1,6 +1,5 @@
 # Business logic for building the snapshots grid (investments × months).
 
-from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,13 +70,9 @@ async def get_snapshot_grid(
     # Collect all unique dates.
     all_dates = sorted({s.date for s in all_snapshots})
 
-    # Build CEDEAR ratio lookup for CEDEAR investments.
-    cedear_ratios: dict[str, Decimal] = {}
+    # Batch-load CEDEAR ratios for CEDEAR investments.
     cedear_tickers = [inv.ticker for inv in investments if inv.ticker and inv.category == InvestmentCategory.cedears]
-    for ct in cedear_tickers:
-        ratio = await cedear_ratio_repository.get_latest(session, ct)
-        if ratio:
-            cedear_ratios[ct] = ratio.ratio
+    cedear_ratios = await cedear_ratio_repository.get_latest_by_tickers(session, cedear_tickers)
 
     rows: list[SnapshotGridRow] = []
     for inv in investments:
@@ -108,9 +103,7 @@ async def get_snapshot_grid(
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
                         id=tx.id,
-                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate_map)
-                        if currency and rate_map
-                        else tx.amount,
+                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate_map) if currency and rate_map else tx.amount,
                         original_amount=tx.amount,
                         quantity=tx.quantity,
                         type=tx.type,
@@ -144,25 +137,17 @@ def _build_transaction_period_map(snaps, txs):
 
     result = {}
 
-    # First snapshot: transactions on or before its date.
+    # First snapshot: latest transaction on or before its date.
     first_date = snaps[0].date
-    first_tx = None
-    for tx in txs:
-        if tx.date <= first_date:
-            if first_tx is None or tx.date > first_tx.date:
-                first_tx = tx
-    if first_tx:
-        result[first_date] = first_tx
+    candidates = [tx for tx in txs if tx.date <= first_date]
+    if candidates:
+        result[first_date] = max(candidates, key=lambda t: t.date)
 
-    # Subsequent snapshots: transactions between (prev_date, curr_date].
+    # Subsequent snapshots: latest transaction between (prev_date, curr_date].
     for i in range(1, len(snaps)):
         prev_date = snaps[i - 1].date
         curr_date = snaps[i].date
-        latest_tx = None
-        for tx in txs:
-            if prev_date < tx.date <= curr_date:
-                if latest_tx is None or tx.date > latest_tx.date:
-                    latest_tx = tx
-        if latest_tx:
-            result[curr_date] = latest_tx
+        candidates = [tx for tx in txs if prev_date < tx.date <= curr_date]
+        if candidates:
+            result[curr_date] = max(candidates, key=lambda t: t.date)
     return result

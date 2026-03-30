@@ -1,3 +1,5 @@
+# Data access for transactions.
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -10,9 +12,7 @@ async def list_by_investment(
     investment_id: int,
 ) -> list[Transaction]:
     result = await session.execute(
-        select(Transaction)
-        .where(Transaction.investment_id == investment_id)
-        .order_by(Transaction.date.desc(), Transaction.id.desc())
+        select(Transaction).where(Transaction.investment_id == investment_id).order_by(Transaction.date.desc(), Transaction.id.desc())
     )
     return list(result.scalars().all())
 
@@ -26,33 +26,30 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
-# Persists transaction, commits, refreshes, and returns it (with id set).
+# Persists a new transaction and flushes to get the id.
 async def create(session: AsyncSession, transaction: Transaction) -> Transaction:
     session.add(transaction)
-    await session.commit()
-    await session.refresh(transaction)
+    await session.flush()
     return transaction
 
 
 # Persists changes to an existing transaction.
 async def save(session: AsyncSession, transaction: Transaction) -> None:
     session.add(transaction)
-    await session.commit()
 
 
 # Deletes a transaction.
 async def delete(session: AsyncSession, transaction: Transaction) -> None:
     await session.delete(transaction)
-    await session.commit()
 
 
 # Namespace to call repository functions (e.g. transaction_repository.list_by_investment).
 class TransactionRepository:
-    list_by_investment = staticmethod(list_by_investment)
-    get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
-    save = staticmethod(save)
     delete = staticmethod(delete)
+    get_by_id = staticmethod(get_by_id)
+    list_by_investment = staticmethod(list_by_investment)
+    save = staticmethod(save)
 
 
 # Singleton used by services to access transaction persistence.

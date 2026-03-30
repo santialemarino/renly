@@ -1,3 +1,5 @@
+# Business logic for investment groups.
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
@@ -15,14 +17,11 @@ async def list_groups(
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> list[tuple[InvestmentGroup, list[int]]]:
-    groups = await group_repository.list_by_user(
-        session, user.id, search=search, sort_by=sort_by, sort_order=sort_order
-    )
-    out = []
-    for g in groups:
-        ids = await group_repository.get_investment_ids_by_group(session, g.id)
-        out.append((g, ids))
-    return out
+    groups = await group_repository.list_by_user(session, user.id, search=search, sort_by=sort_by, sort_order=sort_order)
+    # Batch-load membership for all groups in one query.
+    group_ids = [g.id for g in groups if g.id is not None]
+    ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
+    return [(g, ids_by_group.get(g.id, [])) for g in groups]
 
 
 # Fetches one group by id. Raises NotFoundError if not found or not owned by user.
@@ -45,7 +44,9 @@ async def create_group(
     name: str,
 ) -> InvestmentGroup:
     group = InvestmentGroup(user_id=user.id, name=name)
-    return await group_repository.create(session, group)
+    group = await group_repository.create(session, group)
+    await session.commit()
+    return group
 
 
 # Updates an existing group. Only provided fields are updated.
@@ -62,6 +63,7 @@ async def update_group(
     if name is not None:
         group.name = name
         await group_repository.save(session, group)
+        await session.commit()
         await session.refresh(group)
     ids = await group_repository.get_investment_ids_by_group(session, group.id)
     return (group, ids)
@@ -77,6 +79,7 @@ async def delete_group(
     if group is None:
         raise NotFoundError("Group not found")
     await group_repository.delete(session, group)
+    await session.commit()
 
 
 # Replaces group membership with the given investment ids. All investments must belong to the user.
@@ -89,8 +92,11 @@ async def set_group_investments(
     group = await group_repository.get_by_id(session, group_id, user.id)
     if group is None:
         raise NotFoundError("Group not found")
-    for inv_id in investment_ids:
-        inv = await investment_repository.get_by_id(session, inv_id, user.id)
-        if inv is None:
-            raise NotFoundError(f"Investment {inv_id} not found")
+    # Batch validate all investment ids in one query.
+    if investment_ids:
+        found = await investment_repository.get_by_ids(session, investment_ids, user.id)
+        if len(found) != len(investment_ids):
+            missing = set(investment_ids) - {i.id for i in found}
+            raise NotFoundError(f"Investments not found: {sorted(missing)}")
     await group_repository.set_members(session, group_id, investment_ids)
+    await session.commit()

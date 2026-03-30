@@ -27,9 +27,7 @@ class PriceLookupResponse(BaseModel):
     date: date_type = Field(description="Price date.")
     price: Decimal = Field(description="Price in the original currency.")
     currency: str = Field(description="Original price currency.")
-    converted_price: Decimal | None = Field(
-        default=None, description="Price converted to the target currency (null if no conversion needed)."
-    )
+    converted_price: Decimal | None = Field(default=None, description="Price converted to the target currency (null if no conversion needed).")
     converted_currency: str | None = Field(default=None, description="Target currency (null if no conversion needed).")
     source: str = Field(description="Data provider.")
 

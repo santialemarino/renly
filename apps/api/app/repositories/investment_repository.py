@@ -1,3 +1,5 @@
+# Data access for investments.
+
 from sqlalchemy import asc, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -35,11 +37,7 @@ async def list_by_user_filtered(
     if category:
         stmt = stmt.where(Investment.category == category)
     if group_ids:
-        stmt = stmt.where(
-            Investment.id.in_(
-                select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id.in_(group_ids))
-            )
-        )
+        stmt = stmt.where(Investment.id.in_(select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id.in_(group_ids))))
     count_stmt = select(func.count()).select_from(stmt.subquery())
     count_result = await session.execute(count_stmt)
     total = count_result.scalar_one()
@@ -87,18 +85,12 @@ async def get_groups_by_investment_ids(
     return groups_map
 
 
-# Persists investment, commits, refreshes, and returns it (with id set).
-async def create(session: AsyncSession, investment: Investment) -> Investment:
-    session.add(investment)
-    await session.commit()
-    await session.refresh(investment)
-    return investment
-
-
-# Persists changes to an existing investment.
-async def save(session: AsyncSession, investment: Investment) -> None:
-    session.add(investment)
-    await session.commit()
+# Returns investments matching the given IDs owned by the user.
+async def get_by_ids(session: AsyncSession, ids: list[int], user_id: int) -> list[Investment]:
+    if not ids:
+        return []
+    result = await session.execute(select(Investment).where(Investment.id.in_(ids), Investment.user_id == user_id))
+    return list(result.scalars().all())
 
 
 # Returns all active investments that have a ticker set.
@@ -112,14 +104,27 @@ async def list_with_ticker(session: AsyncSession) -> list[Investment]:
     return list(result.scalars().all())
 
 
+# Persists a new investment and flushes to get the id.
+async def create(session: AsyncSession, investment: Investment) -> Investment:
+    session.add(investment)
+    await session.flush()
+    return investment
+
+
+# Persists changes to an existing investment.
+async def save(session: AsyncSession, investment: Investment) -> None:
+    session.add(investment)
+
+
 # Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
-    list_by_user_filtered = staticmethod(list_by_user_filtered)
-    get_by_id = staticmethod(get_by_id)
-    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     create = staticmethod(create)
-    save = staticmethod(save)
+    get_by_id = staticmethod(get_by_id)
+    get_by_ids = staticmethod(get_by_ids)
+    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
+    list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_with_ticker = staticmethod(list_with_ticker)
+    save = staticmethod(save)
 
 
 # Singleton used by services to access investment persistence.

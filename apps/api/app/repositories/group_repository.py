@@ -1,3 +1,7 @@
+# Data access for investment groups and membership.
+
+from collections import defaultdict
+
 from sqlalchemy import asc, desc
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,31 +49,41 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
-# Persists group, commits, refreshes, and returns it (with id set).
+# Returns investment ids that belong to the group.
+async def get_investment_ids_by_group(session: AsyncSession, group_id: int) -> list[int]:
+    stmt = select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id == group_id)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+# Returns {group_id: [investment_id, ...]} for all given group IDs in a single query.
+async def get_investment_ids_by_groups(session: AsyncSession, group_ids: list[int]) -> dict[int, list[int]]:
+    if not group_ids:
+        return {}
+    result = await session.execute(
+        select(InvestmentGroupMember.group_id, InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id.in_(group_ids))
+    )
+    grouped: dict[int, list[int]] = defaultdict(list)
+    for row in result.all():
+        grouped[row.group_id].append(row.investment_id)
+    return dict(grouped)
+
+
+# Persists a new group and flushes to get the id.
 async def create(session: AsyncSession, group: InvestmentGroup) -> InvestmentGroup:
     session.add(group)
-    await session.commit()
-    await session.refresh(group)
+    await session.flush()
     return group
 
 
 # Persists changes to an existing group.
 async def save(session: AsyncSession, group: InvestmentGroup) -> None:
     session.add(group)
-    await session.commit()
 
 
 # Deletes a group. Members are removed by FK CASCADE.
 async def delete(session: AsyncSession, group: InvestmentGroup) -> None:
     await session.delete(group)
-    await session.commit()
-
-
-# Returns investment ids that belong to the group. Order not specified.
-async def get_investment_ids_by_group(session: AsyncSession, group_id: int) -> list[int]:
-    stmt = select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id == group_id)
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
 
 
 # Replaces membership: delete all for group, then add (group_id, inv_id) for each id.
@@ -81,7 +95,6 @@ async def set_members(
     await session.execute(sa_delete(InvestmentGroupMember).where(InvestmentGroupMember.group_id == group_id))
     for inv_id in investment_ids:
         session.add(InvestmentGroupMember(group_id=group_id, investment_id=inv_id))
-    await session.commit()
 
 
 # Replaces group membership for an investment: removes all existing, adds new group_ids.
@@ -93,7 +106,6 @@ async def set_groups_for_investment(
     await session.execute(sa_delete(InvestmentGroupMember).where(InvestmentGroupMember.investment_id == investment_id))
     for group_id in group_ids:
         session.add(InvestmentGroupMember(investment_id=investment_id, group_id=group_id))
-    await session.commit()
 
 
 # Namespace to call repository functions (e.g. group_repository.list_by_user).
@@ -102,6 +114,7 @@ class GroupRepository:
     delete = staticmethod(delete)
     get_by_id = staticmethod(get_by_id)
     get_investment_ids_by_group = staticmethod(get_investment_ids_by_group)
+    get_investment_ids_by_groups = staticmethod(get_investment_ids_by_groups)
     list_by_user = staticmethod(list_by_user)
     save = staticmethod(save)
     set_groups_for_investment = staticmethod(set_groups_for_investment)

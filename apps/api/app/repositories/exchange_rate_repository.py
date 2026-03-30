@@ -1,12 +1,15 @@
 # Data access for exchange rates.
 
 from datetime import date as date_type
+from decimal import Decimal
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
+from app.models.utils import utcnow
 
 
 # Returns the latest rate for each pair. {pair: ExchangeRate}.
@@ -34,9 +37,7 @@ async def get_by_date(
     session: AsyncSession,
     rate_date: date_type,
 ) -> list[ExchangeRate]:
-    result = await session.execute(
-        select(ExchangeRate).where(ExchangeRate.date == rate_date).order_by(ExchangeRate.pair)
-    )
+    result = await session.execute(select(ExchangeRate).where(ExchangeRate.date == rate_date).order_by(ExchangeRate.pair))
     return list(result.scalars().all())
 
 
@@ -55,27 +56,62 @@ async def get_by_date_and_pair(
     return result.scalar_one_or_none()
 
 
-# Creates or updates a rate by (date, pair). Returns the persisted rate.
-async def upsert(session: AsyncSession, rate: ExchangeRate) -> ExchangeRate:
-    existing = await get_by_date_and_pair(session, rate.date, rate.pair)
-    if existing:
-        existing.rate = rate.rate
-        existing.source = rate.source
-        session.add(existing)
-        await session.commit()
-        await session.refresh(existing)
-        return existing
-    session.add(rate)
-    await session.commit()
-    await session.refresh(rate)
-    return rate
+# Creates or updates a single rate by (date, pair) using ON CONFLICT.
+async def upsert(session: AsyncSession, rate: ExchangeRate) -> None:
+    now = utcnow()
+    stmt = (
+        insert(ExchangeRate)
+        .values(
+            date=rate.date,
+            pair=rate.pair,
+            rate=rate.rate,
+            source=rate.source,
+            updated_at=now,
+        )
+        .on_conflict_do_update(
+            index_elements=["date", "pair"],
+            set_={
+                "rate": rate.rate,
+                "source": rate.source,
+                "updated_at": now,
+            },
+        )
+    )
+    await session.execute(stmt)
+
+
+# Bulk upserts multiple rates in a single statement. Returns the number of rows affected.
+async def bulk_upsert(
+    session: AsyncSession,
+    rates: list[tuple[ExchangeRatePair, Decimal, str]],
+    rate_date: date_type,
+) -> int:
+    if not rates:
+        return 0
+    now = utcnow()
+    values = [{"date": rate_date, "pair": pair, "rate": rate, "source": source, "updated_at": now} for pair, rate, source in rates]
+    stmt = (
+        insert(ExchangeRate)
+        .values(values)
+        .on_conflict_do_update(
+            index_elements=["date", "pair"],
+            set_={
+                "rate": insert(ExchangeRate).excluded.rate,
+                "source": insert(ExchangeRate).excluded.source,
+                "updated_at": insert(ExchangeRate).excluded.updated_at,
+            },
+        )
+    )
+    await session.execute(stmt)
+    return len(values)
 
 
 # Namespace to call repository functions (e.g. exchange_rate_repository.get_latest_all).
 class ExchangeRateRepository:
-    get_latest_all = staticmethod(get_latest_all)
+    bulk_upsert = staticmethod(bulk_upsert)
     get_by_date = staticmethod(get_by_date)
     get_by_date_and_pair = staticmethod(get_by_date_and_pair)
+    get_latest_all = staticmethod(get_latest_all)
     upsert = staticmethod(upsert)
 
 

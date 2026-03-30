@@ -1,3 +1,5 @@
+# Data access for user settings.
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -15,21 +17,19 @@ async def get_by_user_id(
     return result.scalar_one_or_none()
 
 
-# Persists settings, commits, refreshes, and returns it (with id set).
+# Persists a new settings row and flushes to get the id.
 async def create(
     session: AsyncSession,
     user_settings: UserSettings,
 ) -> UserSettings:
     session.add(user_settings)
-    await session.commit()
-    await session.refresh(user_settings)
+    await session.flush()
     return user_settings
 
 
 # Persists changes to an existing settings row.
 async def save(session: AsyncSession, user_settings: UserSettings) -> None:
     session.add(user_settings)
-    await session.commit()
 
 
 # Namespace to call repository functions (e.g. user_settings_repository.get_by_user_id).
