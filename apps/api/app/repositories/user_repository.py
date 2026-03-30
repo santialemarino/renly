@@ -1,3 +1,5 @@
+# Data access for users.
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -10,24 +12,22 @@ async def get_by_email(session: AsyncSession, email: str) -> User | None:
     return result.scalar_one_or_none()
 
 
-# Persists user, commits, refreshes, and returns it (with id set).
+# Persists a new user and flushes to get the id.
 async def create(session: AsyncSession, user: User) -> User:
     session.add(user)
-    await session.commit()
-    await session.refresh(user)
+    await session.flush()
     return user
 
 
-# Persists changes to an existing user (add + commit).
+# Persists changes to an existing user.
 async def save(session: AsyncSession, user: User) -> None:
     session.add(user)
-    await session.commit()
 
 
 # Namespace to call repository functions (e.g. user_repository.get_by_email).
 class UserRepository:
-    get_by_email = staticmethod(get_by_email)
     create = staticmethod(create)
+    get_by_email = staticmethod(get_by_email)
     save = staticmethod(save)
 
 

@@ -1,6 +1,7 @@
 # Business logic for exchange rates: querying stored rates and fetching from providers.
 # Provider-specific logic (URLs, parsing, field mapping) lives in exchange_rate_providers.py.
 
+import asyncio
 import logging
 from datetime import date as date_type
 
@@ -31,23 +32,34 @@ async def get_rates_by_date(
     return [ExchangeRateResponse.model_validate(r) for r in rates]
 
 
-# Fetches latest rates from all registered providers and stores them.
+# Fetches latest rates from all registered providers in parallel and stores them.
 async def fetch_and_store_latest(session: AsyncSession) -> list[ExchangeRate]:
     today = date_type.today()
-    stored: list[ExchangeRate] = []
 
-    for provider in EXCHANGE_RATE_PROVIDERS:
-        results = await provider.fetch()
+    # Fetch from all providers in parallel.
+    fetch_results = await asyncio.gather(
+        *[provider.fetch() for provider in EXCHANGE_RATE_PROVIDERS],
+        return_exceptions=True,
+    )
+
+    # Collect all (pair, rate, source) tuples for bulk upsert.
+    all_rates: list[tuple] = []
+    for provider, results in zip(EXCHANGE_RATE_PROVIDERS, fetch_results):
+        if isinstance(results, BaseException):
+            logger.exception("Provider %s failed: %s.", provider.source, results)
+            continue
         for pair, rate_value in results:
-            rate = ExchangeRate(
-                date=today,
-                pair=pair,
-                rate=rate_value,
-                source=provider.source,
-            )
-            stored.append(await exchange_rate_repository.upsert(session, rate))
-
+            all_rates.append((pair, rate_value, provider.source))
         if results:
-            logger.info("Stored %d rates from %s for %s.", len(results), provider.source, today)
+            logger.info("Fetched %d rates from %s.", len(results), provider.source)
 
+    if not all_rates:
+        return []
+
+    await exchange_rate_repository.bulk_upsert(session, all_rates, today)
+    await session.commit()
+
+    # Return stored rates for logging/caller.
+    stored = await exchange_rate_repository.get_by_date(session, today)
+    logger.info("Stored %d exchange rates for %s.", len(stored), today)
     return stored

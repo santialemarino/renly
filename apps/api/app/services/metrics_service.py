@@ -76,12 +76,10 @@ async def _resolve_filtered_investments(
         allowed = set(investment_ids)
         investments = [i for i in investments if i.id in allowed]
 
-    # Filter by group membership (union of all groups).
+    # Filter by group membership (union of all groups) — batch query.
     if group_ids:
-        member_ids: set[int] = set()
-        for gid in group_ids:
-            ids = await group_repository.get_investment_ids_by_group(session, gid)
-            member_ids.update(ids)
+        ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
+        member_ids = {mid for ids in ids_by_group.values() for mid in ids}
         investments = [i for i in investments if i.id in member_ids]
 
     # Filter by category.
@@ -154,20 +152,20 @@ async def get_portfolio_metrics(
     inv_currency = {i.id: i.base_currency for i in investments}
 
     # Total current value.
-    total_value = ZERO
-    for inv_id, snap in latest_map.items():
-        v = snap.value
-        if currency and rate_map:
-            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
-        total_value += v
+    total_value = sum(
+        (mh.convert_value(snap.value, inv_currency.get(inv_id, ""), currency, rate_map) if currency and rate_map else snap.value)
+        for inv_id, snap in latest_map.items()
+    )
 
     # Total invested capital.
-    total_invested = ZERO
-    for inv_id in inv_ids:
-        cap = mh.invested_capital(tx_by_inv.get(inv_id, []))
-        if currency and rate_map:
-            cap = mh.convert_value(cap, inv_currency.get(inv_id, ""), currency, rate_map)
-        total_invested += cap
+    total_invested = sum(
+        (
+            mh.convert_value(mh.invested_capital(tx_by_inv.get(inv_id, [])), inv_currency.get(inv_id, ""), currency, rate_map)
+            if currency and rate_map
+            else mh.invested_capital(tx_by_inv.get(inv_id, []))
+        )
+        for inv_id in inv_ids
+    )
 
     absolute_gain = total_value - total_invested
 
@@ -432,14 +430,15 @@ async def get_allocation_by_group(
             v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
         inv_values[inv_id] = v
 
-    # Load groups and their memberships.
+    # Load groups and their memberships — batch query.
     groups = await group_repository.list_by_user(session, user_id)
+    group_ids = [g.id for g in groups if g.id is not None]
+    ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
     grouped_inv_ids: set[int] = set()
     group_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
 
     for group in groups:
-        member_ids = await group_repository.get_investment_ids_by_group(session, group.id)
-        for mid in member_ids:
+        for mid in ids_by_group.get(group.id, []):
             if mid in inv_values:
                 group_values[group.name] += inv_values[mid]
                 grouped_inv_ids.add(mid)
@@ -499,9 +498,7 @@ async def get_investments_summary(
         # Check if the investment has any snapshots within the selected date range.
         has_snapshots_in_period = True
         if start_date or end_date:
-            has_snapshots_in_period = any(
-                (start_date is None or s.date >= start_date) and (end_date is None or s.date <= end_date) for s in snaps
-            )
+            has_snapshots_in_period = any((start_date is None or s.date >= start_date) and (end_date is None or s.date <= end_date) for s in snaps)
 
         current_value = snaps[-1].value if snaps else None
         cap = mh.invested_capital(txs)

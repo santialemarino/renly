@@ -199,9 +199,7 @@ async def fetch_comafi_ratios() -> RatioResult:
                 continue
 
             # Build BYMA ticker (add .BA suffix if not present).
-            cedear_ticker = (
-                ticker_str if ticker_str.endswith(COMAFI_BYMA_SUFFIX) else f"{ticker_str}{COMAFI_BYMA_SUFFIX}"
-            )
+            cedear_ticker = ticker_str if ticker_str.endswith(COMAFI_BYMA_SUFFIX) else f"{ticker_str}{COMAFI_BYMA_SUFFIX}"
             # Underlying is the ticker without .BA.
             underlying = ticker_str.replace(COMAFI_BYMA_SUFFIX, "")
 

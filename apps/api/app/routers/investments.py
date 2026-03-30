@@ -249,9 +249,7 @@ async def update_transaction(
     payload = body.model_dump(exclude_unset=True)
     payload_rename = {"date": "transaction_date", "type": "tx_type"}
     service_kwargs = {payload_rename.get(k, k): v for k, v in payload.items()}
-    transaction = await investment_service.update_transaction(
-        session, investment_id, transaction_id, current_user, **service_kwargs
-    )
+    transaction = await investment_service.update_transaction(session, investment_id, transaction_id, current_user, **service_kwargs)
     return TransactionResponse.model_validate(transaction)
 
 

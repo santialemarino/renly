@@ -24,13 +24,9 @@ class SnapshotGridCell(BaseModel):
     original_value: Decimal = Field(description="Snapshot value (base currency, for editing).")
     quantity: Decimal | None = Field(default=None, description="Number of shares/units.")
     source: str = Field(description="Origin: manual or auto.")
-    period_return_pct: Decimal | None = Field(
-        default=None, description="Period return vs previous snapshot (null for first)."
-    )
+    period_return_pct: Decimal | None = Field(default=None, description="Period return vs previous snapshot (null for first).")
     has_transaction: bool = Field(description="Whether a transaction occurred in this period.")
-    transaction: SnapshotGridTransaction | None = Field(
-        default=None, description="Latest transaction in this period (null if none)."
-    )
+    transaction: SnapshotGridTransaction | None = Field(default=None, description="Latest transaction in this period (null if none).")
 
 
 # One row in the snapshots grid (an investment with its snapshot cells).

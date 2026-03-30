@@ -88,5 +88,6 @@ async def update_settings(
         settings[SETTINGS_KEY_DOLLAR_RATE_PREFERENCE] = dollar_rate_preference
     row.settings = settings
     await user_settings_repository.save(session, row)
+    await session.commit()
     await session.refresh(row)
     return _settings_to_response(row.settings)

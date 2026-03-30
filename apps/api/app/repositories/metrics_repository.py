@@ -14,9 +14,7 @@ async def list_active_investments(
     session: AsyncSession,
     user_id: int,
 ) -> list[Investment]:
-    result = await session.execute(
-        select(Investment).where(Investment.user_id == user_id, Investment.is_active.is_(True)).order_by(Investment.id)
-    )
+    result = await session.execute(select(Investment).where(Investment.user_id == user_id, Investment.is_active.is_(True)).order_by(Investment.id))
     return list(result.scalars().all())
 
 
@@ -69,9 +67,7 @@ async def list_transactions_by_investments(
     if not investment_ids:
         return []
     result = await session.execute(
-        select(Transaction)
-        .where(Transaction.investment_id.in_(investment_ids))
-        .order_by(Transaction.investment_id, Transaction.date.asc())
+        select(Transaction).where(Transaction.investment_id.in_(investment_ids)).order_by(Transaction.investment_id, Transaction.date.asc())
     )
     return list(result.scalars().all())
 
