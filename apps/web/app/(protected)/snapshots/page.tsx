@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SnapshotsGrid } from '@/app/(protected)/snapshots/_components/snapshots-grid';
 import { SnapshotsToolbar } from '@/app/(protected)/snapshots/_components/snapshots-toolbar';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getGroups } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
@@ -62,6 +63,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <DismissableCurrencyHint show={!!currency} />
       <SnapshotsToolbar groups={groups} />
       <SnapshotsGrid grid={grid} />
     </div>

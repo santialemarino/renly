@@ -63,7 +63,7 @@ export function GroupsToolbar({
             className="min-w-0 flex-1"
           >
             <SearchInput
-              aria-label={t('toolbar.searchPlaceholder')}
+              aria-label="Search groups"
               placeholder={t('toolbar.searchPlaceholder')}
               value={search}
               surface

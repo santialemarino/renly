@@ -159,6 +159,7 @@ When the dashboard requests metrics in a specific currency (e.g. ARS), investmen
 **Frontend handling:**
 
 - The dashboard shows a `WarningHint` listing skipped investments: _"Some investments were excluded because their currency can't be converted: Name (EUR)."_
+- A `DismissableCurrencyHint` (`InfoHint` with `surface` background) appears on dashboard and snapshots pages when a non-original currency is selected, explaining that past values are converted at today's rate. Dismissable permanently via localStorage (`currency-hint-dismissed` key).
 - If the API returns 503 (no rates at all), the dashboard shows a generic error fallback: _"Unable to load dashboard data."_
 
 ### 9. Multi-currency pivot conversion

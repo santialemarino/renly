@@ -14,6 +14,7 @@ import { InvestmentDetailCard } from '@/app/(protected)/dashboard/_components/in
 import { InvestmentsSummaryTable } from '@/app/(protected)/dashboard/_components/investments-summary-table';
 import { MetricCards } from '@/app/(protected)/dashboard/_components/metric-cards';
 import { PeriodPicker } from '@/app/(protected)/dashboard/_components/period-picker';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { WarningHint } from '@/components/styled-hint';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import {
@@ -209,6 +210,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </>
         }
       />
+      <DismissableCurrencyHint show={!isOriginalSelected} />
       <AnimatedDashboardToolbar
         backButton={<DashboardToolbar isFiltered={isFiltered} />}
         search={<DashboardSearch investments={searchableInvestments} groups={groups} />}

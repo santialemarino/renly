@@ -175,7 +175,7 @@ function GroupRow({
                   size="icon"
                   className="size-8"
                   onClick={() => setEditOpen(true)}
-                  aria-label={t('form.editTitle')}
+                  aria-label="Edit"
                 >
                   <Pencil className="size-4" />
                 </Button>
@@ -189,7 +189,7 @@ function GroupRow({
                   size="icon"
                   className="size-8 text-muted-foreground hover:text-destructive"
                   onClick={() => setDeleteOpen(true)}
-                  aria-label={t('delete.title')}
+                  aria-label="Delete"
                 >
                   <Trash2 className="size-4" />
                 </Button>
