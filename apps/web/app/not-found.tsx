@@ -4,11 +4,11 @@ import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
-import NotFoundBlob from 'public/icons/not-found-blob.svg';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, ANIMATION_SLOW } from '@/lib/constants/animations';
+import NotFoundBlob from '@/public/icons/not-found-blob.svg';
 
 const BLOB_ANIMATION_PROPS = {
   initial: { opacity: 0, y: 16 },

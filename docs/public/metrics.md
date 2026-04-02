@@ -1,0 +1,118 @@
+# Understanding Your Metrics
+
+This page explains every number you see on the Renly dashboard. Each metric is designed to answer a specific question about your investments.
+
+---
+
+## Current value
+
+**What it answers:** "How much is my portfolio worth right now?"
+
+The sum of the latest snapshot value for each of your investments, converted to your chosen display currency. If you have 3 investments worth $5,000, $3,000, and $2,000, your current value is $10,000.
+
+## Invested capital
+
+**What it answers:** "How much money have I actually put in?"
+
+The total of all your deposits and purchases, minus all your withdrawals and sales. This is the net amount of money you've moved into your investments.
+
+Example: You deposited $8,000 over the past year and withdrew $1,000. Your invested capital is $7,000.
+
+## Absolute gain or loss
+
+**What it answers:** "Am I up or down in dollar terms?"
+
+Simply: current value minus invested capital.
+
+- You put in $7,000 (invested capital)
+- You now have $10,000 (current value)
+- You've gained $3,000
+
+If you had $6,500 instead, you'd have a loss of -$500.
+
+## Period return
+
+**What it answers:** "How much did my investment grow this month, ignoring any money I added or removed?"
+
+This is the return between two consecutive snapshots, adjusted for cash flows. Without this adjustment, depositing $1,000 in the middle of the month would look like a $1,000 "gain," which is misleading.
+
+**How it works:**
+
+Take the current value, subtract any net deposits/withdrawals during the period, and compare to the previous value.
+
+`return = (current_value - net_cash_flows) / previous_value - 1`
+
+**Example:** Your investment was worth $10,000 last month. This month it's worth $11,500, and you deposited $1,000 during the month. The period return is:
+
+`($11,500 - $1,000) / $10,000 - 1 = $10,500 / $10,000 - 1 = +5.0%`
+
+The investment grew 5%, and the remaining $1,000 increase came from the money you added.
+
+## Time-Weighted Return (TWR)
+
+**What it answers:** "How did the investment itself perform, regardless of when I added or removed money?"
+
+Imagine you had invested exactly $1 at the very beginning and never touched it. TWR tells you what your return would be. It measures the investment's performance, not your personal result.
+
+**How it works:**
+
+TWR chains together all the period returns by multiplying them:
+
+`TWR = (1 + r1) x (1 + r2) x (1 + r3) x ... - 1`
+
+**Example:**
+
+- Month 1: +5%
+- Month 2: -2%
+- Month 3: +4%
+
+`TWR = 1.05 x 0.98 x 1.04 - 1 = 1.0702 - 1 = +7.02%`
+
+TWR does **not** depend on when you deposited or withdrew money. Two people who invested in the same stock over the same period will see the same TWR, even if one person added money at different times.
+
+## Money-Weighted Return (IRR)
+
+**What it answers:** "At what rate did my actual money grow, considering when I added and removed it?"
+
+This is also called XIRR (extended internal rate of return). Unlike TWR, IRR **does** depend on timing. If you deposited a large sum right before a good month, your IRR will be higher than someone who deposited the same total but spread it out evenly.
+
+IRR finds the annual interest rate that would make all your cash flows (deposits, withdrawals, and final value) balance out to zero. Think of it as: "what savings account interest rate would have given me the same result, given the exact dates I moved money in and out?"
+
+**Key difference from TWR:** If you deposited $5,000 right before a +10% month, your IRR benefits from the good timing. TWR doesn't care -- it treats the investment the same regardless.
+
+IRR is annualized, meaning it's expressed as a yearly rate even if your investment has only been open for a few months.
+
+## When to use TWR vs. IRR
+
+| Question                                 | Use                                                       |
+| ---------------------------------------- | --------------------------------------------------------- |
+| "How did this stock/fund/bond perform?"  | TWR                                                       |
+| "How did **my money** actually do?"      | IRR                                                       |
+| "Should I compare two investments?"      | TWR (fair comparison, ignoring deposit timing)            |
+| "Did my deposit timing help or hurt me?" | Compare TWR and IRR -- if IRR > TWR, your timing was good |
+
+## Distribution and allocation
+
+**What it answers:** "What percentage of my portfolio is in each category or group?"
+
+If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDEARs, and $3,000 in crypto, your allocation is:
+
+- Stocks: 40%
+- CEDEARs: 30%
+- Crypto: 30%
+
+You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **group** (Retirement, Trading, Kids, etc.).
+
+---
+
+## Note on currency conversion
+
+All currency conversions use **today's exchange rate**, not the historical rate from the snapshot's date. This means a snapshot from January 2025 displayed in ARS uses today's USD/ARS rate, not January 2025's rate.
+
+This is a deliberate design choice: it answers "what is this worth to me today?" rather than "what was it worth back then in local currency?" It keeps all values comparable across time when viewed in a single currency.
+
+## Skipped investments
+
+If Renly can't convert an investment's currency to your display currency (for example, you're viewing in BRL but the exchange rate service is temporarily unavailable), that investment is **excluded** from portfolio totals rather than shown with an incorrect value.
+
+When this happens, the dashboard flags which investments were skipped so you know the totals are incomplete. This prevents silent errors in your numbers.

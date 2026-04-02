@@ -1,0 +1,54 @@
+# Environment Variables
+
+All environment variables used by the Renly backend and frontend, with defaults and descriptions.
+
+## Backend (`apps/api/.env`)
+
+| Variable             | Required | Default | Description                                                                      |
+| -------------------- | -------- | ------- | -------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | —       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`) |
+| `JWT_SECRET`         | Yes      | —       | Secret key for signing JWTs. Must match `NEXTAUTH_SECRET` on the frontend        |
+| `JWT_ALGORITHM`      | No       | `HS256` | JWT signing algorithm                                                            |
+| `JWT_EXPIRE_MINUTES` | No       | `10080` | JWT expiration in minutes (default: 7 days)                                      |
+
+## Frontend (`apps/web/.env`)
+
+| Variable                                  | Required | Default | Description                                                                                           |
+| ----------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_SECRET`                         | Yes      | —       | NextAuth.js signing secret. Must match `JWT_SECRET` on the backend                                    |
+| `NEXTAUTH_URL`                            | Yes      | —       | Canonical URL of the web app (e.g. `http://localhost:3000`)                                           |
+| `NEXT_PUBLIC_API_URL`                     | Yes      | —       | Base URL for client-side API requests (e.g. `http://localhost:8000`)                                  |
+| `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY`   | No       | `ARS`   | Default primary currency when no user settings exist. Also pinned in currency combobox                |
+| `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` | No       | `USD`   | Default secondary currency when no user settings exist. Also pinned in currency combobox              |
+| `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`        | No       | `mep`   | Default dollar rate preference (`oficial`, `mep`, or `blue`)                                          |
+| `NEXT_PUBLIC_PREFERRED_CURRENCIES`        | No       | —       | Comma-separated currencies shown in a "Preferred" group in the currency combobox (e.g. `BRL,EUR,GBP`) |
+| `NEXT_PUBLIC_PERIOD_PRESET_1`             | No       | `1M`    | First dashboard period preset button                                                                  |
+| `NEXT_PUBLIC_PERIOD_PRESET_2`             | No       | `3M`    | Second dashboard period preset button                                                                 |
+| `NEXT_PUBLIC_PERIOD_PRESET_3`             | No       | `6M`    | Third dashboard period preset button                                                                  |
+| `NEXT_PUBLIC_PERIOD_PRESET_4`             | No       | `YTD`   | Fourth dashboard period preset button                                                                 |
+| `NEXT_PUBLIC_MAX_GROUPS`                  | No       | `50`    | Maximum investment groups per user (soft limit)                                                       |
+| `NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT`     | No       | —       | Percentage of max groups at which an approaching-limit warning appears. No warning if omitted         |
+
+**Period preset format:** `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If all four are omitted, only "All" is shown.
+
+## Shared constraints
+
+- `JWT_SECRET` (backend) and `NEXTAUTH_SECRET` (frontend) **must be the same value**. The backend signs JWTs that NextAuth stores in its session, and the backend validates them on every API request.
+- `NEXT_PUBLIC_API_URL` must point to the running API server. In Docker, use the service name or host network as appropriate.
+
+## Docker Compose overrides
+
+The `docker-compose.yml` passes these to services via `environment`:
+
+| Variable              | Service         | Default via compose     |
+| --------------------- | --------------- | ----------------------- |
+| `POSTGRES_USER`       | postgres        | `renly`                 |
+| `POSTGRES_PASSWORD`   | postgres        | `renly`                 |
+| `POSTGRES_DB`         | postgres        | `renly`                 |
+| `DATABASE_URL`        | api             | from `.env`             |
+| `JWT_SECRET`          | api             | from `.env`             |
+| `JWT_ALGORITHM`       | api             | from `.env`             |
+| `JWT_EXPIRE_MINUTES`  | api             | from `.env`             |
+| `NEXT_PUBLIC_API_URL` | web (build arg) | `http://localhost:8000` |
+| `NODE_ENV`            | web             | `production`            |
+| `PORT`                | web             | `3000`                  |

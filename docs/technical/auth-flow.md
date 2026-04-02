@@ -1,0 +1,137 @@
+# Authentication Flow
+
+How authentication works across the backend (FastAPI) and frontend (Next.js + NextAuth.js).
+
+## Backend auth (FastAPI)
+
+### Register
+
+1. `POST /auth/register` receives `{name, email, password}`.
+2. Checks if email already exists — returns 409 if taken.
+3. Hashes password with bcrypt (`bcrypt.gensalt()` — default 12 rounds).
+4. Creates user via `user_repository.create()`, commits.
+5. Generates JWT and returns `{access_token, expires_in}`.
+
+### Login
+
+1. `POST /auth/login` receives `{email, password}`.
+2. Looks up user by email. Verifies password with `bcrypt.checkpw()`.
+3. Returns 401 if user not found or password mismatch.
+4. Generates JWT and returns `{access_token, expires_in}`.
+
+### Logout
+
+1. `POST /auth/logout` (requires auth).
+2. Increments `user.session_epoch` by 1 and saves.
+3. All existing JWTs for that user become invalid (their `session_epoch` claim no longer matches).
+
+### Me
+
+`GET /auth/me` returns `{uid, email, name}` for the authenticated user.
+
+## JWT structure
+
+**Payload fields:**
+
+| Field           | Type | Description                                    |
+| --------------- | ---- | ---------------------------------------------- |
+| `sub`           | str  | User ID (as string)                            |
+| `email`         | str  | User email                                     |
+| `session_epoch` | int  | Monotonic counter — incremented on each logout |
+| `exp`           | int  | Expiration timestamp (UTC)                     |
+
+**Configuration** (from `app/config.py`, sourced from `.env`):
+
+| Setting              | Default  | Description                                |
+| -------------------- | -------- | ------------------------------------------ |
+| `JWT_SECRET`         | required | Signing key (must match `NEXTAUTH_SECRET`) |
+| `JWT_ALGORITHM`      | `HS256`  | HMAC-SHA256                                |
+| `JWT_EXPIRE_MINUTES` | `10080`  | 7 days                                     |
+
+**Signing:** `jose.jwt.encode(payload, secret, algorithm="HS256")`.
+
+## Token validation
+
+The `get_current_user()` dependency in `app/deps/auth.py` runs on every protected endpoint:
+
+1. Extracts Bearer token from `Authorization` header via `HTTPBearer()`.
+2. Decodes JWT with `jose.jwt.decode()` using `JWT_SECRET` and `HS256`.
+3. Extracts `sub` (user ID) and `session_epoch` from the payload.
+4. Fetches user from DB by ID.
+5. Compares token's `session_epoch` with the user's current `session_epoch` — rejects if they differ (token was issued before a logout).
+6. Returns the `User` model instance.
+
+Any failure (expired token, invalid signature, missing fields, epoch mismatch, user not found) raises 401 with `"Invalid or expired token"`.
+
+The `CurrentUser` type alias (`Annotated[User, Depends(get_current_user)]`) is used as a parameter type in router functions.
+
+## Frontend auth (NextAuth.js)
+
+### Configuration (`auth.config.ts`)
+
+- **Provider:** `Credentials` (email + password).
+- **Session strategy:** `jwt` (stateless, no DB session on the frontend).
+- **Secret:** `NEXTAUTH_SECRET` env var — must match the backend's `JWT_SECRET`.
+- **Custom sign-in page:** configured via `pages.signIn`.
+
+### Login flow
+
+```
+User submits email + password
+  → NextAuth Credentials.authorize()
+  → loginRequest(email, password)        // POST /auth/login → {access_token, expires_in}
+  → meRequest(access_token)              // GET /auth/me → {uid, email, name}
+  → returns User object to NextAuth with accessToken + expiresIn
+```
+
+### JWT callback
+
+On initial sign-in, stores `uid`, `email`, `name`, `accessToken`, and `accessTokenExpires` (computed as `Date.now() + expiresIn * 1000`) in the NextAuth JWT.
+
+On subsequent requests, checks if `accessTokenExpires` has passed. If expired, sets `error: 'SessionExpired'` on the token to force re-login.
+
+There is no token refresh — when the backend JWT expires, the user must log in again.
+
+### Session callback
+
+Maps JWT fields to the session object exposed to components:
+
+```typescript
+session.user = {
+  id,
+  email,
+  name,
+  accessToken,
+  expiresIn,
+  error,
+};
+```
+
+`expiresIn` is recomputed on each session read as seconds remaining.
+
+### Authorized callback
+
+Runs on every navigation (middleware). Auth pages are always accessible. For all other routes, if the user is not logged in or has a session error, redirects to the login page.
+
+### Logout flow
+
+```
+userSignOut()                    // server action in auth.ts
+  → auth() to get current session
+  → logoutRequest(accessToken)   // POST /auth/logout (bumps session_epoch)
+  → signOut({ redirect: false }) // clears NextAuth session
+  → client handles redirect
+```
+
+## Server-side helpers (`lib/auth.ts`)
+
+- `getSession()` — returns the NextAuth session (for server components/actions).
+- `getAccessToken()` — extracts `session.user.accessToken` for API calls.
+
+## Security notes
+
+- bcrypt uses `gensalt()` which defaults to 12 rounds.
+- `JWT_SECRET` and `NEXTAUTH_SECRET` **must be the same value** — the backend signs tokens that NextAuth stores and the backend later validates.
+- No refresh token mechanism — expiry forces full re-login.
+- `session_epoch` provides immediate token revocation on logout without a blocklist.
+- `trustHost: true` is set in NextAuth config (required for non-Vercel deployments).

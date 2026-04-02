@@ -85,7 +85,7 @@ See `docs/backend-performance-audit.md` for the full diagnostic and fix plans.
 
 ## External data providers
 
-External data fetching (prices, exchange rates) uses a standardized provider pattern. See `docs/external-providers.md` for the full spec. Key points:
+External data fetching (prices, exchange rates) uses a standardized provider pattern. See `docs/technical/external-providers.md` for the full spec. Key points:
 
 - **Provider files** (`services/price_providers.py`, `services/exchange_rate_providers.py`) own all external logic: URLs, HTTP calls, response parsing.
 - **Services** map categories to providers and handle storage — zero provider-specific code.

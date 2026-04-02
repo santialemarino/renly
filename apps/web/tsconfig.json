@@ -9,7 +9,6 @@
     "declaration": false,
     "declarationMap": false,
     "strictNullChecks": true,
-    "baseUrl": ".",
     "paths": {
       "@/app/*": ["./app/*"],
       "@/auth": ["./auth.ts"],
@@ -18,7 +17,8 @@
       "@/config/*": ["./config/*"],
       "@/hooks/*": ["./hooks/*"],
       "@/lib/*": ["./lib/*"],
-      "@/types/*": ["./types/*"]
+      "@/types/*": ["./types/*"],
+      "@/public/*": ["./public/*"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", "next.config.js", ".next/types/**/*.ts"],

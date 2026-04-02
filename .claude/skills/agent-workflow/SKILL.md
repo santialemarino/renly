@@ -35,14 +35,38 @@ So: no strict obligation to run these manually every time, since pre-commit runs
 
 Docs describe **how things work now**, not “what we changed” (no changelog-style “this works like this now” in READMEs).
 
+### READMEs and DB schema
+
 - **On every change:** If your change affects setup, structure, a specific flow or how to run/check something, update the relevant README (root, `apps/api`, `apps/web`) so it still says how things work. One source of truth; no drift.
 - **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, update `apps/api/database/01_create_tables.sql` to reflect the current state. This script must always rebuild the DB from zero correctly. Never add migration-style comments (“added column X”) — just keep the CREATE statements current.
+
+### Documentation tiers (`docs/`)
+
+The project has three documentation tiers:
+
+| Tier          | Path              | Committed       | Audience                        | Content                                                              |
+| ------------- | ----------------- | --------------- | ------------------------------- | -------------------------------------------------------------------- |
+| **Internal**  | `docs/internal/`  | No (gitignored) | Developer/agent                 | Architecture, phase specs, costs, decisions, implementation plan     |
+| **Public**    | `docs/public/`    | Yes             | Anyone (non-technical friendly) | Solution overview, API reference, categories, metrics, data model    |
+| **Technical** | `docs/technical/` | Yes             | Developers/agents               | Currency handling, auth flow, scheduler, env vars, providers, Docker |
+
+**When to update each tier:**
+
+- **`docs/internal/decisions.md`:** When a design decision is made or an existing one changes — add or update the entry with context, options considered, decision, and why. Also log **open questions** with full detail so they can be picked up cold in a future session.
+- **`docs/internal/implementation-plan.md`:** After finishing significant work — update phase status (built, remaining). Same cadence as `project_status.md` memory.
+- **`docs/internal/architecture.md`:** When Phase 1 architecture changes materially (new endpoint, new table, new flow). Less frequent than implementation-plan.
+- **`docs/public/`:** When a change affects a public doc’s accuracy — new endpoint → `api-reference.md`, new metric → `metrics.md`, new category capability → `investment-categories.md`. Keep language accessible for non-technical readers.
+- **`docs/technical/`:** When implementation details change — new provider → `external-providers.md`, auth change → `auth-flow.md`, new env var → `env-vars.md`, new scheduled job → `scheduler.md`.
+
+### Skills and memory
+
 - **When to update skills:** Less often. Update a skill when you change a **convention** or **structure** (e.g. new layer, new place for components, new comment style). If you only added a feature following existing conventions, you usually don’t need to edit a skill.
 - **Memory (`project_status.md`):** After finishing a significant piece of work, update `~/.claude/projects/{slug}/memory/project_status.md`. Add what you completed to the built section, remove it from remaining/next, and add anything new that surfaced. Skip trivial fixes. Also update `MEMORY.md` if you add a new memory file.
 
 ## 4. What NOT to commit
 
 - **Never stage `.claude/plans/`** — agent plans are ephemeral working docs, gitignored.
+- **Never stage `docs/internal/`** — internal docs (architecture, phase specs, costs, decisions) are gitignored.
 - **Never stage temporary markdown files** (e.g. scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name. When staging, always list files individually — never `git add .` or `git add -A` — so stray files are not accidentally included.
 
 ## 5. Other habits
