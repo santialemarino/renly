@@ -8,7 +8,6 @@ export const ROUTES = {
   investments: '/investments',
   groups: '/groups',
   snapshots: '/snapshots',
-  dataEntry: '/data-entry',
   settings: '/settings',
 } as const;
 

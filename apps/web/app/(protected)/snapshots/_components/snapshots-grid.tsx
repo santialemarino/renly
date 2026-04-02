@@ -294,7 +294,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                         size="icon"
                         className="size-8"
                         onClick={(e) => handleAddClick(row, e)}
-                        aria-label={t('grid.addSnapshot')}
+                        aria-label="Add snapshot"
                       >
                         <Plus className="size-4" />
                       </Button>

@@ -116,7 +116,7 @@ function RowActions({
               className="size-8"
               onClick={handleUnarchive}
               disabled={unarchiving}
-              aria-label={t('actions.unarchive')}
+              aria-label="Unarchive"
             >
               <ArchiveRestore className="size-4" />
             </Button>
@@ -140,7 +140,7 @@ function RowActions({
                 e.stopPropagation();
                 setEditOpen(true);
               }}
-              aria-label={t('actions.edit')}
+              aria-label="Edit"
             >
               <Pencil className="size-4" />
             </Button>
@@ -157,7 +157,7 @@ function RowActions({
                 e.stopPropagation();
                 setArchiveOpen(true);
               }}
-              aria-label={t('actions.archive')}
+              aria-label="Archive"
             >
               <Archive className="size-4" />
             </Button>
