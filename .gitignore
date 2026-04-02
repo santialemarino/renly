@@ -51,5 +51,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Claude Code — agent plans are ephemeral working docs, not repo artifacts
+# Claude Code
 .claude/plans/
+.claude/settings.json
+
+# Internal docs — plans, costs, architecture, phase specs, decisions
+docs/internal/

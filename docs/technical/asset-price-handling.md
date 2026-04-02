@@ -45,7 +45,7 @@ Price providers live in `services/price_providers.py`. The category-to-provider 
 
 CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.BA = 1 AAPL). They are separate from prices — a CEDEAR has both a price (in ARS) and a ratio (structural conversion factor).
 
-**Source:** Banco Comafi Excel file at `comafi.com.ar/Multimedios/otros/7279.xlsx`. Comafi is the depositary institution that issues CEDEARs — this is the authoritative source for all ~338 programs.
+**Source:** Banco Comafi Excel file at `comafi.com.ar/Multimedios/otros/7279.xlsx`. Comafi is the principal issuing entity (entidad emisora) for stock CEDEARs in Argentina (90%+ of programs, authorized by CNV). They define the ratios in the prospectuses they file — this is the authoritative source.
 
 **Fetching:** The `fetch_comafi_ratios()` provider downloads the Excel file, parses headers dynamically to locate the ticker and ratio columns, and extracts all entries. The ratio format varies (`"10:1"`, `"10"`, `"10.0"`) — the parser handles all formats.
 

@@ -42,10 +42,10 @@ pnpm dev
 
 **DB**
 
-| Command        | Description                                                                                                   |
-| -------------- | ------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:init` | Start Postgres and apply schema (first time)                                                                  |
-| `pnpm db:fork` | Fork DB from `DATABASE_URL` into a local container (see [docs/local-db-forking.md](docs/local-db-forking.md)) |
+| Command        | Description                                                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:init` | Start Postgres and apply schema (first time)                                                                                      |
+| `pnpm db:fork` | Fork DB from `DATABASE_URL` into a local container (see [docs/technical/local-db-forking.md](docs/technical/local-db-forking.md)) |
 
 **Lint & format**
 
@@ -63,6 +63,16 @@ pnpm dev
 | `pnpm check:web`        | Web TypeScript type check                    |
 | `pnpm check-types`      | TypeScript type check (all workspaces/turbo) |
 | `pnpm test:api`         | Run API unit tests (pytest)                  |
+
+## Documentation
+
+- **[Solution overview](docs/public/solution.md)** — What Renly is and who it's for
+- **[API reference](docs/public/api-reference.md)** — All endpoints, params, and error codes
+- **[Investment categories](docs/public/investment-categories.md)** — Categories, capabilities, and price sources
+- **[Metrics](docs/public/metrics.md)** — Financial metric formulas (TWR, IRR, period return)
+- **[Data model](docs/public/data-model.md)** — Tables, relationships, and design rationale
+
+Technical docs for developers: [`docs/technical/`](docs/technical/) (auth flow, scheduler, env vars, currency handling, providers, Docker).
 
 ## Code quality
 
