@@ -45,9 +45,13 @@ Price providers live in `services/price_providers.py`. The category-to-provider 
 
 CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.BA = 1 AAPL). They are separate from prices — a CEDEAR has both a price (in ARS) and a ratio (structural conversion factor).
 
-**Source:** Banco Comafi Excel file at `comafi.com.ar/Multimedios/otros/7279.xlsx`. Comafi is the principal issuing entity (entidad emisora) for stock CEDEARs in Argentina (90%+ of programs, authorized by CNV). They define the ratios in the prospectuses they file — this is the authoritative source.
+**Primary source:** Banco Comafi Excel file at `comafi.com.ar/Multimedios/otros/7279.xlsx`. Comafi is the principal issuing entity (entidad emisora) for stock CEDEARs in Argentina (90%+ of programs, authorized by CNV). They define the ratios in the prospectuses they file — this is the authoritative source.
 
-**Fetching:** The `fetch_comafi_ratios()` provider downloads the Excel file, parses headers dynamically to locate the ticker and ratio columns, and extracts all entries. The ratio format varies (`"10:1"`, `"10"`, `"10.0"`) — the parser handles all formats.
+**Fallback source:** BYMA PDF from `byma.com.ar/productos/productos-financieros/cedears`. The PDF URL is dynamic (date in filename), so the fetch first scrapes the BYMA page to discover the current link, then parses the PDF with pdfplumber. BYMA is the exchange where CEDEARs trade.
+
+**Fetching flow:** The service fetches both Comafi and BYMA in parallel (`asyncio.gather`). It picks the source with more entries — more entries means more complete and up to date (a stale source misses newly listed CEDEARs). If both return the same count, Comafi is preferred (authoritative issuer). If one fails, the other is used. The `source` column in `cedear_ratios` tracks which provider was used (`"comafi"` or `"byma"`).
+
+**Parsing:** Comafi Excel: headers located dynamically, ratio formats `"10:1"`, `"10"`, `"10.0"`. BYMA PDF: text extraction with pdfplumber, regex-based ratio parsing (`"N:N"` at end of each line), ticker identification by walking tokens backwards past exchange names.
 
 **Storage:** Each ratio is stored in `cedear_ratios` keyed by `(ticker, effective_date)`. Multiple rows per ticker allow tracking historical ratio changes (e.g. after a stock split).
 
@@ -58,7 +62,7 @@ CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.B
 | Exchange rates | Every 6 hours + startup                            | `interval` | DolarApi + Frankfurter → `exchange_rates`                               |
 | Asset prices   | Daily at 22:00 UTC (after market close)            | `cron`     | yfinance + CoinGecko → `asset_prices` for all ticker-linked investments |
 | Auto-snapshots | Last day of month at 23:00 UTC (after price fetch) | `cron`     | Latest quantity × price → `investment_snapshots` with `source: 'auto'`  |
-| CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel → `cedear_ratios` for all ~338 programs                    |
+| CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel (primary) or BYMA PDF (fallback) → `cedear_ratios`         |
 
 All schedule constants are defined at the top of `scheduler.py`. The asset prices job iterates all active investments with a ticker set, calls the appropriate provider for each, and stores results. If a provider fails for one ticker, that investment is skipped (not the entire job).
 

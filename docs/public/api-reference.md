@@ -96,18 +96,20 @@ The grid view shows all investments as rows and months as columns, similar to a 
 
 ## Groups
 
-Groups are user-defined labels for organizing investments (e.g., "Retirement", "Trading", "Kids"). An investment can belong to multiple groups.
+Groups are user-defined labels for organizing investments (e.g., "Retirement", "Trading", "Kids"). An investment can belong to multiple groups. Each group can have an optional target allocation percentage for the dashboard.
 
 | Method   | Path                       | Description                                                                        |
 | -------- | -------------------------- | ---------------------------------------------------------------------------------- |
-| `GET`    | `/groups`                  | List all groups. Each group includes its investment IDs.                           |
-| `POST`   | `/groups`                  | Create a new group.                                                                |
+| `GET`    | `/groups`                  | List all groups. Each group includes its investment IDs and target percentage.     |
+| `POST`   | `/groups`                  | Create a new group. Optional: `target_percentage` (0-100).                         |
 | `GET`    | `/groups/{id}`             | Get a single group with its investment IDs.                                        |
-| `PUT`    | `/groups/{id}`             | Update a group (e.g., rename it).                                                  |
+| `PUT`    | `/groups/{id}`             | Update a group. Fields: `name`, `target_percentage` (both optional).               |
 | `DELETE` | `/groups/{id}`             | Delete a group.                                                                    |
 | `PUT`    | `/groups/{id}/investments` | Replace the group's investment membership. Body: `{ investment_ids: [5, 12, 8] }`. |
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`), `sort_order` (`asc`/`desc`).
+
+**Group allocation metrics** (`GET /metrics/allocation/by-group`) include `target_percentage` and `difference` (actual minus target) for each group that has a target set.
 
 ---
 
