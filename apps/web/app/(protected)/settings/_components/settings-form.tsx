@@ -36,6 +36,7 @@ import {
   FALLBACK_PRIMARY_CURRENCY,
   FALLBACK_SECONDARY_CURRENCY,
 } from '@/lib/constants/currency';
+import { ENV_GROUP_WARNING_PCT, ENV_MAX_GROUPS } from '@/lib/constants/groups';
 import { ENV_PERIOD_PRESETS, ENV_PRESET_CODES } from '@/lib/constants/period-presets';
 import { isCurrencySupported } from '@/lib/utils/currency';
 import { localizePreset } from '@/lib/utils/period-presets';
@@ -288,10 +289,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             />
             <InfoHint>
               {ENV_PREFERRED
-                ? t('form.preferredCurrencies.formatWithExample', { example: ENV_PREFERRED })
+                ? t('form.preferredCurrencies.formatWithDefaults', { defaults: ENV_PREFERRED })
                 : t('form.preferredCurrencies.format')}
             </InfoHint>
-            <InfoHint>{t('form.preferredCurrencies.emptyDefault')}</InfoHint>
           </div>
         </div>
 
@@ -354,10 +354,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               name="maxGroups"
               control={control}
               render={({ field }) => (
-                <Input {...field} surface type="number" min={1} placeholder="50" />
+                <Input
+                  {...field}
+                  surface
+                  type="number"
+                  min={1}
+                  placeholder={String(ENV_MAX_GROUPS)}
+                />
               )}
             />
-            <InfoHint>{t('form.maxGroups.default', { value: '50' })}</InfoHint>
+            <InfoHint>{t('form.maxGroups.default', { value: String(ENV_MAX_GROUPS) })}</InfoHint>
           </div>
 
           <Separator />
@@ -369,10 +375,23 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               name="groupWarningPct"
               control={control}
               render={({ field }) => (
-                <Input {...field} surface type="number" min={1} max={100} placeholder="80" />
+                <Input
+                  {...field}
+                  surface
+                  type="number"
+                  min={1}
+                  max={100}
+                  placeholder={
+                    ENV_GROUP_WARNING_PCT != null ? String(ENV_GROUP_WARNING_PCT) : undefined
+                  }
+                />
               )}
             />
-            <InfoHint>{t('form.groupWarningPct.default', { value: '80' })}</InfoHint>
+            <InfoHint>
+              {ENV_GROUP_WARNING_PCT != null
+                ? t('form.groupWarningPct.default', { value: String(ENV_GROUP_WARNING_PCT) })
+                : t('form.groupWarningPct.noDefault')}
+            </InfoHint>
           </div>
         </div>
       </div>

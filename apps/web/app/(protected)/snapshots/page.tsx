@@ -8,6 +8,7 @@ import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint'
 import { getGroups } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -36,7 +37,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
     : undefined;
 
   const settings = await getSettings().catch(() => null);
-  const primary = settings?.primaryCurrency ?? 'ARS';
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const secondary = settings?.secondaryCurrency ?? null;
   const displayCurrencies = secondary
     ? [primary, secondary, ORIGINAL_CURRENCY]

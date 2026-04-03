@@ -6,10 +6,8 @@ import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSettings } from '@/lib/api/settings';
 import { getSession } from '@/lib/auth';
+import { FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
-
-const FALLBACK_PRIMARY = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
-const FALLBACK_SECONDARY = process.env.NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY ?? 'USD';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
@@ -21,8 +19,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const settings = await getSettings().catch(() => null);
   const cookieStore = await cookies();
 
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
-  const secondary = settings?.secondaryCurrency ?? FALLBACK_SECONDARY;
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const secondary = settings?.secondaryCurrency ?? FALLBACK_SECONDARY_CURRENCY;
   const displayCurrencies = secondary
     ? [primary, secondary, ORIGINAL_CURRENCY]
     : [primary, ORIGINAL_CURRENCY];

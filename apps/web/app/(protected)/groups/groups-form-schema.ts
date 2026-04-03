@@ -5,6 +5,7 @@ import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
 export function buildGroupFormSchema(requiredMsg: string) {
   return z.object({
     name: z.string().min(1, requiredMsg).max(GROUP_NAME_MAX),
+    targetPercentage: z.number().min(0).max(100).nullable().optional(),
     investmentIds: z.array(z.number()).optional(),
   });
 }

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import type { AllocationResponse, GroupAllocationResponse } from '@/lib/api/metrics';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { UNGROUPED_LABEL } from '@/lib/constants/api-constants';
 import {
   CHART_ANIMATION_DURATION,
@@ -27,6 +29,12 @@ import {
 } from '@/lib/constants/charts';
 
 type Mode = 'category' | 'group';
+
+// Formats a percentage, dropping decimals when exact (e.g. 40 → "40", 33.5 → "33.5").
+function formatPct(value: number): string {
+  const hasDecimals = Math.round(value * 10) % 10 !== 0;
+  return hasDecimals ? value.toFixed(1) : value.toFixed(0);
+}
 
 // Formats a number as a compact value.
 function formatValue(value: number): string {
@@ -64,14 +72,42 @@ export function DistributionSection({
         name: tCommon(`categories.${item.category}`),
         value: item.value,
         percentage: item.percentage,
+        targetPercentage: null as number | null,
+        difference: null as number | null,
       }))
     : groupAllocation.items.map((item) => ({
         name: item.groupName === UNGROUPED_LABEL ? t('distribution.ungrouped') : item.groupName,
         value: item.value,
         percentage: item.percentage,
+        targetPercentage: item.targetPercentage,
+        difference: item.difference,
       }));
 
   const hasData = chartData.length > 0;
+  const hasTargets = !isCategoryMode && chartData.some((e) => e.targetPercentage != null);
+
+  // Measure legend height for smooth bottom-edge animation.
+  const legendRef = useRef<HTMLDivElement>(null);
+  const [legendHeight, setLegendHeight] = useState<number>(0);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    const el = legendRef.current;
+    if (!el) return;
+
+    // Set initial height without transition to avoid flash.
+    if (!initialized.current) {
+      setLegendHeight(el.scrollHeight);
+      initialized.current = true;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      if (h != null) setLegendHeight(h);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <Card className="flex-1">
@@ -90,60 +126,118 @@ export function DistributionSection({
           />
         )}
       </CardHeader>
-      <CardContent className="px-6 pb-6">
+      <CardContent className="px-6">
         {hasData ? (
-          <div className="flex flex-col items-center gap-y-4">
-            <div style={{ height: DONUT_HEIGHT }} className="w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={DONUT_INNER_RADIUS}
-                    outerRadius={DONUT_OUTER_RADIUS}
-                    animationDuration={CHART_ANIMATION_DURATION}
-                    animationEasing={CHART_ANIMATION_EASING}
-                    paddingAngle={DONUT_PADDING_ANGLE}
-                    strokeWidth={0}
-                  >
-                    {chartData.map((_entry, index) => (
-                      <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    animationDuration={TOOLTIP_ANIMATION_DURATION}
-                    formatter={(value) => formatValue(Number(value))}
-                    contentStyle={{
-                      backgroundColor: TOOLTIP_BG,
-                      color: TOOLTIP_TEXT,
-                      borderRadius: TOOLTIP_BORDER_RADIUS,
-                      border: TOOLTIP_BORDER,
-                      fontSize: TOOLTIP_FONT_SIZE,
-                    }}
-                    labelStyle={{ color: TOOLTIP_TEXT }}
-                    itemStyle={{ color: TOOLTIP_TEXT }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Legend */}
-            <div className="grid w-full grid-cols-2 gap-x-4 gap-y-2">
-              {chartData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-x-2">
-                  <div
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
-                  />
-                  <span className="min-w-0 truncate text-paragraph-xs text-muted-foreground">
-                    {entry.name}
-                  </span>
-                  <span className="shrink-0 ml-auto text-paragraph-xs-semibold">
-                    {entry.percentage.toFixed(1)}%
-                  </span>
+          <div
+            className="overflow-hidden transition-[height] duration-300 ease-in-out"
+            style={{ height: legendHeight }}
+          >
+            <div ref={legendRef} className="flex flex-col gap-y-4">
+              {/* Chart (top on mobile, right on desktop) + Legend */}
+              <div className="flex flex-col-reverse items-center gap-y-4 lg:flex-row lg:gap-x-6 lg:gap-y-0">
+                {/* Legend items — content fades on mode switch. */}
+                <div className="w-full lg:flex-1 lg:min-w-0">
+                  <AnimatePresence mode="wait" initial={false}>
+                    <motion.div
+                      key={activeMode}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: ANIMATION_DEFAULT }}
+                      className="grid grid-cols-2 gap-x-4 gap-y-2 lg:flex lg:flex-col lg:gap-x-0"
+                    >
+                      {chartData.map((entry, index) => (
+                        <div key={entry.name} className="flex items-center gap-x-2">
+                          <div
+                            className="size-2.5 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length],
+                            }}
+                          />
+                          <span className="min-w-0 text-paragraph-xs text-muted-foreground truncate">
+                            {entry.name}
+                          </span>
+                          <span className="shrink-0 text-paragraph-xs-semibold">
+                            {formatPct(entry.percentage)}%
+                          </span>
+                          {entry.targetPercentage != null && (
+                            <span
+                              className={`shrink-0 text-paragraph-mini ${
+                                entry.difference != null && entry.difference > 0
+                                  ? 'text-red-500'
+                                  : entry.difference != null && entry.difference < 0
+                                    ? 'text-amber-500'
+                                    : 'text-muted-foreground'
+                              }`}
+                            >
+                              ({formatPct(entry.targetPercentage)}%)
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </motion.div>
+                  </AnimatePresence>
                 </div>
-              ))}
+
+                {/* Donut chart — key forces remount so Recharts replays the draw animation. */}
+                <div
+                  style={{ height: DONUT_HEIGHT, maxWidth: DONUT_HEIGHT }}
+                  className="w-full shrink-0"
+                >
+                  <ResponsiveContainer key={activeMode} width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={DONUT_INNER_RADIUS}
+                        outerRadius={DONUT_OUTER_RADIUS}
+                        animationDuration={CHART_ANIMATION_DURATION}
+                        animationEasing={CHART_ANIMATION_EASING}
+                        paddingAngle={DONUT_PADDING_ANGLE}
+                        strokeWidth={0}
+                      >
+                        {chartData.map((_entry, index) => (
+                          <Cell key={index} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        animationDuration={TOOLTIP_ANIMATION_DURATION}
+                        formatter={(value) => formatValue(Number(value))}
+                        contentStyle={{
+                          backgroundColor: TOOLTIP_BG,
+                          color: TOOLTIP_TEXT,
+                          borderRadius: TOOLTIP_BORDER_RADIUS,
+                          border: TOOLTIP_BORDER,
+                          fontSize: TOOLTIP_FONT_SIZE,
+                        }}
+                        labelStyle={{ color: TOOLTIP_TEXT }}
+                        itemStyle={{ color: TOOLTIP_TEXT }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Target color legend — only when groups have targets. */}
+              <AnimatePresence initial={false}>
+                {hasTargets && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                    className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
+                  >
+                    <span>
+                      <span className="text-red-500">●</span> {t('distribution.overAllocated')}
+                    </span>
+                    <span>
+                      <span className="text-amber-500">●</span> {t('distribution.underAllocated')}
+                    </span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         ) : (
