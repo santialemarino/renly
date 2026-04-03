@@ -37,6 +37,11 @@ _CATEGORY_PROVIDERS: dict[InvestmentCategory, PriceProviderInfo] = {
         fetch=price_providers.fetch_yfinance,
         supports_history=True,
     ),
+    InvestmentCategory.fci: PriceProviderInfo(
+        source=price_providers.SOURCE_CAFCI,
+        fetch=price_providers.fetch_fci,
+        supports_history=False,
+    ),
 }
 
 
@@ -114,6 +119,9 @@ async def fetch_and_store_prices(
 # Fetches prices for all ticker-linked investments in parallel. Returns total prices stored.
 async def refresh_all_prices(session: AsyncSession) -> int:
     from app.repositories.investment_repository import investment_repository
+
+    # Clear per-cycle caches so providers re-download fresh data.
+    price_providers.clear_fci_cache()
 
     investments = await investment_repository.list_with_ticker(session)
 

@@ -3,6 +3,7 @@
 # Providers are stateless — they fetch and return, the service handles storage.
 # To swap a provider, change the mapping in asset_price_service._CATEGORY_PROVIDERS.
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import date as date_type
@@ -379,3 +380,239 @@ async def fetch_byma_ratios() -> RatioFetchResult:
     except Exception:
         logger.exception("Failed to parse BYMA CEDEAR PDF.")
         return RatioFetchResult([], source_date)
+
+
+# --- FCI (mutual fund) price provider ---
+
+CAFCI_EXCEL_URL = "https://api.pub.cafci.org.ar/pb_get"
+CAFCI_TIMEOUT = 30.0
+CAFCI_HEADER_SCAN_MAX_ROW = 15
+CAFCI_CODE_HEADER = "código cafci"
+CAFCI_VCP_HEADER = "valor"
+CAFCI_DATE_HEADER = "fecha"
+CAFCI_CURRENCY_HEADER = "moneda fondo"
+
+SOURCE_ARGENTIADATOS = "argentinadatos"
+ARGENTIADATOS_BASE = "https://api.argentinadatos.com/v1/finanzas/fci"
+ARGENTIADATOS_TYPES = ["mercadoDinero", "rentaFija", "rentaVariable", "rentaMixta", "otros"]
+ARGENTIADATOS_TIMEOUT = 15.0
+
+# Module-level caches. Populated on first fetch per process lifecycle.
+# _cafci_prices: code → (date, price, currency). All funds from the latest Excel download.
+# _cafci_registry: code → fund name. Used for ArgentinaDatos fallback.
+_cafci_prices: dict[str, tuple[date_type, Decimal, str]] | None = None
+_cafci_registry: dict[str, str] | None = None
+_cafci_lock: asyncio.Lock | None = None
+
+
+def _get_cafci_lock() -> asyncio.Lock:
+    global _cafci_lock
+    if _cafci_lock is None:
+        _cafci_lock = asyncio.Lock()
+    return _cafci_lock
+
+
+# Clears the CAFCI cache. Called before each refresh cycle so the next fetch re-downloads.
+def clear_fci_cache() -> None:
+    global _cafci_prices, _cafci_registry
+    _cafci_prices = None
+    _cafci_registry = None
+
+
+# Fetches the latest FCI cuotaparte price for a given CAFCI code.
+# Primary: CAFCI public Excel (cached per refresh cycle). Fallback: ArgentinaDatos JSON API.
+async def fetch_fci(
+    ticker: str,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> PriceResult:
+    # Try cached CAFCI data first (populated by the first call in the refresh cycle).
+    if _cafci_prices is not None:
+        entry = _cafci_prices.get(ticker)
+        return [entry] if entry else []
+
+    # First call — download and cache. Lock ensures only one download even with concurrent calls.
+    async with _get_cafci_lock():
+        # Re-check after acquiring lock (another coroutine may have populated the cache).
+        if _cafci_prices is not None:
+            entry = _cafci_prices.get(ticker)
+            return [entry] if entry else []
+        await _load_cafci_cache()
+
+    if _cafci_prices is not None:
+        entry = _cafci_prices.get(ticker)
+        if entry:
+            return [entry]
+
+    logger.warning("CAFCI Excel returned no price for ticker %s. Trying ArgentinaDatos.", ticker)
+    return await _fetch_fci_from_argentinadatos(ticker)
+
+
+# Downloads the CAFCI Excel and caches all fund prices + registry in module-level dicts.
+# Called once per refresh cycle — subsequent fetch_fci() calls read from cache.
+async def _load_cafci_cache() -> None:
+    global _cafci_prices, _cafci_registry
+    import asyncio
+    import io
+
+    try:
+        async with httpx.AsyncClient(timeout=CAFCI_TIMEOUT) as client:
+            response = await client.get(CAFCI_EXCEL_URL)
+            response.raise_for_status()
+            content = response.content
+    except httpx.HTTPError:
+        logger.exception("CAFCI Excel fetch failed.")
+        _cafci_prices = {}
+        return
+
+    def _parse(data: bytes) -> tuple[dict[str, tuple[date_type, Decimal, str]], dict[str, str]]:
+        import re
+
+        from openpyxl import load_workbook
+
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        ws = wb.active
+        if ws is None:
+            return {}, {}
+
+        # Find the header row by locating the CAFCI code column, then map all columns from that row.
+        code_col = None
+        vcp_col = None
+        date_col = None
+        currency_col = None
+        header_row = None
+
+        for row in ws.iter_rows(min_row=1, max_row=CAFCI_HEADER_SCAN_MAX_ROW, values_only=False):
+            for cell in row:
+                if CAFCI_CODE_HEADER in str(cell.value or "").strip().lower():
+                    header_row = cell.row
+                    break
+            if header_row:
+                for cell in row:
+                    val = str(cell.value or "").strip().lower()
+                    if CAFCI_CODE_HEADER in val:
+                        code_col = cell.column
+                    if CAFCI_VCP_HEADER in val:
+                        vcp_col = cell.column
+                    if CAFCI_DATE_HEADER in val:
+                        date_col = cell.column
+                    if CAFCI_CURRENCY_HEADER in val:
+                        currency_col = cell.column
+                break
+
+        if not header_row or not code_col or not vcp_col:
+            logger.warning("Could not find header columns in CAFCI Excel.")
+            wb.close()
+            return {}, {}
+
+        # Parse all rows into the prices dict and registry.
+        prices: dict[str, tuple[date_type, Decimal, str]] = {}
+        registry: dict[str, str] = {}
+
+        for row in ws.iter_rows(min_row=header_row + 2, values_only=False):
+            code_cell = row[code_col - 1].value if len(row) >= code_col else None
+            if not code_cell:
+                continue
+
+            code_str = str(int(code_cell)) if isinstance(code_cell, (int, float)) else str(code_cell).strip()
+            fund_name = str(row[0].value or "").strip()
+            if fund_name:
+                registry[code_str] = fund_name
+
+            # Extract VCP.
+            vcp_cell = row[vcp_col - 1].value if len(row) >= vcp_col else None
+            if not vcp_cell:
+                continue
+            try:
+                vcp = Decimal(str(vcp_cell).strip().replace(",", "."))
+            except Exception:
+                continue
+            if vcp <= 0:
+                continue
+
+            # Extract date.
+            price_date = None
+            if date_col:
+                date_cell = row[date_col - 1].value if len(row) >= date_col else None
+                if isinstance(date_cell, date_type):
+                    price_date = date_cell
+                elif date_cell:
+                    match = re.search(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", str(date_cell))
+                    if match:
+                        y = int(match.group(3))
+                        if y < 100:
+                            y += 2000
+                        try:
+                            price_date = date_type(y, int(match.group(2)), int(match.group(1)))
+                        except ValueError:
+                            pass
+
+            if not price_date:
+                price_date = date_type.today()
+
+            # Extract currency.
+            currency = "ARS"
+            if currency_col:
+                curr_cell = row[currency_col - 1].value if len(row) >= currency_col else None
+                if curr_cell:
+                    currency = str(curr_cell).strip().upper()
+
+            prices[code_str] = (price_date, vcp, currency)
+
+        wb.close()
+        return prices, registry
+
+    try:
+        prices, registry = await asyncio.to_thread(_parse, content)
+        _cafci_prices = prices
+        _cafci_registry = registry
+        logger.info("CAFCI cache loaded: %d prices, %d registry entries.", len(prices), len(registry))
+    except Exception:
+        logger.exception("Failed to parse CAFCI Excel.")
+        _cafci_prices = {}
+
+
+# Fetches FCI price from the ArgentinaDatos JSON API (fallback).
+# Requires _cafci_registry to map CAFCI code → fund name.
+async def _fetch_fci_from_argentinadatos(ticker: str) -> PriceResult:
+    global _cafci_registry
+
+    # Need the fund name to search in ArgentinaDatos.
+    fund_name = (_cafci_registry or {}).get(ticker)
+    if not fund_name:
+        logger.warning("No fund name in registry for CAFCI code %s. Cannot query ArgentinaDatos.", ticker)
+        return []
+
+    # Fetch all types in parallel.
+    async def _fetch_type(fci_type: str) -> list[dict]:
+        try:
+            async with httpx.AsyncClient(timeout=ARGENTIADATOS_TIMEOUT) as client:
+                response = await client.get(f"{ARGENTIADATOS_BASE}/{fci_type}/ultimo")
+                response.raise_for_status()
+                return response.json()
+        except Exception:
+            return []
+
+    import asyncio
+
+    all_results = await asyncio.gather(*[_fetch_type(t) for t in ARGENTIADATOS_TYPES])
+
+    # Search all responses for the fund name.
+    fund_name_lower = fund_name.lower()
+    for items in all_results:
+        for item in items:
+            fondo = (item.get("fondo") or "").strip()
+            if fondo.lower() == fund_name_lower:
+                vcp = item.get("vcp")
+                fecha = item.get("fecha")
+                if not vcp or not fecha:
+                    continue
+                try:
+                    price_date = date_type.fromisoformat(fecha)
+                    price_val = Decimal(str(vcp))
+                    return [(price_date, price_val, "ARS")]
+                except Exception:
+                    continue
+
+    logger.warning("Fund '%s' not found in ArgentinaDatos.", fund_name)
+    return []

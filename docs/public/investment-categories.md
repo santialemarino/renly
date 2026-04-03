@@ -13,7 +13,7 @@ Renly supports 10 investment categories. Each one represents a different type of
 | Crypto             | Yes         | CoinGecko           | USD              |
 | Government Bonds   | Yes         | Yahoo Finance (.BA) | ARS or USD       |
 | Corporate Bonds    | No          | Manual              | ARS or USD       |
-| FCI (Mutual Funds) | No          | Manual              | ARS              |
+| FCI (Mutual Funds) | Yes         | CAFCI               | ARS or USD       |
 | Dollars            | No          | Manual              | USD              |
 | Real Estate        | No          | Manual              | USD              |
 | Term Deposit       | No          | Manual              | ARS              |
@@ -72,11 +72,12 @@ These are currently manual-entry only. Reliable, automated price feeds for Argen
 
 ## FCI (Mutual Funds)
 
-Fondos Comunes de Inversion, Argentine mutual funds. Each FCI has a CAFCI code (the industry registry), but the CAFCI API currently returns authentication errors, so automatic pricing is not available.
+Fondos Comunes de Inversion, Argentine mutual funds. Each fund class has a unique CAFCI code (the industry registry number). Renly fetches cuotaparte (unit price) values daily from the CAFCI public data feed.
 
-You enter the value of your FCI position manually each month. The ticker field accepts a CAFCI code for reference, but it is not used for price fetching at this time.
+To set up an FCI investment, enter the CAFCI code as the ticker (e.g., 2409 for "Bull Market Acciones Argentinas - Clase B"). The app will automatically fetch the latest cuotaparte value and use it for snapshots.
 
-**Ticker:** Yes (CAFCI code, for reference only)
+**Ticker:** Yes (CAFCI code, e.g., 2409)
+**Price source:** CAFCI public Excel (`api.pub.cafci.org.ar`), with ArgentinaDatos JSON API as fallback.
 **Price history:** No -- manual entry required.
 
 ## Dollars
@@ -119,7 +120,7 @@ For investments with a ticker (stocks, CEDEARs, crypto, government bonds), Renly
 
 ## What "manual entry" means
 
-For investments without automatic pricing (corporate bonds, FCI, dollars, real estate, term deposits, other), you enter the value yourself. Typically this means:
+For investments without automatic pricing (corporate bonds, dollars, real estate, term deposits, other), you enter the value yourself. Typically this means:
 
 - Once a month, you go to the data entry screen.
 - You see all your investments listed with their previous values as placeholders.
