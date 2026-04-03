@@ -191,7 +191,9 @@
       "title": "Distribution",
       "byCategory": "By category",
       "byGroup": "By group",
-      "ungrouped": "Ungrouped"
+      "ungrouped": "Ungrouped",
+      "overAllocated": "Over target",
+      "underAllocated": "Under target"
     },
     "investmentsTable": {
       "title": "Investments",
@@ -340,6 +342,8 @@
       "id": "ID",
       "name": "Name",
       "investments": "Investments",
+      "target": "Target",
+      "noTarget": "—",
       "actions": "Actions",
       "noInvestments": "—",
       "empty": "No groups found."
@@ -350,6 +354,10 @@
       "name": {
         "label": "Name",
         "placeholder": "Enter the group name"
+      },
+      "targetPercentage": {
+        "label": "Target allocation (%)",
+        "placeholder": "Enter the target percentage"
       },
       "investments": {
         "label": "Investments",
@@ -478,9 +486,8 @@
         "placeholder": "Search currencies...",
         "inputPlaceholder": "Enter ISO codes (e.g. BRL, EUR)",
         "empty": "No currencies found.",
-        "format": "Comma-separated ISO codes.",
-        "formatWithExample": "Comma-separated ISO codes, e.g. {example}.",
-        "emptyDefault": "Leave empty to use the environment defaults."
+        "format": "Comma-separated ISO codes. Leave empty to disable.",
+        "formatWithDefaults": "Comma-separated ISO codes. Defaults to {defaults} if left empty."
       },
       "sectionCurrencies": "Currencies",
       "sectionDashboard": "Dashboard & Limits",
@@ -499,14 +506,15 @@
         "default": "Defaults to {value} if left empty."
       },
       "groupWarningPct": {
-        "label": "Warning threshold",
+        "label": "Warning threshold (%)",
         "hint": "Show a warning when this percentage of max groups is reached.",
-        "default": "Defaults to {value}% if left empty. Leave empty to disable the warning."
+        "default": "Defaults to {value}% if left empty.",
+        "noDefault": "Leave empty to disable the warning."
       },
       "dollarRate": {
         "label": "Dollar rate",
         "hint": "Which USD/ARS exchange rate to use for all conversions.",
-        "default": "Defaults to {value} if not set.",
+        "default": "Defaults to {value} if left empty.",
         "options": {
           "oficial": "Official",
           "mep": "MEP (financial)",

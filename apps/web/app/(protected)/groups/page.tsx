@@ -7,10 +7,8 @@ import { getGroups } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { ENV_GROUP_WARNING_PCT, ENV_MAX_GROUPS } from '@/lib/constants/groups';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
-
-// Env var fallback for max groups.
-const ENV_MAX_GROUPS = Number(process.env.NEXT_PUBLIC_MAX_GROUPS ?? 50);
 
 export async function generateMetadata() {
   return await generatePageMetadata('groups');
@@ -41,10 +39,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
 
   const investments = investmentsList.items.map((inv) => ({ id: inv.id, name: inv.name }));
   const maxGroups = settings?.maxGroups ?? ENV_MAX_GROUPS;
-  const envWarningPct = process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT
-    ? Number(process.env.NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT)
-    : null;
-  const groupWarningPct = settings?.groupWarningPct ?? envWarningPct;
+  const groupWarningPct = settings?.groupWarningPct ?? ENV_GROUP_WARNING_PCT;
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

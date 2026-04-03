@@ -1,5 +1,7 @@
 # Business logic for investment groups.
 
+from decimal import Decimal
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
@@ -42,8 +44,10 @@ async def create_group(
     session: AsyncSession,
     user: User,
     name: str,
+    *,
+    target_percentage: Decimal | None = None,
 ) -> InvestmentGroup:
-    group = InvestmentGroup(user_id=user.id, name=name)
+    group = InvestmentGroup(user_id=user.id, name=name, target_percentage=target_percentage)
     group = await group_repository.create(session, group)
     await session.commit()
     return group
@@ -56,15 +60,17 @@ async def update_group(
     user: User,
     *,
     name: str | None = None,
+    target_percentage: Decimal | None = None,
 ) -> tuple[InvestmentGroup, list[int]]:
     group = await group_repository.get_by_id(session, group_id, user.id)
     if group is None:
         raise NotFoundError("Group not found")
     if name is not None:
         group.name = name
-        await group_repository.save(session, group)
-        await session.commit()
-        await session.refresh(group)
+    group.target_percentage = target_percentage
+    await group_repository.save(session, group)
+    await session.commit()
+    await session.refresh(group)
     ids = await group_repository.get_investment_ids_by_group(session, group.id)
     return (group, ids)
 

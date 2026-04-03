@@ -29,6 +29,7 @@ interface InvestmentListRaw {
 interface InvestmentGroupRaw {
   id: number;
   name: string;
+  target_percentage: number | null;
   investment_ids: number[];
 }
 
@@ -64,6 +65,7 @@ export interface InvestmentListResponse {
 export interface InvestmentGroup {
   id: number;
   name: string;
+  targetPercentage: number | null;
   investmentIds: number[];
 }
 
@@ -104,6 +106,7 @@ function mapGroup(raw: InvestmentGroupRaw): InvestmentGroup {
   return {
     id: raw.id,
     name: raw.name,
+    targetPercentage: raw.target_percentage,
     investmentIds: raw.investment_ids,
   };
 }

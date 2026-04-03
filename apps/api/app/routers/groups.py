@@ -17,6 +17,7 @@ def _to_response(group, investment_ids: list[int]) -> GroupResponse:
     return GroupResponse(
         id=group.id,
         name=group.name,
+        target_percentage=group.target_percentage,
         created_at=group.created_at,
         updated_at=group.updated_at,
         investment_ids=investment_ids,
@@ -54,7 +55,12 @@ async def create_group(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> GroupResponse:
-    group = await group_service.create_group(session, current_user, name=body.name)
+    group = await group_service.create_group(
+        session,
+        current_user,
+        name=body.name,
+        target_percentage=body.target_percentage,
+    )
     return _to_response(group, [])
 
 

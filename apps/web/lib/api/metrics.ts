@@ -50,6 +50,8 @@ interface GroupAllocationItemRaw {
   group_name: string;
   value: string;
   percentage: string;
+  target_percentage: string | null;
+  difference: string | null;
 }
 
 interface GroupAllocationResponseRaw {
@@ -144,6 +146,8 @@ export interface GroupAllocationItem {
   groupName: string;
   value: number;
   percentage: number;
+  targetPercentage: number | null;
+  difference: number | null;
 }
 
 export interface GroupAllocationResponse {
@@ -235,6 +239,8 @@ function mapGroupAllocationItem(raw: GroupAllocationItemRaw): GroupAllocationIte
     groupName: raw.group_name,
     value: Number(raw.value),
     percentage: Number(raw.percentage),
+    targetPercentage: raw.target_percentage != null ? Number(raw.target_percentage) : null,
+    difference: raw.difference != null ? Number(raw.difference) : null,
   };
 }
 

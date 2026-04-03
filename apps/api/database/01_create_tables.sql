@@ -129,25 +129,16 @@ CREATE TABLE exchange_rates (
 
 CREATE INDEX idx_exchange_rates_date ON exchange_rates(date DESC);
 
--- Investment targets (optional in MVP)
--- Target allocation percentage per investment for dashboard over/under-exposure alerts.
-CREATE TABLE investment_targets (
-  id                BIGSERIAL PRIMARY KEY,
-  investment_id     BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE UNIQUE,
-  target_percentage NUMERIC(5, 2) NOT NULL CHECK (target_percentage >= 0 AND target_percentage <= 100),
-  notes             TEXT,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- Investment groups
 -- User-defined groups for aggregating investments (e.g. Retirement, Kids, Trading).
+-- target_percentage is the desired allocation % for dashboard over/under-exposure alerts.
 CREATE TABLE investment_groups (
-  id         BIGSERIAL PRIMARY KEY,
-  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name       VARCHAR(255) NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name              VARCHAR(255) NOT NULL,
+  target_percentage NUMERIC(5, 2) CHECK (target_percentage >= 0 AND target_percentage <= 100),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_investment_groups_user_id ON investment_groups(user_id);
@@ -240,9 +231,6 @@ CREATE TRIGGER trg_exchange_rates_updated_at
   BEFORE UPDATE ON exchange_rates
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_investment_targets_updated_at
-  BEFORE UPDATE ON investment_targets
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_investment_groups_updated_at
   BEFORE UPDATE ON investment_groups

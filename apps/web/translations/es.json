@@ -191,7 +191,9 @@
       "title": "Distribución",
       "byCategory": "Por categoría",
       "byGroup": "Por grupo",
-      "ungrouped": "Sin grupo"
+      "ungrouped": "Sin grupo",
+      "overAllocated": "Sobre el objetivo",
+      "underAllocated": "Bajo el objetivo"
     },
     "investmentsTable": {
       "title": "Inversiones",
@@ -340,6 +342,8 @@
       "id": "ID",
       "name": "Nombre",
       "investments": "Inversiones",
+      "target": "Objetivo",
+      "noTarget": "—",
       "actions": "Acciones",
       "noInvestments": "—",
       "empty": "No se encontraron grupos."
@@ -350,6 +354,10 @@
       "name": {
         "label": "Nombre",
         "placeholder": "Ingresá el nombre del grupo"
+      },
+      "targetPercentage": {
+        "label": "Objetivo de asignación (%)",
+        "placeholder": "Ingresá el porcentaje objetivo"
       },
       "investments": {
         "label": "Inversiones",
@@ -478,9 +486,8 @@
         "placeholder": "Buscar monedas...",
         "inputPlaceholder": "Ingresá códigos ISO (ej. BRL, EUR)",
         "empty": "No se encontraron monedas.",
-        "format": "Códigos ISO separados por coma.",
-        "formatWithExample": "Códigos ISO separados por coma, ej. {example}.",
-        "emptyDefault": "Dejá vacío para usar los valores predeterminados del entorno."
+        "format": "Códigos ISO separados por coma. Dejá vacío para desactivar.",
+        "formatWithDefaults": "Códigos ISO separados por coma. Por defecto {defaults} si se deja vacío."
       },
       "sectionCurrencies": "Monedas",
       "sectionDashboard": "Dashboard y Límites",
@@ -496,17 +503,19 @@
       "maxGroups": {
         "label": "Máximo de grupos",
         "hint": "Cantidad máxima de grupos de inversiones permitidos.",
+        "placeholder": "Ingresá el máximo de grupos",
         "default": "Por defecto {value} si se deja vacío."
       },
       "groupWarningPct": {
-        "label": "Umbral de advertencia",
+        "label": "Umbral de advertencia (%)",
         "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
-        "default": "Por defecto {value}% si se deja vacío. Dejá vacío para desactivar la advertencia."
+        "default": "Por defecto {value}% si se deja vacío.",
+        "noDefault": "Dejá vacío para desactivar la advertencia."
       },
       "dollarRate": {
         "label": "Cotización del dólar",
         "hint": "Qué tipo de cambio USD/ARS usar para todas las conversiones.",
-        "default": "Por defecto {value} si no se configura.",
+        "default": "Por defecto {value} si se deja vacío.",
         "options": {
           "oficial": "Oficial",
           "mep": "MEP (financiero)",

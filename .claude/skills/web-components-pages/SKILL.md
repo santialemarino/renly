@@ -185,6 +185,26 @@ await authenticatedFetch('/investments', {
 - **Shared translations** (used by multiple pages) live under `common` (e.g. `common.categories.cedears`, `common.allCategories`). Use `useTranslations('common')` or `tCommon` for these.
 - **Rule:** If a translation key is needed by more than one page, move it to `common`. Never import another page's namespace from a different page (e.g. don't use `useTranslations('investments')` inside the snapshots page).
 
+### Placeholder wording
+
+Use descriptive action phrases. The wording depends on the input type:
+
+- **Text inputs:** `"Enter the ..."` (e.g. `"Enter the group name"`, `"Enter the broker"`).
+- **Search inputs:** `"Search ..."` (e.g. `"Search investments..."`, `"Search currencies..."`).
+- **Select inputs:** `"Select a ..."` (e.g. `"Select a category"`, `"Select a currency"`).
+- **Number inputs:** `"Enter the ..."` (e.g. `"Enter the target percentage"`).
+- **Optional/notes:** `"Optional ..."` (e.g. `"Optional notes..."`).
+
+Only use examples (`"e.g., AAPL.BA"`) when the input requires domain-specific knowledge that the user might not know (e.g. ticker symbols). Never use examples for standard fields like names, percentages, or amounts.
+
+### Fields with defaults
+
+When a form field has a default value (from env vars or elsewhere):
+
+- **Placeholder**: Use the default value itself (e.g., `placeholder="50"`, `placeholder={envPreset}`). This shows the user what will be used if they leave it empty. Don't use "Enter the ..." for these.
+- **Hint below input**: Use a `"default"` translation with parameterized value: `"Defaults to {value} if left empty."`. Always use `{value}` interpolation — never hardcode the default in the hint string. Don't mention "environment" — just say "defaults".
+- Both the placeholder and hint refer to the same default value, from the same source (env var or constant).
+
 ## Comments
 
 - **Default:** Use `//`. Multiple consecutive `//` lines are fine for a sequence of independent remarks.

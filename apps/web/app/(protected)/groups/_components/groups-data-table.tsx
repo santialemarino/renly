@@ -111,6 +111,7 @@ export function GroupsDataTable({ groups, investments, sortBy, sortOrder }: Grou
               <SortIcon column="name" sortBy={activeSortBy} sortOrder={activeSortOrder} />
             </button>
           </TableHead>
+          <TableHead className="w-24">{t('table.target')}</TableHead>
           <TableHead>{t('table.investments')}</TableHead>
           <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
         </TableRow>
@@ -118,7 +119,7 @@ export function GroupsDataTable({ groups, investments, sortBy, sortOrder }: Grou
       <TableBody>
         {groups.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={4} className="py-10 rounded-sm text-center text-muted-foreground">
+            <TableCell colSpan={5} className="py-10 rounded-sm text-center text-muted-foreground">
               {t('table.empty')}
             </TableCell>
           </TableRow>
@@ -163,7 +164,10 @@ function GroupRow({
       <TableRow>
         <TableCell className="text-muted-foreground">{group.id}</TableCell>
         <TableCell className="text-paragraph-sm-medium">{group.name}</TableCell>
-        <TableCell className="text-paragraph-sm text-muted-foreground max-w-md truncate">
+        <TableCell className="text-paragraph-sm text-muted-foreground">
+          {group.targetPercentage != null ? `${group.targetPercentage}%` : t('table.noTarget')}
+        </TableCell>
+        <TableCell className="max-w-md text-paragraph-sm text-muted-foreground truncate">
           {investmentNames || t('table.noInvestments')}
         </TableCell>
         <TableCell className="text-center">

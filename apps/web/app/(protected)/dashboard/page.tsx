@@ -28,11 +28,10 @@ import {
 } from '@/lib/api/metrics';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
-
-const FALLBACK_PRIMARY = process.env.NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY ?? 'ARS';
 
 export async function generateMetadata() {
   return await generatePageMetadata('dashboard');
@@ -59,7 +58,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
-  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY;
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const secondary = settings?.secondaryCurrency ?? null;
   const displayCurrencies = secondary
     ? [primary, secondary, ORIGINAL_CURRENCY]

@@ -436,8 +436,10 @@ async def get_allocation_by_group(
     ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
     grouped_inv_ids: set[int] = set()
     group_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    group_targets: dict[str, Decimal | None] = {}
 
     for group in groups:
+        group_targets[group.name] = group.target_percentage
         for mid in ids_by_group.get(group.id, []):
             if mid in inv_values:
                 group_values[group.name] += inv_values[mid]
@@ -456,7 +458,17 @@ async def get_allocation_by_group(
     items = []
     for name, value in sorted(group_values.items(), key=lambda x: x[1], reverse=True):
         pct = (value / total_value * 100) if total_value != ZERO else ZERO
-        items.append(GroupAllocationItem(group_name=name, value=value, percentage=pct))
+        target = group_targets.get(name)
+        diff = pct - target if target is not None else None
+        items.append(
+            GroupAllocationItem(
+                group_name=name,
+                value=value,
+                percentage=pct,
+                target_percentage=target,
+                difference=diff,
+            )
+        )
 
     return GroupAllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
 

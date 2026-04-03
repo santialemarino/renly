@@ -52,6 +52,7 @@ export function GroupFormDialog({
     resolver: zodResolver(schema),
     defaultValues: {
       name: group?.name ?? '',
+      targetPercentage: group?.targetPercentage ?? null,
       investmentIds: group?.investmentIds ?? [],
     },
   });
@@ -60,6 +61,7 @@ export function GroupFormDialog({
     if (open) {
       form.reset({
         name: group?.name ?? '',
+        targetPercentage: group?.targetPercentage ?? null,
         investmentIds: group?.investmentIds ?? [],
       });
     }
@@ -119,6 +121,34 @@ export function GroupFormDialog({
                   <FormLabel required>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="targetPercentage"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('form.targetPercentage.label')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      placeholder={t('form.targetPercentage.placeholder')}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        field.onChange(v === '' ? null : Number(v));
+                      }}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                      name={field.name}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

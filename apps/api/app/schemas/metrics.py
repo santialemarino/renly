@@ -90,6 +90,8 @@ class GroupAllocationItem(BaseModel):
     group_name: str = Field(description="Investment group name.")
     value: Decimal = Field(description="Total value for this group.")
     percentage: Decimal = Field(description="Percentage of total portfolio.")
+    target_percentage: Decimal | None = Field(default=None, description="Target allocation % set by user.")
+    difference: Decimal | None = Field(default=None, description="Actual minus target (positive = over-allocated).")
 
 
 # Distribution of portfolio by investment group.

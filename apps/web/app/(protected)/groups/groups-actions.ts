@@ -6,7 +6,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 export async function createGroup(values: GroupFormValues): Promise<void> {
   const res = await authenticatedFetch('/groups', {
     method: 'POST',
-    body: { name: values.name },
+    body: { name: values.name, target_percentage: values.targetPercentage ?? null },
   });
   if (!res.ok) throw new Error('Failed to create group');
   const raw: { id: number } = await res.json();
@@ -18,7 +18,7 @@ export async function createGroup(values: GroupFormValues): Promise<void> {
 export async function updateGroup(id: number, values: GroupFormValues): Promise<void> {
   const res = await authenticatedFetch(`/groups/${id}`, {
     method: 'PUT',
-    body: { name: values.name },
+    body: { name: values.name, target_percentage: values.targetPercentage ?? null },
   });
   if (!res.ok) throw new Error('Failed to update group');
   await setGroupInvestments(id, values.investmentIds ?? []);
