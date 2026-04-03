@@ -59,6 +59,8 @@ Groups are labels you create to organize your investments however you want. Exam
 
 An investment can belong to **multiple groups** (or none at all). Groups let you filter your dashboard to see metrics for just a slice of your portfolio.
 
+Each group can optionally have a **target allocation percentage** (e.g., "Retirement: 40%"). The dashboard shows how your actual allocation compares to your target -- helping you spot when you're over or under-exposed in a group.
+
 ### Exchange Rates
 
 Renly stores historical exchange rates updated automatically every day:

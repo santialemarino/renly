@@ -53,12 +53,12 @@ Runs 1 hour after the asset prices job to ensure fresh prices are available.
 
 ### 4. CEDEAR ratios
 
-| Property         | Value                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| **Trigger**      | `cron` (1st of month at 00:00 UTC)                                                               |
-| **Also runs**    | Immediately on startup (`next_run_time=datetime.now()`)                                          |
-| **Service call** | `cedear_ratio_service.fetch_and_store_ratios(session)`                                           |
-| **What it does** | Downloads Banco Comafi Excel file, parses all ~338 CEDEAR programs, upserts into `cedear_ratios` |
+| Property         | Value                                                                                                                                                            |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trigger**      | `cron` (1st of month at 00:00 UTC)                                                                                                                               |
+| **Also runs**    | Immediately on startup (`next_run_time=datetime.now()`)                                                                                                          |
+| **Service call** | `cedear_ratio_service.fetch_and_store_ratios(session)`                                                                                                           |
+| **What it does** | Fetches Banco Comafi Excel and BYMA PDF in parallel, picks the most complete source (newer date → more entries → Comafi preferred), upserts into `cedear_ratios` |
 
 ## Error handling
 

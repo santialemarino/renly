@@ -21,6 +21,12 @@ PriceResult = list[tuple[date_type, Decimal, str]]
 RatioResult = list[tuple[str, str, Decimal]]
 
 
+# CEDEAR ratio fetch result: ratios + source date (if parseable).
+class RatioFetchResult(NamedTuple):
+    ratios: RatioResult
+    source_date: date_type | None
+
+
 # --- Provider metadata ---
 
 
@@ -37,6 +43,7 @@ SOURCE_YFINANCE = "yfinance"
 SOURCE_COINGECKO = "coingecko"
 SOURCE_CAFCI = "cafci"
 COMAFI_SOURCE = "comafi"
+BYMA_SOURCE = "byma"
 
 
 # --- Price providers ---
@@ -129,8 +136,8 @@ COMAFI_RATIO_SEPARATOR = ":"
 
 
 # Fetches all CEDEAR ratios from Banco Comafi's Excel file.
-# Returns a list of (cedear_ticker, underlying_ticker, ratio) tuples.
-async def fetch_comafi_ratios() -> RatioResult:
+# Returns ratios + the internal date from the spreadsheet (for freshness comparison).
+async def fetch_comafi_ratios() -> RatioFetchResult:
     import asyncio
     import io
 
@@ -141,15 +148,34 @@ async def fetch_comafi_ratios() -> RatioResult:
             content = response.content
     except httpx.HTTPError:
         logger.exception("Comafi CEDEAR Excel fetch failed.")
-        return []
+        return RatioFetchResult([], None)
 
-    def _parse(data: bytes) -> RatioResult:
+    def _parse(data: bytes) -> RatioFetchResult:
+        import re
+
         from openpyxl import load_workbook
 
         wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         ws = wb.active
         if ws is None:
-            return []
+            return RatioFetchResult([], None)
+
+        # Parse the internal date from the first rows (e.g., "LISTA TOTAL DE CEDEARS AL  13.03.2025").
+        source_date: date_type | None = None
+        for row in ws.iter_rows(min_row=1, max_row=5, values_only=True):
+            for cell in row:
+                if isinstance(cell, date_type):
+                    source_date = cell
+                    break
+                if isinstance(cell, str):
+                    match = re.search(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", cell)
+                    if match:
+                        try:
+                            source_date = date_type(int(match.group(3)), int(match.group(2)), int(match.group(1)))
+                        except ValueError:
+                            pass
+            if source_date:
+                break
 
         # Find the header row to locate columns dynamically.
         header_row = None
@@ -168,7 +194,8 @@ async def fetch_comafi_ratios() -> RatioResult:
 
         if not header_row or not ticker_col or not ratio_col:
             logger.warning("Could not find header columns in Comafi Excel.")
-            return []
+            wb.close()
+            return RatioFetchResult([], source_date)
 
         results: RatioResult = []
         for row in ws.iter_rows(min_row=header_row + 1, values_only=False):
@@ -206,10 +233,149 @@ async def fetch_comafi_ratios() -> RatioResult:
             results.append((cedear_ticker, underlying, ratio_val))
 
         wb.close()
-        return results
+        return RatioFetchResult(results, source_date)
 
     try:
         return await asyncio.to_thread(_parse, content)
     except Exception:
         logger.exception("Failed to parse Comafi CEDEAR Excel.")
-        return []
+        return RatioFetchResult([], None)
+
+
+# --- BYMA PDF ratio provider ---
+
+BYMA_CEDEARS_PAGE_URL = "https://www.byma.com.ar/productos/productos-financieros/cedears"
+BYMA_PDF_CDN_PREFIX = "https://cdn.prod.website-files.com/"
+BYMA_TIMEOUT = 30.0
+BYMA_RATIO_SEPARATOR = ":"
+BYMA_BYMA_SUFFIX = ".BA"
+
+
+# Fetches all CEDEAR ratios from the BYMA PDF.
+# First discovers the current PDF URL from the BYMA page, then parses the PDF.
+# Returns ratios + the date from the PDF filename (for freshness comparison).
+async def fetch_byma_ratios() -> RatioFetchResult:
+    import asyncio
+
+    # Step 1: Discover the PDF URL from the BYMA page.
+    try:
+        async with httpx.AsyncClient(timeout=BYMA_TIMEOUT, follow_redirects=True) as client:
+            page_response = await client.get(BYMA_CEDEARS_PAGE_URL)
+            page_response.raise_for_status()
+            page_html = page_response.text
+    except httpx.HTTPError:
+        logger.exception("BYMA CEDEARs page fetch failed.")
+        return RatioFetchResult([], None)
+
+    # Find the PDF URL in the page HTML (CDN link with "CEDEARs" in the filename).
+    import re
+
+    pdf_match = re.search(
+        r'(https://cdn\.prod\.website-files\.com/[^"\']+CEDEARs[^"\']*\.pdf)',
+        page_html,
+        re.IGNORECASE,
+    )
+    if not pdf_match:
+        logger.warning("Could not find CEDEAR PDF link on BYMA page.")
+        return RatioFetchResult([], None)
+
+    pdf_url = pdf_match.group(1)
+
+    # Parse date from the PDF filename (e.g., "BYMA-CEDEARs-2026-02-03.pdf").
+    source_date: date_type | None = None
+    date_match = re.search(r"(\d{4})-(\d{2})-(\d{2})\.pdf$", pdf_url)
+    if date_match:
+        try:
+            source_date = date_type(int(date_match.group(1)), int(date_match.group(2)), int(date_match.group(3)))
+        except ValueError:
+            pass
+
+    # Step 2: Download the PDF.
+    try:
+        async with httpx.AsyncClient(timeout=BYMA_TIMEOUT) as client:
+            pdf_response = await client.get(pdf_url)
+            pdf_response.raise_for_status()
+            pdf_content = pdf_response.content
+    except httpx.HTTPError:
+        logger.exception("BYMA CEDEAR PDF download failed: %s", pdf_url)
+        return RatioFetchResult([], source_date)
+
+    # Step 3: Parse the PDF.
+    def _parse(data: bytes) -> RatioResult:
+        import io
+
+        import pdfplumber
+
+        results: RatioResult = []
+        with pdfplumber.open(io.BytesIO(data)) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if not text:
+                    continue
+                for line in text.split("\n"):
+                    line = line.strip()
+                    if not line or "Ratio" in line or "Nombre" in line or "Bolsas y Mercados" in line:
+                        continue
+
+                    # Format: "Company Name  TICKER  EXCHANGE  RATIO:1"
+                    # The ratio is always at the end, in "N:N" format.
+                    ratio_match = re.search(r"(\d+):(\d+)\s*$", line)
+                    if not ratio_match:
+                        continue
+
+                    # Extract ticker — it's the uppercase word before the exchange name.
+                    # Split line into parts and find the ticker.
+                    before_ratio = line[: ratio_match.start()].strip()
+                    parts = before_ratio.split()
+                    if len(parts) < 2:
+                        continue
+
+                    # Ticker is typically the second-to-last or third-to-last token before ratio.
+                    # The exchange (NYSE, NASDAQ, etc.) is right before the ratio.
+                    # Walk backwards: last part = exchange, second-to-last = ticker.
+                    ticker = None
+                    for i in range(len(parts) - 1, -1, -1):
+                        token = parts[i].strip()
+                        # Skip exchange names and partial exchange names.
+                        if token.upper() in {
+                            "NYSE",
+                            "NASDAQ",
+                            "XETRA",
+                            "FRANKFURT",
+                            "B3",
+                            "ARCA",
+                            "GS",
+                            "GM",
+                            "AMERICAN",
+                        }:
+                            continue
+                        # Found the ticker.
+                        ticker = token.upper()
+                        break
+
+                    if not ticker or not any(c.isalnum() for c in ticker):
+                        continue
+
+                    # Parse ratio.
+                    numerator = int(ratio_match.group(1))
+                    denominator = int(ratio_match.group(2))
+                    if denominator == 0:
+                        continue
+                    ratio_val = Decimal(numerator) / Decimal(denominator)
+
+                    if ratio_val <= 0:
+                        continue
+
+                    cedear_ticker = ticker if ticker.endswith(BYMA_BYMA_SUFFIX) else f"{ticker}{BYMA_BYMA_SUFFIX}"
+                    underlying = ticker.replace(BYMA_BYMA_SUFFIX, "")
+
+                    results.append((cedear_ticker, underlying, ratio_val))
+
+        return results
+
+    try:
+        ratios = await asyncio.to_thread(_parse, pdf_content)
+        return RatioFetchResult(ratios, source_date)
+    except Exception:
+        logger.exception("Failed to parse BYMA CEDEAR PDF.")
+        return RatioFetchResult([], source_date)

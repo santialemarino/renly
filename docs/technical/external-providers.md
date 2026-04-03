@@ -78,11 +78,20 @@ Used by the investment form to show/hide the ticker field and display category-s
 
 ### Price providers
 
-| Provider  | Categories                        | History          | Notes                                        |
-| --------- | --------------------------------- | ---------------- | -------------------------------------------- |
-| yfinance  | stocks, cedears, government_bonds | Yes              | `.BA` suffix for Argentine assets            |
-| CoinGecko | crypto                            | No (last 7 days) | Uses coin ids, not tickers                   |
-| CAFCI     | fci                               | Blocked          | API returns 401; FCI is manual-entry for now |
+| Provider  | Categories                        | History          | Notes                                                                                                                                                                                              |
+| --------- | --------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| yfinance  | stocks, cedears, government_bonds | Yes              | `.BA` suffix for Argentine assets                                                                                                                                                                  |
+| CoinGecko | crypto                            | No (last 7 days) | Uses coin ids, not tickers                                                                                                                                                                         |
+| CAFCI     | fci                               | Blocked          | Old JSON API returns 403. New public xlsx at `api.pub.cafci.org.ar/pb_get` discovered — not yet integrated. ArgentinaDatos JSON API (`api.argentinadatos.com`) also available. See `decisions.md`. |
+
+### CEDEAR ratio providers
+
+| Provider | Format | Notes                                                                                             |
+| -------- | ------ | ------------------------------------------------------------------------------------------------- |
+| Comafi   | Excel  | Primary. Principal CEDEAR issuer (90%+ programs). Fixed URL. ~306 ratios.                         |
+| BYMA     | PDF    | Fallback. Dynamic URL (date in filename, scraped from page). ~401 ratios. Parsed with pdfplumber. |
+
+The service fetches both in parallel (`asyncio.gather`). Selection: newer source date wins → more entries breaks ties → Comafi preferred if still tied.
 
 ### Exchange rate providers
 
