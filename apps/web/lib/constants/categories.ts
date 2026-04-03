@@ -27,7 +27,7 @@ export const CATEGORY_CAPABILITIES: Record<InvestmentCategory, CategoryCapabilit
   corporate_bonds: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },
   crypto: { hasTicker: true, hasAutoPrice: true, supportsHistory: false },
   dollars: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },
-  fci: { hasTicker: true, hasAutoPrice: false, supportsHistory: false },
+  fci: { hasTicker: true, hasAutoPrice: true, supportsHistory: false },
   government_bonds: { hasTicker: true, hasAutoPrice: true, supportsHistory: true },
   other: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },
   real_estate: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },

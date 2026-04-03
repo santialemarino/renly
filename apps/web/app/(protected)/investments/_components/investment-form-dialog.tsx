@@ -222,7 +222,11 @@ export function InvestmentFormDialog({
                   name="ticker"
                   render={({ field }) => (
                     <FormItem className="flex-1 min-w-0">
-                      <FormLabel>{t('form.ticker.label')}</FormLabel>
+                      <FormLabel>
+                        {watchedCategory && t.has(`form.ticker.label.${watchedCategory}`)
+                          ? t(`form.ticker.label.${watchedCategory}`)
+                          : t('form.ticker.label.default')}
+                      </FormLabel>
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>

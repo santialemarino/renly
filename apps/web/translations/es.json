@@ -282,12 +282,16 @@
         "locked": "La moneda no puede cambiarse porque esta inversión tiene snapshots."
       },
       "ticker": {
-        "label": "Ticker",
+        "label": {
+          "default": "Ticker",
+          "fci": "Código CAFCI",
+          "crypto": "ID de moneda"
+        },
         "placeholder": "Ingresá el ticker",
         "hints": {
           "cedears": "ej. AAPL.BA, GOOGL.BA",
           "crypto": "ej. bitcoin, ethereum",
-          "fci": "ej. 847/2409 (ID fondo/clase CAFCI)",
+          "fci": "ej. 2409 (código CAFCI)",
           "government_bonds": "ej. AL30.BA, GD30.BA",
           "stocks": "ej. AAPL, MSFT"
         }

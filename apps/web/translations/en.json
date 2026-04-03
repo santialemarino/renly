@@ -282,12 +282,16 @@
         "locked": "Currency cannot be changed because this investment has snapshots."
       },
       "ticker": {
-        "label": "Ticker",
+        "label": {
+          "default": "Ticker",
+          "fci": "CAFCI code",
+          "crypto": "Coin ID"
+        },
         "placeholder": "Enter the ticker",
         "hints": {
           "cedears": "e.g., AAPL.BA, GOOGL.BA",
           "crypto": "e.g., bitcoin, ethereum",
-          "fci": "e.g., 847/2409 (CAFCI fund/class ID)",
+          "fci": "e.g., 2409 (CAFCI code)",
           "government_bonds": "e.g., AL30.BA, GD30.BA",
           "stocks": "e.g., AAPL, MSFT"
         }

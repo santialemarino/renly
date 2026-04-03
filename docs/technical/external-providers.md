@@ -78,11 +78,11 @@ Used by the investment form to show/hide the ticker field and display category-s
 
 ### Price providers
 
-| Provider  | Categories                        | History          | Notes                                                                                                                                                                                              |
-| --------- | --------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| yfinance  | stocks, cedears, government_bonds | Yes              | `.BA` suffix for Argentine assets                                                                                                                                                                  |
-| CoinGecko | crypto                            | No (last 7 days) | Uses coin ids, not tickers                                                                                                                                                                         |
-| CAFCI     | fci                               | Blocked          | Old JSON API returns 403. New public xlsx at `api.pub.cafci.org.ar/pb_get` discovered — not yet integrated. ArgentinaDatos JSON API (`api.argentinadatos.com`) also available. See `decisions.md`. |
+| Provider  | Categories                        | History          | Notes                                                                                                                            |
+| --------- | --------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| yfinance  | stocks, cedears, government_bonds | Yes              | `.BA` suffix for Argentine assets                                                                                                |
+| CoinGecko | crypto                            | No (last 7 days) | Uses coin ids, not tickers                                                                                                       |
+| CAFCI     | fci                               | No (daily only)  | Public xlsx at `api.pub.cafci.org.ar/pb_get`. Ticker = CAFCI code (e.g., 2409). Direct row lookup. ArgentinaDatos JSON fallback. |
 
 ### CEDEAR ratio providers
 

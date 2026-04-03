@@ -122,6 +122,12 @@ When the investment has a ticker and a price is available, a Switch toggle appea
 
 For CEDEAR investments with a ratio, the form also shows the equivalent underlying shares (`quantity ÷ ratio`).
 
-## Pending
+### 9. FCI pricing
 
-- **FCI prices:** CAFCI API integration for mutual fund NAVs. Blocked — the API at `api.cafci.org.ar` now returns 401 Unauthorized (was previously public, no longer accessible). Ticker format would be `fondoId/claseId` (e.g., `847/2409`). FCI investments remain manual-entry until an alternative source is found or CAFCI access is restored.
+FCI (mutual funds) prices are fetched daily from the CAFCI public Excel file at `api.pub.cafci.org.ar/pb_get`. The ticker format is the CAFCI code (e.g., `2409`).
+
+**Primary source:** CAFCI Excel (~3993 fund classes, direct row lookup by CAFCI code). Downloaded once per refresh cycle and cached in memory — subsequent lookups are instant dict reads. An `asyncio.Lock` prevents concurrent downloads when multiple FCI investments are refreshed in parallel.
+
+**Fallback source:** ArgentinaDatos JSON API (`api.argentinadatos.com/v1/finanzas/fci/*` — 5 type endpoints fetched in parallel). Searches by fund name using a code → name registry built from the Excel.
+
+**Storage:** Prices stored in `asset_prices` keyed by `(ticker, date)`, same as stocks/CEDEARs/crypto.
