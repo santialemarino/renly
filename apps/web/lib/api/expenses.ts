@@ -9,6 +9,7 @@ interface ExpenseRaw {
   date: string;
   amount: string;
   currency: string;
+  converted_amount: string | null;
   category: string | null;
   notes: string | null;
   payment_method: string | null;
@@ -23,6 +24,7 @@ interface ExpenseListRaw {
   total: number;
   page: number;
   page_size: number;
+  display_currency: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -32,6 +34,7 @@ export interface Expense {
   date: string;
   amount: string;
   currency: string;
+  convertedAmount: string | null;
   category: string | null;
   notes: string | null;
   paymentMethod: string | null;
@@ -46,6 +49,7 @@ export interface ExpenseListResponse {
   total: number;
   page: number;
   pageSize: number;
+  displayCurrency: string | null;
 }
 
 export type ExpenseSortField = 'date' | 'amount' | 'category' | 'payment_method';
@@ -57,6 +61,7 @@ export interface GetExpensesParams {
   paymentMethod?: string;
   dateFrom?: string;
   dateTo?: string;
+  currency?: string;
   page?: number;
   pageSize?: number;
   sortBy?: ExpenseSortField;
@@ -71,6 +76,7 @@ function mapExpense(raw: ExpenseRaw): Expense {
     date: raw.date,
     amount: raw.amount,
     currency: raw.currency,
+    convertedAmount: raw.converted_amount,
     category: raw.category,
     notes: raw.notes,
     paymentMethod: raw.payment_method,
@@ -90,6 +96,7 @@ export async function getExpenses(params: GetExpensesParams = {}): Promise<Expen
   if (params.paymentMethod) qs.set('payment_method', params.paymentMethod);
   if (params.dateFrom) qs.set('date_from', params.dateFrom);
   if (params.dateTo) qs.set('date_to', params.dateTo);
+  if (params.currency) qs.set('currency', params.currency);
   if (params.page !== undefined) qs.set('page', String(params.page));
   if (params.pageSize !== undefined) qs.set('page_size', String(params.pageSize));
   if (params.sortBy) qs.set('sort_by', params.sortBy);
@@ -104,5 +111,6 @@ export async function getExpenses(params: GetExpensesParams = {}): Promise<Expen
     total: raw.total,
     page: raw.page,
     pageSize: raw.page_size,
+    displayCurrency: raw.display_currency,
   };
 }

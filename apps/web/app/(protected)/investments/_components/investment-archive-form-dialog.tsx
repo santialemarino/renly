@@ -65,7 +65,8 @@ export function InvestmentArchiveFormDialog({
           <Button
             onClick={handleArchive}
             disabled={archiving}
-            className="whitespace-nowrap bg-red-500 text-white hover:bg-red-600 active:bg-red-700"
+            variant="destructive"
+            className="whitespace-nowrap"
           >
             {archiving ? t('archiveForm.cta.loading') : t('archiveForm.cta.label')}
           </Button>

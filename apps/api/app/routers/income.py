@@ -1,4 +1,5 @@
 from datetime import date as date_type
+from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
@@ -7,11 +8,27 @@ from app.deps.db import SessionDep
 from app.models.income_entry import IncomeCategory
 from app.schemas.income import IncomeCreate, IncomeListResponse, IncomeResponse, IncomeUpdate
 from app.services import income_service
+from app.services.metrics_helpers import convert_value, get_rate_map
+from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/income", tags=["income"])
 
 
-# List income entries with optional filters and pagination.
+# Converts an entry's amount if a target currency and rate map are provided.
+def _convert_entry(
+    resp: IncomeResponse,
+    entry_currency: str,
+    target_currency: str | None,
+    rate_map: dict[str, Decimal] | None,
+) -> IncomeResponse:
+    if target_currency and rate_map and entry_currency != target_currency:
+        resp.converted_amount = convert_value(resp.amount, entry_currency, target_currency, rate_map)
+    elif target_currency and entry_currency == target_currency:
+        resp.converted_amount = resp.amount
+    return resp
+
+
+# List income entries with optional filters, pagination, and currency conversion.
 @router.get("", response_model=IncomeListResponse)
 async def list_income(
     current_user: CurrentUser,
@@ -20,6 +37,7 @@ async def list_income(
     category: IncomeCategory | None = Query(default=None, description="Filter by category."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
+    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> IncomeListResponse:
@@ -33,19 +51,37 @@ async def list_income(
         page=page,
         page_size=page_size,
     )
-    items = [IncomeResponse.model_validate(e) for e in entries]
-    return IncomeListResponse(items=items, total=total, page=page, page_size=page_size)
+
+    rate_map = None
+    if currency:
+        dp = await get_dollar_pref(session, current_user.id)
+        rate_map = await get_rate_map(session, dp)
+
+    items = [_convert_entry(IncomeResponse.model_validate(e), e.currency, currency, rate_map) for e in entries]
+    return IncomeListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        display_currency=currency,
+    )
 
 
-# Get a single income entry by id.
+# Get a single income entry by id (with optional currency conversion).
 @router.get("/{income_id}", response_model=IncomeResponse)
 async def get_income(
     income_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> IncomeResponse:
     entry = await income_service.get_income(session, income_id, current_user)
-    return IncomeResponse.model_validate(entry)
+    resp = IncomeResponse.model_validate(entry)
+    if currency:
+        dp = await get_dollar_pref(session, current_user.id)
+        rate_map = await get_rate_map(session, dp)
+        resp = _convert_entry(resp, entry.currency, currency, rate_map)
+    return resp
 
 
 # Create a new income entry.

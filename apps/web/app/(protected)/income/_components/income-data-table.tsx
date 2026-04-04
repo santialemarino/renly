@@ -29,17 +29,7 @@ import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { ROUTES } from '@/config/routes';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField, SortOrder } from '@/lib/api/income';
-
-// Formats a number as a compact currency value (strips .00 for integers).
-function formatAmount(value: string): string {
-  const num = Number(value);
-  if (isNaN(num)) return value;
-  const hasDecimals = num % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(num);
-}
+import { formatAmount } from '@/lib/utils/currency';
 
 function SortIcon({
   column,
@@ -220,7 +210,6 @@ export function IncomeDataTable({
                   <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
                 </button>
               </TableHead>
-              <TableHead>{t('table.currency')}</TableHead>
               <TableHead>
                 <button
                   type="button"
@@ -239,7 +228,7 @@ export function IncomeDataTable({
             {items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={5}
                   className="py-10 rounded-sm text-center text-muted-foreground"
                 >
                   {t('table.empty')}
@@ -250,9 +239,8 @@ export function IncomeDataTable({
                 <TableRow key={entry.id}>
                   <TableCell>{entry.date}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(entry.amount)}
+                    {formatAmount(entry.convertedAmount ?? entry.amount)}
                   </TableCell>
-                  <TableCell>{entry.currency}</TableCell>
                   <TableCell>{entry.category ? t(`categories.${entry.category}`) : '—'}</TableCell>
                   <TableCell className="max-w-48 truncate text-muted-foreground">
                     {entry.notes ?? '—'}

@@ -14,6 +14,7 @@ import {
 } from '@repo/ui/components';
 import { deleteIncome } from '@/app/(protected)/income/income-actions';
 import type { IncomeEntry } from '@/lib/api/income';
+import { formatAmount } from '@/lib/utils/currency';
 
 interface IncomeDeleteDialogProps {
   open: boolean;
@@ -52,7 +53,7 @@ export function IncomeDeleteDialog({
           <DialogTitle>{t('delete.title')}</DialogTitle>
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', { amount: income.amount, currency: income.currency })}
+          {t('delete.confirm', { amount: formatAmount(income.amount), currency: income.currency })}
         </p>
         <DialogFooter>
           <Button
@@ -65,7 +66,8 @@ export function IncomeDeleteDialog({
           <Button
             onClick={handleDelete}
             disabled={deleting}
-            className="whitespace-nowrap bg-red-500 text-white hover:bg-red-600 active:bg-red-700"
+            variant="destructive"
+            className="whitespace-nowrap"
           >
             {deleting ? t('delete.deleting') : t('delete.confirmButton')}
           </Button>

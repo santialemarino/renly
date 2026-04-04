@@ -17,7 +17,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
-import { EXPENSE_CATEGORIES } from '@/lib/constants/categories';
+import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 interface ExpenseCategorySelectProps {
   value: string;
@@ -39,9 +39,7 @@ export function ExpenseCategorySelect({
   const isAll = value === CATEGORY_ALL;
   const label = isAll ? tCommon('allCategories') : t(`categories.${value}`);
 
-  const sorted = [...EXPENSE_CATEGORIES].sort((a, b) =>
-    t(`categories.${a}`).localeCompare(t(`categories.${b}`)),
-  );
+  const sorted = sortExpenseCategoriesByLabel((key) => t(key));
   const items = [CATEGORY_ALL, ...sorted];
 
   function handleSelect(selected: string) {
@@ -56,7 +54,7 @@ export function ExpenseCategorySelect({
           <Button
             variant="outline"
             className={cn(
-              'h-9 w-full justify-between gap-x-2 border-border px-3 shadow-xs',
+              'h-9 w-full justify-between px-3 gap-x-2 border-border shadow-xs',
               'text-paragraph-sm font-normal',
               isAll ? 'text-muted-foreground' : 'text-foreground',
               'hover:border-ring',

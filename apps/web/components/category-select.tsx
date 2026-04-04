@@ -52,7 +52,7 @@ export function CategorySelect({
           <Button
             variant="outline"
             className={cn(
-              'h-9 w-full justify-between gap-x-2 border-border px-3 shadow-xs',
+              'h-9 w-full justify-between px-3 gap-x-2 border-border shadow-xs',
               'text-paragraph-sm font-normal',
               isAll ? 'text-muted-foreground' : 'text-foreground',
               'hover:border-ring',
