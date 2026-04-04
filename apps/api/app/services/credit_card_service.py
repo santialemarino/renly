@@ -12,9 +12,22 @@ from app.repositories import card_settlement_repository, credit_card_repository,
 # --- Credit cards ---
 
 
-# List all credit cards for a user.
-async def list_cards(session: AsyncSession, user: User) -> list[CreditCard]:
-    return await credit_card_repository.list_by_user(session, user.id)
+# List credit cards for a user with optional search and sorting.
+async def list_cards(
+    session: AsyncSession,
+    user: User,
+    *,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> list[CreditCard]:
+    return await credit_card_repository.list_by_user(
+        session,
+        user.id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
 
 
 # Get a single credit card by id. Raises NotFoundError if not found.

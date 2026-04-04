@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronRight,
   CircleDollarSign,
+  CreditCard,
   FolderOpen,
   LayoutDashboard,
   LogOut,
@@ -44,6 +45,7 @@ import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 const FINANCES_GROUP = [
   { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
   { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
+  { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
 ] as const;
 
 const PORTFOLIO_GROUP = [

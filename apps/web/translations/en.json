@@ -144,6 +144,7 @@
     "nav": {
       "income": "Income",
       "expenses": "Expenses",
+      "creditCards": "Credit Cards",
       "investorDashboard": "Dashboard",
       "investments": "Investments",
       "groups": "Groups",
@@ -352,6 +353,95 @@
       "deleting": "Deleting...",
       "success": "Expense deleted.",
       "error": "Failed to delete expense."
+    }
+  },
+  "creditCards": {
+    "metadata": {
+      "title": "Credit Cards",
+      "description": "Manage your credit cards"
+    },
+    "title": "Credit Cards",
+    "subtitle": "Manage your credit cards and settlements.",
+    "toolbar": {
+      "searchPlaceholder": "Search cards...",
+      "addCard": "Add card"
+    },
+    "table": {
+      "name": "Name",
+      "closingDay": "Closing day",
+      "dueDay": "Due day",
+      "currency": "Currency",
+      "balance": "Balance",
+      "actions": "Actions",
+      "empty": "No credit cards found."
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "form": {
+      "titleCreate": "Add credit card",
+      "titleEdit": "Edit credit card",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the card name"
+      },
+      "closingDay": {
+        "label": "Closing day",
+        "placeholder": "1-31"
+      },
+      "dueDay": {
+        "label": "Due day",
+        "placeholder": "1-31"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Credit card created.",
+      "updateSuccess": "Credit card updated.",
+      "saveError": "Failed to save credit card."
+    },
+    "delete": {
+      "title": "Delete credit card",
+      "confirm": "Are you sure you want to delete \"{name}\"? All linked expenses and settlements will be unlinked.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Credit card deleted.",
+      "error": "Failed to delete credit card."
+    },
+    "settlements": {
+      "title": "Settlements",
+      "add": "Add settlement",
+      "addTitle": "Add settlement",
+      "empty": "No settlements yet.",
+      "loading": "Loading settlements...",
+      "createSuccess": "Settlement recorded.",
+      "createError": "Failed to record settlement.",
+      "deleteSuccess": "Settlement deleted.",
+      "deleteError": "Failed to delete settlement.",
+      "deleteTooltip": "Delete settlement",
+      "table": {
+        "date": "Date",
+        "amount": "Amount",
+        "currency": "Currency",
+        "notes": "Notes"
+      },
+      "form": {
+        "date": "Date",
+        "datePlaceholder": "Select a date",
+        "amount": "Amount",
+        "currency": "Currency",
+        "notes": "Notes",
+        "notesPlaceholder": "Optional notes..."
+      }
     }
   },
   "investorDashboard": {

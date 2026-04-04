@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
@@ -11,24 +11,36 @@ from app.services import credit_card_service
 router = APIRouter(prefix="/credit-cards", tags=["credit-cards"])
 
 
+# Builds a CreditCardResponse with the computed balance field.
+def _to_response(card: object, balance: Decimal) -> CreditCardResponse:
+    from app.models.credit_card import CreditCard as CreditCardModel
+
+    data = card.model_dump() if isinstance(card, CreditCardModel) else dict(card)  # type: ignore[arg-type]
+    return CreditCardResponse(**{**data, "balance": balance})
+
+
 # --- Credit cards ---
 
 
-# List all credit cards for the current user (with balances).
+# List credit cards for the current user with optional search, sorting, and balances.
 @router.get("", response_model=list[CreditCardResponse])
 async def list_cards(
     current_user: CurrentUser,
     session: SessionDep,
+    search: str | None = Query(default=None, description="Filter cards by name (case-insensitive)."),
+    sort_by: str | None = Query(default=None, description="Column to sort by (name, closing_day, due_day, currency)."),
+    sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
 ) -> list[CreditCardResponse]:
-    cards = await credit_card_service.list_cards(session, current_user)
+    cards = await credit_card_service.list_cards(
+        session,
+        current_user,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
     card_ids = [c.id for c in cards if c.id is not None]
     balances = await credit_card_service.get_card_balances(session, card_ids)
-    result = []
-    for card in cards:
-        resp = CreditCardResponse.model_validate(card)
-        resp.balance = balances.get(card.id, Decimal(0))
-        result.append(resp)
-    return result
+    return [_to_response(card, balances.get(card.id, Decimal(0))) for card in cards]
 
 
 # Get a single credit card with its current balance.
@@ -40,9 +52,7 @@ async def get_card(
 ) -> CreditCardResponse:
     card = await credit_card_service.get_card(session, card_id, current_user)
     balance = await credit_card_service.get_card_balance(session, card.id)
-    resp = CreditCardResponse.model_validate(card)
-    resp.balance = balance
-    return resp
+    return _to_response(card, balance)
 
 
 # Create a new credit card.
@@ -60,9 +70,7 @@ async def create_card(
         due_day=body.due_day,
         currency=body.currency,
     )
-    resp = CreditCardResponse.model_validate(card)
-    resp.balance = Decimal(0)
-    return resp
+    return _to_response(card, Decimal(0))
 
 
 # Update a credit card.
@@ -76,9 +84,7 @@ async def update_card(
     payload = body.model_dump(exclude_unset=True)
     card = await credit_card_service.update_card(session, card_id, current_user, **payload)
     balance = await credit_card_service.get_card_balance(session, card.id)
-    resp = CreditCardResponse.model_validate(card)
-    resp.balance = balance
-    return resp
+    return _to_response(card, balance)
 
 
 # Delete a credit card. Returns 204.

@@ -6,6 +6,7 @@ export const ROUTES = {
   },
   income: '/income',
   expenses: '/expenses',
+  creditCards: '/credit-cards',
   dashboard: '/dashboard',
   investments: '/investments',
   groups: '/groups',
