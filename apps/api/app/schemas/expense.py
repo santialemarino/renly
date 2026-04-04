@@ -36,8 +36,9 @@ class ExpenseUpdate(RequestBase):
 class ExpenseResponse(BaseModel):
     id: int = Field(description="Expense id.")
     date: date_type = Field(description="Expense date.")
-    amount: Decimal = Field(description="Expense amount.", max_digits=18, decimal_places=2)
-    currency: str = Field(description="Currency (ISO 4217).")
+    amount: Decimal = Field(description="Original expense amount.", max_digits=18, decimal_places=2)
+    currency: str = Field(description="Original currency (ISO 4217).")
+    converted_amount: Decimal | None = Field(default=None, description="Amount in the requested display currency.", max_digits=18, decimal_places=2)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
     notes: str | None = Field(default=None, description="Optional notes.")
     payment_method: str | None = Field(default=None, description="Payment method.")
@@ -55,3 +56,4 @@ class ExpenseListResponse(BaseModel):
     total: int = Field(description="Total matching expenses.")
     page: int = Field(description="Current page (1-based).")
     page_size: int = Field(description="Items per page.")
+    display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")

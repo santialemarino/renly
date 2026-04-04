@@ -14,6 +14,7 @@ import {
 } from '@repo/ui/components';
 import { deleteExpense } from '@/app/(protected)/expenses/expenses-actions';
 import type { Expense } from '@/lib/api/expenses';
+import { formatAmount } from '@/lib/utils/currency';
 
 interface ExpenseDeleteDialogProps {
   open: boolean;
@@ -52,7 +53,10 @@ export function ExpenseDeleteDialog({
           <DialogTitle>{t('delete.title')}</DialogTitle>
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', { amount: expense.amount, currency: expense.currency })}
+          {t('delete.confirm', {
+            amount: formatAmount(expense.amount),
+            currency: expense.currency,
+          })}
         </p>
         <DialogFooter>
           <Button
@@ -65,7 +69,8 @@ export function ExpenseDeleteDialog({
           <Button
             onClick={handleDelete}
             disabled={deleting}
-            className="whitespace-nowrap bg-red-500 text-white hover:bg-red-600 active:bg-red-700"
+            variant="destructive"
+            className="whitespace-nowrap"
           >
             {deleting ? t('delete.deleting') : t('delete.confirmButton')}
           </Button>

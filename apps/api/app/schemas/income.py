@@ -32,8 +32,9 @@ class IncomeUpdate(RequestBase):
 class IncomeResponse(BaseModel):
     id: int = Field(description="Income entry id.")
     date: date_type = Field(description="Income date.")
-    amount: Decimal = Field(description="Income amount.", max_digits=18, decimal_places=2)
-    currency: str = Field(description="Currency (ISO 4217).")
+    amount: Decimal = Field(description="Original income amount.", max_digits=18, decimal_places=2)
+    currency: str = Field(description="Original currency (ISO 4217).")
+    converted_amount: Decimal | None = Field(default=None, description="Amount in the requested display currency.", max_digits=18, decimal_places=2)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.")
     source: str = Field(description="Entry origin (manual, shortcut, auto).")
@@ -49,3 +50,4 @@ class IncomeListResponse(BaseModel):
     total: int = Field(description="Total matching entries.")
     page: int = Field(description="Current page (1-based).")
     page_size: int = Field(description="Items per page.")
+    display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")

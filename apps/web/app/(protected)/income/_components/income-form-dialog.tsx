@@ -30,7 +30,7 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { IncomeEntry } from '@/lib/api/income';
-import { INCOME_CATEGORIES } from '@/lib/constants/categories';
+import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
 
 interface IncomeFormDialogProps {
   open: boolean;
@@ -65,16 +65,14 @@ export function IncomeFormDialog({
 
   const isEdit = !!income;
 
-  const sortedCategories = [...INCOME_CATEGORIES].sort((a, b) =>
-    t(`categories.${a}`).localeCompare(t(`categories.${b}`)),
-  );
+  const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key));
 
   // Reset form when dialog opens or income entry changes.
   useEffect(() => {
     if (open) {
       form.reset({
         date: income?.date ?? '',
-        amount: income?.amount ?? '',
+        amount: income?.amount ? String(Number(income.amount)) : '',
         currency: income?.currency ?? '',
         category: (income?.category ?? undefined) as IncomeFormValues['category'],
         notes: income?.notes ?? '',

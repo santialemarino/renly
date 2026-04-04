@@ -6,7 +6,6 @@ from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
-from app.repositories import user_settings_repository
 from app.schemas.metrics import (
     AllocationResponse,
     GroupAllocationResponse,
@@ -16,7 +15,7 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
 )
 from app.services import metrics_service
-from app.services.settings_service import DOLLAR_RATE_DEFAULT, SETTINGS_KEY_DOLLAR_RATE_PREFERENCE
+from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -27,16 +26,6 @@ CATEGORY_DESC = "Filter to investments of this category."
 SEARCH_DESC = "Filter by investment name (case-insensitive)."
 START_DATE_DESC = "Start of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
 END_DATE_DESC = "End of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
-
-
-# Reads the user's dollar rate preference from settings. Returns default if not set.
-async def _get_dollar_pref(session, user_id: int) -> str:
-    row = await user_settings_repository.get_by_user_id(session, user_id)
-    if row and row.settings:
-        pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
-        if isinstance(pref, str) and pref:
-            return pref
-    return DOLLAR_RATE_DEFAULT
 
 
 # Returns portfolio-level metrics (total value, invested, gain, month change).
@@ -53,7 +42,7 @@ async def get_portfolio_metrics(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioMetricsResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_portfolio_metrics(
         session,
         current_user.id,
@@ -82,7 +71,7 @@ async def get_portfolio_evolution(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioEvolutionResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_portfolio_evolution(
         session,
         current_user.id,
@@ -106,7 +95,7 @@ async def get_investment_metrics(
     session: SessionDep,
     currency: str | None = Query(default=None, description=CURRENCY_DESC),
 ) -> InvestmentMetricsResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_investment_metrics(
         session,
         investment_id,
@@ -128,7 +117,7 @@ async def get_allocation(
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
 ) -> AllocationResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_allocation(
         session,
         current_user.id,
@@ -153,7 +142,7 @@ async def get_allocation_by_group(
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
 ) -> GroupAllocationResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_allocation_by_group(
         session,
         current_user.id,
@@ -180,7 +169,7 @@ async def get_investments_summary(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> InvestmentsSummaryResponse:
-    dp = await _get_dollar_pref(session, current_user.id)
+    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_investments_summary(
         session,
         current_user.id,

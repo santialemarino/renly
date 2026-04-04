@@ -65,7 +65,8 @@ export function GroupDeleteFormDialog({
           <Button
             onClick={handleDelete}
             disabled={deleting}
-            className="whitespace-nowrap bg-red-500 text-white hover:bg-red-600 active:bg-red-700"
+            variant="destructive"
+            className="whitespace-nowrap"
           >
             {deleting ? t('delete.deleting') : t('delete.confirm')}
           </Button>

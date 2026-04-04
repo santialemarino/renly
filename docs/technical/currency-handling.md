@@ -50,6 +50,8 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 
 - **Snapshots page**: passes `currency` to `getSnapshotGrid({ currency })`.
 - **Dashboard page**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
+- **Expenses page**: passes `currency` to `getExpenses({ currency })`. Table shows `convertedAmount` when a display currency is active, original `amount` otherwise. Currency column removed — the switcher indicates the display currency.
+- **Income page**: same pattern as expenses — passes `currency` to `getIncome({ currency })`.
 
 ### 3. Backend conversion
 
@@ -68,6 +70,7 @@ Router reads user's dollar_rate_preference from settings
 ```
 
 - **Helpers**: `services/metrics_helpers.py` — `convert_value()`, `can_convert()`, `get_rate_map()`.
+- **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income).
 - **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
 - **Rate map**: `get_rate_map(session, dollar_preference)` fetches the latest rates for all pairs. The dollar preference determines which USD/ARS rate pair to include. Returns `{currency: rate}` where rate means "1 USD = X currency". USD itself has an implicit rate of 1.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
@@ -84,6 +87,8 @@ The snapshot grid returns both converted and original values:
 | `transaction.original_amount` | Base currency amount (for form editing)                    |
 
 The snapshot form always uses `original_value` / `original_amount` to populate fields, ensuring edits are saved in the investment's `base_currency` regardless of the display currency.
+
+**Expenses and income** follow the same principle: the API response includes both `amount` (original) and `converted_amount` (display). The edit form always populates from `amount`, and the delete confirmation shows the original amount. Amount values are formatted with `String(Number())` in forms (strips trailing `.00`) and `formatAmount()` with `Intl.NumberFormat` in tables (adds thousand separators).
 
 ### 4.1 Investment currency lock
 

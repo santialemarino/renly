@@ -29,17 +29,7 @@ import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expe
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
 import { ROUTES } from '@/config/routes';
 import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
-
-// Formats a number as a compact currency value (strips .00 for integers).
-function formatAmount(value: string): string {
-  const num = Number(value);
-  if (isNaN(num)) return value;
-  const hasDecimals = num % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(num);
-}
+import { formatAmount } from '@/lib/utils/currency';
 
 function SortIcon({
   column,
@@ -220,7 +210,6 @@ export function ExpensesDataTable({
                   <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
                 </button>
               </TableHead>
-              <TableHead>{t('table.currency')}</TableHead>
               <TableHead>
                 <button
                   type="button"
@@ -249,7 +238,7 @@ export function ExpensesDataTable({
             {items.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={6}
                   className="py-10 rounded-sm text-center text-muted-foreground"
                 >
                   {t('table.empty')}
@@ -260,9 +249,8 @@ export function ExpensesDataTable({
                 <TableRow key={expense.id}>
                   <TableCell>{expense.date}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(expense.amount)}
+                    {formatAmount(expense.convertedAmount ?? expense.amount)}
                   </TableCell>
-                  <TableCell>{expense.currency}</TableCell>
                   <TableCell>
                     {expense.category ? t(`categories.${expense.category}`) : '—'}
                   </TableCell>

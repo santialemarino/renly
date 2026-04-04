@@ -30,7 +30,8 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Expense } from '@/lib/api/expenses';
-import { EXPENSE_CATEGORIES, PAYMENT_METHODS } from '@/lib/constants/categories';
+import { PAYMENT_METHODS } from '@/lib/constants/categories';
+import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 interface ExpenseFormDialogProps {
   open: boolean;
@@ -67,16 +68,14 @@ export function ExpenseFormDialog({
 
   const isEdit = !!expense;
 
-  const sortedCategories = [...EXPENSE_CATEGORIES].sort((a, b) =>
-    t(`categories.${a}`).localeCompare(t(`categories.${b}`)),
-  );
+  const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
 
   // Reset form when dialog opens or expense changes.
   useEffect(() => {
     if (open) {
       form.reset({
         date: expense?.date ?? '',
-        amount: expense?.amount ?? '',
+        amount: expense?.amount ? String(Number(expense.amount)) : '',
         currency: expense?.currency ?? '',
         category: (expense?.category ?? undefined) as ExpenseFormValues['category'],
         notes: expense?.notes ?? '',

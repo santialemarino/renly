@@ -9,6 +9,7 @@ interface IncomeEntryRaw {
   date: string;
   amount: string;
   currency: string;
+  converted_amount: string | null;
   category: string | null;
   notes: string | null;
   source: string;
@@ -21,6 +22,7 @@ interface IncomeListRaw {
   total: number;
   page: number;
   page_size: number;
+  display_currency: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -30,6 +32,7 @@ export interface IncomeEntry {
   date: string;
   amount: string;
   currency: string;
+  convertedAmount: string | null;
   category: string | null;
   notes: string | null;
   source: string;
@@ -42,6 +45,7 @@ export interface IncomeListResponse {
   total: number;
   page: number;
   pageSize: number;
+  displayCurrency: string | null;
 }
 
 export type IncomeSortField = 'date' | 'amount' | 'category';
@@ -52,6 +56,7 @@ export interface GetIncomeParams {
   category?: string;
   dateFrom?: string;
   dateTo?: string;
+  currency?: string;
   page?: number;
   pageSize?: number;
   sortBy?: IncomeSortField;
@@ -66,6 +71,7 @@ function mapIncomeEntry(raw: IncomeEntryRaw): IncomeEntry {
     date: raw.date,
     amount: raw.amount,
     currency: raw.currency,
+    convertedAmount: raw.converted_amount,
     category: raw.category,
     notes: raw.notes,
     source: raw.source,
@@ -82,6 +88,7 @@ export async function getIncome(params: GetIncomeParams = {}): Promise<IncomeLis
   if (params.category) qs.set('category', params.category);
   if (params.dateFrom) qs.set('date_from', params.dateFrom);
   if (params.dateTo) qs.set('date_to', params.dateTo);
+  if (params.currency) qs.set('currency', params.currency);
   if (params.page !== undefined) qs.set('page', String(params.page));
   if (params.pageSize !== undefined) qs.set('page_size', String(params.pageSize));
   if (params.sortBy) qs.set('sort_by', params.sortBy);
@@ -96,5 +103,6 @@ export async function getIncome(params: GetIncomeParams = {}): Promise<IncomeLis
     total: raw.total,
     page: raw.page,
     pageSize: raw.page_size,
+    displayCurrency: raw.display_currency,
   };
 }
