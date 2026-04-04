@@ -78,6 +78,34 @@ For investments with a ticker (stocks, CEDEARs, crypto, government bonds), Renly
 
 CEDEARs have a conversion ratio to their underlying stock. For example, 10 CEDEARs of AAPL.BA might equal 1 share of Apple stock. These ratios are updated monthly from Banco Comafi, the principal issuing entity for stock CEDEARs in Argentina (90%+ of programs). Ratios change only when the underlying stock splits.
 
+### Income Entries
+
+An income entry records money coming in -- your salary, freelance work, dividends, refunds, or any other source. Each entry has a date, amount, currency, and optional category and notes.
+
+Income categories are fixed: `salary`, `freelance`, `bonus`, `investment_returns`, `dividends`, `rental_income`, `sales`, `refunds`, `gifts`, `other`.
+
+### Expense Entries
+
+An expense entry records money going out. Each entry has a date, amount, currency, optional category, payment method, and notes.
+
+Expense categories are fixed: `food`, `dining`, `transport`, `rent`, `utilities`, `health`, `entertainment`, `sports`, `subscriptions`, `clothing`, `education`, `personal_care`, `home_maintenance`, `gifts`, `travel`, `taxes`, `insurance`, `kids`, `pets`, `other`.
+
+Payment methods: `cash`, `debit`, `transfer`, `credit_card`. When the payment method is `credit_card`, the entry links to a specific credit card -- increasing that card's liability balance.
+
+### Credit Cards
+
+A credit card is a liability account -- it represents money you owe. Each card has a name, closing day, due day, and currency. The card's **balance** is computed (not stored) as the sum of linked expenses minus the sum of settlements.
+
+### Card Settlements
+
+A settlement records a credit card payment. Settlements are **not expenses** -- they reduce both your bank balance and the card's liability, with net-zero effect on patrimony.
+
+For the full accounting model (how expenses create liabilities, how settlements reduce them, how balance is computed), see [Credit Card Liability Model](../technical/credit-card-liability-model.md).
+
+### API Keys
+
+API keys allow external tools (like iOS Shortcuts) to authenticate without a full login flow. Each key has a name, is tied to a user, and can be revoked. The raw key is shown only once at creation.
+
 ### Settings
 
 Each user has personal preferences that control how the app behaves:
@@ -93,6 +121,21 @@ Each user has personal preferences that control how the app behaves:
 ```
 User
  |
+ |-- has many --> Income Entries
+ |                (salary, freelance, dividends, etc.)
+ |
+ |-- has many --> Expense Entries
+ |                (food, transport, rent, etc.)
+ |                  |
+ |                  |-- optionally linked to --> Credit Card
+ |                                              (when payment_method = credit_card)
+ |
+ |-- has many --> Credit Cards
+ |                (liability accounts)
+ |                  |
+ |                  |-- has many --> Card Settlements
+ |                                  (payments that reduce the card balance)
+ |
  |-- has many --> Investments
  |                  |
  |                  |-- has many --> Snapshots
@@ -104,11 +147,14 @@ User
  |                  |-- belongs to many --> Groups
  |                                         (user-defined labels like "Retirement")
  |
- |-- has --> Settings
- |           (currency preferences, display options)
- |
  |-- has many --> Groups
-                  (each group can contain many investments)
+ |                (each group can contain many investments)
+ |
+ |-- has many --> API Keys
+ |                (for iOS Shortcut / external tool access)
+ |
+ |-- has --> Settings
+              (currency preferences, display options)
 ```
 
 **Supporting data** (shared across all users):
@@ -128,3 +174,5 @@ CEDEAR Ratios ...... how many CEDEARs equal one underlying share
 **One snapshot per month.** Each investment gets exactly one snapshot per date. If you enter a value for March 2026 and later correct it, the old value is replaced. This keeps things simple -- one number per month, just like a spreadsheet column.
 
 **Transactions are separate from value.** Your portfolio value (snapshots) and your money movements (transactions) are tracked independently. This separation is what makes accurate return calculations possible.
+
+**Credit cards are liabilities, not expenses.** When you buy something with a credit card, the expense is recorded immediately and the card balance increases as a liability. When you pay the statement, you record a settlement that reduces both your bank and the liability. This avoids double-counting and keeps all metrics accurate. See [Credit Card Liability Model](../technical/credit-card-liability-model.md) for the full accounting details.

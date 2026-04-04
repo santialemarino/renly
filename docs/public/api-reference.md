@@ -1,6 +1,6 @@
 # Renly API Reference
 
-All endpoints require authentication via a Bearer token (JWT) in the `Authorization` header, except for `POST /auth/register` and `POST /auth/login`.
+All endpoints require authentication via a Bearer token (JWT) in the `Authorization` header, except for `POST /auth/register` and `POST /auth/login`. Some endpoints also accept API key authentication (see API Keys section).
 
 Base URL: `/api` (all paths below are relative to this).
 
@@ -110,6 +110,104 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 **List query parameters:** `search` (filter by name), `sort_by` (`name`), `sort_order` (`asc`/`desc`).
 
 **Group allocation metrics** (`GET /metrics/allocation/by-group`) include `target_percentage` and `difference` (actual minus target) for each group that has a target set.
+
+---
+
+## Income
+
+| Method   | Path           | Description                                                 |
+| -------- | -------------- | ----------------------------------------------------------- |
+| `GET`    | `/income`      | List income entries with filtering, search, and pagination. |
+| `POST`   | `/income`      | Create a new income entry.                                  |
+| `GET`    | `/income/{id}` | Get a single income entry by ID.                            |
+| `PUT`    | `/income/{id}` | Update an income entry. Only provided fields are changed.   |
+| `DELETE` | `/income/{id}` | Delete an income entry.                                     |
+
+**List query parameters:**
+
+| Parameter    | Type   | Default | Description                                                       |
+| ------------ | ------ | ------- | ----------------------------------------------------------------- |
+| `search`     | string | --      | Filter by notes (case-insensitive).                               |
+| `category`   | string | --      | Filter by income category (e.g., `salary`, `freelance`).          |
+| `date_from`  | date   | --      | Start date (inclusive, YYYY-MM-DD).                               |
+| `date_to`    | date   | --      | End date (inclusive, YYYY-MM-DD).                                 |
+| `currency`   | string | --      | Display currency for conversion (e.g., `USD`). Omit for original. |
+| `page`       | int    | `1`     | Page number (1-based).                                            |
+| `page_size`  | int    | `25`    | Results per page (max 100).                                       |
+| `sort_by`    | string | --      | Sort field: `date`, `amount`, `category`.                         |
+| `sort_order` | string | `asc`   | Sort direction: `asc` or `desc`.                                  |
+
+**Income categories:** `salary`, `freelance`, `bonus`, `investment_returns`, `dividends`, `rental_income`, `sales`, `refunds`, `gifts`, `other`.
+
+---
+
+## Expenses
+
+| Method   | Path             | Description                                                   |
+| -------- | ---------------- | ------------------------------------------------------------- |
+| `GET`    | `/expenses`      | List expenses with filtering, search, and pagination.         |
+| `POST`   | `/expenses`      | Create a new expense. **Supports both JWT and API key auth.** |
+| `GET`    | `/expenses/{id}` | Get a single expense by ID.                                   |
+| `PUT`    | `/expenses/{id}` | Update an expense. Only provided fields are changed.          |
+| `DELETE` | `/expenses/{id}` | Delete an expense.                                            |
+
+**List query parameters:**
+
+| Parameter        | Type   | Default | Description                                                           |
+| ---------------- | ------ | ------- | --------------------------------------------------------------------- |
+| `search`         | string | --      | Filter by notes (case-insensitive).                                   |
+| `category`       | string | --      | Filter by expense category (e.g., `food`, `transport`).               |
+| `payment_method` | string | --      | Filter by payment method: `cash`, `debit`, `transfer`, `credit_card`. |
+| `date_from`      | date   | --      | Start date (inclusive, YYYY-MM-DD).                                   |
+| `date_to`        | date   | --      | End date (inclusive, YYYY-MM-DD).                                     |
+| `currency`       | string | --      | Display currency for conversion (e.g., `USD`). Omit for original.     |
+| `page`           | int    | `1`     | Page number (1-based).                                                |
+| `page_size`      | int    | `25`    | Results per page (max 100).                                           |
+| `sort_by`        | string | --      | Sort field: `date`, `amount`, `category`, `payment_method`.           |
+| `sort_order`     | string | `asc`   | Sort direction: `asc` or `desc`.                                      |
+
+**Expense categories:** `food`, `dining`, `transport`, `rent`, `utilities`, `health`, `entertainment`, `sports`, `subscriptions`, `clothing`, `education`, `personal_care`, `home_maintenance`, `gifts`, `travel`, `taxes`, `insurance`, `kids`, `pets`, `other`.
+
+**Payment methods:** `cash`, `debit`, `transfer`, `credit_card`.
+
+**Currency conversion:** When `currency` is provided, the response includes `converted_amount` per entry and `display_currency` on the list response. The original `amount` and `currency` are always preserved.
+
+---
+
+## Credit Cards
+
+Credit cards are treated as liabilities. The balance is computed as: total expenses linked to the card minus total settlements (payments).
+
+| Method   | Path                                   | Description                                           |
+| -------- | -------------------------------------- | ----------------------------------------------------- |
+| `GET`    | `/credit-cards`                        | List credit cards with search, sorting, and balances. |
+| `POST`   | `/credit-cards`                        | Create a new credit card.                             |
+| `GET`    | `/credit-cards/{id}`                   | Get a single card with its current balance.           |
+| `PUT`    | `/credit-cards/{id}`                   | Update a card. Only provided fields are changed.      |
+| `DELETE` | `/credit-cards/{id}`                   | Delete a card.                                        |
+| `GET`    | `/credit-cards/{id}/settlements`       | List settlements (payments) for a card.               |
+| `POST`   | `/credit-cards/{id}/settlements`       | Record a new settlement.                              |
+| `DELETE` | `/credit-cards/{id}/settlements/{sid}` | Delete a settlement.                                  |
+
+**List query parameters:** `search` (filter by name), `sort_by` (`name`, `closing_day`, `due_day`, `currency`), `sort_order` (`asc`/`desc`).
+
+**Card fields:** `name`, `closing_day` (1-31), `due_day` (1-31), `currency` (ISO 4217).
+
+**Settlement fields:** `date`, `amount`, `currency`, `notes` (optional).
+
+---
+
+## API Keys
+
+API keys provide long-lived authentication for external tools (e.g., iOS Shortcuts). The raw key is shown only once at creation -- store it securely.
+
+| Method   | Path             | Description                                               |
+| -------- | ---------------- | --------------------------------------------------------- |
+| `GET`    | `/api-keys`      | List all active API keys for the current user.            |
+| `POST`   | `/api-keys`      | Generate a new API key. Returns the raw key (shown once). |
+| `DELETE` | `/api-keys/{id}` | Revoke an API key (soft-delete).                          |
+
+**Authentication with API keys:** Include the raw key as a Bearer token in the `Authorization` header, the same way you would with a JWT. The server tries JWT validation first, then falls back to API key verification. Currently only `POST /expenses` accepts API key auth (for iOS Shortcut expense entry).
 
 ---
 
