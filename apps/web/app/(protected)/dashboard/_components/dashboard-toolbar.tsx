@@ -14,7 +14,7 @@ interface DashboardToolbarProps {
 }
 
 export function DashboardToolbar({ isFiltered }: DashboardToolbarProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
 

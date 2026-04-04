@@ -59,7 +59,7 @@ export function DistributionSection({
   groupAllocation,
   forcedMode,
 }: DistributionSectionProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const [mode, setMode] = useState<Mode>(forcedMode ?? 'category');
 

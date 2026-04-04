@@ -4,11 +4,12 @@ export const ROUTES = {
     login: '/login',
     signup: '/signup',
   },
+  income: '/income',
+  expenses: '/expenses',
   dashboard: '/dashboard',
   investments: '/investments',
   groups: '/groups',
   snapshots: '/snapshots',
-  expenses: '/expenses',
   settings: '/settings',
 } as const;
 

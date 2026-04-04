@@ -24,7 +24,7 @@ interface PeriodPickerProps {
 }
 
 export function PeriodPicker({ presets = PERIOD_PRESETS, className }: PeriodPickerProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();

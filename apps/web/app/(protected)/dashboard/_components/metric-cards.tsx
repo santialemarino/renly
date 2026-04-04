@@ -43,7 +43,7 @@ interface MetricCardsProps {
 }
 
 export function MetricCards({ metrics }: MetricCardsProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

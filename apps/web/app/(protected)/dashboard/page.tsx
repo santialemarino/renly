@@ -34,7 +34,7 @@ import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
 
 export async function generateMetadata() {
-  return await generatePageMetadata('dashboard');
+  return await generatePageMetadata('investorDashboard');
 }
 
 interface DashboardPageProps {
@@ -50,7 +50,7 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const cookieStore = await cookies();
-  const t = await getTranslations('dashboard');
+  const t = await getTranslations('investorDashboard');
   const tCommon = await getTranslations('common');
   const params = await searchParams;
 

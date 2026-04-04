@@ -63,7 +63,7 @@ interface EvolutionSectionProps {
 }
 
 export function EvolutionSection({ evolution }: EvolutionSectionProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
 
   const hasData = evolution.points.length > 0;
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronRight,
+  CircleDollarSign,
   FolderOpen,
   LayoutDashboard,
   LogOut,
@@ -40,14 +41,17 @@ import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switche
 import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
+const FINANCES_GROUP = [
+  { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
+  { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
+] as const;
+
 const PORTFOLIO_GROUP = [
-  { key: 'dashboard', href: ROUTES.dashboard, icon: LayoutDashboard },
+  { key: 'investorDashboard', href: ROUTES.dashboard, icon: LayoutDashboard },
   { key: 'investments', href: ROUTES.investments, icon: Rows3 },
   { key: 'groups', href: ROUTES.groups, icon: FolderOpen },
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
 ] as const;
-
-const FINANCES_GROUP = [{ key: 'expenses', href: ROUTES.expenses, icon: Receipt }] as const;
 
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
@@ -88,8 +92,8 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
         <SidebarGroup className="p-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-y-2">
-              {/* Portfolio collapsible group */}
-              <Collapsible asChild defaultOpen={isPortfolioActive} className="group/collapsible">
+              {/* Finances collapsible group */}
+              <Collapsible asChild defaultOpen={isFinancesActive} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -97,19 +101,19 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        !isPortfolioActive &&
+                        !isFinancesActive &&
                           'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                        isPortfolioActive && 'bg-gray-100',
+                        isFinancesActive && 'bg-gray-100',
                       )}
                     >
-                      <TrendingUp />
-                      <span>{t('navGroups.portfolio')}</span>
+                      <Wallet />
+                      <span>{t('navGroups.finances')}</span>
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
+                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
                         return (
                           <SidebarMenuSubItem key={key}>
@@ -137,8 +141,8 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Finances collapsible group */}
-              <Collapsible asChild defaultOpen={isFinancesActive} className="group/collapsible">
+              {/* Portfolio collapsible group */}
+              <Collapsible asChild defaultOpen={isPortfolioActive} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -146,19 +150,19 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        !isFinancesActive &&
+                        !isPortfolioActive &&
                           'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                        isFinancesActive && 'bg-gray-100',
+                        isPortfolioActive && 'bg-gray-100',
                       )}
                     >
-                      <Wallet />
-                      <span>{t('navGroups.finances')}</span>
+                      <TrendingUp />
+                      <span>{t('navGroups.portfolio')}</span>
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
+                      {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
                         return (
                           <SidebarMenuSubItem key={key}>
