@@ -1,12 +1,34 @@
+from sqlalchemy import asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.credit_card import CreditCard
 
+_SORT_COLUMNS = {
+    "name": CreditCard.name,
+    "closing_day": CreditCard.closing_day,
+    "due_day": CreditCard.due_day,
+    "currency": CreditCard.currency,
+}
 
-# List all credit cards for a user.
-async def list_by_user(session: AsyncSession, user_id: int) -> list[CreditCard]:
-    result = await session.execute(select(CreditCard).where(CreditCard.user_id == user_id).order_by(CreditCard.name))
+
+# List credit cards for a user with optional search and sorting.
+async def list_by_user(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> list[CreditCard]:
+    stmt = select(CreditCard).where(CreditCard.user_id == user_id)
+    if search:
+        stmt = stmt.where(CreditCard.name.ilike(f"%{search}%"))
+    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
+    order_fn = desc if sort_order == "desc" else asc
+    order_clause = order_fn(sort_col) if sort_col is not None else CreditCard.name
+    stmt = stmt.order_by(order_clause)
+    result = await session.execute(stmt)
     return list(result.scalars().all())
 
 

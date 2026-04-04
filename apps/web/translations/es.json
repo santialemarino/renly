@@ -144,6 +144,7 @@
     "nav": {
       "income": "Ingresos",
       "expenses": "Gastos",
+      "creditCards": "Tarjetas de Crédito",
       "investorDashboard": "Dashboard",
       "investments": "Inversiones",
       "groups": "Grupos",
@@ -352,6 +353,95 @@
       "deleting": "Eliminando...",
       "success": "Gasto eliminado.",
       "error": "No se pudo eliminar el gasto."
+    }
+  },
+  "creditCards": {
+    "metadata": {
+      "title": "Tarjetas de Crédito",
+      "description": "Gestioná tus tarjetas de crédito"
+    },
+    "title": "Tarjetas de Crédito",
+    "subtitle": "Gestioná tus tarjetas de crédito y pagos.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar tarjetas...",
+      "addCard": "Agregar tarjeta"
+    },
+    "table": {
+      "name": "Nombre",
+      "closingDay": "Cierre",
+      "dueDay": "Vencimiento",
+      "currency": "Moneda",
+      "balance": "Saldo",
+      "actions": "Acciones",
+      "empty": "No se encontraron tarjetas de crédito."
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar"
+    },
+    "form": {
+      "titleCreate": "Agregar tarjeta de crédito",
+      "titleEdit": "Editar tarjeta de crédito",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre de la tarjeta"
+      },
+      "closingDay": {
+        "label": "Día de cierre",
+        "placeholder": "1-31"
+      },
+      "dueDay": {
+        "label": "Día de vencimiento",
+        "placeholder": "1-31"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Tarjeta creada.",
+      "updateSuccess": "Tarjeta actualizada.",
+      "saveError": "No se pudo guardar la tarjeta."
+    },
+    "delete": {
+      "title": "Eliminar tarjeta de crédito",
+      "confirm": "¿Seguro querés eliminar \"{name}\"? Todos los gastos y pagos vinculados serán desvinculados.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Tarjeta eliminada.",
+      "error": "No se pudo eliminar la tarjeta."
+    },
+    "settlements": {
+      "title": "Pagos",
+      "add": "Agregar pago",
+      "addTitle": "Agregar pago",
+      "empty": "No hay pagos aún.",
+      "loading": "Cargando pagos...",
+      "createSuccess": "Pago registrado.",
+      "createError": "No se pudo registrar el pago.",
+      "deleteSuccess": "Pago eliminado.",
+      "deleteError": "No se pudo eliminar el pago.",
+      "deleteTooltip": "Eliminar pago",
+      "table": {
+        "date": "Fecha",
+        "amount": "Monto",
+        "currency": "Moneda",
+        "notes": "Notas"
+      },
+      "form": {
+        "date": "Fecha",
+        "datePlaceholder": "Elegí una fecha",
+        "amount": "Monto",
+        "currency": "Moneda",
+        "notes": "Notas",
+        "notesPlaceholder": "Notas opcionales..."
+      }
     }
   },
   "investorDashboard": {
