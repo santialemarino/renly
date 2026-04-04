@@ -22,6 +22,50 @@ interface CategoryCapability {
 
 // Per-category capabilities. Used by the investment form to show/hide ticker field
 // and by the snapshot form to determine price lookup behavior.
+export const EXPENSE_CATEGORIES = [
+  'clothing',
+  'dining',
+  'education',
+  'entertainment',
+  'food',
+  'gifts',
+  'health',
+  'home_maintenance',
+  'insurance',
+  'kids',
+  'other',
+  'personal_care',
+  'pets',
+  'rent',
+  'sports',
+  'subscriptions',
+  'taxes',
+  'transport',
+  'travel',
+  'utilities',
+] as const;
+
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const INCOME_CATEGORIES = [
+  'bonus',
+  'dividends',
+  'freelance',
+  'gifts',
+  'investment_returns',
+  'other',
+  'refunds',
+  'rental_income',
+  'salary',
+  'sales',
+] as const;
+
+export type IncomeCategory = (typeof INCOME_CATEGORIES)[number];
+
+export const PAYMENT_METHODS = ['cash', 'debit', 'transfer', 'credit_card'] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 export const CATEGORY_CAPABILITIES: Record<InvestmentCategory, CategoryCapability> = {
   cedears: { hasTicker: true, hasAutoPrice: true, supportsHistory: true },
   corporate_bonds: { hasTicker: false, hasAutoPrice: false, supportsHistory: false },

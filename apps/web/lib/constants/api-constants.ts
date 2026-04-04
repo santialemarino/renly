@@ -8,6 +8,11 @@ export const GROUP_NAME_MAX = 255;
 
 export const API_MAX_PAGE_SIZE = 100;
 
+// --- DB constraints (expenses / income) ---
+
+export const EXPENSE_NOTES_MAX = 500;
+export const CREDIT_CARD_NAME_MAX = 100;
+
 // --- API sentinel values ---
 
 export const UNGROUPED_LABEL = 'Ungrouped';
