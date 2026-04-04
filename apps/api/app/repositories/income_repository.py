@@ -1,0 +1,75 @@
+from datetime import date as date_type
+
+from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+
+from app.models.income_entry import IncomeCategory, IncomeEntry
+
+
+# List income entries for a user with optional filters and pagination.
+async def list_by_user_filtered(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    search: str | None = None,
+    category: IncomeCategory | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[IncomeEntry], int]:
+    base = select(IncomeEntry).where(IncomeEntry.user_id == user_id)
+
+    if search:
+        base = base.where(IncomeEntry.notes.ilike(f"%{search}%"))
+    if category is not None:
+        base = base.where(IncomeEntry.category == category)
+    if date_from is not None:
+        base = base.where(IncomeEntry.date >= date_from)
+    if date_to is not None:
+        base = base.where(IncomeEntry.date <= date_to)
+
+    count_result = await session.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+
+    query = base.order_by(IncomeEntry.date.desc(), IncomeEntry.id.desc())
+    query = query.offset((page - 1) * page_size).limit(page_size)
+    result = await session.execute(query)
+    return list(result.scalars().all()), total
+
+
+# Get a single income entry by id and user_id.
+async def get_by_id(session: AsyncSession, income_id: int, user_id: int) -> IncomeEntry | None:
+    result = await session.execute(select(IncomeEntry).where(IncomeEntry.id == income_id, IncomeEntry.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
+# Insert a new income entry.
+async def create(session: AsyncSession, entry: IncomeEntry) -> IncomeEntry:
+    session.add(entry)
+    await session.flush()
+    return entry
+
+
+# Stage an income entry for update (caller commits).
+async def save(session: AsyncSession, entry: IncomeEntry) -> None:
+    session.add(entry)
+
+
+# Delete an income entry.
+async def delete(session: AsyncSession, entry: IncomeEntry) -> None:
+    await session.delete(entry)
+
+
+# Namespace to call repository functions (e.g. income_repository.list_by_user_filtered).
+class IncomeRepository:
+    list_by_user_filtered = staticmethod(list_by_user_filtered)
+    get_by_id = staticmethod(get_by_id)
+    create = staticmethod(create)
+    save = staticmethod(save)
+    delete = staticmethod(delete)
+
+
+# Singleton used by services to access income persistence.
+income_repository = IncomeRepository()
