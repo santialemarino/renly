@@ -27,7 +27,7 @@ interface DashboardSearchProps {
 }
 
 export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const router = useRouter();
 

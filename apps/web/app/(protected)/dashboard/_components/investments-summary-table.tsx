@@ -44,7 +44,7 @@ interface InvestmentsSummaryTableProps {
 }
 
 export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [hideInactive, setHideInactive] = useState(false);

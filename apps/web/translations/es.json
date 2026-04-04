@@ -142,16 +142,17 @@
   "sidebar": {
     "brand": "Renly",
     "nav": {
-      "dashboard": "Dashboard",
+      "income": "Ingresos",
+      "expenses": "Gastos",
+      "investorDashboard": "Dashboard",
       "investments": "Inversiones",
       "groups": "Grupos",
       "snapshots": "Snapshots",
-      "expenses": "Gastos",
       "settings": "Configuración"
     },
     "navGroups": {
-      "portfolio": "Inversor",
-      "finances": "Finanzas"
+      "finances": "Finanzas",
+      "portfolio": "Inversor"
     },
     "currency": {
       "label": "Moneda",
@@ -163,7 +164,197 @@
       "loading": "Cerrando sesión..."
     }
   },
-  "dashboard": {
+  "income": {
+    "metadata": {
+      "title": "Ingresos",
+      "description": "Registrá tus ingresos"
+    },
+    "title": "Ingresos",
+    "subtitle": "Registrá y gestioná tus ingresos.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar ingresos...",
+      "addIncome": "Agregar ingreso"
+    },
+    "table": {
+      "date": "Fecha",
+      "amount": "Monto",
+      "currency": "Moneda",
+      "category": "Categoría",
+      "notes": "Notas",
+      "actions": "Acciones",
+      "empty": "No se encontraron ingresos.",
+      "total": "{total, plural, one {# ingreso} other {# ingresos}}"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar"
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "categories": {
+      "bonus": "Bonificaciones",
+      "dividends": "Dividendos",
+      "freelance": "Freelance",
+      "gifts": "Regalos",
+      "investment_returns": "Retornos de Inversión",
+      "other": "Otro",
+      "refunds": "Reembolsos",
+      "rental_income": "Alquiler",
+      "salary": "Sueldo",
+      "sales": "Ventas"
+    },
+    "form": {
+      "titleCreate": "Agregar ingreso",
+      "titleEdit": "Editar ingreso",
+      "date": {
+        "label": "Fecha",
+        "placeholder": "Elegí una fecha"
+      },
+      "amount": {
+        "label": "Monto",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "category": {
+        "label": "Categoría",
+        "placeholder": "Seleccioná una categoría"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Ingreso creado.",
+      "updateSuccess": "Ingreso actualizado.",
+      "saveError": "No se pudo guardar el ingreso."
+    },
+    "delete": {
+      "title": "Eliminar ingreso",
+      "confirm": "¿Seguro querés eliminar el ingreso de {amount} {currency}?",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Ingreso eliminado.",
+      "error": "No se pudo eliminar el ingreso."
+    }
+  },
+  "expenses": {
+    "metadata": {
+      "title": "Gastos",
+      "description": "Registrá tus gastos"
+    },
+    "title": "Gastos",
+    "subtitle": "Registrá y gestioná tus gastos.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar gastos...",
+      "addExpense": "Agregar gasto",
+      "allPaymentMethods": "Todos los métodos"
+    },
+    "table": {
+      "date": "Fecha",
+      "amount": "Monto",
+      "currency": "Moneda",
+      "category": "Categoría",
+      "paymentMethod": "Método",
+      "notes": "Notas",
+      "actions": "Acciones",
+      "empty": "No se encontraron gastos.",
+      "total": "{total, plural, one {# gasto} other {# gastos}}"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar"
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "categories": {
+      "clothing": "Ropa",
+      "dining": "Restaurantes",
+      "education": "Educación",
+      "entertainment": "Entretenimiento",
+      "food": "Comida y Supermercado",
+      "gifts": "Regalos",
+      "health": "Salud",
+      "home_maintenance": "Hogar y Mantenimiento",
+      "insurance": "Seguros",
+      "kids": "Hijos",
+      "other": "Otro",
+      "personal_care": "Cuidado Personal",
+      "pets": "Mascotas",
+      "rent": "Alquiler",
+      "sports": "Deportes y Fitness",
+      "subscriptions": "Suscripciones",
+      "taxes": "Impuestos",
+      "transport": "Transporte",
+      "travel": "Viajes",
+      "utilities": "Servicios"
+    },
+    "paymentMethods": {
+      "cash": "Efectivo",
+      "debit": "Débito",
+      "transfer": "Transferencia",
+      "credit_card": "Tarjeta de Crédito"
+    },
+    "form": {
+      "titleCreate": "Agregar gasto",
+      "titleEdit": "Editar gasto",
+      "date": {
+        "label": "Fecha",
+        "placeholder": "Elegí una fecha"
+      },
+      "amount": {
+        "label": "Monto",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "category": {
+        "label": "Categoría",
+        "placeholder": "Seleccioná una categoría"
+      },
+      "paymentMethod": {
+        "label": "Método de pago",
+        "placeholder": "Seleccioná un método"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Gasto creado.",
+      "updateSuccess": "Gasto actualizado.",
+      "saveError": "No se pudo guardar el gasto."
+    },
+    "delete": {
+      "title": "Eliminar gasto",
+      "confirm": "¿Seguro querés eliminar el gasto de {amount} {currency}?",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Gasto eliminado.",
+      "error": "No se pudo eliminar el gasto."
+    }
+  },
+  "investorDashboard": {
     "metadata": {
       "title": "Dashboard",
       "description": "Ve tu dashboard"
@@ -467,112 +658,6 @@
       "createSuccess": "Snapshot creado.",
       "updateSuccess": "Snapshot actualizado.",
       "saveError": "Error al guardar el snapshot."
-    }
-  },
-  "expenses": {
-    "metadata": {
-      "title": "Gastos",
-      "description": "Registrá tus gastos"
-    },
-    "title": "Gastos",
-    "subtitle": "Registrá y gestioná tus gastos.",
-    "toolbar": {
-      "searchPlaceholder": "Buscar gastos...",
-      "addExpense": "Agregar gasto",
-      "allPaymentMethods": "Todos los métodos"
-    },
-    "table": {
-      "date": "Fecha",
-      "amount": "Monto",
-      "currency": "Moneda",
-      "category": "Categoría",
-      "paymentMethod": "Método",
-      "notes": "Notas",
-      "actions": "Acciones",
-      "empty": "No se encontraron gastos.",
-      "total": "{total, plural, one {# gasto} other {# gastos}}"
-    },
-    "actions": {
-      "edit": "Editar",
-      "delete": "Eliminar"
-    },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
-    },
-    "categories": {
-      "clothing": "Ropa",
-      "dining": "Restaurantes",
-      "education": "Educación",
-      "entertainment": "Entretenimiento",
-      "food": "Comida y Supermercado",
-      "gifts": "Regalos",
-      "health": "Salud",
-      "home_maintenance": "Hogar y Mantenimiento",
-      "insurance": "Seguros",
-      "kids": "Hijos",
-      "other": "Otro",
-      "personal_care": "Cuidado Personal",
-      "pets": "Mascotas",
-      "rent": "Alquiler",
-      "sports": "Deportes y Fitness",
-      "subscriptions": "Suscripciones",
-      "taxes": "Impuestos",
-      "transport": "Transporte",
-      "travel": "Viajes",
-      "utilities": "Servicios"
-    },
-    "paymentMethods": {
-      "cash": "Efectivo",
-      "debit": "Débito",
-      "transfer": "Transferencia",
-      "credit_card": "Tarjeta de Crédito"
-    },
-    "form": {
-      "titleCreate": "Agregar gasto",
-      "titleEdit": "Editar gasto",
-      "date": {
-        "label": "Fecha",
-        "placeholder": "Elegí una fecha"
-      },
-      "amount": {
-        "label": "Monto",
-        "placeholder": "0.00"
-      },
-      "currency": {
-        "label": "Moneda",
-        "placeholder": "Seleccioná una moneda",
-        "searchPlaceholder": "Buscar monedas...",
-        "noResults": "No se encontraron monedas."
-      },
-      "category": {
-        "label": "Categoría",
-        "placeholder": "Seleccioná una categoría"
-      },
-      "paymentMethod": {
-        "label": "Método de pago",
-        "placeholder": "Seleccioná un método"
-      },
-      "notes": {
-        "label": "Notas",
-        "placeholder": "Notas opcionales..."
-      },
-      "cancel": "Cancelar",
-      "cta": {
-        "label": "Guardar",
-        "loading": "Guardando..."
-      },
-      "createSuccess": "Gasto creado.",
-      "updateSuccess": "Gasto actualizado.",
-      "saveError": "No se pudo guardar el gasto."
-    },
-    "delete": {
-      "title": "Eliminar gasto",
-      "confirm": "¿Seguro querés eliminar el gasto de {amount} {currency}?",
-      "confirmButton": "Eliminar",
-      "deleting": "Eliminando...",
-      "success": "Gasto eliminado.",
-      "error": "No se pudo eliminar el gasto."
     }
   },
   "settings": {

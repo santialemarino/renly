@@ -21,7 +21,7 @@ interface InvestmentDetailCardProps {
 // Shows metrics complementary to the metric cards (which show value, TWR, IRR, gain).
 // This card shows: invested capital, base currency, category, and data points.
 export function InvestmentDetailCard({ metrics }: InvestmentDetailCardProps) {
-  const t = useTranslations('dashboard');
+  const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
 
   return (
