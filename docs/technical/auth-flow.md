@@ -65,6 +65,30 @@ Any failure (expired token, invalid signature, missing fields, epoch mismatch, u
 
 The `CurrentUser` type alias (`Annotated[User, Depends(get_current_user)]`) is used as a parameter type in router functions.
 
+## API key authentication
+
+For external tools (iOS Shortcuts, automations) that can't go through a browser login flow.
+
+### How it works
+
+1. User generates an API key in the app via `POST /api-keys` — returns the raw key (shown once).
+2. External tool stores the raw key and includes it as `Authorization: Bearer <key>` on API requests.
+3. The server's dual-auth dependency (`JwtOrApiKeyUser` in `app/deps/api_key_auth.py`) tries JWT first, then falls back to API key verification.
+
+### Key storage and verification
+
+- **Raw key:** generated with `secrets.token_urlsafe(32)` (43 characters).
+- **Stored as:** bcrypt hash (`key_hash` column) + first 8 characters unencrypted (`key_prefix` column).
+- **Verification flow:** extract prefix from the Bearer token → query `api_keys` table by prefix (indexed, O(1)) → bcrypt-verify the full key against matching candidates. This avoids scanning all keys.
+- **Last used tracking:** `last_used_at` updated on each successful verification.
+- **Revocation:** `DELETE /api-keys/{id}` sets `is_active = false` (soft-delete). Revoked keys fail verification immediately.
+
+### Supported endpoints
+
+Currently only `POST /expenses` accepts API key auth (for the iOS Shortcut v1 expense entry flow). All other endpoints require JWT. The `JwtOrApiKeyUser` dependency is used instead of `CurrentUser` on endpoints that support both.
+
+---
+
 ## Frontend auth (NextAuth.js)
 
 ### Configuration (`auth.config.ts`)
