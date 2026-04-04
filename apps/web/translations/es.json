@@ -148,6 +148,9 @@
       "snapshots": "Snapshots",
       "settings": "Configuración"
     },
+    "navGroups": {
+      "portfolio": "Inversor"
+    },
     "currency": {
       "label": "Moneda",
       "original": "X",
