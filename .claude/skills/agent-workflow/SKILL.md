@@ -31,7 +31,36 @@ Before committing (or suggesting a commit), ensure lints and checks pass. The re
 
 So: no strict obligation to run these manually every time, since pre-commit runs them; the obligation is not to commit code that would fail these checks.
 
-## 3. Keep docs and memory current
+## 3. Exhaustive compliance check before finishing
+
+After implementation and before committing, audit every changed or created file against the relevant skills. This is not optional — it catches issues that lints and type checks miss (N+1 queries, wrong method order, missing comments, convention drift).
+
+**What to check (API — api-layering + api-methods-entities):**
+
+- **N+1 queries:** No queries inside loops. Use batch variants (`get_by_ids`, `sum_by_*_ids`) and load before iterating.
+- **Method order:** Repositories and services follow get (list, get_by_id) → create → save → update → delete → other. Routers follow CRUD order. `__init__.py` and `__all__` lists are alphabetical.
+- **Transaction rules:** Repositories never call `session.commit()`. Services commit once per use case.
+- **Comments:** `#` above every function/class definition, end with period. No docstrings inside.
+- **Schemas:** Request schemas inherit `RequestBase`. Response schemas inherit `BaseModel` with `model_config = {"from_attributes": True}`. Every field has `Field(description="...")`.
+- **Models:** `__tablename__` set, `Field(...)` with descriptions, `utcnow` for timestamps, enums use `StrEnum` + `sa_column`.
+- **Performance:** Batch variants exist for any method used in a loop. Independent external calls use `asyncio.gather()`.
+
+**What to check (Web — web-structure + web-components-pages):**
+
+- **Tailwind class order:** display/flex → sizing → alignment → padding → gap → bg/border → rounded → state → typography.
+- **Typography tokens:** No raw `text-sm`, `text-xs`, `font-medium`. Use the type scale (`text-paragraph-*`, `text-heading-*`).
+- **Component order:** consts → metadata → props → session → translations → router → state → derived → effects → handlers → return.
+- **Comments:** End with period (except inline and section-header labels).
+- **Translations:** Page-specific under page namespace, shared under `common`.
+- **Icons:** Lucide preferred (`lucide-react`).
+
+**What to check (both):**
+
+- **`__init__.py` / `__all__` / import blocks** are alphabetically ordered.
+- **No dead imports** from deleted files.
+- **Docs and memory** updated per section 4 below.
+
+## 4. Keep docs and memory current
 
 Docs describe **how things work now**, not “what we changed” (no changelog-style “this works like this now” in READMEs).
 
@@ -63,13 +92,13 @@ The project has three documentation tiers:
 - **When to update skills:** Less often. Update a skill when you change a **convention** or **structure** (e.g. new layer, new place for components, new comment style). If you only added a feature following existing conventions, you usually don’t need to edit a skill.
 - **Memory (`project_status.md`):** After finishing a significant piece of work, update `~/.claude/projects/{slug}/memory/project_status.md`. Add what you completed to the built section, remove it from remaining/next, and add anything new that surfaced. Skip trivial fixes. Also update `MEMORY.md` if you add a new memory file.
 
-## 4. What NOT to commit
+## 5. What NOT to commit
 
 - **Never stage `.claude/plans/`** — agent plans are ephemeral working docs, gitignored.
 - **Never stage `docs/internal/`** — internal docs (architecture, phase specs, costs, decisions) are gitignored.
 - **Never stage temporary markdown files** (e.g. scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name. When staging, always list files individually — never `git add .` or `git add -A` — so stray files are not accidentally included.
 
-## 5. Other habits
+## 6. Other habits
 
 - **Scope:** Know which app you’re in (`apps/api` vs `apps/web`). Use the right tooling (e.g. `uv` in API, `pnpm --filter web` for web).
 - **After big refactors:** Run `pnpm check:api` and `pnpm check:web` once to catch import/model/type errors before the user hits pre-commit.

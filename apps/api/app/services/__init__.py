@@ -1,9 +1,13 @@
 # Business logic
 
 from app.services import (
+    api_key_service,
     auth_service,
+    credit_card_service,
     exchange_rate_service,
+    expense_service,
     group_service,
+    income_service,
     investment_service,
     metrics_service,
     settings_service,
@@ -11,9 +15,13 @@ from app.services import (
 )
 
 __all__ = [
+    "api_key_service",
     "auth_service",
+    "credit_card_service",
     "exchange_rate_service",
+    "expense_service",
     "group_service",
+    "income_service",
     "investment_service",
     "metrics_service",
     "settings_service",

@@ -6,7 +6,19 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
 from app.domain import CurrencyChangeBlockedError, ExchangeRateUnavailableError, NotFoundError
-from app.routers import asset_prices, auth, exchange_rates, groups, investments, metrics, snapshot_grid
+from app.routers import (
+    api_keys,
+    asset_prices,
+    auth,
+    credit_cards,
+    exchange_rates,
+    expenses,
+    groups,
+    income,
+    investments,
+    metrics,
+    snapshot_grid,
+)
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
 
@@ -33,10 +45,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(api_keys.router)
 app.include_router(asset_prices.router)
 app.include_router(auth.router)
+app.include_router(credit_cards.router)
 app.include_router(exchange_rates.router)
+app.include_router(expenses.router)
 app.include_router(groups.router)
+app.include_router(income.router)
 app.include_router(investments.router)
 app.include_router(metrics.router)
 app.include_router(settings_router.router)

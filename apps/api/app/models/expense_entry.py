@@ -1,0 +1,57 @@
+from datetime import date as date_type
+from datetime import datetime
+from decimal import Decimal
+from enum import StrEnum
+
+from sqlalchemy import Column
+from sqlalchemy import Enum as SAEnum
+from sqlmodel import Field, SQLModel
+
+from app.models.utils import utcnow
+
+
+# Expense category (food, transport, entertainment, etc.).
+class ExpenseCategory(StrEnum):
+    clothing = "clothing"
+    dining = "dining"
+    education = "education"
+    entertainment = "entertainment"
+    food = "food"
+    gifts = "gifts"
+    health = "health"
+    home_maintenance = "home_maintenance"
+    insurance = "insurance"
+    kids = "kids"
+    other = "other"
+    personal_care = "personal_care"
+    pets = "pets"
+    rent = "rent"
+    sports = "sports"
+    subscriptions = "subscriptions"
+    taxes = "taxes"
+    transport = "transport"
+    travel = "travel"
+    utilities = "utilities"
+
+
+# User expense entry (daily expense tracking).
+class ExpenseEntry(SQLModel, table=True):
+    __tablename__ = "expense_entries"
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", description="Owner.")
+    date: date_type = Field(description="Expense date.")
+    amount: Decimal = Field(max_digits=18, decimal_places=2, description="Expense amount.")
+    currency: str = Field(max_length=3, description="Currency (ISO 4217).")
+    category: ExpenseCategory | None = Field(
+        default=None,
+        sa_column=Column(SAEnum(ExpenseCategory, name="expense_category"), nullable=True),
+    )
+    notes: str | None = Field(default=None, description="Optional notes.")
+    payment_method: str | None = Field(default=None, max_length=20, description="Payment method (cash, debit, transfer, credit_card).")
+    credit_card_id: int | None = Field(
+        default=None, foreign_key="credit_cards.id", description="Credit card used (when payment_method = credit_card)."
+    )
+    source: str = Field(default="manual", max_length=20, description="Entry origin (manual, shortcut, auto, email_parsed).")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
