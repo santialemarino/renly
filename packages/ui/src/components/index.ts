@@ -7,6 +7,7 @@ export * from './calendar';
 export * from './chart';
 export * from './card';
 export * from './checkbox';
+export * from './collapsible';
 export * from './command';
 export * from './dialog';
 export * from './input';
