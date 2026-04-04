@@ -146,10 +146,12 @@
       "investments": "Investments",
       "groups": "Groups",
       "snapshots": "Snapshots",
+      "expenses": "Expenses",
       "settings": "Settings"
     },
     "navGroups": {
-      "portfolio": "Investor"
+      "portfolio": "Investor",
+      "finances": "Finances"
     },
     "currency": {
       "label": "Currency",
@@ -465,6 +467,112 @@
       "createSuccess": "Snapshot created.",
       "updateSuccess": "Snapshot updated.",
       "saveError": "Failed to save snapshot."
+    }
+  },
+  "expenses": {
+    "metadata": {
+      "title": "Expenses",
+      "description": "Track your expenses"
+    },
+    "title": "Expenses",
+    "subtitle": "Track and manage your expenses.",
+    "toolbar": {
+      "searchPlaceholder": "Search expenses...",
+      "addExpense": "Add expense",
+      "allPaymentMethods": "All methods"
+    },
+    "table": {
+      "date": "Date",
+      "amount": "Amount",
+      "currency": "Currency",
+      "category": "Category",
+      "paymentMethod": "Method",
+      "notes": "Notes",
+      "actions": "Actions",
+      "empty": "No expenses found.",
+      "total": "{total, plural, one {# expense} other {# expenses}}"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "categories": {
+      "clothing": "Clothing",
+      "dining": "Restaurants & Dining",
+      "education": "Education",
+      "entertainment": "Entertainment",
+      "food": "Food & Groceries",
+      "gifts": "Gifts",
+      "health": "Health & Medical",
+      "home_maintenance": "Home & Maintenance",
+      "insurance": "Insurance",
+      "kids": "Kids",
+      "other": "Other",
+      "personal_care": "Personal Care",
+      "pets": "Pets",
+      "rent": "Rent",
+      "sports": "Sports & Fitness",
+      "subscriptions": "Subscriptions",
+      "taxes": "Taxes",
+      "transport": "Transport",
+      "travel": "Travel",
+      "utilities": "Utilities"
+    },
+    "paymentMethods": {
+      "cash": "Cash",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "credit_card": "Credit Card"
+    },
+    "form": {
+      "titleCreate": "Add expense",
+      "titleEdit": "Edit expense",
+      "date": {
+        "label": "Date",
+        "placeholder": "Select a date"
+      },
+      "amount": {
+        "label": "Amount",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "category": {
+        "label": "Category",
+        "placeholder": "Select a category"
+      },
+      "paymentMethod": {
+        "label": "Payment method",
+        "placeholder": "Select a method"
+      },
+      "notes": {
+        "label": "Notes",
+        "placeholder": "Optional notes..."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Expense created.",
+      "updateSuccess": "Expense updated.",
+      "saveError": "Failed to save expense."
+    },
+    "delete": {
+      "title": "Delete expense",
+      "confirm": "Are you sure you want to delete the expense of {amount} {currency}?",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Expense deleted.",
+      "error": "Failed to delete expense."
     }
   },
   "settings": {

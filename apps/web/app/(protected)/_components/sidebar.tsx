@@ -8,10 +8,12 @@ import {
   FolderOpen,
   LayoutDashboard,
   LogOut,
+  Receipt,
   Rows3,
   Settings,
   Table2,
   TrendingUp,
+  Wallet,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -45,13 +47,15 @@ const PORTFOLIO_GROUP = [
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
 ] as const;
 
+const FINANCES_GROUP = [{ key: 'expenses', href: ROUTES.expenses, icon: Receipt }] as const;
+
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
   'hover:bg-gray-100 active:bg-gray-200 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:text-white data-[active=true]:hover:bg-blue-900 data-[active=true]:active:bg-blue-950 data-[active=true]:focus-visible:bg-blue-900';
 
-/** Extra styles for SidebarMenuSubButton: transition (not baked in) and svg icon animation. */
+/** Extra styles for SidebarMenuSubButton: hover text color (matching the main button primitive), transition, and svg icon animation. */
 const SUB_BUTTON_EXTRAS =
-  'transition-[background-color,color] duration-200 ease-out [&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-out';
+  'hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground transition-[background-color,color] duration-200 ease-out [&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-out';
 
 interface AppSidebarProps {
   displayCurrencies: string[];
@@ -65,7 +69,8 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
   const [loggingOut, setLoggingOut] = useState(false);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-  const isGroupActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
+  const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
+  const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href));
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -84,7 +89,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
           <SidebarGroupContent>
             <SidebarMenu className="gap-y-2">
               {/* Portfolio collapsible group */}
-              <Collapsible asChild defaultOpen={isGroupActive} className="group/collapsible">
+              <Collapsible asChild defaultOpen={isPortfolioActive} className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
@@ -92,7 +97,9 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        'data-[active=true]:bg-transparent data-[active=true]:text-current',
+                        !isPortfolioActive &&
+                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                        isPortfolioActive && 'bg-gray-100',
                       )}
                     >
                       <TrendingUp />
@@ -103,6 +110,55 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
                       {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
+                        const active = isActive(href);
+                        return (
+                          <SidebarMenuSubItem key={key}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={active}
+                              className={cn(
+                                'h-8 text-paragraph-sm-medium',
+                                NAV_ITEM_STYLES,
+                                SUB_BUTTON_EXTRAS,
+                                !active &&
+                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                              )}
+                            >
+                              <Link href={href}>
+                                <Icon />
+                                <span>{t(`nav.${key}`)}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {/* Finances collapsible group */}
+              <Collapsible asChild defaultOpen={isFinancesActive} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        '[&_svg]:size-5 text-paragraph-medium',
+                        NAV_ITEM_STYLES,
+                        !isFinancesActive &&
+                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                        isFinancesActive && 'bg-gray-100',
+                      )}
+                    >
+                      <Wallet />
+                      <span>{t('navGroups.finances')}</span>
+                      <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                    <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
                         return (
                           <SidebarMenuSubItem key={key}>
