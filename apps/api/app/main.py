@@ -13,6 +13,7 @@ from app.routers import (
     credit_cards,
     exchange_rates,
     expenses,
+    finance_metrics,
     groups,
     income,
     investments,
@@ -51,6 +52,7 @@ app.include_router(auth.router)
 app.include_router(credit_cards.router)
 app.include_router(exchange_rates.router)
 app.include_router(expenses.router)
+app.include_router(finance_metrics.router)
 app.include_router(groups.router)
 app.include_router(income.router)
 app.include_router(investments.router)

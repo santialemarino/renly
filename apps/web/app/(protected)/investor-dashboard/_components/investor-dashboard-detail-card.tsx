@@ -14,13 +14,13 @@ function formatValue(value: number): string {
   }).format(value);
 }
 
-interface InvestmentDetailCardProps {
+interface InvestorDashboardDetailCardProps {
   metrics: InvestmentMetrics;
 }
 
 // Shows metrics complementary to the metric cards (which show value, TWR, IRR, gain).
 // This card shows: invested capital, base currency, category, and data points.
-export function InvestmentDetailCard({ metrics }: InvestmentDetailCardProps) {
+export function InvestorDashboardDetailCard({ metrics }: InvestorDashboardDetailCardProps) {
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
 

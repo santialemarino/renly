@@ -4,11 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  BarChart3,
   ChevronRight,
   CircleDollarSign,
   CreditCard,
   FolderOpen,
-  LayoutDashboard,
   LogOut,
   Receipt,
   Rows3,
@@ -43,13 +43,14 @@ import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
 const FINANCES_GROUP = [
+  { key: 'financeDashboard', href: ROUTES.financeDashboard, icon: BarChart3 },
   { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
   { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
   { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
 ] as const;
 
 const PORTFOLIO_GROUP = [
-  { key: 'investorDashboard', href: ROUTES.dashboard, icon: LayoutDashboard },
+  { key: 'investorDashboard', href: ROUTES.investorDashboard, icon: BarChart3 },
   { key: 'investments', href: ROUTES.investments, icon: Rows3 },
   { key: 'groups', href: ROUTES.groups, icon: FolderOpen },
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },

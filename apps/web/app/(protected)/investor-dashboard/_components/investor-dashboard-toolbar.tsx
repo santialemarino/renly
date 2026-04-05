@@ -9,11 +9,11 @@ import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-interface DashboardToolbarProps {
+interface InvestorDashboardToolbarProps {
   isFiltered: boolean;
 }
 
-export function DashboardToolbar({ isFiltered }: DashboardToolbarProps) {
+export function InvestorDashboardToolbar({ isFiltered }: InvestorDashboardToolbarProps) {
   const t = useTranslations('investorDashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,7 +28,9 @@ export function DashboardToolbar({ isFiltered }: DashboardToolbarProps) {
     if (startDate) qs.set('start_date', startDate);
     if (endDate) qs.set('end_date', endDate);
     const query = qs.toString();
-    router.push(query ? `${ROUTES.dashboard}?${query}` : ROUTES.dashboard, { scroll: false });
+    router.push(query ? `${ROUTES.investorDashboard}?${query}` : ROUTES.investorDashboard, {
+      scroll: false,
+    });
   }
 
   return (

@@ -39,11 +39,11 @@ function formatPct(pct: number): string {
   return pct >= 0 ? `+${s}%` : `${s}%`;
 }
 
-interface InvestmentsSummaryTableProps {
+interface InvestorDashboardSummaryTableProps {
   summary: InvestmentsSummaryResponse;
 }
 
-export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProps) {
+export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSummaryTableProps) {
   const t = useTranslations('investorDashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -64,7 +64,7 @@ export function InvestmentsSummaryTable({ summary }: InvestmentsSummaryTableProp
     if (period) qs.set('period', period);
     if (startDate) qs.set('start_date', startDate);
     if (endDate) qs.set('end_date', endDate);
-    router.push(`${ROUTES.dashboard}?${qs.toString()}`, { scroll: false });
+    router.push(`${ROUTES.investorDashboard}?${qs.toString()}`, { scroll: false });
   }
 
   return (

@@ -21,12 +21,12 @@ interface SearchableInvestment {
   name: string;
 }
 
-interface DashboardSearchProps {
+interface InvestorDashboardSearchProps {
   investments: SearchableInvestment[];
   groups: InvestmentGroup[];
 }
 
-export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
+export function InvestorDashboardSearch({ investments, groups }: InvestorDashboardSearchProps) {
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -74,7 +74,7 @@ export function DashboardSearch({ investments, groups }: DashboardSearchProps) {
     else if (groupIndex === GROUP_GROUPS) qs.set('group_id', itemId);
     else if (groupIndex === GROUP_CATEGORIES) qs.set('category', itemId);
 
-    router.push(`${ROUTES.dashboard}?${qs.toString()}`, { scroll: false });
+    router.push(`${ROUTES.investorDashboard}?${qs.toString()}`, { scroll: false });
   }
 
   return (

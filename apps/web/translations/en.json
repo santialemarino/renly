@@ -149,7 +149,8 @@
       "investments": "Investments",
       "groups": "Groups",
       "snapshots": "Snapshots",
-      "settings": "Settings"
+      "settings": "Settings",
+      "financeDashboard": "Dashboard"
     },
     "navGroups": {
       "finances": "Finances",
@@ -817,6 +818,41 @@
       },
       "saveSuccess": "Settings saved.",
       "saveError": "Failed to save settings."
+    }
+  },
+  "financeDashboard": {
+    "metadata": {
+      "title": "Financial Dashboard",
+      "description": "Income, expenses, and cash flow overview."
+    },
+    "title": "Finances",
+    "subtitle": "Your income, expenses, and cash flow at a glance.",
+    "cards": {
+      "totalIncome": "Total Income",
+      "totalExpenses": "Total Expenses",
+      "net": "Net Cash Flow",
+      "creditCardBalance": "Card Balance",
+      "vsPreviousPeriod": "vs previous period"
+    },
+    "period": {
+      "ytd": "YTD",
+      "all": "All",
+      "custom": "Custom",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "monthlyChart": {
+      "title": "Income vs Expenses",
+      "tooltipIncome": "Income",
+      "tooltipExpenses": "Expenses"
+    },
+    "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
+    "loadError": "Unable to load financial dashboard data. Please try again later.",
+    "noData": "No data available yet. Add income or expense entries to see your financial overview.",
+    "distribution": {
+      "title": "Distribution",
+      "byExpense": "Expenses",
+      "byIncome": "Income"
     }
   }
 }
