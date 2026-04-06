@@ -139,6 +139,8 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 **Income categories:** `salary`, `freelance`, `bonus`, `investment_returns`, `dividends`, `rental_income`, `sales`, `refunds`, `gifts`, `other`.
 
+**Auto-generated entries:** The `investment_returns` category is populated automatically by a monthly background job (last day of month, 23:30 UTC). It computes each investment's monthly return and creates income entries with `source='auto'`. These entries appear alongside manual income in list queries and the financial dashboard.
+
 ---
 
 ## Expenses

@@ -93,6 +93,14 @@ async def get_by_ids(session: AsyncSession, ids: list[int], user_id: int) -> lis
     return list(result.scalars().all())
 
 
+# Returns all active investments across all users.
+async def list_active(session: AsyncSession) -> list[Investment]:
+    result = await session.execute(
+        select(Investment).where(Investment.is_active == True).order_by(Investment.user_id, Investment.id)  # noqa: E712
+    )
+    return list(result.scalars().all())
+
+
 # Returns all active investments that have a ticker set.
 async def list_with_ticker(session: AsyncSession) -> list[Investment]:
     result = await session.execute(
@@ -122,6 +130,7 @@ class InvestmentRepository:
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
+    list_active = staticmethod(list_active)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_with_ticker = staticmethod(list_with_ticker)
     save = staticmethod(save)

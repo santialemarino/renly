@@ -16,6 +16,8 @@ Each job wrapper creates its own `AsyncSessionLocal()` session (not tied to a re
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
+INVESTMENT_BRIDGE_HOUR_UTC = 23
+INVESTMENT_BRIDGE_MINUTE_UTC = 30
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 ```
@@ -51,7 +53,17 @@ Runs after US and Argentine market close. Individual ticker failures are skipped
 
 Runs 1 hour after the asset prices job to ensure fresh prices are available.
 
-### 4. CEDEAR ratios
+### 4. Investment bridge
+
+| Property         | Value                                                                                                                                                                                                          |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trigger**      | `cron` (last day of month at 23:30 UTC)                                                                                                                                                                        |
+| **Service call** | `investment_bridge_service.generate_investment_income(session)`                                                                                                                                                |
+| **What it does** | For each active investment with at least 2 snapshots where the latest is from the current month: computes value delta adjusted for cash flows, creates an `income_entry` with `category='investment_returns'`. |
+
+Runs 30 minutes after auto-snapshots to ensure fresh snapshots are available. Only records positive returns (negative returns are not recorded as expenses). Idempotent — skips users who already have bridge entries for today.
+
+### 5. CEDEAR ratios
 
 | Property         | Value                                                                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

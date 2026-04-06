@@ -1,11 +1,11 @@
-# Scheduled jobs for background tasks (exchange rates, asset prices, auto-snapshots, CEDEAR ratios).
+# Scheduled jobs for background tasks (exchange rates, asset prices, auto-snapshots, investment bridge, CEDEAR ratios).
 
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.db import AsyncSessionLocal
-from app.services import asset_price_service, auto_snapshot_service, cedear_ratio_service, exchange_rate_service
+from app.services import asset_price_service, auto_snapshot_service, cedear_ratio_service, exchange_rate_service, investment_bridge_service
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +15,8 @@ scheduler = AsyncIOScheduler()
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
+INVESTMENT_BRIDGE_HOUR_UTC = 23
+INVESTMENT_BRIDGE_MINUTE_UTC = 30
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 
@@ -46,6 +48,16 @@ async def _generate_auto_snapshots() -> None:
             logger.info("Scheduled auto-snapshots: %d snapshots created.", count)
     except Exception:
         logger.exception("Scheduled auto-snapshot generation failed.")
+
+
+# Generates income entries from monthly investment returns (investment-to-finance bridge).
+async def _generate_investment_income() -> None:
+    try:
+        async with AsyncSessionLocal() as session:
+            count = await investment_bridge_service.generate_investment_income(session)
+            logger.info("Investment bridge: %d income entries created.", count)
+    except Exception:
+        logger.exception("Scheduled investment bridge failed.")
 
 
 # Fetches CEDEAR ratios from Banco Comafi.
@@ -90,6 +102,17 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # Investment bridge: run on the last day of each month at 23:30 UTC (after auto-snapshots).
+    scheduler.add_job(
+        _generate_investment_income,
+        "cron",
+        day="last",
+        hour=INVESTMENT_BRIDGE_HOUR_UTC,
+        minute=INVESTMENT_BRIDGE_MINUTE_UTC,
+        id="generate_investment_income",
+        replace_existing=True,
+    )
+
     # CEDEAR ratios: run monthly (1st of each month at 00:00 UTC) + on startup.
     scheduler.add_job(
         _update_cedear_ratios,
@@ -106,10 +129,13 @@ def start_scheduler() -> None:
         "Scheduler started (exchange rates: now + every %dh, "
         "asset prices: daily %02d:00 UTC, "
         "auto-snapshots: last day %02d:00 UTC, "
+        "investment bridge: last day %02d:%02d UTC, "
         "CEDEAR ratios: now + monthly %dth %02d:00 UTC).",
         EXCHANGE_RATES_INTERVAL_HOURS,
         ASSET_PRICES_HOUR_UTC,
         AUTO_SNAPSHOTS_HOUR_UTC,
+        INVESTMENT_BRIDGE_HOUR_UTC,
+        INVESTMENT_BRIDGE_MINUTE_UTC,
         CEDEAR_RATIOS_DAY_OF_MONTH,
         CEDEAR_RATIOS_HOUR_UTC,
     )
