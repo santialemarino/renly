@@ -71,7 +71,7 @@ For external tools (iOS Shortcuts, automations) that can't go through a browser 
 
 ### How it works
 
-1. User generates an API key in the app via `POST /api-keys` — returns the raw key (shown once).
+1. User generates an API key on the Integrations page (API Keys section) — the raw key is shown once in a dialog with a copy button.
 2. External tool stores the raw key and includes it as `Authorization: Bearer <key>` on API requests.
 3. The server's dual-auth dependency (`JwtOrApiKeyUser` in `app/deps/api_key_auth.py`) tries JWT first, then falls back to API key verification.
 

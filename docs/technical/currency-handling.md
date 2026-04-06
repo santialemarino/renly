@@ -2,7 +2,7 @@
 
 ## User-facing behaviour
 
-The global currency switcher in the sidebar offers three options (configured in Settings):
+The global currency switcher in the sidebar offers three options (configured in Preferences):
 
 | Option                            | What the user sees                                                                                                                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -35,7 +35,7 @@ User clicks switcher → Zustand store updates → Cookie persisted (active-curr
 
 - **Store**: `lib/stores/currency-store.ts` — Zustand with `activeCurrency` state.
 - **Cookie**: `ACTIVE_CURRENCY_COOKIE = 'active-currency'` — read by server components.
-- **Switcher**: `_components/currency-switcher.tsx` — ToggleGroup of `displayCurrencies`. Shows plain currency codes (e.g. `ARS`, `USD`).
+- **Switcher**: `_components/currency-switcher.tsx` — collapsible ToggleGroup of `displayCurrencies`. Expanded: label, pill toggle, note. Collapsed: currency code + inline pill toggle. Collapsed state persisted via cookie (`currency-collapsed`), read server-side to avoid hydration flash.
 - **Layout**: `(protected)/layout.tsx` — reads Settings API for primary/secondary, resolves `displayCurrencies` array, reads cookie for active selection.
 
 ### 2. Server component data flow
@@ -113,7 +113,7 @@ Exchange rate providers follow the standardized provider pattern — see [extern
 
 ### 6. Settings form — currency configuration
 
-The Settings page (`/settings`) has a two-column layout. The left column handles currency configuration:
+The Preferences page (`/preferences`) has a two-column layout. The left column handles currency configuration:
 
 - **Primary currency**: required. The default display currency (shown first in the switcher, used as fallback when "Original" is selected on the dashboard).
 - **Secondary currency**: optional. Shown as the second option in the sidebar switcher.

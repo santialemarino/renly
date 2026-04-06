@@ -18,16 +18,16 @@ import {
   Label,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { createApiKey, revokeApiKey } from '@/app/(protected)/settings/settings-actions';
+import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
 import { CopyButton } from '@/components/copy-button';
 import type { ApiKey } from '@/lib/api/api-keys';
 
-interface SettingsApiKeysProps {
+interface IntegrationsApiKeysProps {
   initialKeys: ApiKey[];
 }
 
-export function SettingsApiKeys({ initialKeys }: SettingsApiKeysProps) {
-  const t = useTranslations('settings');
+export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
+  const t = useTranslations('integrations');
 
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [createOpen, setCreateOpen] = useState(false);

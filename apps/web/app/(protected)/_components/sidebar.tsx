@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -10,9 +10,11 @@ import {
   CreditCard,
   FolderOpen,
   LogOut,
+  Puzzle,
   Receipt,
   Rows3,
   Settings,
+  SlidersHorizontal,
   Table2,
   TrendingUp,
   Wallet,
@@ -56,6 +58,11 @@ const PORTFOLIO_GROUP = [
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
 ] as const;
 
+const SETTINGS_GROUP = [
+  { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
+  { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
+] as const;
+
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
   'hover:bg-gray-100 active:bg-gray-200 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:text-white data-[active=true]:hover:bg-blue-900 data-[active=true]:active:bg-blue-950 data-[active=true]:focus-visible:bg-blue-900';
@@ -67,17 +74,31 @@ const SUB_BUTTON_EXTRAS =
 interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
+  currencyCollapsed: boolean;
 }
 
-export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProps) {
+export function AppSidebar({
+  displayCurrencies,
+  activeCurrency,
+  currencyCollapsed,
+}: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations('sidebar');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-  const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href));
+  const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
+  const isSettingsActive = SETTINGS_GROUP.some(({ href }) => isActive(href));
+
+  // Suppress collapsible animation on first render so open groups don't animate in.
+  const collapsibleContentClass = mounted
+    ? 'overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up'
+    : 'overflow-hidden';
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -114,7 +135,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                  <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
                       {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
@@ -163,7 +184,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+                  <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
                       {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
@@ -193,25 +214,54 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* Settings */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive(ROUTES.settings)}
-                  size="lg"
-                  className={cn(
-                    '[&_svg]:size-5 text-paragraph-medium',
-                    NAV_ITEM_STYLES,
-                    !isActive(ROUTES.settings) &&
-                      'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                  )}
-                >
-                  <Link className="gap-x-2" href={ROUTES.settings}>
-                    <Settings />
-                    <span>{t('nav.settings')}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/* Settings collapsible group */}
+              <Collapsible asChild defaultOpen={isSettingsActive} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        '[&_svg]:size-5 text-paragraph-medium',
+                        NAV_ITEM_STYLES,
+                        !isSettingsActive &&
+                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                        isSettingsActive && 'bg-gray-100',
+                      )}
+                    >
+                      <Settings />
+                      <span>{t('navGroups.settings')}</span>
+                      <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className={collapsibleContentClass}>
+                    <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                      {SETTINGS_GROUP.map(({ key, href, icon: Icon }) => {
+                        const active = isActive(href);
+                        return (
+                          <SidebarMenuSubItem key={key}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={active}
+                              className={cn(
+                                'h-8 text-paragraph-sm-medium',
+                                NAV_ITEM_STYLES,
+                                SUB_BUTTON_EXTRAS,
+                                !active &&
+                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                              )}
+                            >
+                              <Link href={href}>
+                                <Icon />
+                                <span>{t(`nav.${key}`)}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -224,6 +274,7 @@ export function AppSidebar({ displayCurrencies, activeCurrency }: AppSidebarProp
               key={displayCurrencies.join(',')}
               displayCurrencies={displayCurrencies}
               activeCurrency={activeCurrency}
+              initialCollapsed={currencyCollapsed}
             />
           </SidebarGroupContent>
         </SidebarGroup>

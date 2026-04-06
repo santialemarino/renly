@@ -5,33 +5,6 @@ import { revalidatePath } from 'next/cache';
 import type { SettingsData } from '@/lib/api/settings';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
-// --- API Keys ---
-
-interface CreateApiKeyResult {
-  id: number;
-  name: string | null;
-  rawKey: string;
-}
-
-export async function createApiKey(name: string | null): Promise<CreateApiKeyResult> {
-  const res = await authenticatedFetch('/api-keys', {
-    method: 'POST',
-    body: { name: name || null },
-  });
-  if (!res.ok) throw new Error('Failed to create API key');
-  const raw = await res.json();
-  revalidatePath('/settings', 'page');
-  return { id: raw.id, name: raw.name, rawKey: raw.raw_key };
-}
-
-export async function revokeApiKey(keyId: number): Promise<void> {
-  const res = await authenticatedFetch(`/api-keys/${keyId}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to revoke API key');
-  revalidatePath('/settings', 'page');
-}
-
-// --- Settings ---
-
 interface SaveSettingsParams {
   primaryCurrency: string;
   secondaryCurrency: string | null;
