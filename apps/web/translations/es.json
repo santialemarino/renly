@@ -854,6 +854,31 @@
       },
       "saveSuccess": "Configuración guardada.",
       "saveError": "No se pudo guardar la configuración."
+    },
+    "apiKeys": {
+      "title": "Claves API",
+      "description": "Administra claves para acceso externo (Atajo de iOS, automatizaciones).",
+      "create": "Nueva Clave",
+      "unnamed": "Clave sin nombre",
+      "created": "Creada {date}",
+      "lastUsed": "Último uso {date}",
+      "empty": "No hay claves API. Crea una para usar con Atajos de iOS o automatizaciones.",
+      "createSuccess": "Clave API creada.",
+      "createError": "No se pudo crear la clave API.",
+      "revokeSuccess": "Clave API revocada.",
+      "revokeError": "No se pudo revocar la clave API.",
+      "dialog": {
+        "titleCreate": "Crear Clave API",
+        "descriptionCreate": "Dale un nombre a tu clave para identificar dónde se usa.",
+        "titleCreated": "Clave API Creada",
+        "descriptionCreated": "Copia esta clave ahora — no se mostrará de nuevo.",
+        "nameLabel": "Nombre",
+        "namePlaceholder": "Ingresa el nombre de la clave",
+        "keyLabel": "Tu clave API",
+        "create": "Crear",
+        "creating": "Creando...",
+        "done": "Listo"
+      }
     }
   }
 }

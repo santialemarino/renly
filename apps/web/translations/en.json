@@ -853,6 +853,31 @@
       },
       "saveSuccess": "Settings saved.",
       "saveError": "Failed to save settings."
+    },
+    "apiKeys": {
+      "title": "API Keys",
+      "description": "Manage keys for external access (iOS Shortcut, automations).",
+      "create": "New Key",
+      "unnamed": "Unnamed key",
+      "created": "Created {date}",
+      "lastUsed": "Last used {date}",
+      "empty": "No API keys yet. Create one to use with iOS Shortcuts or automations.",
+      "createSuccess": "API key created.",
+      "createError": "Failed to create API key.",
+      "revokeSuccess": "API key revoked.",
+      "revokeError": "Failed to revoke API key.",
+      "dialog": {
+        "titleCreate": "Create API Key",
+        "descriptionCreate": "Give your key a name to identify where it's used.",
+        "titleCreated": "API Key Created",
+        "descriptionCreated": "Copy this key now — it won't be shown again.",
+        "nameLabel": "Name",
+        "namePlaceholder": "Enter the key name",
+        "keyLabel": "Your API key",
+        "create": "Create",
+        "creating": "Creating...",
+        "done": "Done"
+      }
     }
   }
 }
