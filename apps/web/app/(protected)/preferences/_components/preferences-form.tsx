@@ -21,11 +21,11 @@ import {
   Separator,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import { saveSettings } from '@/app/(protected)/settings/settings-actions';
+import { saveSettings } from '@/app/(protected)/preferences/preferences-actions';
 import {
   buildSettingsFormSchema,
   type SettingsFormValues,
-} from '@/app/(protected)/settings/settings-form-schema';
+} from '@/app/(protected)/preferences/preferences-form-schema';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -43,12 +43,12 @@ import { localizePreset } from '@/lib/utils/period-presets';
 
 const ENV_PREFERRED = ENV_PREFERRED_CURRENCIES.join(', ');
 
-interface SettingsFormProps {
+interface PreferencesFormProps {
   initialSettings: SettingsData;
 }
 
-export function SettingsForm({ initialSettings }: SettingsFormProps) {
-  const t = useTranslations('settings');
+export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
+  const t = useTranslations('preferences');
   const tCommon = useTranslations('common');
   const router = useRouter();
 

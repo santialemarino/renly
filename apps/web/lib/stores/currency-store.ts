@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 export const ORIGINAL_CURRENCY = 'original';
 export const ACTIVE_CURRENCY_COOKIE = 'active-currency';
+export const CURRENCY_COLLAPSED_COOKIE = 'currency-collapsed';
 
 const COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365;
 

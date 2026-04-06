@@ -142,6 +142,7 @@
   "sidebar": {
     "brand": "Renly",
     "nav": {
+      "financeDashboard": "Dashboard",
       "income": "Ingresos",
       "expenses": "Gastos",
       "creditCards": "Tarjetas de Crédito",
@@ -149,12 +150,13 @@
       "investments": "Inversiones",
       "groups": "Grupos",
       "snapshots": "Snapshots",
-      "settings": "Configuración",
-      "financeDashboard": "Dashboard"
+      "preferences": "Preferencias",
+      "integrations": "Integraciones"
     },
     "navGroups": {
       "finances": "Finanzas",
-      "portfolio": "Inversor"
+      "portfolio": "Inversor",
+      "settings": "Configuración"
     },
     "currency": {
       "label": "Moneda",
@@ -786,13 +788,13 @@
       "saveError": "Error al guardar el snapshot."
     }
   },
-  "settings": {
+  "preferences": {
     "metadata": {
-      "title": "Configuración",
-      "description": "Configurá tu cuenta"
+      "title": "Preferencias",
+      "description": "Configura tus preferencias de visualización."
     },
-    "title": "Configuración",
-    "subtitle": "Configurá tus preferencias de visualización.",
+    "title": "Preferencias",
+    "subtitle": "Configura tus preferencias de visualización.",
     "form": {
       "primaryCurrency": {
         "label": "Moneda principal",
@@ -852,9 +854,17 @@
         "label": "Guardar",
         "loading": "Guardando..."
       },
-      "saveSuccess": "Configuración guardada.",
-      "saveError": "No se pudo guardar la configuración."
+      "saveSuccess": "Preferencias guardadas.",
+      "saveError": "No se pudieron guardar las preferencias."
+    }
+  },
+  "integrations": {
+    "metadata": {
+      "title": "Integraciones",
+      "description": "Administra claves API y conexiones externas."
     },
+    "title": "Integraciones",
+    "subtitle": "Administra claves API y conexiones externas.",
     "apiKeys": {
       "title": "Claves API",
       "description": "Administra claves para acceso externo (Atajo de iOS, automatizaciones).",

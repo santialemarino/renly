@@ -142,6 +142,7 @@
   "sidebar": {
     "brand": "Renly",
     "nav": {
+      "financeDashboard": "Dashboard",
       "income": "Income",
       "expenses": "Expenses",
       "creditCards": "Credit Cards",
@@ -149,12 +150,13 @@
       "investments": "Investments",
       "groups": "Groups",
       "snapshots": "Snapshots",
-      "settings": "Settings",
-      "financeDashboard": "Dashboard"
+      "preferences": "Preferences",
+      "integrations": "Integrations"
     },
     "navGroups": {
       "finances": "Finances",
-      "portfolio": "Investor"
+      "portfolio": "Investor",
+      "settings": "Settings"
     },
     "currency": {
       "label": "Currency",
@@ -786,12 +788,12 @@
       "saveError": "Failed to save snapshot."
     }
   },
-  "settings": {
+  "preferences": {
     "metadata": {
-      "title": "Settings",
-      "description": "Configure your account settings"
+      "title": "Preferences",
+      "description": "Configure your display preferences."
     },
-    "title": "Settings",
+    "title": "Preferences",
     "subtitle": "Configure your display preferences.",
     "form": {
       "primaryCurrency": {
@@ -851,9 +853,17 @@
         "label": "Save",
         "loading": "Saving..."
       },
-      "saveSuccess": "Settings saved.",
-      "saveError": "Failed to save settings."
+      "saveSuccess": "Preferences saved.",
+      "saveError": "Failed to save preferences."
+    }
+  },
+  "integrations": {
+    "metadata": {
+      "title": "Integrations",
+      "description": "Manage API keys and external connections."
     },
+    "title": "Integrations",
+    "subtitle": "Manage API keys and external connections.",
     "apiKeys": {
       "title": "API Keys",
       "description": "Manage keys for external access (iOS Shortcut, automations).",

@@ -12,7 +12,8 @@ export const ROUTES = {
   investments: '/investments',
   groups: '/groups',
   snapshots: '/snapshots',
-  settings: '/settings',
+  preferences: '/preferences',
+  integrations: '/integrations',
 } as const;
 
 /** All auth routes — accessible without a session */

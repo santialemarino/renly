@@ -47,6 +47,11 @@ const FLAG_OVERRIDES: Record<string, string> = {
   EUR: '🇪🇺',
 };
 
+// Get the currency name from the currency code.
+function getCurrencyName(code: string): string {
+  return cc.code(code)?.currency ?? code;
+}
+
 // Splits currencies into pinned, preferred, and other groups.
 function splitGroups(pinnedCodes: string[], preferredCodes: string[]) {
   const pinnedSet = new Set(pinnedCodes);
@@ -59,10 +64,6 @@ function splitGroups(pinnedCodes: string[], preferredCodes: string[]) {
     (a, b) => a.code.localeCompare(b.code),
   );
   return { pinned, preferred, other };
-}
-
-function getCurrencyName(code: string): string {
-  return cc.code(code)?.currency ?? code;
 }
 
 /*
