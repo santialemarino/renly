@@ -7,9 +7,8 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
-import type { AllocationResponse, GroupAllocationResponse } from '@/lib/api/metrics';
+import type { ExpenseBreakdown, IncomeBreakdown } from '@/lib/api/finance-metrics';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { UNGROUPED_LABEL } from '@/lib/constants/api-constants';
 import {
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
@@ -28,7 +27,7 @@ import {
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
 
-type Mode = 'category' | 'group';
+type Mode = 'expense' | 'income';
 
 // Formats a percentage, dropping decimals when exact (e.g. 40 → "40", 33.5 → "33.5").
 function formatPct(value: number): string {
@@ -48,43 +47,35 @@ function formatValue(value: number): string {
   }).format(value);
 }
 
-interface DistributionSectionProps {
-  categoryAllocation: AllocationResponse;
-  groupAllocation: GroupAllocationResponse;
-  forcedMode?: Mode;
+interface FinanceDashboardDistributionProps {
+  expenseBreakdown: ExpenseBreakdown;
+  incomeBreakdown: IncomeBreakdown;
 }
 
-export function DistributionSection({
-  categoryAllocation,
-  groupAllocation,
-  forcedMode,
-}: DistributionSectionProps) {
-  const t = useTranslations('investorDashboard');
-  const tCommon = useTranslations('common');
-  const [mode, setMode] = useState<Mode>(forcedMode ?? 'category');
+export function FinanceDashboardDistribution({
+  expenseBreakdown,
+  incomeBreakdown,
+}: FinanceDashboardDistributionProps) {
+  const t = useTranslations('financeDashboard');
+  const tExpenses = useTranslations('expenses');
+  const tIncome = useTranslations('income');
+  const [mode, setMode] = useState<Mode>('expense');
 
-  // When forcedMode is set, it overrides the user's toggle selection.
-  const activeMode = forcedMode ?? mode;
-  const isCategoryMode = activeMode === 'category';
+  const isExpenseMode = mode === 'expense';
 
-  const chartData = isCategoryMode
-    ? categoryAllocation.items.map((item) => ({
-        name: tCommon(`categories.${item.category}`),
+  const chartData = isExpenseMode
+    ? expenseBreakdown.items.map((item) => ({
+        name: tExpenses(`categories.${item.category}`),
         value: item.value,
         percentage: item.percentage,
-        targetPercentage: null as number | null,
-        difference: null as number | null,
       }))
-    : groupAllocation.items.map((item) => ({
-        name: item.groupName === UNGROUPED_LABEL ? t('distribution.ungrouped') : item.groupName,
+    : incomeBreakdown.items.map((item) => ({
+        name: tIncome(`categories.${item.category}`),
         value: item.value,
         percentage: item.percentage,
-        targetPercentage: item.targetPercentage,
-        difference: item.difference,
       }));
 
   const hasData = chartData.length > 0;
-  const hasTargets = !isCategoryMode && chartData.some((e) => e.targetPercentage != null);
 
   // Measure legend height for smooth bottom-edge animation.
   const legendRef = useRef<HTMLDivElement>(null);
@@ -115,16 +106,14 @@ export function DistributionSection({
         <CardTitle className="text-paragraph-sm text-muted-foreground">
           {t('distribution.title')}
         </CardTitle>
-        {!forcedMode && (
-          <PillToggleGroup
-            items={[
-              { value: 'category', label: t('distribution.byCategory') },
-              { value: 'group', label: t('distribution.byGroup') },
-            ]}
-            value={mode}
-            onValueChange={(v) => setMode(v as Mode)}
-          />
-        )}
+        <PillToggleGroup
+          items={[
+            { value: 'expense', label: t('distribution.byExpense') },
+            { value: 'income', label: t('distribution.byIncome') },
+          ]}
+          value={mode}
+          onValueChange={(v) => setMode(v as Mode)}
+        />
       </CardHeader>
       <CardContent className="px-6">
         {hasData ? (
@@ -136,10 +125,10 @@ export function DistributionSection({
               {/* Chart (top on mobile, right on desktop) + Legend */}
               <div className="flex flex-col-reverse items-center gap-y-4 lg:flex-row lg:gap-x-6 lg:gap-y-0">
                 {/* Legend items — content fades on mode switch. */}
-                <div className="w-full lg:flex-1 lg:min-w-0">
+                <div className="w-full lg:min-w-0 lg:flex-1">
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
-                      key={activeMode}
+                      key={mode}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
@@ -160,19 +149,6 @@ export function DistributionSection({
                           <span className="shrink-0 text-paragraph-xs-semibold">
                             {formatPct(entry.percentage)}%
                           </span>
-                          {entry.targetPercentage != null && (
-                            <span
-                              className={`shrink-0 text-paragraph-mini ${
-                                entry.difference != null && entry.difference > 0
-                                  ? 'text-red-500'
-                                  : entry.difference != null && entry.difference < 0
-                                    ? 'text-amber-500'
-                                    : 'text-muted-foreground'
-                              }`}
-                            >
-                              ({formatPct(entry.targetPercentage)}%)
-                            </span>
-                          )}
                         </div>
                       ))}
                     </motion.div>
@@ -184,7 +160,7 @@ export function DistributionSection({
                   style={{ height: DONUT_HEIGHT, maxWidth: DONUT_HEIGHT }}
                   className="w-full shrink-0"
                 >
-                  <ResponsiveContainer key={activeMode} width="100%" height="100%">
+                  <ResponsiveContainer key={mode} width="100%" height="100%">
                     <PieChart>
                       <Pie
                         data={chartData}
@@ -218,26 +194,6 @@ export function DistributionSection({
                   </ResponsiveContainer>
                 </div>
               </div>
-
-              {/* Target color legend — only when groups have targets. */}
-              <AnimatePresence initial={false}>
-                {hasTargets && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    className="flex items-center justify-center gap-x-4 text-paragraph-xs text-muted-foreground"
-                  >
-                    <span>
-                      <span className="text-red-500">●</span> {t('distribution.overAllocated')}
-                    </span>
-                    <span>
-                      <span className="text-amber-500">●</span> {t('distribution.underAllocated')}
-                    </span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </div>
         ) : (

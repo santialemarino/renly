@@ -1,21 +1,22 @@
 import { cookies } from 'next/headers';
 import { getTranslations } from 'next-intl/server';
 
+import { DashboardPeriodPicker } from '@/app/(protected)/_components/dashboard-period-picker';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import {
-  AnimatedDashboardHeader,
-  AnimatedDashboardToolbar,
-} from '@/app/(protected)/dashboard/_components/animated-dashboard-header';
-import { DashboardSearch } from '@/app/(protected)/dashboard/_components/dashboard-search';
-import { DashboardToolbar } from '@/app/(protected)/dashboard/_components/dashboard-toolbar';
-import { DistributionSection } from '@/app/(protected)/dashboard/_components/distribution-section';
-import { EvolutionSection } from '@/app/(protected)/dashboard/_components/evolution-section';
-import { InvestmentDetailCard } from '@/app/(protected)/dashboard/_components/investment-detail-card';
-import { InvestmentsSummaryTable } from '@/app/(protected)/dashboard/_components/investments-summary-table';
-import { MetricCards } from '@/app/(protected)/dashboard/_components/metric-cards';
-import { PeriodPicker } from '@/app/(protected)/dashboard/_components/period-picker';
+  InvestorDashboardAnimatedHeader,
+  InvestorDashboardAnimatedToolbar,
+} from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-animated-header';
+import { InvestorDashboardDetailCard } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-detail-card';
+import { InvestorDashboardDistribution } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-distribution';
+import { InvestorDashboardEvolution } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-evolution';
+import { InvestorDashboardMetricCards } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-metric-cards';
+import { InvestorDashboardSearch } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-search';
+import { InvestorDashboardSummaryTable } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-summary-table';
+import { InvestorDashboardToolbar } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-toolbar';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { WarningHint } from '@/components/styled-hint';
+import { ROUTES } from '@/config/routes';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import {
   getAllocation,
@@ -37,7 +38,7 @@ export async function generateMetadata() {
   return await generatePageMetadata('investorDashboard');
 }
 
-interface DashboardPageProps {
+interface InvestorDashboardPageProps {
   searchParams: Promise<{
     investment_id?: string;
     group_id?: string;
@@ -48,7 +49,7 @@ interface DashboardPageProps {
   }>;
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function InvestorDashboardPage({ searchParams }: InvestorDashboardPageProps) {
   const cookieStore = await cookies();
   const t = await getTranslations('investorDashboard');
   const tCommon = await getTranslations('common');
@@ -178,7 +179,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
-      <AnimatedDashboardHeader
+      <InvestorDashboardAnimatedHeader
         subtitleKey={subtitleKey}
         subtitle={
           <PageHeader
@@ -210,25 +211,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }
       />
       <DismissableCurrencyHint show={!isOriginalSelected} />
-      <AnimatedDashboardToolbar
-        backButton={<DashboardToolbar isFiltered={isFiltered} />}
-        search={<DashboardSearch investments={searchableInvestments} groups={groups} />}
-        periodPicker={<PeriodPicker presets={userPresets} />}
+      <InvestorDashboardAnimatedToolbar
+        backButton={<InvestorDashboardToolbar isFiltered={isFiltered} />}
+        search={<InvestorDashboardSearch investments={searchableInvestments} groups={groups} />}
+        periodPicker={
+          <DashboardPeriodPicker
+            routePath={ROUTES.investorDashboard}
+            translationNamespace="investorDashboard"
+            presets={userPresets}
+          />
+        }
       />
 
-      <MetricCards metrics={metrics} />
-      <EvolutionSection evolution={evolution} />
+      <InvestorDashboardMetricCards metrics={metrics} />
+      <InvestorDashboardEvolution evolution={evolution} />
 
       {isSingleInvestment && investmentDetail ? (
-        <InvestmentDetailCard metrics={investmentDetail} />
+        <InvestorDashboardDetailCard metrics={investmentDetail} />
       ) : (
         <div className="flex flex-col gap-6 lg:flex-row">
-          <DistributionSection
+          <InvestorDashboardDistribution
             categoryAllocation={categoryAllocation}
             groupAllocation={groupAllocation}
             forcedMode={isCategoryFilter ? 'group' : isGroupFilter ? 'category' : undefined}
           />
-          <InvestmentsSummaryTable summary={investmentsSummary} />
+          <InvestorDashboardSummaryTable summary={investmentsSummary} />
         </div>
       )}
     </div>

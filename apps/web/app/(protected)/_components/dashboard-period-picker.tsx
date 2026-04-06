@@ -11,20 +11,27 @@ import type { DateRange } from 'react-day-picker';
 import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
-import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/constants/period-presets';
 import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 const DATE_FORMAT = 'MMM d, yyyy';
 
-interface PeriodPickerProps {
+interface DashboardPeriodPickerProps {
+  routePath: string;
+  translationNamespace: 'financeDashboard' | 'investorDashboard';
   presets?: PeriodPreset[];
   className?: string;
 }
 
-export function PeriodPicker({ presets = PERIOD_PRESETS, className }: PeriodPickerProps) {
-  const t = useTranslations('investorDashboard');
+// Period preset pills + custom date range picker. Shared by finance and investor dashboards.
+export function DashboardPeriodPicker({
+  routePath,
+  translationNamespace,
+  presets = PERIOD_PRESETS,
+  className,
+}: DashboardPeriodPickerProps) {
+  const t = useTranslations(translationNamespace);
   const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -48,7 +55,7 @@ export function PeriodPicker({ presets = PERIOD_PRESETS, className }: PeriodPick
       if (val === null) qs.delete(key);
       else qs.set(key, val);
     });
-    router.push(`${ROUTES.dashboard}?${qs.toString()}`, { scroll: false });
+    router.push(`${routePath}?${qs.toString()}`, { scroll: false });
   }
 
   function handlePresetChange(value: string) {

@@ -4,7 +4,7 @@ import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-interface AnimatedDashboardHeaderProps {
+interface InvestorDashboardAnimatedHeaderProps {
   subtitleKey: string;
   subtitle: React.ReactNode;
   warnings: React.ReactNode;
@@ -12,11 +12,11 @@ interface AnimatedDashboardHeaderProps {
 
 // Animates subtitle transitions (fade in/out when filter changes).
 // Uses initial={false} so the first render is static — no animation on page load.
-export function AnimatedDashboardHeader({
+export function InvestorDashboardAnimatedHeader({
   subtitleKey,
   subtitle,
   warnings,
-}: AnimatedDashboardHeaderProps) {
+}: InvestorDashboardAnimatedHeaderProps) {
   return (
     <div className="flex flex-col gap-y-1">
       <AnimatePresence mode="wait" initial={false}>
@@ -35,7 +35,7 @@ export function AnimatedDashboardHeader({
   );
 }
 
-interface AnimatedDashboardToolbarProps {
+interface InvestorDashboardAnimatedToolbarProps {
   backButton: React.ReactNode;
   search: React.ReactNode;
   periodPicker: React.ReactNode;
@@ -43,11 +43,11 @@ interface AnimatedDashboardToolbarProps {
 
 // Animates toolbar layout shifts: search bar smoothly resizes when back button appears/disappears,
 // and period presets shift when custom picker expands.
-export function AnimatedDashboardToolbar({
+export function InvestorDashboardAnimatedToolbar({
   backButton,
   search,
   periodPicker,
-}: AnimatedDashboardToolbarProps) {
+}: InvestorDashboardAnimatedToolbarProps) {
   return (
     <LayoutGroup>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-2">

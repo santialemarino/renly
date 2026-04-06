@@ -197,6 +197,27 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 
 ---
 
+## Finance Metrics
+
+Dashboard-oriented endpoints for income, expense, and cash flow metrics. All support `currency` conversion and optional date range filtering.
+
+| Method | Path                                 | Description                                                         |
+| ------ | ------------------------------------ | ------------------------------------------------------------------- |
+| `GET`  | `/finance-metrics/overview`          | Overview: total income, expenses, net, card balance, period change. |
+| `GET`  | `/finance-metrics/monthly`           | Monthly income vs expenses series (bar chart data).                 |
+| `GET`  | `/finance-metrics/expense-breakdown` | Expense totals grouped by category (donut chart data).              |
+| `GET`  | `/finance-metrics/income-breakdown`  | Income totals grouped by category (donut chart data).               |
+
+**Common query parameters:** `currency` (display currency), `date_from` (start date), `date_to` (end date).
+
+**Overview response:** `total_income`, `total_expenses`, `net`, `income_change_pct` (vs previous period), `expense_change_pct`, `credit_card_balance`.
+
+**Monthly response:** `points[]` with `date`, `income`, `expenses` per month.
+
+**Breakdown responses:** `items[]` with `category`, `value`, `percentage`. Multi-currency entries are converted to the display currency via USD pivot.
+
+---
+
 ## API Keys
 
 API keys provide long-lived authentication for external tools (e.g., iOS Shortcuts). The raw key is shown only once at creation -- store it securely.

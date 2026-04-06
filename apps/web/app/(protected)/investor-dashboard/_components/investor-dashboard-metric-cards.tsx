@@ -38,11 +38,11 @@ function valueColor(value: number | null): string {
   return value > 0 ? 'text-emerald-600' : 'text-red-500';
 }
 
-interface MetricCardsProps {
+interface InvestorDashboardMetricCardsProps {
   metrics: PortfolioMetrics;
 }
 
-export function MetricCards({ metrics }: MetricCardsProps) {
+export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetricCardsProps) {
   const t = useTranslations('investorDashboard');
 
   return (

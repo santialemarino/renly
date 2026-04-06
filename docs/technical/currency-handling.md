@@ -49,9 +49,10 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 ```
 
 - **Snapshots page**: passes `currency` to `getSnapshotGrid({ currency })`.
-- **Dashboard page**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
+- **Investor dashboard**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
 - **Expenses page**: passes `currency` to `getExpenses({ currency })`. Table shows `convertedAmount` when a display currency is active, original `amount` otherwise. Currency column removed — the switcher indicates the display currency.
 - **Income page**: same pattern as expenses — passes `currency` to `getIncome({ currency })`.
+- **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `get_rate_map` pipeline. Same "Original" → primary fallback as the investor dashboard.
 
 ### 3. Backend conversion
 

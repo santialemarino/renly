@@ -233,7 +233,7 @@ export function InvestmentsDataTable({
   }
 
   function handleRowClick(investment: Investment) {
-    router.push(`${ROUTES.dashboard}?investment_id=${investment.id}`);
+    router.push(`${ROUTES.investorDashboard}?investment_id=${investment.id}`);
   }
 
   const { items, total, page, pageSize } = data;

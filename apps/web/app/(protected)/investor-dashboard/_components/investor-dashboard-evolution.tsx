@@ -58,11 +58,11 @@ function formatAxisValue(value: number): string {
   return value.toFixed(0);
 }
 
-interface EvolutionSectionProps {
+interface InvestorDashboardEvolutionProps {
   evolution: PortfolioEvolution;
 }
 
-export function EvolutionSection({ evolution }: EvolutionSectionProps) {
+export function InvestorDashboardEvolution({ evolution }: InvestorDashboardEvolutionProps) {
   const t = useTranslations('investorDashboard');
 
   const hasData = evolution.points.length > 0;

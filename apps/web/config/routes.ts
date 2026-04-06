@@ -1,13 +1,14 @@
 export const ROUTES = {
-  home: '/dashboard',
+  home: '/finance-dashboard',
   auth: {
     login: '/login',
     signup: '/signup',
   },
+  financeDashboard: '/finance-dashboard',
   income: '/income',
   expenses: '/expenses',
   creditCards: '/credit-cards',
-  dashboard: '/dashboard',
+  investorDashboard: '/investor-dashboard',
   investments: '/investments',
   groups: '/groups',
   snapshots: '/snapshots',

@@ -149,7 +149,8 @@
       "investments": "Inversiones",
       "groups": "Grupos",
       "snapshots": "Snapshots",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "financeDashboard": "Dashboard"
     },
     "navGroups": {
       "finances": "Finanzas",
@@ -163,6 +164,41 @@
     "logout": {
       "label": "Cerrar sesión",
       "loading": "Cerrando sesión..."
+    }
+  },
+  "financeDashboard": {
+    "metadata": {
+      "title": "Dashboard Financiero",
+      "description": "Resumen de ingresos, gastos y flujo de caja."
+    },
+    "title": "Finanzas",
+    "subtitle": "Tus ingresos, gastos y flujo de caja de un vistazo.",
+    "cards": {
+      "totalIncome": "Ingresos Totales",
+      "totalExpenses": "Gastos Totales",
+      "net": "Flujo Neto",
+      "creditCardBalance": "Saldo Tarjetas",
+      "vsPreviousPeriod": "vs período anterior"
+    },
+    "period": {
+      "ytd": "YTD",
+      "all": "Todo",
+      "custom": "Personalizado",
+      "cancel": "Cancelar",
+      "apply": "Aplicar"
+    },
+    "monthlyChart": {
+      "title": "Ingresos vs Gastos",
+      "tooltipIncome": "Ingresos",
+      "tooltipExpenses": "Gastos"
+    },
+    "currencyFallback": "El dashboard requiere una moneda común. <bold>Mostrando valores en {currency}.</bold>",
+    "loadError": "No se pudo cargar el dashboard financiero. Inténtalo de nuevo más tarde.",
+    "noData": "No hay datos disponibles. Agrega ingresos o gastos para ver tu resumen financiero.",
+    "distribution": {
+      "title": "Distribución",
+      "byExpense": "Gastos",
+      "byIncome": "Ingresos"
     }
   },
   "income": {
