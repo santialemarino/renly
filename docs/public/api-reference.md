@@ -172,6 +172,8 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 **Source:** The `source` field indicates how the expense was created: `manual` (default, web app), `shortcut` (iOS Shortcut), `auto`, or `email_parsed`. Sent in the request body on `POST /expenses`; returned in all responses.
 
+**Amount validation:** `amount` must be greater than zero on all create and update endpoints (expenses, income, settlements). Returns 422 if zero or negative.
+
 **Currency conversion:** When `currency` is provided, the response includes `converted_amount` per entry and `display_currency` on the list response. The original `amount` and `currency` are always preserved.
 
 ---
@@ -186,14 +188,18 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 | `POST`   | `/credit-cards`                        | Create a new credit card.                                                                     |
 | `GET`    | `/credit-cards/{id}`                   | Get a single card with its current balance.                                                   |
 | `PUT`    | `/credit-cards/{id}`                   | Update a card. Only provided fields are changed.                                              |
-| `DELETE` | `/credit-cards/{id}`                   | Delete a card.                                                                                |
+| `DELETE` | `/credit-cards/{id}`                   | Delete a card. Returns 409 if the card has linked expenses.                                   |
+| `POST`   | `/credit-cards/{id}/archive`           | Archive a card (hide from active selection).                                                  |
+| `POST`   | `/credit-cards/{id}/unarchive`         | Restore an archived card.                                                                     |
 | `GET`    | `/credit-cards/{id}/settlements`       | List settlements (payments) for a card.                                                       |
 | `POST`   | `/credit-cards/{id}/settlements`       | Record a new settlement.                                                                      |
 | `DELETE` | `/credit-cards/{id}/settlements/{sid}` | Delete a settlement.                                                                          |
 
-**List query parameters:** `search` (filter by name), `sort_by` (`name`, `closing_day`, `due_day`, `currency`), `sort_order` (`asc`/`desc`).
+**List query parameters:** `search` (filter by name), `sort_by` (`name`, `closing_day`, `due_day`, `currency`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived cards).
 
-**Card fields:** `name`, `closing_day` (1-31), `due_day` (1-31), `currency` (ISO 4217).
+**Card fields:** `name`, `closing_day` (1-31), `due_day` (1-31), `currency` (ISO 4217), `is_active` (boolean), `has_expenses` (computed, read-only).
+
+**Archive behavior:** Archived cards are hidden from the expense form's card selector but retain all linked expenses and settlements. Balance is still computed normally. Delete is only allowed when the card has no linked expenses (409 otherwise).
 
 **Settlement fields:** `date`, `amount`, `currency`, `notes` (optional).
 

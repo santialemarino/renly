@@ -65,6 +65,27 @@ async def delete(session: AsyncSession, entry: ExpenseEntry) -> None:
     await session.delete(entry)
 
 
+# Count expenses linked to a specific credit card.
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
+    result = await session.execute(select(func.count()).where(ExpenseEntry.credit_card_id == credit_card_id))
+    return int(result.scalar_one())
+
+
+# Count expenses grouped by credit card id. Returns {card_id: count}.
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+    if not credit_card_ids:
+        return {}
+    result = await session.execute(
+        select(
+            ExpenseEntry.credit_card_id,
+            func.count(),
+        )
+        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .group_by(ExpenseEntry.credit_card_id)
+    )
+    return {row[0]: int(row[1]) for row in result.all()}
+
+
 # Sum of expenses linked to a specific credit card.
 async def sum_by_credit_card(session: AsyncSession, credit_card_id: int) -> float:
     result = await session.execute(select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(ExpenseEntry.credit_card_id == credit_card_id))
@@ -168,11 +189,13 @@ async def sum_by_user_grouped_by_category(
 
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
-    list_by_user_filtered = staticmethod(list_by_user_filtered)
-    get_by_id = staticmethod(get_by_id)
+    count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
-    save = staticmethod(save)
     delete = staticmethod(delete)
+    get_by_id = staticmethod(get_by_id)
+    list_by_user_filtered = staticmethod(list_by_user_filtered)
+    save = staticmethod(save)
     sum_by_credit_card = staticmethod(sum_by_credit_card)
     sum_by_credit_card_ids = staticmethod(sum_by_credit_card_ids)
     sum_by_user = staticmethod(sum_by_user)

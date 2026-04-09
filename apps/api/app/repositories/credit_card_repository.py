@@ -12,7 +12,7 @@ _SORT_COLUMNS = {
 }
 
 
-# List credit cards for a user with optional search and sorting.
+# List credit cards for a user with optional search, sorting, and archive filtering.
 async def list_by_user(
     session: AsyncSession,
     user_id: int,
@@ -20,8 +20,11 @@ async def list_by_user(
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
+    active_only: bool = True,
 ) -> list[CreditCard]:
     stmt = select(CreditCard).where(CreditCard.user_id == user_id)
+    if active_only:
+        stmt = stmt.where(CreditCard.is_active.is_(True))
     if search:
         stmt = stmt.where(CreditCard.name.ilike(f"%{search}%"))
     sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None

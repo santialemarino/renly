@@ -27,6 +27,16 @@ export async function deleteCreditCard(id: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to delete credit card');
 }
 
+export async function archiveCreditCard(id: number): Promise<void> {
+  const res = await authenticatedFetch(`/credit-cards/${id}/archive`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to archive credit card');
+}
+
+export async function unarchiveCreditCard(id: number): Promise<void> {
+  const res = await authenticatedFetch(`/credit-cards/${id}/unarchive`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to unarchive credit card');
+}
+
 export async function createSettlement(
   cardId: number,
   values: SettlementFormValues & { currency: string },

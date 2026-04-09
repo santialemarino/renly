@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expenses-data-table';
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
+import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
@@ -32,7 +33,10 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const settings = await getSettings().catch(() => null);
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
@@ -55,8 +59,12 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <ExpensesToolbar preferredCurrencies={preferredCurrencies} />
-      <ExpensesDataTable data={data} preferredCurrencies={preferredCurrencies} />
+      <ExpensesToolbar preferredCurrencies={preferredCurrencies} creditCards={creditCards} />
+      <ExpensesDataTable
+        data={data}
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+      />
     </div>
   );
 }

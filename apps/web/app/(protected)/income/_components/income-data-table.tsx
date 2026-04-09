@@ -119,24 +119,20 @@ function RowActions({
         </Tooltip>
       </div>
 
-      {editOpen && (
-        <IncomeFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          income={income}
-          preferredCurrencies={preferredCurrencies}
-          onSuccess={onSuccess}
-        />
-      )}
+      <IncomeFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        income={income}
+        preferredCurrencies={preferredCurrencies}
+        onSuccess={onSuccess}
+      />
 
-      {deleteOpen && (
-        <IncomeDeleteDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          income={income}
-          onSuccess={onSuccess}
-        />
-      )}
+      <IncomeDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        income={income}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }

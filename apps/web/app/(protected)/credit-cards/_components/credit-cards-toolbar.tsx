@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus } from 'lucide-react';
+import { Archive, Plus } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import { Button, SearchInput } from '@repo/ui/components';
+import { Button, Pill, SearchInput } from '@repo/ui/components';
 import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
@@ -21,6 +21,8 @@ export function CreditCardsToolbar({ preferredCurrencies }: { preferredCurrencie
   const [, startTransition] = useTransition();
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
+
+  const showArchived = searchParams.get('show_archived') === 'true';
 
   function navigate(overrides: Record<string, string | null>) {
     const params = new URLSearchParams(searchParamsRef.current.toString());
@@ -57,8 +59,17 @@ export function CreditCardsToolbar({ preferredCurrencies }: { preferredCurrencie
         <motion.div
           layout
           transition={{ duration: ANIMATION_DEFAULT }}
-          className="flex items-center basis-full md:basis-auto"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full md:basis-auto"
         >
+          <Pill
+            active={showArchived}
+            aria-pressed={showArchived}
+            onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
+            className="min-w-fit flex-1"
+          >
+            <Archive className="size-4" />
+            {t('toolbar.showArchived')}
+          </Pill>
           <Button blue onClick={() => setCreateOpen(true)} className="min-w-fit flex-1">
             <Plus className="size-4" />
             {t('toolbar.addCard')}

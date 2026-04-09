@@ -204,23 +204,19 @@ function GroupRow({
         </TableCell>
       </TableRow>
 
-      {editOpen && (
-        <GroupFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          group={group}
-          investments={investments}
-          onSuccess={onSuccess}
-        />
-      )}
-      {deleteOpen && (
-        <GroupDeleteFormDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          group={group}
-          onSuccess={onSuccess}
-        />
-      )}
+      <GroupFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        group={group}
+        investments={investments}
+        onSuccess={onSuccess}
+      />
+      <GroupDeleteFormDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        group={group}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }

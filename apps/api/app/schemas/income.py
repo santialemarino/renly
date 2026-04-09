@@ -13,7 +13,7 @@ from app.schemas.base import RequestBase
 # Body for POST /income.
 class IncomeCreate(RequestBase):
     date: date_type = Field(description="Income date.")
-    amount: Decimal = Field(description="Income amount.", max_digits=18, decimal_places=2)
+    amount: Decimal = Field(description="Income amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.")
@@ -22,7 +22,7 @@ class IncomeCreate(RequestBase):
 # Body for PUT /income/{id}. Partial update.
 class IncomeUpdate(RequestBase):
     date: date_type | None = Field(default=None, description="Income date.")
-    amount: Decimal | None = Field(default=None, description="Income amount.", max_digits=18, decimal_places=2)
+    amount: Decimal | None = Field(default=None, description="Income amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.")

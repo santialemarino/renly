@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -29,6 +29,7 @@ import {
 } from '@/app/(protected)/expenses/expenses-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
@@ -38,6 +39,7 @@ interface ExpenseFormDialogProps {
   onOpenChange: (open: boolean) => void;
   expense?: Expense;
   preferredCurrencies?: string[];
+  creditCards?: CreditCard[];
   onSuccess: () => void;
 }
 
@@ -46,6 +48,7 @@ export function ExpenseFormDialog({
   onOpenChange,
   expense,
   preferredCurrencies,
+  creditCards,
   onSuccess,
 }: ExpenseFormDialogProps) {
   const t = useTranslations('expenses');
@@ -67,6 +70,9 @@ export function ExpenseFormDialog({
   });
 
   const isEdit = !!expense;
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
+  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
+  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
   const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
 
@@ -84,6 +90,13 @@ export function ExpenseFormDialog({
       });
     }
   }, [open, expense, form]);
+
+  // Clear credit card when payment method changes away from credit_card.
+  useEffect(() => {
+    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
+      form.setValue('creditCardId', undefined);
+    }
+  }, [watchedPaymentMethod, form]);
 
   async function onSubmit(values: ExpenseFormValues) {
     try {
@@ -228,6 +241,36 @@ export function ExpenseFormDialog({
                 )}
               />
             </div>
+
+            {showCreditCard && (
+              <FormField
+                control={form.control}
+                name="creditCardId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t('form.creditCard.label')}</FormLabel>
+                    <Select
+                      value={field.value?.toString() ?? ''}
+                      onValueChange={(v) => field.onChange(Number(v))}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={t('form.creditCard.placeholder')} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {activeCards.map((card) => (
+                          <SelectItem key={card.id} value={card.id.toString()}>
+                            {card.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

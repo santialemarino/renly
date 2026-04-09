@@ -166,25 +166,21 @@ function RowActions({
         </Tooltip>
       </div>
 
-      {editOpen && (
-        <InvestmentFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          investment={investment}
-          groups={groups}
-          preferredCurrencies={preferredCurrencies}
-          onSuccess={onSuccess}
-        />
-      )}
+      <InvestmentFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        investment={investment}
+        groups={groups}
+        preferredCurrencies={preferredCurrencies}
+        onSuccess={onSuccess}
+      />
 
-      {archiveOpen && (
-        <InvestmentArchiveFormDialog
-          open={archiveOpen}
-          onOpenChange={setArchiveOpen}
-          investment={investment}
-          onSuccess={onSuccess}
-        />
-      )}
+      <InvestmentArchiveFormDialog
+        open={archiveOpen}
+        onOpenChange={setArchiveOpen}
+        investment={investment}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }

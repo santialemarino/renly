@@ -371,6 +371,10 @@
         "label": "Payment method",
         "placeholder": "Select a method"
       },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a card"
+      },
       "notes": {
         "label": "Notes",
         "placeholder": "Optional notes..."
@@ -402,7 +406,8 @@
     "subtitle": "Manage your credit cards and settlements.",
     "toolbar": {
       "searchPlaceholder": "Search cards...",
-      "addCard": "Add card"
+      "addCard": "Add card",
+      "showArchived": "Show archived"
     },
     "table": {
       "name": "Name",
@@ -415,7 +420,21 @@
     },
     "actions": {
       "edit": "Edit",
-      "delete": "Delete"
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "unarchiveSuccess": "Credit card unarchived.",
+      "unarchiveError": "Failed to unarchive credit card."
+    },
+    "archive": {
+      "title": "Archive credit card",
+      "confirm": "Are you sure you want to archive \"{name}\"? It will be hidden from the expense form but all linked expenses and settlements will be preserved.",
+      "cta": {
+        "label": "Archive",
+        "loading": "Archiving..."
+      },
+      "success": "Credit card archived.",
+      "error": "Failed to archive credit card."
     },
     "form": {
       "titleCreate": "Add credit card",
@@ -438,6 +457,7 @@
         "searchPlaceholder": "Search currencies...",
         "noResults": "No currencies found."
       },
+      "invalidDay": "Must be a number between 1 and 31.",
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -449,7 +469,7 @@
     },
     "delete": {
       "title": "Delete credit card",
-      "confirm": "Are you sure you want to delete \"{name}\"? All linked expenses and settlements will be unlinked.",
+      "confirm": "Are you sure you want to delete \"{name}\"? All settlements linked to this card will be permanently deleted.",
       "confirmButton": "Delete",
       "deleting": "Deleting...",
       "success": "Credit card deleted.",

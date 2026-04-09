@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import HasLinkedExpensesError, NotFoundError
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.user import User
@@ -12,7 +12,7 @@ from app.repositories import card_settlement_repository, credit_card_repository,
 # --- Credit cards ---
 
 
-# List credit cards for a user with optional search and sorting.
+# List credit cards for a user with optional search, sorting, and archive filtering.
 async def list_cards(
     session: AsyncSession,
     user: User,
@@ -20,6 +20,7 @@ async def list_cards(
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
+    active_only: bool = True,
 ) -> list[CreditCard]:
     return await credit_card_repository.list_by_user(
         session,
@@ -27,6 +28,7 @@ async def list_cards(
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
+        active_only=active_only,
     )
 
 
@@ -92,11 +94,34 @@ async def update_card(
     return card
 
 
-# Delete a credit card.
+# Delete a credit card. Rejects if the card has linked expenses (409).
 async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
+    expense_count = await expense_repository.count_by_credit_card(session, card_id)
+    if expense_count > 0:
+        raise HasLinkedExpensesError()
     await credit_card_repository.delete(session, card)
     await session.commit()
+
+
+# Archive a credit card (set is_active = false).
+async def archive_card(session: AsyncSession, card_id: int, user: User) -> CreditCard:
+    card = await get_card(session, card_id, user)
+    card.is_active = False
+    await credit_card_repository.save(session, card)
+    await session.commit()
+    await session.refresh(card)
+    return card
+
+
+# Unarchive a credit card (set is_active = true).
+async def unarchive_card(session: AsyncSession, card_id: int, user: User) -> CreditCard:
+    card = await get_card(session, card_id, user)
+    card.is_active = True
+    await credit_card_repository.save(session, card)
+    await session.commit()
+    await session.refresh(card)
+    return card
 
 
 # --- Settlements ---

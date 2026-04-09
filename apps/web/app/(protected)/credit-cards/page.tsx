@@ -16,6 +16,7 @@ interface CreditCardsPageProps {
     search?: string;
     sort_by?: string;
     sort_order?: string;
+    show_archived?: string;
   }>;
 }
 
@@ -28,6 +29,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
       search: params.search,
       sortBy: params.sort_by as 'name' | 'closing_day' | 'due_day' | 'currency' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
+      showArchived: params.show_archived === 'true',
     }),
     getSettings().catch(() => null),
   ]);
