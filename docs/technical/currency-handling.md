@@ -119,6 +119,7 @@ The Preferences page (`/preferences`) has a two-column layout. The left column h
 - **Secondary currency**: optional. Shown as the second option in the sidebar switcher.
 - **Dollar rate**: dropdown with Oficial / MEP / Blue. Controls which USD/ARS rate is used for all conversions. Default: MEP (from env var `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`).
 - **Preferred currencies**: comma-separated ISO codes. Shown in their own group at the top of the currency combobox.
+- **Shortcut currencies** (Integrations page): configurable list of currencies shown in the iOS Shortcut currency picker. Stored as `shortcut_currencies` in the settings JSONB. Defaults to primary + secondary when not set (backend fallback in `_settings_to_response`).
 
 Both primary/secondary fields use a `CurrencyCombobox` with flag emoji, ranked search, and the full ISO 4217 allowlist. The env fallback currencies (`NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY` / `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY`) are pinned at the top in a stable "Common" group. The backend stores the selected codes in `user_settings` via `PUT /settings`.
 

@@ -97,13 +97,28 @@
     transform: scale(1);
   }
   50% {
-    transform: scale(1.4);
+    transform: scale(1.5);
   }
 }
 
 /* @utility (not @layer utilities) so Tailwind generates focus-visible: and other variants for it */
 @utility animate-focus-bump {
   animation: focus-bump 0.3s ease-in-out;
+}
+
+/* Softer focus bump for inline elements like links. */
+@keyframes focus-bump-soft {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+@utility animate-focus-bump-soft {
+  animation: focus-bump-soft 0.3s ease-in-out;
 }
 
 /* Collapsible expand/collapse animations (used by Radix Collapsible) */

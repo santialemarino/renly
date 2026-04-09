@@ -11,6 +11,7 @@ SETTINGS_KEY_PERIOD_PRESETS = "period_presets"
 SETTINGS_KEY_MAX_GROUPS = "max_groups"
 SETTINGS_KEY_GROUP_WARNING_PCT = "group_warning_pct"
 SETTINGS_KEY_DOLLAR_RATE_PREFERENCE = "dollar_rate_preference"
+SETTINGS_KEY_SHORTCUT_CURRENCIES = "shortcut_currencies"
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -33,6 +34,17 @@ def _settings_to_response(settings: dict) -> dict:
     group_warning_pct = raw_warning_pct if isinstance(raw_warning_pct, int) else None
     raw_dollar_pref = settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
     dollar_rate_preference = raw_dollar_pref if isinstance(raw_dollar_pref, str) and raw_dollar_pref else None
+    raw_shortcut = settings.get(SETTINGS_KEY_SHORTCUT_CURRENCIES)
+    shortcut_currencies = raw_shortcut if isinstance(raw_shortcut, list) else None
+    # Fall back to primary + secondary when shortcut currencies are not configured.
+    if not shortcut_currencies:
+        seen: set[str] = set()
+        fallback: list[str] = []
+        for c in [primary_currency, secondary_currency]:
+            if c and c not in seen:
+                seen.add(c)
+                fallback.append(c)
+        shortcut_currencies = fallback or None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -41,6 +53,7 @@ def _settings_to_response(settings: dict) -> dict:
         "max_groups": max_groups,
         "group_warning_pct": group_warning_pct,
         "dollar_rate_preference": dollar_rate_preference,
+        "shortcut_currencies": shortcut_currencies,
     }
 
 
@@ -66,6 +79,7 @@ async def update_settings(
     max_groups: int | None = _NOT_SET,
     group_warning_pct: int | None = _NOT_SET,
     dollar_rate_preference: str | None = _NOT_SET,
+    shortcut_currencies: list[str] | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -86,6 +100,8 @@ async def update_settings(
         settings[SETTINGS_KEY_GROUP_WARNING_PCT] = group_warning_pct
     if dollar_rate_preference is not _NOT_SET:
         settings[SETTINGS_KEY_DOLLAR_RATE_PREFERENCE] = dollar_rate_preference
+    if shortcut_currencies is not _NOT_SET:
+        settings[SETTINGS_KEY_SHORTCUT_CURRENCIES] = shortcut_currencies
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()

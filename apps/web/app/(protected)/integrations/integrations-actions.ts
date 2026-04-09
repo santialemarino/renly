@@ -26,3 +26,12 @@ export async function revokeApiKey(keyId: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to revoke API key');
   revalidatePath('/integrations', 'page');
 }
+
+export async function saveShortcutCurrencies(currencies: string[] | null): Promise<void> {
+  const res = await authenticatedFetch('/settings', {
+    method: 'PUT',
+    body: { shortcut_currencies: currencies },
+  });
+  if (!res.ok) throw new Error('Failed to save shortcut currencies');
+  revalidatePath('/integrations', 'page');
+}

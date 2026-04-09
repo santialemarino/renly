@@ -170,6 +170,8 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 **Payment methods:** `cash`, `debit`, `transfer`, `credit_card`.
 
+**Source:** The `source` field indicates how the expense was created: `manual` (default, web app), `shortcut` (iOS Shortcut), `auto`, or `email_parsed`. Sent in the request body on `POST /expenses`; returned in all responses.
+
 **Currency conversion:** When `currency` is provided, the response includes `converted_amount` per entry and `display_currency` on the list response. The original `amount` and `currency` are always preserved.
 
 ---
@@ -178,16 +180,16 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 Credit cards are treated as liabilities. The balance is computed as: total expenses linked to the card minus total settlements (payments).
 
-| Method   | Path                                   | Description                                           |
-| -------- | -------------------------------------- | ----------------------------------------------------- |
-| `GET`    | `/credit-cards`                        | List credit cards with search, sorting, and balances. |
-| `POST`   | `/credit-cards`                        | Create a new credit card.                             |
-| `GET`    | `/credit-cards/{id}`                   | Get a single card with its current balance.           |
-| `PUT`    | `/credit-cards/{id}`                   | Update a card. Only provided fields are changed.      |
-| `DELETE` | `/credit-cards/{id}`                   | Delete a card.                                        |
-| `GET`    | `/credit-cards/{id}/settlements`       | List settlements (payments) for a card.               |
-| `POST`   | `/credit-cards/{id}/settlements`       | Record a new settlement.                              |
-| `DELETE` | `/credit-cards/{id}/settlements/{sid}` | Delete a settlement.                                  |
+| Method   | Path                                   | Description                                                                                   |
+| -------- | -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `GET`    | `/credit-cards`                        | List credit cards with search, sorting, and balances. **Supports both JWT and API key auth.** |
+| `POST`   | `/credit-cards`                        | Create a new credit card.                                                                     |
+| `GET`    | `/credit-cards/{id}`                   | Get a single card with its current balance.                                                   |
+| `PUT`    | `/credit-cards/{id}`                   | Update a card. Only provided fields are changed.                                              |
+| `DELETE` | `/credit-cards/{id}`                   | Delete a card.                                                                                |
+| `GET`    | `/credit-cards/{id}/settlements`       | List settlements (payments) for a card.                                                       |
+| `POST`   | `/credit-cards/{id}/settlements`       | Record a new settlement.                                                                      |
+| `DELETE` | `/credit-cards/{id}/settlements/{sid}` | Delete a settlement.                                                                          |
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `closing_day`, `due_day`, `currency`), `sort_order` (`asc`/`desc`).
 
@@ -238,7 +240,7 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 | Method | Path        | Description                                                          |
 | ------ | ----------- | -------------------------------------------------------------------- |
-| `GET`  | `/settings` | Get current user's settings.                                         |
+| `GET`  | `/settings` | Get current user's settings. **Supports both JWT and API key auth.** |
 | `PUT`  | `/settings` | Update settings. Partial update -- only provided fields are changed. |
 
 **Settings fields:**
@@ -252,6 +254,7 @@ User preferences stored as key-value pairs. All fields are optional on update --
 | `max_groups`             | int      | Maximum number of groups the user can create.                           |
 | `group_warning_pct`      | number   | Percentage threshold that triggers a group allocation warning.          |
 | `dollar_rate_preference` | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`. |
+| `shortcut_currencies`    | string[] | Currencies shown in the iOS Shortcut currency picker.                   |
 
 ---
 
