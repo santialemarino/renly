@@ -33,9 +33,9 @@ import { cn } from '@repo/ui/lib';
 import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
 import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
+import { SettlementDeleteDialog } from '@/app/(protected)/credit-cards/_components/settlement-delete-dialog';
 import { SettlementFormDialog } from '@/app/(protected)/credit-cards/_components/settlement-form-dialog';
 import {
-  deleteSettlement,
   fetchSettlements,
   unarchiveCreditCard,
   type SettlementResult,
@@ -98,6 +98,7 @@ function SettlementsSection({
   const [settlements, setSettlements] = useState<SettlementResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [deleteSettlementState, setDeleteSettlementState] = useState<SettlementResult | null>(null);
 
   const loadSettlements = useCallback(async () => {
     setLoading(true);
@@ -124,17 +125,6 @@ function SettlementsSection({
       loadSettlements();
     }
   }, [expanded, fetched, loadSettlements]);
-
-  async function handleDeleteSettlement(settlementId: number) {
-    try {
-      await deleteSettlement(cardId, settlementId);
-      toast.success(t('settlements.deleteSuccess'));
-      await loadSettlements();
-      router.refresh();
-    } catch {
-      toast.error(t('settlements.deleteError'));
-    }
-  }
 
   return (
     <AnimatePresence>
@@ -216,7 +206,7 @@ function SettlementsSection({
                                       variant="ghost"
                                       size="icon"
                                       className="size-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => handleDeleteSettlement(s.id)}
+                                      onClick={() => setDeleteSettlementState(s)}
                                       aria-label="Delete settlement"
                                     >
                                       <Trash2 className="size-3.5" />
@@ -238,6 +228,19 @@ function SettlementsSection({
                   onOpenChange={setAddOpen}
                   cardId={cardId}
                   cardCurrency={cardCurrency}
+                  onSuccess={() => {
+                    loadSettlements();
+                    router.refresh();
+                  }}
+                />
+
+                <SettlementDeleteDialog
+                  open={!!deleteSettlementState}
+                  onOpenChange={(open) => {
+                    if (!open) setDeleteSettlementState(null);
+                  }}
+                  cardId={cardId}
+                  settlement={deleteSettlementState}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
