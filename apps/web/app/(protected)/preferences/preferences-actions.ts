@@ -54,5 +54,6 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     maxGroups: raw.max_groups ?? null,
     groupWarningPct: raw.group_warning_pct ?? null,
     dollarRatePreference: raw.dollar_rate_preference ?? null,
+    shortcutCurrencies: raw.shortcut_currencies ?? null,
   };
 }

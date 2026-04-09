@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
+from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.schemas.card_settlement import CardSettlementCreate, CardSettlementResponse
@@ -25,7 +26,7 @@ def _to_response(card: object, balance: Decimal) -> CreditCardResponse:
 # List credit cards for the current user with optional search, sorting, and balances.
 @router.get("", response_model=list[CreditCardResponse])
 async def list_cards(
-    current_user: CurrentUser,
+    current_user: JwtOrApiKeyUser,
     session: SessionDep,
     search: str | None = Query(default=None, description="Filter cards by name (case-insensitive)."),
     sort_by: str | None = Query(default=None, description="Column to sort by (name, closing_day, due_day, currency)."),

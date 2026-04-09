@@ -12,6 +12,7 @@ interface SettingsRaw {
   max_groups: number | null;
   group_warning_pct: number | null;
   dollar_rate_preference: string | null;
+  shortcut_currencies: string[] | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -24,6 +25,7 @@ export interface SettingsData {
   maxGroups: number | null;
   groupWarningPct: number | null;
   dollarRatePreference: string | null;
+  shortcutCurrencies: string[] | null;
 }
 
 // --- Mappers ---
@@ -37,6 +39,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     maxGroups: raw.max_groups,
     groupWarningPct: raw.group_warning_pct,
     dollarRatePreference: raw.dollar_rate_preference,
+    shortcutCurrencies: raw.shortcut_currencies,
   };
 }
 

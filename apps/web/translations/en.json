@@ -888,6 +888,30 @@
         "creating": "Creating...",
         "done": "Done"
       }
+    },
+    "shortcut": {
+      "title": "iOS Shortcut",
+      "description": "Log expenses from your phone with a single tap.",
+      "downloadLink": "Download Shortcut",
+      "downloadPending": "Shortcut download link will be available soon. Use the setup instructions below to build it manually.",
+      "saveSuccess": "Shortcut currencies saved.",
+      "saveError": "Failed to save shortcut currencies.",
+      "currencies": {
+        "label": "Shortcut currencies",
+        "hint": "Currencies shown in the shortcut when logging an expense.",
+        "placeholder": "Enter ISO codes (e.g. ARS, USD)",
+        "save": "Save",
+        "saving": "Saving...",
+        "format": "Comma-separated ISO codes. Leave empty to disable.",
+        "formatWithDefaults": "Comma-separated ISO codes. Defaults to {defaults} if left empty."
+      },
+      "instructions": {
+        "title": "How to install",
+        "step1": "Tap the download link above to get the shortcut.",
+        "step2": "When prompted, tap \"Add Shortcut\" to install it.",
+        "step3": "Open the shortcut, enter your API URL and API key when prompted (first run only).",
+        "step4": "Run the shortcut from your home screen, widget, or Siri."
+      }
     }
   }
 }

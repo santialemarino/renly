@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.schemas.settings import SettingsResponse, SettingsUpdate
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 # Returns current user's settings (currencies, period presets, limits).
 @router.get("", response_model=SettingsResponse)
 async def get_settings(
-    current_user: CurrentUser,
+    current_user: JwtOrApiKeyUser,
     session: SessionDep,
 ) -> SettingsResponse:
     data = await settings_service.get_settings(session, current_user)
@@ -41,5 +42,7 @@ async def update_settings(
         kwargs["group_warning_pct"] = payload["group_warning_pct"]
     if "dollar_rate_preference" in payload:
         kwargs["dollar_rate_preference"] = payload["dollar_rate_preference"]
+    if "shortcut_currencies" in payload:
+        kwargs["shortcut_currencies"] = payload["shortcut_currencies"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

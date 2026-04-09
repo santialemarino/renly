@@ -104,6 +104,7 @@ async def create_expense(
         notes=body.notes,
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
+        source=body.source,
     )
     return ExpenseResponse.model_validate(entry)
 

@@ -35,6 +35,10 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Which USD/ARS rate to use: oficial, mep, or blue. Default: mep.",
     )
+    shortcut_currencies: list[str] | None = Field(
+        default=None,
+        description="Currencies shown in the iOS Shortcut currency picker.",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -66,4 +70,8 @@ class SettingsUpdate(RequestBase):
     dollar_rate_preference: str | None = Field(
         default=None,
         description="Which USD/ARS rate to use: oficial, mep, or blue.",
+    )
+    shortcut_currencies: list[str] | None = Field(
+        default=None,
+        description="Currencies shown in the iOS Shortcut currency picker.",
     )

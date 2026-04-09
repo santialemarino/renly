@@ -86,7 +86,7 @@ Income categories are fixed: `salary`, `freelance`, `bonus`, `investment_returns
 
 ### Expense Entries
 
-An expense entry records money going out. Each entry has a date, amount, currency, optional category, payment method, and notes.
+An expense entry records money going out. Each entry has a date, amount, currency, optional category, payment method, notes, and a source indicating how it was created (`manual`, `shortcut`, `auto`, or `email_parsed`).
 
 Expense categories are fixed: `food`, `dining`, `transport`, `rent`, `utilities`, `health`, `entertainment`, `sports`, `subscriptions`, `clothing`, `education`, `personal_care`, `home_maintenance`, `gifts`, `travel`, `taxes`, `insurance`, `kids`, `pets`, `other`.
 
@@ -113,6 +113,7 @@ Each user has personal preferences that control how the app behaves:
 - Which currencies to display (primary and secondary)
 - Which USD/ARS rate to use for conversions (oficial, MEP, or blue)
 - Dashboard period presets and display options
+- Which currencies to show in the iOS Shortcut currency picker (defaults to primary + secondary)
 
 ---
 

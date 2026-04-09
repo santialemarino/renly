@@ -19,6 +19,7 @@ class ExpenseCreate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.")
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+    source: str = Field(default="manual", description="Entry origin (manual, shortcut, auto, email_parsed).", max_length=20)
 
 
 # Body for PUT /expenses/{id}. Partial update.
