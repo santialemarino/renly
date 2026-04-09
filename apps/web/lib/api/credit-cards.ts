@@ -12,6 +12,7 @@ interface CreditCardRaw {
   currency: string;
   is_active: boolean;
   balance: string;
+  has_expenses: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +38,7 @@ export interface CreditCard {
   currency: string;
   isActive: boolean;
   balance: string;
+  hasExpenses: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +65,7 @@ function mapCreditCard(raw: CreditCardRaw): CreditCard {
     currency: raw.currency,
     isActive: raw.is_active,
     balance: raw.balance,
+    hasExpenses: raw.has_expenses,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -90,6 +93,7 @@ export interface GetCreditCardsParams {
   search?: string;
   sortBy?: CreditCardSortField;
   sortOrder?: SortOrder;
+  showArchived?: boolean;
 }
 
 export async function getCreditCards(params: GetCreditCardsParams = {}): Promise<CreditCard[]> {
@@ -97,6 +101,7 @@ export async function getCreditCards(params: GetCreditCardsParams = {}): Promise
   if (params.search) qs.set('search', params.search);
   if (params.sortBy) qs.set('sort_by', params.sortBy);
   if (params.sortOrder) qs.set('sort_order', params.sortOrder);
+  if (params.showArchived) qs.set('show_archived', 'true');
 
   const endpoint = qs.toString() ? `/credit-cards?${qs.toString()}` : '/credit-cards';
   const res = await authenticatedFetch(endpoint, { method: 'GET' });

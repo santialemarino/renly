@@ -12,42 +12,42 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@repo/ui/components';
-import { deleteCreditCard } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { archiveCreditCard } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
-interface CreditCardDeleteDialogProps {
+interface CreditCardArchiveDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   card: CreditCard | null;
   onSuccess: () => void;
 }
 
-export function CreditCardDeleteDialog({
+export function CreditCardArchiveDialog({
   open,
   onOpenChange,
   card,
   onSuccess,
-}: CreditCardDeleteDialogProps) {
+}: CreditCardArchiveDialogProps) {
   const t = useTranslations('creditCards');
-  const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   // Preserve card data during close animation so the name doesn't disappear.
   const lastCard = useRef(card);
   if (card) lastCard.current = card;
   const displayCard = card ?? lastCard.current;
 
-  async function handleDelete() {
+  async function handleArchive() {
     if (!card) return;
-    setDeleting(true);
+    setArchiving(true);
     try {
-      await deleteCreditCard(card.id);
-      toast.success(t('delete.success'));
+      await archiveCreditCard(card.id);
+      toast.success(t('archive.success'));
       onSuccess();
       onOpenChange(false);
     } catch {
-      toast.error(t('delete.error'));
+      toast.error(t('archive.error'));
     } finally {
-      setDeleting(false);
+      setArchiving(false);
     }
   }
 
@@ -55,10 +55,10 @@ export function CreditCardDeleteDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
+          <DialogTitle>{t('archive.title')}</DialogTitle>
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', { name: displayCard?.name ?? '' })}
+          {t('archive.confirm', { name: displayCard?.name ?? '' })}
         </p>
         <DialogFooter>
           <Button
@@ -71,10 +71,10 @@ export function CreditCardDeleteDialog({
           <Button
             variant="destructive"
             className="whitespace-nowrap"
-            onClick={handleDelete}
-            disabled={deleting}
+            onClick={handleArchive}
+            disabled={archiving}
           >
-            {deleting ? t('delete.deleting') : t('delete.confirmButton')}
+            {archiving ? t('archive.cta.loading') : t('archive.cta.label')}
           </Button>
         </DialogFooter>
       </DialogContent>

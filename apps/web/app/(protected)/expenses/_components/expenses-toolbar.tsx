@@ -11,10 +11,17 @@ import { ExpenseCategorySelect } from '@/app/(protected)/expenses/_components/ex
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { ROUTES } from '@/config/routes';
+import type { CreditCard } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
-export function ExpensesToolbar({ preferredCurrencies }: { preferredCurrencies?: string[] }) {
+export function ExpensesToolbar({
+  preferredCurrencies,
+  creditCards,
+}: {
+  preferredCurrencies?: string[];
+  creditCards?: CreditCard[];
+}) {
   const t = useTranslations('expenses');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -103,6 +110,7 @@ export function ExpensesToolbar({ preferredCurrencies }: { preferredCurrencies?:
           open={createOpen}
           onOpenChange={setCreateOpen}
           preferredCurrencies={preferredCurrencies}
+          creditCards={creditCards}
           onSuccess={() => router.refresh()}
         />
       </div>

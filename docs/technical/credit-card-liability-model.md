@@ -96,6 +96,12 @@ Settlements **only** surface in:
 - Payments Calendar (Phase 3) -- as due dates with rolled-up totals.
 - Cash flow analysis (if added) -- as bank outflows clearly labelled as card payments.
 
+## Archive and delete
+
+Cards can be **archived** (set `is_active = false`) to hide them from the expense form's card selector while preserving all linked expenses, settlements, and balance history. Archived cards appear dimmed in the credit cards table and can be unarchived at any time.
+
+Cards can only be **deleted** when they have no linked expenses. Attempting to delete a card with expenses returns 409 Conflict (`HasLinkedExpensesError`). Settlements cascade on delete. The `has_expenses` field on the response tells the frontend whether the delete button should be available.
+
 ## Where this is implemented
 
 - **Backend:** `credit_card_service.get_card_balance()` and `get_card_balances()` compute balance from two batch queries. `_to_response()` in the credit cards router builds the response with the computed balance.

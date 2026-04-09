@@ -28,6 +28,7 @@ import { cn } from '@repo/ui/lib';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
 import { ROUTES } from '@/config/routes';
+import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
 import { formatAmount } from '@/lib/utils/currency';
 
@@ -70,10 +71,12 @@ function SortIcon({
 function RowActions({
   expense,
   preferredCurrencies,
+  creditCards,
   onSuccess,
 }: {
   expense: Expense;
   preferredCurrencies?: string[];
+  creditCards?: CreditCard[];
   onSuccess: () => void;
 }) {
   const t = useTranslations('expenses');
@@ -119,24 +122,21 @@ function RowActions({
         </Tooltip>
       </div>
 
-      {editOpen && (
-        <ExpenseFormDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          expense={expense}
-          preferredCurrencies={preferredCurrencies}
-          onSuccess={onSuccess}
-        />
-      )}
+      <ExpenseFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        expense={expense}
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+        onSuccess={onSuccess}
+      />
 
-      {deleteOpen && (
-        <ExpenseDeleteDialog
-          open={deleteOpen}
-          onOpenChange={setDeleteOpen}
-          expense={expense}
-          onSuccess={onSuccess}
-        />
-      )}
+      <ExpenseDeleteDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        expense={expense}
+        onSuccess={onSuccess}
+      />
     </>
   );
 }
@@ -144,9 +144,11 @@ function RowActions({
 export function ExpensesDataTable({
   data,
   preferredCurrencies,
+  creditCards,
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
+  creditCards?: CreditCard[];
 }) {
   const t = useTranslations('expenses');
   const router = useRouter();
@@ -264,6 +266,7 @@ export function ExpensesDataTable({
                     <RowActions
                       expense={expense}
                       preferredCurrencies={preferredCurrencies}
+                      creditCards={creditCards}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>

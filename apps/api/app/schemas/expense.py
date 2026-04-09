@@ -13,7 +13,7 @@ from app.schemas.base import RequestBase
 # Body for POST /expenses.
 class ExpenseCreate(RequestBase):
     date: date_type = Field(description="Expense date.")
-    amount: Decimal = Field(description="Expense amount.", max_digits=18, decimal_places=2)
+    amount: Decimal = Field(description="Expense amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
     notes: str | None = Field(default=None, description="Optional notes.")
@@ -25,7 +25,7 @@ class ExpenseCreate(RequestBase):
 # Body for PUT /expenses/{id}. Partial update.
 class ExpenseUpdate(RequestBase):
     date: date_type | None = Field(default=None, description="Expense date.")
-    amount: Decimal | None = Field(default=None, description="Expense amount.", max_digits=18, decimal_places=2)
+    amount: Decimal | None = Field(default=None, description="Expense amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
     notes: str | None = Field(default=None, description="Optional notes.")

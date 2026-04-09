@@ -46,8 +46,8 @@ export function CreditCardFormDialog({
   const tCommon = useTranslations('common');
 
   const schema = useMemo(
-    () => buildCreditCardFormSchema(tCommon('form.errors.required')),
-    [tCommon],
+    () => buildCreditCardFormSchema(tCommon('form.errors.required'), t('form.invalidDay')),
+    [t, tCommon],
   );
 
   const form = useForm<CreditCardFormValues>({
@@ -128,9 +128,7 @@ export function CreditCardFormDialog({
                     <FormControl>
                       <Input
                         {...field}
-                        type="number"
-                        min={1}
-                        max={31}
+                        inputMode="numeric"
                         placeholder={t('form.closingDay.placeholder')}
                       />
                     </FormControl>
@@ -148,9 +146,7 @@ export function CreditCardFormDialog({
                     <FormControl>
                       <Input
                         {...field}
-                        type="number"
-                        min={1}
-                        max={31}
+                        inputMode="numeric"
                         placeholder={t('form.dueDay.placeholder')}
                       />
                     </FormControl>

@@ -371,6 +371,10 @@
         "label": "Método de pago",
         "placeholder": "Seleccioná un método"
       },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Seleccioná una tarjeta"
+      },
       "notes": {
         "label": "Notas",
         "placeholder": "Notas opcionales..."
@@ -402,7 +406,8 @@
     "subtitle": "Gestioná tus tarjetas de crédito y pagos.",
     "toolbar": {
       "searchPlaceholder": "Buscar tarjetas...",
-      "addCard": "Agregar tarjeta"
+      "addCard": "Agregar tarjeta",
+      "showArchived": "Mostrar archivadas"
     },
     "table": {
       "name": "Nombre",
@@ -415,7 +420,21 @@
     },
     "actions": {
       "edit": "Editar",
-      "delete": "Eliminar"
+      "delete": "Eliminar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "unarchiveSuccess": "Tarjeta de crédito desarchivada.",
+      "unarchiveError": "No se pudo desarchivar la tarjeta de crédito."
+    },
+    "archive": {
+      "title": "Archivar tarjeta de crédito",
+      "confirm": "¿Estás seguro de que querés archivar \"{name}\"? Se ocultará del formulario de gastos pero se conservarán todos los gastos y liquidaciones vinculados.",
+      "cta": {
+        "label": "Archivar",
+        "loading": "Archivando..."
+      },
+      "success": "Tarjeta de crédito archivada.",
+      "error": "No se pudo archivar la tarjeta de crédito."
     },
     "form": {
       "titleCreate": "Agregar tarjeta de crédito",
@@ -438,6 +457,7 @@
         "searchPlaceholder": "Buscar monedas...",
         "noResults": "No se encontraron monedas."
       },
+      "invalidDay": "Debe ser un numero entre 1 y 31.",
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -449,7 +469,7 @@
     },
     "delete": {
       "title": "Eliminar tarjeta de crédito",
-      "confirm": "¿Seguro querés eliminar \"{name}\"? Todos los gastos y pagos vinculados serán desvinculados.",
+      "confirm": "¿Seguro querés eliminar \"{name}\"? Todas las liquidaciones vinculadas a esta tarjeta serán eliminadas permanentemente.",
       "confirmButton": "Eliminar",
       "deleting": "Eliminando...",
       "success": "Tarjeta eliminada.",
@@ -831,7 +851,6 @@
       "maxGroups": {
         "label": "Máximo de grupos",
         "hint": "Cantidad máxima de grupos de inversiones permitidos.",
-        "placeholder": "Ingresá el máximo de grupos",
         "default": "Por defecto {value} si se deja vacío."
       },
       "groupWarningPct": {

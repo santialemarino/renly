@@ -16,6 +16,13 @@ class ExchangeRateUnavailableError(Exception):
         super().__init__(self.message)
 
 
+# Operation conflicts with current state (e.g. deleting a card with linked expenses). Mapped to 409 by the API.
+class HasLinkedExpensesError(Exception):
+    def __init__(self) -> None:
+        self.message = "Cannot delete a credit card that has linked expenses. Archive it instead."
+        super().__init__(self.message)
+
+
 # Resource not found or not owned by the current user. Mapped to 404 by the API.
 class NotFoundError(Exception):
     def __init__(self, message: str = "Not found") -> None:

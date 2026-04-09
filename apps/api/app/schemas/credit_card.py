@@ -34,6 +34,7 @@ class CreditCardResponse(BaseModel):
     currency: str = Field(description="Card currency (ISO 4217).")
     is_active: bool = Field(description="Whether the card is active.")
     balance: Decimal = Field(description="Current card balance (expenses - settlements).", max_digits=18, decimal_places=2)
+    has_expenses: bool = Field(description="Whether the card has linked expenses.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

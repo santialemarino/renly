@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
+  Archive,
+  ArchiveRestore,
   ArrowDown,
   ArrowUp,
   ChevronRight,
@@ -28,12 +30,14 @@ import {
   TooltipTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
 import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
 import { SettlementFormDialog } from '@/app/(protected)/credit-cards/_components/settlement-form-dialog';
 import {
   deleteSettlement,
   fetchSettlements,
+  unarchiveCreditCard,
   type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
 import { ROUTES } from '@/config/routes';
@@ -112,11 +116,14 @@ function SettlementsSection({
     }
   }, [cardId]);
 
+  // Fetch on first expand. Re-expand shows cached data instantly.
+  const [fetched, setFetched] = useState(false);
   useEffect(() => {
-    if (expanded) {
+    if (expanded && !fetched) {
+      setFetched(true);
       loadSettlements();
     }
-  }, [expanded, loadSettlements]);
+  }, [expanded, fetched, loadSettlements]);
 
   async function handleDeleteSettlement(settlementId: number) {
     try {
@@ -258,7 +265,22 @@ export function CreditCardsTable({
   const [isPending, startTransition] = useTransition();
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editCard, setEditCard] = useState<CreditCard | null>(null);
+  const [archiveCard, setArchiveCard] = useState<CreditCard | null>(null);
   const [deleteCardState, setDeleteCardState] = useState<CreditCard | null>(null);
+  const [unarchiving, setUnarchiving] = useState<number | null>(null);
+
+  async function handleUnarchive(card: CreditCard) {
+    setUnarchiving(card.id);
+    try {
+      await unarchiveCreditCard(card.id);
+      toast.success(t('actions.unarchiveSuccess'));
+      router.refresh();
+    } catch {
+      toast.error(t('actions.unarchiveError'));
+    } finally {
+      setUnarchiving(null);
+    }
+  }
 
   const sortBy = (searchParams.get('sort_by') as CreditCardSortField | null) ?? null;
   const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
@@ -370,36 +392,73 @@ export function CreditCardsTable({
                         {formatAmount(card.balance)}
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setEditCard(card)}
-                                aria-label="Edit"
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteCardState(card)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
-                        </div>
+                        {!card.isActive ? (
+                          <div className="flex items-center justify-center">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                  onClick={() => handleUnarchive(card)}
+                                  disabled={unarchiving === card.id}
+                                  aria-label="Unarchive"
+                                >
+                                  <ArchiveRestore className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('actions.unarchive')}</TooltipContent>
+                            </Tooltip>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-x-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8"
+                                  onClick={() => setEditCard(card)}
+                                  aria-label="Edit"
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{t('actions.edit')}</TooltipContent>
+                            </Tooltip>
+                            {card.hasExpenses ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 text-muted-foreground hover:text-foreground"
+                                    onClick={() => setArchiveCard(card)}
+                                    aria-label="Archive"
+                                  >
+                                    <Archive className="size-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('actions.archive')}</TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 text-muted-foreground hover:text-destructive"
+                                    onClick={() => setDeleteCardState(card)}
+                                    aria-label="Delete"
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{t('actions.delete')}</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                     <SettlementsSection
@@ -416,30 +475,33 @@ export function CreditCardsTable({
         </Table>
       </div>
 
-      {editCard && (
-        <CreditCardFormDialog
-          open={!!editCard}
-          onOpenChange={(open) => !open && setEditCard(null)}
-          card={editCard}
-          preferredCurrencies={preferredCurrencies}
-          onSuccess={() => {
-            setEditCard(null);
-            router.refresh();
-          }}
-        />
-      )}
+      <CreditCardFormDialog
+        open={!!editCard}
+        onOpenChange={(open) => {
+          if (!open) setEditCard(null);
+        }}
+        card={editCard ?? undefined}
+        preferredCurrencies={preferredCurrencies}
+        onSuccess={() => router.refresh()}
+      />
 
-      {deleteCardState && (
-        <CreditCardDeleteDialog
-          open={!!deleteCardState}
-          onOpenChange={(open) => !open && setDeleteCardState(null)}
-          card={deleteCardState}
-          onSuccess={() => {
-            setDeleteCardState(null);
-            router.refresh();
-          }}
-        />
-      )}
+      <CreditCardArchiveDialog
+        open={!!archiveCard}
+        onOpenChange={(open) => {
+          if (!open) setArchiveCard(null);
+        }}
+        card={archiveCard}
+        onSuccess={() => router.refresh()}
+      />
+
+      <CreditCardDeleteDialog
+        open={!!deleteCardState}
+        onOpenChange={(open) => {
+          if (!open) setDeleteCardState(null);
+        }}
+        card={deleteCardState}
+        onSuccess={() => router.refresh()}
+      />
     </div>
   );
 }
