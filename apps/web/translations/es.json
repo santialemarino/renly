@@ -53,6 +53,12 @@
       "pinnedGroupLabel": "Comunes",
       "preferredGroupLabel": "Preferidas",
       "otherGroupLabel": "Otras monedas"
+    },
+    "typeToConfirm": {
+      "label": "Escribí \"{name}\" para confirmar",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "loading": "Procesando..."
     }
   },
   "login": {
@@ -486,6 +492,12 @@
       "deleteSuccess": "Pago eliminado.",
       "deleteError": "No se pudo eliminar el pago.",
       "deleteTooltip": "Eliminar pago",
+      "delete": {
+        "title": "Eliminar pago",
+        "confirm": "¿Seguro querés eliminar el pago de {amount} {currency}?",
+        "confirmButton": "Eliminar",
+        "deleting": "Eliminando..."
+      },
       "table": {
         "date": "Fecha",
         "amount": "Monto",
@@ -896,6 +908,12 @@
       "createError": "No se pudo crear la clave API.",
       "revokeSuccess": "Clave API revocada.",
       "revokeError": "No se pudo revocar la clave API.",
+      "revoke": {
+        "title": "Revocar clave API",
+        "description": "¿Seguro querés revocar \"{name}\"? Las integraciones que usen esta clave dejarán de funcionar inmediatamente.",
+        "confirm": "Revocar",
+        "revoking": "Revocando..."
+      },
       "dialog": {
         "titleCreate": "Crear Clave API",
         "descriptionCreate": "Dale un nombre a tu clave para identificar dónde se usa.",

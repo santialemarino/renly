@@ -4,15 +4,8 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components';
 import { deleteCreditCard } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface CreditCardDeleteDialogProps {
@@ -52,32 +45,16 @@ export function CreditCardDeleteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', { name: displayCard?.name ?? '' })}
-        </p>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="whitespace-nowrap"
-            onClick={() => onOpenChange(false)}
-          >
-            {t('form.cancel')}
-          </Button>
-          <Button
-            variant="destructive"
-            className="whitespace-nowrap"
-            onClick={handleDelete}
-            disabled={deleting}
-          >
-            {deleting ? t('delete.deleting') : t('delete.confirmButton')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TypeToConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('delete.title')}
+      description={t('delete.confirm', { name: displayCard?.name ?? '' })}
+      confirmName={displayCard?.name ?? ''}
+      onConfirm={handleDelete}
+      loading={deleting}
+      loadingLabel={t('delete.deleting')}
+      confirmLabel={t('delete.confirmButton')}
+    />
   );
 }

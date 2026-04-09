@@ -4,15 +4,8 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components';
 import { deleteGroup } from '@/app/(protected)/groups/groups-actions';
+import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { InvestmentGroup } from '@/lib/api/groups';
 
 interface GroupDeleteFormDialogProps {
@@ -46,32 +39,16 @@ export function GroupDeleteFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.description', { name: group.name, count: group.investmentIds.length })}
-        </p>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="whitespace-nowrap"
-            onClick={() => onOpenChange(false)}
-          >
-            {t('delete.cancel')}
-          </Button>
-          <Button
-            onClick={handleDelete}
-            disabled={deleting}
-            variant="destructive"
-            className="whitespace-nowrap"
-          >
-            {deleting ? t('delete.deleting') : t('delete.confirm')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <TypeToConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('delete.title')}
+      description={t('delete.description', { name: group.name, count: group.investmentIds.length })}
+      confirmName={group.name}
+      onConfirm={handleDelete}
+      loading={deleting}
+      loadingLabel={t('delete.deleting')}
+      confirmLabel={t('delete.confirm')}
+    />
   );
 }

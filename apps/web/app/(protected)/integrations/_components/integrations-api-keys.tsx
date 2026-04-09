@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -17,9 +17,9 @@ import {
   Input,
   Label,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
 import { CopyButton } from '@/components/copy-button';
+import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
 
 interface IntegrationsApiKeysProps {
@@ -34,7 +34,13 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
   const [newKeyName, setNewKeyName] = useState('');
   const [creating, setCreating] = useState(false);
   const [rawKey, setRawKey] = useState<string | null>(null);
-  const [revokingId, setRevokingId] = useState<number | null>(null);
+  const [revokeKey, setRevokeKey] = useState<ApiKey | null>(null);
+  const [revoking, setRevoking] = useState(false);
+
+  // Preserve revoke key data during close animation.
+  const lastRevokeKey = useRef(revokeKey);
+  if (revokeKey) lastRevokeKey.current = revokeKey;
+  const displayRevokeKey = revokeKey ?? lastRevokeKey.current;
 
   async function handleCreate() {
     setCreating(true);
@@ -61,23 +67,28 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
   }
 
   function handleDialogClose(open: boolean) {
-    if (!open) {
-      setRawKey(null);
-      setNewKeyName('');
-    }
     setCreateOpen(open);
+    if (!open) {
+      // Delay state reset so dialog content stays visible during close animation.
+      setTimeout(() => {
+        setRawKey(null);
+        setNewKeyName('');
+      }, 200);
+    }
   }
 
-  async function handleRevoke(keyId: number) {
-    setRevokingId(keyId);
+  async function handleRevoke() {
+    if (!revokeKey) return;
+    setRevoking(true);
     try {
-      await revokeApiKey(keyId);
-      setKeys((prev) => prev.filter((k) => k.id !== keyId));
+      await revokeApiKey(revokeKey.id);
+      setKeys((prev) => prev.filter((k) => k.id !== revokeKey.id));
       toast.success(t('apiKeys.revokeSuccess'));
+      setRevokeKey(null);
     } catch {
       toast.error(t('apiKeys.revokeError'));
     } finally {
-      setRevokingId(null);
+      setRevoking(false);
     }
   }
 
@@ -176,9 +187,8 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                disabled={revokingId === key.id}
-                onClick={() => handleRevoke(key.id)}
-                className={cn('shrink-0', revokingId !== key.id && 'hover:text-red-500')}
+                onClick={() => setRevokeKey(key)}
+                className="shrink-0 text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="size-4" />
               </Button>
@@ -190,6 +200,22 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
           <p className="text-paragraph-sm text-muted-foreground">{t('apiKeys.empty')}</p>
         </div>
       )}
+
+      <TypeToConfirmDialog
+        open={!!revokeKey}
+        onOpenChange={(open) => {
+          if (!open) setRevokeKey(null);
+        }}
+        title={t('apiKeys.revoke.title')}
+        description={t('apiKeys.revoke.description', {
+          name: displayRevokeKey?.name || t('apiKeys.unnamed'),
+        })}
+        confirmName={displayRevokeKey?.name || t('apiKeys.unnamed')}
+        onConfirm={handleRevoke}
+        loading={revoking}
+        loadingLabel={t('apiKeys.revoke.revoking')}
+        confirmLabel={t('apiKeys.revoke.confirm')}
+      />
     </div>
   );
 }
