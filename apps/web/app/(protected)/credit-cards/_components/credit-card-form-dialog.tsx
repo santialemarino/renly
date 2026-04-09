@@ -47,7 +47,7 @@ export function CreditCardFormDialog({
 
   const schema = useMemo(
     () => buildCreditCardFormSchema(tCommon('form.errors.required'), t('form.invalidDay')),
-    [tCommon],
+    [t, tCommon],
   );
 
   const form = useForm<CreditCardFormValues>({
