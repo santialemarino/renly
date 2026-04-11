@@ -11,6 +11,7 @@ from app.routers import (
     asset_prices,
     auth,
     credit_cards,
+    dashboard,
     exchange_rates,
     expenses,
     finance_metrics,
@@ -50,6 +51,7 @@ app.include_router(api_keys.router)
 app.include_router(asset_prices.router)
 app.include_router(auth.router)
 app.include_router(credit_cards.router)
+app.include_router(dashboard.router)
 app.include_router(exchange_rates.router)
 app.include_router(expenses.router)
 app.include_router(finance_metrics.router)

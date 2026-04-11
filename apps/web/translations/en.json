@@ -148,6 +148,7 @@
   "sidebar": {
     "brand": "Renly",
     "nav": {
+      "dashboard": "Dashboard",
       "financeDashboard": "Dashboard",
       "income": "Income",
       "expenses": "Expenses",
@@ -173,6 +174,52 @@
       "label": "Log out",
       "loading": "Logging out..."
     }
+  },
+  "dashboard": {
+    "metadata": {
+      "title": "Dashboard",
+      "description": "Your complete financial overview."
+    },
+    "title": "Dashboard",
+    "subtitle": "Your finances and investments at a glance.",
+    "cards": {
+      "netWorth": "Net Worth",
+      "investmentValue": "Investment Value",
+      "netCashFlow": "Net Cash Flow",
+      "creditCardBalance": "Card Balance",
+      "vsLastMonth": "vs last month",
+      "netWorthHint": "Excludes cash accounts (coming soon)"
+    },
+    "period": {
+      "ytd": "YTD",
+      "all": "All",
+      "custom": "Custom",
+      "cancel": "Cancel",
+      "apply": "Apply"
+    },
+    "chart": {
+      "title": "Net Worth Evolution",
+      "tooltipValue": "Value"
+    },
+    "composition": {
+      "title": "Composition",
+      "liabilities": "Liabilities"
+    },
+    "health": {
+      "savingsRate": "Savings Rate",
+      "savingsRateHint": "Income saved after expenses",
+      "incomeExpenseRatio": "Income / Expense",
+      "incomeExpenseRatioHint": "How much you earn per unit spent"
+    },
+    "links": {
+      "finances": "Finance Dashboard",
+      "financesHint": "Income, expenses, and cash flow details",
+      "investments": "Investor Dashboard",
+      "investmentsHint": "Portfolio performance and allocation"
+    },
+    "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
+    "loadError": "Unable to load dashboard data. Please try again later.",
+    "noData": "No data available yet. Add financial entries or investment snapshots to see your overview."
   },
   "financeDashboard": {
     "metadata": {

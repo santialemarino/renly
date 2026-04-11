@@ -19,7 +19,7 @@ const DATE_FORMAT = 'MMM d, yyyy';
 
 interface DashboardPeriodPickerProps {
   routePath: string;
-  translationNamespace: 'financeDashboard' | 'investorDashboard';
+  translationNamespace: 'dashboard' | 'financeDashboard' | 'investorDashboard';
   presets?: PeriodPreset[];
   className?: string;
 }

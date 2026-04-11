@@ -62,6 +62,30 @@ async def sum_by_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> 
     return {row[0]: float(row[1]) for row in result.all()}
 
 
+# Monthly settlement totals for given credit cards, grouped by card_id, year, and month.
+# Returns a list of (card_id, year, month, total) tuples.
+async def sum_by_card_ids_monthly(
+    session: AsyncSession,
+    credit_card_ids: list[int],
+) -> list[tuple[int, int, int, float]]:
+    if not credit_card_ids:
+        return []
+    year_col = func.extract("year", CardSettlement.date).label("year")
+    month_col = func.extract("month", CardSettlement.date).label("month")
+    result = await session.execute(
+        select(
+            CardSettlement.credit_card_id,
+            year_col,
+            month_col,
+            func.coalesce(func.sum(CardSettlement.amount), 0),
+        )
+        .where(CardSettlement.credit_card_id.in_(credit_card_ids))
+        .group_by(CardSettlement.credit_card_id, year_col, month_col)
+        .order_by(year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), float(row[3])) for row in result.all()]
+
+
 # Namespace to call repository functions (e.g. card_settlement_repository.list_by_card).
 class CardSettlementRepository:
     list_by_card = staticmethod(list_by_card)
@@ -71,6 +95,7 @@ class CardSettlementRepository:
     delete = staticmethod(delete)
     sum_by_card = staticmethod(sum_by_card)
     sum_by_card_ids = staticmethod(sum_by_card_ids)
+    sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)
 
 
 # Singleton used by services to access card settlement persistence.

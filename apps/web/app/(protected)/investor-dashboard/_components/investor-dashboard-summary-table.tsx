@@ -21,23 +21,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentsSummaryResponse } from '@/lib/api/metrics';
-
-// Formats a number as a compact currency value.
-function formatValue(value: number): string {
-  const hasDecimals = value % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value);
-}
-
-// Formats a decimal ratio as a display percentage (e.g. 0.05 → "+5%").
-function formatPct(pct: number): string {
-  const val = pct * 100;
-  const hasDecimals = Math.round(val * 10) % 10 !== 0;
-  const s = hasDecimals ? val.toFixed(1) : val.toFixed(0);
-  return pct >= 0 ? `+${s}%` : `${s}%`;
-}
+import { formatSignedPct, formatValue } from '@/lib/utils/format';
 
 interface InvestorDashboardSummaryTableProps {
   summary: InvestmentsSummaryResponse;
@@ -138,7 +122,7 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                               : 'text-red-500',
                         )}
                       >
-                        {item.monthChangePct !== null ? formatPct(item.monthChangePct) : '—'}
+                        {item.monthChangePct !== null ? formatSignedPct(item.monthChangePct) : '—'}
                         {!isChangeZero &&
                           ((item.monthChangePct ?? 0) > 0 ? (
                             <ArrowUp className="size-3.5" />

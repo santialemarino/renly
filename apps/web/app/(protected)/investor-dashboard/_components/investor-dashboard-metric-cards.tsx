@@ -6,37 +6,7 @@ import { useTranslations } from 'next-intl';
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import type { PortfolioMetrics } from '@/lib/api/metrics';
-
-// Formats a number as a compact currency value.
-function formatValue(value: number): string {
-  const hasDecimals = value % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value);
-}
-
-// Formats a decimal ratio as a display percentage (e.g. 0.05 → "+5%").
-function formatPct(pct: number): string {
-  const val = pct * 100;
-  const hasDecimals = Math.round(val * 10) % 10 !== 0;
-  const s = hasDecimals ? val.toFixed(1) : val.toFixed(0);
-  return pct >= 0 ? `+${s}%` : `${s}%`;
-}
-
-// Formats a number with explicit +/- sign.
-function formatSignedValue(value: number): string {
-  const formatted = formatValue(Math.abs(value));
-  if (value > 0) return `+${formatted}`;
-  if (value < 0) return `-${formatted}`;
-  return formatted;
-}
-
-// Returns the color class: green for positive, red for negative, grey for zero/null.
-function valueColor(value: number | null): string {
-  if (value === null || value === 0) return 'text-muted-foreground';
-  return value > 0 ? 'text-emerald-600' : 'text-red-500';
-}
+import { formatSignedPct, formatSignedValue, formatValue, valueColor } from '@/lib/utils/format';
 
 interface InvestorDashboardMetricCardsProps {
   metrics: PortfolioMetrics;
@@ -58,7 +28,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.twr')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.twr))}>
-            {metrics.twr !== null ? formatPct(metrics.twr) : '—'}
+            {metrics.twr !== null ? formatSignedPct(metrics.twr) : '—'}
           </p>
           {metrics.twr !== null &&
             metrics.twr !== 0 &&
@@ -75,7 +45,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.irr')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.irr))}>
-            {metrics.irr !== null ? formatPct(metrics.irr) : '—'}
+            {metrics.irr !== null ? formatSignedPct(metrics.irr) : '—'}
           </p>
           {metrics.irr !== null &&
             metrics.irr !== 0 &&
@@ -96,7 +66,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
           </p>
           {metrics.totalReturnPct !== null && metrics.totalReturnPct !== 0 && (
             <span className={cn('text-paragraph-sm', valueColor(metrics.totalReturnPct))}>
-              {formatPct(metrics.totalReturnPct)}
+              {formatSignedPct(metrics.totalReturnPct)}
             </span>
           )}
         </div>
@@ -104,7 +74,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
           <span className={cn('text-paragraph-xs', valueColor(metrics.monthChange))}>
             {formatSignedValue(metrics.monthChange)}
             {metrics.monthChangePct !== null && metrics.monthChangePct !== 0 && (
-              <> ({formatPct(metrics.monthChangePct)})</>
+              <> ({formatSignedPct(metrics.monthChangePct)})</>
             )}{' '}
             {t('cards.vsLastMonth')}
           </span>

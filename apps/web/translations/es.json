@@ -148,6 +148,7 @@
   "sidebar": {
     "brand": "Renly",
     "nav": {
+      "dashboard": "Dashboard",
       "financeDashboard": "Dashboard",
       "income": "Ingresos",
       "expenses": "Gastos",
@@ -173,6 +174,52 @@
       "label": "Cerrar sesión",
       "loading": "Cerrando sesión..."
     }
+  },
+  "dashboard": {
+    "metadata": {
+      "title": "Dashboard",
+      "description": "Tu resumen financiero completo."
+    },
+    "title": "Dashboard",
+    "subtitle": "Tus finanzas e inversiones de un vistazo.",
+    "cards": {
+      "netWorth": "Patrimonio Neto",
+      "investmentValue": "Valor de Inversiones",
+      "netCashFlow": "Flujo Neto",
+      "creditCardBalance": "Saldo Tarjetas",
+      "vsLastMonth": "vs mes anterior",
+      "netWorthHint": "No incluye cuentas bancarias (próximamente)"
+    },
+    "period": {
+      "ytd": "YTD",
+      "all": "Todo",
+      "custom": "Personalizado",
+      "cancel": "Cancelar",
+      "apply": "Aplicar"
+    },
+    "chart": {
+      "title": "Evolución del Patrimonio",
+      "tooltipValue": "Valor"
+    },
+    "composition": {
+      "title": "Composición",
+      "liabilities": "Pasivos"
+    },
+    "health": {
+      "savingsRate": "Tasa de Ahorro",
+      "savingsRateHint": "Ingreso ahorrado después de gastos",
+      "incomeExpenseRatio": "Ingreso / Gasto",
+      "incomeExpenseRatioHint": "Cuánto ganás por cada unidad gastada"
+    },
+    "links": {
+      "finances": "Dashboard Financiero",
+      "financesHint": "Detalles de ingresos, gastos y flujo de caja",
+      "investments": "Dashboard Inversor",
+      "investmentsHint": "Rendimiento y distribución del portfolio"
+    },
+    "currencyFallback": "El dashboard requiere una moneda común. <bold>Mostrando valores en {currency}.</bold>",
+    "loadError": "No se pudo cargar el dashboard. Intentalo de nuevo más tarde.",
+    "noData": "No hay datos disponibles. Agregá entradas financieras o snapshots de inversión para ver tu resumen."
   },
   "financeDashboard": {
     "metadata": {

@@ -4,15 +4,7 @@ import { useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import type { InvestmentMetrics } from '@/lib/api/metrics';
-
-// Formats a number as a compact currency value.
-function formatValue(value: number): string {
-  const hasDecimals = value % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value);
-}
+import { formatValue } from '@/lib/utils/format';
 
 interface InvestorDashboardDetailCardProps {
   metrics: InvestmentMetrics;

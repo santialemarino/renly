@@ -9,6 +9,7 @@ import {
   CircleDollarSign,
   CreditCard,
   FolderOpen,
+  LayoutDashboard,
   LogOut,
   Puzzle,
   Receipt,
@@ -116,6 +117,26 @@ export function AppSidebar({
         <SidebarGroup className="p-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-y-2">
+              {/* General Dashboard — top-level, not inside any group */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive(ROUTES.dashboard)}
+                  size="lg"
+                  className={cn(
+                    '[&_svg]:size-5 text-paragraph-medium',
+                    NAV_ITEM_STYLES,
+                    !isActive(ROUTES.dashboard) &&
+                      'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                  )}
+                >
+                  <Link href={ROUTES.dashboard}>
+                    <LayoutDashboard />
+                    <span>{t('nav.dashboard')}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Finances collapsible group */}
               <Collapsible asChild defaultOpen={isFinancesActive} className="group/collapsible">
                 <SidebarMenuItem>

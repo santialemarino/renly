@@ -1,19 +1,33 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
-import type { FinanceMonthly } from '@/lib/api/finance-metrics';
+import type { DashboardEvolution } from '@/lib/api/dashboard';
 import {
+  AREA_CURVE_TYPE,
+  AREA_FILL_GRADIENT_ID,
+  AREA_GRADIENT_END_OFFSET,
+  AREA_GRADIENT_END_OPACITY,
+  AREA_GRADIENT_START_OFFSET,
+  AREA_GRADIENT_START_OPACITY,
+  AREA_STROKE_WIDTH,
   AXIS_FONT_SIZE,
   AXIS_LINE,
   AXIS_TICK_LINE,
   AXIS_TICK_MARGIN,
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
-  CHART_COLOR_NEGATIVE,
-  CHART_COLOR_POSITIVE,
+  CHART_COLOR_PRIMARY,
   CHART_HEIGHT,
   CHART_MARGIN,
   GRID_STROKE_DASHARRAY,
@@ -22,37 +36,34 @@ import {
   TOOLTIP_BG,
   TOOLTIP_BORDER,
   TOOLTIP_BORDER_RADIUS,
+  TOOLTIP_CURSOR_STROKE_WIDTH,
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
 import { formatAxisValue, formatMonth } from '@/lib/utils/format';
 
-const BAR_COLOR_INCOME = CHART_COLOR_POSITIVE;
-const BAR_COLOR_EXPENSES = CHART_COLOR_NEGATIVE;
-const BAR_RADIUS = 4;
-
-interface FinanceDashboardMonthlyChartProps {
-  monthly: FinanceMonthly;
+interface DashboardEvolutionProps {
+  evolution: DashboardEvolution;
 }
 
-export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthlyChartProps) {
-  const t = useTranslations('financeDashboard');
+export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) {
+  const t = useTranslations('dashboard');
 
-  const hasData = monthly.points.length > 0;
+  const hasData = evolution.points.length > 0;
 
   return (
-    <Card>
+    <Card className="flex-1">
       <CardHeader className="px-6">
         <CardTitle className="text-paragraph-sm text-muted-foreground">
-          {t('monthlyChart.title')}
+          {t('chart.title')}
         </CardTitle>
       </CardHeader>
       <CardContent className="px-6 pb-6">
         {hasData ? (
           <div style={{ height: CHART_HEIGHT }} className="w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthly.points} margin={CHART_MARGIN}>
+              <AreaChart data={evolution.points} margin={CHART_MARGIN}>
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
@@ -73,12 +84,7 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
                   labelFormatter={(label) => formatMonth(String(label))}
-                  formatter={(value, name) => [
-                    formatAxisValue(Number(value)),
-                    name === 'income'
-                      ? t('monthlyChart.tooltipIncome')
-                      : t('monthlyChart.tooltipExpenses'),
-                  ]}
+                  formatter={(value) => [formatAxisValue(Number(value)), t('chart.tooltipValue')]}
                   contentStyle={{
                     backgroundColor: TOOLTIP_BG,
                     color: TOOLTIP_TEXT,
@@ -88,23 +94,32 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                   }}
                   labelStyle={{ color: TOOLTIP_TEXT }}
                   itemStyle={{ color: TOOLTIP_TEXT }}
-                  cursor={false}
+                  cursor={{ stroke: CHART_COLOR_PRIMARY, strokeWidth: TOOLTIP_CURSOR_STROKE_WIDTH }}
                 />
-                <Bar
-                  dataKey="income"
-                  fill={BAR_COLOR_INCOME}
-                  radius={[BAR_RADIUS, BAR_RADIUS, 0, 0]}
+                <defs>
+                  <linearGradient id={AREA_FILL_GRADIENT_ID} x1="0" y1="0" x2="0" y2="1">
+                    <stop
+                      offset={AREA_GRADIENT_START_OFFSET}
+                      stopColor={CHART_COLOR_PRIMARY}
+                      stopOpacity={AREA_GRADIENT_START_OPACITY}
+                    />
+                    <stop
+                      offset={AREA_GRADIENT_END_OFFSET}
+                      stopColor={CHART_COLOR_PRIMARY}
+                      stopOpacity={AREA_GRADIENT_END_OPACITY}
+                    />
+                  </linearGradient>
+                </defs>
+                <Area
+                  type={AREA_CURVE_TYPE}
+                  dataKey="netWorth"
+                  stroke={CHART_COLOR_PRIMARY}
+                  fill={`url(#${AREA_FILL_GRADIENT_ID})`}
+                  strokeWidth={AREA_STROKE_WIDTH}
                   animationDuration={CHART_ANIMATION_DURATION}
                   animationEasing={CHART_ANIMATION_EASING}
                 />
-                <Bar
-                  dataKey="expenses"
-                  fill={BAR_COLOR_EXPENSES}
-                  radius={[BAR_RADIUS, BAR_RADIUS, 0, 0]}
-                  animationDuration={CHART_ANIMATION_DURATION}
-                  animationEasing={CHART_ANIMATION_EASING}
-                />
-              </BarChart>
+              </AreaChart>
             </ResponsiveContainer>
           </div>
         ) : (

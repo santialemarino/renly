@@ -1,9 +1,10 @@
 export const ROUTES = {
-  home: '/finance-dashboard',
+  home: '/dashboard',
   auth: {
     login: '/login',
     signup: '/signup',
   },
+  dashboard: '/dashboard',
   financeDashboard: '/finance-dashboard',
   income: '/income',
   expenses: '/expenses',

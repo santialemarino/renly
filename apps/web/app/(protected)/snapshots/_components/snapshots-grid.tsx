@@ -22,33 +22,11 @@ import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snap
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
+import { formatMonth, formatSignedPct, formatValue } from '@/lib/utils/format';
 
 // Extracts "YYYY-MM" from a date string like "2025-01-31".
 function toYearMonth(dateStr: string): string {
   return dateStr.slice(0, 7);
-}
-
-// Formats a "YYYY-MM" string as a short month label (e.g. "Jan 25").
-function formatMonth(ym: string): string {
-  const d = new Date(ym + '-01T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-}
-
-// Formats a number as a compact currency value (no decimals for integers, up to 2 for decimals).
-function formatValue(value: number): string {
-  const hasDecimals = value % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value);
-}
-
-// Formats a decimal as a percentage string (e.g. 0.05 → "+5%", 0.052 → "+5.2%").
-function formatPct(pct: number): string {
-  const val = pct * 100;
-  const hasDecimals = Math.round(val * 10) % 10 !== 0;
-  const s = hasDecimals ? val.toFixed(1) : val.toFixed(0);
-  return pct >= 0 ? `+${s}%` : `${s}%`;
 }
 
 // Generates all "YYYY-MM" keys between global min and max snapshot dates.
@@ -141,7 +119,7 @@ function CellContent({ cell }: CellContentProps) {
           ) : (
             <Minus className="size-3" />
           )}
-          {formatPct(cell.periodReturnPct)}
+          {formatSignedPct(cell.periodReturnPct)}
         </span>
       )}
 
@@ -249,7 +227,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                   key={month}
                   className="min-w-[140px] text-center text-paragraph-xs bg-background transition-colors group-hover:bg-muted/50"
                 >
-                  {formatMonth(month)}
+                  {formatMonth(month + '-01')}
                 </TableHead>
               ))}
               <TableHead className="sticky right-0 z-10 min-w-[70px] bg-background text-center">
