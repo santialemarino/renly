@@ -226,6 +226,30 @@ Dashboard-oriented endpoints for income, expense, and cash flow metrics. All sup
 
 ---
 
+## General Dashboard
+
+Aggregated endpoints combining investment portfolio and finance data for the home dashboard. All support optional `currency` conversion.
+
+| Method | Path                     | Description                                                                           |
+| ------ | ------------------------ | ------------------------------------------------------------------------------------- |
+| `GET`  | `/dashboard/overview`    | Net worth, investment KPIs, finance KPIs, savings rate, income/expense ratio.         |
+| `GET`  | `/dashboard/evolution`   | Monthly net worth series (investment value - cumulative card balance at each month).  |
+| `GET`  | `/dashboard/composition` | Investment allocation by category plus a liabilities segment for credit card balance. |
+
+**Query parameters (overview + evolution):** `currency`, `date_from` (YYYY-MM-DD), `date_to` (YYYY-MM-DD).
+
+**Query parameters (composition):** `currency` only (no date filtering — shows current allocation).
+
+**Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses).
+
+**Evolution response:** `points[]` with `date`, `investment_value`, `card_balance`, `net_worth` per month.
+
+**Composition response:** `items[]` with `label` (category name or "liabilities"), `value`, `percentage`. Plus `total_assets`, `total_liabilities`.
+
+**Net worth formula:** `investment_total - credit_card_balance`. Cash accounts deferred — net worth currently excludes liquid cash.
+
+---
+
 ## API Keys
 
 API keys provide long-lived authentication for external tools (e.g., iOS Shortcuts). The raw key is shown only once at creation -- store it securely.

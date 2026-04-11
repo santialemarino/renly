@@ -4,8 +4,10 @@
 
 // --- Colors ---
 
-// oklch value for blue-800. Recharts needs a resolved CSS color, not a Tailwind class.
-export const CHART_COLOR_PRIMARY = 'oklch(0.424 0.199 265.638)';
+// oklch values — Recharts needs resolved CSS colors, not Tailwind classes.
+export const CHART_COLOR_PRIMARY = 'oklch(0.424 0.199 265.638)'; // blue-800
+export const CHART_COLOR_POSITIVE = 'oklch(0.596 0.145 163.225)'; // emerald-600
+export const CHART_COLOR_NEGATIVE = 'oklch(0.637 0.237 25.331)'; // red-500
 
 // --- Layout ---
 

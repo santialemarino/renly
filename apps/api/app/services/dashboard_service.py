@@ -1,0 +1,237 @@
+# Business logic for the general dashboard (aggregates investments + finance).
+
+from datetime import date as date_type
+from decimal import Decimal
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.domain import CardBalance
+from app.repositories.card_settlement_repository import card_settlement_repository
+from app.repositories.credit_card_repository import credit_card_repository
+from app.repositories.expense_repository import expense_repository
+from app.schemas.dashboard import (
+    CompositionItem,
+    DashboardCompositionResponse,
+    DashboardEvolutionResponse,
+    DashboardOverviewResponse,
+    NetWorthEvolutionPoint,
+)
+from app.services import credit_card_service, finance_metrics_service, metrics_service
+from app.utils.metrics import convert_value, get_rate_map
+
+ZERO = Decimal("0")
+
+
+# Pure computation: builds cumulative monthly card balance from expense and settlement totals.
+# Returns {(year, month): cumulative_balance} in the target currency.
+def compute_monthly_card_balances(
+    expense_monthly: list[tuple[int, int, int, str, float]],
+    settlement_monthly: list[tuple[int, int, int, float]],
+    card_currencies: dict[int, str],
+    target_currency: str | None,
+    rate_map: dict[str, Decimal] | None,
+) -> dict[tuple[int, int], Decimal]:
+    # Aggregate expenses per (year, month) across all cards, converting to target currency.
+    month_expenses: dict[tuple[int, int], Decimal] = {}
+    for card_id, year, month, currency, total in expense_monthly:
+        val = Decimal(str(total))
+        card_cur = card_currencies.get(card_id, currency)
+        # Convert expense currency → card currency → target currency.
+        if currency != card_cur and rate_map:
+            val = convert_value(val, currency, card_cur, rate_map)
+        if target_currency and card_cur != target_currency and rate_map:
+            val = convert_value(val, card_cur, target_currency, rate_map)
+        key = (year, month)
+        month_expenses[key] = month_expenses.get(key, ZERO) + val
+
+    # Aggregate settlements per (year, month), converting to target currency.
+    month_settlements: dict[tuple[int, int], Decimal] = {}
+    for card_id, year, month, total in settlement_monthly:
+        val = Decimal(str(total))
+        card_cur = card_currencies.get(card_id, "")
+        if target_currency and card_cur != target_currency and rate_map:
+            val = convert_value(val, card_cur, target_currency, rate_map)
+        key = (year, month)
+        month_settlements[key] = month_settlements.get(key, ZERO) + val
+
+    # Collect and sort all months, then accumulate running balance.
+    all_months = sorted(set(month_expenses) | set(month_settlements))
+    running = ZERO
+    result: dict[tuple[int, int], Decimal] = {}
+    for ym in all_months:
+        running += month_expenses.get(ym, ZERO) - month_settlements.get(ym, ZERO)
+        result[ym] = running
+    return result
+
+
+# Aggregates investment portfolio metrics and finance overview into a single dashboard response.
+async def get_overview(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    dollar_preference: str | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> DashboardOverviewResponse:
+    # Sequential calls — AsyncSession is not safe for concurrent use.
+    portfolio = await metrics_service.get_portfolio_metrics(
+        session,
+        user_id,
+        currency=currency,
+        dollar_preference=dollar_preference,
+    )
+    finance = await finance_metrics_service.get_overview(
+        session,
+        user_id,
+        currency=currency,
+        dollar_preference=dollar_preference,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    net_worth = portfolio.total_value - finance.credit_card_balance
+
+    # Net worth month-over-month change (approximated from portfolio change).
+    net_worth_change = portfolio.month_change
+    net_worth_change_pct: Decimal | None = None
+    if net_worth_change is not None:
+        prev = net_worth - net_worth_change
+        if prev != ZERO:
+            net_worth_change_pct = net_worth_change / prev
+
+    savings_rate: Decimal | None = None
+    if finance.total_income != ZERO:
+        savings_rate = (finance.total_income - finance.total_expenses) / finance.total_income
+
+    income_expense_ratio: Decimal | None = None
+    if finance.total_expenses != ZERO:
+        income_expense_ratio = finance.total_income / finance.total_expenses
+
+    return DashboardOverviewResponse(
+        net_worth=net_worth,
+        net_worth_change=net_worth_change,
+        net_worth_change_pct=net_worth_change_pct,
+        investment_total=portfolio.total_value,
+        investment_gain=portfolio.absolute_gain,
+        investment_gain_pct=portfolio.total_return_pct,
+        investment_month_change=portfolio.month_change,
+        investment_month_change_pct=portfolio.month_change_pct,
+        credit_card_balance=finance.credit_card_balance,
+        total_income=finance.total_income,
+        total_expenses=finance.total_expenses,
+        savings_rate=savings_rate,
+        income_expense_ratio=income_expense_ratio,
+        currency=currency,
+    )
+
+
+# Computes monthly net worth series (investment value - cumulative card balance).
+async def get_evolution(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    dollar_preference: str | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> DashboardEvolutionResponse:
+    portfolio_evo = await metrics_service.get_portfolio_evolution(
+        session,
+        user_id,
+        currency=currency,
+        dollar_preference=dollar_preference,
+        start_date=date_from,
+        end_date=date_to,
+    )
+
+    if not portfolio_evo.points:
+        return DashboardEvolutionResponse(points=[], currency=currency)
+
+    # Build monthly card balance series.
+    cards = await credit_card_repository.list_by_user(session, user_id)
+    card_ids = [c.id for c in cards if c.id is not None]
+    card_currencies = {c.id: c.currency for c in cards if c.id is not None}
+
+    card_balance_by_month: dict[tuple[int, int], Decimal] = {}
+    if card_ids:
+        expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
+        settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
+        rate_map = await get_rate_map(session, dollar_preference) if currency else None
+        card_balance_by_month = compute_monthly_card_balances(
+            expense_monthly,
+            settlement_monthly,
+            card_currencies,
+            currency,
+            rate_map,
+        )
+
+    # Merge: for each portfolio evolution point, look up cumulative card balance.
+    points: list[NetWorthEvolutionPoint] = []
+    last_balance = ZERO
+    for p in portfolio_evo.points:
+        ym = (p.date.year, p.date.month)
+        if ym in card_balance_by_month:
+            last_balance = card_balance_by_month[ym]
+        points.append(
+            NetWorthEvolutionPoint(
+                date=p.date,
+                investment_value=p.total_value,
+                card_balance=last_balance,
+                net_worth=p.total_value - last_balance,
+            )
+        )
+
+    return DashboardEvolutionResponse(points=points, currency=currency)
+
+
+# Computes investment allocation by category plus a liabilities segment.
+async def get_composition(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    dollar_preference: str | None = None,
+) -> DashboardCompositionResponse:
+    allocation = await metrics_service.get_allocation(
+        session,
+        user_id,
+        currency=currency,
+        dollar_preference=dollar_preference,
+    )
+
+    # Compute total card balance, converting each card's balance to display currency.
+    cards = await credit_card_repository.list_by_user(session, user_id)
+    card_ids = [c.id for c in cards if c.id is not None]
+    card_balance = ZERO
+    if card_ids:
+        card_currencies = {c.id: c.currency for c in cards if c.id is not None}
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dollar_preference)
+        rate_map = await get_rate_map(session, dollar_preference) if currency else None
+        for card in cards:
+            bal: CardBalance | None = balances.get(card.id)
+            if bal is None:
+                continue
+            val = bal.balance
+            if currency and card.currency != currency and rate_map:
+                val = convert_value(val, card.currency, currency, rate_map)
+            card_balance += val
+
+    total_assets = allocation.total_value
+    total_gross = total_assets + card_balance
+
+    items: list[CompositionItem] = []
+    for item in allocation.items:
+        pct = (item.value / total_gross * 100) if total_gross != ZERO else ZERO
+        items.append(CompositionItem(label=item.category, value=item.value, percentage=pct))
+
+    if card_balance > ZERO:
+        pct = (card_balance / total_gross * 100) if total_gross != ZERO else ZERO
+        items.append(CompositionItem(label="liabilities", value=card_balance, percentage=pct))
+
+    return DashboardCompositionResponse(
+        items=items,
+        total_assets=total_assets,
+        total_liabilities=card_balance,
+        currency=currency,
+    )

@@ -27,14 +27,9 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
+import { formatPct } from '@/lib/utils/format';
 
 type Mode = 'category' | 'group';
-
-// Formats a percentage, dropping decimals when exact (e.g. 40 → "40", 33.5 → "33.5").
-function formatPct(value: number): string {
-  const hasDecimals = Math.round(value * 10) % 10 !== 0;
-  return hasDecimals ? value.toFixed(1) : value.toFixed(0);
-}
 
 // Formats a number as a compact value.
 function formatValue(value: number): string {

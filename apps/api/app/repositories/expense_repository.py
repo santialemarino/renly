@@ -108,6 +108,31 @@ async def sum_by_credit_card_ids_grouped(
     return grouped
 
 
+# Monthly expense totals for given credit cards, grouped by card_id, year, month, and currency.
+# Returns a list of (card_id, year, month, currency, total) tuples.
+async def sum_by_credit_card_ids_monthly(
+    session: AsyncSession,
+    credit_card_ids: list[int],
+) -> list[tuple[int, int, int, str, float]]:
+    if not credit_card_ids:
+        return []
+    year_col = func.extract("year", ExpenseEntry.date).label("year")
+    month_col = func.extract("month", ExpenseEntry.date).label("month")
+    result = await session.execute(
+        select(
+            ExpenseEntry.credit_card_id,
+            year_col,
+            month_col,
+            ExpenseEntry.currency,
+            func.coalesce(func.sum(ExpenseEntry.amount), 0),
+        )
+        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .group_by(ExpenseEntry.credit_card_id, year_col, month_col, ExpenseEntry.currency)
+        .order_by(year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
+
+
 # Total expenses for a user within a date range.
 async def sum_by_user(
     session: AsyncSession,
@@ -198,6 +223,7 @@ class ExpenseRepository:
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     save = staticmethod(save)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
+    sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

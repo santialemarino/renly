@@ -30,8 +30,6 @@ import {
   CHART_COLOR_PRIMARY,
   CHART_HEIGHT,
   CHART_MARGIN,
-  FORMAT_THRESHOLD_MILLION,
-  FORMAT_THRESHOLD_THOUSAND,
   GRID_STROKE_DASHARRAY,
   GRID_VERTICAL,
   TOOLTIP_ANIMATION_DURATION,
@@ -43,20 +41,7 @@ import {
   TOOLTIP_TEXT,
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
-
-// Formats a date string (YYYY-MM-DD) as "Jan 25".
-function formatMonth(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-}
-
-// Formats a number as a compact value for the Y axis.
-function formatAxisValue(value: number): string {
-  if (value >= FORMAT_THRESHOLD_MILLION) return `${(value / FORMAT_THRESHOLD_MILLION).toFixed(1)}M`;
-  if (value >= FORMAT_THRESHOLD_THOUSAND)
-    return `${(value / FORMAT_THRESHOLD_THOUSAND).toFixed(0)}K`;
-  return value.toFixed(0);
-}
+import { formatAxisValue, formatMonth } from '@/lib/utils/format';
 
 interface InvestorDashboardEvolutionProps {
   evolution: PortfolioEvolution;
