@@ -13,7 +13,7 @@ from app.schemas.snapshot_grid import (
     SnapshotGridRow,
     SnapshotGridTransaction,
 )
-from app.services import metrics_helpers as mh
+from app.utils import metrics as mh
 
 
 # Builds the snapshots grid for a user's investments.

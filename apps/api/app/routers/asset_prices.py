@@ -8,8 +8,8 @@ from app.models.investment import InvestmentCategory
 from app.repositories import user_settings_repository
 from app.schemas.asset_price import AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
 from app.services import asset_price_service
-from app.services import metrics_helpers as mh
 from app.services.settings_service import DOLLAR_RATE_DEFAULT, SETTINGS_KEY_DOLLAR_RATE_PREFERENCE
+from app.utils import metrics as mh
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
 

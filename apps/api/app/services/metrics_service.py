@@ -27,7 +27,7 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
     SkippedInvestment,
 )
-from app.services import metrics_helpers as mh
+from app.utils import metrics as mh
 
 ZERO = Decimal("0")
 ONE = Decimal("1")

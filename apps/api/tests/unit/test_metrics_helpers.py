@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
-from app.services.metrics_helpers import (
+from app.utils.metrics import (
     build_irr_cashflows,
     can_convert,
     compute_period_returns,
