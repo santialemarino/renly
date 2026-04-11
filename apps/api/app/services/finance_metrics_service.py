@@ -19,7 +19,7 @@ from app.schemas.finance_metrics import (
     MonthlyPoint,
 )
 from app.services import credit_card_service
-from app.services.metrics_helpers import convert_value, get_rate_map
+from app.utils.metrics import convert_value, get_rate_map
 
 ZERO = Decimal("0")
 
@@ -103,12 +103,16 @@ async def get_overview(
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
-        balances = await credit_card_service.get_card_balances(session, card_ids)
+        card_currencies = {c.id: c.currency for c in cards if c.id is not None}
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dollar_preference)
         for card in cards:
-            bal = balances.get(card.id, ZERO)
-            if bal and currency and rate_map and card.currency != currency:
-                bal = convert_value(bal, card.currency, currency, rate_map)
-            card_balance += bal
+            bal = balances.get(card.id)
+            if bal is None:
+                continue
+            val = bal.balance
+            if val and currency and rate_map and card.currency != currency:
+                val = convert_value(val, card.currency, currency, rate_map)
+            card_balance += val
 
     return FinanceOverviewResponse(
         total_income=total_income,

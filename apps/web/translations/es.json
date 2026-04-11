@@ -421,6 +421,7 @@
       "dueDay": "Vencimiento",
       "currency": "Moneda",
       "balance": "Saldo",
+      "approximateBalance": "Aproximado — incluye gastos en otras monedas convertidos al tipo de cambio de hoy.",
       "actions": "Acciones",
       "empty": "No se encontraron tarjetas de crédito."
     },

@@ -421,6 +421,7 @@
       "dueDay": "Due day",
       "currency": "Currency",
       "balance": "Balance",
+      "approximateBalance": "Approximate — includes expenses in other currencies converted at today's rate.",
       "actions": "Actions",
       "empty": "No credit cards found."
     },

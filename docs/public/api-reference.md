@@ -197,7 +197,7 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `closing_day`, `due_day`, `currency`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived cards).
 
-**Card fields:** `name`, `closing_day` (1-31), `due_day` (1-31), `currency` (ISO 4217), `is_active` (boolean), `has_expenses` (computed, read-only).
+**Card fields:** `name`, `closing_day` (1-31), `due_day` (1-31), `currency` (ISO 4217), `is_active` (boolean), `has_expenses` (computed, read-only), `has_mixed_currencies` (computed — true when card has expenses in currencies other than its own), `balance` (expenses minus settlements, converted to card currency when mixed currencies are present; uses current exchange rates).
 
 **Archive behavior:** Archived cards are hidden from the expense form's card selector but retain all linked expenses and settlements. Balance is still computed normally. Delete is only allowed when the card has no linked expenses (409 otherwise).
 

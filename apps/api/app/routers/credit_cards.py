@@ -5,20 +5,24 @@ from fastapi import APIRouter, Query, status
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.domain import CardBalance
 from app.repositories import expense_repository
 from app.schemas.card_settlement import CardSettlementCreate, CardSettlementResponse
 from app.schemas.credit_card import CreditCardCreate, CreditCardResponse, CreditCardUpdate
 from app.services import credit_card_service
+from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/credit-cards", tags=["credit-cards"])
 
+ZERO_BALANCE = CardBalance(Decimal(0), False)
+
 
 # Builds a CreditCardResponse with the computed balance and has_expenses fields.
-def _to_response(card: object, balance: Decimal, has_expenses: bool = False) -> CreditCardResponse:
+def _to_response(card: object, bal: CardBalance, has_expenses: bool = False) -> CreditCardResponse:
     from app.models.credit_card import CreditCard as CreditCardModel
 
     data = card.model_dump() if isinstance(card, CreditCardModel) else dict(card)  # type: ignore[arg-type]
-    return CreditCardResponse(**{**data, "balance": balance, "has_expenses": has_expenses})
+    return CreditCardResponse(**{**data, "balance": bal.balance, "has_expenses": has_expenses, "has_mixed_currencies": bal.has_mixed_currencies})
 
 
 # --- Credit cards ---
@@ -43,9 +47,11 @@ async def list_cards(
         active_only=not show_archived,
     )
     card_ids = [c.id for c in cards if c.id is not None]
-    balances = await credit_card_service.get_card_balances(session, card_ids)
+    card_currencies = {c.id: c.currency for c in cards if c.id is not None}
+    dp = await get_dollar_pref(session, current_user.id)
+    balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dp)
     expense_counts = await expense_repository.count_by_credit_card_ids(session, card_ids)
-    return [_to_response(card, balances.get(card.id, Decimal(0)), expense_counts.get(card.id, 0) > 0) for card in cards]
+    return [_to_response(card, balances.get(card.id, ZERO_BALANCE), expense_counts.get(card.id, 0) > 0) for card in cards]
 
 
 # Get a single credit card with its current balance.
@@ -56,9 +62,10 @@ async def get_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.get_card(session, card_id, current_user)
-    balance = await credit_card_service.get_card_balance(session, card.id)
+    dp = await get_dollar_pref(session, current_user.id)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balance, count > 0)
+    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
 
 
 # Create a new credit card.
@@ -76,7 +83,7 @@ async def create_card(
         due_day=body.due_day,
         currency=body.currency,
     )
-    return _to_response(card, Decimal(0), False)
+    return _to_response(card, ZERO_BALANCE, False)
 
 
 # Update a credit card.
@@ -89,9 +96,10 @@ async def update_card(
 ) -> CreditCardResponse:
     payload = body.model_dump(exclude_unset=True)
     card = await credit_card_service.update_card(session, card_id, current_user, **payload)
-    balance = await credit_card_service.get_card_balance(session, card.id)
+    dp = await get_dollar_pref(session, current_user.id)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balance, count > 0)
+    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
 
 
 # Delete a credit card. Rejects with 409 if the card has linked expenses.
@@ -112,9 +120,10 @@ async def archive_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.archive_card(session, card_id, current_user)
-    balance = await credit_card_service.get_card_balance(session, card.id)
+    dp = await get_dollar_pref(session, current_user.id)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balance, count > 0)
+    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
 
 
 # Unarchive a credit card (set is_active = true). Returns the updated card.
@@ -125,9 +134,10 @@ async def unarchive_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.unarchive_card(session, card_id, current_user)
-    balance = await credit_card_service.get_card_balance(session, card.id)
+    dp = await get_dollar_pref(session, current_user.id)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balance, count > 0)
+    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
 
 
 # --- Settlements ---

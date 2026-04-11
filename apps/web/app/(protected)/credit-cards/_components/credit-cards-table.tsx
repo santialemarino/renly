@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ChevronRight,
   ChevronsUpDown,
+  Info,
   Pencil,
   Plus,
   Trash2,
@@ -392,7 +393,17 @@ export function CreditCardsTable({
                       <TableCell>{card.dueDay}</TableCell>
                       <TableCell>{card.currency}</TableCell>
                       <TableCell className="text-paragraph-sm tabular-nums">
-                        {formatAmount(card.balance)}
+                        <span className="flex items-center gap-x-1.5">
+                          {formatAmount(card.balance)}
+                          {card.hasMixedCurrencies && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Info className="size-3.5 shrink-0 text-blue-400" />
+                              </TooltipTrigger>
+                              <TooltipContent>{t('table.approximateBalance')}</TooltipContent>
+                            </Tooltip>
+                          )}
+                        </span>
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!card.isActive ? (

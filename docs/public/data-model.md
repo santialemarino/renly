@@ -94,7 +94,7 @@ Payment methods: `cash`, `debit`, `transfer`, `credit_card`. When the payment me
 
 ### Credit Cards
 
-A credit card is a liability account -- it represents money you owe. Each card has a name, closing day, due day, and currency. Cards can be archived to hide them from active selection while preserving their history. The card's **balance** is computed (not stored) as the sum of linked expenses minus the sum of settlements. A card can only be deleted if it has no linked expenses.
+A credit card is a liability account -- it represents money you owe. Each card has a name, closing day, due day, and currency. Cards can be archived to hide them from active selection while preserving their history. The card's **balance** is computed (not stored) as the sum of linked expenses minus the sum of settlements. When a card has expenses in currencies other than its own, those amounts are converted to the card's currency using current exchange rates (USD pivot). A `has_mixed_currencies` flag indicates when the balance is approximate due to conversion. A card can only be deleted if it has no linked expenses.
 
 ### Card Settlements
 

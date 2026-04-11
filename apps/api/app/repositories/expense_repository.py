@@ -86,25 +86,26 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
     return {row[0]: int(row[1]) for row in result.all()}
 
 
-# Sum of expenses linked to a specific credit card.
-async def sum_by_credit_card(session: AsyncSession, credit_card_id: int) -> float:
-    result = await session.execute(select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(ExpenseEntry.credit_card_id == credit_card_id))
-    return float(result.scalar_one())
-
-
-# Sum of expenses grouped by credit card id. Returns a dict {card_id: total}.
-async def sum_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, float]:
+# Sum of expenses grouped by credit card id and currency. Returns {card_id: {currency: total}}.
+async def sum_by_credit_card_ids_grouped(
+    session: AsyncSession,
+    credit_card_ids: list[int],
+) -> dict[int, dict[str, float]]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
         select(
             ExpenseEntry.credit_card_id,
+            ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
         .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
-        .group_by(ExpenseEntry.credit_card_id)
+        .group_by(ExpenseEntry.credit_card_id, ExpenseEntry.currency)
     )
-    return {row[0]: float(row[1]) for row in result.all()}
+    grouped: dict[int, dict[str, float]] = {}
+    for card_id, currency, total in result.all():
+        grouped.setdefault(card_id, {})[currency] = float(total)
+    return grouped
 
 
 # Total expenses for a user within a date range.
@@ -196,8 +197,7 @@ class ExpenseRepository:
     get_by_id = staticmethod(get_by_id)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     save = staticmethod(save)
-    sum_by_credit_card = staticmethod(sum_by_credit_card)
-    sum_by_credit_card_ids = staticmethod(sum_by_credit_card_ids)
+    sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

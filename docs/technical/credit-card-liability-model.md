@@ -104,6 +104,6 @@ Cards can only be **deleted** when they have no linked expenses. Attempting to d
 
 ## Where this is implemented
 
-- **Backend:** `credit_card_service.get_card_balance()` and `get_card_balances()` compute balance from two batch queries. `_to_response()` in the credit cards router builds the response with the computed balance.
-- **Frontend:** The credit cards table shows the computed balance per card. Expandable rows show settlement history with add/delete.
+- **Backend:** `credit_card_service.get_card_balances()` computes balances in batch. `expense_repository.sum_by_credit_card_ids_grouped()` returns expense totals grouped by card and currency. `compute_card_balances()` (pure function) converts each currency subtotal to the card's currency via `convert_value()` (USD pivot) and sums. Returns `CardBalance(balance, has_mixed_currencies)` per card. Rate map fetch is skipped when no card has foreign-currency expenses. `_to_response()` in the credit cards router builds the response with the computed balance.
+- **Frontend:** The credit cards table shows the computed balance per card. When `has_mixed_currencies` is true, a tooltip indicates the balance is approximate (converted at current rates). Expandable rows show settlement history with add/delete.
 - **DB schema:** `expense_entries.credit_card_id` FK links expenses to cards. `card_settlements.credit_card_id` FK links settlements to cards. Balance computed at query time from these two tables.

@@ -8,7 +8,7 @@ from app.deps.db import SessionDep
 from app.models.income_entry import IncomeCategory
 from app.schemas.income import IncomeCreate, IncomeListResponse, IncomeResponse, IncomeUpdate
 from app.services import income_service
-from app.services.metrics_helpers import convert_value, get_rate_map
+from app.utils.metrics import convert_value, get_rate_map
 from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/income", tags=["income"])

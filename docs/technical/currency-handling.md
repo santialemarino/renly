@@ -70,7 +70,7 @@ Router reads user's dollar_rate_preference from settings
      → Unsupported pair: return unchanged
 ```
 
-- **Helpers**: `services/metrics_helpers.py` — `convert_value()`, `can_convert()`, `get_rate_map()`.
+- **Helpers**: `utils/metrics.py` — `convert_value()`, `can_convert()`, `get_rate_map()`.
 - **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income).
 - **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
 - **Rate map**: `get_rate_map(session, dollar_preference)` fetches the latest rates for all pairs. The dollar preference determines which USD/ARS rate pair to include. Returns `{currency: rate}` where rate means "1 USD = X currency". USD itself has an implicit rate of 1.
@@ -158,7 +158,7 @@ When the dashboard requests metrics in a specific currency (e.g. ARS), investmen
 
 **Backend flow:**
 
-1. `can_convert(from, to)` in `metrics_helpers.py` checks if both currencies are in `SUPPORTED_CURRENCIES`.
+1. `can_convert(from, to)` in `utils/metrics.py` checks if both currencies are in `SUPPORTED_CURRENCIES`.
 2. `_split_by_convertibility()` in `metrics_service.py` splits investments into convertible and skipped lists.
 3. Only convertible investments are used for computation. Skipped investments are returned in `skipped_investments` on every response.
 4. If conversion is needed but no exchange rates exist in the DB, `ExchangeRateUnavailableError` (503) is raised.
@@ -197,6 +197,14 @@ All rates are stored against USD; any pair converts through USD as pivot.
 | No exchange rates in DB          | 503 error, dashboard shows load error fallback |
 | "Original" selected on dashboard | Falls back to primary currency, hint shown     |
 | "Original" on snapshots page     | No conversion, values in base currency         |
+
+### 11. Credit card balance — mixed-currency conversion
+
+Credit card balances are computed as `sum(expenses) - sum(settlements)`. When a card has expenses in currencies other than its own (e.g., a USD card with ARS expenses), the expense amounts are converted to the card's currency using the same USD-pivot mechanism before summing. Settlements always match the card's currency (auto-set on creation) and need no conversion.
+
+The conversion uses the user's dollar rate preference. A `has_mixed_currencies` flag on the response tells the frontend to show an "approximate" tooltip (since the conversion uses current rates, not the bank's historical rates). The rate map query is skipped entirely when no card has foreign-currency expenses.
+
+**Backend flow:** `expense_repository.sum_by_credit_card_ids_grouped()` returns `{card_id: {currency: amount}}`. `compute_card_balances()` (pure function in `credit_card_service.py`) converts each subtotal via `convert_value()` and sums. `get_card_balances()` orchestrates the DB queries and calls the pure function.
 
 ## Data model
 

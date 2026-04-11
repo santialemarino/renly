@@ -13,6 +13,7 @@ interface CreditCardRaw {
   is_active: boolean;
   balance: string;
   has_expenses: boolean;
+  has_mixed_currencies: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +40,7 @@ export interface CreditCard {
   isActive: boolean;
   balance: string;
   hasExpenses: boolean;
+  hasMixedCurrencies: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,6 +68,7 @@ function mapCreditCard(raw: CreditCardRaw): CreditCard {
     isActive: raw.is_active,
     balance: raw.balance,
     hasExpenses: raw.has_expenses,
+    hasMixedCurrencies: raw.has_mixed_currencies,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };

@@ -33,8 +33,11 @@ class CreditCardResponse(BaseModel):
     due_day: int = Field(description="Payment due day (1-31).")
     currency: str = Field(description="Card currency (ISO 4217).")
     is_active: bool = Field(description="Whether the card is active.")
-    balance: Decimal = Field(description="Current card balance (expenses - settlements).", max_digits=18, decimal_places=2)
+    balance: Decimal = Field(
+        description="Current card balance (expenses - settlements), converted to card currency.", max_digits=18, decimal_places=2
+    )
     has_expenses: bool = Field(description="Whether the card has linked expenses.")
+    has_mixed_currencies: bool = Field(description="Whether the card has expenses in currencies other than the card's own.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 
