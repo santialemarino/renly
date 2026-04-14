@@ -17,6 +17,7 @@ Before doing substantive work, read and apply the relevant skills so your change
 Use **api-\*** skills when touching the backend; **web-\*** when touching the frontend. Use both when a change spans API and web.
 
 - **commit** — Commit message format, types, and staging rules. Load when creating a commit.
+- **pr-format** — PR title, body, branch name, and label conventions. Load when creating a pull request.
 - **testing** — Where tests live, how to run them, what to cover. Load when writing or running tests.
 
 ## 2. Lints and checks before commit
