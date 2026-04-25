@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -33,6 +34,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
 
@@ -261,35 +263,49 @@ export function SubscriptionFormDialog({
               )}
             />
 
-            {showCreditCard && (
-              <FormField
-                control={form.control}
-                name="creditCardId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                    <Select
-                      value={field.value?.toString() ?? ''}
-                      onValueChange={(v) => field.onChange(Number(v))}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {activeCards.map((card) => (
-                          <SelectItem key={card.id} value={card.id.toString()}>
-                            {card.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <AnimatePresence initial={false}>
+              {showCreditCard && (
+                <motion.div
+                  key="credit-card"
+                  layout
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ overflow: 'hidden', marginTop: -16 }}
+                >
+                  <div className="pt-4">
+                    <FormField
+                      control={form.control}
+                      name="creditCardId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
+                          <Select
+                            value={field.value?.toString() ?? ''}
+                            onValueChange={(v) => field.onChange(Number(v))}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder={t('form.creditCard.placeholder')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {activeCards.map((card) => (
+                                <SelectItem key={card.id} value={card.id.toString()}>
+                                  {card.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 
