@@ -567,10 +567,10 @@
   "subscriptions": {
     "metadata": {
       "title": "Subscriptions",
-      "description": "Manage recurring charges like Netflix, Spotify, or your gym."
+      "description": "Manage your subscriptions"
     },
     "title": "Subscriptions",
-    "subtitle": "Recurring charges (Netflix, Spotify, gym, etc.).",
+    "subtitle": "Track and manage your subscriptions.",
     "toolbar": {
       "searchPlaceholder": "Search subscriptions...",
       "add": "Add subscription",
@@ -662,10 +662,10 @@
   "installments": {
     "metadata": {
       "title": "Installments",
-      "description": "Manage installment plans (cuotas)."
+      "description": "Manage your installment plans"
     },
     "title": "Installments",
-    "subtitle": "Multi-cuota purchases (TV in 12 cuotas, sofa in 6 cuotas, etc.).",
+    "subtitle": "Track and manage your installment plans.",
     "toolbar": {
       "searchPlaceholder": "Search installments...",
       "add": "Add installment plan",
@@ -673,7 +673,7 @@
     },
     "table": {
       "name": "Name",
-      "installmentAmount": "Per cuota",
+      "installmentAmount": "Per installment",
       "totalAmount": "Total",
       "progress": "Progress",
       "startDate": "Start date",
@@ -702,14 +702,14 @@
       "titleEdit": "Edit installment plan",
       "name": {
         "label": "Name",
-        "placeholder": "Enter the plan name (e.g., TV Samsung)"
+        "placeholder": "Enter the plan name"
       },
       "totalAmount": {
         "label": "Total amount",
         "placeholder": "0.00"
       },
       "installmentAmount": {
-        "label": "Per cuota",
+        "label": "Per installment",
         "placeholder": "0.00"
       },
       "currency": {
@@ -719,11 +719,11 @@
         "noResults": "No currencies found."
       },
       "installmentsCount": {
-        "label": "Total cuotas",
+        "label": "Total installments",
         "placeholder": "12"
       },
       "currentInstallment": {
-        "label": "Current cuota",
+        "label": "Current installment",
         "placeholder": "1"
       },
       "startDate": {

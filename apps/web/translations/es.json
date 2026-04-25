@@ -567,10 +567,10 @@
   "subscriptions": {
     "metadata": {
       "title": "Suscripciones",
-      "description": "Gestioná cargos recurrentes como Netflix, Spotify o el gimnasio."
+      "description": "Gestioná tus suscripciones"
     },
     "title": "Suscripciones",
-    "subtitle": "Cargos recurrentes (Netflix, Spotify, gimnasio, etc.).",
+    "subtitle": "Registrá y gestioná tus suscripciones.",
     "toolbar": {
       "searchPlaceholder": "Buscar suscripciones...",
       "add": "Agregar suscripción",
@@ -662,10 +662,10 @@
   "installments": {
     "metadata": {
       "title": "Cuotas",
-      "description": "Gestioná tus planes de cuotas."
+      "description": "Gestioná tus planes de cuotas"
     },
     "title": "Cuotas",
-    "subtitle": "Compras en cuotas (TV en 12 cuotas, sillón en 6 cuotas, etc.).",
+    "subtitle": "Registrá y gestioná tus planes de cuotas.",
     "toolbar": {
       "searchPlaceholder": "Buscar planes de cuotas...",
       "add": "Agregar plan",
@@ -702,7 +702,7 @@
       "titleEdit": "Editar plan de cuotas",
       "name": {
         "label": "Nombre",
-        "placeholder": "Ingresá el nombre del plan (ej., TV Samsung)"
+        "placeholder": "Ingresá el nombre del plan"
       },
       "totalAmount": {
         "label": "Monto total",
