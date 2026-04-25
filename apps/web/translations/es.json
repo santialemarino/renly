@@ -153,6 +153,8 @@
       "income": "Ingresos",
       "expenses": "Gastos",
       "creditCards": "Tarjetas de Crédito",
+      "subscriptions": "Suscripciones",
+      "installments": "Cuotas",
       "investorDashboard": "Dashboard",
       "investments": "Inversiones",
       "groups": "Grupos",
@@ -560,6 +562,199 @@
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
       }
+    }
+  },
+  "subscriptions": {
+    "metadata": {
+      "title": "Suscripciones",
+      "description": "Gestioná cargos recurrentes como Netflix, Spotify o el gimnasio."
+    },
+    "title": "Suscripciones",
+    "subtitle": "Cargos recurrentes (Netflix, Spotify, gimnasio, etc.).",
+    "toolbar": {
+      "searchPlaceholder": "Buscar suscripciones...",
+      "add": "Agregar suscripción",
+      "showArchived": "Ver archivadas"
+    },
+    "table": {
+      "name": "Nombre",
+      "amount": "Monto",
+      "billingCycle": "Ciclo",
+      "nextBillingDate": "Próximo cobro",
+      "paymentMethod": "Forma de pago",
+      "actions": "Acciones",
+      "empty": "No se encontraron suscripciones."
+    },
+    "billingCycles": {
+      "weekly": "Semanal",
+      "biweekly": "Quincenal",
+      "monthly": "Mensual",
+      "quarterly": "Trimestral",
+      "annual": "Anual"
+    },
+    "paymentMethods": {
+      "cash": "Efectivo",
+      "debit": "Débito",
+      "transfer": "Transferencia",
+      "credit_card": "Tarjeta de crédito"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "archiveSuccess": "Suscripción archivada.",
+      "archiveError": "No se pudo archivar la suscripción.",
+      "unarchiveSuccess": "Suscripción desarchivada.",
+      "unarchiveError": "No se pudo desarchivar la suscripción."
+    },
+    "form": {
+      "titleCreate": "Agregar suscripción",
+      "titleEdit": "Editar suscripción",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre de la suscripción"
+      },
+      "amount": {
+        "label": "Monto",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "billingCycle": {
+        "label": "Ciclo de cobro",
+        "placeholder": "Seleccioná un ciclo"
+      },
+      "nextBillingDate": {
+        "label": "Próximo cobro",
+        "placeholder": "Seleccioná una fecha"
+      },
+      "paymentMethod": {
+        "label": "Forma de pago",
+        "placeholder": "Seleccioná una forma de pago"
+      },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Seleccioná una tarjeta"
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Suscripción creada.",
+      "updateSuccess": "Suscripción actualizada.",
+      "saveError": "No se pudo guardar la suscripción."
+    },
+    "delete": {
+      "title": "Eliminar suscripción",
+      "confirm": "¿Seguro que querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Suscripción eliminada.",
+      "error": "No se pudo eliminar la suscripción."
+    }
+  },
+  "installments": {
+    "metadata": {
+      "title": "Cuotas",
+      "description": "Gestioná tus planes de cuotas."
+    },
+    "title": "Cuotas",
+    "subtitle": "Compras en cuotas (TV en 12 cuotas, sillón en 6 cuotas, etc.).",
+    "toolbar": {
+      "searchPlaceholder": "Buscar planes de cuotas...",
+      "add": "Agregar plan",
+      "showArchived": "Ver archivados"
+    },
+    "table": {
+      "name": "Nombre",
+      "installmentAmount": "Por cuota",
+      "totalAmount": "Total",
+      "progress": "Progreso",
+      "startDate": "Fecha de inicio",
+      "paymentMethod": "Forma de pago",
+      "actions": "Acciones",
+      "empty": "No se encontraron planes de cuotas."
+    },
+    "paymentMethods": {
+      "cash": "Efectivo",
+      "debit": "Débito",
+      "transfer": "Transferencia",
+      "credit_card": "Tarjeta de crédito"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "archiveSuccess": "Plan archivado.",
+      "archiveError": "No se pudo archivar el plan.",
+      "unarchiveSuccess": "Plan desarchivado.",
+      "unarchiveError": "No se pudo desarchivar el plan."
+    },
+    "form": {
+      "titleCreate": "Agregar plan de cuotas",
+      "titleEdit": "Editar plan de cuotas",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre del plan (ej., TV Samsung)"
+      },
+      "totalAmount": {
+        "label": "Monto total",
+        "placeholder": "0.00"
+      },
+      "installmentAmount": {
+        "label": "Por cuota",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "installmentsCount": {
+        "label": "Total de cuotas",
+        "placeholder": "12"
+      },
+      "currentInstallment": {
+        "label": "Cuota actual",
+        "placeholder": "1"
+      },
+      "startDate": {
+        "label": "Fecha de inicio",
+        "placeholder": "Seleccioná una fecha"
+      },
+      "paymentMethod": {
+        "label": "Forma de pago",
+        "placeholder": "Seleccioná una forma de pago"
+      },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Seleccioná una tarjeta"
+      },
+      "invalidPositiveInteger": "Debe ser un número entero positivo.",
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Plan creado.",
+      "updateSuccess": "Plan actualizado.",
+      "saveError": "No se pudo guardar el plan."
+    },
+    "delete": {
+      "title": "Eliminar plan de cuotas",
+      "confirm": "¿Seguro que querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Plan eliminado.",
+      "error": "No se pudo eliminar el plan."
     }
   },
   "investorDashboard": {
