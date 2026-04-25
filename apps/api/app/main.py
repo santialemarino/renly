@@ -17,9 +17,12 @@ from app.routers import (
     finance_metrics,
     groups,
     income,
+    installments,
     investments,
     metrics,
+    payment_obligations,
     snapshot_grid,
+    subscriptions,
 )
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
@@ -57,10 +60,13 @@ app.include_router(expenses.router)
 app.include_router(finance_metrics.router)
 app.include_router(groups.router)
 app.include_router(income.router)
+app.include_router(installments.router)
 app.include_router(investments.router)
 app.include_router(metrics.router)
+app.include_router(payment_obligations.router)
 app.include_router(settings_router.router)
 app.include_router(snapshot_grid.router)
+app.include_router(subscriptions.router)
 
 
 @app.exception_handler(CurrencyChangeBlockedError)

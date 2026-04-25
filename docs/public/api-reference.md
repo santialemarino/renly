@@ -205,6 +205,62 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 
 ---
 
+## Subscriptions
+
+Recurring charges (e.g. Netflix, Spotify, gym). Auto-generation of monthly expenses lands in a later step.
+
+| Method   | Path                  | Description                                                                       |
+| -------- | --------------------- | --------------------------------------------------------------------------------- |
+| `GET`    | `/subscriptions`      | List subscriptions with search, sorting, archive filter, and currency conversion. |
+| `POST`   | `/subscriptions`      | Create a new subscription.                                                        |
+| `GET`    | `/subscriptions/{id}` | Get a single subscription by ID.                                                  |
+| `PUT`    | `/subscriptions/{id}` | Update a subscription. Only provided fields are changed.                          |
+| `DELETE` | `/subscriptions/{id}` | Delete a subscription.                                                            |
+
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `billing_cycle`, `next_billing_date`), `sort_order` (`asc`/`desc`), `show_archived`, `currency` (display currency for conversion).
+
+**Subscription fields:** `name`, `amount` (> 0), `currency` (ISO 4217), `billing_cycle` (`monthly`, `annual`, `quarterly`, `biweekly`, `weekly`), `payment_method` (optional; `cash`, `debit`, `transfer`, `credit_card`), `credit_card_id` (when payment_method = credit_card), `is_active`, `next_billing_date`. Responses also include `converted_amount` when `currency` query param is provided.
+
+---
+
+## Installments
+
+Cuotas (installment plans, e.g. TV Samsung 12x). Auto-generation of monthly cuota expenses lands in a later step.
+
+| Method   | Path                 | Description                                                                           |
+| -------- | -------------------- | ------------------------------------------------------------------------------------- |
+| `GET`    | `/installments`      | List installment plans with search, sorting, archive filter, and currency conversion. |
+| `POST`   | `/installments`      | Create a new installment plan.                                                        |
+| `GET`    | `/installments/{id}` | Get a single installment plan by ID.                                                  |
+| `PUT`    | `/installments/{id}` | Update an installment plan. Only provided fields are changed.                         |
+| `DELETE` | `/installments/{id}` | Delete an installment plan.                                                           |
+
+**Query parameters (list):** `search`, `sort_by` (`name`, `total_amount`, `installment_amount`, `currency`, `installments_count`, `current_installment`, `start_date`), `sort_order`, `show_archived`, `currency`.
+
+**Installment fields:** `name`, `total_amount` (> 0), `installment_amount` (> 0), `currency`, `installments_count` (≥ 1), `current_installment` (≥ 1; default 1), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `start_date`. Responses include `converted_total_amount` and `converted_installment_amount` when `currency` query param is provided.
+
+**Lifecycle:** `is_active` flips to `false` automatically when the auto-generation scheduler issues the last cuota (`current_installment > installments_count`). Until that scheduler ships, `is_active` is user-controlled via `PUT /installments/{id}`.
+
+---
+
+## Payment Obligations
+
+Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surfaces in the Payments Calendar (Phase 3, Step 4).
+
+| Method   | Path                        | Description                                                                     |
+| -------- | --------------------------- | ------------------------------------------------------------------------------- |
+| `GET`    | `/payment-obligations`      | List obligations with search, sorting, archive filter, and currency conversion. |
+| `POST`   | `/payment-obligations`      | Create a new obligation.                                                        |
+| `GET`    | `/payment-obligations/{id}` | Get a single obligation by ID.                                                  |
+| `PUT`    | `/payment-obligations/{id}` | Update an obligation. Only provided fields are changed.                         |
+| `DELETE` | `/payment-obligations/{id}` | Delete an obligation.                                                           |
+
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
+
+**Obligation fields:** `name`, `amount` (> 0), `currency`, `due_date`, `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
+
+---
+
 ## Finance Metrics
 
 Dashboard-oriented endpoints for income, expense, and cash flow metrics. All support `currency` conversion and optional date range filtering.

@@ -102,6 +102,24 @@ A settlement records a credit card payment. Settlements are **not expenses** -- 
 
 For the full accounting model (how expenses create liabilities, how settlements reduce them, how balance is computed), see [Credit Card Liability Model](../technical/credit-card-liability-model.md).
 
+### Subscriptions
+
+A subscription represents a recurring charge (e.g. Netflix, Spotify, gym). Each subscription has a name, amount, currency, billing cycle (`monthly`, `annual`, `quarterly`, `biweekly`, `weekly`), an active flag, and the date of its next billing event. It optionally links to a payment method and credit card.
+
+A scheduled job (Phase 3, Step 3) auto-generates one expense entry per billing cycle and advances `next_billing_date`. Until that ships, subscriptions are CRUD-only — no expenses are auto-generated.
+
+### Installments
+
+An installment plan represents a multi-cuota purchase (e.g. "TV Samsung 12x"). Each plan has a name, total amount, per-cuota amount, currency, total cuota count, the index of the next cuota to issue, an active flag, and a start date. Like subscriptions, it optionally links to a payment method and credit card.
+
+A scheduled job (Phase 3, Step 3) auto-generates one expense entry per cuota each month, increments `current_installment`, and flips `is_active` to `false` when the last cuota is issued.
+
+### Payment Obligations
+
+A payment obligation records a recurring or one-off bill (electricity, ABL, internet, etc.). Each obligation has a name, amount, currency, due date, optional recurrence (`monthly`, `bimonthly`, `quarterly`, `annual`, or none for one-off), free-form category, optional payment method/credit card, an active flag, and notes.
+
+Obligations are not auto-generated as expenses — they exist as upcoming commitments that surface in the Payments Calendar (Phase 3, Step 4) so you can see what's due ahead. When you actually pay one, it's a separate manual expense entry.
+
 ### API Keys
 
 API keys allow external tools (like iOS Shortcuts) to authenticate without a full login flow. Each key has a name, is tied to a user, and can be revoked. The raw key is shown only once at creation.
@@ -136,6 +154,21 @@ User
  |                  |
  |                  |-- has many --> Card Settlements
  |                                  (payments that reduce the card balance)
+ |
+ |-- has many --> Subscriptions
+ |                (recurring charges; auto-generates monthly expenses in Phase 3 Step 3)
+ |                  |
+ |                  |-- optionally linked to --> Credit Card
+ |
+ |-- has many --> Installments
+ |                (cuota plans; auto-generates per-cuota expenses in Phase 3 Step 3)
+ |                  |
+ |                  |-- optionally linked to --> Credit Card
+ |
+ |-- has many --> Payment Obligations
+ |                (upcoming bills; surfaces in Payments Calendar)
+ |                  |
+ |                  |-- optionally linked to --> Credit Card
  |
  |-- has many --> Investments
  |                  |
