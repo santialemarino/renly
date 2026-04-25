@@ -36,7 +36,6 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
   ) => {
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
-    const hasError = ariaInvalid === true || ariaInvalid === 'true';
 
     function handleSelect(selected: Date | undefined) {
       if (selected) {
@@ -57,12 +56,13 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
               'text-paragraph-sm font-normal',
               'transition-[border-color,box-shadow] duration-200 ease-in-out',
               surface ? 'bg-background' : 'bg-input',
-              // Suppress Button's built-in unconditional aria-invalid ring; we only
-              // want a destructive ring on focus-visible to match Input's behavior.
-              'aria-invalid:ring-0',
-              hasError
-                ? 'border-destructive focus-visible:border-destructive focus-visible:ring-[3px] focus-visible:ring-destructive/30'
-                : 'border-border hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              // Default state: regular border, hover hint, blue ring on focus-visible.
+              'border-border hover:border-ring',
+              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              // Aria-invalid: red border, no ring (override Button's built-in aria-invalid:ring-3).
+              'aria-invalid:border-destructive aria-invalid:ring-0',
+              // Aria-invalid + focus-visible: red ring restored (compound variant wins via specificity).
+              'aria-invalid:focus-visible:border-destructive aria-invalid:focus-visible:ring-[3px] aria-invalid:focus-visible:ring-destructive/30',
               !isValidDate && 'text-muted-foreground',
               className,
             )}

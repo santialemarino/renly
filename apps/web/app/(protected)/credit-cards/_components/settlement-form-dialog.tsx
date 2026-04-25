@@ -23,6 +23,7 @@ import {
 } from '@/app/(protected)/credit-cards/settlement-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface SettlementFormDialogProps {
   open: boolean;
@@ -114,7 +115,14 @@ export function SettlementFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('settlements.form.amount')}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" step="0.01" min="0" placeholder="0.00" />
+                      <Input
+                        {...field}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        onKeyDown={blockNegativeNumberKeys}
+                        placeholder="0.00"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

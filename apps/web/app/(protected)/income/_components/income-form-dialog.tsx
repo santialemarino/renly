@@ -31,6 +31,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { IncomeEntry } from '@/lib/api/income';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface IncomeFormDialogProps {
   open: boolean;
@@ -164,6 +165,7 @@ export function IncomeFormDialog({
                         type="number"
                         step="0.01"
                         min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.amount.placeholder')}
                       />
                     </FormControl>

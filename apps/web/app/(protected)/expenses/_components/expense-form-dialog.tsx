@@ -35,6 +35,7 @@ import type { Expense } from '@/lib/api/expenses';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface ExpenseFormDialogProps {
   open: boolean;
@@ -184,6 +185,7 @@ export function ExpenseFormDialog({
                         type="number"
                         step="0.01"
                         min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.amount.placeholder')}
                       />
                     </FormControl>

@@ -37,6 +37,7 @@ import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface SubscriptionFormDialogProps {
   open: boolean;
@@ -162,6 +163,7 @@ export function SubscriptionFormDialog({
                         type="number"
                         step="0.01"
                         min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.amount.placeholder')}
                       />
                     </FormControl>

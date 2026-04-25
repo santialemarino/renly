@@ -43,6 +43,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly (DB cache hit).
@@ -430,6 +431,7 @@ export function SnapshotFormDialog({
                           type="number"
                           step="0.01"
                           min="0"
+                          onKeyDown={blockNegativeNumberKeys}
                           placeholder={t('form.value.placeholder')}
                           className={cn(
                             'transition-colors',
@@ -458,6 +460,7 @@ export function SnapshotFormDialog({
                             type="number"
                             step="any"
                             min="0"
+                            onKeyDown={blockNegativeNumberKeys}
                             placeholder={t('form.quantity.placeholder')}
                             className={cn(
                               'transition-colors',
@@ -531,6 +534,7 @@ export function SnapshotFormDialog({
                                 type="number"
                                 step="0.01"
                                 min="0"
+                                onKeyDown={blockNegativeNumberKeys}
                                 placeholder="0.00"
                                 className={cn(
                                   'transition-colors',
@@ -559,6 +563,7 @@ export function SnapshotFormDialog({
                                   type="number"
                                   step="any"
                                   min="0"
+                                  onKeyDown={blockNegativeNumberKeys}
                                   placeholder="0"
                                   className={cn(
                                     'transition-colors',

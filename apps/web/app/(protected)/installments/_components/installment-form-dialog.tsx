@@ -36,6 +36,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface InstallmentFormDialogProps {
   open: boolean;
@@ -167,6 +168,7 @@ export function InstallmentFormDialog({
                         type="number"
                         step="0.01"
                         min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.totalAmount.placeholder')}
                       />
                     </FormControl>
@@ -187,6 +189,7 @@ export function InstallmentFormDialog({
                         type="number"
                         step="0.01"
                         min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.installmentAmount.placeholder')}
                       />
                     </FormControl>
