@@ -130,18 +130,41 @@ export function ExpenseFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormControl>
+                    <DatePickerInput
+                      value={field.value || undefined}
+                      onChange={field.onChange}
+                      placeholder={t('form.date.placeholder')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
-                name="date"
+                name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormItem className="flex-1 min-w-0">
+                    <FormLabel required>{t('form.currency.label')}</FormLabel>
                     <FormControl>
-                      <DatePickerInput
-                        value={field.value || undefined}
+                      <CurrencyCombobox
+                        compact
+                        value={field.value || null}
+                        exclude={[]}
+                        preferredCurrencies={preferredCurrencies}
+                        placeholder={t('form.currency.placeholder')}
+                        searchPlaceholder={t('form.currency.searchPlaceholder')}
+                        noResults={t('form.currency.noResults')}
                         onChange={field.onChange}
-                        placeholder={t('form.date.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -162,29 +185,6 @@ export function ExpenseFormDialog({
                         step="0.01"
                         min="0"
                         placeholder={t('form.amount.placeholder')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="currency"
-                render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
-                    <FormControl>
-                      <CurrencyCombobox
-                        compact
-                        value={field.value || null}
-                        exclude={[]}
-                        preferredCurrencies={preferredCurrencies}
-                        placeholder={t('form.currency.placeholder')}
-                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                        noResults={t('form.currency.noResults')}
-                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />

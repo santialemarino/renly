@@ -132,12 +132,18 @@ function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
 function FormMessage({ className, children }: { className?: string; children?: React.ReactNode }) {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? '') : children;
+  // Key by content so AnimatePresence treats different error messages as separate
+  // elements, and `layout` smoothly animates the height when an error grows from
+  // one to two lines (e.g. switching from "required" to a longer min-value error).
+  const key = typeof body === 'string' ? body : 'message';
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="popLayout" initial={false}>
       {body && (
         <motion.p
+          key={key}
           data-slot="form-message"
           id={formMessageId}
+          layout
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}

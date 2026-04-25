@@ -57,6 +57,9 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
               'text-paragraph-sm font-normal',
               'transition-[border-color,box-shadow] duration-200 ease-in-out',
               surface ? 'bg-background' : 'bg-input',
+              // Suppress Button's built-in unconditional aria-invalid ring; we only
+              // want a destructive ring on focus-visible to match Input's behavior.
+              'aria-invalid:ring-0',
               hasError
                 ? 'border-destructive focus-visible:border-destructive focus-visible:ring-[3px] focus-visible:ring-destructive/30'
                 : 'border-border hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
