@@ -161,6 +161,7 @@ export function SubscriptionFormDialog({
                         {...field}
                         type="number"
                         step="0.01"
+                        min="0"
                         placeholder={t('form.amount.placeholder')}
                       />
                     </FormControl>

@@ -114,7 +114,7 @@ export function SettlementFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('settlements.form.amount')}</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" step="0.01" placeholder="0.00" />
+                      <Input {...field} type="number" step="0.01" min="0" placeholder="0.00" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

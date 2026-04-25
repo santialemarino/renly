@@ -17,13 +17,26 @@ interface DatePickerInputProps {
   disabled?: boolean;
   surface?: boolean;
   className?: string;
+  'aria-invalid'?: boolean | 'true' | 'false';
 }
 
 // A form-compatible date picker that stores the value as a YYYY-MM-DD string.
 const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
-  ({ value, onChange, placeholder, disabled, surface = false, className }, ref) => {
+  (
+    {
+      value,
+      onChange,
+      placeholder,
+      disabled,
+      surface = false,
+      className,
+      'aria-invalid': ariaInvalid,
+    },
+    ref,
+  ) => {
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
+    const hasError = ariaInvalid === true || ariaInvalid === 'true';
 
     function handleSelect(selected: Date | undefined) {
       if (selected) {
@@ -38,12 +51,15 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             ref={ref}
             variant="outline"
             disabled={disabled}
+            aria-invalid={ariaInvalid}
             className={cn(
-              'h-9 w-full justify-start gap-x-2 border-border px-3 shadow-xs',
+              'h-9 w-full justify-start gap-x-2 px-3 shadow-xs',
               'text-paragraph-sm font-normal',
+              'transition-[border-color,box-shadow] duration-200 ease-in-out',
               surface ? 'bg-background' : 'bg-input',
-              'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              hasError
+                ? 'border-destructive focus-visible:border-destructive focus-visible:ring-[3px] focus-visible:ring-destructive/30'
+                : 'border-border hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
               !isValidDate && 'text-muted-foreground',
               className,
             )}
