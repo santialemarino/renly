@@ -295,6 +295,76 @@ CREATE TABLE card_settlements (
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);
 
+-- Subscriptions (recurring charges; e.g. Netflix, Spotify, gym).
+-- Auto-generates monthly expense_entries via the scheduler (Phase 3, Step 3).
+-- billing_cycle: 'monthly', 'annual', 'quarterly', 'biweekly', 'weekly'.
+-- credit_card_id only set when payment_method = 'credit_card'.
+CREATE TABLE subscriptions (
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name              VARCHAR(255) NOT NULL,
+  amount            NUMERIC(18, 2) NOT NULL,
+  currency          VARCHAR(3) NOT NULL,
+  billing_cycle     VARCHAR(20) NOT NULL,
+  payment_method    VARCHAR(20),
+  credit_card_id    BIGINT REFERENCES credit_cards(id),
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  next_billing_date DATE NOT NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
+CREATE INDEX idx_subscriptions_user_next_billing ON subscriptions(user_id, next_billing_date);
+CREATE INDEX idx_subscriptions_credit_card ON subscriptions(credit_card_id);
+
+-- Installments (cuotas; e.g. TV Samsung 12x).
+-- Auto-generates one expense_entry per cuota each month (Phase 3, Step 3).
+-- is_active flips to false when current_installment > installments_count (fully paid).
+CREATE TABLE installments (
+  id                  BIGSERIAL PRIMARY KEY,
+  user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name                VARCHAR(255) NOT NULL,
+  total_amount        NUMERIC(18, 2) NOT NULL,
+  installment_amount  NUMERIC(18, 2) NOT NULL,
+  currency            VARCHAR(3) NOT NULL,
+  installments_count  INTEGER NOT NULL,
+  current_installment INTEGER NOT NULL DEFAULT 1,
+  payment_method      VARCHAR(20),
+  credit_card_id      BIGINT REFERENCES credit_cards(id),
+  is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+  start_date          DATE NOT NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_installments_user_id ON installments(user_id);
+CREATE INDEX idx_installments_user_active ON installments(user_id, is_active);
+CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
+
+-- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
+-- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
+CREATE TABLE payment_obligations (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name            VARCHAR(255) NOT NULL,
+  amount          NUMERIC(18, 2) NOT NULL,
+  currency        VARCHAR(3) NOT NULL,
+  due_date        DATE NOT NULL,
+  recurrence      VARCHAR(20),
+  category        VARCHAR(100),
+  payment_method  VARCHAR(20),
+  credit_card_id  BIGINT REFERENCES credit_cards(id),
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_payment_obligations_user_id ON payment_obligations(user_id);
+CREATE INDEX idx_payment_obligations_user_due_date ON payment_obligations(user_id, due_date);
+CREATE INDEX idx_payment_obligations_credit_card ON payment_obligations(credit_card_id);
+
 -- API keys for external access (iOS Shortcut, automations).
 -- key_hash stores bcrypt hash; raw key is shown once at creation.
 -- key_prefix stores first 8 chars of the raw key for fast indexed lookup
@@ -388,5 +458,17 @@ CREATE TRIGGER trg_income_entries_updated_at
 
 CREATE TRIGGER trg_card_settlements_updated_at
   BEFORE UPDATE ON card_settlements
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_subscriptions_updated_at
+  BEFORE UPDATE ON subscriptions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_installments_updated_at
+  BEFORE UPDATE ON installments
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_payment_obligations_updated_at
+  BEFORE UPDATE ON payment_obligations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 

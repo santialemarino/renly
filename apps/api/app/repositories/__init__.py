@@ -9,9 +9,12 @@ from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
+from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.metrics_repository import metrics_repository
+from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.snapshot_repository import snapshot_repository
+from app.repositories.subscription_repository import subscription_repository
 from app.repositories.transaction_repository import transaction_repository
 from app.repositories.user_repository import user_repository
 from app.repositories.user_settings_repository import user_settings_repository
@@ -26,9 +29,12 @@ __all__ = [
     "expense_repository",
     "group_repository",
     "income_repository",
+    "installment_repository",
     "investment_repository",
     "metrics_repository",
+    "payment_obligation_repository",
     "snapshot_repository",
+    "subscription_repository",
     "transaction_repository",
     "user_repository",
     "user_settings_repository",

@@ -9,10 +9,13 @@ from app.services import (
     finance_metrics_service,
     group_service,
     income_service,
+    installment_service,
     investment_service,
     metrics_service,
+    payment_obligation_service,
     settings_service,
     snapshot_grid_service,
+    subscription_service,
 )
 
 __all__ = [
@@ -24,8 +27,11 @@ __all__ = [
     "finance_metrics_service",
     "group_service",
     "income_service",
+    "installment_service",
     "investment_service",
     "metrics_service",
+    "payment_obligation_service",
     "settings_service",
     "snapshot_grid_service",
+    "subscription_service",
 ]

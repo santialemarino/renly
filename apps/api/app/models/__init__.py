@@ -8,9 +8,12 @@ from app.models.credit_card import CreditCard
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.income_entry import IncomeCategory, IncomeEntry
+from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.models.payment_obligation import PaymentObligation
 from app.models.snapshot import InvestmentSnapshot
+from app.models.subscription import Subscription
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.models.user_settings import UserSettings
@@ -28,11 +31,14 @@ __all__ = [
     "ExpenseEntry",
     "IncomeCategory",
     "IncomeEntry",
+    "Installment",
     "Investment",
     "InvestmentCategory",
     "InvestmentGroup",
     "InvestmentGroupMember",
     "InvestmentSnapshot",
+    "PaymentObligation",
+    "Subscription",
     "Transaction",
     "TransactionType",
     "User",
