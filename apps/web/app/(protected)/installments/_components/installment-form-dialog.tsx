@@ -204,7 +204,7 @@ export function InstallmentFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
-            {/* Row 1: name + Sin/Con interés toggle. */}
+            {/* Row 1: name + Without/With interest toggle. */}
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
@@ -380,37 +380,28 @@ export function InstallmentFormDialog({
                 />
               </div>
 
-              {/* Derived totals line. */}
-              <AnimatePresence initial={false} mode="wait">
-                {showDerivedLine && (
-                  <motion.div
-                    key={watchedHasInterest ? 'with-interest' : 'no-interest'}
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ overflow: 'hidden', marginTop: -8 }}
-                  >
-                    <div className="text-paragraph-xs text-muted-foreground pt-2">
-                      {watchedHasInterest && computedInterest !== null ? (
-                        <>
-                          {t('form.derived.totalToPay', {
-                            amount: formatAmount(String(computedTotalToPay)),
-                          })}
-                          {' · '}
-                          {t('form.derived.interest', {
-                            amount: formatAmount(String(computedInterest)),
-                          })}
-                        </>
-                      ) : (
-                        t('form.derived.total', {
-                          amount: formatAmount(String(computedTotalToPay)),
-                        })
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              {/* Derived totals line. Rendered without animation because the
+                  validity boundary flips on every keystroke and animating
+                  here races with FormMessage exits. */}
+              {showDerivedLine && (
+                <div className="text-paragraph-xs text-muted-foreground">
+                  {watchedHasInterest && computedInterest !== null ? (
+                    <>
+                      {t('form.derived.totalToPay', {
+                        amount: formatAmount(String(computedTotalToPay)),
+                      })}
+                      {' · '}
+                      {t('form.derived.interest', {
+                        amount: formatAmount(String(computedInterest)),
+                      })}
+                    </>
+                  ) : (
+                    t('form.derived.total', {
+                      amount: formatAmount(String(computedTotalToPay)),
+                    })
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Row 4 (Sin interés only): currency + startDate. */}
