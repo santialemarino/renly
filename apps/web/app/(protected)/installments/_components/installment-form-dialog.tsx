@@ -132,6 +132,10 @@ export function InstallmentFormDialog({
     computedTotalToPay > originalNum
       ? computedTotalToPay - originalNum
       : null;
+  // Show the derived line only when there's something meaningful to display:
+  // Sin interés just needs a valid total, Con interés also needs positive interest.
+  const showDerivedLine =
+    computedTotalToPay !== null && (watchedHasInterest ? computedInterest !== null : true);
 
   // Reset form when dialog opens or installment changes.
   useEffect(() => {
@@ -394,7 +398,7 @@ export function InstallmentFormDialog({
 
                 {/* Derived totals line. */}
                 <AnimatePresence initial={false} mode="wait">
-                  {computedTotalToPay !== null && (
+                  {showDerivedLine && (
                     <motion.div
                       key={watchedHasInterest ? 'with-interest' : 'no-interest'}
                       initial={{ opacity: 0, height: 0 }}
@@ -414,11 +418,11 @@ export function InstallmentFormDialog({
                               amount: formatAmount(String(computedInterest)),
                             })}
                           </>
-                        ) : !watchedHasInterest ? (
+                        ) : (
                           t('form.derived.total', {
                             amount: formatAmount(String(computedTotalToPay)),
                           })
-                        ) : null}
+                        )}
                       </div>
                     </motion.div>
                   )}
