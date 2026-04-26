@@ -5,7 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
-from app.domain import CurrencyChangeBlockedError, ExchangeRateUnavailableError, HasLinkedExpensesError, NotFoundError
+from app.domain import (
+    CurrencyChangeBlockedError,
+    ExchangeRateUnavailableError,
+    HasLinkedExpensesError,
+    InstallmentLockedFieldError,
+    NotFoundError,
+)
 from app.routers import (
     api_keys,
     asset_prices,
@@ -82,6 +88,14 @@ async def has_linked_expenses_handler(_request, exc: HasLinkedExpensesError):
     return JSONResponse(
         status_code=409,
         content={"detail": exc.message},
+    )
+
+
+@app.exception_handler(InstallmentLockedFieldError)
+async def installment_locked_field_handler(_request, exc: InstallmentLockedFieldError):
+    return JSONResponse(
+        status_code=400,
+        content={"detail": exc.message, "code": exc.code, "fields": exc.fields},
     )
 
 
