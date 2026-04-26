@@ -155,6 +155,7 @@ export function InstallmentFormDialog({
               )}
             />
 
+            {/* Purchase: total cost + currency. */}
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
@@ -170,27 +171,6 @@ export function InstallmentFormDialog({
                         min="0"
                         onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.totalAmount.placeholder')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="installmentAmount"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.installmentAmount.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -222,7 +202,29 @@ export function InstallmentFormDialog({
               />
             </div>
 
+            {/* Plan: per-installment amount × number of installments. */}
             <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="installmentAmount"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        onKeyDown={blockNegativeNumberKeys}
+                        placeholder={t('form.installmentAmount.placeholder')}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="installmentsCount"
@@ -234,6 +236,27 @@ export function InstallmentFormDialog({
                         {...field}
                         inputMode="numeric"
                         placeholder={t('form.installmentsCount.placeholder')}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Schedule: when it started + which cuota is next. */}
+            <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="startDate"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                    <FormControl>
+                      <DatePickerInput
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        placeholder={t('form.startDate.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -252,24 +275,6 @@ export function InstallmentFormDialog({
                         {...field}
                         inputMode="numeric"
                         placeholder={t('form.currentInstallment.placeholder')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="startDate"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.startDate.label')}</FormLabel>
-                    <FormControl>
-                      <DatePickerInput
-                        value={field.value || undefined}
-                        onChange={field.onChange}
-                        placeholder={t('form.startDate.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
