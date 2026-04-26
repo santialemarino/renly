@@ -36,6 +36,7 @@ import {
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
+import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 
 function SortIcon({
@@ -215,18 +216,40 @@ export function InstallmentsTable({
               </TableRow>
             ) : (
               installments.map((inst) => {
-                const cuotaDisplay = inst.convertedInstallmentAmount ?? inst.installmentAmount;
-                const totalDisplay = inst.convertedTotalAmount ?? inst.totalAmount;
-                const progressLabel = `${inst.currentInstallment}/${inst.installmentsCount}`;
+                const installmentDisplay =
+                  inst.convertedInstallmentAmount ?? inst.installmentAmount;
+                const isConverted = inst.convertedInstallmentAmount !== null;
+                const installmentNum = Number(installmentDisplay);
+                const totalToPay = Number.isFinite(installmentNum)
+                  ? installmentNum * inst.installmentsCount
+                  : 0;
+                const baseTotalNum = Number(inst.convertedTotalAmount ?? inst.totalAmount);
+                const interestAmount =
+                  Number.isFinite(baseTotalNum) && totalToPay > baseTotalNum + INTEREST_EPSILON
+                    ? totalToPay - baseTotalNum
+                    : null;
+                const currencySuffix = isConverted ? '' : ` ${inst.currency}`;
+                const paid = Math.max(0, inst.currentInstallment - 1);
+                const progressLabel = `${paid}/${inst.installmentsCount}`;
                 return (
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(cuotaDisplay)}{' '}
-                      {inst.convertedInstallmentAmount ? '' : inst.currency}
+                      {formatAmount(installmentDisplay)}
+                      {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
-                      {formatAmount(totalDisplay)} {inst.convertedTotalAmount ? '' : inst.currency}
+                      <div>
+                        {formatAmount(String(totalToPay))}
+                        {currencySuffix}
+                      </div>
+                      {interestAmount !== null && (
+                        <div className="text-paragraph-xs">
+                          {t('table.interestSubLine', {
+                            amount: `${formatAmount(String(interestAmount))}${currencySuffix}`,
+                          })}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-paragraph-sm-medium tabular-nums">
                       {progressLabel}
