@@ -36,6 +36,7 @@ import {
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
+import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 
 function SortIcon({
@@ -224,7 +225,7 @@ export function InstallmentsTable({
                   : 0;
                 const baseTotalNum = Number(inst.convertedTotalAmount ?? inst.totalAmount);
                 const interestAmount =
-                  Number.isFinite(baseTotalNum) && totalToPay > baseTotalNum + 0.01
+                  Number.isFinite(baseTotalNum) && totalToPay > baseTotalNum + INTEREST_EPSILON
                     ? totalToPay - baseTotalNum
                     : null;
                 const currencySuffix = isConverted ? '' : ` ${inst.currency}`;

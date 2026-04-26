@@ -41,10 +41,9 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
+import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
-
-const INTEREST_EPSILON = 0.01;
 
 interface InstallmentFormDialogProps {
   open: boolean;
@@ -75,9 +74,6 @@ export function InstallmentFormDialog({
 }: InstallmentFormDialogProps) {
   const t = useTranslations('installments');
   const tCommon = useTranslations('common');
-
-  const isEdit = !!installment;
-  const isLocked = isEdit && Number(installment.currentInstallment) > 1;
 
   const schema = useMemo(
     () =>
@@ -111,6 +107,8 @@ export function InstallmentFormDialog({
   const watchedInstallmentsCount = useWatch({ control: form.control, name: 'installmentsCount' });
   const watchedOriginalPrice = useWatch({ control: form.control, name: 'originalPrice' });
 
+  const isEdit = !!installment;
+  const isLocked = isEdit && Number(installment.currentInstallment) > 1;
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
