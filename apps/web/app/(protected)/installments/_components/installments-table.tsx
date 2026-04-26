@@ -215,11 +215,12 @@ export function InstallmentsTable({
               </TableRow>
             ) : (
               installments.map((inst) => {
-                const cuotaDisplay = inst.convertedInstallmentAmount ?? inst.installmentAmount;
+                const installmentDisplay =
+                  inst.convertedInstallmentAmount ?? inst.installmentAmount;
                 const isConverted = inst.convertedInstallmentAmount !== null;
-                const cuotaNum = Number(cuotaDisplay);
-                const totalToPay = Number.isFinite(cuotaNum)
-                  ? cuotaNum * inst.installmentsCount
+                const installmentNum = Number(installmentDisplay);
+                const totalToPay = Number.isFinite(installmentNum)
+                  ? installmentNum * inst.installmentsCount
                   : 0;
                 const baseTotalNum = Number(inst.convertedTotalAmount ?? inst.totalAmount);
                 const interestAmount =
@@ -233,7 +234,7 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(cuotaDisplay)}
+                      {formatAmount(installmentDisplay)}
                       {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">

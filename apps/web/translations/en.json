@@ -708,7 +708,7 @@
       "interest": {
         "noInterest": "No interest",
         "withInterest": "With interest",
-        "noInterestHint": "Don't know the original price? Use No interest instead — your monthly cuota stays the same and we'll track cash flow correctly."
+        "noInterestHint": "Don't know the original price? Use No interest instead — your monthly installment stays the same and we'll track cash flow correctly."
       },
       "originalPrice": {
         "label": "Original price",
@@ -731,7 +731,7 @@
       "currentInstallment": {
         "label": "Current installment",
         "placeholder": "1",
-        "editHint": "Default 1. Only change to skip cuotas you've already logged manually."
+        "editHint": "Default 1. Only change to skip installments you've already logged manually."
       },
       "startDate": {
         "label": "Start date",
@@ -750,7 +750,7 @@
         "totalToPay": "Total to pay: {amount}",
         "interest": "Interest: {amount}"
       },
-      "locked": "Locked because cuotas have been charged. To change these terms, delete and recreate the plan.",
+      "locked": "Locked because installments have been charged. To change these terms, delete and recreate the plan.",
       "interestMustBePositive": "Per installment × count must be greater than the original price.",
       "invalidPositiveInteger": "Must be a positive whole number.",
       "cancel": "Cancel",

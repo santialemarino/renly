@@ -133,7 +133,7 @@ export function InstallmentFormDialog({
       ? computedTotalToPay - originalNum
       : null;
   // Show the derived line only when there's something meaningful to display:
-  // Sin interés just needs a valid total, Con interés also needs positive interest.
+  // No interest just needs a valid total, With interest also needs a positive interest.
   const showDerivedLine =
     computedTotalToPay !== null && (watchedHasInterest ? computedInterest !== null : true);
 
@@ -167,7 +167,7 @@ export function InstallmentFormDialog({
     }
   }, [watchedPaymentMethod, form]);
 
-  // Clear originalPrice when toggling to Sin interés so it doesn't linger as form state.
+  // Clear originalPrice when toggling to No interest so it doesn't linger as form state.
   useEffect(() => {
     if (!watchedHasInterest && form.getValues('originalPrice')) {
       form.setValue('originalPrice', '', { shouldValidate: false });
@@ -204,7 +204,7 @@ export function InstallmentFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
-            {/* Row 1: name + Without/With interest toggle. */}
+            {/* Row 1: name + No/With interest toggle. */}
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
@@ -247,7 +247,7 @@ export function InstallmentFormDialog({
               />
             </div>
 
-            {/* Row 2 (Con interés only): originalPrice + currency, with InfoHint below. */}
+            {/* Row 2 (With interest only): originalPrice + currency, with InfoHint below. */}
             <AnimatePresence initial={false}>
               {watchedHasInterest && (
                 <motion.div
@@ -404,7 +404,7 @@ export function InstallmentFormDialog({
               )}
             </div>
 
-            {/* Row 4 (Sin interés only): currency + startDate. */}
+            {/* Row 4 (No interest only): currency + startDate. */}
             <AnimatePresence initial={false}>
               {!watchedHasInterest && (
                 <motion.div
@@ -477,7 +477,7 @@ export function InstallmentFormDialog({
               )}
             </AnimatePresence>
 
-            {/* Row 4 (Con interés only): startDate full-width. */}
+            {/* Row 4 (With interest only): startDate full-width. */}
             <AnimatePresence initial={false}>
               {watchedHasInterest && (
                 <motion.div
