@@ -12,6 +12,7 @@ interface PillToggleGroupProps {
   items: PillToggleGroupItem[];
   value: string;
   onValueChange: (value: string) => void;
+  disabled?: boolean;
   itemClassName?: string;
   className?: string;
 }
@@ -21,6 +22,7 @@ export function PillToggleGroup({
   items,
   value,
   onValueChange,
+  disabled,
   itemClassName,
   className,
 }: PillToggleGroupProps) {
@@ -29,6 +31,7 @@ export function PillToggleGroup({
       type="single"
       value={value}
       onValueChange={(v) => v && onValueChange(v)}
+      disabled={disabled}
       variant="outline"
       size="sm"
       className={cn(

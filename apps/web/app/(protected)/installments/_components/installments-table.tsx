@@ -216,17 +216,38 @@ export function InstallmentsTable({
             ) : (
               installments.map((inst) => {
                 const cuotaDisplay = inst.convertedInstallmentAmount ?? inst.installmentAmount;
-                const totalDisplay = inst.convertedTotalAmount ?? inst.totalAmount;
-                const progressLabel = `${inst.currentInstallment}/${inst.installmentsCount}`;
+                const isConverted = inst.convertedInstallmentAmount !== null;
+                const cuotaNum = Number(cuotaDisplay);
+                const totalToPay = Number.isFinite(cuotaNum)
+                  ? cuotaNum * inst.installmentsCount
+                  : 0;
+                const baseTotalNum = Number(inst.convertedTotalAmount ?? inst.totalAmount);
+                const interestAmount =
+                  Number.isFinite(baseTotalNum) && totalToPay > baseTotalNum + 0.01
+                    ? totalToPay - baseTotalNum
+                    : null;
+                const currencySuffix = isConverted ? '' : ` ${inst.currency}`;
+                const paid = Math.max(0, inst.currentInstallment - 1);
+                const progressLabel = `${paid}/${inst.installmentsCount}`;
                 return (
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(cuotaDisplay)}{' '}
-                      {inst.convertedInstallmentAmount ? '' : inst.currency}
+                      {formatAmount(cuotaDisplay)}
+                      {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
-                      {formatAmount(totalDisplay)} {inst.convertedTotalAmount ? '' : inst.currency}
+                      <div>
+                        {formatAmount(String(totalToPay))}
+                        {currencySuffix}
+                      </div>
+                      {interestAmount !== null && (
+                        <div className="text-paragraph-xs">
+                          {t('table.interestSubLine', {
+                            amount: `${formatAmount(String(interestAmount))}${currencySuffix}`,
+                          })}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-paragraph-sm-medium tabular-nums">
                       {progressLabel}

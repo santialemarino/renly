@@ -675,6 +675,7 @@
       "name": "Name",
       "installmentAmount": "Per installment",
       "totalAmount": "Total",
+      "interestSubLine": "Includes {amount} interest",
       "progress": "Progress",
       "startDate": "Start date",
       "paymentMethod": "Payment method",
@@ -704,8 +705,13 @@
         "label": "Name",
         "placeholder": "Enter the plan name"
       },
-      "totalAmount": {
-        "label": "Total amount",
+      "interest": {
+        "noInterest": "No interest",
+        "withInterest": "With interest",
+        "noInterestHint": "Don't know the original price? Use No interest instead — your monthly cuota stays the same and we'll track cash flow correctly."
+      },
+      "originalPrice": {
+        "label": "Original price",
         "placeholder": "0.00"
       },
       "installmentAmount": {
@@ -724,7 +730,8 @@
       },
       "currentInstallment": {
         "label": "Current installment",
-        "placeholder": "1"
+        "placeholder": "1",
+        "editHint": "Default 1. Only change to skip cuotas you've already logged manually."
       },
       "startDate": {
         "label": "Start date",
@@ -738,6 +745,13 @@
         "label": "Credit card",
         "placeholder": "Select a credit card"
       },
+      "derived": {
+        "total": "Total: {amount}",
+        "totalToPay": "Total to pay: {amount}",
+        "interest": "Interest: {amount}"
+      },
+      "locked": "Locked because cuotas have been charged. To change these terms, delete and recreate the plan.",
+      "interestMustBePositive": "Per installment × count must be greater than the original price.",
       "invalidPositiveInteger": "Must be a positive whole number.",
       "cancel": "Cancel",
       "cta": {

@@ -4,25 +4,21 @@ import type { InstallmentFormValues } from '@/app/(protected)/installments/insta
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 function toBody(values: InstallmentFormValues) {
-  const {
-    totalAmount,
-    installmentAmount,
-    installmentsCount,
-    currentInstallment,
-    startDate,
-    paymentMethod,
-    creditCardId,
-    ...rest
-  } = values;
+  const installmentNum = Number(values.installmentAmount);
+  const countNum = Number(values.installmentsCount);
+  const totalAmount = values.hasInterest
+    ? Number(values.originalPrice ?? '0')
+    : installmentNum * countNum;
   return {
-    ...rest,
-    total_amount: Number(totalAmount),
-    installment_amount: Number(installmentAmount),
-    installments_count: Number(installmentsCount),
-    current_installment: Number(currentInstallment),
-    start_date: startDate,
-    payment_method: paymentMethod ?? null,
-    credit_card_id: paymentMethod === 'credit_card' ? (creditCardId ?? null) : null,
+    name: values.name,
+    total_amount: totalAmount,
+    installment_amount: installmentNum,
+    installments_count: countNum,
+    current_installment: Number(values.currentInstallment),
+    currency: values.currency,
+    start_date: values.startDate,
+    payment_method: values.paymentMethod ?? null,
+    credit_card_id: values.paymentMethod === 'credit_card' ? (values.creditCardId ?? null) : null,
   };
 }
 

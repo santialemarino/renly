@@ -675,6 +675,7 @@
       "name": "Nombre",
       "installmentAmount": "Por cuota",
       "totalAmount": "Total",
+      "interestSubLine": "Incluye {amount} de interés",
       "progress": "Progreso",
       "startDate": "Fecha de inicio",
       "paymentMethod": "Forma de pago",
@@ -704,8 +705,13 @@
         "label": "Nombre",
         "placeholder": "Ingresá el nombre del plan"
       },
-      "totalAmount": {
-        "label": "Monto total",
+      "interest": {
+        "noInterest": "Sin interés",
+        "withInterest": "Con interés",
+        "noInterestHint": "¿No sabés el precio original? Usá Sin interés — la cuota mensual queda igual y vamos a registrar el flujo de caja correctamente."
+      },
+      "originalPrice": {
+        "label": "Precio original",
         "placeholder": "0.00"
       },
       "installmentAmount": {
@@ -724,7 +730,8 @@
       },
       "currentInstallment": {
         "label": "Cuota actual",
-        "placeholder": "1"
+        "placeholder": "1",
+        "editHint": "Por defecto 1. Cambialo solo para saltear cuotas que ya registraste manualmente."
       },
       "startDate": {
         "label": "Fecha de inicio",
@@ -738,6 +745,13 @@
         "label": "Tarjeta de crédito",
         "placeholder": "Seleccioná una tarjeta"
       },
+      "derived": {
+        "total": "Total: {amount}",
+        "totalToPay": "Total a pagar: {amount}",
+        "interest": "Interés: {amount}"
+      },
+      "locked": "Bloqueado porque ya se cobraron cuotas. Para cambiar estos datos, eliminá el plan y volvé a crearlo.",
+      "interestMustBePositive": "Por cuota × cantidad debe ser mayor al precio original.",
       "invalidPositiveInteger": "Debe ser un número entero positivo.",
       "cancel": "Cancelar",
       "cta": {
