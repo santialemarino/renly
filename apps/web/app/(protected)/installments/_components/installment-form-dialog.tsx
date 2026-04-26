@@ -308,11 +308,11 @@ export function InstallmentFormDialog({
                 <motion.div
                   key="credit-card"
                   layout
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                   transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ overflow: 'hidden', marginTop: -16 }}
+                  style={{ marginTop: -16 }}
                 >
                   <div className="pt-4">
                     <FormField
