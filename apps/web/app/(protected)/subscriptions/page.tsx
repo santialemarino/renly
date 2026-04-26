@@ -1,0 +1,66 @@
+import { cookies } from 'next/headers';
+import { getTranslations } from 'next-intl/server';
+
+import { PageHeader } from '@/app/(protected)/_components/page-header';
+import { SubscriptionsTable } from '@/app/(protected)/subscriptions/_components/subscriptions-table';
+import { SubscriptionsToolbar } from '@/app/(protected)/subscriptions/_components/subscriptions-toolbar';
+import { getCreditCards } from '@/lib/api/credit-cards';
+import { getSettings } from '@/lib/api/settings';
+import {
+  getSubscriptions,
+  type SortOrder,
+  type SubscriptionSortField,
+} from '@/lib/api/subscriptions';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
+
+export async function generateMetadata() {
+  return await generatePageMetadata('subscriptions');
+}
+
+interface SubscriptionsPageProps {
+  searchParams: Promise<{
+    search?: string;
+    sort_by?: string;
+    sort_order?: string;
+    show_archived?: string;
+  }>;
+}
+
+export default async function SubscriptionsPage({ searchParams }: SubscriptionsPageProps) {
+  const t = await getTranslations('subscriptions');
+  const params = await searchParams;
+  const cookieStore = await cookies();
+
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
+
+  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const activeCurrency = savedCurrency || primary;
+  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+
+  const subscriptions = await getSubscriptions({
+    search: params.search,
+    sortBy: params.sort_by as SubscriptionSortField | undefined,
+    sortOrder: params.sort_order as SortOrder | undefined,
+    showArchived: params.show_archived === 'true',
+    currency,
+  });
+
+  return (
+    <div className="flex flex-col flex-1 p-8 gap-y-4">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <SubscriptionsToolbar preferredCurrencies={preferredCurrencies} creditCards={creditCards} />
+      <SubscriptionsTable
+        subscriptions={subscriptions}
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+      />
+    </div>
+  );
+}

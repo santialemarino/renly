@@ -10,9 +10,11 @@ import {
   CreditCard,
   FolderOpen,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Puzzle,
   Receipt,
+  RefreshCw,
   Rows3,
   Settings,
   SlidersHorizontal,
@@ -50,6 +52,8 @@ const FINANCES_GROUP = [
   { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
   { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
   { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
+  { key: 'subscriptions', href: ROUTES.subscriptions, icon: RefreshCw },
+  { key: 'installments', href: ROUTES.installments, icon: ListChecks },
 ] as const;
 
 const PORTFOLIO_GROUP = [

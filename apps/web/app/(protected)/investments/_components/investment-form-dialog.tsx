@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -36,6 +37,7 @@ import {
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { CATEGORY_CAPABILITIES, type InvestmentCategory } from '@/lib/constants/categories';
 import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
@@ -215,50 +217,71 @@ export function InvestmentFormDialog({
               />
             </div>
 
-            <div className="flex min-w-0 items-start gap-x-3">
-              {showTicker && (
-                <FormField
-                  control={form.control}
-                  name="ticker"
-                  render={({ field }) => (
-                    <FormItem className="flex-1 min-w-0">
-                      <FormLabel>
-                        {watchedCategory && t.has(`form.ticker.label.${watchedCategory}`)
-                          ? t(`form.ticker.label.${watchedCategory}`)
-                          : t('form.ticker.label.default')}
-                      </FormLabel>
-                      <FormControl>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Input
-                              {...field}
-                              placeholder={t('form.ticker.placeholder')}
-                              onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                            />
-                          </TooltipTrigger>
-                          {tickerHint && <TooltipContent>{tickerHint}</TooltipContent>}
-                        </Tooltip>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+            <LayoutGroup>
+              <div className="flex min-w-0 items-start gap-x-3">
+                <AnimatePresence initial={false} mode="popLayout">
+                  {showTicker && (
+                    <motion.div
+                      key="ticker"
+                      layout
+                      initial={{ opacity: 0, width: 0, marginRight: -12 }}
+                      animate={{ opacity: 1, width: 'auto', marginRight: 0 }}
+                      exit={{ opacity: 0, width: 0, marginRight: -12 }}
+                      transition={{ duration: ANIMATION_DEFAULT }}
+                      style={{ overflow: 'hidden' }}
+                      className="flex-1 min-w-0"
+                    >
+                      <FormField
+                        control={form.control}
+                        name="ticker"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>
+                              {watchedCategory && t.has(`form.ticker.label.${watchedCategory}`)
+                                ? t(`form.ticker.label.${watchedCategory}`)
+                                : t('form.ticker.label.default')}
+                            </FormLabel>
+                            <FormControl>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Input
+                                    {...field}
+                                    placeholder={t('form.ticker.placeholder')}
+                                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                                  />
+                                </TooltipTrigger>
+                                {tickerHint && <TooltipContent>{tickerHint}</TooltipContent>}
+                              </Tooltip>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </motion.div>
                   )}
-                />
-              )}
+                </AnimatePresence>
 
-              <FormField
-                control={form.control}
-                name="broker"
-                render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel>{t('form.broker.label')}</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder={t('form.broker.placeholder')} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+                <motion.div
+                  layout
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  className="flex-1 min-w-0"
+                >
+                  <FormField
+                    control={form.control}
+                    name="broker"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('form.broker.label')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={t('form.broker.placeholder')} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </motion.div>
+              </div>
+            </LayoutGroup>
 
             {groups.length > 0 && (
               <FormField

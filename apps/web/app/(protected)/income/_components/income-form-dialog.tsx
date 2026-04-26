@@ -31,6 +31,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { IncomeEntry } from '@/lib/api/income';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
+import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface IncomeFormDialogProps {
   open: boolean;
@@ -110,18 +111,41 @@ export function IncomeFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormControl>
+                    <DatePickerInput
+                      value={field.value || undefined}
+                      onChange={field.onChange}
+                      placeholder={t('form.date.placeholder')}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
-                name="date"
+                name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormItem className="flex-1 min-w-0">
+                    <FormLabel required>{t('form.currency.label')}</FormLabel>
                     <FormControl>
-                      <DatePickerInput
-                        value={field.value || undefined}
+                      <CurrencyCombobox
+                        compact
+                        value={field.value || null}
+                        exclude={[]}
+                        preferredCurrencies={preferredCurrencies}
+                        placeholder={t('form.currency.placeholder')}
+                        searchPlaceholder={t('form.currency.searchPlaceholder')}
+                        noResults={t('form.currency.noResults')}
                         onChange={field.onChange}
-                        placeholder={t('form.date.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -140,30 +164,9 @@ export function IncomeFormDialog({
                         {...field}
                         type="number"
                         step="0.01"
+                        min="0"
+                        onKeyDown={blockNegativeNumberKeys}
                         placeholder={t('form.amount.placeholder')}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="currency"
-                render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
-                    <FormControl>
-                      <CurrencyCombobox
-                        compact
-                        value={field.value || null}
-                        exclude={[]}
-                        preferredCurrencies={preferredCurrencies}
-                        placeholder={t('form.currency.placeholder')}
-                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                        noResults={t('form.currency.noResults')}
-                        onChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />

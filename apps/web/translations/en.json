@@ -153,6 +153,8 @@
       "income": "Income",
       "expenses": "Expenses",
       "creditCards": "Credit Cards",
+      "subscriptions": "Subscriptions",
+      "installments": "Installments",
       "investorDashboard": "Dashboard",
       "investments": "Investments",
       "groups": "Groups",
@@ -560,6 +562,199 @@
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }
+    }
+  },
+  "subscriptions": {
+    "metadata": {
+      "title": "Subscriptions",
+      "description": "Manage your subscriptions"
+    },
+    "title": "Subscriptions",
+    "subtitle": "Track and manage your subscriptions.",
+    "toolbar": {
+      "searchPlaceholder": "Search subscriptions...",
+      "add": "Add subscription",
+      "showArchived": "Show archived"
+    },
+    "table": {
+      "name": "Name",
+      "amount": "Amount",
+      "billingCycle": "Billing cycle",
+      "nextBillingDate": "Next billing",
+      "paymentMethod": "Payment method",
+      "actions": "Actions",
+      "empty": "No subscriptions found."
+    },
+    "billingCycles": {
+      "weekly": "Weekly",
+      "biweekly": "Biweekly",
+      "monthly": "Monthly",
+      "quarterly": "Quarterly",
+      "annual": "Annual"
+    },
+    "paymentMethods": {
+      "cash": "Cash",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "credit_card": "Credit card"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveSuccess": "Subscription archived.",
+      "archiveError": "Failed to archive subscription.",
+      "unarchiveSuccess": "Subscription unarchived.",
+      "unarchiveError": "Failed to unarchive subscription."
+    },
+    "form": {
+      "titleCreate": "Add subscription",
+      "titleEdit": "Edit subscription",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the subscription name"
+      },
+      "amount": {
+        "label": "Amount",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "billingCycle": {
+        "label": "Billing cycle",
+        "placeholder": "Select a billing cycle"
+      },
+      "nextBillingDate": {
+        "label": "Next billing date",
+        "placeholder": "Select a date"
+      },
+      "paymentMethod": {
+        "label": "Payment method",
+        "placeholder": "Select a payment method"
+      },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a credit card"
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Subscription created.",
+      "updateSuccess": "Subscription updated.",
+      "saveError": "Failed to save subscription."
+    },
+    "delete": {
+      "title": "Delete subscription",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Subscription deleted.",
+      "error": "Failed to delete subscription."
+    }
+  },
+  "installments": {
+    "metadata": {
+      "title": "Installments",
+      "description": "Manage your installment plans"
+    },
+    "title": "Installments",
+    "subtitle": "Track and manage your installment plans.",
+    "toolbar": {
+      "searchPlaceholder": "Search installments...",
+      "add": "Add installment plan",
+      "showArchived": "Show archived"
+    },
+    "table": {
+      "name": "Name",
+      "installmentAmount": "Per installment",
+      "totalAmount": "Total",
+      "progress": "Progress",
+      "startDate": "Start date",
+      "paymentMethod": "Payment method",
+      "actions": "Actions",
+      "empty": "No installment plans found."
+    },
+    "paymentMethods": {
+      "cash": "Cash",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "credit_card": "Credit card"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveSuccess": "Installment plan archived.",
+      "archiveError": "Failed to archive installment plan.",
+      "unarchiveSuccess": "Installment plan unarchived.",
+      "unarchiveError": "Failed to unarchive installment plan."
+    },
+    "form": {
+      "titleCreate": "Add installment plan",
+      "titleEdit": "Edit installment plan",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the plan name"
+      },
+      "totalAmount": {
+        "label": "Total amount",
+        "placeholder": "0.00"
+      },
+      "installmentAmount": {
+        "label": "Per installment",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "installmentsCount": {
+        "label": "Total installments",
+        "placeholder": "12"
+      },
+      "currentInstallment": {
+        "label": "Current installment",
+        "placeholder": "1"
+      },
+      "startDate": {
+        "label": "Start date",
+        "placeholder": "Select a date"
+      },
+      "paymentMethod": {
+        "label": "Payment method",
+        "placeholder": "Select a payment method"
+      },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a credit card"
+      },
+      "invalidPositiveInteger": "Must be a positive whole number.",
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Installment plan created.",
+      "updateSuccess": "Installment plan updated.",
+      "saveError": "Failed to save installment plan."
+    },
+    "delete": {
+      "title": "Delete installment plan",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Installment plan deleted.",
+      "error": "Failed to delete installment plan."
     }
   },
   "investorDashboard": {

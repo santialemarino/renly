@@ -9,6 +9,8 @@ export const ROUTES = {
   income: '/income',
   expenses: '/expenses',
   creditCards: '/credit-cards',
+  subscriptions: '/subscriptions',
+  installments: '/installments',
   investorDashboard: '/investor-dashboard',
   investments: '/investments',
   groups: '/groups',

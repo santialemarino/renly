@@ -20,79 +20,89 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import { createExpense, updateExpense } from '@/app/(protected)/expenses/expenses-actions';
 import {
-  buildExpenseFormSchema,
-  type ExpenseFormValues,
-} from '@/app/(protected)/expenses/expenses-form-schema';
+  createInstallment,
+  updateInstallment,
+} from '@/app/(protected)/installments/installment-actions';
+import {
+  buildInstallmentFormSchema,
+  type InstallmentFormValues,
+} from '@/app/(protected)/installments/installment-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type { Expense } from '@/lib/api/expenses';
+import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
-import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
-interface ExpenseFormDialogProps {
+interface InstallmentFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  expense?: Expense;
+  installment?: Installment;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   onSuccess: () => void;
 }
 
-export function ExpenseFormDialog({
+export function InstallmentFormDialog({
   open,
   onOpenChange,
-  expense,
+  installment,
   preferredCurrencies,
   creditCards,
   onSuccess,
-}: ExpenseFormDialogProps) {
-  const t = useTranslations('expenses');
+}: InstallmentFormDialogProps) {
+  const t = useTranslations('installments');
   const tCommon = useTranslations('common');
 
-  const schema = useMemo(() => buildExpenseFormSchema(tCommon('form.errors.required')), [tCommon]);
+  const schema = useMemo(
+    () =>
+      buildInstallmentFormSchema(tCommon('form.errors.required'), t('form.invalidPositiveInteger')),
+    [t, tCommon],
+  );
 
-  const form = useForm<ExpenseFormValues>({
+  const form = useForm<InstallmentFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      date: '',
-      amount: '',
+      name: '',
+      totalAmount: '',
+      installmentAmount: '',
       currency: '',
-      category: undefined,
-      notes: '',
+      installmentsCount: '',
+      currentInstallment: '1',
+      startDate: '',
       paymentMethod: undefined,
       creditCardId: undefined,
     },
   });
 
-  const isEdit = !!expense;
+  const isEdit = !!installment;
   const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
-
-  // Reset form when dialog opens or expense changes.
+  // Reset form when dialog opens or installment changes.
   useEffect(() => {
     if (open) {
       form.reset({
-        date: expense?.date ?? '',
-        amount: expense?.amount ? String(Number(expense.amount)) : '',
-        currency: expense?.currency ?? '',
-        category: (expense?.category ?? undefined) as ExpenseFormValues['category'],
-        notes: expense?.notes ?? '',
-        paymentMethod: (expense?.paymentMethod ?? undefined) as ExpenseFormValues['paymentMethod'],
-        creditCardId: expense?.creditCardId ?? undefined,
+        name: installment?.name ?? '',
+        totalAmount: installment?.totalAmount ? String(Number(installment.totalAmount)) : '',
+        installmentAmount: installment?.installmentAmount
+          ? String(Number(installment.installmentAmount))
+          : '',
+        currency: installment?.currency ?? '',
+        installmentsCount: installment ? String(installment.installmentsCount) : '',
+        currentInstallment: installment ? String(installment.currentInstallment) : '1',
+        startDate: installment?.startDate ?? '',
+        paymentMethod: (installment?.paymentMethod ??
+          undefined) as InstallmentFormValues['paymentMethod'],
+        creditCardId: installment?.creditCardId ?? undefined,
       });
     }
-  }, [open, expense, form]);
+  }, [open, installment, form]);
 
   // Clear credit card when payment method changes away from credit_card.
   useEffect(() => {
@@ -101,13 +111,13 @@ export function ExpenseFormDialog({
     }
   }, [watchedPaymentMethod, form]);
 
-  async function onSubmit(values: ExpenseFormValues) {
+  async function onSubmit(values: InstallmentFormValues) {
     try {
       if (isEdit) {
-        await updateExpense(expense.id, values);
+        await updateInstallment(installment.id, values);
         toast.success(t('form.updateSuccess'));
       } else {
-        await createExpense(values);
+        await createInstallment(values);
         toast.success(t('form.createSuccess'));
       }
       onSuccess();
@@ -126,30 +136,48 @@ export function ExpenseFormDialog({
 
         <Form {...form}>
           <form
-            id="expense-form"
+            id="installment-form"
             className="flex flex-col min-w-0 gap-y-4"
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
             <FormField
               control={form.control}
-              name="date"
+              name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormLabel required>{t('form.name.label')}</FormLabel>
                   <FormControl>
-                    <DatePickerInput
-                      value={field.value || undefined}
-                      onChange={field.onChange}
-                      placeholder={t('form.date.placeholder')}
-                    />
+                    <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            {/* Purchase: total cost + currency. */}
             <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="totalAmount"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel required>{t('form.totalAmount.label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        onKeyDown={blockNegativeNumberKeys}
+                        placeholder={t('form.totalAmount.placeholder')}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <FormField
                 control={form.control}
                 name="currency"
@@ -172,13 +200,16 @@ export function ExpenseFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
+            {/* Plan: per-installment amount × number of installments. */}
+            <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
-                name="amount"
+                name="installmentAmount"
                 render={({ field }) => (
                   <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                    <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -186,7 +217,25 @@ export function ExpenseFormDialog({
                         step="0.01"
                         min="0"
                         onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.amount.placeholder')}
+                        placeholder={t('form.installmentAmount.placeholder')}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="installmentsCount"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel required>{t('form.installmentsCount.label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        inputMode="numeric"
+                        placeholder={t('form.installmentsCount.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -195,27 +244,21 @@ export function ExpenseFormDialog({
               />
             </div>
 
+            {/* Schedule: when it started + which cuota is next. */}
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
-                name="category"
+                name="startDate"
                 render={({ field }) => (
                   <FormItem className="flex-1">
-                    <FormLabel>{t('form.category.label')}</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.category.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sortedCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {t(`categories.${cat}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                    <FormControl>
+                      <DatePickerInput
+                        value={field.value || undefined}
+                        onChange={field.onChange}
+                        placeholder={t('form.startDate.placeholder')}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -223,29 +266,47 @@ export function ExpenseFormDialog({
 
               <FormField
                 control={form.control}
-                name="paymentMethod"
+                name="currentInstallment"
                 render={({ field }) => (
                   <FormItem className="flex-1">
-                    <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {PAYMENT_METHODS.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {t(`paymentMethods.${method}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        inputMode="numeric"
+                        placeholder={t('form.currentInstallment.placeholder')}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="paymentMethod"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
+                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {PAYMENT_METHODS.map((method) => (
+                        <SelectItem key={method} value={method}>
+                          {t(`paymentMethods.${method}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <AnimatePresence initial={false}>
               {showCreditCard && (
@@ -290,20 +351,6 @@ export function ExpenseFormDialog({
                 </motion.div>
               )}
             </AnimatePresence>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.notes.label')}</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} placeholder={t('form.notes.placeholder')} rows={2} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </form>
         </Form>
 
@@ -311,7 +358,7 @@ export function ExpenseFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('form.cancel')}
           </Button>
-          <Button blue type="submit" form="expense-form" disabled={form.formState.isSubmitting}>
+          <Button blue type="submit" form="installment-form" disabled={form.formState.isSubmitting}>
             {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
           </Button>
         </DialogFooter>
