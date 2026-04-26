@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -204,244 +204,89 @@ export function InstallmentFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
-            <LayoutGroup>
-              {/* Row 1: name + Sin/Con interés toggle. */}
-              <motion.div
-                layout
-                transition={{ duration: ANIMATION_DEFAULT }}
-                className="flex min-w-0 items-start gap-x-3"
-              >
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem className="flex-1 min-w-0">
-                      <FormLabel required>{t('form.name.label')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={t('form.name.placeholder')} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="hasInterest"
-                  render={({ field }) => (
-                    <FormItem className="shrink-0">
-                      <FormLabel>&nbsp;</FormLabel>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div>
-                            <PillToggleGroup
-                              items={[
-                                {
-                                  value: 'no',
-                                  label: t('form.interest.noInterest'),
-                                },
-                                {
-                                  value: 'yes',
-                                  label: t('form.interest.withInterest'),
-                                },
-                              ]}
-                              value={field.value ? 'yes' : 'no'}
-                              onValueChange={(v) => field.onChange(v === 'yes')}
-                              disabled={isLocked}
-                            />
-                          </div>
-                        </TooltipTrigger>
-                        {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                      </Tooltip>
-                    </FormItem>
-                  )}
-                />
-              </motion.div>
-
-              {/* Row 2 (Con interés only): originalPrice + currency, with InfoHint below. */}
-              <AnimatePresence initial={false}>
-                {watchedHasInterest && (
-                  <motion.div
-                    key="original-price-row"
-                    layout
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ marginTop: -16 }}
-                  >
-                    <div className="flex flex-col pt-4 gap-y-4">
-                      <div className="flex min-w-0 items-start gap-x-3">
-                        <FormField
-                          control={form.control}
-                          name="originalPrice"
-                          render={({ field }) => (
-                            <FormItem className="flex-1 min-w-0">
-                              <FormLabel required>{t('form.originalPrice.label')}</FormLabel>
-                              <FormControl>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Input
-                                      {...field}
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      onKeyDown={blockNegativeNumberKeys}
-                                      placeholder={t('form.originalPrice.placeholder')}
-                                      disabled={isLocked}
-                                    />
-                                  </TooltipTrigger>
-                                  {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                                </Tooltip>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="currency"
-                          render={({ field }) => (
-                            <FormItem className="flex-1 min-w-0">
-                              <FormLabel required>{t('form.currency.label')}</FormLabel>
-                              <FormControl>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <div>
-                                      <CurrencyCombobox
-                                        compact
-                                        value={field.value || null}
-                                        exclude={[]}
-                                        preferredCurrencies={preferredCurrencies}
-                                        disabled={isLocked}
-                                        placeholder={t('form.currency.placeholder')}
-                                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                                        noResults={t('form.currency.noResults')}
-                                        onChange={field.onChange}
-                                      />
-                                    </div>
-                                  </TooltipTrigger>
-                                  {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                                </Tooltip>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <InfoHint>{t('form.interest.noInterestHint')}</InfoHint>
-                    </div>
-                  </motion.div>
+            {/* Row 1: name + Sin/Con interés toggle. */}
+            <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="flex-1 min-w-0">
+                    <FormLabel required>{t('form.name.label')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder={t('form.name.placeholder')} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
                 )}
-              </AnimatePresence>
+              />
 
-              {/* Row 3: installmentAmount + installmentsCount, with derived line below. */}
-              <motion.div
-                layout
-                transition={{ duration: ANIMATION_DEFAULT }}
-                className="flex flex-col gap-y-2"
-              >
-                <div className="flex min-w-0 items-start gap-x-3">
-                  <FormField
-                    control={form.control}
-                    name="installmentAmount"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
-                        <FormControl>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Input
-                                {...field}
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                onKeyDown={blockNegativeNumberKeys}
-                                placeholder={t('form.installmentAmount.placeholder')}
-                                disabled={isLocked}
-                              />
-                            </TooltipTrigger>
-                            {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                          </Tooltip>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+              <FormField
+                control={form.control}
+                name="hasInterest"
+                render={({ field }) => (
+                  <FormItem className="shrink-0">
+                    <FormLabel>&nbsp;</FormLabel>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div>
+                          <PillToggleGroup
+                            items={[
+                              { value: 'no', label: t('form.interest.noInterest') },
+                              { value: 'yes', label: t('form.interest.withInterest') },
+                            ]}
+                            value={field.value ? 'yes' : 'no'}
+                            onValueChange={(v) => field.onChange(v === 'yes')}
+                            disabled={isLocked}
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                    </Tooltip>
+                  </FormItem>
+                )}
+              />
+            </div>
 
-                  <FormField
-                    control={form.control}
-                    name="installmentsCount"
-                    render={({ field }) => (
-                      <FormItem className="flex-1">
-                        <FormLabel required>{t('form.installmentsCount.label')}</FormLabel>
-                        <FormControl>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Input
-                                {...field}
-                                inputMode="numeric"
-                                placeholder={t('form.installmentsCount.placeholder')}
-                                disabled={isLocked}
-                              />
-                            </TooltipTrigger>
-                            {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                          </Tooltip>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Derived totals line. */}
-                <AnimatePresence initial={false} mode="wait">
-                  {showDerivedLine && (
-                    <motion.div
-                      key={watchedHasInterest ? 'with-interest' : 'no-interest'}
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      exit={{ opacity: 0, height: 0 }}
-                      transition={{ duration: ANIMATION_DEFAULT }}
-                      style={{ overflow: 'hidden', marginTop: -8 }}
-                    >
-                      <div className="text-paragraph-xs text-muted-foreground pt-2">
-                        {watchedHasInterest && computedInterest !== null ? (
-                          <>
-                            {t('form.derived.totalToPay', {
-                              amount: formatAmount(String(computedTotalToPay)),
-                            })}
-                            {' · '}
-                            {t('form.derived.interest', {
-                              amount: formatAmount(String(computedInterest)),
-                            })}
-                          </>
-                        ) : (
-                          t('form.derived.total', {
-                            amount: formatAmount(String(computedTotalToPay)),
-                          })
+            {/* Row 2 (Con interés only): originalPrice + currency, with InfoHint below. */}
+            <AnimatePresence initial={false}>
+              {watchedHasInterest && (
+                <motion.div
+                  key="original-price-row"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ marginTop: -16 }}
+                >
+                  <div className="flex flex-col pt-4 gap-y-4">
+                    <div className="flex min-w-0 items-start gap-x-3">
+                      <FormField
+                        control={form.control}
+                        name="originalPrice"
+                        render={({ field }) => (
+                          <FormItem className="flex-1 min-w-0">
+                            <FormLabel required>{t('form.originalPrice.label')}</FormLabel>
+                            <FormControl>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Input
+                                    {...field}
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    onKeyDown={blockNegativeNumberKeys}
+                                    placeholder={t('form.originalPrice.placeholder')}
+                                    disabled={isLocked}
+                                  />
+                                </TooltipTrigger>
+                                {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                              </Tooltip>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
                         )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                      />
 
-              {/* Row 4 (Sin interés only): currency + startDate. */}
-              <AnimatePresence initial={false}>
-                {!watchedHasInterest && (
-                  <motion.div
-                    key="currency-start-row"
-                    layout
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ marginTop: -16 }}
-                  >
-                    <div className="flex min-w-0 items-start pt-4 gap-x-3">
                       <FormField
                         control={form.control}
                         name="currency"
@@ -472,204 +317,331 @@ export function InstallmentFormDialog({
                           </FormItem>
                         )}
                       />
-
-                      <FormField
-                        control={form.control}
-                        name="startDate"
-                        render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel required>{t('form.startDate.label')}</FormLabel>
-                            <FormControl>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div>
-                                    <DatePickerInput
-                                      value={field.value || undefined}
-                                      onChange={field.onChange}
-                                      disabled={isLocked}
-                                      placeholder={t('form.startDate.placeholder')}
-                                    />
-                                  </div>
-                                </TooltipTrigger>
-                                {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                              </Tooltip>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              {/* Row 4 (Con interés only): startDate full-width. */}
-              <AnimatePresence initial={false}>
-                {watchedHasInterest && (
-                  <motion.div
-                    key="start-row"
-                    layout
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ marginTop: -16 }}
-                  >
-                    <div className="pt-4">
-                      <FormField
-                        control={form.control}
-                        name="startDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel required>{t('form.startDate.label')}</FormLabel>
-                            <FormControl>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div>
-                                    <DatePickerInput
-                                      value={field.value || undefined}
-                                      onChange={field.onChange}
-                                      disabled={isLocked}
-                                      placeholder={t('form.startDate.placeholder')}
-                                    />
-                                  </div>
-                                </TooltipTrigger>
-                                {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                              </Tooltip>
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Edit-only: currentInstallment full-width with hint. */}
-              {isEdit && (
-                <motion.div
-                  layout
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  className="flex flex-col gap-y-2"
-                >
-                  <FormField
-                    control={form.control}
-                    name="currentInstallment"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            inputMode="numeric"
-                            placeholder={t('form.currentInstallment.placeholder')}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <p className="text-paragraph-xs text-muted-foreground">
-                    {t('form.currentInstallment.editHint')}
-                  </p>
+                    <InfoHint>{t('form.interest.noInterestHint')}</InfoHint>
+                  </div>
                 </motion.div>
               )}
+            </AnimatePresence>
 
-              {/* Payment method full-width. */}
-              <motion.div layout transition={{ duration: ANIMATION_DEFAULT }}>
+            {/* Row 3: installmentAmount + installmentsCount, with derived line below. */}
+            <div className="flex flex-col gap-y-2">
+              <div className="flex min-w-0 items-start gap-x-3">
                 <FormField
                   control={form.control}
-                  name="paymentMethod"
+                  name="installmentAmount"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div>
-                            <Select
-                              value={field.value ?? ''}
-                              onValueChange={field.onChange}
+                    <FormItem className="flex-1">
+                      <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
+                      <FormControl>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Input
+                              {...field}
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              onKeyDown={blockNegativeNumberKeys}
+                              placeholder={t('form.installmentAmount.placeholder')}
                               disabled={isLocked}
-                            >
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {PAYMENT_METHODS.map((method) => (
-                                  <SelectItem key={method} value={method}>
-                                    {t(`paymentMethods.${method}`)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </TooltipTrigger>
-                        {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                      </Tooltip>
+                            />
+                          </TooltipTrigger>
+                          {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                        </Tooltip>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </motion.div>
 
-              {/* Conditional credit card. */}
-              <AnimatePresence initial={false}>
-                {showCreditCard && (
+                <FormField
+                  control={form.control}
+                  name="installmentsCount"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel required>{t('form.installmentsCount.label')}</FormLabel>
+                      <FormControl>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Input
+                              {...field}
+                              inputMode="numeric"
+                              placeholder={t('form.installmentsCount.placeholder')}
+                              disabled={isLocked}
+                            />
+                          </TooltipTrigger>
+                          {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                        </Tooltip>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Derived totals line. */}
+              <AnimatePresence initial={false} mode="wait">
+                {showDerivedLine && (
                   <motion.div
-                    key="credit-card"
-                    layout
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    key={watchedHasInterest ? 'with-interest' : 'no-interest'}
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ marginTop: -16 }}
+                    style={{ overflow: 'hidden', marginTop: -8 }}
                   >
-                    <div className="pt-4">
-                      <FormField
-                        control={form.control}
-                        name="creditCardId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div>
-                                  <Select
-                                    value={field.value?.toString() ?? ''}
-                                    onValueChange={(v) => field.onChange(Number(v))}
-                                    disabled={isLocked}
-                                  >
-                                    <FormControl>
-                                      <SelectTrigger className="w-full">
-                                        <SelectValue
-                                          placeholder={t('form.creditCard.placeholder')}
-                                        />
-                                      </SelectTrigger>
-                                    </FormControl>
-                                    <SelectContent>
-                                      {activeCards.map((card) => (
-                                        <SelectItem key={card.id} value={card.id.toString()}>
-                                          {card.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </TooltipTrigger>
-                              {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                            </Tooltip>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <div className="text-paragraph-xs text-muted-foreground pt-2">
+                      {watchedHasInterest && computedInterest !== null ? (
+                        <>
+                          {t('form.derived.totalToPay', {
+                            amount: formatAmount(String(computedTotalToPay)),
+                          })}
+                          {' · '}
+                          {t('form.derived.interest', {
+                            amount: formatAmount(String(computedInterest)),
+                          })}
+                        </>
+                      ) : (
+                        t('form.derived.total', {
+                          amount: formatAmount(String(computedTotalToPay)),
+                        })
+                      )}
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </LayoutGroup>
+            </div>
+
+            {/* Row 4 (Sin interés only): currency + startDate. */}
+            <AnimatePresence initial={false}>
+              {!watchedHasInterest && (
+                <motion.div
+                  key="currency-start-row"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ marginTop: -16 }}
+                >
+                  <div className="flex min-w-0 items-start pt-4 gap-x-3">
+                    <FormField
+                      control={form.control}
+                      name="currency"
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-0">
+                          <FormLabel required>{t('form.currency.label')}</FormLabel>
+                          <FormControl>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div>
+                                  <CurrencyCombobox
+                                    compact
+                                    value={field.value || null}
+                                    exclude={[]}
+                                    preferredCurrencies={preferredCurrencies}
+                                    disabled={isLocked}
+                                    placeholder={t('form.currency.placeholder')}
+                                    searchPlaceholder={t('form.currency.searchPlaceholder')}
+                                    noResults={t('form.currency.noResults')}
+                                    onChange={field.onChange}
+                                  />
+                                </div>
+                              </TooltipTrigger>
+                              {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                            </Tooltip>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem className="flex-1">
+                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                          <FormControl>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div>
+                                  <DatePickerInput
+                                    value={field.value || undefined}
+                                    onChange={field.onChange}
+                                    disabled={isLocked}
+                                    placeholder={t('form.startDate.placeholder')}
+                                  />
+                                </div>
+                              </TooltipTrigger>
+                              {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                            </Tooltip>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Row 4 (Con interés only): startDate full-width. */}
+            <AnimatePresence initial={false}>
+              {watchedHasInterest && (
+                <motion.div
+                  key="start-row"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ marginTop: -16 }}
+                >
+                  <div className="pt-4">
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                          <FormControl>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div>
+                                  <DatePickerInput
+                                    value={field.value || undefined}
+                                    onChange={field.onChange}
+                                    disabled={isLocked}
+                                    placeholder={t('form.startDate.placeholder')}
+                                  />
+                                </div>
+                              </TooltipTrigger>
+                              {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                            </Tooltip>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Edit-only: currentInstallment full-width with hint. */}
+            {isEdit && (
+              <div className="flex flex-col gap-y-2">
+                <FormField
+                  control={form.control}
+                  name="currentInstallment"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          inputMode="numeric"
+                          placeholder={t('form.currentInstallment.placeholder')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <p className="text-paragraph-xs text-muted-foreground">
+                  {t('form.currentInstallment.editHint')}
+                </p>
+              </div>
+            )}
+
+            {/* Payment method full-width. */}
+            <FormField
+              control={form.control}
+              name="paymentMethod"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <Select
+                          value={field.value ?? ''}
+                          onValueChange={field.onChange}
+                          disabled={isLocked}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {PAYMENT_METHODS.map((method) => (
+                              <SelectItem key={method} value={method}>
+                                {t(`paymentMethods.${method}`)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TooltipTrigger>
+                    {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                  </Tooltip>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Conditional credit card. */}
+            <AnimatePresence initial={false}>
+              {showCreditCard && (
+                <motion.div
+                  key="credit-card"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ marginTop: -16 }}
+                >
+                  <div className="pt-4">
+                    <FormField
+                      control={form.control}
+                      name="creditCardId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Select
+                                  value={field.value?.toString() ?? ''}
+                                  onValueChange={(v) => field.onChange(Number(v))}
+                                  disabled={isLocked}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder={t('form.creditCard.placeholder')} />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {activeCards.map((card) => (
+                                      <SelectItem key={card.id} value={card.id.toString()}>
+                                        {card.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </TooltipTrigger>
+                            {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
+                          </Tooltip>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 
