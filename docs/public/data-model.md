@@ -162,12 +162,12 @@ User
  |                                  (payments that reduce the card balance)
  |
  |-- has many --> Subscriptions
- |                (recurring charges; auto-generates monthly expenses in Phase 3 Step 3)
+ |                (recurring charges; the daily scheduler auto-generates one expense per cycle)
  |                  |
  |                  |-- optionally linked to --> Credit Card
  |
  |-- has many --> Installments
- |                (cuota plans; auto-generates per-cuota expenses in Phase 3 Step 3)
+ |                (cuota plans; the daily scheduler auto-generates one expense per cuota)
  |                  |
  |                  |-- optionally linked to --> Credit Card
  |
