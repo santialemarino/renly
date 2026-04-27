@@ -378,28 +378,42 @@ export function InstallmentFormDialog({
                 />
               </div>
 
-              {/* Derived totals line. Rendered without animation because the
-                  validity boundary flips on every keystroke and animating
-                  here races with FormMessage exits. */}
-              {showDerivedLine && (
-                <div className="text-paragraph-xs text-muted-foreground">
-                  {watchedHasInterest && computedInterest !== null ? (
-                    <>
-                      {t('form.derived.totalToPay', {
-                        amount: formatAmount(String(computedTotalToPay)),
-                      })}
-                      {' · '}
-                      {t('form.derived.interest', {
-                        amount: formatAmount(String(computedInterest)),
-                      })}
-                    </>
-                  ) : (
-                    t('form.derived.total', {
-                      amount: formatAmount(String(computedTotalToPay)),
-                    })
-                  )}
-                </div>
-              )}
+              {/* Derived totals line. Animated with the same height + opacity +
+                  overflow pattern as other conditional rows. The previous "no
+                  animation" stance was a workaround for the FormMessage `layout`
+                  race fixed in components/form.tsx (popLayout + height-only).
+                  We keep a stable key so the wrapper doesn't remount per keystroke
+                  — only the text content swaps inside. */}
+              <AnimatePresence initial={false}>
+                {showDerivedLine && (
+                  <motion.div
+                    key="derived-totals"
+                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                    style={{ marginTop: -8 }}
+                  >
+                    <div className="text-paragraph-xs text-muted-foreground pt-2">
+                      {watchedHasInterest && computedInterest !== null ? (
+                        <>
+                          {t('form.derived.totalToPay', {
+                            amount: formatAmount(String(computedTotalToPay)),
+                          })}
+                          {' · '}
+                          {t('form.derived.interest', {
+                            amount: formatAmount(String(computedInterest)),
+                          })}
+                        </>
+                      ) : (
+                        t('form.derived.total', {
+                          amount: formatAmount(String(computedTotalToPay)),
+                        })
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Row 4 (No interest only): currency + startDate. */}
