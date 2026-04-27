@@ -29,13 +29,32 @@ class TestSubscriptionDatesToEmit:
         result = subscription_dates_to_emit(date(2026, 1, 15), BILLING_CYCLE_MONTHLY, today=date(2026, 4, 26))
         assert result == [date(2026, 1, 15), date(2026, 2, 15), date(2026, 3, 15), date(2026, 4, 15)]
 
-    def test_clamps_day_and_drifts_after_short_month(self):
-        # Subscriptions advance by chaining cursor → add_months(cursor, 1), so once
-        # Jan 31 → Feb 28 clamps, subsequent cycles ride the new day-of-month (drift).
-        # This is acceptable for v1 — installment cuotas don't drift because they
-        # always derive from the original start_date.
+    def test_snaps_back_to_anchor_day_after_short_month(self):
+        # When anchor_day is supplied (or implicitly defaulted to next_billing_date.day),
+        # short-month clamps don't poison subsequent cycles: Jan 31 -> Feb 28 -> Mar 31 -> Apr 30.
         result = subscription_dates_to_emit(date(2026, 1, 31), BILLING_CYCLE_MONTHLY, today=date(2026, 4, 30))
-        assert result == [date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 28), date(2026, 4, 28)]
+        assert result == [date(2026, 1, 31), date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30)]
+
+    def test_explicit_anchor_day_overrides_next_billing_date_day(self):
+        # next_billing_date is Feb 28 (already clamped from a Jan 31 emit), but anchor_day = 31.
+        # The next cycle should snap back to Mar 31, not Mar 28.
+        result = subscription_dates_to_emit(
+            date(2026, 2, 28),
+            BILLING_CYCLE_MONTHLY,
+            today=date(2026, 5, 31),
+            anchor_day=31,
+        )
+        assert result == [date(2026, 2, 28), date(2026, 3, 31), date(2026, 4, 30), date(2026, 5, 31)]
+
+    def test_anchor_day_ignored_for_weekly_cycle(self):
+        # Weekly advances by literal days; anchor_day has no meaning here.
+        result = subscription_dates_to_emit(
+            date(2026, 4, 19),
+            BILLING_CYCLE_WEEKLY,
+            today=date(2026, 4, 26),
+            anchor_day=15,
+        )
+        assert result == [date(2026, 4, 19), date(2026, 4, 26)]
 
     def test_annual_cycle(self):
         result = subscription_dates_to_emit(date(2024, 4, 26), BILLING_CYCLE_ANNUAL, today=date(2026, 4, 26))

@@ -110,6 +110,8 @@ A subscription represents a recurring charge (e.g. Netflix, Spotify, gym). Each 
 
 A daily scheduled job auto-generates one expense entry per billing cycle and advances `next_billing_date` to the next future cycle. Subscriptions registered with a past `next_billing_date` are back-filled in a single tick — every missed cycle gets its own historical-dated expense.
 
+The day-of-month is preserved across short-month clamps via an internal `anchor_day` field (1-31, auto-derived from `next_billing_date.day` and not exposed in the form). A subscription billed on the 31st walks Jan 31 → Feb 28 → Mar 31 → Apr 30 → May 31 without drifting to day-28. Weekly and biweekly cycles ignore `anchor_day` since they advance by literal days.
+
 ### Installments
 
 An installment plan represents a multi-cuota purchase (e.g. "TV Samsung 12x"). Each plan has a name, total amount, per-cuota amount, currency, total cuota count, the index of the next cuota to issue, an active flag, and a start date. Like subscriptions, it optionally links to a payment method and credit card.

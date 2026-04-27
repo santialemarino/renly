@@ -7,6 +7,7 @@ from app.utils.dates import (
     BILLING_CYCLE_QUARTERLY,
     BILLING_CYCLE_WEEKLY,
     add_months,
+    add_months_anchored,
     advance_by_cycle,
 )
 
@@ -64,3 +65,52 @@ class TestAdvanceByCycle:
     def test_unknown_cycle_falls_back_to_monthly(self):
         # Defensive: unknown cycle should still progress.
         assert advance_by_cycle(date(2026, 4, 26), "lunar") == date(2026, 5, 26)
+
+
+# --- add_months_anchored ---
+
+
+class TestAddMonthsAnchored:
+    def test_uses_anchor_day_over_input_day(self):
+        # Input date already clamped to Feb 28; anchor 31 wins for March.
+        assert add_months_anchored(date(2026, 2, 28), 1, anchor_day=31) == date(2026, 3, 31)
+
+    def test_clamps_anchor_day_to_short_month(self):
+        # Anchor 31 in April clamps to 30.
+        assert add_months_anchored(date(2026, 3, 31), 1, anchor_day=31) == date(2026, 4, 30)
+
+    def test_anchor_day_smaller_than_input_day(self):
+        # Anchor 5 should beat the input's day-of-month even when both fit.
+        assert add_months_anchored(date(2026, 1, 20), 1, anchor_day=5) == date(2026, 2, 5)
+
+    def test_three_months_with_anchor(self):
+        # Useful for quarterly cycles: anchor 31 across Jan -> Apr clamps to Apr 30.
+        assert add_months_anchored(date(2026, 1, 31), 3, anchor_day=31) == date(2026, 4, 30)
+
+
+# --- advance_by_cycle with anchor_day ---
+
+
+class TestAdvanceByCycleAnchored:
+    def test_monthly_with_anchor_snaps_back_after_clamp(self):
+        # Feb 28 (clamped previously) + monthly with anchor 31 = Mar 31, not Mar 28.
+        assert advance_by_cycle(date(2026, 2, 28), BILLING_CYCLE_MONTHLY, anchor_day=31) == date(2026, 3, 31)
+
+    def test_quarterly_with_anchor(self):
+        assert advance_by_cycle(date(2026, 1, 31), BILLING_CYCLE_QUARTERLY, anchor_day=31) == date(2026, 4, 30)
+
+    def test_annual_with_anchor(self):
+        # 2027 is non-leap; anchor 29 on Feb clamps to 28.
+        assert advance_by_cycle(date(2024, 2, 29), BILLING_CYCLE_ANNUAL, anchor_day=29) == date(2025, 2, 28)
+
+    def test_weekly_ignores_anchor(self):
+        # Weekly is pure date arithmetic — anchor_day must not interfere.
+        assert advance_by_cycle(date(2026, 4, 19), BILLING_CYCLE_WEEKLY, anchor_day=15) == date(2026, 4, 26)
+
+    def test_biweekly_ignores_anchor(self):
+        assert advance_by_cycle(date(2026, 4, 1), BILLING_CYCLE_BIWEEKLY, anchor_day=15) == date(2026, 4, 15)
+
+    def test_no_anchor_falls_back_to_input_day(self):
+        # Backwards-compatible default — without anchor_day, behaviour matches the
+        # pre-anchor implementation (uses d.day, drifts after clamps).
+        assert advance_by_cycle(date(2026, 2, 28), BILLING_CYCLE_MONTHLY) == date(2026, 3, 28)

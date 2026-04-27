@@ -276,6 +276,10 @@ CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id
 -- Auto-generates monthly expense_entries via the scheduler (Phase 3, Step 3).
 -- billing_cycle: 'monthly', 'annual', 'quarterly', 'biweekly', 'weekly'.
 -- credit_card_id only set when payment_method = 'credit_card'.
+-- anchor_day is the user's intended day-of-month (1-31). It's auto-derived from
+-- next_billing_date and lets the scheduler snap back to the original day after
+-- a short-month clamp (e.g. Jan 31 -> Feb 28 -> Mar 31, not Mar 28). Ignored by
+-- weekly / biweekly cycles since those advance by literal days.
 CREATE TABLE subscriptions (
   id                BIGSERIAL PRIMARY KEY,
   user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -287,6 +291,7 @@ CREATE TABLE subscriptions (
   credit_card_id    BIGINT REFERENCES credit_cards(id),
   is_active         BOOLEAN NOT NULL DEFAULT TRUE,
   next_billing_date DATE NOT NULL,
+  anchor_day        INTEGER NOT NULL CHECK (anchor_day >= 1 AND anchor_day <= 31),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -22,14 +22,25 @@ SOURCE_INSTALLMENT = "installment"
 
 # Returns the list of cycle dates a subscription should have emitted up to and
 # including today, given its current next_billing_date and billing cycle.
+# `anchor_day` defaults to next_billing_date.day so callers without an explicit
+# anchor still get sensible behaviour; the scheduler always passes the stored
+# subscription.anchor_day to keep the user's intended day across short-month clamps.
 # Pure function — does not advance the subscription record itself.
-def subscription_dates_to_emit(next_billing_date: date_type, billing_cycle: str, today: date_type) -> list[date_type]:
+def subscription_dates_to_emit(
+    next_billing_date: date_type,
+    billing_cycle: str,
+    today: date_type,
+    *,
+    anchor_day: int | None = None,
+) -> list[date_type]:
+    if anchor_day is None:
+        anchor_day = next_billing_date.day
     dates: list[date_type] = []
     cursor = next_billing_date
     # Safety cap to avoid runaway loops on bad data (e.g. unknown cycle landing on the same day).
     while cursor <= today and len(dates) < 1000:
         dates.append(cursor)
-        nxt = advance_by_cycle(cursor, billing_cycle)
+        nxt = advance_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
         if nxt <= cursor:
             break
         cursor = nxt
@@ -90,7 +101,12 @@ async def _generate_subscription_expenses(session: AsyncSession, today: date_typ
 
     created = 0
     for sub in subscriptions:
-        dates = subscription_dates_to_emit(sub.next_billing_date, sub.billing_cycle, today)
+        dates = subscription_dates_to_emit(
+            sub.next_billing_date,
+            sub.billing_cycle,
+            today,
+            anchor_day=sub.anchor_day,
+        )
         if not dates:
             continue
         for d in dates:
@@ -111,7 +127,7 @@ async def _generate_subscription_expenses(session: AsyncSession, today: date_typ
             )
             created += 1
         # Advance to the first cycle strictly after today.
-        next_after = advance_by_cycle(dates[-1], sub.billing_cycle)
+        next_after = advance_by_cycle(dates[-1], sub.billing_cycle, anchor_day=sub.anchor_day)
         sub.next_billing_date = next_after
         session.add(sub)
 
