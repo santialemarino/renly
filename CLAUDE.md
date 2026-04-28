@@ -6,6 +6,10 @@ Renly is a financial management app focused on investment tracking. Monorepo: `a
 
 Always read the **agent-workflow** skill first. It tells you which other skills to load and covers checks, docs, and commit rules.
 
+## Codex compatibility
+
+Codex uses `AGENTS.md` for always-loaded repository instructions and `.agents/skills/` for repo-scoped skills. Keep those files aligned with this Claude context and `.claude/skills/` when changing shared conventions.
+
 ## Key commands (from repo root)
 
 ```bash
