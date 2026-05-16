@@ -38,6 +38,8 @@ async def get_subscription(session: AsyncSession, subscription_id: int, user: Us
 
 
 # Create a new subscription.
+# anchor_day is auto-derived from next_billing_date so the scheduler can preserve
+# the user's intended day-of-month across short-month clamps.
 async def create_subscription(
     session: AsyncSession,
     user: User,
@@ -57,6 +59,7 @@ async def create_subscription(
         currency=currency,
         billing_cycle=billing_cycle,
         next_billing_date=next_billing_date,
+        anchor_day=next_billing_date.day,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
     )
@@ -66,6 +69,8 @@ async def create_subscription(
 
 
 # Update an existing subscription. Only provided fields are changed.
+# When next_billing_date is updated, anchor_day re-syncs to its day-of-month —
+# the user is implicitly redeclaring their billing day.
 async def update_subscription(
     session: AsyncSession,
     subscription_id: int,
@@ -73,6 +78,10 @@ async def update_subscription(
     **fields: object,
 ) -> Subscription:
     subscription = await get_subscription(session, subscription_id, user)
+    if "next_billing_date" in fields and fields["next_billing_date"] is not None:
+        nbd = fields["next_billing_date"]
+        if isinstance(nbd, date_type):
+            fields["anchor_day"] = nbd.day
     for key, value in fields.items():
         setattr(subscription, key, value)
     await subscription_repository.save(session, subscription)

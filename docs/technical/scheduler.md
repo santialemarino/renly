@@ -16,6 +16,7 @@ Each job wrapper creates its own `AsyncSessionLocal()` session (not tied to a re
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
+AUTO_EXPENSES_HOUR_UTC = 1
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 ```
@@ -51,7 +52,17 @@ Runs after US and Argentine market close. Individual ticker failures are skipped
 
 Runs 1 hour after the asset prices job to ensure fresh prices are available.
 
-### 4. CEDEAR ratios
+### 4. Auto-expenses
+
+| Property         | Value                                                                                                                                                                                                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trigger**      | `cron` (daily at 01:00 UTC)                                                                                                                                                                                                                                                                                           |
+| **Service call** | `auto_expense_service.generate_auto_expenses(session)`                                                                                                                                                                                                                                                                |
+| **What it does** | Retroactively emits `expense_entries` for every active subscription whose `next_billing_date <= today` and every active installment whose next cuota is at or before today. Each generated entry carries the source plan's FK (`subscription_id` or `installment_id`) and `source = 'subscription' \| 'installment'`. |
+
+Runs at 01:00 UTC so today's cuota / billing dates have settled across all timezones served. Idempotent on re-runs: a partial unique index on `(subscription_id, date)` / `(installment_id, date)` plus a pre-check skip in the service prevent double-insertion when the job retries or back-fills. Once an installment plan reaches `current_installment > installments_count`, `is_active` flips to `false` automatically.
+
+### 5. CEDEAR ratios
 
 | Property         | Value                                                                                                                                                            |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |

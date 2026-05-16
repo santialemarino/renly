@@ -23,6 +23,17 @@ class HasLinkedExpensesError(Exception):
         super().__init__(self.message)
 
 
+# Attempt to modify locked contractual fields on an installment after the first cuota was charged. Mapped to 400 by the API.
+class InstallmentLockedFieldError(Exception):
+    code = "installment_locked_field"
+
+    def __init__(self, fields: list[str]) -> None:
+        self.fields = fields
+        joined = ", ".join(fields)
+        self.message = f"Cannot modify locked installment fields ({joined}) after the first cuota has been charged."
+        super().__init__(self.message)
+
+
 # Resource not found or not owned by the current user. Mapped to 404 by the API.
 class NotFoundError(Exception):
     def __init__(self, message: str = "Not found") -> None:

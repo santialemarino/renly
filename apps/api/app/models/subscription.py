@@ -18,6 +18,11 @@ class Subscription(SQLModel, table=True):
     currency: str = Field(max_length=3, description="Currency (ISO 4217).")
     billing_cycle: str = Field(max_length=20, description="Billing cycle (monthly, annual, quarterly, biweekly, weekly).")
     next_billing_date: date_type = Field(description="Date of next billing event.")
+    anchor_day: int = Field(
+        ge=1,
+        le=31,
+        description="Intended day-of-month (1-31). Lets the scheduler snap back after a short-month clamp.",
+    )
     payment_method: str | None = Field(default=None, max_length=20, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(
         default=None, foreign_key="credit_cards.id", description="Credit card used (when payment_method = credit_card)."

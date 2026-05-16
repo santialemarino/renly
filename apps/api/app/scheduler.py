@@ -5,7 +5,13 @@ import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.db import AsyncSessionLocal
-from app.services import asset_price_service, auto_snapshot_service, cedear_ratio_service, exchange_rate_service
+from app.services import (
+    asset_price_service,
+    auto_expense_service,
+    auto_snapshot_service,
+    cedear_ratio_service,
+    exchange_rate_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +21,7 @@ scheduler = AsyncIOScheduler()
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
+AUTO_EXPENSES_HOUR_UTC = 1
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 
@@ -46,6 +53,17 @@ async def _generate_auto_snapshots() -> None:
             logger.info("Scheduled auto-snapshots: %d snapshots created.", count)
     except Exception:
         logger.exception("Scheduled auto-snapshot generation failed.")
+
+
+# Generates expense_entries from active subscriptions and installment plans.
+# Loops retroactively per record so missed cycles back-fill on the next tick.
+async def _generate_auto_expenses() -> None:
+    try:
+        async with AsyncSessionLocal() as session:
+            count = await auto_expense_service.generate_auto_expenses(session)
+            logger.info("Scheduled auto-expenses: %d entries created.", count)
+    except Exception:
+        logger.exception("Scheduled auto-expense generation failed.")
 
 
 # Fetches CEDEAR ratios from Banco Comafi.
@@ -90,6 +108,15 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
+    # Auto-expenses: run daily at 01:00 UTC (after midnight so today's cuota dates settle).
+    scheduler.add_job(
+        _generate_auto_expenses,
+        "cron",
+        hour=AUTO_EXPENSES_HOUR_UTC,
+        id="generate_auto_expenses",
+        replace_existing=True,
+    )
+
     # CEDEAR ratios: run monthly (1st of each month at 00:00 UTC) + on startup.
     scheduler.add_job(
         _update_cedear_ratios,
@@ -106,10 +133,12 @@ def start_scheduler() -> None:
         "Scheduler started (exchange rates: now + every %dh, "
         "asset prices: daily %02d:00 UTC, "
         "auto-snapshots: last day %02d:00 UTC, "
+        "auto-expenses: daily %02d:00 UTC, "
         "CEDEAR ratios: now + monthly %dth %02d:00 UTC).",
         EXCHANGE_RATES_INTERVAL_HOURS,
         ASSET_PRICES_HOUR_UTC,
         AUTO_SNAPSHOTS_HOUR_UTC,
+        AUTO_EXPENSES_HOUR_UTC,
         CEDEAR_RATIOS_DAY_OF_MONTH,
         CEDEAR_RATIOS_HOUR_UTC,
     )

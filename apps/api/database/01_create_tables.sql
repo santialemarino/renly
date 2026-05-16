@@ -239,29 +239,6 @@ CREATE TABLE credit_cards (
 
 CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
 
--- Expense entries (daily expense tracking).
--- payment_method: 'cash', 'debit', 'transfer', 'credit_card'.
--- credit_card_id only set when payment_method = 'credit_card'.
--- source tracks origin: 'manual', 'shortcut', 'auto', 'email_parsed'.
-CREATE TABLE expense_entries (
-  id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date            DATE NOT NULL,
-  amount          NUMERIC(18, 2) NOT NULL,
-  currency        VARCHAR(3) NOT NULL,
-  category        expense_category,
-  notes           TEXT,
-  payment_method  VARCHAR(20),
-  credit_card_id  BIGINT REFERENCES credit_cards(id),
-  source          VARCHAR(20) NOT NULL DEFAULT 'manual',
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);
-CREATE INDEX idx_expense_entries_user_date ON expense_entries(user_id, date DESC);
-CREATE INDEX idx_expense_entries_credit_card ON expense_entries(credit_card_id);
-
 -- Income entries (daily income tracking).
 -- source tracks origin: 'manual', 'shortcut', 'auto'.
 CREATE TABLE income_entries (
@@ -299,6 +276,10 @@ CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id
 -- Auto-generates monthly expense_entries via the scheduler (Phase 3, Step 3).
 -- billing_cycle: 'monthly', 'annual', 'quarterly', 'biweekly', 'weekly'.
 -- credit_card_id only set when payment_method = 'credit_card'.
+-- anchor_day is the user's intended day-of-month (1-31). It's auto-derived from
+-- next_billing_date and lets the scheduler snap back to the original day after
+-- a short-month clamp (e.g. Jan 31 -> Feb 28 -> Mar 31, not Mar 28). Ignored by
+-- weekly / biweekly cycles since those advance by literal days.
 CREATE TABLE subscriptions (
   id                BIGSERIAL PRIMARY KEY,
   user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -310,6 +291,7 @@ CREATE TABLE subscriptions (
   credit_card_id    BIGINT REFERENCES credit_cards(id),
   is_active         BOOLEAN NOT NULL DEFAULT TRUE,
   next_billing_date DATE NOT NULL,
+  anchor_day        INTEGER NOT NULL CHECK (anchor_day >= 1 AND anchor_day <= 31),
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -341,6 +323,42 @@ CREATE TABLE installments (
 CREATE INDEX idx_installments_user_id ON installments(user_id);
 CREATE INDEX idx_installments_user_active ON installments(user_id, is_active);
 CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
+
+-- Expense entries (daily expense tracking).
+-- payment_method: 'cash', 'debit', 'transfer', 'credit_card'.
+-- credit_card_id only set when payment_method = 'credit_card'.
+-- source tracks origin: 'manual', 'shortcut', 'auto', 'email_parsed', 'subscription', 'installment'.
+-- subscription_id / installment_id link auto-generated entries to their source plan (Phase 3, Step 3 scheduler).
+-- Both FKs use ON DELETE SET NULL so deleting a plan keeps historical expenses.
+-- Defined after subscriptions and installments because of these FK references.
+CREATE TABLE expense_entries (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date            DATE NOT NULL,
+  amount          NUMERIC(18, 2) NOT NULL,
+  currency        VARCHAR(3) NOT NULL,
+  category        expense_category,
+  notes           TEXT,
+  payment_method  VARCHAR(20),
+  credit_card_id  BIGINT REFERENCES credit_cards(id),
+  source          VARCHAR(20) NOT NULL DEFAULT 'manual',
+  subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  installment_id  BIGINT REFERENCES installments(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);
+CREATE INDEX idx_expense_entries_user_date ON expense_entries(user_id, date DESC);
+CREATE INDEX idx_expense_entries_credit_card ON expense_entries(credit_card_id);
+
+-- Idempotency for the auto-generation scheduler: at most one entry per source plan per date.
+CREATE UNIQUE INDEX idx_expense_entries_subscription_date
+  ON expense_entries(subscription_id, date)
+  WHERE subscription_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_expense_entries_installment_date
+  ON expense_entries(installment_id, date)
+  WHERE installment_id IS NOT NULL;
 
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.

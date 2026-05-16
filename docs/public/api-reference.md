@@ -207,7 +207,7 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 
 ## Subscriptions
 
-Recurring charges (e.g. Netflix, Spotify, gym). Auto-generation of monthly expenses lands in a later step.
+Recurring charges (e.g. Netflix, Spotify, gym). The daily scheduler auto-generates one expense entry per billing cycle, advances `next_billing_date`, and back-fills missed cycles for subscriptions registered with a past `next_billing_date`.
 
 | Method   | Path                  | Description                                                                       |
 | -------- | --------------------- | --------------------------------------------------------------------------------- |
@@ -225,7 +225,7 @@ Recurring charges (e.g. Netflix, Spotify, gym). Auto-generation of monthly expen
 
 ## Installments
 
-Cuotas (installment plans, e.g. TV Samsung 12x). Auto-generation of monthly cuota expenses lands in a later step.
+Cuotas (installment plans, e.g. TV Samsung 12x). The daily scheduler auto-generates one expense entry per cuota and back-fills missed cuotas for plans registered with a past `start_date`.
 
 | Method   | Path                 | Description                                                                           |
 | -------- | -------------------- | ------------------------------------------------------------------------------------- |
@@ -239,7 +239,9 @@ Cuotas (installment plans, e.g. TV Samsung 12x). Auto-generation of monthly cuot
 
 **Installment fields:** `name`, `total_amount` (> 0), `installment_amount` (> 0), `currency`, `installments_count` (≥ 1), `current_installment` (≥ 1; default 1), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `start_date`. Responses include `converted_total_amount` and `converted_installment_amount` when `currency` query param is provided.
 
-**Lifecycle:** `is_active` flips to `false` automatically when the auto-generation scheduler issues the last cuota (`current_installment > installments_count`). Until that scheduler ships, `is_active` is user-controlled via `PUT /installments/{id}`.
+**Lifecycle:** `is_active` flips to `false` automatically when the scheduler issues the last cuota (`current_installment > installments_count`). The user can also archive/unarchive a plan manually via `PUT /installments/{id}` with `is_active`.
+
+**Locked fields:** Once `current_installment > 1` (any cuota has been charged), the contractual fields `total_amount`, `installment_amount`, `installments_count`, `currency`, `start_date`, `payment_method`, `credit_card_id` are locked. A `PUT` that attempts to change any of them returns `400` with `{"detail": "...", "code": "installment_locked_field", "fields": [...]}`. Always editable: `name`, `current_installment`, `is_active`.
 
 ---
 

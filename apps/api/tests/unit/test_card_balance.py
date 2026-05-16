@@ -112,3 +112,20 @@ class TestComputeCardBalances:
         # No conversion: 100 + 1200 = 1300 (meaningless but safe fallback).
         assert bal.balance == Decimal("1300")
         assert bal.has_mixed_currencies is True
+
+    def test_includes_auto_generated_subscription_and_installment_charges(self):
+        # Phase 3 Step 3: auto-generated entries land in expense_entries with credit_card_id set.
+        # The aggregation in expense_repository.sum_by_credit_card_ids_grouped is source-agnostic,
+        # so manual + subscription + installment totals all flow into expense_grouped here.
+        # Card 1 (ARS): 5000 manual + 4500 subscription (Netflix x3 cuotas) + 30000 installment
+        # (TV cuota 4) = 39500. Settlement: 10000.
+        result = compute_card_balances(
+            card_ids=[1],
+            card_currencies={1: "ARS"},
+            expense_grouped={1: {"ARS": 39500.0}},
+            settlement_sums={1: 10000.0},
+            rate_map=None,
+        )
+        bal = result[1]
+        assert bal.balance == Decimal("29500")
+        assert bal.has_mixed_currencies is False

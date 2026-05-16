@@ -3,10 +3,32 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import InstallmentLockedFieldError, NotFoundError
 from app.models.installment import Installment
 from app.models.user import User
 from app.repositories import installment_repository
+
+# Contractual fields locked once any cuota has been charged (current_installment > 1).
+# Always editable: name, current_installment (manual correction), is_active (archive).
+LOCKED_FIELDS = (
+    "total_amount",
+    "installment_amount",
+    "installments_count",
+    "currency",
+    "start_date",
+    "payment_method",
+    "credit_card_id",
+)
+
+
+# Returns the subset of locked field names whose update value differs from the existing record.
+# A no-op write (same value) is allowed so partial PUTs that echo unchanged fields don't error.
+def diff_locked_fields(existing: Installment, fields: dict[str, object]) -> list[str]:
+    changed: list[str] = []
+    for name in LOCKED_FIELDS:
+        if name in fields and fields[name] != getattr(existing, name):
+            changed.append(name)
+    return changed
 
 
 # List installments for a user with optional search, sorting, and archive filtering.
@@ -70,6 +92,8 @@ async def create_installment(
 
 
 # Update an existing installment plan. Only provided fields are changed.
+# Once any cuota has been charged (current_installment > 1), contractual fields are locked
+# and modifying them raises InstallmentLockedFieldError (mapped to 400).
 async def update_installment(
     session: AsyncSession,
     installment_id: int,
@@ -77,6 +101,10 @@ async def update_installment(
     **fields: object,
 ) -> Installment:
     installment = await get_installment(session, installment_id, user)
+    if installment.current_installment > 1:
+        violated = diff_locked_fields(installment, fields)
+        if violated:
+            raise InstallmentLockedFieldError(violated)
     for key, value in fields.items():
         setattr(installment, key, value)
     await installment_repository.save(session, installment)
