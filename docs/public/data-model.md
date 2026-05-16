@@ -96,7 +96,11 @@ Payment methods: `cash`, `debit`, `transfer`, `credit_card`. When the payment me
 
 ### Credit Cards
 
-A credit card is a liability account -- it represents money you owe. Each card has a name, closing day, due day, and currency. Cards can be archived to hide them from active selection while preserving their history. The card's **balance** is computed (not stored) as the sum of linked expenses minus the sum of settlements. When a card has expenses in currencies other than its own, those amounts are converted to the card's currency using current exchange rates (USD pivot). A `has_mixed_currencies` flag indicates when the balance is approximate due to conversion. A card can only be deleted if it has no linked expenses.
+A credit card is a liability account -- it represents money you owe. Each card has a name, closing day, due day, and a primary currency (the statement issuance currency). Cards can be archived to hide them from active selection while preserving their history.
+
+Card balance is reported **per currency bucket**: one bucket per currency that has activity on the card. The primary currency always has a bucket (zero when no activity). Other buckets emerge automatically from the first expense in a non-primary currency -- matching how Argentine resúmenes print "Saldo en pesos" + "Saldo en dólares" on the same physical card. Each bucket's balance is `sum(expenses in this currency) - sum(settlements in this currency)`, with no cross-currency conversion at display time. Single-currency cards collapse to one bucket -- zero overhead for non-Argentine users.
+
+A card can only be deleted if it has no linked expenses.
 
 ### Card Settlements
 

@@ -39,7 +39,7 @@ export async function unarchiveCreditCard(id: number): Promise<void> {
 
 export async function createSettlement(
   cardId: number,
-  values: SettlementFormValues & { currency: string },
+  values: SettlementFormValues,
 ): Promise<void> {
   const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, {
     method: 'POST',

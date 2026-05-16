@@ -14,6 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { createSettlement } from '@/app/(protected)/credit-cards/credit-card-actions';
@@ -29,7 +34,9 @@ interface SettlementFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cardId: number;
-  cardCurrency: string;
+  // Primary currency first, then any other currencies with activity on this card.
+  // Length 1 = single-bucket card (picker hidden). Length > 1 = multi-bucket (picker shown).
+  bucketCurrencies: string[];
   onSuccess: () => void;
 }
 
@@ -37,7 +44,7 @@ export function SettlementFormDialog({
   open,
   onOpenChange,
   cardId,
-  cardCurrency,
+  bucketCurrencies,
   onSuccess,
 }: SettlementFormDialogProps) {
   const t = useTranslations('creditCards');
@@ -48,25 +55,29 @@ export function SettlementFormDialog({
     [tCommon],
   );
 
+  const defaultCurrency = bucketCurrencies[0] ?? '';
+  const showBucketPicker = bucketCurrencies.length > 1;
+
   const form = useForm<SettlementFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: '',
       amount: '',
+      currency: defaultCurrency,
       notes: '',
     },
   });
 
-  // Reset form when dialog opens.
+  // Reset form when dialog opens — re-anchor currency to the card's primary bucket.
   useEffect(() => {
     if (open) {
-      form.reset({ date: '', amount: '', notes: '' });
+      form.reset({ date: '', amount: '', currency: defaultCurrency, notes: '' });
     }
-  }, [open, form]);
+  }, [open, form, defaultCurrency]);
 
   async function onSubmit(values: SettlementFormValues) {
     try {
-      await createSettlement(cardId, { ...values, currency: cardCurrency });
+      await createSettlement(cardId, values);
       toast.success(t('settlements.createSuccess'));
       onSuccess();
       onOpenChange(false);
@@ -129,6 +140,33 @@ export function SettlementFormDialog({
                 )}
               />
             </div>
+
+            {showBucketPicker && (
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel required>{t('settlements.form.bucket')}</FormLabel>
+                    <FormControl>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={t('settlements.form.bucketPlaceholder')} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bucketCurrencies.map((cur) => (
+                            <SelectItem key={cur} value={cur}>
+                              {cur}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

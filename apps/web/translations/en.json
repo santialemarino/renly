@@ -434,6 +434,11 @@
         "label": "Notes",
         "placeholder": "Optional notes..."
       },
+      "novelCurrency": {
+        "title": "Confirm new bucket",
+        "description": "This is the first {currency} expense on {cardName}. A new {currency} bucket will be created. Continue?",
+        "confirm": "Continue"
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -470,7 +475,6 @@
       "dueDay": "Due day",
       "currency": "Currency",
       "balance": "Balance",
-      "approximateBalance": "Approximate — includes expenses in other currencies converted at today's rate.",
       "actions": "Actions",
       "empty": "No credit cards found."
     },
@@ -559,6 +563,8 @@
         "datePlaceholder": "Select a date",
         "amount": "Amount",
         "currency": "Currency",
+        "bucket": "Bucket",
+        "bucketPlaceholder": "Select bucket currency",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }

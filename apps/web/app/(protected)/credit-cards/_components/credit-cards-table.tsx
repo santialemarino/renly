@@ -9,7 +9,6 @@ import {
   ArrowUp,
   ChevronRight,
   ChevronsUpDown,
-  Info,
   Pencil,
   Plus,
   Trash2,
@@ -87,11 +86,11 @@ function SortIcon({
 
 function SettlementsSection({
   cardId,
-  cardCurrency,
+  bucketCurrencies,
   expanded,
 }: {
   cardId: number;
-  cardCurrency: string;
+  bucketCurrencies: string[];
   expanded: boolean;
 }) {
   const t = useTranslations('creditCards');
@@ -228,7 +227,7 @@ function SettlementsSection({
                   open={addOpen}
                   onOpenChange={setAddOpen}
                   cardId={cardId}
-                  cardCurrency={cardCurrency}
+                  bucketCurrencies={bucketCurrencies}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -393,17 +392,16 @@ export function CreditCardsTable({
                       <TableCell>{card.dueDay}</TableCell>
                       <TableCell>{card.currency}</TableCell>
                       <TableCell className="text-paragraph-sm tabular-nums">
-                        <span className="flex items-center gap-x-1.5">
-                          {formatAmount(card.balance)}
-                          {card.hasMixedCurrencies && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Info className="size-3.5 shrink-0 text-blue-400" />
-                              </TooltipTrigger>
-                              <TooltipContent>{t('table.approximateBalance')}</TooltipContent>
-                            </Tooltip>
-                          )}
-                        </span>
+                        <div className="flex flex-col gap-y-0.5">
+                          {card.balances.map((bucket) => (
+                            <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
+                              <span>{formatAmount(bucket.balance)}</span>
+                              <span className="text-paragraph-xs text-muted-foreground">
+                                {bucket.currency}
+                              </span>
+                            </span>
+                          ))}
+                        </div>
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!card.isActive ? (
@@ -478,7 +476,7 @@ export function CreditCardsTable({
                     <SettlementsSection
                       key={`settlements-${card.id}`}
                       cardId={card.id}
-                      cardCurrency={card.currency}
+                      bucketCurrencies={card.balances.map((b) => b.currency)}
                       expanded={isExpanded}
                     />
                   </Fragment>

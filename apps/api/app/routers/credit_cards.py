@@ -5,24 +5,27 @@ from fastapi import APIRouter, Query, status
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
-from app.domain import CardBalance
+from app.domain import CardBucketBalance
 from app.repositories import expense_repository
 from app.schemas.card_settlement import CardSettlementCreate, CardSettlementResponse
-from app.schemas.credit_card import CreditCardCreate, CreditCardResponse, CreditCardUpdate
+from app.schemas.credit_card import CardBucketBalanceResponse, CreditCardCreate, CreditCardResponse, CreditCardUpdate
 from app.services import credit_card_service
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/credit-cards", tags=["credit-cards"])
 
-ZERO_BALANCE = CardBalance(Decimal(0), False)
 
-
-# Builds a CreditCardResponse with the computed balance and has_expenses fields.
-def _to_response(card: object, bal: CardBalance, has_expenses: bool = False) -> CreditCardResponse:
+# Builds a CreditCardResponse with per-currency bucket balances and the has_expenses flag.
+# `buckets` is empty when the card has no activity yet — the service still seeds the primary
+# bucket with 0, so an empty list here means we're rendering pre-load (e.g. a fresh POST).
+def _to_response(card: object, buckets: list[CardBucketBalance], has_expenses: bool = False) -> CreditCardResponse:
     from app.models.credit_card import CreditCard as CreditCardModel
 
     data = card.model_dump() if isinstance(card, CreditCardModel) else dict(card)  # type: ignore[arg-type]
-    return CreditCardResponse(**{**data, "balance": bal.balance, "has_expenses": has_expenses, "has_mixed_currencies": bal.has_mixed_currencies})
+    bucket_payload = [CardBucketBalanceResponse(currency=b.currency, balance=b.balance) for b in buckets]
+    if not bucket_payload:
+        # Fallback for the create-flow response: surface a zero bucket in the card's primary currency.
+        bucket_payload = [CardBucketBalanceResponse(currency=data["currency"], balance=Decimal(0))]
+    return CreditCardResponse(**{**data, "balances": bucket_payload, "has_expenses": has_expenses})
 
 
 # --- Credit cards ---
@@ -48,10 +51,9 @@ async def list_cards(
     )
     card_ids = [c.id for c in cards if c.id is not None]
     card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-    dp = await get_dollar_pref(session, current_user.id)
-    balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dp)
+    balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
     expense_counts = await expense_repository.count_by_credit_card_ids(session, card_ids)
-    return [_to_response(card, balances.get(card.id, ZERO_BALANCE), expense_counts.get(card.id, 0) > 0) for card in cards]
+    return [_to_response(card, balances.get(card.id, []), expense_counts.get(card.id, 0) > 0) for card in cards]
 
 
 # Get a single credit card with its current balance.
@@ -62,10 +64,9 @@ async def get_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.get_card(session, card_id, current_user)
-    dp = await get_dollar_pref(session, current_user.id)
-    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency})
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
+    return _to_response(card, balances.get(card.id, []), count > 0)
 
 
 # Create a new credit card.
@@ -83,7 +84,7 @@ async def create_card(
         due_day=body.due_day,
         currency=body.currency,
     )
-    return _to_response(card, ZERO_BALANCE, False)
+    return _to_response(card, [], False)
 
 
 # Update a credit card.
@@ -96,10 +97,9 @@ async def update_card(
 ) -> CreditCardResponse:
     payload = body.model_dump(exclude_unset=True)
     card = await credit_card_service.update_card(session, card_id, current_user, **payload)
-    dp = await get_dollar_pref(session, current_user.id)
-    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency})
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
+    return _to_response(card, balances.get(card.id, []), count > 0)
 
 
 # Delete a credit card. Rejects with 409 if the card has linked expenses.
@@ -120,10 +120,9 @@ async def archive_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.archive_card(session, card_id, current_user)
-    dp = await get_dollar_pref(session, current_user.id)
-    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency})
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
+    return _to_response(card, balances.get(card.id, []), count > 0)
 
 
 # Unarchive a credit card (set is_active = true). Returns the updated card.
@@ -134,10 +133,9 @@ async def unarchive_card(
     session: SessionDep,
 ) -> CreditCardResponse:
     card = await credit_card_service.unarchive_card(session, card_id, current_user)
-    dp = await get_dollar_pref(session, current_user.id)
-    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, dp)
+    balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency})
     count = await expense_repository.count_by_credit_card(session, card.id)
-    return _to_response(card, balances.get(card.id, ZERO_BALANCE), count > 0)
+    return _to_response(card, balances.get(card.id, []), count > 0)
 
 
 # --- Settlements ---

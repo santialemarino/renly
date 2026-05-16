@@ -1,6 +1,6 @@
 # Domain types: value objects, enums, errors used by services.
 
-from app.domain.credit_card import CardBalance
+from app.domain.credit_card import CardBucketBalance
 from app.domain.currency import (
     SUPPORTED_CURRENCIES,
     get_ars_pair,
@@ -15,7 +15,7 @@ from app.domain.errors import (
 )
 
 __all__ = [
-    "CardBalance",
+    "CardBucketBalance",
     "CurrencyChangeBlockedError",
     "ExchangeRateUnavailableError",
     "HasLinkedExpensesError",

@@ -9,7 +9,7 @@ RATE_MAP = {
 }
 
 
-# --- compute_monthly_card_balances ---
+# --- compute_monthly_card_balances (5-tuple settlement / expense shape) ---
 
 
 class TestComputeMonthlyCardBalances:
@@ -19,7 +19,7 @@ class TestComputeMonthlyCardBalances:
             (1, 2026, 2, "USD", 50.0),
         ]
         settlements = [
-            (1, 2026, 2, 80.0),
+            (1, 2026, 2, "USD", 80.0),
         ]
         result = compute_monthly_card_balances(
             expenses,
@@ -32,7 +32,7 @@ class TestComputeMonthlyCardBalances:
         assert result[(2026, 1)] == Decimal("100")
         assert result[(2026, 2)] == Decimal("70")
 
-    def test_multi_card_multi_currency(self):
+    def test_multi_card_multi_currency_converts_each_bucket(self):
         expenses = [
             (1, 2026, 1, "USD", 100.0),
             (2, 2026, 1, "ARS", 1200.0),  # 1200 ARS = 1 USD.
@@ -45,7 +45,7 @@ class TestComputeMonthlyCardBalances:
             target_currency="USD",
             rate_map=RATE_MAP,
         )
-        # Card 1: 100 USD. Card 2: 1200 ARS → 1 USD. Total: 101 USD.
+        # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
         assert result[(2026, 1)] == Decimal("101")
 
     def test_cumulative_across_months(self):
@@ -67,12 +67,8 @@ class TestComputeMonthlyCardBalances:
         assert result[(2026, 3)] == Decimal("150")
 
     def test_settlement_exceeds_expenses(self):
-        expenses = [
-            (1, 2026, 1, "USD", 50.0),
-        ]
-        settlements = [
-            (1, 2026, 1, 100.0),
-        ]
+        expenses = [(1, 2026, 1, "USD", 50.0)]
+        settlements = [(1, 2026, 1, "USD", 100.0)]
         result = compute_monthly_card_balances(
             expenses,
             settlements,
@@ -93,8 +89,8 @@ class TestComputeMonthlyCardBalances:
         )
         assert result == {}
 
-    def test_no_target_currency(self):
-        # When no target currency, values pass through unconverted.
+    def test_no_target_currency_passes_values_through(self):
+        # When no target currency is set, every bucket's value is summed raw.
         expenses = [
             (1, 2026, 1, "USD", 100.0),
             (1, 2026, 1, "ARS", 500.0),
@@ -107,21 +103,33 @@ class TestComputeMonthlyCardBalances:
             target_currency=None,
             rate_map=None,
         )
-        # No conversion: 100 + 500 = 600 (meaningless but safe fallback).
+        # No conversion: 100 + 500 = 600.
         assert result[(2026, 1)] == Decimal("600")
 
-    def test_foreign_expense_converted_to_card_then_target(self):
-        # Card is ARS, expense in USD, target is ARS.
-        expenses = [
-            (1, 2026, 1, "USD", 10.0),  # 10 USD on an ARS card.
-        ]
-        settlements = []
+    def test_foreign_bucket_settled_in_its_own_currency(self):
+        # ARS card with USD bucket activity — both expense and settlement live in USD,
+        # so the USD bucket cancels cleanly without going through card currency.
+        expenses = [(1, 2026, 1, "USD", 50.0)]
+        settlements = [(1, 2026, 1, "USD", 50.0)]
         result = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "ARS"},
-            target_currency="ARS",
+            target_currency="USD",
             rate_map=RATE_MAP,
         )
-        # 10 USD → 12000 ARS (rate: 1 USD = 1200 ARS).
-        assert result[(2026, 1)] == Decimal("12000")
+        assert result[(2026, 1)] == Decimal("0")
+
+    def test_each_bucket_converts_from_its_own_currency(self):
+        # ARS-currency settlement on a USD card converts directly from ARS, not via card currency.
+        expenses = [(1, 2026, 1, "USD", 100.0)]
+        settlements = [(1, 2026, 1, "ARS", 1200.0)]  # 1200 ARS = 1 USD.
+        result = compute_monthly_card_balances(
+            expenses,
+            settlements,
+            card_currencies={1: "USD"},
+            target_currency="USD",
+            rate_map=RATE_MAP,
+        )
+        # 100 USD expense - 1 USD settlement (from 1200 ARS) = 99 USD.
+        assert result[(2026, 1)] == Decimal("99")

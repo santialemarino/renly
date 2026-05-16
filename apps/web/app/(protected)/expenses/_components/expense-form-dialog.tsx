@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -101,7 +101,21 @@ export function ExpenseFormDialog({
     }
   }, [watchedPaymentMethod, form]);
 
-  async function onSubmit(values: ExpenseFormValues) {
+  // Soft confirmation when a credit-card expense uses a currency the card
+  // hasn't seen before. Catches typos that would otherwise create a phantom
+  // bucket. Edits skip the check — the bucket already exists by definition.
+  const [novelCurrencyPending, setNovelCurrencyPending] = useState<ExpenseFormValues | null>(null);
+
+  function selectedNovelCurrencyCardName(values: ExpenseFormValues): string | null {
+    if (values.paymentMethod !== 'credit_card') return null;
+    if (!values.creditCardId || !values.currency) return null;
+    const card = activeCards.find((c) => c.id === values.creditCardId);
+    if (!card) return null;
+    if (card.balances.some((b) => b.currency === values.currency)) return null;
+    return card.name;
+  }
+
+  async function doSubmit(values: ExpenseFormValues) {
     try {
       if (isEdit) {
         await updateExpense(expense.id, values);
@@ -112,9 +126,18 @@ export function ExpenseFormDialog({
       }
       onSuccess();
       onOpenChange(false);
+      setNovelCurrencyPending(null);
     } catch {
       toast.error(t('form.saveError'));
     }
+  }
+
+  async function onSubmit(values: ExpenseFormValues) {
+    if (!isEdit && selectedNovelCurrencyCardName(values)) {
+      setNovelCurrencyPending(values);
+      return;
+    }
+    await doSubmit(values);
   }
 
   return (
@@ -316,6 +339,37 @@ export function ExpenseFormDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <Dialog
+        open={!!novelCurrencyPending}
+        onOpenChange={(open) => !open && setNovelCurrencyPending(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('form.novelCurrency.title')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-paragraph-sm text-muted-foreground">
+            {t('form.novelCurrency.description', {
+              currency: novelCurrencyPending?.currency ?? '',
+              cardName: novelCurrencyPending
+                ? (selectedNovelCurrencyCardName(novelCurrencyPending) ?? '')
+                : '',
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNovelCurrencyPending(null)}>
+              {t('form.cancel')}
+            </Button>
+            <Button
+              blue
+              onClick={() => novelCurrencyPending && doSubmit(novelCurrencyPending)}
+              disabled={form.formState.isSubmitting}
+            >
+              {t('form.novelCurrency.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

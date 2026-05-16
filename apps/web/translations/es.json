@@ -434,6 +434,11 @@
         "label": "Notas",
         "placeholder": "Notas opcionales..."
       },
+      "novelCurrency": {
+        "title": "Confirmar nuevo saldo",
+        "description": "Este es el primer gasto en {currency} de {cardName}. Se va a crear un nuevo saldo en {currency}. ¿Continuar?",
+        "confirm": "Continuar"
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -470,7 +475,6 @@
       "dueDay": "Vencimiento",
       "currency": "Moneda",
       "balance": "Saldo",
-      "approximateBalance": "Aproximado — incluye gastos en otras monedas convertidos al tipo de cambio de hoy.",
       "actions": "Acciones",
       "empty": "No se encontraron tarjetas de crédito."
     },
@@ -559,6 +563,8 @@
         "datePlaceholder": "Elegí una fecha",
         "amount": "Monto",
         "currency": "Moneda",
+        "bucket": "Saldo",
+        "bucketPlaceholder": "Elegí la moneda del saldo",
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
       }

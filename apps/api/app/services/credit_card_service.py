@@ -3,12 +3,11 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CardBalance, HasLinkedExpensesError, NotFoundError
+from app.domain import CardBucketBalance, HasLinkedExpensesError, NotFoundError
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.user import User
 from app.repositories import card_settlement_repository, credit_card_repository, expense_repository
-from app.utils.metrics import convert_value, get_rate_map
 
 # --- Credit cards ---
 
@@ -41,50 +40,46 @@ async def get_card(session: AsyncSession, card_id: int, user: User) -> CreditCar
     return card
 
 
-# Pure computation: converts grouped expense totals to each card's currency and subtracts settlements.
+# Pure computation: returns one CardBucketBalance per currency that has activity
+# on a card. Each bucket's balance is sum(expenses) - sum(settlements) in that
+# currency — no cross-currency conversion. The card's primary currency always
+# appears even with zero activity so newly-created cards still surface a bucket.
+# Buckets are ordered primary first, then remaining currencies alphabetically.
 def compute_card_balances(
     card_ids: list[int],
     card_currencies: dict[int, str],
     expense_grouped: dict[int, dict[str, float]],
-    settlement_sums: dict[int, float],
-    rate_map: dict[str, Decimal] | None,
-) -> dict[int, CardBalance]:
-    result: dict[int, CardBalance] = {}
+    settlement_grouped: dict[int, dict[str, float]],
+) -> dict[int, list[CardBucketBalance]]:
+    result: dict[int, list[CardBucketBalance]] = {}
     for card_id in card_ids:
-        card_currency = card_currencies.get(card_id, "")
-        by_currency = expense_grouped.get(card_id, {})
-        has_mixed = len(by_currency) > 1 or any(c != card_currency for c in by_currency)
-
-        total_expenses = Decimal(0)
-        for cur, amount in by_currency.items():
-            val = Decimal(str(amount))
-            if cur != card_currency and rate_map:
-                val = convert_value(val, cur, card_currency, rate_map)
-            total_expenses += val
-
-        settlement_total = Decimal(str(settlement_sums.get(card_id, 0)))
-        result[card_id] = CardBalance(total_expenses - settlement_total, has_mixed)
+        primary = card_currencies.get(card_id)
+        expense_by_cur = expense_grouped.get(card_id, {})
+        settlement_by_cur = settlement_grouped.get(card_id, {})
+        active = set(expense_by_cur) | set(settlement_by_cur)
+        if primary:
+            active.add(primary)
+        ordered = ([primary] if primary else []) + sorted(c for c in active if c != primary)
+        buckets: list[CardBucketBalance] = []
+        for cur in ordered:
+            expenses = Decimal(str(expense_by_cur.get(cur, 0)))
+            settlements = Decimal(str(settlement_by_cur.get(cur, 0)))
+            buckets.append(CardBucketBalance(currency=cur, balance=expenses - settlements))
+        result[card_id] = buckets
     return result
 
 
-# Compute balances for multiple cards, converting mixed-currency expenses to each card's currency.
-# Returns {card_id: CardBalance(balance, has_mixed_currencies)}.
+# Returns per-bucket balances for the given cards. {card_id: [CardBucketBalance, ...]}.
 async def get_card_balances(
     session: AsyncSession,
     card_ids: list[int],
     card_currencies: dict[int, str],
-    dollar_preference: str | None = None,
-) -> dict[int, CardBalance]:
+) -> dict[int, list[CardBucketBalance]]:
     if not card_ids:
         return {}
     expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids)
-    settlement_sums = await card_settlement_repository.sum_by_card_ids(session, card_ids)
-
-    # Skip rate_map fetch when no card has expenses in a foreign currency.
-    needs_conversion = any(any(cur != card_currencies.get(card_id, "") for cur in currencies) for card_id, currencies in expense_grouped.items())
-    rate_map = await get_rate_map(session, dollar_preference) if needs_conversion else None
-
-    return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_sums, rate_map)
+    settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
+    return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
 
 
 # Create a new credit card.

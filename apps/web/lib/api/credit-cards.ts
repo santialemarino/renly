@@ -4,6 +4,11 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
+interface CardBucketBalanceRaw {
+  currency: string;
+  balance: string;
+}
+
 interface CreditCardRaw {
   id: number;
   name: string;
@@ -11,9 +16,8 @@ interface CreditCardRaw {
   due_day: number;
   currency: string;
   is_active: boolean;
-  balance: string;
+  balances: CardBucketBalanceRaw[];
   has_expenses: boolean;
-  has_mixed_currencies: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +35,11 @@ interface CardSettlementRaw {
 
 // --- Frontend types (camelCase) ---
 
+export interface CardBucketBalance {
+  currency: string;
+  balance: string;
+}
+
 export interface CreditCard {
   id: number;
   name: string;
@@ -38,9 +47,8 @@ export interface CreditCard {
   dueDay: number;
   currency: string;
   isActive: boolean;
-  balance: string;
+  balances: CardBucketBalance[];
   hasExpenses: boolean;
-  hasMixedCurrencies: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -66,9 +74,8 @@ function mapCreditCard(raw: CreditCardRaw): CreditCard {
     dueDay: raw.due_day,
     currency: raw.currency,
     isActive: raw.is_active,
-    balance: raw.balance,
+    balances: raw.balances.map((b) => ({ currency: b.currency, balance: b.balance })),
     hasExpenses: raw.has_expenses,
-    hasMixedCurrencies: raw.has_mixed_currencies,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
