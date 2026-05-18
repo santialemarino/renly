@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -105,6 +105,12 @@ export function ExpenseFormDialog({
   // hasn't seen before. Catches typos that would otherwise create a phantom
   // bucket. Edits skip the check — the bucket already exists by definition.
   const [novelCurrencyPending, setNovelCurrencyPending] = useState<ExpenseFormValues | null>(null);
+
+  // Preserve the pending values during the close animation so the description
+  // text doesn't blank out and shift the modal mid-exit.
+  const lastNovelCurrencyPending = useRef(novelCurrencyPending);
+  if (novelCurrencyPending) lastNovelCurrencyPending.current = novelCurrencyPending;
+  const novelCurrencyDisplay = novelCurrencyPending ?? lastNovelCurrencyPending.current;
 
   function selectedNovelCurrencyCardName(values: ExpenseFormValues): string | null {
     if (values.paymentMethod !== 'credit_card') return null;
@@ -357,9 +363,9 @@ export function ExpenseFormDialog({
           </DialogHeader>
           <p className="text-paragraph-sm text-muted-foreground">
             {t('form.novelCurrency.description', {
-              currency: novelCurrencyPending?.currency ?? '',
-              cardName: novelCurrencyPending
-                ? (selectedNovelCurrencyCardName(novelCurrencyPending) ?? '')
+              currency: novelCurrencyDisplay?.currency ?? '',
+              cardName: novelCurrencyDisplay
+                ? (selectedNovelCurrencyCardName(novelCurrencyDisplay) ?? '')
                 : '',
             })}
           </p>
