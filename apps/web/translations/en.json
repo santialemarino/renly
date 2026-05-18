@@ -155,6 +155,8 @@
       "creditCards": "Credit Cards",
       "subscriptions": "Subscriptions",
       "installments": "Installments",
+      "paymentObligations": "Payment Obligations",
+      "paymentsCalendar": "Payments Calendar",
       "investorDashboard": "Dashboard",
       "investments": "Investments",
       "groups": "Groups",
@@ -164,6 +166,7 @@
     },
     "navGroups": {
       "finances": "Finances",
+      "commitments": "Commitments",
       "portfolio": "Investor",
       "settings": "Settings"
     },
@@ -663,6 +666,141 @@
       "deleting": "Deleting...",
       "success": "Subscription deleted.",
       "error": "Failed to delete subscription."
+    }
+  },
+  "paymentObligations": {
+    "metadata": {
+      "title": "Payment obligations",
+      "description": "Manage your recurring and one-off payment obligations"
+    },
+    "title": "Payment obligations",
+    "subtitle": "Track recurring bills and one-off payments (electricity, ABL, internet, taxes, ...).",
+    "toolbar": {
+      "searchPlaceholder": "Search payment obligations...",
+      "add": "Add obligation",
+      "showArchived": "Show archived"
+    },
+    "table": {
+      "name": "Name",
+      "amount": "Amount",
+      "dueDate": "Due date",
+      "recurrence": "Recurrence",
+      "category": "Category",
+      "paymentMethod": "Payment method",
+      "actions": "Actions",
+      "empty": "No payment obligations found."
+    },
+    "recurrences": {
+      "oneOff": "One-off",
+      "monthly": "Monthly",
+      "bimonthly": "Bimonthly",
+      "quarterly": "Quarterly",
+      "annual": "Annual"
+    },
+    "paymentMethods": {
+      "cash": "Cash",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "credit_card": "Credit card"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveSuccess": "Obligation archived.",
+      "archiveError": "Failed to archive obligation.",
+      "unarchiveSuccess": "Obligation unarchived.",
+      "unarchiveError": "Failed to unarchive obligation."
+    },
+    "form": {
+      "titleCreate": "Add payment obligation",
+      "titleEdit": "Edit payment obligation",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the obligation name"
+      },
+      "amount": {
+        "label": "Amount",
+        "placeholder": "0.00"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "dueDate": {
+        "label": "Due date",
+        "placeholder": "Select a date"
+      },
+      "recurrence": {
+        "label": "Recurrence",
+        "placeholder": "Select a recurrence"
+      },
+      "category": {
+        "label": "Category",
+        "placeholder": "Optional category (utilities, taxes, ...)"
+      },
+      "paymentMethod": {
+        "label": "Payment method",
+        "placeholder": "Select a payment method"
+      },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a credit card"
+      },
+      "notes": {
+        "label": "Notes",
+        "placeholder": "Optional notes..."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Payment obligation created.",
+      "updateSuccess": "Payment obligation updated.",
+      "saveError": "Failed to save payment obligation."
+    },
+    "delete": {
+      "title": "Delete payment obligation",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Payment obligation deleted.",
+      "error": "Failed to delete payment obligation."
+    }
+  },
+  "paymentsCalendar": {
+    "metadata": {
+      "title": "Payments calendar",
+      "description": "Read-only timeline of upcoming payment obligations"
+    },
+    "title": "Payments calendar",
+    "subtitle": "All your upcoming payments in one timeline — subscriptions, installment cuotas, payment obligations and credit-card due dates.",
+    "empty": "Nothing due in {month}.",
+    "noBuckets": "No active cards.",
+    "monthLabel": "{month} {year}",
+    "navigation": {
+      "previous": "Previous month",
+      "next": "Next month",
+      "today": "Today"
+    },
+    "types": {
+      "subscription": "Subscription",
+      "installment": "Installment",
+      "obligation": "Obligation",
+      "card_due": "Card due"
+    },
+    "installment": {
+      "progress": "Cuota {index} of {total}"
+    },
+    "paymentMethods": {
+      "cash": "Cash",
+      "debit": "Debit",
+      "transfer": "Transfer",
+      "credit_card": "Credit card"
     }
   },
   "installments": {

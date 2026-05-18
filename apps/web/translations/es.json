@@ -155,6 +155,8 @@
       "creditCards": "Tarjetas de Crédito",
       "subscriptions": "Suscripciones",
       "installments": "Cuotas",
+      "paymentObligations": "Obligaciones de pago",
+      "paymentsCalendar": "Calendario de pagos",
       "investorDashboard": "Dashboard",
       "investments": "Inversiones",
       "groups": "Grupos",
@@ -164,6 +166,7 @@
     },
     "navGroups": {
       "finances": "Finanzas",
+      "commitments": "Compromisos",
       "portfolio": "Inversor",
       "settings": "Configuración"
     },
@@ -663,6 +666,141 @@
       "deleting": "Eliminando...",
       "success": "Suscripción eliminada.",
       "error": "No se pudo eliminar la suscripción."
+    }
+  },
+  "paymentObligations": {
+    "metadata": {
+      "title": "Obligaciones de pago",
+      "description": "Gestioná tus pagos recurrentes y únicos"
+    },
+    "title": "Obligaciones de pago",
+    "subtitle": "Llevá el control de servicios y pagos únicos (luz, ABL, internet, impuestos, ...).",
+    "toolbar": {
+      "searchPlaceholder": "Buscar obligaciones de pago...",
+      "add": "Agregar obligación",
+      "showArchived": "Mostrar archivadas"
+    },
+    "table": {
+      "name": "Nombre",
+      "amount": "Monto",
+      "dueDate": "Vencimiento",
+      "recurrence": "Frecuencia",
+      "category": "Categoría",
+      "paymentMethod": "Método de pago",
+      "actions": "Acciones",
+      "empty": "No se encontraron obligaciones de pago."
+    },
+    "recurrences": {
+      "oneOff": "Único",
+      "monthly": "Mensual",
+      "bimonthly": "Bimestral",
+      "quarterly": "Trimestral",
+      "annual": "Anual"
+    },
+    "paymentMethods": {
+      "cash": "Efectivo",
+      "debit": "Débito",
+      "transfer": "Transferencia",
+      "credit_card": "Tarjeta de crédito"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "archiveSuccess": "Obligación archivada.",
+      "archiveError": "No se pudo archivar la obligación.",
+      "unarchiveSuccess": "Obligación desarchivada.",
+      "unarchiveError": "No se pudo desarchivar la obligación."
+    },
+    "form": {
+      "titleCreate": "Agregar obligación",
+      "titleEdit": "Editar obligación",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Nombre de la obligación"
+      },
+      "amount": {
+        "label": "Monto",
+        "placeholder": "0,00"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Elegí una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "dueDate": {
+        "label": "Vencimiento",
+        "placeholder": "Elegí una fecha"
+      },
+      "recurrence": {
+        "label": "Frecuencia",
+        "placeholder": "Elegí una frecuencia"
+      },
+      "category": {
+        "label": "Categoría",
+        "placeholder": "Categoría opcional (servicios, impuestos, ...)"
+      },
+      "paymentMethod": {
+        "label": "Método de pago",
+        "placeholder": "Elegí un método de pago"
+      },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Elegí una tarjeta"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Obligación creada.",
+      "updateSuccess": "Obligación actualizada.",
+      "saveError": "No se pudo guardar la obligación."
+    },
+    "delete": {
+      "title": "Eliminar obligación",
+      "confirm": "¿Seguro querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Obligación eliminada.",
+      "error": "No se pudo eliminar la obligación."
+    }
+  },
+  "paymentsCalendar": {
+    "metadata": {
+      "title": "Calendario de pagos",
+      "description": "Línea de tiempo de los próximos pagos"
+    },
+    "title": "Calendario de pagos",
+    "subtitle": "Todos tus próximos pagos en una sola vista — suscripciones, cuotas, obligaciones y vencimientos de tarjetas.",
+    "empty": "Nada para pagar en {month}.",
+    "noBuckets": "No hay tarjetas activas.",
+    "monthLabel": "{month} {year}",
+    "navigation": {
+      "previous": "Mes anterior",
+      "next": "Mes siguiente",
+      "today": "Hoy"
+    },
+    "types": {
+      "subscription": "Suscripción",
+      "installment": "Cuota",
+      "obligation": "Obligación",
+      "card_due": "Vencimiento de tarjeta"
+    },
+    "installment": {
+      "progress": "Cuota {index} de {total}"
+    },
+    "paymentMethods": {
+      "cash": "Efectivo",
+      "debit": "Débito",
+      "transfer": "Transferencia",
+      "credit_card": "Tarjeta de crédito"
     }
   },
   "installments": {

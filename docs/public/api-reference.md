@@ -263,6 +263,48 @@ Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surf
 
 ---
 
+## Payments Calendar
+
+Read-only timeline that aggregates every upcoming payment for a given calendar month: subscription charges, installment cuotas, payment obligations, and credit-card due dates.
+
+| Method | Path                 | Description                                                |
+| ------ | -------------------- | ---------------------------------------------------------- |
+| `GET`  | `/payments-calendar` | Aggregated calendar events for the requested month / year. |
+
+**Required query parameters:** `year` (integer), `month` (1-12).
+
+**Optional query parameters:** `currency` (display currency — adds `converted_amount` on each item).
+
+**Response shape:**
+
+\`\`\`
+{
+"year": 2026,
+"month": 5,
+"currency": "ARS" | null,
+"items": [
+{
+"type": "subscription" | "installment" | "obligation" | "card_due",
+"date": "2026-05-15",
+"name": "Netflix",
+"amount": "5990.00",
+"currency": "ARS",
+"converted_amount": "5990.00" | null,
+"payment_method": "credit_card" | null,
+"credit_card_id": 12 | null,
+"source_id": 7,
+"cuota_index": null, // installments only
+"installments_count": null, // installments only
+"recurrence": null // obligations only
+}
+]
+}
+\`\`\`
+
+`items` is sorted by date ascending. Within the same date the order is stable: `card_due` → `subscription` → `installment` → `obligation`. Card-due events emit one entry per active card per bucket with non-zero balance, dated on that month's resolved `due_day` (clamped for short months).
+
+---
+
 ## Finance Metrics
 
 Dashboard-oriented endpoints for income, expense, and cash flow metrics. All support `currency` conversion and optional date range filtering.

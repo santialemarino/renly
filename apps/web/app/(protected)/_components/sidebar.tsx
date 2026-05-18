@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BarChart3,
+  CalendarClock,
   ChevronRight,
   CircleDollarSign,
+  ClipboardList,
   CreditCard,
+  FileText,
   FolderOpen,
   LayoutDashboard,
   ListChecks,
@@ -52,8 +55,13 @@ const FINANCES_GROUP = [
   { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
   { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
   { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
+] as const;
+
+const COMMITMENTS_GROUP = [
   { key: 'subscriptions', href: ROUTES.subscriptions, icon: RefreshCw },
   { key: 'installments', href: ROUTES.installments, icon: ListChecks },
+  { key: 'paymentObligations', href: ROUTES.paymentObligations, icon: FileText },
+  { key: 'paymentsCalendar', href: ROUTES.paymentsCalendar, icon: CalendarClock },
 ] as const;
 
 const PORTFOLIO_GROUP = [
@@ -96,7 +104,9 @@ export function AppSidebar({
   useEffect(() => setMounted(true), []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
-  const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href));
+  const isCommitmentsActive = COMMITMENTS_GROUP.some(({ href }) => isActive(href));
+  // Finances "section" is active when any direct child or any nested Commitments child is active.
+  const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;
   const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
   const isSettingsActive = SETTINGS_GROUP.some(({ href }) => isActive(href));
 
@@ -185,6 +195,59 @@ export function AppSidebar({
                           </SidebarMenuSubItem>
                         );
                       })}
+
+                      {/* Nested Commitments subgroup — subscriptions, installments, obligations, calendar. */}
+                      <Collapsible
+                        asChild
+                        defaultOpen={isCommitmentsActive}
+                        className="group/inner-collapsible"
+                      >
+                        <SidebarMenuSubItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuSubButton
+                              className={cn(
+                                'h-8 text-paragraph-sm-medium cursor-pointer',
+                                NAV_ITEM_STYLES,
+                                SUB_BUTTON_EXTRAS,
+                                isCommitmentsActive && 'bg-gray-100',
+                                !isCommitmentsActive &&
+                                  'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                              )}
+                            >
+                              <ClipboardList />
+                              <span>{t('navGroups.commitments')}</span>
+                              <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
+                            </SidebarMenuSubButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className={collapsibleContentClass}>
+                            <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                              {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
+                                const active = isActive(href);
+                                return (
+                                  <SidebarMenuSubItem key={key}>
+                                    <SidebarMenuSubButton
+                                      asChild
+                                      isActive={active}
+                                      className={cn(
+                                        'h-8 text-paragraph-sm-medium',
+                                        NAV_ITEM_STYLES,
+                                        SUB_BUTTON_EXTRAS,
+                                        !active &&
+                                          'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                                      )}
+                                    >
+                                      <Link href={href}>
+                                        <Icon />
+                                        <span>{t(`nav.${key}`)}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuSubItem>
+                      </Collapsible>
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>

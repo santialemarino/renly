@@ -11,6 +11,8 @@ export const ROUTES = {
   creditCards: '/credit-cards',
   subscriptions: '/subscriptions',
   installments: '/installments',
+  paymentObligations: '/payment-obligations',
+  paymentsCalendar: '/payments-calendar',
   investorDashboard: '/investor-dashboard',
   investments: '/investments',
   groups: '/groups',
