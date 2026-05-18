@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CardBalance
 from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.expense_repository import expense_repository
@@ -22,35 +21,35 @@ from app.utils.metrics import convert_value, get_rate_map
 ZERO = Decimal("0")
 
 
-# Pure computation: builds cumulative monthly card balance from expense and settlement totals.
+# Pure computation: builds cumulative monthly card balance from expense and
+# settlement totals. Phase 3 dual-currency model: settlements carry their own
+# currency (bucket they settle), so both inputs are 5-tuples and each tuple's
+# currency converts directly to `target_currency`. `card_currencies` is no
+# longer load-bearing here (each row knows its own currency) but stays in the
+# signature so callers don't need to rewire — defensive fallback only.
 # Returns {(year, month): cumulative_balance} in the target currency.
 def compute_monthly_card_balances(
     expense_monthly: list[tuple[int, int, int, str, float]],
-    settlement_monthly: list[tuple[int, int, int, float]],
+    settlement_monthly: list[tuple[int, int, int, str, float]],
     card_currencies: dict[int, str],
     target_currency: str | None,
     rate_map: dict[str, Decimal] | None,
 ) -> dict[tuple[int, int], Decimal]:
-    # Aggregate expenses per (year, month) across all cards, converting to target currency.
+    # Aggregate expenses per (year, month), converting from the expense's own currency.
     month_expenses: dict[tuple[int, int], Decimal] = {}
-    for card_id, year, month, currency, total in expense_monthly:
+    for _card_id, year, month, currency, total in expense_monthly:
         val = Decimal(str(total))
-        card_cur = card_currencies.get(card_id, currency)
-        # Convert expense currency → card currency → target currency.
-        if currency != card_cur and rate_map:
-            val = convert_value(val, currency, card_cur, rate_map)
-        if target_currency and card_cur != target_currency and rate_map:
-            val = convert_value(val, card_cur, target_currency, rate_map)
+        if target_currency and currency != target_currency and rate_map:
+            val = convert_value(val, currency, target_currency, rate_map)
         key = (year, month)
         month_expenses[key] = month_expenses.get(key, ZERO) + val
 
-    # Aggregate settlements per (year, month), converting to target currency.
+    # Aggregate settlements per (year, month), converting from the settlement's own currency.
     month_settlements: dict[tuple[int, int], Decimal] = {}
-    for card_id, year, month, total in settlement_monthly:
+    for _card_id, year, month, currency, total in settlement_monthly:
         val = Decimal(str(total))
-        card_cur = card_currencies.get(card_id, "")
-        if target_currency and card_cur != target_currency and rate_map:
-            val = convert_value(val, card_cur, target_currency, rate_map)
+        if target_currency and currency != target_currency and rate_map:
+            val = convert_value(val, currency, target_currency, rate_map)
         key = (year, month)
         month_settlements[key] = month_settlements.get(key, ZERO) + val
 
@@ -200,22 +199,20 @@ async def get_composition(
         dollar_preference=dollar_preference,
     )
 
-    # Compute total card balance, converting each card's balance to display currency.
+    # Compute total card liability, converting each bucket's balance to display currency.
     cards = await credit_card_repository.list_by_user(session, user_id)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dollar_preference)
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
         rate_map = await get_rate_map(session, dollar_preference) if currency else None
-        for card in cards:
-            bal: CardBalance | None = balances.get(card.id)
-            if bal is None:
-                continue
-            val = bal.balance
-            if currency and card.currency != currency and rate_map:
-                val = convert_value(val, card.currency, currency, rate_map)
-            card_balance += val
+        for buckets in balances.values():
+            for bucket in buckets:
+                val = bucket.balance
+                if currency and bucket.currency != currency and rate_map:
+                    val = convert_value(val, bucket.currency, currency, rate_map)
+                card_balance += val
 
     total_assets = allocation.total_value
     total_gross = total_assets + card_balance

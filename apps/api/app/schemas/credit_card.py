@@ -25,19 +25,28 @@ class CreditCardUpdate(RequestBase):
     is_active: bool | None = Field(default=None, description="Whether the card is active.")
 
 
-# Response for a single credit card.
+# Per-currency bucket balance on a credit card (Phase 3 dual-currency model).
+class CardBucketBalanceResponse(BaseModel):
+    currency: str = Field(description="Bucket currency (ISO 4217).", max_length=3)
+    balance: Decimal = Field(description="Balance in this currency (expenses - settlements).", max_digits=18, decimal_places=2)
+
+
+# Response for a single credit card. Phase 3 dual-currency model: `balances` is
+# a per-currency bucket list (always includes the primary currency bucket, plus
+# one bucket per other currency with activity). No more cross-currency conversion
+# at display time.
 class CreditCardResponse(BaseModel):
     id: int = Field(description="Card id.")
     name: str = Field(description="Card label.")
     closing_day: int = Field(description="Statement closing day (1-31).")
     due_day: int = Field(description="Payment due day (1-31).")
-    currency: str = Field(description="Card currency (ISO 4217).")
+    currency: str = Field(description="Primary statement currency (ISO 4217).")
     is_active: bool = Field(description="Whether the card is active.")
-    balance: Decimal = Field(
-        description="Current card balance (expenses - settlements), converted to card currency.", max_digits=18, decimal_places=2
+    balances: list[CardBucketBalanceResponse] = Field(
+        default_factory=list,
+        description="Per-currency bucket balances. Primary first, then any other currency with activity.",
     )
     has_expenses: bool = Field(description="Whether the card has linked expenses.")
-    has_mixed_currencies: bool = Field(description="Whether the card has expenses in currencies other than the card's own.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

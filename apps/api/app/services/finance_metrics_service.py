@@ -98,21 +98,20 @@ async def get_overview(
         if prev_expenses != ZERO:
             expense_change_pct = (total_expenses - prev_expenses) / prev_expenses
 
-    # Credit card balance (all active cards, converted to display currency).
+    # Credit card liability — sum every active card's per-currency buckets, converting
+    # each bucket to the display currency.
     cards = await credit_card_repository.list_by_user(session, user_id)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, dollar_preference)
-        for card in cards:
-            bal = balances.get(card.id)
-            if bal is None:
-                continue
-            val = bal.balance
-            if val and currency and rate_map and card.currency != currency:
-                val = convert_value(val, card.currency, currency, rate_map)
-            card_balance += val
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+        for buckets in balances.values():
+            for bucket in buckets:
+                val = bucket.balance
+                if val and currency and rate_map and bucket.currency != currency:
+                    val = convert_value(val, bucket.currency, currency, rate_map)
+                card_balance += val
 
     return FinanceOverviewResponse(
         total_income=total_income,

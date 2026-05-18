@@ -198,13 +198,17 @@ All rates are stored against USD; any pair converts through USD as pivot.
 | "Original" selected on dashboard | Falls back to primary currency, hint shown     |
 | "Original" on snapshots page     | No conversion, values in base currency         |
 
-### 11. Credit card balance — mixed-currency conversion
+### 11. Credit card balance — per-currency buckets
 
-Credit card balances are computed as `sum(expenses) - sum(settlements)`. When a card has expenses in currencies other than its own (e.g., a USD card with ARS expenses), the expense amounts are converted to the card's currency using the same USD-pivot mechanism before summing. Settlements always match the card's currency (auto-set on creation) and need no conversion.
+Credit card balances are computed **per currency bucket**: each card carries one balance entry per currency that has activity on it, plus a primary-currency bucket (always present, zero when no activity). Each bucket's balance is `sum(expenses in this currency) - sum(settlements in this currency)`, with no cross-currency conversion at display time. This matches how Argentine resúmenes structure dual-balance cards (peso bucket + dólar bucket on the same physical card).
 
-The conversion uses the user's dollar rate preference. A `has_mixed_currencies` flag on the response tells the frontend to show an "approximate" tooltip (since the conversion uses current rates, not the bank's historical rates). The rate map query is skipped entirely when no card has foreign-currency expenses.
+Single-currency cards collapse to one bucket — visually identical to the pre-Phase-3 single-balance display, zero overhead for non-Argentine users.
 
-**Backend flow:** `expense_repository.sum_by_credit_card_ids_grouped()` returns `{card_id: {currency: amount}}`. `compute_card_balances()` (pure function in `credit_card_service.py`) converts each subtotal via `convert_value()` and sums. `get_card_balances()` orchestrates the DB queries and calls the pure function.
+**Backend flow:** `expense_repository.sum_by_credit_card_ids_grouped()` and `card_settlement_repository.sum_by_card_ids_grouped()` both return `{card_id: {currency: amount}}`. `compute_card_balances()` (pure function in `credit_card_service.py`) subtracts settlements from expenses inside each bucket and orders the result primary-first. `get_card_balances()` orchestrates the DB queries — no rate map needed at this layer because buckets are never converted across currencies.
+
+**Dashboard aggregation:** consumers that need a single-currency total (general dashboard, finance metrics) iterate every bucket and convert each one independently via `convert_value()` (USD pivot) using the user's dollar rate preference. The conversion happens at the consuming layer, not on the card-balance API.
+
+**Front-end UX guards:** the settlement form shows a currency picker only when a card has > 1 bucket (otherwise it locks to primary silently). The expense form intercepts submit when a credit-card expense uses a currency the card hasn't seen before — the soft confirmation catches typos that would create phantom buckets.
 
 ## Data model
 

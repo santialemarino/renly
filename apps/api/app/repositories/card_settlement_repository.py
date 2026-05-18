@@ -47,27 +47,35 @@ async def sum_by_card(session: AsyncSession, credit_card_id: int) -> float:
     return float(result.scalar_one())
 
 
-# Sum of settlements grouped by credit card id. Returns a dict {card_id: total}.
-async def sum_by_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, float]:
+# Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
+# Replaces the flat sum_by_card_ids — bucket balances need per-currency totals.
+async def sum_by_card_ids_grouped(
+    session: AsyncSession,
+    credit_card_ids: list[int],
+) -> dict[int, dict[str, float]]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
         select(
             CardSettlement.credit_card_id,
+            CardSettlement.currency,
             func.coalesce(func.sum(CardSettlement.amount), 0),
         )
         .where(CardSettlement.credit_card_id.in_(credit_card_ids))
-        .group_by(CardSettlement.credit_card_id)
+        .group_by(CardSettlement.credit_card_id, CardSettlement.currency)
     )
-    return {row[0]: float(row[1]) for row in result.all()}
+    grouped: dict[int, dict[str, float]] = {}
+    for card_id, currency, total in result.all():
+        grouped.setdefault(card_id, {})[currency] = float(total)
+    return grouped
 
 
-# Monthly settlement totals for given credit cards, grouped by card_id, year, and month.
-# Returns a list of (card_id, year, month, total) tuples.
+# Monthly settlement totals for given credit cards, grouped by card_id, year, month, and currency.
+# Returns a list of (card_id, year, month, currency, total) tuples.
 async def sum_by_card_ids_monthly(
     session: AsyncSession,
     credit_card_ids: list[int],
-) -> list[tuple[int, int, int, float]]:
+) -> list[tuple[int, int, int, str, float]]:
     if not credit_card_ids:
         return []
     year_col = func.extract("year", CardSettlement.date).label("year")
@@ -77,13 +85,14 @@ async def sum_by_card_ids_monthly(
             CardSettlement.credit_card_id,
             year_col,
             month_col,
+            CardSettlement.currency,
             func.coalesce(func.sum(CardSettlement.amount), 0),
         )
         .where(CardSettlement.credit_card_id.in_(credit_card_ids))
-        .group_by(CardSettlement.credit_card_id, year_col, month_col)
+        .group_by(CardSettlement.credit_card_id, year_col, month_col, CardSettlement.currency)
         .order_by(year_col, month_col)
     )
-    return [(row[0], int(row[1]), int(row[2]), float(row[3])) for row in result.all()]
+    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
 
 
 # Namespace to call repository functions (e.g. card_settlement_repository.list_by_card).
@@ -94,7 +103,7 @@ class CardSettlementRepository:
     save = staticmethod(save)
     delete = staticmethod(delete)
     sum_by_card = staticmethod(sum_by_card)
-    sum_by_card_ids = staticmethod(sum_by_card_ids)
+    sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)
     sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)
 
 

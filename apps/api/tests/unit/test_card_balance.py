@@ -2,84 +2,97 @@ from decimal import Decimal
 
 from app.services.credit_card_service import compute_card_balances
 
-# Rate map: 1 USD = 1200 ARS, 1 USD = 0.92 EUR.
-RATE_MAP = {
-    "USD": Decimal("1"),
-    "ARS": Decimal("1200"),
-    "EUR": Decimal("0.92"),
-}
-
-
-# --- compute_card_balances ---
+# --- compute_card_balances (per-currency bucket model) ---
 
 
 class TestComputeCardBalances:
-    def test_single_currency_no_conversion(self):
+    def test_single_currency_returns_one_bucket(self):
         # Card in USD, all expenses in USD.
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
             expense_grouped={1: {"USD": 100.0}},
-            settlement_sums={1: 30.0},
-            rate_map=None,
+            settlement_grouped={1: {"USD": 30.0}},
         )
-        bal = result[1]
-        assert bal.balance == Decimal("70")
-        assert bal.has_mixed_currencies is False
+        buckets = result[1]
+        assert len(buckets) == 1
+        assert buckets[0].currency == "USD"
+        assert buckets[0].balance == Decimal("70")
 
-    def test_mixed_currencies_converts_to_card_currency(self):
-        # Card in USD. Expenses: 100 USD + 1200 ARS (= 1 USD).
-        result = compute_card_balances(
-            card_ids=[1],
-            card_currencies={1: "USD"},
-            expense_grouped={1: {"USD": 100.0, "ARS": 1200.0}},
-            settlement_sums={1: 0.0},
-            rate_map=RATE_MAP,
-        )
-        bal = result[1]
-        assert bal.balance == Decimal("101")
-        assert bal.has_mixed_currencies is True
-
-    def test_foreign_only_marks_mixed(self):
-        # Card in USD, but only ARS expenses.
-        result = compute_card_balances(
-            card_ids=[1],
-            card_currencies={1: "USD"},
-            expense_grouped={1: {"ARS": 2400.0}},
-            settlement_sums={1: 0.0},
-            rate_map=RATE_MAP,
-        )
-        bal = result[1]
-        # 2400 ARS / 1200 = 2 USD.
-        assert bal.balance == Decimal("2")
-        assert bal.has_mixed_currencies is True
-
-    def test_no_expenses_no_settlements(self):
+    def test_no_activity_returns_zero_primary_bucket(self):
+        # Card with no expenses or settlements yet — bucket exists with 0 balance.
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
             expense_grouped={},
-            settlement_sums={},
-            rate_map=None,
+            settlement_grouped={},
         )
-        bal = result[1]
-        assert bal.balance == Decimal("0")
-        assert bal.has_mixed_currencies is False
+        buckets = result[1]
+        assert len(buckets) == 1
+        assert buckets[0].currency == "USD"
+        assert buckets[0].balance == Decimal("0")
 
-    def test_settlement_exceeds_expenses(self):
+    def test_multi_currency_returns_one_bucket_per_currency(self):
+        # ARS card with peso and dollar activity — two independent buckets.
+        result = compute_card_balances(
+            card_ids=[1],
+            card_currencies={1: "ARS"},
+            expense_grouped={1: {"ARS": 50000.0, "USD": 100.0}},
+            settlement_grouped={1: {"ARS": 20000.0, "USD": 40.0}},
+        )
+        buckets = result[1]
+        assert len(buckets) == 2
+        # Primary (ARS) comes first.
+        assert buckets[0].currency == "ARS"
+        assert buckets[0].balance == Decimal("30000")
+        # Secondary in alphabetical order.
+        assert buckets[1].currency == "USD"
+        assert buckets[1].balance == Decimal("60")
+
+    def test_buckets_are_not_converted_across_currencies(self):
+        # The whole point of Option B: each bucket settles in its own currency.
+        # Even with a "rate map" available externally, the function returns raw bucket totals.
+        result = compute_card_balances(
+            card_ids=[1],
+            card_currencies={1: "USD"},
+            expense_grouped={1: {"USD": 100.0, "ARS": 1200.0}},
+            settlement_grouped={},
+        )
+        buckets = result[1]
+        assert {b.currency: b.balance for b in buckets} == {
+            "USD": Decimal("100"),
+            "ARS": Decimal("1200"),
+        }
+
+    def test_settlement_in_non_primary_currency(self):
+        # Settling the USD bucket of an ARS card directly.
+        result = compute_card_balances(
+            card_ids=[1],
+            card_currencies={1: "ARS"},
+            expense_grouped={1: {"USD": 100.0}},
+            settlement_grouped={1: {"USD": 100.0}},
+        )
+        buckets = result[1]
+        # Primary ARS bucket: no activity -> 0.
+        ars = next(b for b in buckets if b.currency == "ARS")
+        assert ars.balance == Decimal("0")
+        # USD bucket: settled to zero.
+        usd = next(b for b in buckets if b.currency == "USD")
+        assert usd.balance == Decimal("0")
+
+    def test_settlement_exceeds_expenses_yields_negative_bucket(self):
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "ARS"},
             expense_grouped={1: {"ARS": 5000.0}},
-            settlement_sums={1: 8000.0},
-            rate_map=None,
+            settlement_grouped={1: {"ARS": 8000.0}},
         )
-        bal = result[1]
-        assert bal.balance == Decimal("-3000")
-        assert bal.has_mixed_currencies is False
+        buckets = result[1]
+        assert len(buckets) == 1
+        assert buckets[0].currency == "ARS"
+        assert buckets[0].balance == Decimal("-3000")
 
-    def test_multiple_cards(self):
-        # Card 1: USD card, only USD expenses. Card 2: ARS card, mixed expenses.
+    def test_multiple_cards_each_get_their_own_buckets(self):
         result = compute_card_balances(
             card_ids=[1, 2],
             card_currencies={1: "USD", 2: "ARS"},
@@ -87,45 +100,34 @@ class TestComputeCardBalances:
                 1: {"USD": 50.0},
                 2: {"ARS": 10000.0, "USD": 10.0},
             },
-            settlement_sums={1: 20.0, 2: 5000.0},
-            rate_map=RATE_MAP,
+            settlement_grouped={
+                1: {"USD": 20.0},
+                2: {"ARS": 5000.0},
+            },
         )
-        bal1 = result[1]
-        assert bal1.balance == Decimal("30")
-        assert bal1.has_mixed_currencies is False
+        # Card 1: single USD bucket, 50 - 20 = 30.
+        c1 = result[1]
+        assert len(c1) == 1
+        assert c1[0].currency == "USD"
+        assert c1[0].balance == Decimal("30")
 
-        bal2 = result[2]
-        # 10000 ARS + 10 USD converted to ARS (10 * 1200 = 12000) = 22000 - 5000 = 17000.
-        assert bal2.balance == Decimal("17000")
-        assert bal2.has_mixed_currencies is True
+        # Card 2: ARS primary + USD secondary.
+        c2 = result[2]
+        c2_by_cur = {b.currency: b.balance for b in c2}
+        assert c2_by_cur == {"ARS": Decimal("5000"), "USD": Decimal("10")}
 
-    def test_no_rate_map_returns_raw_sum(self):
-        # Mixed currencies but no rate_map (rates unavailable). Falls back to raw sum.
+    def test_primary_always_listed_first(self):
+        # Even when the only activity is in a non-primary currency, primary still leads.
         result = compute_card_balances(
             card_ids=[1],
             card_currencies={1: "USD"},
-            expense_grouped={1: {"USD": 100.0, "ARS": 1200.0}},
-            settlement_sums={1: 0.0},
-            rate_map=None,
+            expense_grouped={1: {"ARS": 1000.0, "EUR": 50.0}},
+            settlement_grouped={},
         )
-        bal = result[1]
-        # No conversion: 100 + 1200 = 1300 (meaningless but safe fallback).
-        assert bal.balance == Decimal("1300")
-        assert bal.has_mixed_currencies is True
+        currencies = [b.currency for b in result[1]]
+        assert currencies[0] == "USD"
+        # The rest sorted alphabetically.
+        assert currencies[1:] == ["ARS", "EUR"]
 
-    def test_includes_auto_generated_subscription_and_installment_charges(self):
-        # Phase 3 Step 3: auto-generated entries land in expense_entries with credit_card_id set.
-        # The aggregation in expense_repository.sum_by_credit_card_ids_grouped is source-agnostic,
-        # so manual + subscription + installment totals all flow into expense_grouped here.
-        # Card 1 (ARS): 5000 manual + 4500 subscription (Netflix x3 cuotas) + 30000 installment
-        # (TV cuota 4) = 39500. Settlement: 10000.
-        result = compute_card_balances(
-            card_ids=[1],
-            card_currencies={1: "ARS"},
-            expense_grouped={1: {"ARS": 39500.0}},
-            settlement_sums={1: 10000.0},
-            rate_map=None,
-        )
-        bal = result[1]
-        assert bal.balance == Decimal("29500")
-        assert bal.has_mixed_currencies is False
+    def test_empty_card_ids(self):
+        assert compute_card_balances([], {}, {}, {}) == {}

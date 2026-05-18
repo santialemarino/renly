@@ -6,6 +6,7 @@ export function buildSettlementFormSchema(requiredMsg: string) {
   return z.object({
     date: z.string().min(1, { message: requiredMsg }),
     amount: z.string().min(1, { message: requiredMsg }),
+    currency: z.string().min(1, { message: requiredMsg }),
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }
