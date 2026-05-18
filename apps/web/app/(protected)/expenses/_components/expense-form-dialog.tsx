@@ -141,54 +141,31 @@ export function ExpenseFormDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
+          </DialogHeader>
 
-        <Form {...form}>
-          <form
-            id="expense-form"
-            className="flex flex-col min-w-0 gap-y-4"
-            onSubmit={form.handleSubmit(onSubmit)}
-            noValidate
-          >
-            <FormField
-              control={form.control}
-              name="date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.date.label')}</FormLabel>
-                  <FormControl>
-                    <DatePickerInput
-                      value={field.value || undefined}
-                      onChange={field.onChange}
-                      placeholder={t('form.date.placeholder')}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex min-w-0 items-start gap-x-3">
+          <Form {...form}>
+            <form
+              id="expense-form"
+              className="flex flex-col min-w-0 gap-y-4"
+              onSubmit={form.handleSubmit(onSubmit)}
+              noValidate
+            >
               <FormField
                 control={form.control}
-                name="currency"
+                name="date"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem>
+                    <FormLabel required>{t('form.date.label')}</FormLabel>
                     <FormControl>
-                      <CurrencyCombobox
-                        compact
-                        value={field.value || null}
-                        exclude={[]}
-                        preferredCurrencies={preferredCurrencies}
-                        placeholder={t('form.currency.placeholder')}
-                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                        noResults={t('form.currency.noResults')}
+                      <DatePickerInput
+                        value={field.value || undefined}
                         onChange={field.onChange}
+                        placeholder={t('form.date.placeholder')}
                       />
                     </FormControl>
                     <FormMessage />
@@ -196,155 +173,185 @@ export function ExpenseFormDialog({
                 )}
               />
 
+              <div className="flex min-w-0 items-start gap-x-3">
+                <FormField
+                  control={form.control}
+                  name="currency"
+                  render={({ field }) => (
+                    <FormItem className="flex-1 min-w-0">
+                      <FormLabel required>{t('form.currency.label')}</FormLabel>
+                      <FormControl>
+                        <CurrencyCombobox
+                          compact
+                          value={field.value || null}
+                          exclude={[]}
+                          preferredCurrencies={preferredCurrencies}
+                          placeholder={t('form.currency.placeholder')}
+                          searchPlaceholder={t('form.currency.searchPlaceholder')}
+                          noResults={t('form.currency.noResults')}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="amount"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel required>{t('form.amount.label')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          onKeyDown={blockNegativeNumberKeys}
+                          placeholder={t('form.amount.placeholder')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="flex min-w-0 items-start gap-x-3">
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>{t('form.category.label')}</FormLabel>
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={t('form.category.placeholder')} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {sortedCategories.map((cat) => (
+                            <SelectItem key={cat} value={cat}>
+                              {t(`categories.${cat}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="paymentMethod"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
+                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {PAYMENT_METHODS.map((method) => (
+                            <SelectItem key={method} value={method}>
+                              {t(`paymentMethods.${method}`)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <AnimatePresence initial={false}>
+                {showCreditCard && (
+                  <motion.div
+                    key="credit-card"
+                    layout
+                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                    style={{ marginTop: -16 }}
+                  >
+                    <div className="pt-4">
+                      <FormField
+                        control={form.control}
+                        name="creditCardId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('form.creditCard.label')}</FormLabel>
+                            <Select
+                              value={field.value?.toString() ?? ''}
+                              onValueChange={(v) => field.onChange(Number(v))}
+                            >
+                              <FormControl>
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder={t('form.creditCard.placeholder')} />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {activeCards.map((card) => (
+                                  <SelectItem key={card.id} value={card.id.toString()}>
+                                    {card.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <FormField
                 control={form.control}
-                name="amount"
+                name="notes"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem>
+                    <FormLabel>{t('form.notes.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.amount.placeholder')}
-                      />
+                      <Textarea {...field} placeholder={t('form.notes.placeholder')} rows={2} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-            </div>
+            </form>
+          </Form>
 
-            <div className="flex min-w-0 items-start gap-x-3">
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>{t('form.category.label')}</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.category.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sortedCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {t(`categories.${cat}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              {t('form.cancel')}
+            </Button>
+            <Button blue type="submit" form="expense-form" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-              <FormField
-                control={form.control}
-                name="paymentMethod"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {PAYMENT_METHODS.map((method) => (
-                          <SelectItem key={method} value={method}>
-                            {t(`paymentMethods.${method}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  layout
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Select
-                            value={field.value?.toString() ?? ''}
-                            onValueChange={(v) => field.onChange(Number(v))}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {activeCards.map((card) => (
-                                <SelectItem key={card.id} value={card.id.toString()}>
-                                  {card.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.notes.label')}</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} placeholder={t('form.notes.placeholder')} rows={2} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </form>
-        </Form>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            {t('form.cancel')}
-          </Button>
-          <Button blue type="submit" form="expense-form" disabled={form.formState.isSubmitting}>
-            {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-
+      {/* Sibling of the expense-form Dialog (not nested) so each gets its own
+          Radix overlay. The confirm dialog mounts on top with its own backdrop,
+          dimming the expense form behind it the same way other modals do. */}
       <Dialog
         open={!!novelCurrencyPending}
         onOpenChange={(open) => !open && setNovelCurrencyPending(null)}
       >
-        <DialogContent>
+        {/* Narrower than the form (sm:max-w-md vs sm:max-w-xl) so the dimmed
+            form peeks out around the edges, giving the stack a depth feel. */}
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t('form.novelCurrency.title')}</DialogTitle>
           </DialogHeader>
@@ -370,6 +377,6 @@ export function ExpenseFormDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Dialog>
+    </>
   );
 }
