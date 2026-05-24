@@ -51,3 +51,28 @@ def advance_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = None)
     if cycle == BILLING_CYCLE_WEEKLY:
         return d + timedelta(days=7)
     return add_months_anchored(d, 1, day)
+
+
+# Resolves a 1..31 day-of-month into a concrete date for the given year/month,
+# clamping to the last valid day when the target month is shorter (e.g. day=31 in Feb 2025 -> 2025-02-28).
+# Matches how every surveyed Argentine bank handles month-end closing / due days.
+def resolve_day_in_month(day: int, year: int, month: int) -> date_type:
+    last_day = calendar.monthrange(year, month)[1]
+    return date_type(year, month, min(day, last_day))
+
+
+# Computes a credit-card statement period from the card's closing_day and the period's closing date.
+# Returns (period_start, period_end) with both bounds inclusive.
+# Semantics: a statement is identified by its closing date. period_end IS that closing date
+# (the closing day is the LAST day of its own statement). period_start = previous closing date + 1 day.
+# Day-of-month overflow on the previous month is resolved by clamping to the last day of the target month.
+# Example: closing_day=15, statement_closing_date=2026-03-15 -> ((Feb 16, 2026), (Mar 15, 2026)).
+# Example: closing_day=31, statement_closing_date=2026-03-31 -> ((Mar 1, 2026), (Mar 31, 2026))
+#          because Feb 2026 has only 28 days, so the previous closing was clamped to Feb 28 -> next day = Mar 1.
+def compute_statement_period(closing_day: int, statement_closing_date: date_type) -> tuple[date_type, date_type]:
+    prev_month_total = statement_closing_date.year * 12 + (statement_closing_date.month - 1) - 1
+    prev_year, prev_month = divmod(prev_month_total, 12)
+    prev_month += 1
+    previous_closing = resolve_day_in_month(closing_day, prev_year, prev_month)
+    period_start = previous_closing + timedelta(days=1)
+    return period_start, statement_closing_date

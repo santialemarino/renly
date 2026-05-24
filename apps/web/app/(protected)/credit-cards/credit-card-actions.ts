@@ -1,7 +1,14 @@
 'use server';
 
 import type { CreditCardFormValues } from '@/app/(protected)/credit-cards/credit-card-form-schema';
+import type { ReconciliationFormValues } from '@/app/(protected)/credit-cards/reconciliation-form-schema';
 import type { SettlementFormValues } from '@/app/(protected)/credit-cards/settlement-form-schema';
+import {
+  mapReconciliation,
+  mapStatement,
+  type CardReconciliation,
+  type StatementPeriod,
+} from '@/lib/api/card-reconciliations';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 export async function createCreditCard(values: CreditCardFormValues): Promise<void> {
@@ -88,4 +95,62 @@ export async function fetchSettlements(cardId: number): Promise<SettlementResult
     currency: s.currency,
     notes: s.notes,
   }));
+}
+
+// Fetches recent statement periods per bucket with reconciliation status (Phase 3, Step 5).
+// Drives the Reconciliations sub-section in the expandable card row.
+export async function fetchStatements(
+  cardId: number,
+  currency: string,
+): Promise<StatementPeriod[]> {
+  const res = await authenticatedFetch(
+    `/credit-cards/${cardId}/statements?currency=${encodeURIComponent(currency)}`,
+    { method: 'GET' },
+  );
+  if (!res.ok) throw new Error('Failed to fetch statements');
+  const raw = await res.json();
+  return raw.map(mapStatement);
+}
+
+// Fetches existing reconciliations for a card+bucket. Used to render history under the statement list.
+export async function fetchReconciliations(
+  cardId: number,
+  currency: string,
+): Promise<CardReconciliation[]> {
+  const res = await authenticatedFetch(
+    `/credit-cards/${cardId}/reconciliations?currency=${encodeURIComponent(currency)}`,
+    { method: 'GET' },
+  );
+  if (!res.ok) throw new Error('Failed to fetch reconciliations');
+  const raw = await res.json();
+  return raw.map(mapReconciliation);
+}
+
+// Create-or-replace a reconciliation for (card, currency, period). Replaces in-place when one exists.
+export async function createOrReplaceReconciliation(
+  cardId: number,
+  values: ReconciliationFormValues,
+): Promise<void> {
+  const res = await authenticatedFetch(`/credit-cards/${cardId}/reconciliations`, {
+    method: 'POST',
+    body: {
+      currency: values.currency,
+      period_start: values.periodStart,
+      period_end: values.periodEnd,
+      statement_balance: values.statementBalance,
+    },
+  });
+  if (!res.ok) throw new Error('Failed to save reconciliation');
+}
+
+// Delete a reconciliation (cascades to its adjustment expense or income).
+export async function deleteReconciliation(
+  cardId: number,
+  reconciliationId: number,
+): Promise<void> {
+  const res = await authenticatedFetch(
+    `/credit-cards/${cardId}/reconciliations/${reconciliationId}`,
+    { method: 'DELETE' },
+  );
+  if (!res.ok) throw new Error('Failed to delete reconciliation');
 }

@@ -13,6 +13,7 @@ from app.models.utils import utcnow
 # Income category (salary, freelance, investment_returns, etc.).
 class IncomeCategory(StrEnum):
     bonus = "bonus"
+    card_credits_and_refunds = "card_credits_and_refunds"
     dividends = "dividends"
     freelance = "freelance"
     gifts = "gifts"
@@ -38,6 +39,11 @@ class IncomeEntry(SQLModel, table=True):
         sa_column=Column(SAEnum(IncomeCategory, name="income_category"), nullable=True),
     )
     notes: str | None = Field(default=None, description="Optional notes.")
-    source: str = Field(default="manual", max_length=20, description="Entry origin (manual, shortcut, auto).")
+    source: str = Field(default="manual", max_length=20, description="Entry origin (manual, shortcut, auto, reconciliation).")
+    reconciliation_id: int | None = Field(
+        default=None,
+        foreign_key="card_reconciliations.id",
+        description="Owning reconciliation when this row is the adjustment income from the reconciliation flow.",
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

@@ -33,6 +33,7 @@ import { cn } from '@repo/ui/lib';
 import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
 import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
+import { CreditCardReconciliationsSection } from '@/app/(protected)/credit-cards/_components/credit-card-reconciliations-section';
 import { SettlementDeleteDialog } from '@/app/(protected)/credit-cards/_components/settlement-delete-dialog';
 import { SettlementFormDialog } from '@/app/(protected)/credit-cards/_components/settlement-form-dialog';
 import {
@@ -246,6 +247,14 @@ function SettlementsSection({
                     router.refresh();
                   }}
                 />
+
+                <div className="mt-6 pt-6 border-t border-border">
+                  <CreditCardReconciliationsSection
+                    cardId={cardId}
+                    bucketCurrencies={bucketCurrencies}
+                    expanded={expanded}
+                  />
+                </div>
               </div>
             </motion.div>
           </TableCell>

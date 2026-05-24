@@ -9,6 +9,8 @@ from app.utils.dates import (
     add_months,
     add_months_anchored,
     advance_by_cycle,
+    compute_statement_period,
+    resolve_day_in_month,
 )
 
 # --- add_months ---
@@ -114,3 +116,64 @@ class TestAdvanceByCycleAnchored:
         # Backwards-compatible default — without anchor_day, behaviour matches the
         # pre-anchor implementation (uses d.day, drifts after clamps).
         assert advance_by_cycle(date(2026, 2, 28), BILLING_CYCLE_MONTHLY) == date(2026, 3, 28)
+
+
+# --- resolve_day_in_month ---
+
+
+class TestResolveDayInMonth:
+    def test_normal_day_in_long_month(self):
+        assert resolve_day_in_month(15, 2026, 3) == date(2026, 3, 15)
+
+    def test_day_31_in_feb_non_leap(self):
+        # Feb 2026 has 28 days.
+        assert resolve_day_in_month(31, 2026, 2) == date(2026, 2, 28)
+
+    def test_day_31_in_feb_leap(self):
+        # Feb 2024 has 29 days.
+        assert resolve_day_in_month(31, 2024, 2) == date(2024, 2, 29)
+
+    def test_day_31_in_30_day_month(self):
+        # April has 30 days.
+        assert resolve_day_in_month(31, 2026, 4) == date(2026, 4, 30)
+
+    def test_day_30_in_31_day_month_passes_through(self):
+        assert resolve_day_in_month(30, 2026, 3) == date(2026, 3, 30)
+
+    def test_day_1(self):
+        assert resolve_day_in_month(1, 2026, 3) == date(2026, 3, 1)
+
+
+# --- compute_statement_period ---
+
+
+class TestComputeStatementPeriod:
+    def test_closing_15_mid_month(self):
+        # closing_day=15, statement closes Mar 15 -> period Feb 16 .. Mar 15.
+        period_start, period_end = compute_statement_period(15, date(2026, 3, 15))
+        assert period_start == date(2026, 2, 16)
+        assert period_end == date(2026, 3, 15)
+
+    def test_closing_31_in_long_month(self):
+        # closing_day=31, statement closes Mar 31 -> previous closing was Feb 28 (2026 non-leap) -> period Mar 1 .. Mar 31.
+        period_start, period_end = compute_statement_period(31, date(2026, 3, 31))
+        assert period_start == date(2026, 3, 1)
+        assert period_end == date(2026, 3, 31)
+
+    def test_closing_31_in_short_month_clamps(self):
+        # closing_day=31, current statement closes Feb 28 (2026 non-leap clamp) -> previous closing was Jan 31 -> period Feb 1 .. Feb 28.
+        period_start, period_end = compute_statement_period(31, date(2026, 2, 28))
+        assert period_start == date(2026, 2, 1)
+        assert period_end == date(2026, 2, 28)
+
+    def test_year_boundary(self):
+        # closing_day=15, statement closes Jan 15, 2027 -> previous closing was Dec 15, 2026 -> period Dec 16, 2026 .. Jan 15, 2027.
+        period_start, period_end = compute_statement_period(15, date(2027, 1, 15))
+        assert period_start == date(2026, 12, 16)
+        assert period_end == date(2027, 1, 15)
+
+    def test_closing_1(self):
+        # closing_day=1, statement closes Mar 1 -> previous closing was Feb 1 -> period Feb 2 .. Mar 1.
+        period_start, period_end = compute_statement_period(1, date(2026, 3, 1))
+        assert period_start == date(2026, 2, 2)
+        assert period_end == date(2026, 3, 1)

@@ -3,6 +3,7 @@
 from app.services import (
     api_key_service,
     auth_service,
+    card_reconciliation_service,
     credit_card_service,
     exchange_rate_service,
     expense_service,
@@ -22,6 +23,7 @@ from app.services import (
 __all__ = [
     "api_key_service",
     "auth_service",
+    "card_reconciliation_service",
     "credit_card_service",
     "exchange_rate_service",
     "expense_service",

@@ -2,6 +2,7 @@
 
 from app.models.api_key import ApiKey
 from app.models.asset_price import AssetPrice
+from app.models.card_reconciliation import CardReconciliation
 from app.models.card_settlement import CardSettlement
 from app.models.cedear_ratio import CedearRatio
 from app.models.credit_card import CreditCard
@@ -21,6 +22,7 @@ from app.models.user_settings import UserSettings
 __all__ = [
     "ApiKey",
     "AssetPrice",
+    "CardReconciliation",
     "CardSettlement",
     "CedearRatio",
     "CreditCard",

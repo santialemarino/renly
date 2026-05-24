@@ -2,6 +2,7 @@
 
 from app.repositories.api_key_repository import api_key_repository
 from app.repositories.asset_price_repository import asset_price_repository
+from app.repositories.card_reconciliation_repository import card_reconciliation_repository
 from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.cedear_ratio_repository import cedear_ratio_repository
 from app.repositories.credit_card_repository import credit_card_repository
@@ -22,6 +23,7 @@ from app.repositories.user_settings_repository import user_settings_repository
 __all__ = [
     "api_key_repository",
     "asset_price_repository",
+    "card_reconciliation_repository",
     "card_settlement_repository",
     "cedear_ratio_repository",
     "credit_card_repository",

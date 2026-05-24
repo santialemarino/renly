@@ -7,6 +7,7 @@ from app.domain import NotFoundError
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import expense_repository
+from app.services import card_reconciliation_service
 
 
 # List expenses for a user with optional filters and pagination.
@@ -43,7 +44,7 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
     return entry
 
 
-# Create a new expense entry.
+# Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
 async def create_expense(
     session: AsyncSession,
     user: User,
@@ -69,11 +70,14 @@ async def create_expense(
         source=source,
     )
     entry = await expense_repository.create(session, entry)
+    if credit_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
     await session.commit()
     return entry
 
 
 # Update an existing expense entry. Only provided fields are changed.
+# Marks stale on both the prior and the new (card, currency, date) when either has credit_card_id.
 async def update_expense(
     session: AsyncSession,
     expense_id: int,
@@ -81,16 +85,31 @@ async def update_expense(
     **fields: object,
 ) -> ExpenseEntry:
     entry = await get_expense(session, expense_id, user)
+    old_card_id = entry.credit_card_id
+    old_currency = entry.currency
+    old_date = entry.date
     for key, value in fields.items():
         setattr(entry, key, value)
     await expense_repository.save(session, entry)
+
+    if old_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
+    moved = entry.credit_card_id != old_card_id or entry.currency != old_currency or entry.date != old_date
+    if entry.credit_card_id is not None and moved:
+        await card_reconciliation_service.mark_stale_for_date(session, entry.credit_card_id, entry.currency, entry.date)
+
     await session.commit()
     await session.refresh(entry)
     return entry
 
 
-# Delete an expense entry.
+# Delete an expense entry. Marks any reconciliation covering the entry's date stale.
 async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> None:
     entry = await get_expense(session, expense_id, user)
+    old_card_id = entry.credit_card_id
+    old_currency = entry.currency
+    old_date = entry.date
     await expense_repository.delete(session, entry)
+    if old_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
     await session.commit()
