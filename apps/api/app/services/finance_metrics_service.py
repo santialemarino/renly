@@ -1,5 +1,6 @@
 # Business logic for financial dashboard metrics (income, expenses, credit cards).
 
+import calendar as _calendar
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
@@ -19,25 +20,37 @@ from app.schemas.finance_metrics import (
     MonthlyPoint,
 )
 from app.services import credit_card_service
-from app.utils.metrics import convert_value, get_rate_map
+from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
 
 ZERO = Decimal("0")
 
 
-# Converts a multi-currency total dict into a single Decimal in the target currency.
-# Each entry in totals_by_currency is {currency_code: amount}.
+# Period-summary totals are aggregated at the DB layer (`SUM(amount) GROUP BY currency`) and lose
+# the per-row date dimension, so the conversion can't truly be per-row here. We anchor the
+# conversion to the period-end (date_to) — better than always-today's rate, but acknowledged as
+# coarser than the per-row conversion used everywhere else. If finer historical accuracy is
+# needed later, the repository can switch to per-month grouping (already done for the monthly
+# evolution chart).
 def _sum_converted(
     totals_by_currency: dict[str, float],
     target_currency: str | None,
-    rate_map: dict[str, Decimal] | None,
+    lookup: RateLookup | None,
+    anchor_date: date_type,
 ) -> Decimal:
     total = ZERO
+    rate_map = lookup.get_rate_map_at(anchor_date) if (target_currency and lookup) else None
     for currency, amount in totals_by_currency.items():
         val = Decimal(str(amount))
         if target_currency and rate_map and currency != target_currency:
             val = convert_value(val, currency, target_currency, rate_map)
         total += val
     return total
+
+
+# Returns the last day of the month containing month_start, used to convert monthly aggregates
+# at the end of their period (matches how monthly snapshots are typically dated).
+def _month_end(year: int, month: int) -> date_type:
+    return date_type(year, month, _calendar.monthrange(year, month)[1])
 
 
 # Computes overview metrics (total income, expenses, net, card balance, period change).
@@ -50,7 +63,9 @@ async def get_overview(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceOverviewResponse:
-    rate_map = await _get_rate_map_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    today = date_type.today()
+    anchor = date_to or today
 
     # Current period totals.
     income_by_currency = await income_repository.sum_by_user(
@@ -66,8 +81,8 @@ async def get_overview(
         date_to=date_to,
     )
 
-    total_income = _sum_converted(income_by_currency, currency, rate_map)
-    total_expenses = _sum_converted(expense_by_currency, currency, rate_map)
+    total_income = _sum_converted(income_by_currency, currency, lookup, anchor)
+    total_expenses = _sum_converted(expense_by_currency, currency, lookup, anchor)
 
     # Period-over-period change (compare with same-length previous period).
     income_change_pct = None
@@ -90,27 +105,29 @@ async def get_overview(
             date_to=prev_to,
         )
 
-        prev_income = _sum_converted(prev_income_by_currency, currency, rate_map)
-        prev_expenses = _sum_converted(prev_expense_by_currency, currency, rate_map)
+        # Prior period is anchored to ITS own end so the comparison reflects what each period
+        # was worth at the time, not at today's rate.
+        prev_income = _sum_converted(prev_income_by_currency, currency, lookup, prev_to)
+        prev_expenses = _sum_converted(prev_expense_by_currency, currency, lookup, prev_to)
 
         if prev_income != ZERO:
             income_change_pct = (total_income - prev_income) / prev_income
         if prev_expenses != ZERO:
             expense_change_pct = (total_expenses - prev_expenses) / prev_expenses
 
-    # Credit card liability — sum every active card's per-currency buckets, converting
-    # each bucket to the display currency.
+    # Credit card liability — current outstanding, so convert at today's rate per bucket.
     cards = await credit_card_repository.list_by_user(session, user_id)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+        today_rate_map = lookup.get_rate_map_at(today) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
-                if val and currency and rate_map and bucket.currency != currency:
-                    val = convert_value(val, bucket.currency, currency, rate_map)
+                if val and currency and today_rate_map and bucket.currency != currency:
+                    val = convert_value(val, bucket.currency, currency, today_rate_map)
                 card_balance += val
 
     return FinanceOverviewResponse(
@@ -134,7 +151,7 @@ async def get_monthly(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceMonthlyResponse:
-    rate_map = await _get_rate_map_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
 
     income_rows = await income_repository.sum_by_user_monthly(
         session,
@@ -149,19 +166,24 @@ async def get_monthly(
         date_to=date_to,
     )
 
-    # Aggregate multi-currency monthly totals into a single converted value per month.
+    # Aggregate multi-currency monthly totals into a single converted value per month, converting
+    # at the month's last day so each historical month uses its own period-end FX rate.
     income_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in income_rows:
         val = Decimal(str(amount))
-        if currency and rate_map and cur != currency:
-            val = convert_value(val, cur, currency, rate_map)
+        if currency and lookup and cur != currency:
+            rate_map = lookup.get_rate_map_at(_month_end(year, month))
+            if rate_map:
+                val = convert_value(val, cur, currency, rate_map)
         income_by_month[(year, month)] += val
 
     expense_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in expense_rows:
         val = Decimal(str(amount))
-        if currency and rate_map and cur != currency:
-            val = convert_value(val, cur, currency, rate_map)
+        if currency and lookup and cur != currency:
+            rate_map = lookup.get_rate_map_at(_month_end(year, month))
+            if rate_map:
+                val = convert_value(val, cur, currency, rate_map)
         expense_by_month[(year, month)] += val
 
     # Merge into a single timeline.
@@ -188,7 +210,9 @@ async def get_expense_breakdown(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> ExpenseBreakdownResponse:
-    rate_map = await _get_rate_map_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    anchor = date_to or date_type.today()
+    rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await expense_repository.sum_by_user_grouped_by_category(
         session,
@@ -197,7 +221,8 @@ async def get_expense_breakdown(
         date_to=date_to,
     )
 
-    # Aggregate multi-currency per-category totals.
+    # Aggregate multi-currency per-category totals — anchor conversion to the period end. The
+    # category breakdown loses per-row dates at the DB layer; see _sum_converted comment above.
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
         val = Decimal(str(amount))
@@ -229,7 +254,9 @@ async def get_income_breakdown(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> IncomeBreakdownResponse:
-    rate_map = await _get_rate_map_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    anchor = date_to or date_type.today()
+    rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await income_repository.sum_by_user_grouped_by_category(
         session,
@@ -238,7 +265,7 @@ async def get_income_breakdown(
         date_to=date_to,
     )
 
-    # Aggregate multi-currency per-category totals.
+    # Aggregate multi-currency per-category totals — anchor conversion to the period end.
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
         val = Decimal(str(amount))
@@ -260,12 +287,12 @@ async def get_income_breakdown(
     )
 
 
-# Returns a rate map when a display currency is requested. None otherwise.
-async def _get_rate_map_if_needed(
+# Returns a pre-loaded RateLookup when a display currency is requested. None otherwise.
+async def _build_lookup_if_needed(
     session: AsyncSession,
     currency: str | None,
     dollar_preference: str | None,
-) -> dict[str, Decimal] | None:
+) -> RateLookup | None:
     if not currency:
         return None
-    return await get_rate_map(session, dollar_preference)
+    return await build_rate_lookup(session, dollar_preference)

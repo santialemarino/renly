@@ -39,7 +39,10 @@ async def lookup_price(
             pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
             if isinstance(pref, str) and pref:
                 dp = pref
-        rate_map = await mh.get_rate_map(session, dp)
+        # Convert at the price's historical date (Phase 3, Step C). A January price displayed in
+        # USD uses January's rate, not today's.
+        lookup = await mh.build_rate_lookup(session, dp)
+        rate_map = lookup.get_rate_map_at(price.date)
         if rate_map and mh.can_convert(price.currency, convert_to):
             converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
             converted_currency = convert_to

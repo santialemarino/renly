@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from decimal import Decimal
 
 from app.services.dashboard_service import compute_monthly_card_balances
@@ -7,6 +8,20 @@ RATE_MAP = {
     "USD": Decimal("1"),
     "ARS": Decimal("1200"),
 }
+
+
+# Stub RateLookup that returns the same rate map for any date — keeps the existing tests focused
+# on the per-currency aggregation logic rather than the date-aware lookup behaviour (which has
+# its own coverage in test_metrics_helpers / test_rate_lookup).
+class _FixedLookup:
+    def __init__(self, rate_map: dict[str, Decimal] | None) -> None:
+        self._rate_map = rate_map
+
+    def get_rate_map_at(self, _as_of_date: date_type) -> dict[str, Decimal] | None:
+        return self._rate_map
+
+
+FIXED_LOOKUP = _FixedLookup(RATE_MAP)
 
 
 # --- compute_monthly_card_balances (5-tuple settlement / expense shape) ---
@@ -26,7 +41,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         # Jan: 100 - 0 = 100. Feb: 100 + 50 - 80 = 70.
         assert result[(2026, 1)] == Decimal("100")
@@ -43,7 +58,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD", 2: "ARS"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
         assert result[(2026, 1)] == Decimal("101")
@@ -59,7 +74,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         # Jan: 100. Mar: 100 + 50 = 150. Feb has no data, not in result.
         assert result[(2026, 1)] == Decimal("100")
@@ -74,7 +89,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         # Overpayment: 50 - 100 = -50.
         assert result[(2026, 1)] == Decimal("-50")
@@ -85,7 +100,7 @@ class TestComputeMonthlyCardBalances:
             [],
             card_currencies={},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         assert result == {}
 
@@ -101,7 +116,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD"},
             target_currency=None,
-            rate_map=None,
+            lookup=None,
         )
         # No conversion: 100 + 500 = 600.
         assert result[(2026, 1)] == Decimal("600")
@@ -116,7 +131,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "ARS"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         assert result[(2026, 1)] == Decimal("0")
 
@@ -129,7 +144,7 @@ class TestComputeMonthlyCardBalances:
             settlements,
             card_currencies={1: "USD"},
             target_currency="USD",
-            rate_map=RATE_MAP,
+            lookup=FIXED_LOOKUP,
         )
         # 100 USD expense - 1 USD settlement (from 1200 ARS) = 99 USD.
         assert result[(2026, 1)] == Decimal("99")

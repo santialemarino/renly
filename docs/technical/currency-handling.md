@@ -54,15 +54,17 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 - **Income page**: same pattern as expenses — passes `currency` to `getIncome({ currency })`.
 - **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `get_rate_map` pipeline. Same "Original" → primary fallback as the investor dashboard.
 
-### 3. Backend conversion
+### 3. Backend conversion (date-aware as of Phase 3, Step C)
 
-All conversion happens at query time in the service layer. Stored values are never modified.
+All conversion happens at query time in the service layer. Stored values are never modified. **Conversion uses the FX rate that was in effect on the value's own date**, not today's rate, so historical dashboards stay deterministic across time.
 
 ```
 Router reads user's dollar_rate_preference from settings
-  → passes dollar_preference to service function
-  → service calls mh.get_rate_map(session, dollar_preference)
-  → rate_map: {currency: Decimal} where each value is "1 USD = X currency"
+  → calls mh.build_rate_lookup(session, dollar_preference)  # one DB round-trip per request
+  → lookup pre-loads every stored rate, grouped by pair, sorted by date
+
+Per row / per snapshot / per cashflow:
+  → rate_map = lookup.get_rate_map_at(row.date)
   → mh.convert_value(value, from_currency, to_currency, rate_map)
      → Converts through USD as pivot:
        from → USD (divide by from_rate) → to (multiply by to_rate)
@@ -70,10 +72,25 @@ Router reads user's dollar_rate_preference from settings
      → Unsupported pair: return unchanged
 ```
 
-- **Helpers**: `utils/metrics.py` — `convert_value()`, `can_convert()`, `get_rate_map()`.
-- **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income).
+The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
+
+**Which date a value converts at, by use case:**
+
+| Use case                                               | Conversion date                               | Why                                                                                                                                                |
+| ------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expense / income list display                          | row's `date`                                  | Past records — historical accuracy.                                                                                                                |
+| Snapshot grid cell / transaction                       | row's own `date`                              | Historical accuracy.                                                                                                                               |
+| Asset price lookup                                     | `price.date`                                  | Historical accuracy.                                                                                                                               |
+| Payments Calendar `card_due` event                     | item's event `date` (could be past or future) | Past months use historical rates; future dates fall back to latest stored.                                                                         |
+| Portfolio TWR / IRR                                    | each snapshot / cashflow at its OWN date      | Chain math reflects real historical FX exposure.                                                                                                   |
+| Per-month evolution chart                              | each month-end                                | Each historical month uses its own period-end rate.                                                                                                |
+| Subscription / installment / payment obligation amount | today                                         | Forward-looking planning entities — what does this cost me NOW.                                                                                    |
+| Card balance display (running total)                   | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
+| Finance-metrics period totals (category breakdowns)    | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
+
+- **Helpers**: `utils/metrics.py` — `convert_value()`, `can_convert()`, `RateLookup`, `build_rate_lookup()`, `get_rate_map()` (kept as a backward-compat shim returning today's rate map).
+- **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income, payments_calendar, asset_prices, etc.).
 - **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
-- **Rate map**: `get_rate_map(session, dollar_preference)` fetches the latest rates for all pairs. The dollar preference determines which USD/ARS rate pair to include. Returns `{currency: rate}` where rate means "1 USD = X currency". USD itself has an implicit rate of 1.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
 
 ### 4. Original values for editing

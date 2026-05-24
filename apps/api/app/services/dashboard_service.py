@@ -1,5 +1,6 @@
 # Business logic for the general dashboard (aggregates investments + finance).
 
+import calendar as _calendar
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -16,15 +17,21 @@ from app.schemas.dashboard import (
     NetWorthEvolutionPoint,
 )
 from app.services import credit_card_service, finance_metrics_service, metrics_service
-from app.utils.metrics import convert_value, get_rate_map
+from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
 
 ZERO = Decimal("0")
+
+
+# Returns the last day of the given (year, month). Used to convert monthly aggregates at month-end.
+def _month_end(year: int, month: int) -> date_type:
+    return date_type(year, month, _calendar.monthrange(year, month)[1])
 
 
 # Pure computation: builds cumulative monthly card balance from expense and
 # settlement totals. Phase 3 dual-currency model: settlements carry their own
 # currency (bucket they settle), so both inputs are 5-tuples and each tuple's
-# currency converts directly to `target_currency`. `card_currencies` is no
+# currency converts directly to `target_currency` — each row at its OWN month-end rate
+# (Phase 3 Step C — historical exchange rate conversion). `card_currencies` is no
 # longer load-bearing here (each row knows its own currency) but stays in the
 # signature so callers don't need to rewire — defensive fallback only.
 # Returns {(year, month): cumulative_balance} in the target currency.
@@ -33,23 +40,27 @@ def compute_monthly_card_balances(
     settlement_monthly: list[tuple[int, int, int, str, float]],
     card_currencies: dict[int, str],
     target_currency: str | None,
-    rate_map: dict[str, Decimal] | None,
+    lookup: RateLookup | None,
 ) -> dict[tuple[int, int], Decimal]:
-    # Aggregate expenses per (year, month), converting from the expense's own currency.
+    def _convert_at_month(val: Decimal, currency: str, year: int, month: int) -> Decimal:
+        if not (target_currency and lookup) or currency == target_currency:
+            return val
+        rate_map = lookup.get_rate_map_at(_month_end(year, month))
+        if rate_map is None:
+            return val
+        return convert_value(val, currency, target_currency, rate_map)
+
+    # Aggregate expenses per (year, month), converting each row at its OWN month-end rate.
     month_expenses: dict[tuple[int, int], Decimal] = {}
     for _card_id, year, month, currency, total in expense_monthly:
-        val = Decimal(str(total))
-        if target_currency and currency != target_currency and rate_map:
-            val = convert_value(val, currency, target_currency, rate_map)
+        val = _convert_at_month(Decimal(str(total)), currency, year, month)
         key = (year, month)
         month_expenses[key] = month_expenses.get(key, ZERO) + val
 
-    # Aggregate settlements per (year, month), converting from the settlement's own currency.
+    # Aggregate settlements per (year, month), converting each row at its OWN month-end rate.
     month_settlements: dict[tuple[int, int], Decimal] = {}
     for _card_id, year, month, currency, total in settlement_monthly:
-        val = Decimal(str(total))
-        if target_currency and currency != target_currency and rate_map:
-            val = convert_value(val, currency, target_currency, rate_map)
+        val = _convert_at_month(Decimal(str(total)), currency, year, month)
         key = (year, month)
         month_settlements[key] = month_settlements.get(key, ZERO) + val
 
@@ -156,13 +167,13 @@ async def get_evolution(
     if card_ids:
         expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
         settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
-        rate_map = await get_rate_map(session, dollar_preference) if currency else None
+        lookup = await build_rate_lookup(session, dollar_preference) if currency else None
         card_balance_by_month = compute_monthly_card_balances(
             expense_monthly,
             settlement_monthly,
             card_currencies,
             currency,
-            rate_map,
+            lookup,
         )
 
     # Merge: for each portfolio evolution point, look up cumulative card balance.
@@ -199,14 +210,16 @@ async def get_composition(
         dollar_preference=dollar_preference,
     )
 
-    # Compute total card liability, converting each bucket's balance to display currency.
+    # Compute total card liability, converting each bucket's balance to display currency at TODAY's
+    # rate (the composition view is a snapshot of the current state, not a historical one).
     cards = await credit_card_repository.list_by_user(session, user_id)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
-        rate_map = await get_rate_map(session, dollar_preference) if currency else None
+        lookup = await build_rate_lookup(session, dollar_preference) if currency else None
+        rate_map = lookup.get_rate_map_at(date_type.today()) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance

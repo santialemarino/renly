@@ -41,6 +41,20 @@ async def get_by_date(
     return list(result.scalars().all())
 
 
+# Returns every stored rate, grouped by pair and sorted by date ascending. Powers the
+# RateLookup helper for date-aware conversion (Phase 3, Step C). One query per request,
+# bounded by the size of the exchange_rates table (small: ~5 pairs * ~5 years of daily
+# rows = ~9k rows in practice).
+async def get_all_grouped_by_pair(
+    session: AsyncSession,
+) -> dict[ExchangeRatePair, list[ExchangeRate]]:
+    result = await session.execute(select(ExchangeRate).order_by(ExchangeRate.pair, ExchangeRate.date))
+    grouped: dict[ExchangeRatePair, list[ExchangeRate]] = {}
+    for rate in result.scalars().all():
+        grouped.setdefault(rate.pair, []).append(rate)
+    return grouped
+
+
 # Returns a rate by date and pair. Returns None if not found.
 async def get_by_date_and_pair(
     session: AsyncSession,
@@ -109,6 +123,7 @@ async def bulk_upsert(
 # Namespace to call repository functions (e.g. exchange_rate_repository.get_latest_all).
 class ExchangeRateRepository:
     bulk_upsert = staticmethod(bulk_upsert)
+    get_all_grouped_by_pair = staticmethod(get_all_grouped_by_pair)
     get_by_date = staticmethod(get_by_date)
     get_by_date_and_pair = staticmethod(get_by_date_and_pair)
     get_latest_all = staticmethod(get_latest_all)
