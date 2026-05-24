@@ -683,7 +683,7 @@
     "table": {
       "name": "Name",
       "amount": "Amount",
-      "dueDate": "Due date",
+      "dueDate": "Next due date",
       "recurrence": "Recurrence",
       "category": "Category",
       "paymentMethod": "Payment method",
@@ -731,7 +731,7 @@
         "noResults": "No currencies found."
       },
       "dueDate": {
-        "label": "Due date",
+        "label": "Next due date",
         "placeholder": "Select a date"
       },
       "recurrence": {

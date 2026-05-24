@@ -683,7 +683,7 @@
     "table": {
       "name": "Nombre",
       "amount": "Monto",
-      "dueDate": "Vencimiento",
+      "dueDate": "Próximo vencimiento",
       "recurrence": "Frecuencia",
       "category": "Categoría",
       "paymentMethod": "Método de pago",
@@ -731,7 +731,7 @@
         "noResults": "No se encontraron monedas."
       },
       "dueDate": {
-        "label": "Vencimiento",
+        "label": "Próximo vencimiento",
         "placeholder": "Elegí una fecha"
       },
       "recurrence": {
