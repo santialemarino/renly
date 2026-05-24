@@ -10,7 +10,7 @@ interface PaymentObligationRaw {
   amount: string;
   currency: string;
   converted_amount: string | null;
-  due_date: string;
+  next_due_date: string;
   recurrence: string | null;
   category: string | null;
   payment_method: string | null;
@@ -29,7 +29,7 @@ export interface PaymentObligation {
   amount: string;
   currency: string;
   convertedAmount: string | null;
-  dueDate: string;
+  nextDueDate: string;
   recurrence: string | null;
   category: string | null;
   paymentMethod: string | null;
@@ -49,7 +49,7 @@ function mapObligation(raw: PaymentObligationRaw): PaymentObligation {
     amount: raw.amount,
     currency: raw.currency,
     convertedAmount: raw.converted_amount,
-    dueDate: raw.due_date,
+    nextDueDate: raw.next_due_date,
     recurrence: raw.recurrence,
     category: raw.category,
     paymentMethod: raw.payment_method,
@@ -67,7 +67,7 @@ export type PaymentObligationSortField =
   | 'name'
   | 'amount'
   | 'currency'
-  | 'due_date'
+  | 'next_due_date'
   | 'recurrence'
   | 'category';
 export type SortOrder = 'asc' | 'desc';

@@ -8,45 +8,19 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select
 
-from app.models.credit_card import CreditCard
-from app.models.installment import Installment
+from app.domain import CalendarItem
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
 from app.models.user import User
+from app.repositories import (
+    credit_card_repository,
+    installment_repository,
+    payment_obligation_repository,
+    subscription_repository,
+)
 from app.services import credit_card_service
-from app.utils.dates import add_months, advance_by_cycle
-
-
-# Pure value object returned from the service. Routers map this into the API response shape.
-class CalendarItem:
-    def __init__(
-        self,
-        *,
-        type: str,
-        date: date_type,
-        name: str,
-        amount: Decimal,
-        currency: str,
-        payment_method: str | None = None,
-        credit_card_id: int | None = None,
-        source_id: int,
-        cuota_index: int | None = None,
-        installments_count: int | None = None,
-        recurrence: str | None = None,
-    ) -> None:
-        self.type = type
-        self.date = date
-        self.name = name
-        self.amount = amount
-        self.currency = currency
-        self.payment_method = payment_method
-        self.credit_card_id = credit_card_id
-        self.source_id = source_id
-        self.cuota_index = cuota_index
-        self.installments_count = installments_count
-        self.recurrence = recurrence
+from app.utils.dates import add_months, add_months_anchored, advance_by_cycle
 
 
 # Aggregates calendar items for the given month. Order: by date ascending,
@@ -81,17 +55,11 @@ async def _subscription_items(
     period_start: date_type,
     period_end: date_type,
 ) -> list[CalendarItem]:
-    result = await session.execute(
-        select(Subscription).where(
-            Subscription.user_id == user.id,
-            Subscription.is_active.is_(True),
-        )
-    )
-    subscriptions = list(result.scalars().all())
+    subscriptions = await subscription_repository.list_by_user(session, user.id, active_only=True)
 
     items: list[CalendarItem] = []
     for sub in subscriptions:
-        for d in _subscription_dates_in_window(sub, period_start, period_end):
+        for d in subscription_dates_in_window(sub, period_start, period_end):
             items.append(
                 CalendarItem(
                     type="subscription",
@@ -115,13 +83,7 @@ async def _installment_items(
     period_start: date_type,
     period_end: date_type,
 ) -> list[CalendarItem]:
-    result = await session.execute(
-        select(Installment).where(
-            Installment.user_id == user.id,
-            Installment.is_active.is_(True),
-        )
-    )
-    installments = list(result.scalars().all())
+    installments = await installment_repository.list_by_user(session, user.id, active_only=True)
 
     items: list[CalendarItem] = []
     for inst in installments:
@@ -148,36 +110,39 @@ async def _installment_items(
     return items
 
 
-# Payment obligations whose due_date falls in the period (active only).
+# Payment obligation occurrences that fall in the period. For one-off obligations
+# this is at most one event (only when `next_due_date` lies inside the window).
+# For recurring obligations we walk the recurrence forward from `next_due_date`
+# (anchor-aware via add_months_anchored) and emit every occurrence inside the
+# window — matches the subscription pattern so a monthly ABL surfaces every month.
 async def _obligation_items(
     session: AsyncSession,
     user: User,
     period_start: date_type,
     period_end: date_type,
 ) -> list[CalendarItem]:
-    result = await session.execute(
-        select(PaymentObligation).where(
-            PaymentObligation.user_id == user.id,
-            PaymentObligation.is_active.is_(True),
-            PaymentObligation.due_date >= period_start,
-            PaymentObligation.due_date <= period_end,
-        )
-    )
-    obligations = list(result.scalars().all())
-    return [
-        CalendarItem(
-            type="obligation",
-            date=o.due_date,
-            name=o.name,
-            amount=o.amount,
-            currency=o.currency,
-            payment_method=o.payment_method,
-            credit_card_id=o.credit_card_id,
-            source_id=o.id,
-            recurrence=o.recurrence,
-        )
-        for o in obligations
-    ]
+    # Fetch only obligations whose anchor is at or before the window's end —
+    # anything anchored further in the future can't project into this window
+    # (we don't walk backwards).
+    obligations = await payment_obligation_repository.list_active_anchored_to_or_before(session, user.id, period_end)
+
+    items: list[CalendarItem] = []
+    for o in obligations:
+        for occurrence in obligation_dates_in_window(o, period_start, period_end):
+            items.append(
+                CalendarItem(
+                    type="obligation",
+                    date=occurrence,
+                    name=o.name,
+                    amount=o.amount,
+                    currency=o.currency,
+                    payment_method=o.payment_method,
+                    credit_card_id=o.credit_card_id,
+                    source_id=o.id,
+                    recurrence=o.recurrence,
+                )
+            )
+    return items
 
 
 # Credit-card due-date events for the requested month. One event per active card per
@@ -192,13 +157,7 @@ async def _card_due_items(
     year: int,
     month: int,
 ) -> list[CalendarItem]:
-    result = await session.execute(
-        select(CreditCard).where(
-            CreditCard.user_id == user.id,
-            CreditCard.is_active.is_(True),
-        )
-    )
-    cards = list(result.scalars().all())
+    cards = await credit_card_repository.list_by_user(session, user.id, active_only=True)
     if not cards:
         return []
 
@@ -232,7 +191,7 @@ async def _card_due_items(
 # Yields every cycle date for a subscription that lands inside [period_start, period_end].
 # Starts from the saved next_billing_date, walks the cycle (anchor-aware for monthly /
 # quarterly / annual), and skips dates before the window.
-def _subscription_dates_in_window(
+def subscription_dates_in_window(
     sub: Subscription,
     period_start: date_type,
     period_end: date_type,
@@ -249,6 +208,48 @@ def _subscription_dates_in_window(
         cursor = nxt
         iterations += 1
     return dates
+
+
+# Returns every occurrence of a payment obligation that lands inside the window.
+# One-off obligations (recurrence=None) yield at most one date: the stored anchor
+# when it's inside the window. Recurring obligations walk forward from the anchor
+# using add_months_anchored — month-step is derived from recurrence (monthly=1,
+# bimonthly=2, quarterly=3, annual=12). The anchor day-of-month is preserved
+# across short-month clamps just like subscriptions and installments.
+def obligation_dates_in_window(
+    obligation: PaymentObligation,
+    period_start: date_type,
+    period_end: date_type,
+) -> list[date_type]:
+    anchor = obligation.next_due_date
+    months_step = _OBLIGATION_MONTH_STEP.get(obligation.recurrence or "")
+    if months_step is None:
+        # One-off — emit only if the anchor itself is in the window.
+        return [anchor] if period_start <= anchor <= period_end else []
+
+    anchor_day = anchor.day
+    dates: list[date_type] = []
+    cursor = anchor
+    iterations = 0
+    # Safety cap mirrors the subscription helper so a corrupt record can't loop forever.
+    while cursor <= period_end and iterations < 1000:
+        if cursor >= period_start:
+            dates.append(cursor)
+        nxt = add_months_anchored(cursor, months_step, anchor_day)
+        if nxt <= cursor:
+            break
+        cursor = nxt
+        iterations += 1
+    return dates
+
+
+# Recurrence pattern → calendar-month step used when projecting forward.
+_OBLIGATION_MONTH_STEP = {
+    "monthly": 1,
+    "bimonthly": 2,
+    "quarterly": 3,
+    "annual": 12,
+}
 
 
 # Stable ordering within the same date.

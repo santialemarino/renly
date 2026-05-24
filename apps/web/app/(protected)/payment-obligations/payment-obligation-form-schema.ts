@@ -8,7 +8,7 @@ export function buildPaymentObligationFormSchema(requiredMsg: string) {
     name: z.string().min(1, { message: requiredMsg }).max(255),
     amount: z.string().min(1, { message: requiredMsg }),
     currency: z.string().min(1, { message: requiredMsg }),
-    dueDate: z.string().min(1, { message: requiredMsg }),
+    nextDueDate: z.string().min(1, { message: requiredMsg }),
     recurrence: z.enum(OBLIGATION_RECURRENCES).optional(),
     category: z.string().max(100).optional(),
     paymentMethod: z.enum(['cash', 'debit', 'transfer', 'credit_card']).optional(),

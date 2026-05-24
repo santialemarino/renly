@@ -176,11 +176,11 @@ export function PaymentObligationsTable({
               <TableHead>
                 <button
                   type="button"
-                  onClick={() => handleSortChange('due_date')}
+                  onClick={() => handleSortChange('next_due_date')}
                   className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
                   {t('table.dueDate')}
-                  <SortIcon column="due_date" sortBy={sortBy} sortOrder={sortOrder} />
+                  <SortIcon column="next_due_date" sortBy={sortBy} sortOrder={sortOrder} />
                 </button>
               </TableHead>
               <TableHead>
@@ -217,7 +217,7 @@ export function PaymentObligationsTable({
                     <TableCell className="text-paragraph-sm tabular-nums">
                       {formatAmount(displayAmount)} {o.convertedAmount ? '' : o.currency}
                     </TableCell>
-                    <TableCell>{o.dueDate}</TableCell>
+                    <TableCell>{o.nextDueDate}</TableCell>
                     <TableCell>
                       {o.recurrence ? t(`recurrences.${o.recurrence}`) : t('recurrences.oneOff')}
                     </TableCell>

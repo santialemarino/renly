@@ -4,9 +4,9 @@ from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.domain import CalendarItem
 from app.schemas.payments_calendar import PaymentsCalendarItemResponse, PaymentsCalendarResponse
 from app.services import payments_calendar_service
-from app.services.payments_calendar_service import CalendarItem
 from app.utils.metrics import convert_value, get_rate_map
 from app.utils.settings import get_dollar_pref
 

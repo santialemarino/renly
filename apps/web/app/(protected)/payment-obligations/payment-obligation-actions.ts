@@ -4,11 +4,11 @@ import type { PaymentObligationFormValues } from '@/app/(protected)/payment-obli
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 function toBody(values: PaymentObligationFormValues) {
-  const { dueDate, recurrence, category, paymentMethod, creditCardId, notes, ...rest } = values;
+  const { nextDueDate, recurrence, category, paymentMethod, creditCardId, notes, ...rest } = values;
   return {
     ...rest,
     amount: Number(values.amount),
-    due_date: dueDate,
+    next_due_date: nextDueDate,
     recurrence: recurrence ?? null,
     category: category || null,
     payment_method: paymentMethod ?? null,

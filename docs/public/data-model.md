@@ -126,7 +126,7 @@ Once any cuota has been charged (`current_installment > 1`), the contractual fie
 
 ### Payment Obligations
 
-A payment obligation records a recurring or one-off bill (electricity, ABL, internet, etc.). Each obligation has a name, amount, currency, due date, optional recurrence (`monthly`, `bimonthly`, `quarterly`, `annual`, or none for one-off), free-form category, optional payment method/credit card, an active flag, and notes.
+A payment obligation records a recurring or one-off bill (electricity, ABL, internet, etc.). Each obligation has a name, amount, currency, anchor due date (`next_due_date` — the date of the next occurrence; recurring obligations project forward from this), optional recurrence (`monthly`, `bimonthly`, `quarterly`, `annual`, or none for one-off), free-form category, optional payment method/credit card, an active flag, and notes.
 
 Obligations are not auto-generated as expenses — they exist as upcoming commitments that surface in the Payments Calendar (Phase 3, Step 4) so you can see what's due ahead. When you actually pay one, it's a separate manual expense entry.
 

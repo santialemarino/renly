@@ -16,7 +16,9 @@ class PaymentObligation(SQLModel, table=True):
     name: str = Field(max_length=255, description="Obligation name (e.g. Electricity).")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount due.")
     currency: str = Field(max_length=3, description="Currency (ISO 4217).")
-    due_date: date_type = Field(description="Next due date.")
+    next_due_date: date_type = Field(
+        description="Anchor date for the next occurrence — recurring obligations project forward from this in the Payments Calendar.",
+    )
     recurrence: str | None = Field(
         default=None, max_length=20, description="Recurrence pattern (monthly, bimonthly, quarterly, annual). None for one-off."
     )

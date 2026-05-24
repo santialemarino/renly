@@ -257,9 +257,9 @@ Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surf
 | `PUT`    | `/payment-obligations/{id}` | Update an obligation. Only provided fields are changed.                         |
 | `DELETE` | `/payment-obligations/{id}` | Delete an obligation.                                                           |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `next_due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
 
-**Obligation fields:** `name`, `amount` (> 0), `currency`, `due_date`, `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
+**Obligation fields:** `name`, `amount` (> 0), `currency`, `next_due_date` (anchor for the next occurrence — recurring obligations project forward from this), `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars — see "Open" section in `docs/internal/decisions.md` for the enum-vs-tag-style discussion), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
 
 ---
 

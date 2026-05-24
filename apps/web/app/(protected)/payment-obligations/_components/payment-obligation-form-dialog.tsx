@@ -76,7 +76,7 @@ export function PaymentObligationFormDialog({
       name: '',
       amount: '',
       currency: '',
-      dueDate: '',
+      nextDueDate: '',
       recurrence: undefined,
       category: '',
       paymentMethod: undefined,
@@ -97,7 +97,7 @@ export function PaymentObligationFormDialog({
         name: obligation?.name ?? '',
         amount: obligation?.amount ? String(Number(obligation.amount)) : '',
         currency: obligation?.currency ?? '',
-        dueDate: obligation?.dueDate ?? '',
+        nextDueDate: obligation?.nextDueDate ?? '',
         recurrence: (obligation?.recurrence ??
           undefined) as PaymentObligationFormValues['recurrence'],
         category: obligation?.category ?? '',
@@ -209,7 +209,7 @@ export function PaymentObligationFormDialog({
             <div className="flex min-w-0 items-start gap-x-3">
               <FormField
                 control={form.control}
-                name="dueDate"
+                name="nextDueDate"
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.dueDate.label')}</FormLabel>

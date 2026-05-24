@@ -14,7 +14,7 @@ class PaymentObligationCreate(RequestBase):
     name: str = Field(description="Obligation name (e.g. Electricity).", max_length=255)
     amount: Decimal = Field(description="Amount due.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
-    due_date: date_type = Field(description="Next due date.")
+    next_due_date: date_type = Field(description="Anchor date for the next occurrence.")
     recurrence: str | None = Field(
         default=None,
         description="Recurrence pattern (monthly, bimonthly, quarterly, annual). Omit for one-off.",
@@ -31,7 +31,7 @@ class PaymentObligationUpdate(RequestBase):
     name: str | None = Field(default=None, description="Obligation name.", max_length=255)
     amount: Decimal | None = Field(default=None, description="Amount due.", gt=0, max_digits=18, decimal_places=2)
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
-    due_date: date_type | None = Field(default=None, description="Next due date.")
+    next_due_date: date_type | None = Field(default=None, description="Anchor date for the next occurrence.")
     recurrence: str | None = Field(default=None, description="Recurrence pattern.", max_length=20)
     category: str | None = Field(default=None, description="Obligation category.", max_length=100)
     payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
@@ -47,7 +47,7 @@ class PaymentObligationResponse(BaseModel):
     amount: Decimal = Field(description="Original amount due.", max_digits=18, decimal_places=2)
     currency: str = Field(description="Original currency (ISO 4217).")
     converted_amount: Decimal | None = Field(default=None, description="Amount in the requested display currency.", max_digits=18, decimal_places=2)
-    due_date: date_type = Field(description="Next due date.")
+    next_due_date: date_type = Field(description="Anchor date for the next occurrence.")
     recurrence: str | None = Field(default=None, description="Recurrence pattern (None for one-off).")
     category: str | None = Field(default=None, description="Obligation category.")
     payment_method: str | None = Field(default=None, description="Payment method.")
