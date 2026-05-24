@@ -73,7 +73,7 @@ async def list_recent_statements(
     else:
         latest_close = this_month_close
 
-    # Walk backwards one statement at a time, building the list.
+    # Walk backwards one statement at a time, building the candidate closings list.
     closings: list[date_type] = [latest_close]
     cursor = latest_close
     for _ in range(RECENT_STATEMENTS_LIMIT - 1):
@@ -85,10 +85,20 @@ async def list_recent_statements(
 
     existing = await card_reconciliation_repository.list_by_card(session, card.id, currency=currency)
     rec_by_period: dict[tuple[date_type, date_type], CardReconciliation] = {(r.period_start, r.period_end): r for r in existing}
+    first_activity = await card_reconciliation_repository.get_first_activity_date(session, card.id, currency)
 
     statements: list[dict] = []
     for closing in closings:
         period_start, period_end = compute_statement_period(card.closing_day, closing)
+        rec = rec_by_period.get((period_start, period_end))
+        # Visibility rule: keep a statement when it has a reconciliation (explicit record),
+        # is the latest closed statement (always reconcilable when a new statement arrives),
+        # or sits at-or-after the bucket's first activity (the bucket actually existed by then).
+        # Drops pre-history zeros so a fresh card doesn't render 12 rows of "Not reconciled · $0".
+        is_latest = closing == latest_close
+        post_first_activity = first_activity is not None and period_end >= first_activity
+        if rec is None and not is_latest and not post_first_activity:
+            continue
         computed = await compute_bucket_balance_at(session, card.id, currency, period_end)
         statements.append(
             {
@@ -96,7 +106,7 @@ async def list_recent_statements(
                 "period_start": period_start,
                 "period_end": period_end,
                 "computed_balance": computed,
-                "reconciliation": rec_by_period.get((period_start, period_end)),
+                "reconciliation": rec,
             }
         )
     return statements

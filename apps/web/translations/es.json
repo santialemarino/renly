@@ -591,6 +591,7 @@
         "period": "Resumen",
         "periodRange": "Período",
         "computedBalance": "Saldo app",
+        "computedBalanceTooltip": "Saldo acumulado a la fecha de cierre del resumen. Incluye el arrastre de resúmenes anteriores sin pagar — igual que el resumen del banco.",
         "status": "Estado",
         "actions": "Acciones"
       },

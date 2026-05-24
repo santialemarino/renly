@@ -135,12 +135,37 @@ async def sum_settlements_at(
     return Decimal(str(result.scalar_one()))
 
 
+# Earliest date of any activity (expense or settlement) on a card+currency bucket. Returns None
+# when the bucket has no activity yet. Drives the visibility rule for the statements list — we
+# hide pre-history zeros (statements whose period_end is before the bucket existed).
+async def get_first_activity_date(
+    session: AsyncSession,
+    card_id: int,
+    currency: str,
+) -> date_type | None:
+    expense_min = await session.execute(
+        select(func.min(ExpenseEntry.date)).where(
+            ExpenseEntry.credit_card_id == card_id,
+            ExpenseEntry.currency == currency,
+        )
+    )
+    settlement_min = await session.execute(
+        select(func.min(CardSettlement.date)).where(
+            CardSettlement.credit_card_id == card_id,
+            CardSettlement.currency == currency,
+        )
+    )
+    candidates = [d for d in (expense_min.scalar_one(), settlement_min.scalar_one()) if d is not None]
+    return min(candidates) if candidates else None
+
+
 # Namespace to call repository functions (e.g. card_reconciliation_repository.list_by_card).
 class CardReconciliationRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     get_by_id = staticmethod(get_by_id)
     get_by_period = staticmethod(get_by_period)
+    get_first_activity_date = staticmethod(get_first_activity_date)
     list_by_card = staticmethod(list_by_card)
     list_covering_date = staticmethod(list_covering_date)
     mark_stale = staticmethod(mark_stale)

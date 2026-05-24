@@ -591,6 +591,7 @@
         "period": "Statement",
         "periodRange": "Period",
         "computedBalance": "App balance",
+        "computedBalanceTooltip": "Running balance at the statement's closing date. Includes carryover from prior unpaid statements — same as your bank's resumen.",
         "status": "Status",
         "actions": "Actions"
       },

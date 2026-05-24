@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
+import { Info, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
@@ -105,12 +105,15 @@ export function CreditCardReconciliationsSection({
           <span className="text-paragraph-xs text-muted-foreground">{t('subtitle')}</span>
         </div>
 
-        {bucketCurrencies.map((currency) => {
+        {bucketCurrencies.map((currency, index) => {
           const list = statementsByCurrency[currency] ?? [];
           const isLoading = loading[currency];
+          // Multi-bucket cards get a thin divider + extra top padding between buckets so the
+          // boundary is visible without an explicit Separator component.
+          const dividerClass = index > 0 ? 'pt-4 border-t border-border' : '';
 
           return (
-            <div key={currency} className="flex flex-col gap-y-2">
+            <div key={currency} className={`flex flex-col gap-y-2 ${dividerClass}`}>
               <div className="flex items-center justify-between">
                 <span className="text-paragraph-xs-medium">{t('bucketLabel', { currency })}</span>
                 <span className="text-paragraph-xs text-muted-foreground">
@@ -154,7 +157,19 @@ export function CreditCardReconciliationsSection({
                         <TableRow>
                           <TableHead>{t('table.period')}</TableHead>
                           <TableHead>{t('table.periodRange')}</TableHead>
-                          <TableHead>{t('table.computedBalance')}</TableHead>
+                          <TableHead>
+                            <span className="inline-flex items-center gap-x-1">
+                              {t('table.computedBalance')}
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="size-3 text-muted-foreground cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  {t('table.computedBalanceTooltip')}
+                                </TooltipContent>
+                              </Tooltip>
+                            </span>
+                          </TableHead>
                           <TableHead>{t('table.status')}</TableHead>
                           <TableHead className="w-24 text-center">{t('table.actions')}</TableHead>
                         </TableRow>

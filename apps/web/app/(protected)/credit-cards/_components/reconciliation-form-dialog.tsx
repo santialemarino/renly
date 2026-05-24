@@ -100,22 +100,22 @@ export function ReconciliationFormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
+        {/* Hint banners live inside the DialogHeader so the header's pb-4 fires once at the
+            bottom of the whole banner block, matching the gap-4 between subsequent siblings. */}
         <DialogHeader>
           <DialogTitle>{t('form.title')}</DialogTitle>
           <p className="text-paragraph-sm text-muted-foreground">
             {t('form.periodRange', { start: statement.periodStart, end: statement.periodEnd })}
           </p>
+          {isStale && <StyledHint variant="warning">{t('form.staleBanner')}</StyledHint>}
+          {isReplace && !isStale && statement.reconciliation && (
+            <StyledHint variant="info">
+              {t('form.replaceBanner', {
+                date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(),
+              })}
+            </StyledHint>
+          )}
         </DialogHeader>
-
-        {isStale && <StyledHint variant="warning">{t('form.staleBanner')}</StyledHint>}
-
-        {isReplace && !isStale && statement.reconciliation && (
-          <StyledHint variant="info">
-            {t('form.replaceBanner', {
-              date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(),
-            })}
-          </StyledHint>
-        )}
 
         <Form {...form}>
           <form

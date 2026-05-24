@@ -152,6 +152,27 @@ This guards against the "I forgot to log a January expense, recorded it in May, 
 
 Uniqueness on `(card_id, currency, period_start, period_end)`. POST is create-or-replace: the prior row deletes, the cascade drops the prior adjustment (FK `ON DELETE CASCADE` from `expense_entries` / `income_entries` back to `card_reconciliations`), and a fresh pair is written atomically. The UI pre-fills the dialog with the prior `statement_balance` and renders a banner: _"Reconciled on {date} — saving replaces this entry."_ The Save button relabels to "Replace reconciliation."
 
+### Statement visibility rule (what shows in the list)
+
+The Reconciliations sub-section doesn't render every walk-back statement unconditionally — that would clutter a fresh card with 12 rows of `$0 · Not reconciled`. The rule:
+
+> Show a statement when **any** of: (a) it has an existing reconciliation, (b) it is the latest closed statement, (c) its `period_end` is at or after the bucket's first activity (earliest expense or settlement date on this card+currency).
+
+Consequences:
+
+- **Fresh card with no activity**: one row, the latest closed statement, so the user can reconcile whenever the first statement actually arrives.
+- **Active card**: every statement from first activity through the latest, capped at 12.
+- **`$0` statements after first activity**: visible. They're real bank statements with $0 due — the user may want to confirm them (occasional maintenance fees, etc.).
+- **Reconciled historical statements**: always shown, even if the period predates first activity (defensive — historical reconciliations are explicit records).
+
+`first_activity_date` is computed via `card_reconciliation_repository.get_first_activity_date(card_id, currency)` — `min(min(expense.date), min(settlement.date))` for the bucket, or `None` when empty.
+
+### Adjustments propagate (running-balance, like a real bank)
+
+The adjustment expense or income is dated on `period_end` (the closing date) and enters the bucket's running balance from that date forward. **Example:** Mar 2026 reconciled to 40 with computed 0 → +40 expense dated Mar 30. If Apr already had 40 in expenses, Apr's computed balance becomes 80 (= 40 carryover + 40 new). This matches the bank's resumen (`previous balance $40 + new charges $40 = $80 due`) and is the intended behaviour — fees / taxes captured by reconciliation are real outstanding debt that carries forward until settled.
+
+The Reconciliations sub-section's "App balance" column has a tooltip clarifying this: _"Running balance at the statement's closing date. Includes carryover from prior unpaid statements — same as your bank's resumen."_
+
 ### UI surface
 
 Reconcile lives only inside the credit-cards table expandable row, as a sibling sub-section to Settlements. Each bucket shows a list of recent statement periods with `Reconciled` / `Not reconciled` / `Stale` badges; clicking a row opens the dialog. The "Last reconciled" marker is the first line of the Reconciliations sub-section per bucket. The Payments Calendar stays read-only (Step 4 contract).
