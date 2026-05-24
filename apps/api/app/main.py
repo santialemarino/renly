@@ -27,6 +27,7 @@ from app.routers import (
     investments,
     metrics,
     payment_obligations,
+    payments_calendar,
     snapshot_grid,
     subscriptions,
 )
@@ -70,6 +71,7 @@ app.include_router(installments.router)
 app.include_router(investments.router)
 app.include_router(metrics.router)
 app.include_router(payment_obligations.router)
+app.include_router(payments_calendar.router)
 app.include_router(settings_router.router)
 app.include_router(snapshot_grid.router)
 app.include_router(subscriptions.router)

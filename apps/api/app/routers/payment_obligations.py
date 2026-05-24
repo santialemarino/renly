@@ -38,7 +38,7 @@ async def list_obligations(
     search: str | None = Query(default=None, description="Filter obligations by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
-        description="Column to sort by (name, amount, currency, due_date, recurrence, category).",
+        description="Column to sort by (name, amount, currency, next_due_date, recurrence, category).",
     ),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) obligations."),
@@ -91,7 +91,7 @@ async def create_obligation(
         name=body.name,
         amount=body.amount,
         currency=body.currency,
-        due_date=body.due_date,
+        next_due_date=body.next_due_date,
         recurrence=body.recurrence,
         category=body.category,
         payment_method=body.payment_method,

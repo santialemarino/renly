@@ -1,3 +1,5 @@
+from datetime import date as date_type
+
 from sqlalchemy import asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -8,7 +10,7 @@ _SORT_COLUMNS = {
     "name": PaymentObligation.name,
     "amount": PaymentObligation.amount,
     "currency": PaymentObligation.currency,
-    "due_date": PaymentObligation.due_date,
+    "next_due_date": PaymentObligation.next_due_date,
     "recurrence": PaymentObligation.recurrence,
     "category": PaymentObligation.category,
 }
@@ -31,8 +33,25 @@ async def list_by_user(
         stmt = stmt.where(PaymentObligation.name.ilike(f"%{search}%"))
     sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
     order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else PaymentObligation.due_date
+    order_clause = order_fn(sort_col) if sort_col is not None else PaymentObligation.next_due_date
     stmt = stmt.order_by(order_clause)
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+# Active obligations whose next_due_date is at or before the given upper bound.
+# Used by the Payments Calendar to project recurrences forward inside a window —
+# anchors after the window can't reach back, so we filter them out at the DB.
+async def list_active_anchored_to_or_before(
+    session: AsyncSession,
+    user_id: int,
+    upper_bound: date_type,
+) -> list[PaymentObligation]:
+    stmt = select(PaymentObligation).where(
+        PaymentObligation.user_id == user_id,
+        PaymentObligation.is_active.is_(True),
+        PaymentObligation.next_due_date <= upper_bound,
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
@@ -63,6 +82,7 @@ async def delete(session: AsyncSession, obligation: PaymentObligation) -> None:
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
 class PaymentObligationRepository:
     list_by_user = staticmethod(list_by_user)
+    list_active_anchored_to_or_before = staticmethod(list_active_anchored_to_or_before)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

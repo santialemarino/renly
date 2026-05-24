@@ -257,9 +257,51 @@ Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surf
 | `PUT`    | `/payment-obligations/{id}` | Update an obligation. Only provided fields are changed.                         |
 | `DELETE` | `/payment-obligations/{id}` | Delete an obligation.                                                           |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `next_due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
 
-**Obligation fields:** `name`, `amount` (> 0), `currency`, `due_date`, `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
+**Obligation fields:** `name`, `amount` (> 0), `currency`, `next_due_date` (anchor for the next occurrence — recurring obligations project forward from this), `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars — see "Open" section in `docs/internal/decisions.md` for the enum-vs-tag-style discussion), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
+
+---
+
+## Payments Calendar
+
+Read-only timeline that aggregates every upcoming payment for a given calendar month: subscription charges, installment cuotas, payment obligations, and credit-card due dates.
+
+| Method | Path                 | Description                                                |
+| ------ | -------------------- | ---------------------------------------------------------- |
+| `GET`  | `/payments-calendar` | Aggregated calendar events for the requested month / year. |
+
+**Required query parameters:** `year` (integer), `month` (1-12).
+
+**Optional query parameters:** `currency` (display currency — adds `converted_amount` on each item).
+
+**Response shape:**
+
+\`\`\`
+{
+"year": 2026,
+"month": 5,
+"currency": "ARS" | null,
+"items": [
+{
+"type": "subscription" | "installment" | "obligation" | "card_due",
+"date": "2026-05-15",
+"name": "Netflix",
+"amount": "5990.00",
+"currency": "ARS",
+"converted_amount": "5990.00" | null,
+"payment_method": "credit_card" | null,
+"credit_card_id": 12 | null,
+"source_id": 7,
+"cuota_index": null, // installments only
+"installments_count": null, // installments only
+"recurrence": null // obligations only
+}
+]
+}
+\`\`\`
+
+`items` is sorted by date ascending. Within the same date the order is stable: `card_due` → `subscription` → `installment` → `obligation`. Card-due events emit one entry per active card per bucket with non-zero balance, dated on that month's resolved `due_day` (clamped for short months).
 
 ---
 

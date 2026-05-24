@@ -13,8 +13,10 @@ from app.domain.errors import (
     InstallmentLockedFieldError,
     NotFoundError,
 )
+from app.domain.payments_calendar import CalendarItem
 
 __all__ = [
+    "CalendarItem",
     "CardBucketBalance",
     "CurrencyChangeBlockedError",
     "ExchangeRateUnavailableError",

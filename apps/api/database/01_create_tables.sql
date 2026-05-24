@@ -362,13 +362,14 @@ CREATE UNIQUE INDEX idx_expense_entries_installment_date
 
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
+-- next_due_date is the anchor for the next occurrence; recurring obligations project forward from it.
 CREATE TABLE payment_obligations (
   id              BIGSERIAL PRIMARY KEY,
   user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name            VARCHAR(255) NOT NULL,
   amount          NUMERIC(18, 2) NOT NULL,
   currency        VARCHAR(3) NOT NULL,
-  due_date        DATE NOT NULL,
+  next_due_date   DATE NOT NULL,
   recurrence      VARCHAR(20),
   category        VARCHAR(100),
   payment_method  VARCHAR(20),
@@ -380,7 +381,7 @@ CREATE TABLE payment_obligations (
 );
 
 CREATE INDEX idx_payment_obligations_user_id ON payment_obligations(user_id);
-CREATE INDEX idx_payment_obligations_user_due_date ON payment_obligations(user_id, due_date);
+CREATE INDEX idx_payment_obligations_user_next_due_date ON payment_obligations(user_id, next_due_date);
 CREATE INDEX idx_payment_obligations_credit_card ON payment_obligations(credit_card_id);
 
 -- API keys for external access (iOS Shortcut, automations).

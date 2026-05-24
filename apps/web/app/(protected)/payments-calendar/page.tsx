@@ -1,0 +1,58 @@
+import { cookies } from 'next/headers';
+import { getTranslations } from 'next-intl/server';
+
+import { PageHeader } from '@/app/(protected)/_components/page-header';
+import { PaymentsCalendarHeader } from '@/app/(protected)/payments-calendar/_components/payments-calendar-header';
+import { PaymentsCalendarList } from '@/app/(protected)/payments-calendar/_components/payments-calendar-list';
+import { getPaymentsCalendar } from '@/lib/api/payments-calendar';
+import { getSettings } from '@/lib/api/settings';
+import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { generatePageMetadata } from '@/lib/utils/page-metadata';
+
+export async function generateMetadata() {
+  return await generatePageMetadata('paymentsCalendar');
+}
+
+interface PaymentsCalendarPageProps {
+  searchParams: Promise<{
+    year?: string;
+    month?: string;
+  }>;
+}
+
+export default async function PaymentsCalendarPage({ searchParams }: PaymentsCalendarPageProps) {
+  const t = await getTranslations('paymentsCalendar');
+  const params = await searchParams;
+  const cookieStore = await cookies();
+
+  const settings = await getSettings().catch(() => null);
+  const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+
+  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const activeCurrency = savedCurrency || primary;
+  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+
+  // Default to the current month when the URL doesn't carry year/month.
+  const now = new Date();
+  const year = parseYearMonth(params.year) ?? now.getFullYear();
+  const month = parseYearMonth(params.month) ?? now.getMonth() + 1;
+
+  const calendar = await getPaymentsCalendar({ year, month, currency });
+
+  return (
+    <div className="flex flex-col flex-1 p-8 gap-y-4">
+      <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <PaymentsCalendarHeader year={year} month={month} />
+      <PaymentsCalendarList items={calendar.items} year={year} month={month} />
+    </div>
+  );
+}
+
+// Parses a query-string integer and ignores malformed values so the page falls
+// back to "today" instead of crashing on garbage input.
+function parseYearMonth(raw: string | undefined): number | null {
+  if (!raw) return null;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
