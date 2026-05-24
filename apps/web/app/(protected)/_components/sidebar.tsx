@@ -48,6 +48,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
 import { userSignOut } from '@/auth';
+import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
 const FINANCES_GROUP = [
@@ -189,7 +190,7 @@ export function AppSidebar({
                             >
                               <Link href={href}>
                                 <Icon />
-                                <span>{t(`nav.${key}`)}</span>
+                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -238,7 +239,7 @@ export function AppSidebar({
                                     >
                                       <Link href={href}>
                                         <Icon />
-                                        <span>{t(`nav.${key}`)}</span>
+                                        <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
                                       </Link>
                                     </SidebarMenuSubButton>
                                   </SidebarMenuSubItem>
@@ -291,7 +292,7 @@ export function AppSidebar({
                             >
                               <Link href={href}>
                                 <Icon />
-                                <span>{t(`nav.${key}`)}</span>
+                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -340,7 +341,7 @@ export function AppSidebar({
                             >
                               <Link href={href}>
                                 <Icon />
-                                <span>{t(`nav.${key}`)}</span>
+                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
