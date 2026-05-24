@@ -8,6 +8,7 @@ from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.user import User
 from app.repositories import card_settlement_repository, credit_card_repository, expense_repository
+from app.services import card_reconciliation_service
 
 # --- Credit cards ---
 
@@ -159,7 +160,7 @@ async def list_settlements(session: AsyncSession, card_id: int, user: User) -> l
     return await card_settlement_repository.list_by_card(session, card_id)
 
 
-# Record a new card settlement.
+# Record a new card settlement. Marks any reconciliation covering the settlement date stale (Phase 3, Step 5).
 async def create_settlement(
     session: AsyncSession,
     card_id: int,
@@ -179,15 +180,19 @@ async def create_settlement(
         notes=notes,
     )
     settlement = await card_settlement_repository.create(session, settlement)
+    await card_reconciliation_service.mark_stale_for_date(session, card_id, currency, date)
     await session.commit()
     return settlement
 
 
-# Delete a settlement (verifies card ownership first).
+# Delete a settlement (verifies card ownership first). Marks any reconciliation covering the settlement date stale.
 async def delete_settlement(session: AsyncSession, card_id: int, settlement_id: int, user: User) -> None:
     await get_card(session, card_id, user)
     settlement = await card_settlement_repository.get_by_id(session, settlement_id, card_id)
     if settlement is None:
         raise NotFoundError("Settlement not found.")
+    old_currency = settlement.currency
+    old_date = settlement.date
     await card_settlement_repository.delete(session, settlement)
+    await card_reconciliation_service.mark_stale_for_date(session, card_id, old_currency, old_date)
     await session.commit()

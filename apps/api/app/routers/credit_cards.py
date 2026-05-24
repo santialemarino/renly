@@ -7,9 +7,14 @@ from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.domain import CardBucketBalance
 from app.repositories import expense_repository
+from app.schemas.card_reconciliation import (
+    CardReconciliationCreate,
+    CardReconciliationResponse,
+    StatementPeriodResponse,
+)
 from app.schemas.card_settlement import CardSettlementCreate, CardSettlementResponse
 from app.schemas.credit_card import CardBucketBalanceResponse, CreditCardCreate, CreditCardResponse, CreditCardUpdate
-from app.services import credit_card_service
+from app.services import card_reconciliation_service, credit_card_service
 
 router = APIRouter(prefix="/credit-cards", tags=["credit-cards"])
 
@@ -185,3 +190,78 @@ async def delete_settlement(
     session: SessionDep,
 ) -> None:
     await credit_card_service.delete_settlement(session, card_id, settlement_id, current_user)
+
+
+# --- Reconciliations (Phase 3, Step 5) ---
+
+
+# List reconciliations for a card. Optional ?currency= filters to a single bucket.
+@router.get("/{card_id}/reconciliations", response_model=list[CardReconciliationResponse])
+async def list_reconciliations(
+    card_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    currency: str | None = Query(default=None, description="Filter to a single bucket currency."),
+) -> list[CardReconciliationResponse]:
+    rows = await card_reconciliation_service.list_reconciliations(session, card_id, current_user, currency=currency)
+    return [CardReconciliationResponse.model_validate(r) for r in rows]
+
+
+# List recent statement periods per bucket with reconciliation status. Drives the Reconciliations sub-section UI.
+@router.get("/{card_id}/statements", response_model=list[StatementPeriodResponse])
+async def list_statements(
+    card_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    currency: str = Query(description="Bucket currency to list statements for."),
+) -> list[StatementPeriodResponse]:
+    card = await credit_card_service.get_card(session, card_id, current_user)
+    statements = await card_reconciliation_service.list_recent_statements(session, card, currency)
+    return [
+        StatementPeriodResponse(
+            currency=s["currency"],
+            period_start=s["period_start"],
+            period_end=s["period_end"],
+            computed_balance=s["computed_balance"],
+            reconciliation=(CardReconciliationResponse.model_validate(s["reconciliation"]) if s["reconciliation"] is not None else None),
+        )
+        for s in statements
+    ]
+
+
+# Create-or-replace a reconciliation for (card, currency, period). Atomic.
+@router.post(
+    "/{card_id}/reconciliations",
+    response_model=CardReconciliationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_or_replace_reconciliation(
+    card_id: int,
+    body: CardReconciliationCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> CardReconciliationResponse:
+    rec = await card_reconciliation_service.create_or_replace(
+        session,
+        card_id,
+        current_user,
+        currency=body.currency,
+        period_start=body.period_start,
+        period_end=body.period_end,
+        statement_balance=body.statement_balance,
+    )
+    return CardReconciliationResponse.model_validate(rec)
+
+
+# Delete a reconciliation. Cascades to its adjustment expense or income.
+@router.delete(
+    "/{card_id}/reconciliations/{reconciliation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_reconciliation(
+    card_id: int,
+    reconciliation_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> None:
+    await card_reconciliation_service.delete_reconciliation(session, card_id, reconciliation_id, current_user)

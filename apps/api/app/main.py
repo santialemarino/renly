@@ -11,6 +11,7 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     NotFoundError,
+    ReconciliationPeriodMismatchError,
 )
 from app.routers import (
     api_keys,
@@ -113,6 +114,14 @@ async def not_found_exception_handler(_request, exc: NotFoundError):
 async def exchange_rate_unavailable_handler(_request, exc: ExchangeRateUnavailableError):
     return JSONResponse(
         status_code=503,
+        content={"detail": exc.message},
+    )
+
+
+@app.exception_handler(ReconciliationPeriodMismatchError)
+async def reconciliation_period_mismatch_handler(_request, exc: ReconciliationPeriodMismatchError):
+    return JSONResponse(
+        status_code=400,
         content={"detail": exc.message},
     )
 

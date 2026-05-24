@@ -19,8 +19,8 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
-from app.services import credit_card_service
-from app.utils.dates import add_months, add_months_anchored, advance_by_cycle
+from app.services import card_reconciliation_service, credit_card_service
+from app.utils.dates import add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month
 
 
 # Aggregates calendar items for the given month. Order: by date ascending,
@@ -146,9 +146,13 @@ async def _obligation_items(
 
 
 # Credit-card due-date events for the requested month. One event per active card per
-# bucket with non-zero balance. The card's due_day is clamped to the last day of the
-# target month (handles closing_day=31 in Feb, etc.).
-# Note: bucket amount is today's outstanding — Step 5 will tie this to statement periods.
+# bucket with non-zero balance, dated on the card's resolved due_day in the month.
+# The amount is the bucket's running-balance snapshot at the matching statement closing
+# date (Phase 3, Step 5 — running-balance model). When closing_day <= due_day, the
+# bill due in month M is for the statement closed in M; otherwise it's the previous
+# month's statement. Carryover from older unpaid statements is implicit in the snapshot,
+# matching how a real bank resumen reads.
+# Issues one balance lookup per (card, currency) — small N in practice (1–3 cards per user).
 async def _card_due_items(
     session: AsyncSession,
     user: User,
@@ -163,7 +167,9 @@ async def _card_due_items(
 
     card_ids = [c.id for c in cards]
     card_currencies = {c.id: c.currency for c in cards}
-    balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+    # We use get_card_balances purely for the list of active buckets per card —
+    # the running-balance amount is recomputed at the relevant closing date below.
+    buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
 
     last_day = calendar.monthrange(year, month)[1]
     items: list[CalendarItem] = []
@@ -172,20 +178,36 @@ async def _card_due_items(
         due_date = date_type(year, month, due_day)
         if due_date < period_start or due_date > period_end:
             continue
-        for bucket in balances.get(card.id, []):
-            if bucket.balance == Decimal(0):
+        closing_date = _statement_closing_for_due(card.closing_day, due_date)
+        for bucket in buckets_by_card.get(card.id, []):
+            snapshot = await card_reconciliation_service.compute_bucket_balance_at(session, card.id, bucket.currency, closing_date)
+            if snapshot == Decimal(0):
                 continue
             items.append(
                 CalendarItem(
                     type="card_due",
                     date=due_date,
                     name=card.name,
-                    amount=bucket.balance,
+                    amount=snapshot,
                     currency=bucket.currency,
                     source_id=card.id,
                 )
             )
     return items
+
+
+# Resolves the statement closing date that a given due_date is paying for.
+# When closing_day <= due_day (closing happens before due in the same month), the bill
+# due in month M is for M's statement. Otherwise it's the previous month's statement
+# (closing in M is in the future relative to due in M, so the bill is for the prior cycle).
+def _statement_closing_for_due(closing_day: int, due_date: date_type) -> date_type:
+    candidate_in_month = resolve_day_in_month(closing_day, due_date.year, due_date.month)
+    if candidate_in_month <= due_date:
+        return candidate_in_month
+    prev_total = due_date.year * 12 + (due_date.month - 1) - 1
+    prev_year, prev_month = divmod(prev_total, 12)
+    prev_month += 1
+    return resolve_day_in_month(closing_day, prev_year, prev_month)
 
 
 # Yields every cycle date for a subscription that lands inside [period_start, period_end].

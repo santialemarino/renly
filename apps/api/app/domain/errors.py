@@ -39,3 +39,10 @@ class NotFoundError(Exception):
     def __init__(self, message: str = "Not found") -> None:
         self.message = message
         super().__init__(message)
+
+
+# Reconciliation period bounds are inconsistent (e.g. period_start > period_end). Mapped to 400 by the API.
+class ReconciliationPeriodMismatchError(Exception):
+    def __init__(self, message: str = "Reconciliation period is invalid.") -> None:
+        self.message = message
+        super().__init__(message)

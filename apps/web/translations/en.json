@@ -292,6 +292,7 @@
     },
     "categories": {
       "bonus": "Bonuses",
+      "card_credits_and_refunds": "Card Credits & Refunds",
       "dividends": "Dividends",
       "freelance": "Freelance",
       "gifts": "Gifts",
@@ -377,6 +378,7 @@
       "next": "Next"
     },
     "categories": {
+      "card_fees_and_taxes": "Card Fees & Taxes",
       "clothing": "Clothing",
       "dining": "Restaurants & Dining",
       "education": "Education",
@@ -570,6 +572,59 @@
         "bucketPlaceholder": "Select bucket currency",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
+      }
+    },
+    "reconciliations": {
+      "title": "Reconciliations",
+      "subtitle": "Match each statement against your bank.",
+      "bucketLabel": "{currency} bucket",
+      "lastReconciled": "Last reconciled: {period}",
+      "notYetReconciled": "Not yet reconciled.",
+      "empty": "No recent statements to reconcile.",
+      "loading": "Loading statements...",
+      "statusReconciled": "Reconciled",
+      "statusNotReconciled": "Not reconciled",
+      "statusStale": "Stale",
+      "reconcileButton": "Reconcile",
+      "viewReconciliation": "View",
+      "table": {
+        "period": "Statement",
+        "periodRange": "Period",
+        "computedBalance": "App balance",
+        "computedBalanceTooltip": "Running balance at the statement's closing date. Includes carryover from prior unpaid statements — same as your bank's resumen.",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "form": {
+        "title": "Reconcile statement",
+        "subtitle": "{period}",
+        "periodRange": "Period: {start} → {end}",
+        "bankBalance": "Bank statement balance",
+        "bankBalancePlaceholder": "0.00",
+        "computedBalance": "App-computed balance",
+        "computedBalanceHint": "What the app thinks you owed at the closing date.",
+        "difference": "Difference",
+        "differenceExpensePreview": "Will create an expense of {amount} {currency} for fees / taxes.",
+        "differenceIncomePreview": "Will create an income of {amount} {currency} for credits / refunds.",
+        "differenceZeroPreview": "No adjustment will be created — balances match.",
+        "replaceBanner": "Reconciled on {date} — saving will replace this entry.",
+        "staleBanner": "This statement was modified after the last reconciliation. Re-reconcile to refresh.",
+        "saveLabel": "Reconcile",
+        "saveLoading": "Saving...",
+        "replaceLabel": "Replace reconciliation",
+        "cancel": "Cancel",
+        "createSuccess": "Statement reconciled.",
+        "replaceSuccess": "Reconciliation replaced.",
+        "saveError": "Failed to reconcile statement."
+      },
+      "delete": {
+        "title": "Delete reconciliation",
+        "confirm": "Are you sure you want to delete this reconciliation? Its adjustment will be removed too.",
+        "confirmButton": "Delete",
+        "deleting": "Deleting...",
+        "success": "Reconciliation deleted.",
+        "error": "Failed to delete reconciliation.",
+        "tooltip": "Delete reconciliation"
       }
     }
   },

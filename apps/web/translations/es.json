@@ -292,6 +292,7 @@
     },
     "categories": {
       "bonus": "Bonificaciones",
+      "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
       "dividends": "Dividendos",
       "freelance": "Freelance",
       "gifts": "Regalos",
@@ -377,6 +378,7 @@
       "next": "Siguiente"
     },
     "categories": {
+      "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
       "clothing": "Ropa",
       "dining": "Restaurantes",
       "education": "Educación",
@@ -570,6 +572,59 @@
         "bucketPlaceholder": "Elegí la moneda del saldo",
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
+      }
+    },
+    "reconciliations": {
+      "title": "Conciliaciones",
+      "subtitle": "Igualá cada resumen con el banco.",
+      "bucketLabel": "Saldo {currency}",
+      "lastReconciled": "Última conciliación: {period}",
+      "notYetReconciled": "Sin conciliar.",
+      "empty": "No hay resúmenes recientes para conciliar.",
+      "loading": "Cargando resúmenes...",
+      "statusReconciled": "Conciliado",
+      "statusNotReconciled": "Sin conciliar",
+      "statusStale": "Desactualizado",
+      "reconcileButton": "Conciliar",
+      "viewReconciliation": "Ver",
+      "table": {
+        "period": "Resumen",
+        "periodRange": "Período",
+        "computedBalance": "Saldo app",
+        "computedBalanceTooltip": "Saldo acumulado a la fecha de cierre del resumen. Incluye el arrastre de resúmenes anteriores sin pagar — igual que el resumen del banco.",
+        "status": "Estado",
+        "actions": "Acciones"
+      },
+      "form": {
+        "title": "Conciliar resumen",
+        "subtitle": "{period}",
+        "periodRange": "Período: {start} → {end}",
+        "bankBalance": "Saldo del resumen del banco",
+        "bankBalancePlaceholder": "0.00",
+        "computedBalance": "Saldo calculado por la app",
+        "computedBalanceHint": "Lo que la app cree que debías a la fecha de cierre.",
+        "difference": "Diferencia",
+        "differenceExpensePreview": "Se creará un gasto de {amount} {currency} para comisiones / impuestos.",
+        "differenceIncomePreview": "Se creará un ingreso de {amount} {currency} para créditos / reintegros.",
+        "differenceZeroPreview": "No se creará ajuste — los saldos coinciden.",
+        "replaceBanner": "Conciliado el {date} — al guardar se reemplaza esta entrada.",
+        "staleBanner": "Este resumen se modificó después de la última conciliación. Reconciliá para actualizarlo.",
+        "saveLabel": "Conciliar",
+        "saveLoading": "Guardando...",
+        "replaceLabel": "Reemplazar conciliación",
+        "cancel": "Cancelar",
+        "createSuccess": "Resumen conciliado.",
+        "replaceSuccess": "Conciliación reemplazada.",
+        "saveError": "No se pudo conciliar el resumen."
+      },
+      "delete": {
+        "title": "Eliminar conciliación",
+        "confirm": "¿Seguro querés eliminar esta conciliación? También se eliminará su ajuste.",
+        "confirmButton": "Eliminar",
+        "deleting": "Eliminando...",
+        "success": "Conciliación eliminada.",
+        "error": "No se pudo eliminar la conciliación.",
+        "tooltip": "Eliminar conciliación"
       }
     }
   },

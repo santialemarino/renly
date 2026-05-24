@@ -201,7 +201,26 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 
 **Archive behavior:** Archived cards are hidden from the expense form's card selector but retain all linked expenses and settlements. Bucket balances are still computed normally. Delete is only allowed when the card has no linked expenses (409 otherwise).
 
-**Settlement fields:** `date`, `amount`, `currency` (required — selects which bucket the settlement reduces), `notes` (optional).
+**Settlement fields:** `date`, `amount`, `currency` (required — selects which bucket the settlement reduces), `notes` (optional). Settlements have no statement-period link; per-statement amounts are derived as running-balance snapshots at the period's closing date.
+
+### Card Reconciliations (Phase 3, Step 5)
+
+Per-bucket, per-statement true-up against the bank. Captures fees / FX / taxes / timing that fall outside the app's normal model. See [Credit Card Liability Model](../technical/credit-card-liability-model.md) for the full math.
+
+| Method   | Path                                       | Description                                                                                                                                                               |
+| -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/credit-cards/{id}/reconciliations`       | List reconciliations for a card. Optional `currency` filter selects a single bucket.                                                                                      |
+| `GET`    | `/credit-cards/{id}/statements`            | List recent statement periods per bucket with `Reconciled` / `Not reconciled` / `Stale` status. Drives the Reconciliations sub-section UI.                                |
+| `POST`   | `/credit-cards/{id}/reconciliations`       | Create-or-replace a reconciliation. If one exists for the same `(currency, period_start, period_end)`, it (and its adjustment) is deleted before the new pair is written. |
+| `DELETE` | `/credit-cards/{id}/reconciliations/{rid}` | Delete a reconciliation. Cascade-deletes its adjustment expense or income.                                                                                                |
+
+**`POST` body:** `currency`, `period_start`, `period_end`, `statement_balance`. The server computes `computed_balance` (= running balance at `period_end` for the bucket), `difference = statement_balance − computed_balance`, and creates a matching adjustment: an `expense_entries` row (category `card_fees_and_taxes`, `source='reconciliation'`) when `difference > 0`, an `income_entries` row (category `card_credits_and_refunds`, `source='reconciliation'`) when `difference < 0`, none when `difference == 0`. The adjustment is dated on `period_end` so it flows naturally into the next period's running balance.
+
+**Reconciliation fields:** `id`, `card_id`, `currency`, `period_start`, `period_end`, `statement_balance`, `computed_balance`, `difference`, `adjustment_expense_id`, `adjustment_income_id`, `is_stale` (flipped to `true` when a relevant expense or settlement is created / edited / deleted inside the period after this reconciliation), `reconciled_at`.
+
+**Statement-period semantics:** A statement is identified by its closing date. The period spans `(prev_closing_date, this_closing_date]` — the closing date is the LAST day of the statement it closes; the next statement starts the day after. Day-of-month overflow (e.g. `closing_day = 31` in February) is resolved by clamping to the last day of the target month.
+
+**Uniqueness:** `(card_id, currency, period_start, period_end)`. `POST` always behaves as create-or-replace.
 
 ---
 
@@ -301,7 +320,7 @@ Read-only timeline that aggregates every upcoming payment for a given calendar m
 }
 \`\`\`
 
-`items` is sorted by date ascending. Within the same date the order is stable: `card_due` → `subscription` → `installment` → `obligation`. Card-due events emit one entry per active card per bucket with non-zero balance, dated on that month's resolved `due_day` (clamped for short months).
+`items` is sorted by date ascending. Within the same date the order is stable: `card_due` → `subscription` → `installment` → `obligation`. Card-due events emit one entry per active card per bucket, dated on that month's resolved `due_day` (clamped for short months); the amount is the bucket's **running balance at the statement's closing date** (= `sum(expenses dated ≤ closing_date) − sum(settlements dated ≤ closing_date)` for that bucket). Carryover from prior unpaid statements is implicit in the snapshot, matching how a real bank resumen presents the bill. Buckets whose snapshot is zero are omitted. When a reconciliation exists for the period, the reconciliation's adjustment is part of the running balance via its dated adjustment entry.
 
 ---
 

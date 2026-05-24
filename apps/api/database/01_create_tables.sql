@@ -59,6 +59,7 @@ CREATE TYPE expense_category AS ENUM (
   'insurance',
   'kids',
   'pets',
+  'card_fees_and_taxes',
   'other'
 );
 
@@ -72,6 +73,7 @@ CREATE TYPE income_category AS ENUM (
   'sales',
   'refunds',
   'gifts',
+  'card_credits_and_refunds',
   'other'
 );
 
@@ -240,22 +242,27 @@ CREATE TABLE credit_cards (
 CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
 
 -- Income entries (daily income tracking).
--- source tracks origin: 'manual', 'shortcut', 'auto'.
+-- source tracks origin: 'manual', 'shortcut', 'auto', 'reconciliation'.
+-- reconciliation_id links the adjustment income created by the reconciliation flow (Phase 3, Step 5).
+-- FK constraint is added via ALTER TABLE after card_reconciliations exists (circular dependency).
 CREATE TABLE income_entries (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date        DATE NOT NULL,
-  amount      NUMERIC(18, 2) NOT NULL,
-  currency    VARCHAR(3) NOT NULL,
-  category    income_category,
-  notes       TEXT,
-  source      VARCHAR(20) NOT NULL DEFAULT 'manual',
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date              DATE NOT NULL,
+  amount            NUMERIC(18, 2) NOT NULL,
+  currency          VARCHAR(3) NOT NULL,
+  category          income_category,
+  notes             TEXT,
+  source            VARCHAR(20) NOT NULL DEFAULT 'manual',
+  reconciliation_id BIGINT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_income_entries_user_id ON income_entries(user_id);
 CREATE INDEX idx_income_entries_user_date ON income_entries(user_id, date DESC);
+CREATE INDEX idx_income_entries_reconciliation_id
+  ON income_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
 
 -- Card settlements (credit card payments — not expenses).
 -- Reduces card liability and bank balance simultaneously (net-zero on patrimony).
@@ -327,30 +334,35 @@ CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
 -- Expense entries (daily expense tracking).
 -- payment_method: 'cash', 'debit', 'transfer', 'credit_card'.
 -- credit_card_id only set when payment_method = 'credit_card'.
--- source tracks origin: 'manual', 'shortcut', 'auto', 'email_parsed', 'subscription', 'installment'.
+-- source tracks origin: 'manual', 'shortcut', 'auto', 'email_parsed', 'subscription', 'installment', 'reconciliation'.
 -- subscription_id / installment_id link auto-generated entries to their source plan (Phase 3, Step 3 scheduler).
 -- Both FKs use ON DELETE SET NULL so deleting a plan keeps historical expenses.
+-- reconciliation_id links the adjustment expense created by the reconciliation flow (Phase 3, Step 5).
+-- FK constraint on reconciliation_id is added via ALTER TABLE after card_reconciliations exists (circular dependency).
 -- Defined after subscriptions and installments because of these FK references.
 CREATE TABLE expense_entries (
-  id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date            DATE NOT NULL,
-  amount          NUMERIC(18, 2) NOT NULL,
-  currency        VARCHAR(3) NOT NULL,
-  category        expense_category,
-  notes           TEXT,
-  payment_method  VARCHAR(20),
-  credit_card_id  BIGINT REFERENCES credit_cards(id),
-  source          VARCHAR(20) NOT NULL DEFAULT 'manual',
-  subscription_id BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
-  installment_id  BIGINT REFERENCES installments(id) ON DELETE SET NULL,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date              DATE NOT NULL,
+  amount            NUMERIC(18, 2) NOT NULL,
+  currency          VARCHAR(3) NOT NULL,
+  category          expense_category,
+  notes             TEXT,
+  payment_method    VARCHAR(20),
+  credit_card_id    BIGINT REFERENCES credit_cards(id),
+  source            VARCHAR(20) NOT NULL DEFAULT 'manual',
+  subscription_id   BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  installment_id    BIGINT REFERENCES installments(id) ON DELETE SET NULL,
+  reconciliation_id BIGINT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);
 CREATE INDEX idx_expense_entries_user_date ON expense_entries(user_id, date DESC);
 CREATE INDEX idx_expense_entries_credit_card ON expense_entries(credit_card_id);
+CREATE INDEX idx_expense_entries_reconciliation_id
+  ON expense_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
 
 -- Idempotency for the auto-generation scheduler: at most one entry per source plan per date.
 CREATE UNIQUE INDEX idx_expense_entries_subscription_date
@@ -359,6 +371,52 @@ CREATE UNIQUE INDEX idx_expense_entries_subscription_date
 CREATE UNIQUE INDEX idx_expense_entries_installment_date
   ON expense_entries(installment_id, date)
   WHERE installment_id IS NOT NULL;
+
+-- Card reconciliations (Phase 3, Step 5). One row per (card, currency, period_start, period_end).
+-- statement_balance is the user-entered figure from the bank's resumen.
+-- computed_balance is the bucket's running balance at period_end (= sum of expenses dated <= period_end
+--   minus sum of settlements dated <= period_end). difference = statement_balance - computed_balance.
+-- adjustment_expense_id / adjustment_income_id back-reference the single expense or income row created
+--   to capture the difference (positive -> expense in card_fees_and_taxes; negative -> income in
+--   card_credits_and_refunds; zero -> no adjustment). ON DELETE SET NULL keeps the reconciliation
+--   record if the adjustment is deleted via the normal entry flow.
+-- is_stale flips to true when an expense_entries or card_settlements row inside the period is created
+--   / updated / deleted after this reconciliation was written. UI surfaces a re-reconcile prompt.
+-- Re-reconciliation is delete-and-replace via the UNIQUE constraint and the cascade from
+--   expense_entries / income_entries.reconciliation_id.
+CREATE TABLE card_reconciliations (
+  id                    BIGSERIAL PRIMARY KEY,
+  user_id               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  card_id               BIGINT NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
+  currency              VARCHAR(3) NOT NULL,
+  period_start          DATE NOT NULL,
+  period_end            DATE NOT NULL,
+  statement_balance     NUMERIC(18, 2) NOT NULL,
+  computed_balance      NUMERIC(18, 2) NOT NULL,
+  difference            NUMERIC(18, 2) NOT NULL,
+  adjustment_expense_id BIGINT REFERENCES expense_entries(id) ON DELETE SET NULL,
+  adjustment_income_id  BIGINT REFERENCES income_entries(id) ON DELETE SET NULL,
+  is_stale              BOOLEAN NOT NULL DEFAULT FALSE,
+  reconciled_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (card_id, currency, period_start, period_end)
+);
+
+CREATE INDEX idx_card_reconciliations_user_id ON card_reconciliations(user_id);
+CREATE INDEX idx_card_reconciliations_card_currency ON card_reconciliations(card_id, currency);
+CREATE INDEX idx_card_reconciliations_period_end ON card_reconciliations(card_id, period_end DESC);
+
+-- Forward FKs from expense_entries / income_entries to card_reconciliations.
+-- Declared via ALTER TABLE because card_reconciliations is created after the entry tables
+-- (which need to exist first for the back-pointer FKs).
+ALTER TABLE expense_entries
+  ADD CONSTRAINT expense_entries_reconciliation_fkey
+  FOREIGN KEY (reconciliation_id) REFERENCES card_reconciliations(id) ON DELETE CASCADE;
+
+ALTER TABLE income_entries
+  ADD CONSTRAINT income_entries_reconciliation_fkey
+  FOREIGN KEY (reconciliation_id) REFERENCES card_reconciliations(id) ON DELETE CASCADE;
 
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
@@ -489,5 +547,9 @@ CREATE TRIGGER trg_installments_updated_at
 
 CREATE TRIGGER trg_payment_obligations_updated_at
   BEFORE UPDATE ON payment_obligations
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_card_reconciliations_updated_at
+  BEFORE UPDATE ON card_reconciliations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
