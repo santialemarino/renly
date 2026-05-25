@@ -339,23 +339,26 @@ CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
 -- Both FKs use ON DELETE SET NULL so deleting a plan keeps historical expenses.
 -- reconciliation_id links the adjustment expense created by the reconciliation flow (Phase 3, Step 5).
 -- FK constraint on reconciliation_id is added via ALTER TABLE after card_reconciliations exists (circular dependency).
+-- payment_obligation_id back-points to the payment_obligations row this expense was created to pay (Phase 3, Step E).
+-- FK constraint on payment_obligation_id is added via ALTER TABLE after payment_obligations exists (declaration-order dependency).
 -- Defined after subscriptions and installments because of these FK references.
 CREATE TABLE expense_entries (
-  id                BIGSERIAL PRIMARY KEY,
-  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date              DATE NOT NULL,
-  amount            NUMERIC(18, 2) NOT NULL,
-  currency          VARCHAR(3) NOT NULL,
-  category          expense_category,
-  notes             TEXT,
-  payment_method    VARCHAR(20),
-  credit_card_id    BIGINT REFERENCES credit_cards(id),
-  source            VARCHAR(20) NOT NULL DEFAULT 'manual',
-  subscription_id   BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
-  installment_id    BIGINT REFERENCES installments(id) ON DELETE SET NULL,
-  reconciliation_id BIGINT,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                     BIGSERIAL PRIMARY KEY,
+  user_id                BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date                   DATE NOT NULL,
+  amount                 NUMERIC(18, 2) NOT NULL,
+  currency               VARCHAR(3) NOT NULL,
+  category               expense_category,
+  notes                  TEXT,
+  payment_method         VARCHAR(20),
+  credit_card_id         BIGINT REFERENCES credit_cards(id),
+  source                 VARCHAR(20) NOT NULL DEFAULT 'manual',
+  subscription_id        BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  installment_id         BIGINT REFERENCES installments(id) ON DELETE SET NULL,
+  reconciliation_id      BIGINT,
+  payment_obligation_id  BIGINT,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);
@@ -363,6 +366,8 @@ CREATE INDEX idx_expense_entries_user_date ON expense_entries(user_id, date DESC
 CREATE INDEX idx_expense_entries_credit_card ON expense_entries(credit_card_id);
 CREATE INDEX idx_expense_entries_reconciliation_id
   ON expense_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
+CREATE INDEX idx_expense_entries_payment_obligation_id
+  ON expense_entries(payment_obligation_id) WHERE payment_obligation_id IS NOT NULL;
 
 -- Idempotency for the auto-generation scheduler: at most one entry per source plan per date.
 CREATE UNIQUE INDEX idx_expense_entries_subscription_date
@@ -422,25 +427,34 @@ ALTER TABLE income_entries
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
 -- next_due_date is the anchor for the next occurrence; recurring obligations project forward from it.
 CREATE TABLE payment_obligations (
-  id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name            VARCHAR(255) NOT NULL,
-  amount          NUMERIC(18, 2) NOT NULL,
-  currency        VARCHAR(3) NOT NULL,
-  next_due_date   DATE NOT NULL,
-  recurrence      VARCHAR(20),
-  category        VARCHAR(100),
-  payment_method  VARCHAR(20),
-  credit_card_id  BIGINT REFERENCES credit_cards(id),
-  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-  notes           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name              VARCHAR(255) NOT NULL,
+  amount            NUMERIC(18, 2) NOT NULL,
+  currency          VARCHAR(3) NOT NULL,
+  next_due_date     DATE NOT NULL,
+  anchor_day        INTEGER NOT NULL CHECK (anchor_day BETWEEN 1 AND 31),
+  recurrence        VARCHAR(20),
+  category          VARCHAR(100),
+  expense_category  expense_category,
+  payment_method    VARCHAR(20),
+  credit_card_id    BIGINT REFERENCES credit_cards(id),
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_payment_obligations_user_id ON payment_obligations(user_id);
 CREATE INDEX idx_payment_obligations_user_next_due_date ON payment_obligations(user_id, next_due_date);
 CREATE INDEX idx_payment_obligations_credit_card ON payment_obligations(credit_card_id);
+
+-- Forward FK from expense_entries to payment_obligations (Phase 3, Step E).
+-- Declared via ALTER TABLE because payment_obligations is created after expense_entries.
+-- ON DELETE SET NULL: deleting an obligation keeps the historical expense and clears the back-pointer.
+ALTER TABLE expense_entries
+  ADD CONSTRAINT expense_entries_payment_obligation_fkey
+  FOREIGN KEY (payment_obligation_id) REFERENCES payment_obligations(id) ON DELETE SET NULL;
 
 -- API keys for external access (iOS Shortcut, automations).
 -- key_hash stores bcrypt hash; raw key is shown once at creation.

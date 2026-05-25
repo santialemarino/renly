@@ -17,6 +17,7 @@ interface PaymentsCalendarItemRaw {
   cuota_index: number | null;
   installments_count: number | null;
   recurrence: string | null;
+  is_paid: boolean;
 }
 
 interface PaymentsCalendarRaw {
@@ -43,6 +44,7 @@ export interface PaymentsCalendarItem {
   cuotaIndex: number | null;
   installmentsCount: number | null;
   recurrence: string | null;
+  isPaid: boolean;
 }
 
 export interface PaymentsCalendar {
@@ -68,6 +70,7 @@ function mapItem(raw: PaymentsCalendarItemRaw): PaymentsCalendarItem {
     cuotaIndex: raw.cuota_index,
     installmentsCount: raw.installments_count,
     recurrence: raw.recurrence,
+    isPaid: raw.is_paid,
   };
 }
 

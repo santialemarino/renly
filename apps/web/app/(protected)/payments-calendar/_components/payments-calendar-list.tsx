@@ -72,15 +72,25 @@ export async function PaymentsCalendarList({ items, year, month }: PaymentsCalen
               {dayItems.map((item, idx) => {
                 const displayAmount = item.convertedAmount ?? item.amount;
                 const showOriginalCurrency = !item.convertedAmount;
+                const isPaidObligation = item.type === 'obligation' && item.isPaid;
                 return (
                   <div
                     key={`${item.type}-${item.sourceId}-${idx}`}
                     className="flex items-center justify-between gap-x-3 rounded-md border border-border px-3 py-2"
                   >
                     <div className="flex min-w-0 items-center gap-x-3">
-                      <Badge variant={TYPE_VARIANT[item.type]} className="shrink-0">
-                        {t(`types.${item.type}`)}
-                      </Badge>
+                      {isPaidObligation ? (
+                        <Badge
+                          variant="default"
+                          className="shrink-0 bg-emerald-100 [a&]:hover:bg-emerald-100 text-emerald-800"
+                        >
+                          {t('types.obligationPaid')}
+                        </Badge>
+                      ) : (
+                        <Badge variant={TYPE_VARIANT[item.type]} className="shrink-0">
+                          {t(`types.${item.type}`)}
+                        </Badge>
+                      )}
                       <div className="flex min-w-0 flex-col">
                         <div className="text-paragraph-sm-medium truncate">{item.name}</div>
                         {item.type === 'installment' &&

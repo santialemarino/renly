@@ -444,6 +444,11 @@
         "description": "This is the first {currency} expense on {cardName}. A new {currency} bucket will be created. Continue?",
         "confirm": "Continue"
       },
+      "autoChargeMatch": {
+        "title": "Possible duplicate auto-charge",
+        "description": "Looks like an auto-charge from {planName} on {existingDate} matches this entry. Continue anyway?",
+        "confirm": "Continue anyway"
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -743,7 +748,8 @@
       "category": "Category",
       "paymentMethod": "Payment method",
       "actions": "Actions",
-      "empty": "No payment obligations found."
+      "empty": "No payment obligations found.",
+      "paidOn": "Paid on {date}"
     },
     "recurrences": {
       "oneOff": "One-off",
@@ -763,6 +769,7 @@
       "delete": "Delete",
       "archive": "Archive",
       "unarchive": "Unarchive",
+      "markPaid": "Mark paid",
       "archiveSuccess": "Obligation archived.",
       "archiveError": "Failed to archive obligation.",
       "unarchiveSuccess": "Obligation unarchived.",
@@ -794,8 +801,12 @@
         "placeholder": "Select a recurrence"
       },
       "category": {
-        "label": "Category",
-        "placeholder": "Optional category (utilities, taxes, ...)"
+        "label": "Label",
+        "placeholder": "Optional label (ABL, Patente, Cable, ...)"
+      },
+      "expenseCategory": {
+        "label": "Expense category",
+        "placeholder": "Select an expense category"
       },
       "paymentMethod": {
         "label": "Payment method",
@@ -846,6 +857,7 @@
       "subscription": "Subscription",
       "installment": "Installment",
       "obligation": "Obligation",
+      "obligationPaid": "Paid",
       "card_due": "Card due"
     },
     "installment": {

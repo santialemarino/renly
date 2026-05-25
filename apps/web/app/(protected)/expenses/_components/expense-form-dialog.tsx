@@ -23,7 +23,12 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import { createExpense, updateExpense } from '@/app/(protected)/expenses/expenses-actions';
+import {
+  createExpense,
+  getAutoChargeMatch,
+  updateExpense,
+  type AutoChargeMatch,
+} from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
   type ExpenseFormValues,
@@ -37,10 +42,24 @@ import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
+// Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
+// When supplied (and `expense` is absent), the form opens in CREATE mode with values
+// copied from the obligation and the FK set so the server auto-advances on save.
+export interface PrefillFromObligation {
+  amount: string;
+  currency: string;
+  paymentMethod?: ExpenseFormValues['paymentMethod'];
+  creditCardId?: number;
+  category?: ExpenseFormValues['category'];
+  paymentObligationId: number;
+  obligationName: string;
+}
+
 interface ExpenseFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   expense?: Expense;
+  prefillFromObligation?: PrefillFromObligation;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   onSuccess: () => void;
@@ -50,6 +69,7 @@ export function ExpenseFormDialog({
   open,
   onOpenChange,
   expense,
+  prefillFromObligation,
   preferredCurrencies,
   creditCards,
   onSuccess,
@@ -69,6 +89,7 @@ export function ExpenseFormDialog({
       notes: '',
       paymentMethod: undefined,
       creditCardId: undefined,
+      paymentObligationId: undefined,
     },
   });
 
@@ -79,20 +100,45 @@ export function ExpenseFormDialog({
 
   const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
 
-  // Reset form when dialog opens or expense changes.
+  // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   useEffect(() => {
     if (open) {
-      form.reset({
-        date: expense?.date ?? '',
-        amount: expense?.amount ? String(Number(expense.amount)) : '',
-        currency: expense?.currency ?? '',
-        category: (expense?.category ?? undefined) as ExpenseFormValues['category'],
-        notes: expense?.notes ?? '',
-        paymentMethod: (expense?.paymentMethod ?? undefined) as ExpenseFormValues['paymentMethod'],
-        creditCardId: expense?.creditCardId ?? undefined,
-      });
+      if (expense) {
+        form.reset({
+          date: expense.date,
+          amount: expense.amount ? String(Number(expense.amount)) : '',
+          currency: expense.currency ?? '',
+          category: (expense.category ?? undefined) as ExpenseFormValues['category'],
+          notes: expense.notes ?? '',
+          paymentMethod: (expense.paymentMethod ?? undefined) as ExpenseFormValues['paymentMethod'],
+          creditCardId: expense.creditCardId ?? undefined,
+          paymentObligationId: expense.paymentObligationId ?? undefined,
+        });
+      } else if (prefillFromObligation) {
+        form.reset({
+          date: '',
+          amount: String(Number(prefillFromObligation.amount)),
+          currency: prefillFromObligation.currency,
+          category: prefillFromObligation.category,
+          notes: '',
+          paymentMethod: prefillFromObligation.paymentMethod,
+          creditCardId: prefillFromObligation.creditCardId,
+          paymentObligationId: prefillFromObligation.paymentObligationId,
+        });
+      } else {
+        form.reset({
+          date: '',
+          amount: '',
+          currency: '',
+          category: undefined,
+          notes: '',
+          paymentMethod: undefined,
+          creditCardId: undefined,
+          paymentObligationId: undefined,
+        });
+      }
     }
-  }, [open, expense, form]);
+  }, [open, expense, prefillFromObligation, form]);
 
   // Clear credit card when payment method changes away from credit_card.
   useEffect(() => {
@@ -106,11 +152,34 @@ export function ExpenseFormDialog({
   // bucket. Edits skip the check — the bucket already exists by definition.
   const [novelCurrencyPending, setNovelCurrencyPending] = useState<ExpenseFormValues | null>(null);
 
+  // Soft confirmation when the candidate entry matches a scheduler-generated expense
+  // within DUPE_MATCH_WINDOW_DAYS on card / currency / exact amount (Phase 3, Step D).
+  // Fires on BOTH create and edit (edit excludes the row being modified so it can't
+  // match itself).
+  const [autoChargeMatch, setAutoChargeMatch] = useState<{
+    values: ExpenseFormValues;
+    match: AutoChargeMatch;
+  } | null>(null);
+
+  // Clear pending soft-confirmations when the form dialog closes. Otherwise a
+  // dupe-match lookup that resolves AFTER the user cancels the form would surface
+  // a confirmation dialog with no form behind it (race condition on async submit).
+  useEffect(() => {
+    if (!open) {
+      setNovelCurrencyPending(null);
+      setAutoChargeMatch(null);
+    }
+  }, [open]);
+
   // Preserve the pending values during the close animation so the description
   // text doesn't blank out and shift the modal mid-exit.
   const lastNovelCurrencyPending = useRef(novelCurrencyPending);
   if (novelCurrencyPending) lastNovelCurrencyPending.current = novelCurrencyPending;
   const novelCurrencyDisplay = novelCurrencyPending ?? lastNovelCurrencyPending.current;
+
+  const lastAutoChargeMatch = useRef(autoChargeMatch);
+  if (autoChargeMatch) lastAutoChargeMatch.current = autoChargeMatch;
+  const autoChargeMatchDisplay = autoChargeMatch ?? lastAutoChargeMatch.current;
 
   function selectedNovelCurrencyCardName(values: ExpenseFormValues): string | null {
     if (values.paymentMethod !== 'credit_card') return null;
@@ -133,6 +202,7 @@ export function ExpenseFormDialog({
       onSuccess();
       onOpenChange(false);
       setNovelCurrencyPending(null);
+      setAutoChargeMatch(null);
     } catch {
       toast.error(t('form.saveError'));
     }
@@ -142,6 +212,33 @@ export function ExpenseFormDialog({
     if (!isEdit && selectedNovelCurrencyCardName(values)) {
       setNovelCurrencyPending(values);
       return;
+    }
+    // Run the dupe-warning on BOTH create and edit (Phase 3, Step D + 6.ii):
+    // edit case excludes the row being modified so an auto-tagged expense doesn't
+    // match itself. Only fires when the four match-key fields are present and the
+    // payment method is credit card. Errors are non-blocking — fall through to save.
+    if (
+      values.paymentMethod === 'credit_card' &&
+      values.creditCardId &&
+      values.currency &&
+      values.amount &&
+      values.date
+    ) {
+      try {
+        const match = await getAutoChargeMatch({
+          creditCardId: values.creditCardId,
+          currency: values.currency,
+          amount: values.amount,
+          date: values.date,
+          excludeExpenseId: isEdit ? expense.id : undefined,
+        });
+        if (match) {
+          setAutoChargeMatch({ values, match });
+          return;
+        }
+      } catch {
+        // Silent fail — better to allow save than block the user on a lookup error.
+      }
     }
     await doSubmit(values);
   }
@@ -379,6 +476,35 @@ export function ExpenseFormDialog({
               disabled={form.formState.isSubmitting}
             >
               {t('form.novelCurrency.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-charge match confirmation (Phase 3, Step D). Same sibling pattern
+          as novel-currency — fires when the candidate entry matches an existing
+          scheduler-generated expense within DUPE_MATCH_WINDOW_DAYS. */}
+      <Dialog open={!!autoChargeMatch} onOpenChange={(open) => !open && setAutoChargeMatch(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('form.autoChargeMatch.title')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-paragraph-sm text-muted-foreground">
+            {t('form.autoChargeMatch.description', {
+              planName: autoChargeMatchDisplay?.match.sourcePlan.name ?? '',
+              existingDate: autoChargeMatchDisplay?.match.date ?? '',
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAutoChargeMatch(null)}>
+              {t('form.cancel')}
+            </Button>
+            <Button
+              blue
+              onClick={() => autoChargeMatch && doSubmit(autoChargeMatch.values)}
+              disabled={form.formState.isSubmitting}
+            >
+              {t('form.autoChargeMatch.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

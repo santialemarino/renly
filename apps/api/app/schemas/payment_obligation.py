@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase
 
 
@@ -20,7 +21,11 @@ class PaymentObligationCreate(RequestBase):
         description="Recurrence pattern (monthly, bimonthly, quarterly, annual). Omit for one-off.",
         max_length=20,
     )
-    category: str | None = Field(default=None, description="Free-form obligation category (e.g. utilities, taxes).", max_length=100)
+    category: str | None = Field(default=None, description="Free-form obligation label (e.g. ABL, Patente, Cable).", max_length=100)
+    expense_category: ExpenseCategory | None = Field(
+        default=None,
+        description="Structured expense category used to pre-fill Mark Paid and feed finance breakdowns.",
+    )
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     notes: str | None = Field(default=None, description="Optional notes.")
@@ -33,7 +38,8 @@ class PaymentObligationUpdate(RequestBase):
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     next_due_date: date_type | None = Field(default=None, description="Anchor date for the next occurrence.")
     recurrence: str | None = Field(default=None, description="Recurrence pattern.", max_length=20)
-    category: str | None = Field(default=None, description="Obligation category.", max_length=100)
+    category: str | None = Field(default=None, description="Free-form obligation label.", max_length=100)
+    expense_category: ExpenseCategory | None = Field(default=None, description="Structured expense category.")
     payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the obligation is active.")
@@ -49,11 +55,16 @@ class PaymentObligationResponse(BaseModel):
     converted_amount: Decimal | None = Field(default=None, description="Amount in the requested display currency.", max_digits=18, decimal_places=2)
     next_due_date: date_type = Field(description="Anchor date for the next occurrence.")
     recurrence: str | None = Field(default=None, description="Recurrence pattern (None for one-off).")
-    category: str | None = Field(default=None, description="Obligation category.")
+    category: str | None = Field(default=None, description="Free-form obligation label.")
+    expense_category: ExpenseCategory | None = Field(default=None, description="Structured expense category.")
     payment_method: str | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool = Field(description="Whether the obligation is active.")
     notes: str | None = Field(default=None, description="Optional notes.")
+    last_payment_date: date_type | None = Field(
+        default=None,
+        description="Date of the most recent linked expense, or null when never paid (Phase 3, Step E).",
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

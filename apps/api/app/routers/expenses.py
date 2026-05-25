@@ -1,4 +1,5 @@
 from datetime import date as date_type
+from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
@@ -6,7 +7,15 @@ from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.expense import ExpenseCreate, ExpenseListResponse, ExpenseResponse, ExpenseUpdate
+from app.schemas.expense import (
+    AutoChargeMatch,
+    AutoChargeMatchResponse,
+    AutoChargeMatchSourcePlan,
+    ExpenseCreate,
+    ExpenseListResponse,
+    ExpenseResponse,
+    ExpenseUpdate,
+)
 from app.services import expense_service
 from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
 from app.utils.settings import get_dollar_pref
@@ -75,6 +84,44 @@ async def list_expenses(
     )
 
 
+# Look up a likely-duplicate auto-generated expense for a manual entry being drafted
+# (Phase 3, Step D). Returns at most one match (newest first) — the form uses it to
+# trigger a soft confirmation dialog before saving. Declared above GET /{id} so the
+# static slug isn't shadowed by the parametrised route.
+@router.get("/auto-charge-match", response_model=AutoChargeMatchResponse)
+async def auto_charge_match(
+    current_user: CurrentUser,
+    session: SessionDep,
+    credit_card_id: int = Query(description="Credit card id of the candidate manual entry."),
+    currency: str = Query(description="Currency of the candidate manual entry (ISO 4217).", max_length=3),
+    amount: Decimal = Query(description="Amount of the candidate manual entry.", gt=0),
+    date: date_type = Query(description="Date of the candidate manual entry."),
+    exclude_expense_id: int | None = Query(
+        default=None,
+        description="Expense id to exclude (set on the edit flow so a row doesn't match itself).",
+    ),
+) -> AutoChargeMatchResponse:
+    result = await expense_service.find_auto_charge_match(
+        session,
+        current_user,
+        credit_card_id=credit_card_id,
+        currency=currency,
+        amount=amount,
+        target_date=date,
+        exclude_expense_id=exclude_expense_id,
+    )
+    if result is None:
+        return AutoChargeMatchResponse(match=None)
+    return AutoChargeMatchResponse(
+        match=AutoChargeMatch(
+            expense_id=result.expense_id,
+            date=result.date,
+            source=result.source,
+            source_plan=AutoChargeMatchSourcePlan(id=result.source_plan_id, name=result.source_plan_name),
+        )
+    )
+
+
 # Get a single expense by id (with optional currency conversion).
 @router.get("/{expense_id}", response_model=ExpenseResponse)
 async def get_expense(
@@ -110,6 +157,7 @@ async def create_expense(
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
         source=body.source,
+        payment_obligation_id=body.payment_obligation_id,
     )
     return ExpenseResponse.model_validate(entry)
 

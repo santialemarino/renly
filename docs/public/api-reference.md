@@ -143,13 +143,14 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 ## Expenses
 
-| Method   | Path             | Description                                                   |
-| -------- | ---------------- | ------------------------------------------------------------- |
-| `GET`    | `/expenses`      | List expenses with filtering, search, and pagination.         |
-| `POST`   | `/expenses`      | Create a new expense. **Supports both JWT and API key auth.** |
-| `GET`    | `/expenses/{id}` | Get a single expense by ID.                                   |
-| `PUT`    | `/expenses/{id}` | Update an expense. Only provided fields are changed.          |
-| `DELETE` | `/expenses/{id}` | Delete an expense.                                            |
+| Method   | Path                          | Description                                                                         |
+| -------- | ----------------------------- | ----------------------------------------------------------------------------------- |
+| `GET`    | `/expenses`                   | List expenses with filtering, search, and pagination.                               |
+| `POST`   | `/expenses`                   | Create a new expense. **Supports both JWT and API key auth.**                       |
+| `GET`    | `/expenses/{id}`              | Get a single expense by ID.                                                         |
+| `PUT`    | `/expenses/{id}`              | Update an expense. Only provided fields are changed.                                |
+| `DELETE` | `/expenses/{id}`              | Delete an expense.                                                                  |
+| `GET`    | `/expenses/auto-charge-match` | Look up a likely-duplicate auto-generated expense for a manual entry being drafted. |
 
 **List query parameters:**
 
@@ -170,11 +171,23 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 **Payment methods:** `cash`, `debit`, `transfer`, `credit_card`.
 
-**Source:** The `source` field indicates how the expense was created: `manual` (default, web app), `shortcut` (iOS Shortcut), `auto`, or `email_parsed`. Sent in the request body on `POST /expenses`; returned in all responses.
+**Source:** The `source` field indicates how the expense was created: `manual` (default, web app), `shortcut` (iOS Shortcut), `auto`, `email_parsed`, `subscription`, `installment`, or `reconciliation`. Sent in the request body on `POST /expenses`; returned in all responses.
+
+**Payment obligation link:** `POST /expenses` accepts an optional `payment_obligation_id` (nullable). When set, the server (a) inserts the expense with the FK and (b) auto-advances the linked obligation in the same transaction — recurring obligations move `next_due_date` forward by one cycle (anchor-day preserved via `add_months_anchored`); one-off obligations flip `is_active=false`. The FK is informational on the expense side and is returned by `GET /expenses/{id}` and the list response. Editing or deleting a linked expense does NOT reverse the advance.
 
 **Amount validation:** `amount` must be greater than zero on all create and update endpoints (expenses, income, settlements). Returns 422 if zero or negative.
 
 **Currency conversion:** When `currency` is provided, the response includes `converted_amount` per entry and `display_currency` on the list response. The original `amount` and `currency` are always preserved.
+
+### Auto-charge match (Phase 3, Step D)
+
+`GET /expenses/auto-charge-match` is a lookup endpoint the expense form calls before submitting a new manual credit-card expense, to warn the user when they're about to enter a row that matches an already-scheduler-generated charge.
+
+**Query parameters:** `credit_card_id` (int, required), `currency` (string, required), `amount` (decimal, required), `date` (YYYY-MM-DD, required), `exclude_expense_id` (int, optional — set on the edit flow so the row being edited doesn't match itself).
+
+**Match rule:** existing `expense_entries` with `source IN ('subscription', 'installment')` AND same `credit_card_id` AND same `currency` AND exact `amount` match AND `date` within ±15 days of the supplied `date`. When `exclude_expense_id` is set, that row is excluded from the result. Newest match wins; only the first match is returned.
+
+**Response:** `{ "match": null }` when no row matches; otherwise `{ "match": { "expense_id", "date", "source": "subscription" | "installment", "source_plan": { "id", "name" } } }`. The `source_plan.name` is the subscription / installment name for display in the confirmation dialog.
 
 ---
 
@@ -278,7 +291,9 @@ Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surf
 
 **Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `next_due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
 
-**Obligation fields:** `name`, `amount` (> 0), `currency`, `next_due_date` (anchor for the next occurrence — recurring obligations project forward from this), `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form, max 100 chars — see "Open" section in `docs/internal/decisions.md` for the enum-vs-tag-style discussion), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional). Responses include `converted_amount` when `currency` query param is provided.
+**Obligation fields:** `name`, `amount` (> 0), `currency`, `next_due_date` (anchor for the next occurrence — recurring obligations project forward from this), `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form user label, max 100 chars — e.g. "ABL", "Cable"), `expense_category` (optional, structured enum reusing `ExpenseCategory` — used to pre-fill Mark Paid + feed finance breakdowns), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional), `last_payment_date` (computed, read-only — date of the most recent linked expense, surfaces on archived one-off rows as a "Paid on" indicator). Responses include `converted_amount` when `currency` query param is provided.
+
+**Paid state (Phase 3, Step E):** Obligations are paid by creating a linked expense from the "Mark paid" action on the obligations table. The expense form opens pre-filled from the obligation, and on save `POST /expenses` carries `payment_obligation_id` — the obligation's `next_due_date` auto-advances one cycle (recurring) or `is_active` flips to `false` (one-off) atomically with the expense insert. The advance is one-way: editing or deleting a linked expense does NOT reverse it. To correct an over-advance, `PUT /payment-obligations/{id}` with the desired `next_due_date`.
 
 ---
 
@@ -314,13 +329,16 @@ Read-only timeline that aggregates every upcoming payment for a given calendar m
 "source_id": 7,
 "cuota_index": null, // installments only
 "installments_count": null, // installments only
-"recurrence": null // obligations only
+"recurrence": null, // obligations only
+"is_paid": false // obligations only — true when an expense with this payment_obligation_id falls inside the cycle
 }
 ]
 }
 \`\`\`
 
 `items` is sorted by date ascending. Within the same date the order is stable: `card_due` → `subscription` → `installment` → `obligation`. Card-due events emit one entry per active card per bucket, dated on that month's resolved `due_day` (clamped for short months); the amount is the bucket's **running balance at the statement's closing date** (= `sum(expenses dated ≤ closing_date) − sum(settlements dated ≤ closing_date)` for that bucket). Carryover from prior unpaid statements is implicit in the snapshot, matching how a real bank resumen presents the bill. Buckets whose snapshot is zero are omitted. When a reconciliation exists for the period, the reconciliation's adjustment is part of the running balance via its dated adjustment entry.
+
+**Obligation projection (Phase 3, Step E):** Obligations project both forward AND backward from `next_due_date` so the calendar shows BOTH unpaid future cycles (the existing behaviour) AND past-paid cycles whose period contains a linked expense. Past-paid cycles carry `is_paid = true`; unpaid future cycles carry `is_paid = false`. The walker uses `add_months_anchored` so anchor day is preserved across short-month clamps. A backward-walked occurrence at date `D` is paid when an expense with `payment_obligation_id = obligation.id` has its date inside the occurrence's cycle period `(prev_anchor, D]`.
 
 ---
 

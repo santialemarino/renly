@@ -12,6 +12,7 @@ export function buildExpenseFormSchema(requiredMsg: string) {
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     creditCardId: z.number().optional(),
+    paymentObligationId: z.number().optional(),
   });
 }
 

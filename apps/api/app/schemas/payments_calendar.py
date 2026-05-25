@@ -26,6 +26,10 @@ class PaymentsCalendarItemResponse(BaseModel):
     cuota_index: int | None = Field(default=None, description="1-based cuota index (installments only).")
     installments_count: int | None = Field(default=None, description="Total cuotas (installments only).")
     recurrence: str | None = Field(default=None, description="Recurrence pattern (obligations only).")
+    is_paid: bool = Field(
+        default=False,
+        description="True when an obligation cycle has a linked expense (Phase 3, Step E). Always False for non-obligation events.",
+    )
 
 
 # Response for GET /payments-calendar.

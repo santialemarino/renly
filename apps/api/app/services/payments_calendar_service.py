@@ -15,11 +15,13 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import (
     credit_card_repository,
+    expense_repository,
     installment_repository,
     payment_obligation_repository,
     subscription_repository,
 )
 from app.services import card_reconciliation_service, credit_card_service
+from app.services.payment_obligation_service import OBLIGATION_MONTH_STEP
 from app.utils.dates import add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month
 
 
@@ -110,24 +112,53 @@ async def _installment_items(
     return items
 
 
-# Payment obligation occurrences that fall in the period. For one-off obligations
-# this is at most one event (only when `next_due_date` lies inside the window).
-# For recurring obligations we walk the recurrence forward from `next_due_date`
-# (anchor-aware via add_months_anchored) and emit every occurrence inside the
-# window — matches the subscription pattern so a monthly ABL surfaces every month.
+# Payment obligation occurrences that fall in the period.
+#
+# Forward projection: walks the recurrence forward from `next_due_date` and emits every
+# upcoming UNPAID occurrence inside the window — matches the subscription pattern so a
+# monthly ABL surfaces every month. One-off obligations emit at most one forward event
+# (only when `next_due_date` lies inside the window). Forward events use the obligation's
+# CURRENT amount + currency ("what next will cost").
+#
+# Backward projection (Phase 3, Step E — recurring only): walks backward from
+# `next_due_date` one cycle per linked expense and emits every past occurrence inside
+# the window. Each emitted cycle carries the LINKED EXPENSE'S amount + currency (the
+# actual historical paid values), so editing the obligation later doesn't retroactively
+# rewrite past Paid badges on the calendar. Pairing: backward step `i` (newest-first)
+# uses linked-expense `i` (newest-first by expense date). One-off obligations don't
+# backward-walk because paying a one-off archives it (it disappears from the list).
 async def _obligation_items(
     session: AsyncSession,
     user: User,
     period_start: date_type,
     period_end: date_type,
 ) -> list[CalendarItem]:
-    # Fetch only obligations whose anchor is at or before the window's end —
-    # anything anchored further in the future can't project into this window
-    # (we don't walk backwards).
-    obligations = await payment_obligation_repository.list_active_anchored_to_or_before(session, user.id, period_end)
+    # Fetch every active obligation in one query, then split per-direction in Python.
+    # Forward projection still needs the original anchor-before-window filter; the
+    # backward walk uses anchors AFTER the window too.
+    obligations = await payment_obligation_repository.list_by_user(session, user.id, active_only=True)
+    if not obligations:
+        return []
+
+    # Forward-projection candidates: anchor must be at or before period_end (anchors past
+    # the window can't reach back when walking forward).
+    forward_obligations = [o for o in obligations if o.next_due_date <= period_end]
+
+    # Backward-projection candidates: only recurring obligations (one-offs would be archived
+    # on payment) AND the anchor must be after period_start (otherwise there's no prior cycle
+    # to walk into the window).
+    backward_obligations = [o for o in obligations if o.recurrence is not None and o.next_due_date > period_start]
+    backward_ids = [o.id for o in backward_obligations]
+
+    # Batch-load linked expenses per obligation in one query (no N+1). Sorted DESC by
+    # date so backward step `i` pairs naturally with `linked_by_obligation[id][i]`.
+    linked_by_obligation: dict[int, list] = {}
+    if backward_ids:
+        linked_by_obligation = await expense_repository.list_linked_obligation_expenses(session, user.id, backward_ids)
 
     items: list[CalendarItem] = []
-    for o in obligations:
+    # Forward (unpaid future) — uses obligation's CURRENT amount + currency.
+    for o in forward_obligations:
         for occurrence in obligation_dates_in_window(o, period_start, period_end):
             items.append(
                 CalendarItem(
@@ -140,6 +171,31 @@ async def _obligation_items(
                     credit_card_id=o.credit_card_id,
                     source_id=o.id,
                     recurrence=o.recurrence,
+                    is_paid=False,
+                )
+            )
+    # Backward (past paid) — uses the LINKED EXPENSE's historical amount + currency.
+    for o in backward_obligations:
+        linked = linked_by_obligation.get(o.id, [])
+        if not linked:
+            continue
+        for occurrence, expense in obligation_past_paid_cycles_in_window(o, period_start, period_end, linked):
+            items.append(
+                CalendarItem(
+                    type="obligation",
+                    date=occurrence,
+                    name=o.name,
+                    amount=expense.amount,
+                    currency=expense.currency,
+                    payment_method=o.payment_method,
+                    credit_card_id=o.credit_card_id,
+                    source_id=o.id,
+                    recurrence=o.recurrence,
+                    is_paid=True,
+                    # FX conversion anchors on the actual paid date (not the cycle date),
+                    # so the calendar's converted amount matches what the linked expense
+                    # shows on the standalone Expenses list.
+                    conversion_date=expense.date,
                 )
             )
     return items
@@ -232,7 +288,7 @@ def subscription_dates_in_window(
     return dates
 
 
-# Returns every occurrence of a payment obligation that lands inside the window.
+# Returns every UNPAID forward occurrence of a payment obligation inside the window.
 # One-off obligations (recurrence=None) yield at most one date: the stored anchor
 # when it's inside the window. Recurring obligations walk forward from the anchor
 # using add_months_anchored — month-step is derived from recurrence (monthly=1,
@@ -244,12 +300,14 @@ def obligation_dates_in_window(
     period_end: date_type,
 ) -> list[date_type]:
     anchor = obligation.next_due_date
-    months_step = _OBLIGATION_MONTH_STEP.get(obligation.recurrence or "")
+    months_step = OBLIGATION_MONTH_STEP.get(obligation.recurrence or "")
     if months_step is None:
         # One-off — emit only if the anchor itself is in the window.
         return [anchor] if period_start <= anchor <= period_end else []
 
-    anchor_day = anchor.day
+    # Use obligation.anchor_day (NOT anchor.day) so day-31 obligations don't drift
+    # after a short-month clamp earlier in the recurrence.
+    anchor_day = obligation.anchor_day
     dates: list[date_type] = []
     cursor = anchor
     iterations = 0
@@ -265,13 +323,43 @@ def obligation_dates_in_window(
     return dates
 
 
-# Recurrence pattern → calendar-month step used when projecting forward.
-_OBLIGATION_MONTH_STEP = {
-    "monthly": 1,
-    "bimonthly": 2,
-    "quarterly": 3,
-    "annual": 12,
-}
+# Returns (cycle_date, linked_expense) pairs for every PAST PAID occurrence of a
+# recurring payment obligation that lands inside the window (Phase 3, Step E).
+# Walks backward from next_due_date one cycle per linked expense — because each
+# linked expense advances next_due_date exactly one cycle, the first N backward
+# steps correspond to the N linked expenses regardless of when those payments
+# were actually dated.
+# `linked_expenses` must be sorted DESC by expense date so that backward step `i`
+# pairs with `linked_expenses[i]` (newest cycle ↔ newest expense). Cycles outside
+# the window are skipped; cycles before period_start short-circuit the walk.
+# One-off obligations don't backward-walk because paying a one-off archives it.
+def obligation_past_paid_cycles_in_window(
+    obligation: PaymentObligation,
+    period_start: date_type,
+    period_end: date_type,
+    linked_expenses: list,
+) -> list[tuple]:
+    months_step = OBLIGATION_MONTH_STEP.get(obligation.recurrence or "")
+    if months_step is None or not linked_expenses:
+        return []
+
+    # Use the obligation's stored anchor_day, NOT next_due_date.day, so day-31 anchors
+    # don't drift after a short-month clamp (same fix as subscriptions' anchor_day).
+    anchor_day = obligation.anchor_day
+    cursor = obligation.next_due_date
+    pairs: list[tuple] = []
+    step = 0
+    while step < len(linked_expenses) and step < 1000:
+        prev = add_months_anchored(cursor, -months_step, anchor_day)
+        if prev >= cursor:
+            break
+        cursor = prev
+        if cursor < period_start:
+            break
+        if cursor <= period_end:
+            pairs.append((cursor, linked_expenses[step]))
+        step += 1
+    return pairs
 
 
 # Stable ordering within the same date.

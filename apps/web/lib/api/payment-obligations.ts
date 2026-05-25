@@ -13,10 +13,12 @@ interface PaymentObligationRaw {
   next_due_date: string;
   recurrence: string | null;
   category: string | null;
+  expense_category: string | null;
   payment_method: string | null;
   credit_card_id: number | null;
   is_active: boolean;
   notes: string | null;
+  last_payment_date: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,10 +34,12 @@ export interface PaymentObligation {
   nextDueDate: string;
   recurrence: string | null;
   category: string | null;
+  expenseCategory: string | null;
   paymentMethod: string | null;
   creditCardId: number | null;
   isActive: boolean;
   notes: string | null;
+  lastPaymentDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -52,10 +56,12 @@ function mapObligation(raw: PaymentObligationRaw): PaymentObligation {
     nextDueDate: raw.next_due_date,
     recurrence: raw.recurrence,
     category: raw.category,
+    expenseCategory: raw.expense_category,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
     isActive: raw.is_active,
     notes: raw.notes,
+    lastPaymentDate: raw.last_payment_date,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };

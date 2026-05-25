@@ -444,6 +444,11 @@
         "description": "Este es el primer gasto en {currency} de {cardName}. Se va a crear un nuevo saldo en {currency}. ¿Continuar?",
         "confirm": "Continuar"
       },
+      "autoChargeMatch": {
+        "title": "Posible duplicado de cargo automático",
+        "description": "Parece que un cargo automático de {planName} del {existingDate} coincide con este gasto. ¿Cargar igual?",
+        "confirm": "Cargar igual"
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -743,7 +748,8 @@
       "category": "Categoría",
       "paymentMethod": "Método de pago",
       "actions": "Acciones",
-      "empty": "No se encontraron obligaciones de pago."
+      "empty": "No se encontraron obligaciones de pago.",
+      "paidOn": "Pagada el {date}"
     },
     "recurrences": {
       "oneOff": "Único",
@@ -763,6 +769,7 @@
       "delete": "Eliminar",
       "archive": "Archivar",
       "unarchive": "Desarchivar",
+      "markPaid": "Marcar pagada",
       "archiveSuccess": "Obligación archivada.",
       "archiveError": "No se pudo archivar la obligación.",
       "unarchiveSuccess": "Obligación desarchivada.",
@@ -794,8 +801,12 @@
         "placeholder": "Elegí una frecuencia"
       },
       "category": {
-        "label": "Categoría",
-        "placeholder": "Categoría opcional (servicios, impuestos, ...)"
+        "label": "Etiqueta",
+        "placeholder": "Etiqueta opcional (ABL, Patente, Cable, ...)"
+      },
+      "expenseCategory": {
+        "label": "Categoría de gasto",
+        "placeholder": "Elegí una categoría de gasto"
       },
       "paymentMethod": {
         "label": "Método de pago",
@@ -846,6 +857,7 @@
       "subscription": "Suscripción",
       "installment": "Cuota",
       "obligation": "Obligación",
+      "obligationPaid": "Pagada",
       "card_due": "Vencimiento de tarjeta"
     },
     "installment": {

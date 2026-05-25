@@ -1,4 +1,6 @@
 from datetime import date as date_type
+from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,14 +215,105 @@ async def sum_by_user_grouped_by_category(
     return [(str(row[0]), row[1], float(row[2])) for row in result.all()]
 
 
+# Finds the most recent auto-generated expense (source IN subscription / installment)
+# matching the candidate manual entry on card / currency / amount within ±window_days.
+# `exclude_expense_id` is set on the edit flow to prevent an expense from matching
+# itself when it's already auto-tagged (e.g. user editing a scheduler-emitted row).
+# Returns the first match newest-first, or None.
+async def find_auto_charge_match(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    credit_card_id: int,
+    currency: str,
+    amount: Decimal,
+    target_date: date_type,
+    window_days: int,
+    exclude_expense_id: int | None = None,
+) -> ExpenseEntry | None:
+    lo = target_date - timedelta(days=window_days)
+    hi = target_date + timedelta(days=window_days)
+    # Require the source FK to be intact — otherwise the match has no plan name to
+    # surface in the confirmation dialog. Rows whose source plan was deleted via
+    # ON DELETE SET NULL keep `source='subscription'|'installment'` but lose the FK;
+    # skip them so a slightly older valid match isn't shadowed by an unresolvable one.
+    stmt = (
+        select(ExpenseEntry)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.credit_card_id == credit_card_id)
+        .where(ExpenseEntry.currency == currency)
+        .where(ExpenseEntry.amount == amount)
+        .where(ExpenseEntry.date >= lo)
+        .where(ExpenseEntry.date <= hi)
+        .where(
+            ((ExpenseEntry.source == "subscription") & ExpenseEntry.subscription_id.is_not(None))
+            | ((ExpenseEntry.source == "installment") & ExpenseEntry.installment_id.is_not(None))
+        )
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+        .limit(1)
+    )
+    if exclude_expense_id is not None:
+        stmt = stmt.where(ExpenseEntry.id != exclude_expense_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+# Returns {obligation_id: [ExpenseEntry, ...]} for expenses linked to any of the
+# given obligations, sorted by date DESC (newest first). Used by the Payments
+# Calendar to size the backward-walk for the Paid badge AND to surface each paid
+# cycle with its actual historical amount + currency (NOT the obligation's current
+# values, which may have been edited since the payment).
+async def list_linked_obligation_expenses(
+    session: AsyncSession,
+    user_id: int,
+    obligation_ids: list[int],
+) -> dict[int, list[ExpenseEntry]]:
+    if not obligation_ids:
+        return {}
+    stmt = (
+        select(ExpenseEntry)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.payment_obligation_id.in_(obligation_ids))
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+    )
+    result = await session.execute(stmt)
+    grouped: dict[int, list[ExpenseEntry]] = {}
+    for entry in result.scalars().all():
+        assert entry.payment_obligation_id is not None  # filtered by WHERE clause.
+        grouped.setdefault(entry.payment_obligation_id, []).append(entry)
+    return grouped
+
+
+# Returns {obligation_id: date} for the most recent linked expense per obligation.
+# Used by the payment-obligations list endpoint to surface a "Paid on" indicator
+# on archived one-off rows (Phase 3, Step E, sub-improvement 6.i).
+async def max_linked_obligation_dates(
+    session: AsyncSession,
+    user_id: int,
+    obligation_ids: list[int],
+) -> dict[int, date_type]:
+    if not obligation_ids:
+        return {}
+    result = await session.execute(
+        select(ExpenseEntry.payment_obligation_id, func.max(ExpenseEntry.date))
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.payment_obligation_id.in_(obligation_ids))
+        .group_by(ExpenseEntry.payment_obligation_id)
+    )
+    return {row[0]: row[1] for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     count_by_credit_card = staticmethod(count_by_credit_card)
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
+    list_linked_obligation_expenses = staticmethod(list_linked_obligation_expenses)
+    max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)

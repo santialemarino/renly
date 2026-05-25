@@ -38,6 +38,7 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
+import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Form-internal sentinel for "no recurrence" — the API stores NULL, but a Select
@@ -79,6 +80,7 @@ export function PaymentObligationFormDialog({
       nextDueDate: '',
       recurrence: undefined,
       category: '',
+      expenseCategory: undefined,
       paymentMethod: undefined,
       creditCardId: undefined,
       notes: '',
@@ -89,6 +91,9 @@ export function PaymentObligationFormDialog({
   const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
+
+  const tExpenses = useTranslations('expenses');
+  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key));
 
   // Reset form when dialog opens or obligation changes.
   useEffect(() => {
@@ -101,6 +106,8 @@ export function PaymentObligationFormDialog({
         recurrence: (obligation?.recurrence ??
           undefined) as PaymentObligationFormValues['recurrence'],
         category: obligation?.category ?? '',
+        expenseCategory: (obligation?.expenseCategory ??
+          undefined) as PaymentObligationFormValues['expenseCategory'],
         paymentMethod: (obligation?.paymentMethod ??
           undefined) as PaymentObligationFormValues['paymentMethod'],
         creditCardId: obligation?.creditCardId ?? undefined,
@@ -261,19 +268,51 @@ export function PaymentObligationFormDialog({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="category"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.category.label')}</FormLabel>
-                  <FormControl>
-                    <Input {...field} placeholder={t('form.category.placeholder')} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="flex min-w-0 items-start gap-x-3">
+              <FormField
+                control={form.control}
+                name="category"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>{t('form.category.label')}</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder={t('form.category.placeholder')} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="expenseCategory"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>{t('form.expenseCategory.label')}</FormLabel>
+                    <Select
+                      value={field.value ?? ''}
+                      onValueChange={(v) =>
+                        field.onChange(v as PaymentObligationFormValues['expenseCategory'])
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={t('form.expenseCategory.placeholder')} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {sortedExpenseCategories.map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            {tExpenses(`categories.${cat}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
