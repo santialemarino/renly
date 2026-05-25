@@ -2,8 +2,11 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
+from sqlalchemy import Column
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
+from app.models.expense_entry import ExpenseCategory
 from app.models.utils import utcnow
 
 
@@ -22,7 +25,11 @@ class PaymentObligation(SQLModel, table=True):
     recurrence: str | None = Field(
         default=None, max_length=20, description="Recurrence pattern (monthly, bimonthly, quarterly, annual). None for one-off."
     )
-    category: str | None = Field(default=None, max_length=100, description="Free-form obligation category (e.g. utilities, taxes).")
+    category: str | None = Field(default=None, max_length=100, description="Free-form obligation label (e.g. ABL, Patente, Cable).")
+    expense_category: ExpenseCategory | None = Field(
+        default=None,
+        sa_column=Column(SAEnum(ExpenseCategory, name="expense_category"), nullable=True),
+    )
     payment_method: str | None = Field(default=None, max_length=20, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(
         default=None, foreign_key="credit_cards.id", description="Credit card used (when payment_method = credit_card)."

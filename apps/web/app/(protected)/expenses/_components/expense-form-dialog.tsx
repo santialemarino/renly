@@ -202,10 +202,11 @@ export function ExpenseFormDialog({
       setNovelCurrencyPending(values);
       return;
     }
-    // Only check the dupe-warning on CREATE, only for credit-card expenses with the
-    // full match-key present. Errors here are non-blocking — fall through to save.
+    // Run the dupe-warning on BOTH create and edit (Phase 3, Step D + 6.ii):
+    // edit case excludes the row being modified so an auto-tagged expense doesn't
+    // match itself. Only fires when the four match-key fields are present and the
+    // payment method is credit card. Errors are non-blocking — fall through to save.
     if (
-      !isEdit &&
       values.paymentMethod === 'credit_card' &&
       values.creditCardId &&
       values.currency &&
@@ -218,6 +219,7 @@ export function ExpenseFormDialog({
           currency: values.currency,
           amount: values.amount,
           date: values.date,
+          excludeExpenseId: isEdit ? expense.id : undefined,
         });
         if (match) {
           setAutoChargeMatch({ values, match });

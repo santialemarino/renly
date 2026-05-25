@@ -748,7 +748,8 @@
       "category": "Category",
       "paymentMethod": "Payment method",
       "actions": "Actions",
-      "empty": "No payment obligations found."
+      "empty": "No payment obligations found.",
+      "paidOn": "Paid on {date}"
     },
     "recurrences": {
       "oneOff": "One-off",
@@ -800,8 +801,12 @@
         "placeholder": "Select a recurrence"
       },
       "category": {
-        "label": "Category",
-        "placeholder": "Optional category (utilities, taxes, ...)"
+        "label": "Label",
+        "placeholder": "Optional label (ABL, Patente, Cable, ...)"
+      },
+      "expenseCategory": {
+        "label": "Expense category",
+        "placeholder": "Select an expense category"
       },
       "paymentMethod": {
         "label": "Payment method",

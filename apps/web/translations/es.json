@@ -748,7 +748,8 @@
       "category": "Categoría",
       "paymentMethod": "Método de pago",
       "actions": "Acciones",
-      "empty": "No se encontraron obligaciones de pago."
+      "empty": "No se encontraron obligaciones de pago.",
+      "paidOn": "Pagada el {date}"
     },
     "recurrences": {
       "oneOff": "Único",
@@ -800,8 +801,12 @@
         "placeholder": "Elegí una frecuencia"
       },
       "category": {
-        "label": "Categoría",
-        "placeholder": "Categoría opcional (servicios, impuestos, ...)"
+        "label": "Etiqueta",
+        "placeholder": "Etiqueta opcional (ABL, Patente, Cable, ...)"
+      },
+      "expenseCategory": {
+        "label": "Categoría de gasto",
+        "placeholder": "Elegí una categoría de gasto"
       },
       "paymentMethod": {
         "label": "Método de pago",

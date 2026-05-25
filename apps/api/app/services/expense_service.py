@@ -138,7 +138,8 @@ async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> 
 
 # Looks up the most recent scheduler-generated expense (source IN subscription/installment)
 # that matches the candidate manual entry on card/currency/amount within ±DUPE_MATCH_WINDOW_DAYS.
-# Returns None when nothing matches. Backs the Step D dupe-warning lookup endpoint.
+# `exclude_expense_id` is passed from the edit flow so the row being edited doesn't match
+# itself when it happens to be auto-tagged. Returns None when nothing matches.
 async def find_auto_charge_match(
     session: AsyncSession,
     user: User,
@@ -147,6 +148,7 @@ async def find_auto_charge_match(
     currency: str,
     amount: Decimal,
     target_date: date_type,
+    exclude_expense_id: int | None = None,
 ) -> AutoChargeMatchResult | None:
     match = await expense_repository.find_auto_charge_match(
         session,
@@ -156,6 +158,7 @@ async def find_auto_charge_match(
         amount=amount,
         target_date=target_date,
         window_days=DUPE_MATCH_WINDOW_DAYS,
+        exclude_expense_id=exclude_expense_id,
     )
     if match is None:
         return None

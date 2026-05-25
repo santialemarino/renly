@@ -133,6 +133,7 @@ export function PaymentObligationsTable({
     setMarkPaidPrefill({
       amount: obligation.amount,
       currency: obligation.currency,
+      category: (obligation.expenseCategory ?? undefined) as PrefillFromObligation['category'],
       paymentMethod: (obligation.paymentMethod ??
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
@@ -231,9 +232,21 @@ export function PaymentObligationsTable({
             ) : (
               obligations.map((o) => {
                 const displayAmount = o.convertedAmount ?? o.amount;
+                // One-off paid obligations are archived after Mark Paid — surface
+                // the payment date as a sub-line so the user can find it later.
+                const showPaidOn = !o.isActive && !o.recurrence && o.lastPaymentDate;
                 return (
                   <TableRow key={o.id} className={!o.isActive ? 'opacity-60' : undefined}>
-                    <TableCell className="text-paragraph-sm-medium">{o.name}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="text-paragraph-sm-medium">{o.name}</span>
+                        {showPaidOn && (
+                          <span className="text-paragraph-xs text-muted-foreground">
+                            {t('table.paidOn', { date: o.lastPaymentDate ?? '' })}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
                       {formatAmount(displayAmount)} {o.convertedAmount ? '' : o.currency}
                     </TableCell>

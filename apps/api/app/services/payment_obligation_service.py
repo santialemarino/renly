@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
+from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.repositories import payment_obligation_repository
@@ -58,6 +59,7 @@ async def create_obligation(
     next_due_date: date_type,
     recurrence: str | None = None,
     category: str | None = None,
+    expense_category: ExpenseCategory | None = None,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
     notes: str | None = None,
@@ -70,6 +72,7 @@ async def create_obligation(
         next_due_date=next_due_date,
         recurrence=recurrence,
         category=category,
+        expense_category=expense_category,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
         notes=notes,

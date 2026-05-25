@@ -61,6 +61,7 @@ export async function getAutoChargeMatch(params: {
   currency: string;
   amount: string;
   date: string;
+  excludeExpenseId?: number;
 }): Promise<AutoChargeMatch | null> {
   const qs = new URLSearchParams({
     credit_card_id: String(params.creditCardId),
@@ -68,6 +69,9 @@ export async function getAutoChargeMatch(params: {
     amount: params.amount,
     date: params.date,
   });
+  if (params.excludeExpenseId !== undefined) {
+    qs.set('exclude_expense_id', String(params.excludeExpenseId));
+  }
   const res = await authenticatedFetch(`/expenses/auto-charge-match?${qs.toString()}`, {
     method: 'GET',
   });

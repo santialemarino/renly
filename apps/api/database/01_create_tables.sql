@@ -427,20 +427,21 @@ ALTER TABLE income_entries
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
 -- next_due_date is the anchor for the next occurrence; recurring obligations project forward from it.
 CREATE TABLE payment_obligations (
-  id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name            VARCHAR(255) NOT NULL,
-  amount          NUMERIC(18, 2) NOT NULL,
-  currency        VARCHAR(3) NOT NULL,
-  next_due_date   DATE NOT NULL,
-  recurrence      VARCHAR(20),
-  category        VARCHAR(100),
-  payment_method  VARCHAR(20),
-  credit_card_id  BIGINT REFERENCES credit_cards(id),
-  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-  notes           TEXT,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name              VARCHAR(255) NOT NULL,
+  amount            NUMERIC(18, 2) NOT NULL,
+  currency          VARCHAR(3) NOT NULL,
+  next_due_date     DATE NOT NULL,
+  recurrence        VARCHAR(20),
+  category          VARCHAR(100),
+  expense_category  expense_category,
+  payment_method    VARCHAR(20),
+  credit_card_id    BIGINT REFERENCES credit_cards(id),
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_payment_obligations_user_id ON payment_obligations(user_id);

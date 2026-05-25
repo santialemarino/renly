@@ -1,10 +1,11 @@
 from datetime import date
 from decimal import Decimal
 
+from app.models.expense_entry import ExpenseEntry
 from app.models.payment_obligation import PaymentObligation
 from app.services.payments_calendar_service import (
     obligation_dates_in_window,
-    obligation_past_paid_dates_in_window,
+    obligation_past_paid_cycles_in_window,
 )
 
 
@@ -20,6 +21,26 @@ def _obligation(*, recurrence: str | None, next_due_date: date) -> PaymentObliga
         next_due_date=next_due_date,
         recurrence=recurrence,
         is_active=True,
+    )
+
+
+def _expense(
+    *,
+    date_val: date,
+    amount: Decimal = Decimal("1000"),
+    currency: str = "ARS",
+) -> ExpenseEntry:
+    # Minimal in-memory ExpenseEntry for the past-paid pairing tests. user_id and
+    # payment_obligation_id are placeholders — the pairing helper consumes only date,
+    # amount, and currency.
+    return ExpenseEntry(
+        id=1,
+        user_id=1,
+        date=date_val,
+        amount=amount,
+        currency=currency,
+        source="manual",
+        payment_obligation_id=1,
     )
 
 
@@ -97,7 +118,7 @@ class TestRecurringObligations:
 
     def test_window_strictly_before_anchor_emits_nothing(self):
         # Forward helper doesn't walk backward — anchor=May, window=Mar yields nothing.
-        # Past-paid cycles surface via obligation_past_paid_dates_in_window instead.
+        # Past-paid cycles surface via obligation_past_paid_cycles_in_window instead.
         o = _obligation(recurrence="monthly", next_due_date=date(2026, 5, 25))
         result = obligation_dates_in_window(o, date(2026, 3, 1), date(2026, 3, 31))
         assert result == []
@@ -113,42 +134,73 @@ class TestRecurringObligations:
 
 
 class TestPastPaidObligations:
-    def test_monthly_one_payment_surfaces_prior_cycle(self):
+    def test_monthly_one_payment_surfaces_prior_cycle_with_expense_data(self):
         # User paid May → next_due_date advanced to June 15. Viewing May calendar
-        # walks back ONE step (count=1) and lands on May 15 inside the window.
+        # walks back ONE step and pairs with the single linked expense.
         o = _obligation(recurrence="monthly", next_due_date=date(2026, 6, 15))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 5, 1), date(2026, 5, 31), linked_expense_count=1)
-        assert result == [date(2026, 5, 15)]
+        e = _expense(date_val=date(2026, 5, 20), amount=Decimal("480"), currency="USD")
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 5, 1), date(2026, 5, 31), [e])
+        assert result == [(date(2026, 5, 15), e)]
 
     def test_monthly_no_linked_expenses_emits_nothing(self):
         o = _obligation(recurrence="monthly", next_due_date=date(2026, 6, 15))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 5, 1), date(2026, 5, 31), linked_expense_count=0)
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 5, 1), date(2026, 5, 31), [])
         assert result == []
 
-    def test_monthly_multiple_payments_walks_through_window(self):
-        # User pre-paid 3 months in May → next_due_date = Aug 15. Viewing May–July
-        # walks back 3 steps and surfaces May 15, June 15, July 15.
+    def test_monthly_multiple_payments_pair_newest_first(self):
+        # User pre-paid 3 months → next_due_date = Aug 15. Viewing May-July. Linked
+        # expenses sorted DESC by date so backward step `i` pairs with linked[i].
         o = _obligation(recurrence="monthly", next_due_date=date(2026, 8, 15))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 5, 1), date(2026, 7, 31), linked_expense_count=3)
-        assert sorted(result) == [date(2026, 5, 15), date(2026, 6, 15), date(2026, 7, 15)]
+        e_july = _expense(date_val=date(2026, 7, 1), amount=Decimal("300"))
+        e_june = _expense(date_val=date(2026, 6, 1), amount=Decimal("200"))
+        e_may = _expense(date_val=date(2026, 5, 1), amount=Decimal("100"))
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 5, 1), date(2026, 7, 31), [e_july, e_june, e_may])
+        # Backward walk emits July 15 → June 15 → May 15, each paired with the linked
+        # expense at the same step index (newest cycle with newest expense).
+        assert result == [
+            (date(2026, 7, 15), e_july),
+            (date(2026, 6, 15), e_june),
+            (date(2026, 5, 15), e_may),
+        ]
 
     def test_walk_stops_when_cursor_exits_window(self):
-        # 5 linked payments but only July is inside the August view: stop after July.
+        # 5 linked payments but only August is inside the August view.
         o = _obligation(recurrence="monthly", next_due_date=date(2026, 12, 15))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 8, 1), date(2026, 8, 31), linked_expense_count=5)
-        # Walk: Nov 15 (skip, > Aug 31), Oct 15 (skip), Sep 15 (skip), Aug 15 (append),
-        # July 15 (< Aug 1, break).
-        assert result == [date(2026, 8, 15)]
+        e_nov = _expense(date_val=date(2026, 11, 1))
+        e_oct = _expense(date_val=date(2026, 10, 1))
+        e_sep = _expense(date_val=date(2026, 9, 1))
+        e_aug = _expense(date_val=date(2026, 8, 1), amount=Decimal("777"))
+        e_jul = _expense(date_val=date(2026, 7, 1))
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 8, 1), date(2026, 8, 31), [e_nov, e_oct, e_sep, e_aug, e_jul])
+        # Walk: Nov 15 (skip, > Aug 31), Oct 15 (skip), Sep 15 (skip), Aug 15 (append
+        # paired with e_aug — step index 3), July 15 (< Aug 1, break).
+        assert result == [(date(2026, 8, 15), e_aug)]
 
     def test_annual_anchor_day_31_clamps_across_short_month(self):
         # Annual obligation anchored Mar 31 → next_due_date already 2027-03-31.
         # One paid step backward → 2026-03-31 (no drift across short months).
         o = _obligation(recurrence="annual", next_due_date=date(2027, 3, 31))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 3, 1), date(2026, 3, 31), linked_expense_count=1)
-        assert result == [date(2026, 3, 31)]
+        e = _expense(date_val=date(2026, 3, 30))
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 3, 1), date(2026, 3, 31), [e])
+        assert result == [(date(2026, 3, 31), e)]
 
     def test_one_off_never_backward_walks(self):
         # One-off obligations get archived on payment — they don't backward-walk.
         o = _obligation(recurrence=None, next_due_date=date(2026, 6, 15))
-        result = obligation_past_paid_dates_in_window(o, date(2026, 5, 1), date(2026, 5, 31), linked_expense_count=1)
+        e = _expense(date_val=date(2026, 5, 20))
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 5, 1), date(2026, 5, 31), [e])
         assert result == []
+
+    def test_paired_expense_amount_is_independent_of_obligation_amount(self):
+        # The obligation says 1000 ARS but the linked expense was 1200 USD. The pair
+        # must carry the EXPENSE's amount + currency, so editing the obligation later
+        # doesn't rewrite past Paid badges on the calendar.
+        o = _obligation(recurrence="monthly", next_due_date=date(2026, 6, 15))
+        e = _expense(date_val=date(2026, 5, 20), amount=Decimal("1200"), currency="USD")
+        result = obligation_past_paid_cycles_in_window(o, date(2026, 5, 1), date(2026, 5, 31), [e])
+        assert result == [(date(2026, 5, 15), e)]
+        # Sanity: paired expense carries historical values, obligation keeps current ones.
+        assert result[0][1].amount == Decimal("1200")
+        assert result[0][1].currency == "USD"
+        assert o.amount == Decimal("1000")
+        assert o.currency == "ARS"

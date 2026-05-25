@@ -96,6 +96,10 @@ async def auto_charge_match(
     currency: str = Query(description="Currency of the candidate manual entry (ISO 4217).", max_length=3),
     amount: Decimal = Query(description="Amount of the candidate manual entry.", gt=0),
     date: date_type = Query(description="Date of the candidate manual entry."),
+    exclude_expense_id: int | None = Query(
+        default=None,
+        description="Expense id to exclude (set on the edit flow so a row doesn't match itself).",
+    ),
 ) -> AutoChargeMatchResponse:
     result = await expense_service.find_auto_charge_match(
         session,
@@ -104,6 +108,7 @@ async def auto_charge_match(
         currency=currency,
         amount=amount,
         target_date=date,
+        exclude_expense_id=exclude_expense_id,
     )
     if result is None:
         return AutoChargeMatchResponse(match=None)

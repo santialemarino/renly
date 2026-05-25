@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.repositories import expense_repository
 from app.schemas.payment_obligation import (
     PaymentObligationCreate,
     PaymentObligationResponse,
@@ -58,7 +59,16 @@ async def list_obligations(
         dp = await get_dollar_pref(session, current_user.id)
         rate_map = await get_rate_map(session, dp)
 
-    return [_convert_response(PaymentObligationResponse.model_validate(o), o.currency, currency, rate_map) for o in obligations]
+    # Batch-load latest-paid date per obligation in one query so archived one-off rows
+    # can display "Paid on YYYY-MM-DD" without an N+1 lookup (Phase 3, Step E, 6.i).
+    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, current_user.id, [o.id for o in obligations])
+
+    responses: list[PaymentObligationResponse] = []
+    for o in obligations:
+        resp = PaymentObligationResponse.model_validate(o)
+        resp.last_payment_date = last_paid_dates.get(o.id)
+        responses.append(_convert_response(resp, o.currency, currency, rate_map))
+    return responses
 
 
 # Get a single payment obligation by id (with optional currency conversion).
@@ -71,6 +81,8 @@ async def get_obligation(
 ) -> PaymentObligationResponse:
     obligation = await payment_obligation_service.get_obligation(session, obligation_id, current_user)
     resp = PaymentObligationResponse.model_validate(obligation)
+    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, current_user.id, [obligation.id])
+    resp.last_payment_date = last_paid_dates.get(obligation.id)
     if currency:
         dp = await get_dollar_pref(session, current_user.id)
         rate_map = await get_rate_map(session, dp)
@@ -94,6 +106,7 @@ async def create_obligation(
         next_due_date=body.next_due_date,
         recurrence=body.recurrence,
         category=body.category,
+        expense_category=body.expense_category,
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
         notes=body.notes,
