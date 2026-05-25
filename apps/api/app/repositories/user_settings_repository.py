@@ -6,6 +6,18 @@ from sqlmodel import select
 from app.models.user_settings import UserSettings
 
 
+# Returns {user_id: timezone_name} for every user that has a non-empty 'timezone' key in their settings.
+# Users without a stored timezone are omitted; callers fall back to UTC.
+async def get_all_timezones(session: AsyncSession) -> dict[int, str]:
+    result = await session.execute(select(UserSettings.user_id, UserSettings.settings))
+    out: dict[int, str] = {}
+    for user_id, settings in result.all():
+        tz = settings.get("timezone") if isinstance(settings, dict) else None
+        if isinstance(tz, str) and tz:
+            out[user_id] = tz
+    return out
+
+
 # Fetches settings row by user_id. Returns None if not found.
 async def get_by_user_id(
     session: AsyncSession,
@@ -35,6 +47,7 @@ async def save(session: AsyncSession, user_settings: UserSettings) -> None:
 # Namespace to call repository functions (e.g. user_settings_repository.get_by_user_id).
 class UserSettingsRepository:
     create = staticmethod(create)
+    get_all_timezones = staticmethod(get_all_timezones)
     get_by_user_id = staticmethod(get_by_user_id)
     save = staticmethod(save)
 

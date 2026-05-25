@@ -417,16 +417,18 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 **Settings fields:**
 
-| Field                    | Type     | Description                                                             |
-| ------------------------ | -------- | ----------------------------------------------------------------------- |
-| `primary_currency`       | string   | Main display currency (e.g., `USD`).                                    |
-| `secondary_currency`     | string   | Secondary display currency (e.g., `ARS`).                               |
-| `preferred_currencies`   | string[] | Ordered list of currencies for the currency switcher.                   |
-| `period_presets`         | object[] | Custom period presets for the dashboard date range selector.            |
-| `max_groups`             | int      | Maximum number of groups the user can create.                           |
-| `group_warning_pct`      | number   | Percentage threshold that triggers a group allocation warning.          |
-| `dollar_rate_preference` | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`. |
-| `shortcut_currencies`    | string[] | Currencies shown in the iOS Shortcut currency picker.                   |
+| Field                    | Type     | Description                                                                                                                                                                                                                         |
+| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `primary_currency`       | string   | Main display currency (e.g., `USD`).                                                                                                                                                                                                |
+| `secondary_currency`     | string   | Secondary display currency (e.g., `ARS`).                                                                                                                                                                                           |
+| `preferred_currencies`   | string[] | Ordered list of currencies for the currency switcher.                                                                                                                                                                               |
+| `period_presets`         | object[] | Custom period presets for the dashboard date range selector.                                                                                                                                                                        |
+| `max_groups`             | int      | Maximum number of groups the user can create.                                                                                                                                                                                       |
+| `group_warning_pct`      | number   | Percentage threshold that triggers a group allocation warning.                                                                                                                                                                      |
+| `dollar_rate_preference` | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`.                                                                                                                                                             |
+| `shortcut_currencies`    | string[] | Currencies shown in the iOS Shortcut currency picker.                                                                                                                                                                               |
+| `timezone`               | string   | User's IANA timezone (e.g. `America/Argentina/Buenos_Aires`). Used by the auto-expense scheduler to fire cycles on the user's local calendar day. Defaults to UTC when unset. Validated server-side; invalid IANA names return 400. |
+| `timezone_mode`          | string   | `auto` or `manual`. In `auto`, the browser-detected timezone is silently kept in sync on every protected page load. In `manual`, the stored value never changes automatically.                                                      |
 
 ---
 

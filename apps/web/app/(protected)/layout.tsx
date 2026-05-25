@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
+import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSettings } from '@/lib/api/settings';
 import { getSession } from '@/lib/auth';
@@ -36,6 +37,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <SidebarProvider>
+      <TimezoneAutoSync
+        storedTimezone={settings?.timezone ?? null}
+        storedMode={settings?.timezoneMode ?? null}
+      />
       <AppSidebar
         displayCurrencies={displayCurrencies}
         activeCurrency={activeCurrency}

@@ -162,6 +162,7 @@
       "groups": "Grupos",
       "snapshots": "Snapshots",
       "preferences": "Preferencias",
+      "localization": "Localización",
       "integrations": "Integraciones"
     },
     "navGroups": {
@@ -1375,6 +1376,36 @@
       },
       "saveSuccess": "Preferencias guardadas.",
       "saveError": "No se pudieron guardar las preferencias."
+    }
+  },
+  "localization": {
+    "metadata": {
+      "title": "Localización",
+      "description": "Configura tu zona horaria y preferencias regionales."
+    },
+    "title": "Localización",
+    "subtitle": "Configura tu zona horaria y preferencias regionales.",
+    "form": {
+      "mode": {
+        "label": "Detección",
+        "hint": "Automática mantiene la zona horaria sincronizada con tu navegador. Manual la fija al valor que elijas.",
+        "automatic": "Automática",
+        "manual": "Manual"
+      },
+      "timezone": {
+        "label": "Zona horaria",
+        "hintAuto": "Detectada automáticamente desde tu navegador. Elegir un valor distinto cambia a Manual.",
+        "hintManual": "Seleccionada manualmente. Cambiá a Automática para volver a seguir al navegador.",
+        "placeholder": "Seleccioná una zona horaria",
+        "searchPlaceholder": "Buscar zonas horarias...",
+        "noResults": "No se encontraron zonas horarias."
+      },
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "saveSuccess": "Configuración de localización guardada.",
+      "saveError": "No se pudo guardar la configuración de localización."
     }
   },
   "integrations": {

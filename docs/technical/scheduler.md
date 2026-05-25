@@ -16,7 +16,7 @@ Each job wrapper creates its own `AsyncSessionLocal()` session (not tied to a re
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
-AUTO_EXPENSES_HOUR_UTC = 1
+AUTO_EXPENSES_HOUR_LOCAL = 1
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 ```
@@ -54,13 +54,17 @@ Runs 1 hour after the asset prices job to ensure fresh prices are available.
 
 ### 4. Auto-expenses
 
-| Property         | Value                                                                                                                                                                                                                                                                                                                 |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Trigger**      | `cron` (daily at 01:00 UTC)                                                                                                                                                                                                                                                                                           |
-| **Service call** | `auto_expense_service.generate_auto_expenses(session)`                                                                                                                                                                                                                                                                |
-| **What it does** | Retroactively emits `expense_entries` for every active subscription whose `next_billing_date <= today` and every active installment whose next cuota is at or before today. Each generated entry carries the source plan's FK (`subscription_id` or `installment_id`) and `source = 'subscription' \| 'installment'`. |
+| Property         | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Trigger**      | `cron` (hourly, every UTC hour at HH:00)                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Service call** | `auto_expense_service.generate_auto_expenses(session)`                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **What it does** | Each UTC tick the service loads every user's timezone in one batch, filters to users whose **local-time-now hour equals `AUTO_EXPENSES_HOUR_LOCAL`** (= 1), then retroactively emits `expense_entries` for those users: every active subscription whose `next_billing_date <= today_for_user` and every active installment whose next cuota is at or before `today_for_user`. Each generated entry carries the source plan's FK (`subscription_id` or `installment_id`) and `source` accordingly. |
 
-Runs at 01:00 UTC so today's cuota / billing dates have settled across all timezones served. Idempotent on re-runs: a partial unique index on `(subscription_id, date)` / `(installment_id, date)` plus a pre-check skip in the service prevent double-insertion when the job retries or back-fills. Once an installment plan reaches `current_installment > installments_count`, `is_active` flips to `false` automatically.
+The hourly tick + per-user-local-hour filter means each user's auto-expenses fire at their own local 01:00. A user in `America/Argentina/Buenos_Aires` (UTC-3) processes at 04:00 UTC; a user in `America/New_York` EST processes at 06:00 UTC; a user in UTC processes at 01:00 UTC. `today_for_user = datetime.now(ZoneInfo(user.tz)).date()` so the `next_billing_date <= today` comparison lands on the user's local calendar — a subscription with `next_billing_date = 2026-05-25` only fires once the user's local-now has actually crossed into 2026-05-25.
+
+User timezone comes from `user_settings.settings.timezone` (IANA name; auto-detected from the browser, manual override available on the `/localization` page). Users with no timezone set fall back to UTC (day-zero behaviour for un-filled users matches the pre-Step-G design exactly). Invalid IANA names are caught by the settings router on write; if a stale invalid value ever reaches the scheduler at runtime it logs a warning and falls back to UTC.
+
+Idempotent on re-runs: partial unique indexes on `(subscription_id, date)` / `(installment_id, date)` plus a pre-check skip in the service prevent double-insertion. Once an installment plan reaches `current_installment > installments_count`, `is_active` flips to `false` automatically.
 
 ### 5. CEDEAR ratios
 

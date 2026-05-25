@@ -162,6 +162,7 @@
       "groups": "Groups",
       "snapshots": "Snapshots",
       "preferences": "Preferences",
+      "localization": "Localization",
       "integrations": "Integrations"
     },
     "navGroups": {
@@ -1375,6 +1376,36 @@
       },
       "saveSuccess": "Preferences saved.",
       "saveError": "Failed to save preferences."
+    }
+  },
+  "localization": {
+    "metadata": {
+      "title": "Localization",
+      "description": "Configure your timezone and regional preferences."
+    },
+    "title": "Localization",
+    "subtitle": "Configure your timezone and regional preferences.",
+    "form": {
+      "mode": {
+        "label": "Detection",
+        "hint": "Automatic keeps your timezone in sync with the browser. Manual locks it to your chosen value.",
+        "automatic": "Automatic",
+        "manual": "Manual"
+      },
+      "timezone": {
+        "label": "Timezone",
+        "hintAuto": "Auto-detected from your browser. Picking a different value switches to Manual.",
+        "hintManual": "Manually selected. Switch to Automatic to follow the browser again.",
+        "placeholder": "Select a timezone",
+        "searchPlaceholder": "Search timezones...",
+        "noResults": "No timezones found."
+      },
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "saveSuccess": "Localization settings saved.",
+      "saveError": "Failed to save localization settings."
     }
   },
   "integrations": {

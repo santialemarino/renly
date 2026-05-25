@@ -44,5 +44,9 @@ async def update_settings(
         kwargs["dollar_rate_preference"] = payload["dollar_rate_preference"]
     if "shortcut_currencies" in payload:
         kwargs["shortcut_currencies"] = payload["shortcut_currencies"]
+    if "timezone" in payload:
+        kwargs["timezone"] = payload["timezone"]
+    if "timezone_mode" in payload:
+        kwargs["timezone_mode"] = payload["timezone_mode"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)
