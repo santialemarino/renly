@@ -38,6 +38,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 function SortIcon({
   column,
@@ -255,7 +256,7 @@ export function InstallmentsTable({
                     <TableCell className="text-paragraph-sm-medium tabular-nums">
                       {progressLabel}
                     </TableCell>
-                    <TableCell>{inst.startDate}</TableCell>
+                    <TableCell>{formatDateForLocale(inst.startDate, locale)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {inst.paymentMethod ? t(`paymentMethods.${inst.paymentMethod}`) : '—'}
                     </TableCell>

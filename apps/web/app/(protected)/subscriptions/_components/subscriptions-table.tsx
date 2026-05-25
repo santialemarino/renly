@@ -37,6 +37,7 @@ import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { SortOrder, Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 function SortIcon({
   column,
@@ -215,7 +216,7 @@ export function SubscriptionsTable({
                       {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>
-                    <TableCell>{sub.nextBillingDate}</TableCell>
+                    <TableCell>{formatDateForLocale(sub.nextBillingDate, locale)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {sub.paymentMethod ? t(`paymentMethods.${sub.paymentMethod}`) : '—'}
                     </TableCell>

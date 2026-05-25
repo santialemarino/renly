@@ -24,6 +24,7 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface CreditCardReconciliationsSectionProps {
@@ -185,7 +186,8 @@ export function CreditCardReconciliationsSection({
                                 {formatPeriodLabel(statement.periodStart, statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-xs text-muted-foreground">
-                                {statement.periodStart} → {statement.periodEnd}
+                                {formatDateForLocale(statement.periodStart, locale)} →{' '}
+                                {formatDateForLocale(statement.periodEnd, locale)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
                                 {formatAmount(statement.computedBalance, locale)}{' '}

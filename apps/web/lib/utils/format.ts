@@ -1,4 +1,6 @@
-import { getLocaleTag } from '@/lib/utils/locale';
+import { format } from 'date-fns';
+
+import { getDateFnsLocale, getLocaleTag } from '@/lib/utils/locale';
 
 interface FormatValueOptions {
   locale?: string;
@@ -67,6 +69,16 @@ export function valueColor(value: number | null): string {
 export function formatMonth(dateStr: string, locale?: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: '2-digit' });
+}
+
+// Formats an ISO date string (YYYY-MM-DD) as a locale-aware medium-style label (e.g. "Jan 2, 2025" / "2 ene 2025") via date-fns's 'PP' token. Day-month-year ordering in every supported locale sidesteps DD/MM vs MM/DD ambiguity. Pass an alternate format token to override.
+export function formatDateForLocale(
+  iso: string,
+  locale?: string,
+  dateFormat: string = 'PP',
+): string {
+  const date = new Date(iso + 'T00:00:00');
+  return format(date, dateFormat, { locale: getDateFnsLocale(locale) });
 }
 
 // Formats a number as a compact value for chart Y axes and tooltips (e.g. 1500000 → "1.5M", 23000 → "23K").

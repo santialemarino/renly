@@ -53,6 +53,7 @@ import type {
   SortOrder,
 } from '@/lib/api/payment-obligations';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 function SortIcon({
   column,
@@ -304,7 +305,11 @@ export function PaymentObligationsTable({
                         <span className="text-paragraph-sm-medium">{o.name}</span>
                         {showPaidOn && (
                           <span className="text-paragraph-xs text-muted-foreground">
-                            {t('table.paidOn', { date: o.lastPaymentDate ?? '' })}
+                            {t('table.paidOn', {
+                              date: o.lastPaymentDate
+                                ? formatDateForLocale(o.lastPaymentDate, locale)
+                                : '',
+                            })}
                           </span>
                         )}
                       </div>
@@ -312,7 +317,7 @@ export function PaymentObligationsTable({
                     <TableCell className="text-paragraph-sm tabular-nums">
                       {formatAmount(displayAmount, locale)} {o.convertedAmount ? '' : o.currency}
                     </TableCell>
-                    <TableCell>{o.nextDueDate}</TableCell>
+                    <TableCell>{formatDateForLocale(o.nextDueDate, locale)}</TableCell>
                     <TableCell>
                       {o.recurrence ? t(`recurrences.${o.recurrence}`) : t('recurrences.oneOff')}
                     </TableCell>
