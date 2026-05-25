@@ -7,8 +7,9 @@ from typing import NamedTuple
 
 # A single event on the Payments Calendar timeline. `type` discriminates the
 # source entity: 'subscription' | 'installment' | 'obligation' | 'card_due'.
-# Type-specific fields (cuota_index, installments_count, recurrence, is_paid) are
-# populated only by their respective sources and remain None / False elsewhere.
+# Type-specific fields (cuota_index, installments_count, recurrence, is_paid,
+# conversion_date) are populated only by their respective sources and remain
+# None / False elsewhere.
 class CalendarItem(NamedTuple):
     type: str
     date: date_type
@@ -22,3 +23,4 @@ class CalendarItem(NamedTuple):
     installments_count: int | None = None
     recurrence: str | None = None
     is_paid: bool = False
+    conversion_date: date_type | None = None  # FX-conversion anchor; overrides `date` when set (paid obligations use linked expense date)

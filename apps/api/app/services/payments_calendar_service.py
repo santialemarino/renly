@@ -192,6 +192,10 @@ async def _obligation_items(
                     source_id=o.id,
                     recurrence=o.recurrence,
                     is_paid=True,
+                    # FX conversion anchors on the actual paid date (not the cycle date),
+                    # so the calendar's converted amount matches what the linked expense
+                    # shows on the standalone Expenses list.
+                    conversion_date=expense.date,
                 )
             )
     return items
@@ -301,7 +305,9 @@ def obligation_dates_in_window(
         # One-off — emit only if the anchor itself is in the window.
         return [anchor] if period_start <= anchor <= period_end else []
 
-    anchor_day = anchor.day
+    # Use obligation.anchor_day (NOT anchor.day) so day-31 obligations don't drift
+    # after a short-month clamp earlier in the recurrence.
+    anchor_day = obligation.anchor_day
     dates: list[date_type] = []
     cursor = anchor
     iterations = 0
@@ -337,7 +343,9 @@ def obligation_past_paid_cycles_in_window(
     if months_step is None or not linked_expenses:
         return []
 
-    anchor_day = obligation.next_due_date.day
+    # Use the obligation's stored anchor_day, NOT next_due_date.day, so day-31 anchors
+    # don't drift after a short-month clamp (same fix as subscriptions' anchor_day).
+    anchor_day = obligation.anchor_day
     cursor = obligation.next_due_date
     pairs: list[tuple] = []
     step = 0

@@ -233,15 +233,22 @@ async def find_auto_charge_match(
 ) -> ExpenseEntry | None:
     lo = target_date - timedelta(days=window_days)
     hi = target_date + timedelta(days=window_days)
+    # Require the source FK to be intact — otherwise the match has no plan name to
+    # surface in the confirmation dialog. Rows whose source plan was deleted via
+    # ON DELETE SET NULL keep `source='subscription'|'installment'` but lose the FK;
+    # skip them so a slightly older valid match isn't shadowed by an unresolvable one.
     stmt = (
         select(ExpenseEntry)
         .where(ExpenseEntry.user_id == user_id)
-        .where(ExpenseEntry.source.in_(["subscription", "installment"]))
         .where(ExpenseEntry.credit_card_id == credit_card_id)
         .where(ExpenseEntry.currency == currency)
         .where(ExpenseEntry.amount == amount)
         .where(ExpenseEntry.date >= lo)
         .where(ExpenseEntry.date <= hi)
+        .where(
+            ((ExpenseEntry.source == "subscription") & ExpenseEntry.subscription_id.is_not(None))
+            | ((ExpenseEntry.source == "installment") & ExpenseEntry.installment_id.is_not(None))
+        )
         .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
         .limit(1)
     )

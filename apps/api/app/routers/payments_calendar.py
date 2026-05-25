@@ -23,8 +23,11 @@ def _to_response(
     lookup: RateLookup | None,
 ) -> PaymentsCalendarItemResponse:
     converted: Decimal | None = None
+    # Past-paid obligations set `conversion_date` to the linked expense's actual date
+    # so the rate matches what the expenses list shows; everything else uses the cycle date.
+    fx_date = item.conversion_date or item.date
     if target_currency and lookup and item.currency != target_currency:
-        rate_map = lookup.get_rate_map_at(item.date)
+        rate_map = lookup.get_rate_map_at(fx_date)
         if rate_map:
             converted = convert_value(item.amount, item.currency, target_currency, rate_map)
     elif target_currency and item.currency == target_currency:
@@ -42,6 +45,7 @@ def _to_response(
         cuota_index=item.cuota_index,
         installments_count=item.installments_count,
         recurrence=item.recurrence,
+        is_paid=item.is_paid,
     )
 
 

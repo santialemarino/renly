@@ -22,6 +22,9 @@ class PaymentObligation(SQLModel, table=True):
     next_due_date: date_type = Field(
         description="Anchor date for the next occurrence — recurring obligations project forward from this in the Payments Calendar.",
     )
+    anchor_day: int = Field(
+        description="Original day-of-month (1-31). Preserved across short-month clamps so day-31 obligations don't drift.",
+    )
     recurrence: str | None = Field(
         default=None, max_length=20, description="Recurrence pattern (monthly, bimonthly, quarterly, annual). None for one-off."
     )

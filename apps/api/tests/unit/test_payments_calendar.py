@@ -1,17 +1,25 @@
 from datetime import date
 from decimal import Decimal
 
+from app.domain import CalendarItem
 from app.models.expense_entry import ExpenseEntry
 from app.models.payment_obligation import PaymentObligation
+from app.routers.payments_calendar import _to_response
 from app.services.payments_calendar_service import (
     obligation_dates_in_window,
     obligation_past_paid_cycles_in_window,
 )
 
 
-def _obligation(*, recurrence: str | None, next_due_date: date) -> PaymentObligation:
+def _obligation(
+    *,
+    recurrence: str | None,
+    next_due_date: date,
+    anchor_day: int | None = None,
+) -> PaymentObligation:
     # Minimal in-memory PaymentObligation. We only exercise the projection helper,
     # so user_id / amount / currency / id are placeholders.
+    # anchor_day defaults to next_due_date.day, matching the create-obligation auto-derive.
     return PaymentObligation(
         id=1,
         user_id=1,
@@ -19,6 +27,7 @@ def _obligation(*, recurrence: str | None, next_due_date: date) -> PaymentObliga
         amount=Decimal("1000"),
         currency="ARS",
         next_due_date=next_due_date,
+        anchor_day=anchor_day if anchor_day is not None else next_due_date.day,
         recurrence=recurrence,
         is_active=True,
     )
@@ -204,3 +213,48 @@ class TestPastPaidObligations:
         assert result[0][1].currency == "USD"
         assert o.amount == Decimal("1000")
         assert o.currency == "ARS"
+
+
+# --- Router-level mapper (regression: is_paid must propagate to the response) ---
+
+
+class TestToResponse:
+    def test_is_paid_true_propagates_to_response(self):
+        # Regression: prior to this test the `is_paid` flag was set on the domain
+        # CalendarItem but not declared on PaymentsCalendarItemResponse, so the field
+        # was silently dropped and the frontend Paid badge never rendered.
+        item = CalendarItem(
+            type="obligation",
+            date=date(2026, 5, 15),
+            name="ABL",
+            amount=Decimal("1000"),
+            currency="ARS",
+            source_id=1,
+            is_paid=True,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.is_paid is True
+
+    def test_is_paid_defaults_false_when_unset(self):
+        item = CalendarItem(
+            type="obligation",
+            date=date(2026, 5, 15),
+            name="ABL",
+            amount=Decimal("1000"),
+            currency="ARS",
+            source_id=1,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.is_paid is False
+
+    def test_is_paid_false_for_non_obligation_events(self):
+        item = CalendarItem(
+            type="subscription",
+            date=date(2026, 5, 15),
+            name="Netflix",
+            amount=Decimal("5990"),
+            currency="ARS",
+            source_id=1,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.is_paid is False

@@ -433,6 +433,7 @@ CREATE TABLE payment_obligations (
   amount            NUMERIC(18, 2) NOT NULL,
   currency          VARCHAR(3) NOT NULL,
   next_due_date     DATE NOT NULL,
+  anchor_day        INTEGER NOT NULL CHECK (anchor_day BETWEEN 1 AND 31),
   recurrence        VARCHAR(20),
   category          VARCHAR(100),
   expense_category  expense_category,

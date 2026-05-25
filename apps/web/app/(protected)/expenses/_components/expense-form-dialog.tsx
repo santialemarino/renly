@@ -152,13 +152,24 @@ export function ExpenseFormDialog({
   // bucket. Edits skip the check — the bucket already exists by definition.
   const [novelCurrencyPending, setNovelCurrencyPending] = useState<ExpenseFormValues | null>(null);
 
-  // Soft confirmation when the candidate manual entry matches a scheduler-generated
-  // expense within DUPE_MATCH_WINDOW_DAYS on card / currency / exact amount (Phase 3, Step D).
-  // Only fires on CREATE — edits don't risk a new duplicate.
+  // Soft confirmation when the candidate entry matches a scheduler-generated expense
+  // within DUPE_MATCH_WINDOW_DAYS on card / currency / exact amount (Phase 3, Step D).
+  // Fires on BOTH create and edit (edit excludes the row being modified so it can't
+  // match itself).
   const [autoChargeMatch, setAutoChargeMatch] = useState<{
     values: ExpenseFormValues;
     match: AutoChargeMatch;
   } | null>(null);
+
+  // Clear pending soft-confirmations when the form dialog closes. Otherwise a
+  // dupe-match lookup that resolves AFTER the user cancels the form would surface
+  // a confirmation dialog with no form behind it (race condition on async submit).
+  useEffect(() => {
+    if (!open) {
+      setNovelCurrencyPending(null);
+      setAutoChargeMatch(null);
+    }
+  }, [open]);
 
   // Preserve the pending values during the close animation so the description
   // text doesn't blank out and shift the modal mid-exit.
