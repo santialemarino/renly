@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
-from app.schemas.settings import TIMEZONE_MODE_VALUES
+from app.schemas.settings import LANGUAGE_MODE_VALUES, SUPPORTED_LANGUAGES, TIMEZONE_MODE_VALUES
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
@@ -15,6 +15,8 @@ SETTINGS_KEY_DOLLAR_RATE_PREFERENCE = "dollar_rate_preference"
 SETTINGS_KEY_SHORTCUT_CURRENCIES = "shortcut_currencies"
 SETTINGS_KEY_TIMEZONE = "timezone"
 SETTINGS_KEY_TIMEZONE_MODE = "timezone_mode"
+SETTINGS_KEY_LANGUAGE = "language"
+SETTINGS_KEY_LANGUAGE_MODE = "language_mode"
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -22,6 +24,10 @@ DOLLAR_RATE_DEFAULT = "mep"
 # Valid values for timezone mode (re-exported from the schema for backward-compat with callers).
 TIMEZONE_MODE_AUTO = "auto"
 TIMEZONE_MODE_MANUAL = "manual"
+
+# Valid values for language mode.
+LANGUAGE_MODE_AUTO = "auto"
+LANGUAGE_MODE_MANUAL = "manual"
 
 _NOT_SET = object()
 
@@ -56,6 +62,10 @@ def _settings_to_response(settings: dict) -> dict:
     timezone = raw_timezone if isinstance(raw_timezone, str) and raw_timezone else None
     raw_timezone_mode = settings.get(SETTINGS_KEY_TIMEZONE_MODE)
     timezone_mode = raw_timezone_mode if isinstance(raw_timezone_mode, str) and raw_timezone_mode in TIMEZONE_MODE_VALUES else None
+    raw_language = settings.get(SETTINGS_KEY_LANGUAGE)
+    language = raw_language if isinstance(raw_language, str) and raw_language in SUPPORTED_LANGUAGES else None
+    raw_language_mode = settings.get(SETTINGS_KEY_LANGUAGE_MODE)
+    language_mode = raw_language_mode if isinstance(raw_language_mode, str) and raw_language_mode in LANGUAGE_MODE_VALUES else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -67,6 +77,8 @@ def _settings_to_response(settings: dict) -> dict:
         "shortcut_currencies": shortcut_currencies,
         "timezone": timezone,
         "timezone_mode": timezone_mode,
+        "language": language,
+        "language_mode": language_mode,
     }
 
 
@@ -95,6 +107,8 @@ async def update_settings(
     shortcut_currencies: list[str] | None = _NOT_SET,
     timezone: str | None = _NOT_SET,
     timezone_mode: str | None = _NOT_SET,
+    language: str | None = _NOT_SET,
+    language_mode: str | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -121,6 +135,10 @@ async def update_settings(
         settings[SETTINGS_KEY_TIMEZONE] = timezone
     if timezone_mode is not _NOT_SET:
         settings[SETTINGS_KEY_TIMEZONE_MODE] = timezone_mode
+    if language is not _NOT_SET:
+        settings[SETTINGS_KEY_LANGUAGE] = language
+    if language_mode is not _NOT_SET:
+        settings[SETTINGS_KEY_LANGUAGE_MODE] = language_mode
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()

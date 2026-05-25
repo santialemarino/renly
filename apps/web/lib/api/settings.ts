@@ -15,6 +15,8 @@ interface SettingsRaw {
   shortcut_currencies: string[] | null;
   timezone: string | null;
   timezone_mode: string | null;
+  language: string | null;
+  language_mode: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -30,6 +32,8 @@ export interface SettingsData {
   shortcutCurrencies: string[] | null;
   timezone: string | null;
   timezoneMode: string | null;
+  language: string | null;
+  languageMode: string | null;
 }
 
 // --- Mappers ---
@@ -46,6 +50,8 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     shortcutCurrencies: raw.shortcut_currencies,
     timezone: raw.timezone,
     timezoneMode: raw.timezone_mode,
+    language: raw.language,
+    languageMode: raw.language_mode,
   };
 }
 

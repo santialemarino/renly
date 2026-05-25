@@ -57,5 +57,7 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     shortcutCurrencies: raw.shortcut_currencies ?? null,
     timezone: raw.timezone ?? null,
     timezoneMode: raw.timezone_mode ?? null,
+    language: raw.language ?? null,
+    languageMode: raw.language_mode ?? null,
   };
 }
