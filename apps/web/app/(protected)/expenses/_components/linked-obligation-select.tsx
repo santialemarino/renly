@@ -101,15 +101,23 @@ export function LinkedObligationSelect({
         {sorted.map(({ obligation, status }) => (
           <SelectItem key={obligation.id} value={String(obligation.id)}>
             <div className="flex items-center gap-x-2">
-              <CircleDot
-                className={cn(
-                  'size-3 shrink-0',
-                  // Show the green dot ONLY on a confirmed full match. Suppress entirely
-                  // in disabled mode (Mark Paid) so field-edit flicker doesn't confuse.
-                  !disabled && status === 'match' ? 'text-emerald-500' : 'text-transparent',
-                )}
-                aria-hidden
-              />
+              {/* Tri-color status dot: emerald (match) / muted (unknown, form not fully filled)
+                  / amber (mismatch). Pairs visually with the amber StyledHint below the dropdown
+                  when a selected obligation conflicts. transition-colors smooths the color
+                  swap when the user edits a field that changes the match status.
+                  Suppressed entirely in disabled mode (Mark Paid) so the trigger's text
+                  aligns naturally to the left with no phantom indent. */}
+              {!disabled && (
+                <CircleDot
+                  className={cn(
+                    'size-3 shrink-0 transition-colors',
+                    status === 'match' && 'text-emerald-500',
+                    status === 'unknown' && 'text-muted-foreground',
+                    status === 'mismatch' && 'text-amber-500',
+                  )}
+                  aria-hidden
+                />
+              )}
               <span>{obligation.name}</span>
             </div>
           </SelectItem>
