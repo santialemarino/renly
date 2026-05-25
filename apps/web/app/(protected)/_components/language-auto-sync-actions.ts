@@ -3,12 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-import { LOCALE_COOKIE } from '@/config/constants';
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/config/constants';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { LANGUAGE_MODE_AUTO } from '@/lib/constants/languages';
-
-// One-year max-age — the cookie is the SSR locale signal; it should outlive sessions.
-const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 // Silent PUT of browser-detected language. Called from the layout-level LanguageAutoSync
 // effect when mode is 'auto' and the browser language differs from stored. Keeps mode = auto.

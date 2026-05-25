@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-import { LOCALE_COOKIE } from '@/config/constants';
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/config/constants';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface SaveLocalizationParams {
@@ -12,9 +12,6 @@ interface SaveLocalizationParams {
   language: string;
   languageMode: string;
 }
-
-// One-year max-age — the cookie is the SSR locale signal; it should outlive sessions.
-const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 // Persists the user's IANA timezone + language preference (explicit save from the
 // Localization form). Sets the NEXT_LOCALE cookie so SSR picks up the language change

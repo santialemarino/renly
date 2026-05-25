@@ -56,6 +56,10 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
       ? LANGUAGE_MODE_MANUAL
       : LANGUAGE_MODE_AUTO;
 
+  // defaultValues use stored values OR static fallbacks — never call detectBrowser*() here.
+  // Those helpers reference `navigator` / `Intl.DateTimeFormat()` which return different values
+  // on SSR vs client, causing hydration mismatches. The layout-level auto-sync effects populate
+  // stored values in the background; the form only ever sees what's already persisted.
   const {
     control,
     handleSubmit,
@@ -66,11 +70,9 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
   } = useForm<LocalizationFormValues>({
     resolver: zodResolver(localizationFormSchema),
     defaultValues: {
-      timezone: initialSettings.timezone ?? detectBrowserTimezone() ?? TIMEZONE_DEFAULT,
+      timezone: initialSettings.timezone ?? TIMEZONE_DEFAULT,
       timezoneMode: initialTimezoneMode,
-      language: (initialSettings.language ??
-        detectBrowserLanguage() ??
-        DEFAULT_LOCALE) as LocalizationFormValues['language'],
+      language: (initialSettings.language ?? DEFAULT_LOCALE) as LocalizationFormValues['language'],
       languageMode: initialLanguageMode,
     },
   });
