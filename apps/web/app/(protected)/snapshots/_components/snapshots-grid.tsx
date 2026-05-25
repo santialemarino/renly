@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Minus, Plus } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -87,19 +87,22 @@ interface CellContentProps {
 }
 
 function CellContent({ cell }: CellContentProps) {
+  const locale = useLocale();
   return (
     <div className="flex items-center justify-center gap-x-1.5">
       {cell.quantity !== null ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="text-paragraph-sm tabular-nums cursor-default">
-              {formatValue(cell.value)}
+              {formatValue(cell.value, { locale })}
             </span>
           </TooltipTrigger>
           <TooltipContent>{cell.quantity} shares</TooltipContent>
         </Tooltip>
       ) : (
-        <span className="text-paragraph-sm tabular-nums">{formatValue(cell.value)}</span>
+        <span className="text-paragraph-sm tabular-nums">
+          {formatValue(cell.value, { locale })}
+        </span>
       )}
 
       {cell.periodReturnPct !== null && (
@@ -119,7 +122,7 @@ function CellContent({ cell }: CellContentProps) {
           ) : (
             <Minus className="size-3" />
           )}
-          {formatSignedPct(cell.periodReturnPct)}
+          {formatSignedPct(cell.periodReturnPct, locale)}
         </span>
       )}
 
@@ -131,7 +134,7 @@ function CellContent({ cell }: CellContentProps) {
               {(TRANSACTION_TYPES_OUTGOING as readonly string[]).includes(cell.transaction.type)
                 ? '-'
                 : '+'}
-              {formatValue(cell.transaction.amount)}
+              {formatValue(cell.transaction.amount, { locale })}
             </span>
           </TooltipTrigger>
           <TooltipContent>{cell.transaction.type}</TooltipContent>
@@ -146,6 +149,7 @@ interface SnapshotsGridProps {
 }
 
 export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
+  const locale = useLocale();
   const t = useTranslations('snapshots');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -227,7 +231,7 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
                   key={month}
                   className="min-w-[140px] text-center text-paragraph-xs bg-background transition-colors group-hover:bg-muted/50"
                 >
-                  {formatMonth(month + '-01')}
+                  {formatMonth(month + '-01', locale)}
                 </TableHead>
               ))}
               <TableHead className="sticky right-0 z-10 min-w-[70px] bg-background text-center">

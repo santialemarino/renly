@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -87,6 +87,7 @@ export function ExpenseFormDialog({
   onSuccess,
   onMarkPaidSave,
 }: ExpenseFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
@@ -134,7 +135,7 @@ export function ExpenseFormDialog({
       watchedCreditCardId,
     ) === 'mismatch';
 
-  const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
+  const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key), locale);
 
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   useEffect(() => {

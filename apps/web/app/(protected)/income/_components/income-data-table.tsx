@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -144,6 +144,7 @@ export function IncomeDataTable({
   data: IncomeListResponse;
   preferredCurrencies?: string[];
 }) {
+  const locale = useLocale();
   const t = useTranslations('income');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -235,7 +236,7 @@ export function IncomeDataTable({
                 <TableRow key={entry.id}>
                   <TableCell>{entry.date}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(entry.convertedAmount ?? entry.amount)}
+                    {formatAmount(entry.convertedAmount ?? entry.amount, locale)}
                   </TableCell>
                   <TableCell>{entry.category ? t(`categories.${entry.category}`) : '—'}</TableCell>
                   <TableCell className="max-w-48 truncate text-muted-foreground">

@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -58,6 +58,7 @@ export function InvestmentFormDialog({
   preferredCurrencies,
   onSuccess,
 }: InvestmentFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
 
@@ -171,7 +172,7 @@ export function InvestmentFormDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {sortCategoriesByLabel(tCommon).map((cat) => (
+                        {sortCategoriesByLabel(tCommon, locale).map((cat) => (
                           <SelectItem key={cat} value={cat}>
                             {tCommon(`categories.${cat}`)}
                           </SelectItem>

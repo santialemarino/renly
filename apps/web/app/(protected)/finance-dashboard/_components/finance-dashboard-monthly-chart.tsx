@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
@@ -37,6 +37,7 @@ interface FinanceDashboardMonthlyChartProps {
 }
 
 export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthlyChartProps) {
+  const locale = useLocale();
   const t = useTranslations('financeDashboard');
 
   const hasData = monthly.points.length > 0;
@@ -56,14 +57,14 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(value) => formatMonth(String(value))}
+                  tickFormatter={(value) => formatMonth(String(value), locale)}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <YAxis
-                  tickFormatter={(value) => formatAxisValue(Number(value))}
+                  tickFormatter={(value) => formatAxisValue(Number(value), locale)}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
@@ -72,9 +73,9 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                 />
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
-                  labelFormatter={(label) => formatMonth(String(label))}
+                  labelFormatter={(label) => formatMonth(String(label), locale)}
                   formatter={(value, name) => [
-                    formatAxisValue(Number(value)),
+                    formatAxisValue(Number(value), locale),
                     name === 'income'
                       ? t('monthlyChart.tooltipIncome')
                       : t('monthlyChart.tooltipExpenses'),

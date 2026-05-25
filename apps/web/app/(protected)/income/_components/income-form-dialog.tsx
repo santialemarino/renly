@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -48,6 +48,7 @@ export function IncomeFormDialog({
   preferredCurrencies,
   onSuccess,
 }: IncomeFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('income');
   const tCommon = useTranslations('common');
 
@@ -66,7 +67,7 @@ export function IncomeFormDialog({
 
   const isEdit = !!income;
 
-  const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key));
+  const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key), locale);
 
   // Reset form when dialog opens or income entry changes.
   useEffect(() => {

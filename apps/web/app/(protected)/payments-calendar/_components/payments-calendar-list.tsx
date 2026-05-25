@@ -117,7 +117,7 @@ export async function PaymentsCalendarList({
                       </div>
                     </div>
                     <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
-                      <span>{formatAmount(displayAmount)}</span>
+                      <span>{formatAmount(displayAmount, locale)}</span>
                       {showOriginalCurrency && (
                         <span className="text-paragraph-xs text-muted-foreground">
                           {item.currency}

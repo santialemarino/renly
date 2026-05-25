@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Info, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Badge,
@@ -24,6 +24,7 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 interface CreditCardReconciliationsSectionProps {
   cardId: number;
@@ -36,6 +37,7 @@ export function CreditCardReconciliationsSection({
   bucketCurrencies,
   expanded,
 }: CreditCardReconciliationsSectionProps) {
+  const locale = useLocale();
   const t = useTranslations('creditCards.reconciliations');
   const router = useRouter();
 
@@ -86,7 +88,7 @@ export function CreditCardReconciliationsSection({
   function formatPeriodLabel(start: string, end: string): string {
     // YYYY-MM-DD -> Locale-aware short label using period_end as the anchor.
     const endDate = new Date(end);
-    return endDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+    return endDate.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: 'numeric' });
   }
 
   function lastReconciledLabel(list: StatementPeriod[]): string {
@@ -186,7 +188,7 @@ export function CreditCardReconciliationsSection({
                                 {statement.periodStart} → {statement.periodEnd}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(statement.computedBalance)}{' '}
+                                {formatAmount(statement.computedBalance, locale)}{' '}
                                 <span className="text-paragraph-xs text-muted-foreground">
                                   {statement.currency}
                                 </span>

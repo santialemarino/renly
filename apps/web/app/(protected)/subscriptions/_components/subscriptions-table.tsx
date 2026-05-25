@@ -11,7 +11,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -85,6 +85,7 @@ export function SubscriptionsTable({
   preferredCurrencies,
   creditCards,
 }: SubscriptionsTableProps) {
+  const locale = useLocale();
   const t = useTranslations('subscriptions');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -210,7 +211,8 @@ export function SubscriptionsTable({
                   <TableRow key={sub.id} className={!sub.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{sub.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount)} {sub.convertedAmount ? '' : sub.currency}
+                      {formatAmount(displayAmount, locale)}{' '}
+                      {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>
                     <TableCell>{sub.nextBillingDate}</TableCell>

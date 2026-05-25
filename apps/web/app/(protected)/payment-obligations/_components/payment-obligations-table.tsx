@@ -12,7 +12,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -101,6 +101,7 @@ export function PaymentObligationsTable({
   preferredCurrencies,
   creditCards,
 }: PaymentObligationsTableProps) {
+  const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -309,7 +310,7 @@ export function PaymentObligationsTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount)} {o.convertedAmount ? '' : o.currency}
+                      {formatAmount(displayAmount, locale)} {o.convertedAmount ? '' : o.currency}
                     </TableCell>
                     <TableCell>{o.nextDueDate}</TableCell>
                     <TableCell>

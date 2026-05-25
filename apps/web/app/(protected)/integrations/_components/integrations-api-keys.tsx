@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -21,12 +21,14 @@ import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integ
 import { CopyButton } from '@/components/copy-button';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 interface IntegrationsApiKeysProps {
   initialKeys: ApiKey[];
 }
 
 export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
+  const locale = useLocale();
   const t = useTranslations('integrations');
 
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
@@ -94,7 +96,7 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
 
   // Formats a timestamp as a short date string.
   function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString('en-US', {
+    return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
       month: 'short',
       day: 'numeric',
       year: 'numeric',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import type { InvestmentMetrics } from '@/lib/api/metrics';
@@ -13,6 +13,7 @@ interface InvestorDashboardDetailCardProps {
 // Shows metrics complementary to the metric cards (which show value, TWR, IRR, gain).
 // This card shows: invested capital, base currency, category, and data points.
 export function InvestorDashboardDetailCard({ metrics }: InvestorDashboardDetailCardProps) {
+  const locale = useLocale();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
 
@@ -27,7 +28,9 @@ export function InvestorDashboardDetailCard({ metrics }: InvestorDashboardDetail
         {/* Invested Capital */}
         <div className="flex flex-col gap-y-1">
           <span className="text-paragraph-xs text-muted-foreground">{t('detail.invested')}</span>
-          <span className="text-paragraph-semibold">{formatValue(metrics.investedCapital)}</span>
+          <span className="text-paragraph-semibold">
+            {formatValue(metrics.investedCapital, { locale })}
+          </span>
         </div>
 
         {/* Snapshots */}

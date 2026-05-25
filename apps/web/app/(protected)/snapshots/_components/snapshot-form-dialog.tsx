@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -43,6 +43,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { formatAmount } from '@/lib/utils/currency';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Minimum time (ms) from fetch start before showing the result.
@@ -76,6 +77,7 @@ export function SnapshotFormDialog({
   cell,
   onSuccess,
 }: SnapshotFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('snapshots');
   const tCommon = useTranslations('common');
   const isEdit = !!cell;
@@ -367,9 +369,9 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && priceConverted && effectivePrice !== null && (
                           <span>
                             {t('form.price.converted', {
-                              originalPrice: fetchedPrice!.toFixed(2),
+                              originalPrice: formatAmount(String(fetchedPrice), locale),
                               originalCurrency: fetchedPriceCurrency ?? '',
-                              price: effectivePrice.toFixed(2),
+                              price: formatAmount(String(effectivePrice), locale),
                               currency: baseCurrency,
                             })}
                           </span>
@@ -377,7 +379,7 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && !priceConverted && hasEffectivePrice && (
                           <span>
                             {t('form.price.found', {
-                              price: effectivePrice!.toFixed(2),
+                              price: formatAmount(String(effectivePrice), locale),
                               currency: baseCurrency,
                             })}
                           </span>
@@ -385,7 +387,7 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && !hasEffectivePrice && (
                           <span>
                             {t('form.price.noConversion', {
-                              price: fetchedPrice!.toFixed(2),
+                              price: formatAmount(String(fetchedPrice), locale),
                               currency: fetchedPriceCurrency ?? '',
                             })}
                           </span>

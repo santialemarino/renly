@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingDown, TrendingUp } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -13,6 +13,7 @@ interface InvestorDashboardMetricCardsProps {
 }
 
 export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetricCardsProps) {
+  const locale = useLocale();
   const t = useTranslations('investorDashboard');
 
   return (
@@ -20,7 +21,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
       {/* Total Value */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalValue')}</span>
-        <p className="text-heading-3">{formatValue(metrics.totalValue)}</p>
+        <p className="text-heading-3">{formatValue(metrics.totalValue, { locale })}</p>
       </Card>
 
       {/* TWR */}
@@ -28,7 +29,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.twr')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.twr))}>
-            {metrics.twr !== null ? formatSignedPct(metrics.twr) : '—'}
+            {metrics.twr !== null ? formatSignedPct(metrics.twr, locale) : '—'}
           </p>
           {metrics.twr !== null &&
             metrics.twr !== 0 &&
@@ -45,7 +46,7 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.irr')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.irr))}>
-            {metrics.irr !== null ? formatSignedPct(metrics.irr) : '—'}
+            {metrics.irr !== null ? formatSignedPct(metrics.irr, locale) : '—'}
           </p>
           {metrics.irr !== null &&
             metrics.irr !== 0 &&
@@ -62,19 +63,19 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.gain')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.absoluteGain))}>
-            {formatValue(metrics.absoluteGain)}
+            {formatValue(metrics.absoluteGain, { locale })}
           </p>
           {metrics.totalReturnPct !== null && metrics.totalReturnPct !== 0 && (
             <span className={cn('text-paragraph-sm', valueColor(metrics.totalReturnPct))}>
-              {formatSignedPct(metrics.totalReturnPct)}
+              {formatSignedPct(metrics.totalReturnPct, locale)}
             </span>
           )}
         </div>
         {metrics.monthChange !== null && (
           <span className={cn('text-paragraph-xs', valueColor(metrics.monthChange))}>
-            {formatSignedValue(metrics.monthChange)}
+            {formatSignedValue(metrics.monthChange, locale)}
             {metrics.monthChangePct !== null && metrics.monthChangePct !== 0 && (
-              <> ({formatSignedPct(metrics.monthChangePct)})</>
+              <> ({formatSignedPct(metrics.monthChangePct, locale)})</>
             )}{' '}
             {t('cards.vsLastMonth')}
           </span>
