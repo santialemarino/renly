@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -6,8 +7,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import NotFoundError
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
-from app.repositories import expense_repository
-from app.services import card_reconciliation_service
+from app.repositories import expense_repository, installment_repository, subscription_repository
+from app.services import card_reconciliation_service, payment_obligation_service
+
+# Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
+# user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
+DUPE_MATCH_WINDOW_DAYS = 15
+
+
+# Result of an auto-charge match lookup. Returned by find_auto_charge_match and
+# shaped by the router into AutoChargeMatchResponse.
+@dataclass(frozen=True)
+class AutoChargeMatchResult:
+    expense_id: int
+    date: date_type
+    source: str
+    source_plan_id: int
+    source_plan_name: str
 
 
 # List expenses for a user with optional filters and pagination.
@@ -45,6 +61,7 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
 
 
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
+# When payment_obligation_id is set, advances or archives the linked obligation atomically (Phase 3, Step E).
 async def create_expense(
     session: AsyncSession,
     user: User,
@@ -57,6 +74,7 @@ async def create_expense(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
     source: str = "manual",
+    payment_obligation_id: int | None = None,
 ) -> ExpenseEntry:
     entry = ExpenseEntry(
         user_id=user.id,
@@ -68,10 +86,13 @@ async def create_expense(
         payment_method=payment_method,
         credit_card_id=credit_card_id,
         source=source,
+        payment_obligation_id=payment_obligation_id,
     )
     entry = await expense_repository.create(session, entry)
     if credit_card_id is not None:
         await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
+    if payment_obligation_id is not None:
+        await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
     await session.commit()
     return entry
 
@@ -113,3 +134,43 @@ async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> 
     if old_card_id is not None:
         await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
     await session.commit()
+
+
+# Looks up the most recent scheduler-generated expense (source IN subscription/installment)
+# that matches the candidate manual entry on card/currency/amount within ±DUPE_MATCH_WINDOW_DAYS.
+# Returns None when nothing matches. Backs the Step D dupe-warning lookup endpoint.
+async def find_auto_charge_match(
+    session: AsyncSession,
+    user: User,
+    *,
+    credit_card_id: int,
+    currency: str,
+    amount: Decimal,
+    target_date: date_type,
+) -> AutoChargeMatchResult | None:
+    match = await expense_repository.find_auto_charge_match(
+        session,
+        user.id,
+        credit_card_id=credit_card_id,
+        currency=currency,
+        amount=amount,
+        target_date=target_date,
+        window_days=DUPE_MATCH_WINDOW_DAYS,
+    )
+    if match is None:
+        return None
+    if match.source == "subscription" and match.subscription_id is not None:
+        plan = await subscription_repository.get_by_id(session, match.subscription_id, user.id)
+    elif match.source == "installment" and match.installment_id is not None:
+        plan = await installment_repository.get_by_id(session, match.installment_id, user.id)
+    else:
+        return None
+    if plan is None:
+        return None
+    return AutoChargeMatchResult(
+        expense_id=match.id,
+        date=match.date,
+        source=match.source,
+        source_plan_id=plan.id,
+        source_plan_name=plan.name,
+    )

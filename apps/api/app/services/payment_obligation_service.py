@@ -7,6 +7,16 @@ from app.domain import NotFoundError
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.repositories import payment_obligation_repository
+from app.utils.dates import add_months_anchored
+
+# Recurrence pattern -> calendar-month step. Public so the Payments Calendar
+# (forward / backward walkers) and the expense -> obligation auto-advance share a single map.
+OBLIGATION_MONTH_STEP: dict[str, int] = {
+    "monthly": 1,
+    "bimonthly": 2,
+    "quarterly": 3,
+    "annual": 12,
+}
 
 
 # List payment obligations for a user with optional search, sorting, and archive filtering.
@@ -90,3 +100,30 @@ async def delete_obligation(session: AsyncSession, obligation_id: int, user: Use
     obligation = await get_obligation(session, obligation_id, user)
     await payment_obligation_repository.delete(session, obligation)
     await session.commit()
+
+
+# Pure helper: given an obligation's current next_due_date + recurrence, returns the post-advance
+# (next_due_date, is_active) pair. Recurring obligations move next_due_date forward by one
+# recurrence cycle (anchor-day preserved across short-month clamps). One-off obligations flip
+# is_active to False. Returns (next_due_date, True) unchanged when the recurrence value is
+# unrecognised — defensive default so a corrupt record doesn't disable the obligation by
+# accident.
+def compute_obligation_advance(next_due_date: date_type, recurrence: str | None) -> tuple[date_type, bool]:
+    if recurrence is None:
+        return next_due_date, False
+    months_step = OBLIGATION_MONTH_STEP.get(recurrence)
+    if months_step is None:
+        return next_due_date, True
+    return add_months_anchored(next_due_date, months_step, next_due_date.day), True
+
+
+# Advances next_due_date one recurrence cycle (recurring) or archives the obligation (one-off).
+# Caller commits — this stages the change inside the expense-create transaction so the advance
+# is atomic with the linked expense insert (Phase 3, Step E). No-op when the obligation
+# can't be found or doesn't belong to the user.
+async def advance_or_archive(session: AsyncSession, obligation_id: int, user: User) -> None:
+    obligation = await payment_obligation_repository.get_by_id(session, obligation_id, user.id)
+    if obligation is None:
+        return
+    obligation.next_due_date, obligation.is_active = compute_obligation_advance(obligation.next_due_date, obligation.recurrence)
+    await payment_obligation_repository.save(session, obligation)

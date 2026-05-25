@@ -444,6 +444,11 @@
         "description": "Este es el primer gasto en {currency} de {cardName}. Se va a crear un nuevo saldo en {currency}. ¿Continuar?",
         "confirm": "Continuar"
       },
+      "autoChargeMatch": {
+        "title": "Posible duplicado de cargo automático",
+        "description": "Parece que un cargo automático de {planName} del {existingDate} coincide con este gasto. ¿Cargar igual?",
+        "confirm": "Cargar igual"
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -763,6 +768,7 @@
       "delete": "Eliminar",
       "archive": "Archivar",
       "unarchive": "Desarchivar",
+      "markPaid": "Marcar pagada",
       "archiveSuccess": "Obligación archivada.",
       "archiveError": "No se pudo archivar la obligación.",
       "unarchiveSuccess": "Obligación desarchivada.",
@@ -846,6 +852,7 @@
       "subscription": "Suscripción",
       "installment": "Cuota",
       "obligation": "Obligación",
+      "obligationPaid": "Pagada",
       "card_due": "Vencimiento de tarjeta"
     },
     "installment": {

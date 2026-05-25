@@ -7,6 +7,7 @@ import {
   ArchiveRestore,
   ArrowDown,
   ArrowUp,
+  BadgeDollarSign,
   ChevronsUpDown,
   Pencil,
   Trash2,
@@ -27,6 +28,10 @@ import {
   TooltipTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import {
+  ExpenseFormDialog,
+  type PrefillFromObligation,
+} from '@/app/(protected)/expenses/_components/expense-form-dialog';
 import { PaymentObligationDeleteDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-delete-dialog';
 import { PaymentObligationFormDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-form-dialog';
 import {
@@ -96,6 +101,7 @@ export function PaymentObligationsTable({
   const [editObligation, setEditObligation] = useState<PaymentObligation | null>(null);
   const [deleteState, setDeleteState] = useState<PaymentObligation | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
+  const [markPaidPrefill, setMarkPaidPrefill] = useState<PrefillFromObligation | null>(null);
 
   const sortBy = (searchParams.get('sort_by') as PaymentObligationSortField | null) ?? null;
   const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
@@ -119,6 +125,20 @@ export function PaymentObligationsTable({
     } else {
       navigate({ sort_by: column, sort_order: 'asc' });
     }
+  }
+
+  // Mark paid opens the expense form pre-filled from the obligation (Phase 3, Step E).
+  // The server auto-advances next_due_date on save (or archives one-off obligations).
+  function handleMarkPaid(obligation: PaymentObligation) {
+    setMarkPaidPrefill({
+      amount: obligation.amount,
+      currency: obligation.currency,
+      paymentMethod: (obligation.paymentMethod ??
+        undefined) as PrefillFromObligation['paymentMethod'],
+      creditCardId: obligation.creditCardId ?? undefined,
+      paymentObligationId: obligation.id,
+      obligationName: obligation.name,
+    });
   }
 
   async function handleArchive(obligation: PaymentObligation) {
@@ -265,6 +285,20 @@ export function PaymentObligationsTable({
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="size-8 text-muted-foreground hover:text-blue-700"
+                                onClick={() => handleMarkPaid(o)}
+                                aria-label="Mark paid"
+                              >
+                                <BadgeDollarSign className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{t('actions.markPaid')}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="size-8"
                                 onClick={() => setEditObligation(o)}
                                 aria-label="Edit"
@@ -332,6 +366,20 @@ export function PaymentObligationsTable({
         }}
         obligation={deleteState}
         onSuccess={() => router.refresh()}
+      />
+
+      <ExpenseFormDialog
+        open={!!markPaidPrefill}
+        onOpenChange={(open) => {
+          if (!open) setMarkPaidPrefill(null);
+        }}
+        prefillFromObligation={markPaidPrefill ?? undefined}
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+        onSuccess={() => {
+          setMarkPaidPrefill(null);
+          router.refresh();
+        }}
       />
     </div>
   );

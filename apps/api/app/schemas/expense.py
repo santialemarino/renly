@@ -20,6 +20,10 @@ class ExpenseCreate(RequestBase):
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     source: str = Field(default="manual", description="Entry origin (manual, shortcut, auto, email_parsed).", max_length=20)
+    payment_obligation_id: int | None = Field(
+        default=None,
+        description="When set, links the expense to an obligation and auto-advances next_due_date (Phase 3, Step E).",
+    )
 
 
 # Body for PUT /expenses/{id}. Partial update.
@@ -45,10 +49,30 @@ class ExpenseResponse(BaseModel):
     payment_method: str | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     source: str = Field(description="Entry origin (manual, shortcut, auto, email_parsed).")
+    payment_obligation_id: int | None = Field(default=None, description="Linked payment obligation id (Phase 3, Step E).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Source plan (subscription or installment) referenced by an auto-charge match.
+class AutoChargeMatchSourcePlan(BaseModel):
+    id: int = Field(description="Source plan id.")
+    name: str = Field(description="Source plan name (for display in the dupe-match confirmation dialog).")
+
+
+# A single auto-charge match — the existing scheduler-generated expense closest to the candidate.
+class AutoChargeMatch(BaseModel):
+    expense_id: int = Field(description="Existing expense id.")
+    date: date_type = Field(description="Existing expense date.")
+    source: str = Field(description="Match source: 'subscription' or 'installment'.")
+    source_plan: AutoChargeMatchSourcePlan = Field(description="The subscription / installment that owns the auto-charge.")
+
+
+# Response for GET /expenses/auto-charge-match. match is null when nothing matches the candidate.
+class AutoChargeMatchResponse(BaseModel):
+    match: AutoChargeMatch | None = Field(default=None, description="The matching auto-generated expense, or null.")
 
 
 # Paginated response for GET /expenses.

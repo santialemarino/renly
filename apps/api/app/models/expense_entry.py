@@ -69,5 +69,10 @@ class ExpenseEntry(SQLModel, table=True):
         foreign_key="card_reconciliations.id",
         description="Owning reconciliation when this row is the adjustment expense from the reconciliation flow.",
     )
+    payment_obligation_id: int | None = Field(
+        default=None,
+        foreign_key="payment_obligations.id",
+        description="Back-pointer to the payment obligation this expense was created to pay (Phase 3, Step E).",
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

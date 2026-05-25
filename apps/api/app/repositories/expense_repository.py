@@ -1,4 +1,6 @@
 from datetime import date as date_type
+from datetime import timedelta
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,12 +215,65 @@ async def sum_by_user_grouped_by_category(
     return [(str(row[0]), row[1], float(row[2])) for row in result.all()]
 
 
+# Finds the most recent auto-generated expense (source IN subscription / installment)
+# matching the candidate manual entry on card / currency / amount within ±window_days.
+# Returns the first match newest-first, or None. Used by the Step D dupe-warning lookup.
+async def find_auto_charge_match(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    credit_card_id: int,
+    currency: str,
+    amount: Decimal,
+    target_date: date_type,
+    window_days: int,
+) -> ExpenseEntry | None:
+    lo = target_date - timedelta(days=window_days)
+    hi = target_date + timedelta(days=window_days)
+    stmt = (
+        select(ExpenseEntry)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.source.in_(["subscription", "installment"]))
+        .where(ExpenseEntry.credit_card_id == credit_card_id)
+        .where(ExpenseEntry.currency == currency)
+        .where(ExpenseEntry.amount == amount)
+        .where(ExpenseEntry.date >= lo)
+        .where(ExpenseEntry.date <= hi)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+# Returns {obligation_id: count} for expenses linked to any of the given obligations.
+# Used by the Payments Calendar to size the backward-walk for the Paid badge
+# (each linked expense advances next_due_date one cycle, so N linked expenses = N
+# past-paid cycles to surface).
+async def count_linked_obligations(
+    session: AsyncSession,
+    user_id: int,
+    obligation_ids: list[int],
+) -> dict[int, int]:
+    if not obligation_ids:
+        return {}
+    result = await session.execute(
+        select(ExpenseEntry.payment_obligation_id, func.count())
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.payment_obligation_id.in_(obligation_ids))
+        .group_by(ExpenseEntry.payment_obligation_id)
+    )
+    return {row[0]: int(row[1]) for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     count_by_credit_card = staticmethod(count_by_credit_card)
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
+    count_linked_obligations = staticmethod(count_linked_obligations)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     save = staticmethod(save)
