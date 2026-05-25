@@ -67,14 +67,14 @@ export function InvestorDashboardEvolution({ evolution }: InvestorDashboardEvolu
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={formatMonth}
+                  tickFormatter={(value) => formatMonth(String(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <YAxis
-                  tickFormatter={formatAxisValue}
+                  tickFormatter={(value) => formatAxisValue(Number(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}

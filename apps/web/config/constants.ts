@@ -4,10 +4,10 @@
 export const DEFAULT_LOCALE = 'en';
 export const SUPPORTED_LOCALES = ['en', 'es'] as const;
 
-export const LOCALE_MAP: Record<string, string> = {
+export const LOCALE_MAP = {
   en: 'en-US',
   es: 'es-AR',
-};
+} as const;
 
 export const LOCALE_COOKIE = 'NEXT_LOCALE';
 // One-year max-age — the cookie is the SSR locale signal; it should outlive sessions.
