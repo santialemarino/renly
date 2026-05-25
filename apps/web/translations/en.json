@@ -1381,16 +1381,33 @@
   "localization": {
     "metadata": {
       "title": "Localization",
-      "description": "Configure your timezone and regional preferences."
+      "description": "Configure your language, timezone, and regional preferences."
     },
     "title": "Localization",
-    "subtitle": "Configure your timezone and regional preferences.",
+    "subtitle": "Configure your language, timezone, and regional preferences.",
     "form": {
+      "sectionLanguage": "Language",
+      "sectionTimezone": "Timezone",
       "mode": {
-        "label": "Detection",
-        "hint": "Automatic keeps your timezone in sync with the browser. Manual locks it to your chosen value.",
         "automatic": "Automatic",
         "manual": "Manual"
+      },
+      "languageMode": {
+        "label": "Detection",
+        "hint": "Automatic keeps your language in sync with the browser. Manual locks it to your chosen value."
+      },
+      "language": {
+        "label": "Language",
+        "hintAuto": "Auto-detected from your browser. Picking a different value switches to Manual.",
+        "hintManual": "Manually selected. Switch to Automatic to follow the browser again.",
+        "options": {
+          "en": "English",
+          "es": "Español"
+        }
+      },
+      "timezoneMode": {
+        "label": "Detection",
+        "hint": "Automatic keeps your timezone in sync with the browser. Manual locks it to your chosen value."
       },
       "timezone": {
         "label": "Timezone",

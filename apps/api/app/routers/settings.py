@@ -48,5 +48,9 @@ async def update_settings(
         kwargs["timezone"] = payload["timezone"]
     if "timezone_mode" in payload:
         kwargs["timezone_mode"] = payload["timezone_mode"]
+    if "language" in payload:
+        kwargs["language"] = payload["language"]
+    if "language_mode" in payload:
+        kwargs["language_mode"] = payload["language_mode"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { SidebarInset, SidebarProvider } from '@repo/ui/components';
+import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { LOGIN_ROUTE } from '@/config/routes';
@@ -38,7 +39,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <SidebarProvider>
       {settings && (
-        <TimezoneAutoSync storedTimezone={settings.timezone} storedMode={settings.timezoneMode} />
+        <>
+          <TimezoneAutoSync storedTimezone={settings.timezone} storedMode={settings.timezoneMode} />
+          <LanguageAutoSync storedLanguage={settings.language} storedMode={settings.languageMode} />
+        </>
       )}
       <AppSidebar
         displayCurrencies={displayCurrencies}

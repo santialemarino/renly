@@ -1381,16 +1381,33 @@
   "localization": {
     "metadata": {
       "title": "Localización",
-      "description": "Configura tu zona horaria y preferencias regionales."
+      "description": "Configura tu idioma, zona horaria y preferencias regionales."
     },
     "title": "Localización",
-    "subtitle": "Configura tu zona horaria y preferencias regionales.",
+    "subtitle": "Configura tu idioma, zona horaria y preferencias regionales.",
     "form": {
+      "sectionLanguage": "Idioma",
+      "sectionTimezone": "Zona horaria",
       "mode": {
-        "label": "Detección",
-        "hint": "Automática mantiene la zona horaria sincronizada con tu navegador. Manual la fija al valor que elijas.",
         "automatic": "Automática",
         "manual": "Manual"
+      },
+      "languageMode": {
+        "label": "Detección",
+        "hint": "Automática mantiene el idioma sincronizado con tu navegador. Manual lo fija al valor que elijas."
+      },
+      "language": {
+        "label": "Idioma",
+        "hintAuto": "Detectado automáticamente desde tu navegador. Elegir un valor distinto cambia a Manual.",
+        "hintManual": "Seleccionado manualmente. Cambiá a Automática para volver a seguir al navegador.",
+        "options": {
+          "en": "English",
+          "es": "Español"
+        }
+      },
+      "timezoneMode": {
+        "label": "Detección",
+        "hint": "Automática mantiene la zona horaria sincronizada con tu navegador. Manual la fija al valor que elijas."
       },
       "timezone": {
         "label": "Zona horaria",

@@ -6,8 +6,10 @@ export const SUPPORTED_LOCALES = ['en', 'es'] as const;
 
 export const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
-  es: 'es-ES',
+  es: 'es-AR',
 };
+
+export const LOCALE_COOKIE = 'NEXT_LOCALE';
 
 export const ES_LOCALE = 'es';
 export const EN_LOCALE = 'en';

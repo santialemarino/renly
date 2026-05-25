@@ -7,6 +7,8 @@ from pydantic import BaseModel, Field, field_validator
 from app.schemas.base import RequestBase
 
 TIMEZONE_MODE_VALUES = ("auto", "manual")
+LANGUAGE_MODE_VALUES = ("auto", "manual")
+SUPPORTED_LANGUAGES = ("en", "es")
 
 
 # Response for GET /settings. User display preferences and app configuration.
@@ -50,6 +52,14 @@ class SettingsResponse(BaseModel):
     timezone_mode: str | None = Field(
         default=None,
         description="Timezone source: 'auto' (browser-detected, kept in sync) or 'manual' (locked).",
+    )
+    language: str | None = Field(
+        default=None,
+        description="User's preferred language code (e.g. 'en', 'es'). Drives i18n message loading.",
+    )
+    language_mode: str | None = Field(
+        default=None,
+        description="Language source: 'auto' (browser-detected, kept in sync) or 'manual' (locked).",
     )
 
 
@@ -95,6 +105,14 @@ class SettingsUpdate(RequestBase):
         default=None,
         description="Timezone source: 'auto' or 'manual'.",
     )
+    language: str | None = Field(
+        default=None,
+        description="User's preferred language code ('en' or 'es').",
+    )
+    language_mode: str | None = Field(
+        default=None,
+        description="Language source: 'auto' or 'manual'.",
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -114,4 +132,22 @@ class SettingsUpdate(RequestBase):
             return None
         if value not in TIMEZONE_MODE_VALUES:
             raise ValueError(f"timezone_mode must be one of {TIMEZONE_MODE_VALUES}.")
+        return value
+
+    @field_validator("language")
+    @classmethod
+    def _validate_language(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in SUPPORTED_LANGUAGES:
+            raise ValueError(f"language must be one of {SUPPORTED_LANGUAGES}.")
+        return value
+
+    @field_validator("language_mode")
+    @classmethod
+    def _validate_language_mode(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value not in LANGUAGE_MODE_VALUES:
+            raise ValueError(f"language_mode must be one of {LANGUAGE_MODE_VALUES}.")
         return value
