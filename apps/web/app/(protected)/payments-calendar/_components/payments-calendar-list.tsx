@@ -2,6 +2,8 @@ import { getLocale, getTranslations } from 'next-intl/server';
 
 import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
+import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import { formatAmount } from '@/lib/utils/currency';
 
@@ -9,6 +11,8 @@ interface PaymentsCalendarListProps {
   items: PaymentsCalendarItem[];
   year: number;
   month: number;
+  preferredCurrencies?: string[];
+  creditCards?: CreditCard[];
 }
 
 // Variant colour per entry type — keeps the timeline scannable.
@@ -22,7 +26,13 @@ const TYPE_VARIANT: Record<
   card_due: 'destructive',
 };
 
-export async function PaymentsCalendarList({ items, year, month }: PaymentsCalendarListProps) {
+export async function PaymentsCalendarList({
+  items,
+  year,
+  month,
+  preferredCurrencies,
+  creditCards,
+}: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
   const locale = await getLocale();
 
@@ -72,19 +82,20 @@ export async function PaymentsCalendarList({ items, year, month }: PaymentsCalen
               {dayItems.map((item, idx) => {
                 const displayAmount = item.convertedAmount ?? item.amount;
                 const showOriginalCurrency = !item.convertedAmount;
-                const isPaidObligation = item.type === 'obligation' && item.isPaid;
-                return (
+                const rowContent = (
                   <div
-                    key={`${item.type}-${item.sourceId}-${idx}`}
-                    className="flex items-center justify-between gap-x-3 rounded-md border border-border px-3 py-2"
+                    className={cn(
+                      'flex items-center justify-between gap-x-3 rounded-md border border-border px-3 py-2',
+                      item.isPaid && 'hover:bg-muted/40 transition-colors',
+                    )}
                   >
                     <div className="flex min-w-0 items-center gap-x-3">
-                      {isPaidObligation ? (
+                      {item.isPaid ? (
                         <Badge
                           variant="default"
                           className="shrink-0 bg-emerald-100 [a&]:hover:bg-emerald-100 text-emerald-800"
                         >
-                          {t('types.obligationPaid')}
+                          {t('types.paid')}
                         </Badge>
                       ) : (
                         <Badge variant={TYPE_VARIANT[item.type]} className="shrink-0">
@@ -115,6 +126,22 @@ export async function PaymentsCalendarList({ items, year, month }: PaymentsCalen
                     </div>
                   </div>
                 );
+                // Paid rows are clickable — open the linked expense's edit dialog inline
+                // (no navigation). Non-paid rows stay static. Falls back to a non-clickable
+                // row if linkedExpenseId is missing defensively.
+                if (item.isPaid && item.linkedExpenseId !== null) {
+                  return (
+                    <LinkedExpenseEditTrigger
+                      key={`${item.type}-${item.sourceId}-${idx}`}
+                      linkedExpenseId={item.linkedExpenseId}
+                      preferredCurrencies={preferredCurrencies}
+                      creditCards={creditCards}
+                    >
+                      {rowContent}
+                    </LinkedExpenseEditTrigger>
+                  );
+                }
+                return <div key={`${item.type}-${item.sourceId}-${idx}`}>{rowContent}</div>;
               })}
             </div>
           </div>

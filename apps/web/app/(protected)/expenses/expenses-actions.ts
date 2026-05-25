@@ -1,7 +1,47 @@
 'use server';
 
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
+import type { Expense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+
+interface ExpenseRaw {
+  id: number;
+  date: string;
+  amount: string;
+  currency: string;
+  converted_amount: string | null;
+  category: string | null;
+  notes: string | null;
+  payment_method: string | null;
+  credit_card_id: number | null;
+  source: string;
+  payment_obligation_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Fetches a single expense by id. Used by the Payments Calendar to open the linked
+// expense's edit dialog when the user clicks a Paid badge.
+export async function getExpenseById(id: number): Promise<Expense> {
+  const res = await authenticatedFetch(`/expenses/${id}`, { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to fetch expense');
+  const raw: ExpenseRaw = await res.json();
+  return {
+    id: raw.id,
+    date: raw.date,
+    amount: raw.amount,
+    currency: raw.currency,
+    convertedAmount: raw.converted_amount,
+    category: raw.category,
+    notes: raw.notes,
+    paymentMethod: raw.payment_method,
+    creditCardId: raw.credit_card_id,
+    source: raw.source,
+    paymentObligationId: raw.payment_obligation_id,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
 
 export async function createExpense(values: ExpenseFormValues): Promise<void> {
   const { paymentMethod, creditCardId, paymentObligationId, ...rest } = values;

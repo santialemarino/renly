@@ -12,15 +12,18 @@ import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expens
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
+import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 export function ExpensesToolbar({
   preferredCurrencies,
   creditCards,
+  activeObligations,
 }: {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
 }) {
   const t = useTranslations('expenses');
   const router = useRouter();
@@ -111,6 +114,7 @@ export function ExpensesToolbar({
           onOpenChange={setCreateOpen}
           preferredCurrencies={preferredCurrencies}
           creditCards={creditCards}
+          activeObligations={activeObligations}
           onSuccess={() => router.refresh()}
         />
       </div>

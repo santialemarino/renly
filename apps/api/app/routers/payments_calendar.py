@@ -46,6 +46,7 @@ def _to_response(
         installments_count=item.installments_count,
         recurrence=item.recurrence,
         is_paid=item.is_paid,
+        linked_expense_id=item.linked_expense_id,
     )
 
 

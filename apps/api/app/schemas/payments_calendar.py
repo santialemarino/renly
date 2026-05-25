@@ -28,7 +28,11 @@ class PaymentsCalendarItemResponse(BaseModel):
     recurrence: str | None = Field(default=None, description="Recurrence pattern (obligations only).")
     is_paid: bool = Field(
         default=False,
-        description="True when an obligation cycle has a linked expense (Phase 3, Step E). Always False for non-obligation events.",
+        description="True when this cycle has a linked expense. Set on past-paid items (obligation / subscription / installment).",
+    )
+    linked_expense_id: int | None = Field(
+        default=None,
+        description="Linked expense id when is_paid is True. The frontend opens the expense's edit dialog when the user clicks the Paid badge.",
     )
 
 

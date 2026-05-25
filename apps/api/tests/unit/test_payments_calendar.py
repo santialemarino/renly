@@ -3,11 +3,15 @@ from decimal import Decimal
 
 from app.domain import CalendarItem
 from app.models.expense_entry import ExpenseEntry
+from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
+from app.models.subscription import Subscription
 from app.routers.payments_calendar import _to_response
 from app.services.payments_calendar_service import (
+    installment_past_paid_cuotas_in_window,
     obligation_dates_in_window,
     obligation_past_paid_cycles_in_window,
+    subscription_past_paid_cycles_in_window,
 )
 
 
@@ -258,3 +262,236 @@ class TestToResponse:
         )
         resp = _to_response(item, target_currency=None, lookup=None)
         assert resp.is_paid is False
+
+    def test_linked_expense_id_propagates_to_response(self):
+        # Regression: prior to round-2 follow-up, linked_expense_id wasn't propagated
+        # by the router mapper — the frontend would have no way to open the linked
+        # expense's edit dialog from a Paid badge click.
+        item = CalendarItem(
+            type="obligation",
+            date=date(2026, 5, 15),
+            name="ABL",
+            amount=Decimal("1000"),
+            currency="ARS",
+            source_id=1,
+            is_paid=True,
+            linked_expense_id=42,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.linked_expense_id == 42
+
+    def test_linked_expense_id_defaults_none_when_unset(self):
+        item = CalendarItem(
+            type="card_due",
+            date=date(2026, 5, 15),
+            name="Visa",
+            amount=Decimal("50000"),
+            currency="ARS",
+            source_id=1,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.linked_expense_id is None
+
+
+# --- Subscription past-paid backward walker (round-2 follow-up) ---
+
+
+def _subscription(
+    *,
+    billing_cycle: str,
+    next_billing_date: date,
+    anchor_day: int | None = None,
+) -> Subscription:
+    # Minimal in-memory Subscription. The walker exercises only billing_cycle +
+    # next_billing_date + anchor_day; the rest are placeholders.
+    return Subscription(
+        id=1,
+        user_id=1,
+        name="Netflix",
+        amount=Decimal("5990"),
+        currency="ARS",
+        billing_cycle=billing_cycle,
+        next_billing_date=next_billing_date,
+        anchor_day=anchor_day if anchor_day is not None else next_billing_date.day,
+        is_active=True,
+    )
+
+
+class TestSubscriptionPastPaidCycles:
+    def test_no_paid_expenses_emits_nothing(self):
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 5, 1), date(2026, 5, 31), {})
+        assert result == []
+
+    def test_monthly_one_past_cycle_with_matching_expense(self):
+        # Scheduler emitted on May 15, advanced next_billing_date to June 15. Viewing May
+        # walks back one cycle, finds the expense at the cycle date.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        e = _expense(date_val=date(2026, 5, 15), amount=Decimal("5990"))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 5, 1), date(2026, 5, 31), {date(2026, 5, 15): e})
+        assert result == [(date(2026, 5, 15), e)]
+
+    def test_monthly_skips_cycle_without_matching_expense(self):
+        # A cycle date inside the window with no matching expense entry isn't emitted —
+        # only paid cycles get a badge.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        result = subscription_past_paid_cycles_in_window(
+            sub, date(2026, 5, 1), date(2026, 5, 31), {date(2026, 1, 15): _expense(date_val=date(2026, 1, 15))}
+        )
+        assert result == []
+
+    def test_multiple_past_cycles_in_window(self):
+        # 3 paid cycles all inside the 3-month view.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 8, 15))
+        e_may = _expense(date_val=date(2026, 5, 15))
+        e_jun = _expense(date_val=date(2026, 6, 15))
+        e_jul = _expense(date_val=date(2026, 7, 15))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 5, 1),
+            date(2026, 7, 31),
+            {date(2026, 5, 15): e_may, date(2026, 6, 15): e_jun, date(2026, 7, 15): e_jul},
+        )
+        assert result == [(date(2026, 7, 15), e_jul), (date(2026, 6, 15), e_jun), (date(2026, 5, 15), e_may)]
+
+    def test_walk_stops_when_cursor_exits_window(self):
+        # Many paid expenses but only one cycle inside the August view.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 12, 15))
+        e_aug = _expense(date_val=date(2026, 8, 15))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 8, 1), date(2026, 8, 31), {date(2026, 8, 15): e_aug})
+        assert result == [(date(2026, 8, 15), e_aug)]
+
+    def test_anchor_day_31_no_drift_on_backward_walk(self):
+        # Day-31 subscription: walks back from May 31 -> Apr 30 (clamped) -> Mar 31
+        # (back to anchor) without drifting to day-30. The anchor preserves intent.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 5, 31), anchor_day=31)
+        e_apr = _expense(date_val=date(2026, 4, 30))
+        e_mar = _expense(date_val=date(2026, 3, 31))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 3, 1),
+            date(2026, 4, 30),
+            {date(2026, 4, 30): e_apr, date(2026, 3, 31): e_mar},
+        )
+        assert result == [(date(2026, 4, 30), e_apr), (date(2026, 3, 31), e_mar)]
+
+    def test_weekly_cycle_walks_in_7_day_steps(self):
+        sub = _subscription(billing_cycle="weekly", next_billing_date=date(2026, 5, 22))
+        e_may15 = _expense(date_val=date(2026, 5, 15))
+        e_may8 = _expense(date_val=date(2026, 5, 8))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 5, 1),
+            date(2026, 5, 21),
+            {date(2026, 5, 15): e_may15, date(2026, 5, 8): e_may8},
+        )
+        assert result == [(date(2026, 5, 15), e_may15), (date(2026, 5, 8), e_may8)]
+
+
+# --- Installment past-paid backward walker (round-2 follow-up) ---
+
+
+def _installment(
+    *,
+    start_date: date,
+    installments_count: int,
+    current_installment: int,
+) -> Installment:
+    # Minimal in-memory Installment. The walker exercises start_date + current_installment +
+    # installments_count; the rest are placeholders.
+    return Installment(
+        id=1,
+        user_id=1,
+        name="TV Samsung",
+        total_amount=Decimal("120000"),
+        installment_amount=Decimal("10000"),
+        currency="ARS",
+        installments_count=installments_count,
+        start_date=start_date,
+        current_installment=current_installment,
+        is_active=True,
+    )
+
+
+class TestInstallmentPastPaidCuotas:
+    def test_no_past_cuotas_when_current_installment_is_one(self):
+        # current_installment=1 means nothing has been paid yet — backward walk is empty.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=1)
+        e = _expense(date_val=date(2026, 1, 15))
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {date(2026, 1, 15): e})
+        assert result == []
+
+    def test_one_past_cuota_in_window_with_matching_expense(self):
+        # First cuota paid (current_installment=2 means cuota 1 already emitted). Viewing
+        # January, walk yields cuota #1 dated start_date.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=2)
+        e = _expense(date_val=date(2026, 1, 15), amount=Decimal("10000"))
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {date(2026, 1, 15): e})
+        assert result == [(1, date(2026, 1, 15), e)]
+
+    def test_skips_past_cuota_when_no_matching_expense(self):
+        # Cuota date is in window + idx < current_installment, but the auto-row hasn't
+        # been emitted (scheduler hasn't run for that cycle). Walker skips it.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=2)
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {})
+        assert result == []
+
+    def test_multiple_past_cuotas_all_in_window(self):
+        # Three cuotas paid (current_installment=4 → cuotas 1, 2, 3 are past).
+        inst = _installment(start_date=date(2026, 3, 10), installments_count=12, current_installment=4)
+        e1 = _expense(date_val=date(2026, 3, 10), amount=Decimal("10000"))
+        e2 = _expense(date_val=date(2026, 4, 10), amount=Decimal("10000"))
+        e3 = _expense(date_val=date(2026, 5, 10), amount=Decimal("10000"))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 3, 1),
+            date(2026, 5, 31),
+            {date(2026, 3, 10): e1, date(2026, 4, 10): e2, date(2026, 5, 10): e3},
+        )
+        assert result == [(1, date(2026, 3, 10), e1), (2, date(2026, 4, 10), e2), (3, date(2026, 5, 10), e3)]
+
+    def test_only_emits_cuotas_inside_window(self):
+        # 5 cuotas paid (current_installment=6 → cuotas 1..5 past). Viewing April only.
+        inst = _installment(start_date=date(2026, 1, 10), installments_count=12, current_installment=6)
+        e_apr = _expense(date_val=date(2026, 4, 10))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 4, 1),
+            date(2026, 4, 30),
+            {date(2026, 4, 10): e_apr},
+        )
+        # Cuotas 1 (Jan), 2 (Feb), 3 (Mar) drop because they're before period_start;
+        # cuota 5 (May) drops because it's after period_end; only cuota 4 (Apr) is emitted.
+        assert result == [(4, date(2026, 4, 10), e_apr)]
+
+    def test_fully_paid_installment_walks_through_all_cuotas(self):
+        # Edge case: current_installment > installments_count means fully paid. Forward
+        # walker won't emit anything; backward walker emits past cuotas as usual.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=3, current_installment=4)
+        e1 = _expense(date_val=date(2026, 1, 15))
+        e2 = _expense(date_val=date(2026, 2, 15))
+        e3 = _expense(date_val=date(2026, 3, 15))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 1, 1),
+            date(2026, 3, 31),
+            {date(2026, 1, 15): e1, date(2026, 2, 15): e2, date(2026, 3, 15): e3},
+        )
+        assert result == [(1, date(2026, 1, 15), e1), (2, date(2026, 2, 15), e2), (3, date(2026, 3, 15), e3)]
+
+    def test_short_month_clamp_for_day_31_start_no_drift(self):
+        # start_date=Jan 31, installments_count=12. Each cuota date = add_months(start_date, idx-1),
+        # which always uses start_date.day=31 → Feb 28 (clamped), Mar 31, Apr 30, May 31...
+        # NO drift because we recompute from start_date each time (vs the iterative advance
+        # pattern that caused the obligation drift bug).
+        inst = _installment(start_date=date(2026, 1, 31), installments_count=12, current_installment=4)
+        e_jan = _expense(date_val=date(2026, 1, 31))
+        e_feb = _expense(date_val=date(2026, 2, 28))
+        e_mar = _expense(date_val=date(2026, 3, 31))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 1, 1),
+            date(2026, 3, 31),
+            {date(2026, 1, 31): e_jan, date(2026, 2, 28): e_feb, date(2026, 3, 31): e_mar},
+        )
+        assert result == [(1, date(2026, 1, 31), e_jan), (2, date(2026, 2, 28), e_feb), (3, date(2026, 3, 31), e_mar)]

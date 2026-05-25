@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PaymentsCalendarHeader } from '@/app/(protected)/payments-calendar/_components/payments-calendar-header';
 import { PaymentsCalendarList } from '@/app/(protected)/payments-calendar/_components/payments-calendar-list';
+import { getCreditCards } from '@/lib/api/credit-cards';
 import { getPaymentsCalendar } from '@/lib/api/payments-calendar';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
@@ -26,8 +27,12 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const settings = await getSettings().catch(() => null);
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
+  const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
   const activeCurrency = savedCurrency || primary;
@@ -44,7 +49,13 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <PaymentsCalendarHeader year={year} month={month} />
-      <PaymentsCalendarList items={calendar.items} year={year} month={month} />
+      <PaymentsCalendarList
+        items={calendar.items}
+        year={year}
+        month={month}
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+      />
     </div>
   );
 }

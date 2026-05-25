@@ -17,6 +17,11 @@ import { toast } from 'sonner';
 
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   Table,
   TableBody,
   TableCell,
@@ -32,11 +37,13 @@ import {
   ExpenseFormDialog,
   type PrefillFromObligation,
 } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import { PaymentObligationDeleteDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-delete-dialog';
 import { PaymentObligationFormDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-form-dialog';
 import {
   archivePaymentObligation,
   unarchivePaymentObligation,
+  updatePaymentObligationAmount,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -102,6 +109,16 @@ export function PaymentObligationsTable({
   const [deleteState, setDeleteState] = useState<PaymentObligation | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
   const [markPaidPrefill, setMarkPaidPrefill] = useState<PrefillFromObligation | null>(null);
+  // Follow-up amount-mismatch prompt after Mark Paid succeeded with a different amount
+  // than the obligation's expected one. Survives the form dialog's close.
+  const [amountMismatch, setAmountMismatch] = useState<{
+    obligationId: number;
+    obligationName: string;
+    enteredAmount: string;
+    currentAmount: string;
+    currency: string;
+  } | null>(null);
+  const [updatingAmount, setUpdatingAmount] = useState(false);
 
   const sortBy = (searchParams.get('sort_by') as PaymentObligationSortField | null) ?? null;
   const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
@@ -124,6 +141,50 @@ export function PaymentObligationsTable({
       }
     } else {
       navigate({ sort_by: column, sort_order: 'asc' });
+    }
+  }
+
+  // Tolerance for the amount-mismatch prompt — anything within 0.01 currency unit is
+  // treated as equal (avoids prompting on rounding noise from string-to-number conversion).
+  const AMOUNT_TOLERANCE = 0.01;
+
+  // Fires after the expense form saves successfully under Mark Paid. Compares the entered
+  // amount against the obligation's current expected amount and opens a follow-up prompt
+  // when they differ — lets the user update the obligation's "next expected amount" too.
+  function handleMarkPaidSave(savedValues: ExpenseFormValues) {
+    if (!markPaidPrefill) return;
+    const entered = Number(savedValues.amount);
+    const current = Number(markPaidPrefill.amount);
+    if (
+      Number.isFinite(entered) &&
+      Number.isFinite(current) &&
+      Math.abs(entered - current) > AMOUNT_TOLERANCE
+    ) {
+      setAmountMismatch({
+        obligationId: markPaidPrefill.paymentObligationId,
+        obligationName: markPaidPrefill.obligationName,
+        enteredAmount: savedValues.amount,
+        currentAmount: markPaidPrefill.amount,
+        currency: markPaidPrefill.currency,
+      });
+    }
+  }
+
+  async function confirmAmountUpdate() {
+    if (!amountMismatch) return;
+    setUpdatingAmount(true);
+    try {
+      await updatePaymentObligationAmount(
+        amountMismatch.obligationId,
+        amountMismatch.enteredAmount,
+      );
+      toast.success(t('markPaid.amountUpdateSuccess'));
+      setAmountMismatch(null);
+      router.refresh();
+    } catch {
+      toast.error(t('markPaid.amountUpdateError'));
+    } finally {
+      setUpdatingAmount(false);
     }
   }
 
@@ -389,11 +450,51 @@ export function PaymentObligationsTable({
         prefillFromObligation={markPaidPrefill ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeObligations={obligations.filter((o) => o.isActive)}
+        onMarkPaidSave={handleMarkPaidSave}
         onSuccess={() => {
           setMarkPaidPrefill(null);
           router.refresh();
         }}
       />
+
+      {/* Amount-mismatch follow-up prompt — sibling of the form dialog so it stays
+          open after Mark Paid closes. Two paths: update the obligation's amount to
+          match the paid one, or keep the existing expected amount. */}
+      <Dialog
+        open={!!amountMismatch}
+        onOpenChange={(open) => {
+          if (!open) setAmountMismatch(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('markPaid.amountMismatchTitle')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-paragraph-sm text-muted-foreground">
+            {t('markPaid.amountMismatchDescription', {
+              obligationName: amountMismatch?.obligationName ?? '',
+              enteredAmount: amountMismatch?.enteredAmount ?? '',
+              currentAmount: amountMismatch?.currentAmount ?? '',
+              currency: amountMismatch?.currency ?? '',
+            })}
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setAmountMismatch(null)}
+              disabled={updatingAmount}
+            >
+              {t('markPaid.amountMismatchDecline')}
+            </Button>
+            <Button blue onClick={confirmAmountUpdate} disabled={updatingAmount}>
+              {updatingAmount
+                ? t('markPaid.amountMismatchUpdating')
+                : t('markPaid.amountMismatchConfirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

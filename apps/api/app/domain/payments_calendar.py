@@ -23,4 +23,5 @@ class CalendarItem(NamedTuple):
     installments_count: int | None = None
     recurrence: str | None = None
     is_paid: bool = False
-    conversion_date: date_type | None = None  # FX-conversion anchor; overrides `date` when set (paid obligations use linked expense date)
+    conversion_date: date_type | None = None  # FX-conversion anchor; overrides `date` when set (paid items use linked expense date)
+    linked_expense_id: int | None = None  # Set on past-paid items so the frontend can open the linked expense's edit dialog.
