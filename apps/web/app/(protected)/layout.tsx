@@ -37,10 +37,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <SidebarProvider>
-      <TimezoneAutoSync
-        storedTimezone={settings?.timezone ?? null}
-        storedMode={settings?.timezoneMode ?? null}
-      />
+      {settings && (
+        <TimezoneAutoSync storedTimezone={settings.timezone} storedMode={settings.timezoneMode} />
+      )}
       <AppSidebar
         displayCurrencies={displayCurrencies}
         activeCurrency={activeCurrency}

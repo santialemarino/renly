@@ -12,13 +12,20 @@ Each job wrapper creates its own `AsyncSessionLocal()` session (not tied to a re
 
 ## Configuration constants
 
+In `apps/api/app/scheduler.py`:
+
 ```python
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
-AUTO_EXPENSES_HOUR_LOCAL = 1
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
+```
+
+The auto-expenses local hour lives with the service that owns the per-user filter, since the scheduler tick itself is hourly (no UTC-hour constant). In `apps/api/app/services/auto_expense_service.py`:
+
+```python
+AUTO_EXPENSES_HOUR_LOCAL = 1
 ```
 
 ## Jobs

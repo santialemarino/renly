@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
+from app.schemas.settings import TIMEZONE_MODE_VALUES
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
@@ -18,10 +19,9 @@ SETTINGS_KEY_TIMEZONE_MODE = "timezone_mode"
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
 
-# Valid values for timezone mode.
+# Valid values for timezone mode (re-exported from the schema for backward-compat with callers).
 TIMEZONE_MODE_AUTO = "auto"
 TIMEZONE_MODE_MANUAL = "manual"
-TIMEZONE_MODES = (TIMEZONE_MODE_AUTO, TIMEZONE_MODE_MANUAL)
 
 _NOT_SET = object()
 
@@ -55,7 +55,7 @@ def _settings_to_response(settings: dict) -> dict:
     raw_timezone = settings.get(SETTINGS_KEY_TIMEZONE)
     timezone = raw_timezone if isinstance(raw_timezone, str) and raw_timezone else None
     raw_timezone_mode = settings.get(SETTINGS_KEY_TIMEZONE_MODE)
-    timezone_mode = raw_timezone_mode if isinstance(raw_timezone_mode, str) and raw_timezone_mode in TIMEZONE_MODES else None
+    timezone_mode = raw_timezone_mode if isinstance(raw_timezone_mode, str) and raw_timezone_mode in TIMEZONE_MODE_VALUES else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
