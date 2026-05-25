@@ -4,10 +4,12 @@ from decimal import Decimal
 from app.domain import CalendarItem
 from app.models.expense_entry import ExpenseEntry
 from app.models.payment_obligation import PaymentObligation
+from app.models.subscription import Subscription
 from app.routers.payments_calendar import _to_response
 from app.services.payments_calendar_service import (
     obligation_dates_in_window,
     obligation_past_paid_cycles_in_window,
+    subscription_past_paid_cycles_in_window,
 )
 
 
@@ -258,3 +260,127 @@ class TestToResponse:
         )
         resp = _to_response(item, target_currency=None, lookup=None)
         assert resp.is_paid is False
+
+    def test_linked_expense_id_propagates_to_response(self):
+        # Regression: prior to round-2 follow-up, linked_expense_id wasn't propagated
+        # by the router mapper — the frontend would have no way to open the linked
+        # expense's edit dialog from a Paid badge click.
+        item = CalendarItem(
+            type="obligation",
+            date=date(2026, 5, 15),
+            name="ABL",
+            amount=Decimal("1000"),
+            currency="ARS",
+            source_id=1,
+            is_paid=True,
+            linked_expense_id=42,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.linked_expense_id == 42
+
+    def test_linked_expense_id_defaults_none_when_unset(self):
+        item = CalendarItem(
+            type="card_due",
+            date=date(2026, 5, 15),
+            name="Visa",
+            amount=Decimal("50000"),
+            currency="ARS",
+            source_id=1,
+        )
+        resp = _to_response(item, target_currency=None, lookup=None)
+        assert resp.linked_expense_id is None
+
+
+# --- Subscription past-paid backward walker (round-2 follow-up) ---
+
+
+def _subscription(
+    *,
+    billing_cycle: str,
+    next_billing_date: date,
+    anchor_day: int | None = None,
+) -> Subscription:
+    # Minimal in-memory Subscription. The walker exercises only billing_cycle +
+    # next_billing_date + anchor_day; the rest are placeholders.
+    return Subscription(
+        id=1,
+        user_id=1,
+        name="Netflix",
+        amount=Decimal("5990"),
+        currency="ARS",
+        billing_cycle=billing_cycle,
+        next_billing_date=next_billing_date,
+        anchor_day=anchor_day if anchor_day is not None else next_billing_date.day,
+        is_active=True,
+    )
+
+
+class TestSubscriptionPastPaidCycles:
+    def test_no_paid_expenses_emits_nothing(self):
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 5, 1), date(2026, 5, 31), {})
+        assert result == []
+
+    def test_monthly_one_past_cycle_with_matching_expense(self):
+        # Scheduler emitted on May 15, advanced next_billing_date to June 15. Viewing May
+        # walks back one cycle, finds the expense at the cycle date.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        e = _expense(date_val=date(2026, 5, 15), amount=Decimal("5990"))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 5, 1), date(2026, 5, 31), {date(2026, 5, 15): e})
+        assert result == [(date(2026, 5, 15), e)]
+
+    def test_monthly_skips_cycle_without_matching_expense(self):
+        # A cycle date inside the window with no matching expense entry isn't emitted —
+        # only paid cycles get a badge.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 6, 15))
+        result = subscription_past_paid_cycles_in_window(
+            sub, date(2026, 5, 1), date(2026, 5, 31), {date(2026, 1, 15): _expense(date_val=date(2026, 1, 15))}
+        )
+        assert result == []
+
+    def test_multiple_past_cycles_in_window(self):
+        # 3 paid cycles all inside the 3-month view.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 8, 15))
+        e_may = _expense(date_val=date(2026, 5, 15))
+        e_jun = _expense(date_val=date(2026, 6, 15))
+        e_jul = _expense(date_val=date(2026, 7, 15))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 5, 1),
+            date(2026, 7, 31),
+            {date(2026, 5, 15): e_may, date(2026, 6, 15): e_jun, date(2026, 7, 15): e_jul},
+        )
+        assert result == [(date(2026, 7, 15), e_jul), (date(2026, 6, 15), e_jun), (date(2026, 5, 15), e_may)]
+
+    def test_walk_stops_when_cursor_exits_window(self):
+        # Many paid expenses but only one cycle inside the August view.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 12, 15))
+        e_aug = _expense(date_val=date(2026, 8, 15))
+        result = subscription_past_paid_cycles_in_window(sub, date(2026, 8, 1), date(2026, 8, 31), {date(2026, 8, 15): e_aug})
+        assert result == [(date(2026, 8, 15), e_aug)]
+
+    def test_anchor_day_31_no_drift_on_backward_walk(self):
+        # Day-31 subscription: walks back from May 31 -> Apr 30 (clamped) -> Mar 31
+        # (back to anchor) without drifting to day-30. The anchor preserves intent.
+        sub = _subscription(billing_cycle="monthly", next_billing_date=date(2026, 5, 31), anchor_day=31)
+        e_apr = _expense(date_val=date(2026, 4, 30))
+        e_mar = _expense(date_val=date(2026, 3, 31))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 3, 1),
+            date(2026, 4, 30),
+            {date(2026, 4, 30): e_apr, date(2026, 3, 31): e_mar},
+        )
+        assert result == [(date(2026, 4, 30), e_apr), (date(2026, 3, 31), e_mar)]
+
+    def test_weekly_cycle_walks_in_7_day_steps(self):
+        sub = _subscription(billing_cycle="weekly", next_billing_date=date(2026, 5, 22))
+        e_may15 = _expense(date_val=date(2026, 5, 15))
+        e_may8 = _expense(date_val=date(2026, 5, 8))
+        result = subscription_past_paid_cycles_in_window(
+            sub,
+            date(2026, 5, 1),
+            date(2026, 5, 21),
+            {date(2026, 5, 15): e_may15, date(2026, 5, 8): e_may8},
+        )
+        assert result == [(date(2026, 5, 15), e_may15), (date(2026, 5, 8), e_may8)]

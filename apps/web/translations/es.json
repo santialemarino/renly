@@ -449,6 +449,13 @@
         "description": "Parece que un cargo automático de {planName} del {existingDate} coincide con este gasto. ¿Cargar igual?",
         "confirm": "Cargar igual"
       },
+      "linkedObligation": {
+        "label": "Asociado a obligación",
+        "placeholder": "Elegí una obligación (opcional)",
+        "none": "Sin asociar",
+        "lockedFromMarkPaid": "Asociado desde \"Marcar pagada\" — la obligación avanza al guardar.",
+        "mismatch": "Atención: la moneda, método de pago o tarjeta esperada por esta obligación es distinta a la que ingresaste."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -775,6 +782,15 @@
       "unarchiveSuccess": "Obligación desarchivada.",
       "unarchiveError": "No se pudo desarchivar la obligación."
     },
+    "markPaid": {
+      "amountMismatchTitle": "¿Actualizar monto esperado?",
+      "amountMismatchDescription": "Pagaste {enteredAmount} {currency} por \"{obligationName}\" pero su monto esperado actual es {currentAmount} {currency}. ¿Querés que el próximo monto esperado de la obligación sea {enteredAmount} {currency}?",
+      "amountMismatchConfirm": "Sí, actualizar",
+      "amountMismatchDecline": "No, mantener actual",
+      "amountMismatchUpdating": "Actualizando...",
+      "amountUpdateSuccess": "Monto de la obligación actualizado.",
+      "amountUpdateError": "No se pudo actualizar el monto de la obligación."
+    },
     "form": {
       "titleCreate": "Agregar obligación",
       "titleEdit": "Editar obligación",
@@ -857,8 +873,12 @@
       "subscription": "Suscripción",
       "installment": "Cuota",
       "obligation": "Obligación",
-      "obligationPaid": "Pagada",
+      "paid": "Pagado",
       "card_due": "Vencimiento de tarjeta"
+    },
+    "paidBadge": {
+      "ariaLabel": "Abrir gasto asociado",
+      "fetchError": "No se pudo cargar el gasto asociado."
     },
     "installment": {
       "progress": "Cuota {index} de {total}"

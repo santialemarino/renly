@@ -6,6 +6,7 @@ import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expens
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
+import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
@@ -33,9 +34,10 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards] = await Promise.all([
+  const [settings, creditCards, activeObligations] = await Promise.all([
     getSettings().catch(() => null),
     getCreditCards().catch(() => []),
+    getPaymentObligations({ showArchived: false }).catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -59,7 +61,11 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <ExpensesToolbar preferredCurrencies={preferredCurrencies} creditCards={creditCards} />
+      <ExpensesToolbar
+        preferredCurrencies={preferredCurrencies}
+        creditCards={creditCards}
+        activeObligations={activeObligations}
+      />
       <ExpensesDataTable
         data={data}
         preferredCurrencies={preferredCurrencies}

@@ -66,3 +66,13 @@ export async function unarchivePaymentObligation(id: number): Promise<void> {
   });
   if (!res.ok) throw new Error('Failed to unarchive payment obligation');
 }
+
+// Focused partial update for the amount-mismatch follow-up prompt after Mark Paid.
+// Doesn't touch any other field — narrows the blast radius vs the full update.
+export async function updatePaymentObligationAmount(id: number, amount: string): Promise<void> {
+  const res = await authenticatedFetch(`/payment-obligations/${id}`, {
+    method: 'PUT',
+    body: { amount: Number(amount) },
+  });
+  if (!res.ok) throw new Error('Failed to update payment obligation amount');
+}

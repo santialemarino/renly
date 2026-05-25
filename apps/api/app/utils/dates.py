@@ -53,6 +53,24 @@ def advance_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = None)
     return add_months_anchored(d, 1, day)
 
 
+# Inverse of advance_by_cycle — steps a date backward by one full billing cycle.
+# Used by the Payments Calendar to project past PAID cycles inside the viewed window.
+# Falls back to monthly for unknown cycles, matching the forward variant's defensive behaviour.
+def step_back_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = None) -> date_type:
+    day = anchor_day if anchor_day is not None else d.day
+    if cycle == BILLING_CYCLE_MONTHLY:
+        return add_months_anchored(d, -1, day)
+    if cycle == BILLING_CYCLE_ANNUAL:
+        return add_months_anchored(d, -12, day)
+    if cycle == BILLING_CYCLE_QUARTERLY:
+        return add_months_anchored(d, -3, day)
+    if cycle == BILLING_CYCLE_BIWEEKLY:
+        return d - timedelta(days=14)
+    if cycle == BILLING_CYCLE_WEEKLY:
+        return d - timedelta(days=7)
+    return add_months_anchored(d, -1, day)
+
+
 # Resolves a 1..31 day-of-month into a concrete date for the given year/month,
 # clamping to the last valid day when the target month is shorter (e.g. day=31 in Feb 2025 -> 2025-02-28).
 # Matches how every surveyed Argentine bank handles month-end closing / due days.

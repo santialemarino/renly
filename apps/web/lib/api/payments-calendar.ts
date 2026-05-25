@@ -18,6 +18,7 @@ interface PaymentsCalendarItemRaw {
   installments_count: number | null;
   recurrence: string | null;
   is_paid: boolean;
+  linked_expense_id: number | null;
 }
 
 interface PaymentsCalendarRaw {
@@ -45,6 +46,7 @@ export interface PaymentsCalendarItem {
   installmentsCount: number | null;
   recurrence: string | null;
   isPaid: boolean;
+  linkedExpenseId: number | null;
 }
 
 export interface PaymentsCalendar {
@@ -71,6 +73,7 @@ function mapItem(raw: PaymentsCalendarItemRaw): PaymentsCalendarItem {
     installmentsCount: raw.installments_count,
     recurrence: raw.recurrence,
     isPaid: raw.is_paid,
+    linkedExpenseId: raw.linked_expense_id,
   };
 }
 

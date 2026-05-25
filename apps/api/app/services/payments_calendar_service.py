@@ -22,7 +22,7 @@ from app.repositories import (
 )
 from app.services import card_reconciliation_service, credit_card_service
 from app.services.payment_obligation_service import OBLIGATION_MONTH_STEP
-from app.utils.dates import add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month
+from app.utils.dates import add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month, step_back_by_cycle
 
 
 # Aggregates calendar items for the given month. Order: by date ascending,
@@ -49,8 +49,17 @@ def _month_range(year: int, month: int) -> tuple[date_type, date_type]:
     return date_type(year, month, 1), date_type(year, month, last_day)
 
 
-# Subscription charges that fall in the period. Walks from the saved next_billing_date
-# forward, honouring billing_cycle + anchor_day, and emits every cycle date inside the window.
+# Subscription charges that fall in the period.
+#
+# Forward projection: walks from `next_billing_date` forward, honouring billing_cycle +
+# anchor_day, and emits every UNPAID future cycle inside the window. Uses the subscription's
+# CURRENT amount + currency.
+#
+# Backward projection: walks from `next_billing_date` backward and emits every PAST cycle
+# inside the window whose scheduler-emitted expense row exists (matched via the partial
+# UNIQUE INDEX on `(subscription_id, date)`). Each past cycle uses the LINKED EXPENSE's
+# historical amount + currency so editing the subscription later doesn't rewrite the
+# calendar's history. is_paid=True so the UI swaps the badge for a green Paid one.
 async def _subscription_items(
     session: AsyncSession,
     user: User,
@@ -58,9 +67,23 @@ async def _subscription_items(
     period_end: date_type,
 ) -> list[CalendarItem]:
     subscriptions = await subscription_repository.list_by_user(session, user.id, active_only=True)
+    if not subscriptions:
+        return []
+
+    # Batch-load auto-emitted expense rows for these subscriptions across the window in
+    # one query — backward walker reads from the resulting dict, no N+1.
+    paid_by_sub = await expense_repository.linked_subscription_expenses_by_date(
+        session,
+        user.id,
+        [s.id for s in subscriptions],
+        period_start,
+        period_end,
+    )
 
     items: list[CalendarItem] = []
     for sub in subscriptions:
+        paid_expenses = paid_by_sub.get(sub.id, {})
+        # Forward: unpaid future cycles.
         for d in subscription_dates_in_window(sub, period_start, period_end):
             items.append(
                 CalendarItem(
@@ -72,13 +95,38 @@ async def _subscription_items(
                     payment_method=sub.payment_method,
                     credit_card_id=sub.credit_card_id,
                     source_id=sub.id,
+                    is_paid=False,
+                )
+            )
+        # Backward: past paid cycles inside the window.
+        for cycle_date, expense in subscription_past_paid_cycles_in_window(sub, period_start, period_end, paid_expenses):
+            items.append(
+                CalendarItem(
+                    type="subscription",
+                    date=cycle_date,
+                    name=sub.name,
+                    amount=expense.amount,
+                    currency=expense.currency,
+                    payment_method=sub.payment_method,
+                    credit_card_id=sub.credit_card_id,
+                    source_id=sub.id,
+                    is_paid=True,
+                    conversion_date=expense.date,
+                    linked_expense_id=expense.id,
                 )
             )
     return items
 
 
-# Installment cuotas that fall in the period. Each cuota date is start_date + (idx - 1) months,
-# clamped to the last day of the target month.
+# Installment cuotas that fall in the period.
+#
+# Forward projection: emits each unpaid future cuota (`current_installment..installments_count`)
+# whose `start_date + (idx - 1) months` lands inside the window. Uses the installment's
+# current `installment_amount` + currency (the field lock guarantees these don't drift
+# after the first cuota fires).
+#
+# Backward projection: emits each PAST cuota (`1..current_installment - 1`) whose date
+# lands inside the window AND whose scheduler-emitted expense row exists. is_paid=True.
 async def _installment_items(
     session: AsyncSession,
     user: User,
@@ -86,9 +134,21 @@ async def _installment_items(
     period_end: date_type,
 ) -> list[CalendarItem]:
     installments = await installment_repository.list_by_user(session, user.id, active_only=True)
+    if not installments:
+        return []
+
+    paid_by_inst = await expense_repository.linked_installment_expenses_by_date(
+        session,
+        user.id,
+        [i.id for i in installments],
+        period_start,
+        period_end,
+    )
 
     items: list[CalendarItem] = []
     for inst in installments:
+        paid_expenses = paid_by_inst.get(inst.id, {})
+        # Forward: unpaid future cuotas.
         for idx in range(inst.current_installment, inst.installments_count + 1):
             cuota_date = add_months(inst.start_date, idx - 1)
             if cuota_date < period_start:
@@ -107,6 +167,34 @@ async def _installment_items(
                     source_id=inst.id,
                     cuota_index=idx,
                     installments_count=inst.installments_count,
+                    is_paid=False,
+                )
+            )
+        # Backward: past paid cuotas inside the window.
+        for idx in range(1, inst.current_installment):
+            cuota_date = add_months(inst.start_date, idx - 1)
+            if cuota_date < period_start:
+                continue
+            if cuota_date > period_end:
+                continue
+            expense = paid_expenses.get(cuota_date)
+            if expense is None:
+                continue
+            items.append(
+                CalendarItem(
+                    type="installment",
+                    date=cuota_date,
+                    name=inst.name,
+                    amount=expense.amount,
+                    currency=expense.currency,
+                    payment_method=inst.payment_method,
+                    credit_card_id=inst.credit_card_id,
+                    source_id=inst.id,
+                    cuota_index=idx,
+                    installments_count=inst.installments_count,
+                    is_paid=True,
+                    conversion_date=expense.date,
+                    linked_expense_id=expense.id,
                 )
             )
     return items
@@ -196,6 +284,7 @@ async def _obligation_items(
                     # so the calendar's converted amount matches what the linked expense
                     # shows on the standalone Expenses list.
                     conversion_date=expense.date,
+                    linked_expense_id=expense.id,
                 )
             )
     return items
@@ -286,6 +375,40 @@ def subscription_dates_in_window(
         cursor = nxt
         iterations += 1
     return dates
+
+
+# Returns (cycle_date, linked_expense) pairs for every PAST cycle of a subscription
+# inside the window whose scheduler-emitted expense row exists. Walks backward from
+# next_billing_date one cycle at a time, matching each cursor against the supplied
+# dict of paid expenses by date (the partial UNIQUE INDEX on (subscription_id, date)
+# guarantees at most one expense per cycle, so the dict lookup is unambiguous).
+# Stops as soon as the cursor walks past period_start (further past cycles can't
+# intersect the window).
+def subscription_past_paid_cycles_in_window(
+    sub: Subscription,
+    period_start: date_type,
+    period_end: date_type,
+    paid_expenses_by_date: dict[date_type, object],
+) -> list[tuple]:
+    if not paid_expenses_by_date:
+        return []
+
+    pairs: list[tuple] = []
+    cursor = sub.next_billing_date
+    iterations = 0
+    while iterations < 1000:
+        prev = step_back_by_cycle(cursor, sub.billing_cycle, anchor_day=sub.anchor_day)
+        if prev >= cursor:
+            break
+        cursor = prev
+        if cursor < period_start:
+            break
+        if cursor <= period_end:
+            expense = paid_expenses_by_date.get(cursor)
+            if expense is not None:
+                pairs.append((cursor, expense))
+        iterations += 1
+    return pairs
 
 
 # Returns every UNPAID forward occurrence of a payment obligation inside the window.

@@ -303,6 +303,62 @@ async def max_linked_obligation_dates(
     return {row[0]: row[1] for row in result.all()}
 
 
+# Returns {subscription_id: {date: ExpenseEntry}} for scheduler-emitted expenses linked
+# to any of the given subscriptions, restricted to the [window_lo, window_hi] date range.
+# Used by the Payments Calendar backward walker to pair past cycle dates with the
+# actual auto-generated expense row for the Paid badge (symmetric to the obligation flow).
+# Date-indexed because subscriptions enforce one expense per (subscription_id, date) via
+# a partial UNIQUE INDEX — no need to handle multiples per cycle.
+async def linked_subscription_expenses_by_date(
+    session: AsyncSession,
+    user_id: int,
+    subscription_ids: list[int],
+    window_lo: date_type,
+    window_hi: date_type,
+) -> dict[int, dict[date_type, ExpenseEntry]]:
+    if not subscription_ids:
+        return {}
+    stmt = (
+        select(ExpenseEntry)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.subscription_id.in_(subscription_ids))
+        .where(ExpenseEntry.date >= window_lo)
+        .where(ExpenseEntry.date <= window_hi)
+    )
+    result = await session.execute(stmt)
+    grouped: dict[int, dict[date_type, ExpenseEntry]] = {}
+    for entry in result.scalars().all():
+        assert entry.subscription_id is not None  # filtered by WHERE clause.
+        grouped.setdefault(entry.subscription_id, {})[entry.date] = entry
+    return grouped
+
+
+# Same shape as linked_subscription_expenses_by_date but for installments — one auto-row
+# per (installment_id, date) (partial UNIQUE INDEX guarantees no duplicates).
+async def linked_installment_expenses_by_date(
+    session: AsyncSession,
+    user_id: int,
+    installment_ids: list[int],
+    window_lo: date_type,
+    window_hi: date_type,
+) -> dict[int, dict[date_type, ExpenseEntry]]:
+    if not installment_ids:
+        return {}
+    stmt = (
+        select(ExpenseEntry)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.installment_id.in_(installment_ids))
+        .where(ExpenseEntry.date >= window_lo)
+        .where(ExpenseEntry.date <= window_hi)
+    )
+    result = await session.execute(stmt)
+    grouped: dict[int, dict[date_type, ExpenseEntry]] = {}
+    for entry in result.scalars().all():
+        assert entry.installment_id is not None  # filtered by WHERE clause.
+        grouped.setdefault(entry.installment_id, {})[entry.date] = entry
+    return grouped
+
+
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     count_by_credit_card = staticmethod(count_by_credit_card)
@@ -311,6 +367,8 @@ class ExpenseRepository:
     delete = staticmethod(delete)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
+    linked_installment_expenses_by_date = staticmethod(linked_installment_expenses_by_date)
+    linked_subscription_expenses_by_date = staticmethod(linked_subscription_expenses_by_date)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_linked_obligation_expenses = staticmethod(list_linked_obligation_expenses)
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)

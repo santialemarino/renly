@@ -340,6 +340,10 @@ Read-only timeline that aggregates every upcoming payment for a given calendar m
 
 **Obligation projection (Phase 3, Step E):** Obligations project both forward AND backward from `next_due_date` so the calendar shows BOTH unpaid future cycles (the existing behaviour) AND past-paid cycles whose period contains a linked expense. Past-paid cycles carry `is_paid = true`; unpaid future cycles carry `is_paid = false`. The walker uses `add_months_anchored` so anchor day is preserved across short-month clamps. A backward-walked occurrence at date `D` is paid when an expense with `payment_obligation_id = obligation.id` has its date inside the occurrence's cycle period `(prev_anchor, D]`.
 
+**Subscription / installment projection (Phase 3 follow-up):** Symmetric to obligations. Forward walker emits unpaid future cycles (subscription billing cycles from `next_billing_date`; installment cuotas from `current_installment` to `installments_count`). Backward walker emits past PAID cycles whose scheduler-emitted expense row exists, matched via the partial UNIQUE INDEX on `(subscription_id, date)` / `(installment_id, date)`. Past-paid items use the linked expense's historical amount + currency.
+
+**`linked_expense_id` field:** Set on past-paid items of any type (obligation, subscription, installment); always null on `card_due` and future unpaid cycles. Frontend uses it to open the linked expense's edit dialog inline when the user clicks the Paid badge — no page navigation.
+
 ---
 
 ## Finance Metrics

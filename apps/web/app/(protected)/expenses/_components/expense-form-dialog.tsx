@@ -24,6 +24,10 @@ import {
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
+  computeObligationMismatch,
+  LinkedObligationSelect,
+} from '@/app/(protected)/expenses/_components/linked-obligation-select';
+import {
   createExpense,
   getAutoChargeMatch,
   updateExpense,
@@ -37,6 +41,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
+import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
@@ -62,7 +67,12 @@ interface ExpenseFormDialogProps {
   prefillFromObligation?: PrefillFromObligation;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
   onSuccess: () => void;
+  // Optional post-save hook used by the obligations table to show a follow-up amount-mismatch
+  // prompt. Fires AFTER a successful Mark Paid create, BEFORE the form closes — the parent's
+  // dialog can mount as a sibling and survive the form's close animation.
+  onMarkPaidSave?: (savedValues: ExpenseFormValues) => void;
 }
 
 export function ExpenseFormDialog({
@@ -72,7 +82,9 @@ export function ExpenseFormDialog({
   prefillFromObligation,
   preferredCurrencies,
   creditCards,
+  activeObligations,
   onSuccess,
+  onMarkPaidSave,
 }: ExpenseFormDialogProps) {
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
@@ -95,8 +107,25 @@ export function ExpenseFormDialog({
 
   const isEdit = !!expense;
   const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedCreditCardId = useWatch({ control: form.control, name: 'creditCardId' });
+  const watchedPaymentObligationId = useWatch({
+    control: form.control,
+    name: 'paymentObligationId',
+  });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
+
+  // Linked-obligation dropdown is offered only on CREATE (not edit; the update endpoint
+  // doesn't accept the FK) and only when the page has provided active obligations.
+  const showLinkedObligation = !isEdit && (activeObligations?.length ?? 0) > 0;
+  const selectedObligation = activeObligations?.find((o) => o.id === watchedPaymentObligationId);
+  const obligationMismatch = computeObligationMismatch(
+    selectedObligation,
+    watchedCurrency,
+    watchedPaymentMethod,
+    watchedCreditCardId,
+  );
 
   const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
 
@@ -198,6 +227,12 @@ export function ExpenseFormDialog({
       } else {
         await createExpense(values);
         toast.success(t('form.createSuccess'));
+        // Mark-Paid post-save hook fires BEFORE close so the parent can mount any
+        // follow-up dialog (e.g. the amount-mismatch prompt) as a sibling that
+        // survives this dialog's close animation.
+        if (prefillFromObligation && onMarkPaidSave) {
+          onMarkPaidSave(values);
+        }
       }
       onSuccess();
       onOpenChange(false);
@@ -417,6 +452,53 @@ export function ExpenseFormDialog({
                   </motion.div>
                 )}
               </AnimatePresence>
+
+              {showLinkedObligation && activeObligations && (
+                <FormField
+                  control={form.control}
+                  name="paymentObligationId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('form.linkedObligation.label')}</FormLabel>
+                      <FormControl>
+                        <LinkedObligationSelect
+                          obligations={activeObligations}
+                          value={field.value ?? null}
+                          disabled={!!prefillFromObligation}
+                          formCurrency={watchedCurrency || undefined}
+                          formPaymentMethod={watchedPaymentMethod}
+                          formCreditCardId={watchedCreditCardId}
+                          onChange={(id) => {
+                            field.onChange(id ?? undefined);
+                            // Auto-fill expense category from the obligation when the user
+                            // hasn't picked one. Doesn't overwrite an explicit choice.
+                            if (id !== null) {
+                              const o = activeObligations.find((x) => x.id === id);
+                              if (o?.expenseCategory && !form.getValues('category')) {
+                                form.setValue(
+                                  'category',
+                                  o.expenseCategory as ExpenseFormValues['category'],
+                                );
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      {prefillFromObligation && (
+                        <p className="text-paragraph-xs text-muted-foreground">
+                          {t('form.linkedObligation.lockedFromMarkPaid')}
+                        </p>
+                      )}
+                      {obligationMismatch && !prefillFromObligation && (
+                        <p className="text-paragraph-xs text-amber-700">
+                          {t('form.linkedObligation.mismatch')}
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}

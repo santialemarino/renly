@@ -11,6 +11,7 @@ from app.utils.dates import (
     advance_by_cycle,
     compute_statement_period,
     resolve_day_in_month,
+    step_back_by_cycle,
 )
 
 # --- add_months ---
@@ -116,6 +117,35 @@ class TestAdvanceByCycleAnchored:
         # Backwards-compatible default — without anchor_day, behaviour matches the
         # pre-anchor implementation (uses d.day, drifts after clamps).
         assert advance_by_cycle(date(2026, 2, 28), BILLING_CYCLE_MONTHLY) == date(2026, 3, 28)
+
+
+# --- step_back_by_cycle ---
+
+
+class TestStepBackByCycle:
+    def test_monthly_steps_back_one_month(self):
+        assert step_back_by_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY) == date(2026, 5, 15)
+
+    def test_quarterly_steps_back_three_months(self):
+        assert step_back_by_cycle(date(2026, 6, 15), BILLING_CYCLE_QUARTERLY) == date(2026, 3, 15)
+
+    def test_annual_steps_back_twelve_months(self):
+        assert step_back_by_cycle(date(2027, 3, 31), BILLING_CYCLE_ANNUAL, anchor_day=31) == date(2026, 3, 31)
+
+    def test_weekly_steps_back_seven_days(self):
+        assert step_back_by_cycle(date(2026, 5, 22), BILLING_CYCLE_WEEKLY) == date(2026, 5, 15)
+
+    def test_biweekly_steps_back_fourteen_days(self):
+        assert step_back_by_cycle(date(2026, 5, 22), BILLING_CYCLE_BIWEEKLY) == date(2026, 5, 8)
+
+    def test_monthly_with_anchor_31_no_drift(self):
+        # Stepping back from Mar 31 with anchor=31 lands on Feb 28 (clamped). The anchor
+        # is preserved for subsequent backward steps in the calendar walker.
+        assert step_back_by_cycle(date(2026, 3, 31), BILLING_CYCLE_MONTHLY, anchor_day=31) == date(2026, 2, 28)
+
+    def test_unknown_cycle_falls_back_to_monthly(self):
+        # Defensive — same fallback as the forward variant.
+        assert step_back_by_cycle(date(2026, 6, 15), "fortnightly") == date(2026, 5, 15)
 
 
 # --- resolve_day_in_month ---
