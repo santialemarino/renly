@@ -1,5 +1,6 @@
 # Pure calculation functions for investment and portfolio metrics.
 
+import bisect
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
@@ -7,7 +8,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.currency import get_ars_pair, is_supported
-from app.models.exchange_rate import ExchangeRatePair
+from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 
@@ -191,38 +192,94 @@ def convert_value(
     return value / from_rate * to_rate
 
 
-# Builds a rate map {currency: Decimal} from the latest exchange rates in the DB.
-# Each entry means "1 USD = X <currency>". USD itself is always 1.
-# dollar_preference controls which USD/ARS rate to use (oficial/mep/blue).
+# Mapping from non-ARS currency code to its USD pair. ARS uses the dollar-preference pair.
+_NON_ARS_PAIRS = {
+    "BRL": ExchangeRatePair.USD_BRL,
+    "EUR": ExchangeRatePair.USD_EUR,
+    "GBP": ExchangeRatePair.USD_GBP,
+}
+
+
+# Per-request date-aware rate lookup (Phase 3, Step C — historical exchange rate conversion).
+# Pre-fetches every stored rate once per request and serves a rate map for any historical date.
+# For each pair we keep rates sorted by date and binary-search for "the latest rate where
+# date <= as_of_date" (matches how a real bank-statement valuation looks back to the most recent
+# quoted rate at or before the transaction date). If the requested as_of_date predates every
+# stored rate for a pair, we fall back to the earliest available rate so the page never breaks —
+# a deliberate trade-off: degraded historical accuracy for ancient dates beats a 503 page.
+# Per-date rate maps are memoised so repeated lookups for the same date are O(1).
+class RateLookup:
+    def __init__(
+        self,
+        dollar_preference: str | None,
+        rates_by_pair: dict[ExchangeRatePair, list[ExchangeRate]],
+    ) -> None:
+        self._dollar_preference = dollar_preference
+        self._rates_by_pair = rates_by_pair
+        # bisect needs a list of comparable keys; cache the date lists alongside the rate lists.
+        self._dates_by_pair: dict[ExchangeRatePair, list[date_type]] = {pair: [r.date for r in rates] for pair, rates in rates_by_pair.items()}
+        self._cache: dict[date_type, dict[str, Decimal] | None] = {}
+
+    # Returns the rate map for as_of_date (latest rate where rate.date <= as_of_date per pair,
+    # with earliest-available fallback). Returns None when no rates exist at all.
+    def get_rate_map_at(self, as_of_date: date_type) -> dict[str, Decimal] | None:
+        if as_of_date in self._cache:
+            return self._cache[as_of_date]
+        if not self._rates_by_pair:
+            self._cache[as_of_date] = None
+            return None
+
+        rate_map: dict[str, Decimal] = {"USD": ONE}
+
+        ars_pair = get_ars_pair(self._dollar_preference)
+        ars_rate = self._lookup_pair(ars_pair, as_of_date)
+        if ars_rate is None:
+            # Fall back to MEP when the preferred pair has no stored rate (rather than
+            # relying on `or`, which would also short-circuit on a hypothetical Decimal(0)).
+            ars_rate = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
+        if ars_rate is not None:
+            rate_map["ARS"] = ars_rate
+
+        for currency_code, pair in _NON_ARS_PAIRS.items():
+            rate = self._lookup_pair(pair, as_of_date)
+            if rate is not None:
+                rate_map[currency_code] = rate
+
+        self._cache[as_of_date] = rate_map
+        return rate_map
+
+    # Binary-search the pair's sorted rates for the latest entry with date <= as_of_date.
+    # Falls back to the earliest available rate when as_of_date predates all stored rates.
+    def _lookup_pair(self, pair: ExchangeRatePair, as_of_date: date_type) -> Decimal | None:
+        rates = self._rates_by_pair.get(pair)
+        if not rates:
+            return None
+        dates = self._dates_by_pair[pair]
+        idx = bisect.bisect_right(dates, as_of_date) - 1
+        if idx >= 0:
+            return rates[idx].rate
+        # Pre-history fallback: use the earliest rate so display never breaks for ancient dates.
+        return rates[0].rate
+
+
+# Builds a RateLookup pre-loaded with every stored exchange rate. One DB round-trip per request;
+# callers reuse the returned object across many per-row lookups.
+async def build_rate_lookup(
+    session: AsyncSession,
+    dollar_preference: str | None = None,
+) -> RateLookup:
+    from app.repositories.exchange_rate_repository import exchange_rate_repository
+
+    rates_by_pair = await exchange_rate_repository.get_all_grouped_by_pair(session)
+    return RateLookup(dollar_preference, rates_by_pair)
+
+
+# Backward-compat shim: returns the rate map valid TODAY. Equivalent to the previous
+# implementation (latest stored rate per pair). New code should prefer build_rate_lookup +
+# get_rate_map_at(row.date) so historical values stay deterministic across time.
 async def get_rate_map(
     session: AsyncSession,
     dollar_preference: str | None = None,
 ) -> dict[str, Decimal] | None:
-    from app.repositories.exchange_rate_repository import exchange_rate_repository
-
-    latest = await exchange_rate_repository.get_latest_all(session)
-    if not latest:
-        return None
-
-    rate_map: dict[str, Decimal] = {"USD": ONE}
-
-    # ARS rate based on dollar preference.
-    ars_pair = get_ars_pair(dollar_preference)
-    ars_rate = latest.get(ars_pair)
-    if ars_rate is None:
-        ars_rate = latest.get(ExchangeRatePair.USD_ARS_MEP)
-    if ars_rate:
-        rate_map["ARS"] = ars_rate.rate
-
-    # Non-ARS currencies (BRL, EUR, GBP).
-    _OTHER_PAIRS = {
-        "BRL": ExchangeRatePair.USD_BRL,
-        "EUR": ExchangeRatePair.USD_EUR,
-        "GBP": ExchangeRatePair.USD_GBP,
-    }
-    for currency_code, pair in _OTHER_PAIRS.items():
-        rate_obj = latest.get(pair)
-        if rate_obj:
-            rate_map[currency_code] = rate_obj.rate
-
-    return rate_map
+    lookup = await build_rate_lookup(session, dollar_preference)
+    return lookup.get_rate_map_at(date_type.today())

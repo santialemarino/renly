@@ -1,5 +1,4 @@
 from datetime import date as date_type
-from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
@@ -9,21 +8,27 @@ from app.deps.db import SessionDep
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.expense import ExpenseCreate, ExpenseListResponse, ExpenseResponse, ExpenseUpdate
 from app.services import expense_service
-from app.utils.metrics import convert_value, get_rate_map
+from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
 from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
 
-# Converts an entry's amount if a target currency and rate map are provided.
+# Converts an entry's amount at the entry's historical date (Phase 3, Step C).
+# Expenses are records of past events — display value reflects the rate that was in effect
+# when the expense actually happened, so re-opening the page on a different day shows the
+# same number.
 def _convert_entry(
     resp: ExpenseResponse,
     entry_currency: str,
+    entry_date: date_type,
     target_currency: str | None,
-    rate_map: dict[str, Decimal] | None,
+    lookup: RateLookup | None,
 ) -> ExpenseResponse:
-    if target_currency and rate_map and entry_currency != target_currency:
-        resp.converted_amount = convert_value(resp.amount, entry_currency, target_currency, rate_map)
+    if target_currency and lookup and entry_currency != target_currency:
+        rate_map = lookup.get_rate_map_at(entry_date)
+        if rate_map:
+            resp.converted_amount = convert_value(resp.amount, entry_currency, target_currency, rate_map)
     elif target_currency and entry_currency == target_currency:
         resp.converted_amount = resp.amount
     return resp
@@ -55,12 +60,12 @@ async def list_expenses(
         page_size=page_size,
     )
 
-    rate_map = None
+    lookup: RateLookup | None = None
     if currency:
         dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
+        lookup = await build_rate_lookup(session, dp)
 
-    items = [_convert_entry(ExpenseResponse.model_validate(e), e.currency, currency, rate_map) for e in entries]
+    items = [_convert_entry(ExpenseResponse.model_validate(e), e.currency, e.date, currency, lookup) for e in entries]
     return ExpenseListResponse(
         items=items,
         total=total,
@@ -82,8 +87,8 @@ async def get_expense(
     resp = ExpenseResponse.model_validate(entry)
     if currency:
         dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
-        resp = _convert_entry(resp, entry.currency, currency, rate_map)
+        lookup = await build_rate_lookup(session, dp)
+        resp = _convert_entry(resp, entry.currency, entry.date, currency, lookup)
     return resp
 
 

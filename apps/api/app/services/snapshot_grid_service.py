@@ -1,5 +1,6 @@
 # Business logic for building the snapshots grid (investments × months).
 
+from datetime import date as date_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,12 +54,12 @@ async def get_snapshot_grid(
     if not investments:
         return SnapshotGridResponse(rows=[], months=[])
 
-    rate_map = None
+    lookup: mh.RateLookup | None = None
     if currency:
         needs_conversion = any(inv.base_currency != currency for inv in investments)
         if needs_conversion:
-            rate_map = await mh.get_rate_map(session, dollar_preference)
-            if rate_map is None:
+            lookup = await mh.build_rate_lookup(session, dollar_preference)
+            if lookup.get_rate_map_at(date_type.today()) is None:
                 raise ExchangeRateUnavailableError(currency)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -90,8 +91,18 @@ async def get_snapshot_grid(
         for snap in snaps:
             tx = tx_by_period.get(snap.date)
             value = snap.value
-            if currency and rate_map:
-                value = mh.convert_value(value, inv.base_currency, currency, rate_map)
+            # Per-snapshot conversion at the snapshot's own date (Phase 3, Step C). Each historical
+            # cell stays deterministic across time — re-opening tomorrow shows the same number.
+            snap_rate_map = lookup.get_rate_map_at(snap.date) if currency and lookup else None
+            if snap_rate_map:
+                value = mh.convert_value(value, inv.base_currency, currency, snap_rate_map)
+            # Transactions get converted at their own date, not the snapshot's, since a transaction
+            # may occur on any day within the snapshot period.
+            tx_amount = tx.amount if tx else None
+            if tx is not None and currency and lookup:
+                tx_rate_map = lookup.get_rate_map_at(tx.date)
+                if tx_rate_map:
+                    tx_amount = mh.convert_value(tx.amount, inv.base_currency, currency, tx_rate_map)
             cells.append(
                 SnapshotGridCell(
                     date=snap.date,
@@ -103,7 +114,7 @@ async def get_snapshot_grid(
                     has_transaction=tx is not None,
                     transaction=SnapshotGridTransaction(
                         id=tx.id,
-                        amount=mh.convert_value(tx.amount, inv.base_currency, currency, rate_map) if currency and rate_map else tx.amount,
+                        amount=tx_amount if tx_amount is not None else tx.amount,
                         original_amount=tx.amount,
                         quantity=tx.quantity,
                         type=tx.type,
