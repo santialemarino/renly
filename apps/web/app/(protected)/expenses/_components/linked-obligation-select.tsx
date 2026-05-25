@@ -98,30 +98,36 @@ export function LinkedObligationSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_VALUE}>{t('form.linkedObligation.none')}</SelectItem>
-        {sorted.map(({ obligation, status }) => (
-          <SelectItem key={obligation.id} value={String(obligation.id)}>
-            <div className="flex items-center gap-x-2">
-              {/* Tri-color status dot: emerald (match) / muted (unknown, form not fully filled)
-                  / amber (mismatch). Pairs visually with the amber StyledHint below the dropdown
-                  when a selected obligation conflicts. transition-colors smooths the color
-                  swap when the user edits a field that changes the match status.
-                  Suppressed entirely in disabled mode (Mark Paid) so the trigger's text
-                  aligns naturally to the left with no phantom indent. */}
-              {!disabled && (
-                <CircleDot
-                  className={cn(
-                    'size-3 shrink-0 transition-colors',
-                    status === 'match' && 'text-emerald-500',
-                    status === 'unknown' && 'text-muted-foreground',
-                    status === 'mismatch' && 'text-amber-500',
-                  )}
-                  aria-hidden
-                />
-              )}
-              <span>{obligation.name}</span>
-            </div>
-          </SelectItem>
-        ))}
+        {sorted.map(({ obligation, status }) => {
+          const isSelected = obligation.id === value;
+          // Dot color rules:
+          //   - match               -> emerald (positive selection aid, regardless of selection).
+          //   - unknown             -> muted (form not fully filled, no signal yet).
+          //   - mismatch + selected -> amber (pairs 1:1 with the StyledHint warning below).
+          //   - mismatch + unselected -> muted (avoid lighting up the dropdown with amber
+          //                              on browse — sort order already deprioritises them).
+          //   - disabled mode (Mark Paid) -> dot suppressed entirely so the trigger text
+          //                              aligns naturally to the left with no phantom indent.
+          const dotColor =
+            status === 'match'
+              ? 'text-emerald-500'
+              : status === 'mismatch' && isSelected
+                ? 'text-amber-500'
+                : 'text-muted-foreground';
+          return (
+            <SelectItem key={obligation.id} value={String(obligation.id)}>
+              <div className="flex items-center gap-x-2">
+                {!disabled && (
+                  <CircleDot
+                    className={cn('size-3 shrink-0 transition-colors', dotColor)}
+                    aria-hidden
+                  />
+                )}
+                <span>{obligation.name}</span>
+              </div>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );
