@@ -15,7 +15,7 @@ import {
   PopoverTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { IANA_TIMEZONES } from '@/lib/constants/timezones';
+import { formatIanaTimezone, IANA_TIMEZONES } from '@/lib/constants/timezones';
 
 interface TimezoneComboboxProps {
   value: string | null;
@@ -44,7 +44,13 @@ export function TimezoneCombobox({
   const listRef = useRef<HTMLDivElement>(null);
   const q = search.toLowerCase();
 
-  const filtered = q ? IANA_TIMEZONES.filter((tz) => tz.toLowerCase().includes(q)) : IANA_TIMEZONES;
+  // Filter matches either the raw IANA value (e.g. "America/New_York") or the prettified
+  // display (e.g. "America / New York") so the user can type either form.
+  const filtered = q
+    ? IANA_TIMEZONES.filter(
+        (tz) => tz.toLowerCase().includes(q) || formatIanaTimezone(tz).toLowerCase().includes(q),
+      )
+    : IANA_TIMEZONES;
 
   function handleSearch(v: string) {
     setSearch(v);
@@ -71,7 +77,7 @@ export function TimezoneCombobox({
           )}
         >
           <span className={cn('truncate text-paragraph-sm', !value && 'text-muted-foreground')}>
-            {value || placeholder}
+            {value ? formatIanaTimezone(value) : placeholder}
           </span>
           <ChevronDown className="shrink-0 size-4 opacity-50 transition-transform group-aria-expanded:rotate-180" />
         </Button>
@@ -87,7 +93,10 @@ export function TimezoneCombobox({
             value={search}
             onValueChange={handleSearch}
           />
-          <CommandList ref={listRef}>
+          <CommandList
+            ref={listRef}
+            className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+          >
             <CommandEmpty>{noResults}</CommandEmpty>
             {filtered.map((tz) => (
               <CommandItem
@@ -98,7 +107,7 @@ export function TimezoneCombobox({
                   setOpen(false);
                 }}
               >
-                <span className="truncate text-paragraph-sm">{tz}</span>
+                <span className="truncate text-paragraph-sm">{formatIanaTimezone(tz)}</span>
               </CommandItem>
             ))}
           </CommandList>

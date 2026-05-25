@@ -9,8 +9,9 @@ interface SaveLocalizationParams {
   timezoneMode: string;
 }
 
-// Persists the user's IANA timezone + mode. Invalidates the layout so the next navigation
-// re-reads settings (the auto-sync effect needs the fresh stored value to skip its no-op path).
+// Persists the user's IANA timezone + mode (explicit save from the Localization form).
+// Invalidates the layout so the next navigation re-reads settings (the auto-sync effect
+// needs the fresh stored value to skip its no-op path).
 export async function saveLocalization(params: SaveLocalizationParams): Promise<void> {
   const res = await authenticatedFetch('/settings', {
     method: 'PUT',

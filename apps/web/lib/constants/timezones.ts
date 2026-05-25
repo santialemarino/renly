@@ -29,3 +29,10 @@ export function detectBrowserTimezone(): string {
     return TIMEZONE_DEFAULT;
   }
 }
+
+// Formats an IANA timezone for display: underscores -> spaces, slashes -> " / ".
+// Storage and validation always operate on the raw IANA value; this is presentation-only.
+// "America/Argentina/Buenos_Aires" -> "America / Argentina / Buenos Aires".
+export function formatIanaTimezone(tz: string): string {
+  return tz.replace(/_/g, ' ').replace(/\//g, ' / ');
+}

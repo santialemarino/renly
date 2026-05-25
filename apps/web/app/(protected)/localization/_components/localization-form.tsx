@@ -92,8 +92,8 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
   ];
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full max-w-md gap-y-6">
-      <div className="flex flex-col gap-y-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col w-full gap-y-6 lg:gap-y-10">
+      <div className="flex flex-col max-w-md gap-y-3">
         <div className="flex flex-col gap-y-2">
           <Label>{t('form.mode.label')}</Label>
           <Hint>{t('form.mode.hint')}</Hint>
@@ -136,7 +136,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
         </div>
       </div>
 
-      <Button blue type="submit" disabled={isSubmitting}>
+      <Button blue type="submit" className="w-full max-w-md lg:max-w-full" disabled={isSubmitting}>
         {isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
       </Button>
     </form>
