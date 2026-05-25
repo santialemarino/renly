@@ -55,7 +55,7 @@ export function obligationMatchStatus(
     else if (obligation.paymentMethod !== formPaymentMethod) return 'mismatch';
   }
   if (obligation.creditCardId !== null) {
-    if (formCreditCardId === undefined) anyUnknown = true;
+    if (formCreditCardId == null) anyUnknown = true;
     else if (obligation.creditCardId !== formCreditCardId) return 'mismatch';
   }
   return anyUnknown ? 'unknown' : 'match';

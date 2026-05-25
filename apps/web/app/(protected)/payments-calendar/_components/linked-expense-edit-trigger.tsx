@@ -34,7 +34,7 @@ export function LinkedExpenseEditTrigger({
   const [loading, setLoading] = useState(false);
 
   async function handleClick() {
-    if (loading) return;
+    if (loading || open) return;
     setLoading(true);
     try {
       const fetched = await getExpenseById(linkedExpenseId);
