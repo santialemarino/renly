@@ -1,8 +1,14 @@
 # Date helpers shared across services (statement periods, scheduler back-fill, etc.).
 
 import calendar
+import logging
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
-from datetime import timedelta
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_TIMEZONE = "UTC"
 
 # Subscription billing cycles understood by the auto-generation scheduler.
 BILLING_CYCLE_MONTHLY = "monthly"
@@ -77,6 +83,30 @@ def step_back_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = Non
 def resolve_day_in_month(day: int, year: int, month: int) -> date_type:
     last_day = calendar.monthrange(year, month)[1]
     return date_type(year, month, min(day, last_day))
+
+
+# Returns the user-local calendar date corresponding to `now_utc` in the given IANA timezone.
+# Falls back to UTC (with a logged warning) on missing or invalid timezone names so the scheduler
+# can never crash on stale data — the worst case mirrors today's UTC-everywhere behaviour.
+def today_in_timezone(now_utc: datetime, tz_name: str | None) -> date_type:
+    name = tz_name or DEFAULT_TIMEZONE
+    try:
+        return now_utc.astimezone(ZoneInfo(name)).date()
+    except ZoneInfoNotFoundError:
+        logger.warning("Unknown timezone %r — falling back to UTC.", name)
+        return now_utc.astimezone(UTC).date()
+
+
+# Returns the user-local hour (0-23) corresponding to `now_utc` in the given IANA timezone.
+# Used by the auto-expense scheduler to filter users whose local time matches the configured hour.
+# Falls back to UTC on missing or invalid timezone names.
+def local_hour_for_user(now_utc: datetime, tz_name: str | None) -> int:
+    name = tz_name or DEFAULT_TIMEZONE
+    try:
+        return now_utc.astimezone(ZoneInfo(name)).hour
+    except ZoneInfoNotFoundError:
+        logger.warning("Unknown timezone %r — falling back to UTC.", name)
+        return now_utc.astimezone(UTC).hour
 
 
 # Computes a credit-card statement period from the card's closing_day and the period's closing date.

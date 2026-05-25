@@ -55,5 +55,7 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     groupWarningPct: raw.group_warning_pct ?? null,
     dollarRatePreference: raw.dollar_rate_preference ?? null,
     shortcutCurrencies: raw.shortcut_currencies ?? null,
+    timezone: raw.timezone ?? null,
+    timezoneMode: raw.timezone_mode ?? null,
   };
 }

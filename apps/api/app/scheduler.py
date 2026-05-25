@@ -21,7 +21,6 @@ scheduler = AsyncIOScheduler()
 EXCHANGE_RATES_INTERVAL_HOURS = 6
 ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
-AUTO_EXPENSES_HOUR_UTC = 1
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
 
@@ -108,11 +107,13 @@ def start_scheduler() -> None:
         replace_existing=True,
     )
 
-    # Auto-expenses: run daily at 01:00 UTC (after midnight so today's cuota dates settle).
+    # Auto-expenses: run hourly. The service filters users whose local-time-now hour
+    # equals AUTO_EXPENSES_HOUR_LOCAL (= 1) so each user's charges fire at their own
+    # local 01:00 instead of a single global UTC tick.
     scheduler.add_job(
         _generate_auto_expenses,
         "cron",
-        hour=AUTO_EXPENSES_HOUR_UTC,
+        minute=0,
         id="generate_auto_expenses",
         replace_existing=True,
     )
@@ -133,12 +134,11 @@ def start_scheduler() -> None:
         "Scheduler started (exchange rates: now + every %dh, "
         "asset prices: daily %02d:00 UTC, "
         "auto-snapshots: last day %02d:00 UTC, "
-        "auto-expenses: daily %02d:00 UTC, "
+        "auto-expenses: hourly (per-user local 01:00), "
         "CEDEAR ratios: now + monthly %dth %02d:00 UTC).",
         EXCHANGE_RATES_INTERVAL_HOURS,
         ASSET_PRICES_HOUR_UTC,
         AUTO_SNAPSHOTS_HOUR_UTC,
-        AUTO_EXPENSES_HOUR_UTC,
         CEDEAR_RATIOS_DAY_OF_MONTH,
         CEDEAR_RATIOS_HOUR_UTC,
     )

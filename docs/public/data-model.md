@@ -160,6 +160,7 @@ Each user has personal preferences that control how the app behaves:
 - Which USD/ARS rate to use for conversions (oficial, MEP, or blue)
 - Dashboard period presets and display options
 - Which currencies to show in the iOS Shortcut currency picker (defaults to primary + secondary)
+- The user's timezone (IANA name like `America/Argentina/Buenos_Aires`) plus a mode flag (`auto` or `manual`). In auto mode the browser-detected timezone is silently kept in sync on every page load; in manual mode the stored value sticks until the user changes it. The auto-expense scheduler uses this to fire recurring charges on the user's local calendar day instead of the server's UTC day.
 
 ---
 

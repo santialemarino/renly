@@ -1,6 +1,7 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from app.services.auto_expense_service import (
+    AUTO_EXPENSES_HOUR_LOCAL,
     installment_cuotas_to_emit,
     subscription_dates_to_emit,
 )
@@ -10,6 +11,8 @@ from app.utils.dates import (
     BILLING_CYCLE_MONTHLY,
     BILLING_CYCLE_QUARTERLY,
     BILLING_CYCLE_WEEKLY,
+    local_hour_for_user,
+    today_in_timezone,
 )
 
 # --- subscription_dates_to_emit ---
@@ -167,3 +170,53 @@ class TestInstallmentCuotasToEmit:
             (3, date(2026, 3, 31)),
             (4, date(2026, 4, 30)),
         ]
+
+
+# --- Timezone-aware eligibility (Step G) ---
+
+
+class TestTimezoneAwareEligibility:
+    """
+    The hourly cron processes a user iff their local-hour-now equals AUTO_EXPENSES_HOUR_LOCAL.
+    Combined with the existing back-fill loop and today_in_timezone, this gives the
+    user-local day-boundary semantics. These tests exercise the primitives composed
+    by _generate_subscription_expenses (filter + today_in_user_tz + back-fill).
+    """
+
+    def test_argentina_user_at_04_utc_is_eligible(self):
+        # 04:00 UTC = 01:00 ART -> matches AUTO_EXPENSES_HOUR_LOCAL.
+        now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "America/Argentina/Buenos_Aires") == AUTO_EXPENSES_HOUR_LOCAL
+
+    def test_argentina_user_at_01_utc_is_not_eligible(self):
+        # 01:00 UTC = 22:00 ART previous day -> not eligible.
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "America/Argentina/Buenos_Aires") != AUTO_EXPENSES_HOUR_LOCAL
+
+    def test_utc_user_at_01_utc_is_eligible(self):
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "UTC") == AUTO_EXPENSES_HOUR_LOCAL
+
+    def test_argentina_user_today_at_eligible_tick_is_yesterday_utc(self):
+        # At 04:00 UTC May 25 (= 01:00 ART May 25), user's local today is May 25.
+        # A subscription due May 25 fires here (correctly within user's May 25, not pre-May-25).
+        now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
+        user_today = today_in_timezone(now, "America/Argentina/Buenos_Aires")
+        next_billing = date(2026, 5, 25)
+        # The pure helper produces a single emit for this date.
+        emits = subscription_dates_to_emit(next_billing, BILLING_CYCLE_MONTHLY, user_today)
+        assert emits == [date(2026, 5, 25)]
+
+    def test_argentina_user_at_pre_local_midnight_does_not_emit_tomorrow(self):
+        # 02:00 UTC May 25 = 23:00 ART May 24. User local today is still May 24.
+        # A subscription due May 25 must NOT emit yet — back-fill returns empty.
+        now = datetime(2026, 5, 25, 2, 0, tzinfo=UTC)
+        user_today = today_in_timezone(now, "America/Argentina/Buenos_Aires")
+        assert user_today == date(2026, 5, 24)
+        next_billing = date(2026, 5, 25)
+        emits = subscription_dates_to_emit(next_billing, BILLING_CYCLE_MONTHLY, user_today)
+        assert emits == []
+
+    def test_constant_value_is_one(self):
+        # Documented invariant: auto-expenses fire at the user's local 01:00.
+        assert AUTO_EXPENSES_HOUR_LOCAL == 1

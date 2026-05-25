@@ -1,9 +1,12 @@
 # Business logic for retroactive auto-generation of expense_entries from active
-# subscriptions and installment plans. The daily scheduler job calls
-# generate_auto_expenses(); each tick back-fills missed cycles up to today and
-# is idempotent across re-runs (dedup-keyed on (source plan, date)).
+# subscriptions and installment plans. The hourly scheduler job calls
+# generate_auto_expenses(); each tick processes ONLY users whose local-time-now
+# hour equals AUTO_EXPENSES_HOUR_LOCAL (= 1), so each user's charges fire at
+# their own local 01:00. Per-user "today" is computed in the user's IANA tz.
+# Idempotent across re-runs (dedup-keyed on (source plan, date)).
 
 import logging
+from datetime import UTC, datetime
 from datetime import date as date_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,12 +15,23 @@ from sqlmodel import select
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
-from app.utils.dates import add_months, advance_by_cycle
+from app.repositories import user_settings_repository
+from app.utils.dates import (
+    add_months,
+    advance_by_cycle,
+    local_hour_for_user,
+    today_in_timezone,
+)
 
 logger = logging.getLogger(__name__)
 
 SOURCE_SUBSCRIPTION = "subscription"
 SOURCE_INSTALLMENT = "installment"
+
+# Hour-of-day (in each user's local timezone) at which the scheduler emits their
+# pending auto-expenses. The hourly cron checks this against every user's
+# local-time-now and processes only the matching users that tick.
+AUTO_EXPENSES_HOUR_LOCAL = 1
 
 
 # Returns the list of cycle dates a subscription should have emitted up to and
@@ -67,44 +81,58 @@ def installment_cuotas_to_emit(
     return cuotas
 
 
-# Auto-generates expense entries for all active subscriptions and installments.
-# Loops retroactively per record so plans registered with past dates back-fill
-# in one tick. Re-runs are no-ops thanks to (source plan, date) pre-check + the
-# matching partial unique indexes on expense_entries.
+# Auto-generates expense entries for active subscriptions and installments
+# belonging to users whose local-time-now hour equals AUTO_EXPENSES_HOUR_LOCAL.
+# Users with no stored timezone fall back to UTC. Idempotent on re-runs.
 # Returns the count of expense_entries created.
-async def generate_auto_expenses(session: AsyncSession, *, today: date_type | None = None) -> int:
-    today = today or date_type.today()
+async def generate_auto_expenses(session: AsyncSession, *, now_utc: datetime | None = None) -> int:
+    now_utc = now_utc or datetime.now(UTC)
 
-    sub_count = await _generate_subscription_expenses(session, today)
-    inst_count = await _generate_installment_expenses(session, today)
+    user_timezones = await user_settings_repository.get_all_timezones(session)
+
+    sub_count = await _generate_subscription_expenses(session, now_utc, user_timezones)
+    inst_count = await _generate_installment_expenses(session, now_utc, user_timezones)
 
     if sub_count or inst_count:
         await session.commit()
     return sub_count + inst_count
 
 
-# Emits expense_entries for active subscriptions whose next_billing_date is at
-# or before today, advancing each subscription's next_billing_date in lockstep.
-async def _generate_subscription_expenses(session: AsyncSession, today: date_type) -> int:
-    result = await session.execute(
-        select(Subscription).where(
-            Subscription.is_active.is_(True),
-            Subscription.next_billing_date <= today,
-        )
-    )
+# Emits expense_entries for active subscriptions belonging to eligible users
+# (those whose local hour matches AUTO_EXPENSES_HOUR_LOCAL on this tick).
+async def _generate_subscription_expenses(
+    session: AsyncSession,
+    now_utc: datetime,
+    user_timezones: dict[int, str],
+) -> int:
+    result = await session.execute(select(Subscription).where(Subscription.is_active.is_(True)))
     subscriptions = list(result.scalars().all())
     if not subscriptions:
         return 0
 
-    sub_ids = [s.id for s in subscriptions]
+    # Filter to subscriptions whose user is currently at AUTO_EXPENSES_HOUR_LOCAL
+    # AND whose next_billing_date has been reached in that user's local tz.
+    pending: list[tuple[Subscription, date_type]] = []
+    for sub in subscriptions:
+        user_tz = user_timezones.get(sub.user_id)
+        if local_hour_for_user(now_utc, user_tz) != AUTO_EXPENSES_HOUR_LOCAL:
+            continue
+        today_for_user = today_in_timezone(now_utc, user_tz)
+        if sub.next_billing_date > today_for_user:
+            continue
+        pending.append((sub, today_for_user))
+    if not pending:
+        return 0
+
+    sub_ids = [s.id for s, _ in pending]
     existing = await _existing_subscription_dates(session, sub_ids)
 
     created = 0
-    for sub in subscriptions:
+    for sub, today_for_user in pending:
         dates = subscription_dates_to_emit(
             sub.next_billing_date,
             sub.billing_cycle,
-            today,
+            today_for_user,
             anchor_day=sub.anchor_day,
         )
         if not dates:
@@ -133,36 +161,45 @@ async def _generate_subscription_expenses(session: AsyncSession, today: date_typ
 
     if created:
         await session.flush()
-        logger.info("Auto-expenses: created %d subscription charges through %s.", created, today)
+        logger.info("Auto-expenses: created %d subscription charges at %s UTC.", created, now_utc.isoformat())
     return created
 
 
-# Emits expense_entries for active installment plans whose next cuota date is
-# at or before today. Increments current_installment per cuota and flips
-# is_active to False once the plan is fully paid.
-async def _generate_installment_expenses(session: AsyncSession, today: date_type) -> int:
+# Emits expense_entries for active installment plans belonging to eligible users.
+async def _generate_installment_expenses(
+    session: AsyncSession,
+    now_utc: datetime,
+    user_timezones: dict[int, str],
+) -> int:
     result = await session.execute(select(Installment).where(Installment.is_active.is_(True)))
     installments = list(result.scalars().all())
     if not installments:
         return 0
 
-    # Pre-filter: skip plans where the next cuota is in the future.
-    pending = [
-        i for i in installments if i.current_installment <= i.installments_count and add_months(i.start_date, i.current_installment - 1) <= today
-    ]
+    pending: list[tuple[Installment, date_type]] = []
+    for inst in installments:
+        user_tz = user_timezones.get(inst.user_id)
+        if local_hour_for_user(now_utc, user_tz) != AUTO_EXPENSES_HOUR_LOCAL:
+            continue
+        if inst.current_installment > inst.installments_count:
+            continue
+        today_for_user = today_in_timezone(now_utc, user_tz)
+        if add_months(inst.start_date, inst.current_installment - 1) > today_for_user:
+            continue
+        pending.append((inst, today_for_user))
     if not pending:
         return 0
 
-    inst_ids = [i.id for i in pending]
+    inst_ids = [i.id for i, _ in pending]
     existing = await _existing_installment_dates(session, inst_ids)
 
     created = 0
-    for inst in pending:
+    for inst, today_for_user in pending:
         cuotas = installment_cuotas_to_emit(
             inst.start_date,
             inst.current_installment,
             inst.installments_count,
-            today,
+            today_for_user,
         )
         if not cuotas:
             continue
@@ -193,7 +230,7 @@ async def _generate_installment_expenses(session: AsyncSession, today: date_type
 
     if created:
         await session.flush()
-        logger.info("Auto-expenses: created %d installment charges through %s.", created, today)
+        logger.info("Auto-expenses: created %d installment charges at %s UTC.", created, now_utc.isoformat())
     return created
 
 

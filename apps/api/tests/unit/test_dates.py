@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 from app.utils.dates import (
     BILLING_CYCLE_ANNUAL,
@@ -10,8 +10,10 @@ from app.utils.dates import (
     add_months_anchored,
     advance_by_cycle,
     compute_statement_period,
+    local_hour_for_user,
     resolve_day_in_month,
     step_back_by_cycle,
+    today_in_timezone,
 )
 
 # --- add_months ---
@@ -207,3 +209,69 @@ class TestComputeStatementPeriod:
         period_start, period_end = compute_statement_period(1, date(2026, 3, 1))
         assert period_start == date(2026, 2, 2)
         assert period_end == date(2026, 3, 1)
+
+
+# --- today_in_timezone ---
+
+
+class TestTodayInTimezone:
+    def test_utc_user_matches_utc_date(self):
+        # 2026-05-25 12:00 UTC -> UTC user's today is May 25.
+        now = datetime(2026, 5, 25, 12, 0, tzinfo=UTC)
+        assert today_in_timezone(now, "UTC") == date(2026, 5, 25)
+
+    def test_argentina_user_is_yesterday_at_utc_midnight(self):
+        # 2026-05-25 02:00 UTC = 2026-05-24 23:00 ART (UTC-3). User's "today" is still May 24.
+        now = datetime(2026, 5, 25, 2, 0, tzinfo=UTC)
+        assert today_in_timezone(now, "America/Argentina/Buenos_Aires") == date(2026, 5, 24)
+
+    def test_argentina_user_local_midnight_crosses(self):
+        # 2026-05-25 04:00 UTC = 2026-05-25 01:00 ART. User's today has advanced to May 25.
+        now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
+        assert today_in_timezone(now, "America/Argentina/Buenos_Aires") == date(2026, 5, 25)
+
+    def test_tokyo_user_already_tomorrow(self):
+        # 2026-05-25 18:00 UTC = 2026-05-26 03:00 JST (UTC+9). User's today is May 26.
+        now = datetime(2026, 5, 25, 18, 0, tzinfo=UTC)
+        assert today_in_timezone(now, "Asia/Tokyo") == date(2026, 5, 26)
+
+    def test_none_falls_back_to_utc(self):
+        now = datetime(2026, 5, 25, 23, 30, tzinfo=UTC)
+        assert today_in_timezone(now, None) == date(2026, 5, 25)
+
+    def test_invalid_name_falls_back_to_utc(self):
+        now = datetime(2026, 5, 25, 23, 30, tzinfo=UTC)
+        assert today_in_timezone(now, "Not/A/Real/Zone") == date(2026, 5, 25)
+
+    def test_dst_transition_correct(self):
+        # 2026-03-08 06:30 UTC = 2026-03-08 02:30 EDT (after spring-forward, 2 AM -> 3 AM).
+        # New York's today should be March 8.
+        now = datetime(2026, 3, 8, 6, 30, tzinfo=UTC)
+        assert today_in_timezone(now, "America/New_York") == date(2026, 3, 8)
+
+
+# --- local_hour_for_user ---
+
+
+class TestLocalHourForUser:
+    def test_utc_returns_utc_hour(self):
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "UTC") == 1
+
+    def test_argentina_hour_is_utc_minus_three(self):
+        # 04:00 UTC = 01:00 ART.
+        now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "America/Argentina/Buenos_Aires") == 1
+
+    def test_none_falls_back_to_utc(self):
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, None) == 1
+
+    def test_invalid_name_falls_back_to_utc(self):
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "Bogus/Zone") == 1
+
+    def test_tokyo_ahead_nine_hours(self):
+        # 16:00 UTC = 01:00 JST next day.
+        now = datetime(2026, 5, 25, 16, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "Asia/Tokyo") == 1

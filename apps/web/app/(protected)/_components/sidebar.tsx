@@ -12,6 +12,7 @@ import {
   CreditCard,
   FileText,
   FolderOpen,
+  Globe,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -74,6 +75,7 @@ const PORTFOLIO_GROUP = [
 
 const SETTINGS_GROUP = [
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
+  { key: 'localization', href: ROUTES.localization, icon: Globe },
   { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
 ] as const;
 

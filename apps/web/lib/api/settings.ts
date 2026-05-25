@@ -13,6 +13,8 @@ interface SettingsRaw {
   group_warning_pct: number | null;
   dollar_rate_preference: string | null;
   shortcut_currencies: string[] | null;
+  timezone: string | null;
+  timezone_mode: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -26,6 +28,8 @@ export interface SettingsData {
   groupWarningPct: number | null;
   dollarRatePreference: string | null;
   shortcutCurrencies: string[] | null;
+  timezone: string | null;
+  timezoneMode: string | null;
 }
 
 // --- Mappers ---
@@ -40,6 +44,8 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     groupWarningPct: raw.group_warning_pct,
     dollarRatePreference: raw.dollar_rate_preference,
     shortcutCurrencies: raw.shortcut_currencies,
+    timezone: raw.timezone,
+    timezoneMode: raw.timezone_mode,
   };
 }
 
