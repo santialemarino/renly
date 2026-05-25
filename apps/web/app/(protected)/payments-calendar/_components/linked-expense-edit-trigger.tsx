@@ -53,7 +53,7 @@ export function LinkedExpenseEditTrigger({
         type="button"
         onClick={handleClick}
         disabled={loading}
-        className="block w-full disabled:opacity-60 disabled:cursor-progress text-left"
+        className="block w-full disabled:opacity-60 text-left"
         aria-label={t('paidBadge.ariaLabel')}
       >
         {children}

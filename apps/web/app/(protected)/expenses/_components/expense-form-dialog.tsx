@@ -24,8 +24,8 @@ import {
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
-  computeObligationMismatch,
   LinkedObligationSelect,
+  obligationMatchStatus,
 } from '@/app/(protected)/expenses/_components/linked-obligation-select';
 import {
   createExpense,
@@ -39,6 +39,7 @@ import {
 } from '@/app/(protected)/expenses/expenses-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { StyledHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
@@ -120,12 +121,18 @@ export function ExpenseFormDialog({
   // doesn't accept the FK) and only when the page has provided active obligations.
   const showLinkedObligation = !isEdit && (activeObligations?.length ?? 0) > 0;
   const selectedObligation = activeObligations?.find((o) => o.id === watchedPaymentObligationId);
-  const obligationMismatch = computeObligationMismatch(
-    selectedObligation,
-    watchedCurrency,
-    watchedPaymentMethod,
-    watchedCreditCardId,
-  );
+  // Mismatch warning fires only on a confirmed conflict ('mismatch' status). 'unknown' (form
+  // not fully filled yet) suppresses both the dot and the warning. Shows in both enabled
+  // and disabled (Mark Paid) states so the user sees when their edits diverge from the
+  // pre-filled obligation's expectations.
+  const obligationMismatch =
+    selectedObligation !== undefined &&
+    obligationMatchStatus(
+      selectedObligation,
+      watchedCurrency || undefined,
+      watchedPaymentMethod,
+      watchedCreditCardId,
+    ) === 'mismatch';
 
   const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key));
 
@@ -489,11 +496,9 @@ export function ExpenseFormDialog({
                           {t('form.linkedObligation.lockedFromMarkPaid')}
                         </p>
                       )}
-                      {obligationMismatch && !prefillFromObligation && (
-                        <p className="text-paragraph-xs text-amber-700">
-                          {t('form.linkedObligation.mismatch')}
-                        </p>
-                      )}
+                      <StyledHint variant="warning" show={obligationMismatch}>
+                        {t('form.linkedObligation.mismatch')}
+                      </StyledHint>
                       <FormMessage />
                     </FormItem>
                   )}

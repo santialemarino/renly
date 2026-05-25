@@ -9,17 +9,18 @@ import { cn } from '@repo/ui/lib';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 
 // "Linked to obligation" dropdown on the expense form (Phase 3 follow-up to Step E).
-// - Sorts active obligations: full match (currency + payment method + card all align) first,
-//   then by next due date.
-// - Renders a small green dot next to fully-matching obligations as a visual hint.
-// - Compute the warning state in the parent so the form can show an inline copy below
-//   when the selected obligation's keys don't fully match what the user is entering.
+// Tri-state match model:
+//   - 'match'    : every comparable obligation field is filled on the form AND equals (green dot, no warning).
+//   - 'mismatch' : at least one filled-on-both-sides field disagrees (no dot, warning fires).
+//   - 'unknown'  : a form field needed for comparison is empty (no dot, no warning — user hasn't said yet).
+// The 'unknown' state is what differs from a naive ignore-empty model — it avoids prematurely
+// showing the green dot when the user has only filled half the form.
+//
+// In disabled mode (Mark Paid pre-fill), the dot is suppressed entirely — the selection is
+// locked and the visual flicker on field edits would be distracting. The mismatch warning
+// still fires so the user sees when their edits diverge from the obligation's expectation.
 
-export interface ObligationMismatch {
-  differentCurrency: { obligation: string; form: string } | null;
-  differentPaymentMethod: { obligation: string | null; form: string } | null;
-  differentCard: { obligation: number | null; form: number } | null;
-}
+export type MatchStatus = 'match' | 'mismatch' | 'unknown';
 
 interface LinkedObligationSelectProps {
   obligations: PaymentObligation[];
@@ -33,31 +34,31 @@ interface LinkedObligationSelectProps {
 
 const NONE_VALUE = 'none';
 
-// Pure: returns true iff every non-null obligation key aligns with the corresponding
-// form field. A key is "ignored" when EITHER side is empty so we don't penalise users
-// for partial form fills (e.g. obligation has no payment_method but the user picked one).
-export function isObligationMatch(
+// Pure: computes the tri-state match between an obligation and the form's current fields.
+// A field is "comparable" when the obligation has a value for it (obligation.X is set).
+// If the form has a value for that comparable field, we check equality (mismatch on conflict,
+// otherwise match contribution). If the form is empty for a comparable field, we mark unknown.
+// Obligation fields that are null act as wildcards — they don't gate anything.
+export function obligationMatchStatus(
   obligation: PaymentObligation,
   formCurrency: string | undefined,
   formPaymentMethod: string | undefined,
   formCreditCardId: number | undefined,
-): boolean {
-  if (obligation.currency && formCurrency && obligation.currency !== formCurrency) return false;
-  if (
-    obligation.paymentMethod &&
-    formPaymentMethod &&
-    obligation.paymentMethod !== formPaymentMethod
-  ) {
-    return false;
+): MatchStatus {
+  let anyUnknown = false;
+  if (obligation.currency) {
+    if (!formCurrency) anyUnknown = true;
+    else if (obligation.currency !== formCurrency) return 'mismatch';
   }
-  if (
-    obligation.creditCardId !== null &&
-    formCreditCardId !== undefined &&
-    obligation.creditCardId !== formCreditCardId
-  ) {
-    return false;
+  if (obligation.paymentMethod) {
+    if (!formPaymentMethod) anyUnknown = true;
+    else if (obligation.paymentMethod !== formPaymentMethod) return 'mismatch';
   }
-  return true;
+  if (obligation.creditCardId !== null) {
+    if (formCreditCardId === undefined) anyUnknown = true;
+    else if (obligation.creditCardId !== formCreditCardId) return 'mismatch';
+  }
+  return anyUnknown ? 'unknown' : 'match';
 }
 
 export function LinkedObligationSelect({
@@ -71,17 +72,19 @@ export function LinkedObligationSelect({
 }: LinkedObligationSelectProps) {
   const t = useTranslations('expenses');
 
-  // Sort: matches first, then by next_due_date ASC.
+  // Sort: 'match' first, then 'unknown', then 'mismatch'. Tiebreak by next_due_date ASC.
   const sorted = useMemo(() => {
-    const withScore = obligations.map((o) => ({
+    const withStatus = obligations.map((o) => ({
       obligation: o,
-      matches: isObligationMatch(o, formCurrency, formPaymentMethod, formCreditCardId),
+      status: obligationMatchStatus(o, formCurrency, formPaymentMethod, formCreditCardId),
     }));
-    withScore.sort((a, b) => {
-      if (a.matches !== b.matches) return a.matches ? -1 : 1;
+    const rank: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
+    withStatus.sort((a, b) => {
+      const rankDiff = rank[a.status] - rank[b.status];
+      if (rankDiff !== 0) return rankDiff;
       return a.obligation.nextDueDate.localeCompare(b.obligation.nextDueDate);
     });
-    return withScore;
+    return withStatus;
   }, [obligations, formCurrency, formPaymentMethod, formCreditCardId]);
 
   return (
@@ -95,11 +98,16 @@ export function LinkedObligationSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_VALUE}>{t('form.linkedObligation.none')}</SelectItem>
-        {sorted.map(({ obligation, matches }) => (
+        {sorted.map(({ obligation, status }) => (
           <SelectItem key={obligation.id} value={String(obligation.id)}>
             <div className="flex items-center gap-x-2">
               <CircleDot
-                className={cn('size-3 shrink-0', matches ? 'text-emerald-500' : 'text-transparent')}
+                className={cn(
+                  'size-3 shrink-0',
+                  // Show the green dot ONLY on a confirmed full match. Suppress entirely
+                  // in disabled mode (Mark Paid) so field-edit flicker doesn't confuse.
+                  !disabled && status === 'match' ? 'text-emerald-500' : 'text-transparent',
+                )}
                 aria-hidden
               />
               <span>{obligation.name}</span>
@@ -109,44 +117,4 @@ export function LinkedObligationSelect({
       </SelectContent>
     </Select>
   );
-}
-
-// Builds the mismatch struct used by the form to render the inline warning.
-// Returns null when the obligation fully matches OR no obligation is selected.
-export function computeObligationMismatch(
-  obligation: PaymentObligation | undefined,
-  formCurrency: string | undefined,
-  formPaymentMethod: string | undefined,
-  formCreditCardId: number | undefined,
-): ObligationMismatch | null {
-  if (!obligation) return null;
-  const mismatch: ObligationMismatch = {
-    differentCurrency: null,
-    differentPaymentMethod: null,
-    differentCard: null,
-  };
-  if (obligation.currency && formCurrency && obligation.currency !== formCurrency) {
-    mismatch.differentCurrency = { obligation: obligation.currency, form: formCurrency };
-  }
-  if (
-    obligation.paymentMethod &&
-    formPaymentMethod &&
-    obligation.paymentMethod !== formPaymentMethod
-  ) {
-    mismatch.differentPaymentMethod = {
-      obligation: obligation.paymentMethod,
-      form: formPaymentMethod,
-    };
-  }
-  if (
-    obligation.creditCardId !== null &&
-    formCreditCardId !== undefined &&
-    obligation.creditCardId !== formCreditCardId
-  ) {
-    mismatch.differentCard = { obligation: obligation.creditCardId, form: formCreditCardId };
-  }
-  if (!mismatch.differentCurrency && !mismatch.differentPaymentMethod && !mismatch.differentCard) {
-    return null;
-  }
-  return mismatch;
 }
