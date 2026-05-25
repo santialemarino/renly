@@ -232,7 +232,11 @@ class RateLookup:
         rate_map: dict[str, Decimal] = {"USD": ONE}
 
         ars_pair = get_ars_pair(self._dollar_preference)
-        ars_rate = self._lookup_pair(ars_pair, as_of_date) or self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
+        ars_rate = self._lookup_pair(ars_pair, as_of_date)
+        if ars_rate is None:
+            # Fall back to MEP when the preferred pair has no stored rate (rather than
+            # relying on `or`, which would also short-circuit on a hypothetical Decimal(0)).
+            ars_rate = self._lookup_pair(ExchangeRatePair.USD_ARS_MEP, as_of_date)
         if ars_rate is not None:
             rate_map["ARS"] = ars_rate
 
@@ -277,7 +281,5 @@ async def get_rate_map(
     session: AsyncSession,
     dollar_preference: str | None = None,
 ) -> dict[str, Decimal] | None:
-    from datetime import date as _date
-
     lookup = await build_rate_lookup(session, dollar_preference)
-    return lookup.get_rate_map_at(_date.today())
+    return lookup.get_rate_map_at(date_type.today())
