@@ -13,6 +13,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Separator,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { formatIanaTimezone, IANA_TIMEZONES } from '@/lib/constants/timezones';
@@ -76,26 +77,35 @@ export function TimezoneCombobox({
               'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
           )}
         >
-          <span className={cn('truncate text-paragraph-sm', !value && 'text-muted-foreground')}>
-            {value ? formatIanaTimezone(value) : placeholder}
-          </span>
-          <ChevronDown className="shrink-0 size-4 opacity-50 transition-transform group-aria-expanded:rotate-180" />
+          {value ? (
+            <span className="inline-flex min-w-0 items-center overflow-hidden text-foreground">
+              <span className="text-paragraph-sm truncate">{formatIanaTimezone(value)}</span>
+            </span>
+          ) : (
+            <span className="min-w-0 text-muted-foreground animate-in fade-in duration-100 truncate">
+              {placeholder}
+            </span>
+          )}
+          <ChevronDown className="shrink-0 size-4 ml-auto text-muted-foreground opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         className="w-(--radix-popover-trigger-width) p-0"
         align="start"
-        sideOffset={4}
+        sideOffset={8}
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} className="gap-y-2">
           <CommandInput
-            placeholder={searchPlaceholder}
+            autoFocus
             value={search}
             onValueChange={handleSearch}
+            placeholder={searchPlaceholder}
           />
+          <Separator />
           <CommandList
             ref={listRef}
             className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+            onWheel={(e) => e.stopPropagation()}
           >
             <CommandEmpty>{noResults}</CommandEmpty>
             {filtered.map((tz) => (
