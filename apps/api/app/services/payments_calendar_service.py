@@ -10,6 +10,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import CalendarItem
+from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
 from app.models.user import User
@@ -171,15 +172,7 @@ async def _installment_items(
                 )
             )
         # Backward: past paid cuotas inside the window.
-        for idx in range(1, inst.current_installment):
-            cuota_date = add_months(inst.start_date, idx - 1)
-            if cuota_date < period_start:
-                continue
-            if cuota_date > period_end:
-                continue
-            expense = paid_expenses.get(cuota_date)
-            if expense is None:
-                continue
+        for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, paid_expenses):
             items.append(
                 CalendarItem(
                     type="installment",
@@ -408,6 +401,29 @@ def subscription_past_paid_cycles_in_window(
             if expense is not None:
                 pairs.append((cursor, expense))
         iterations += 1
+    return pairs
+
+
+# Returns (cuota_index, cuota_date, linked_expense) tuples for every PAST cuota of an
+# installment inside the window whose scheduler-emitted expense row exists. Cuota dates
+# are deterministic (start_date + (idx-1) months), iteration bounded by [1, current_installment).
+# `paid_expenses_by_date` is the pre-loaded window-restricted dict; lookup is unambiguous
+# because the partial UNIQUE INDEX on (installment_id, date) allows at most one row per cuota.
+def installment_past_paid_cuotas_in_window(
+    inst: Installment,
+    period_start: date_type,
+    period_end: date_type,
+    paid_expenses_by_date: dict[date_type, object],
+) -> list[tuple]:
+    pairs: list[tuple] = []
+    for idx in range(1, inst.current_installment):
+        cuota_date = add_months(inst.start_date, idx - 1)
+        if cuota_date < period_start or cuota_date > period_end:
+            continue
+        expense = paid_expenses_by_date.get(cuota_date)
+        if expense is None:
+            continue
+        pairs.append((idx, cuota_date, expense))
     return pairs
 
 

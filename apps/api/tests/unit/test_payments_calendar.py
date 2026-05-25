@@ -3,10 +3,12 @@ from decimal import Decimal
 
 from app.domain import CalendarItem
 from app.models.expense_entry import ExpenseEntry
+from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
 from app.routers.payments_calendar import _to_response
 from app.services.payments_calendar_service import (
+    installment_past_paid_cuotas_in_window,
     obligation_dates_in_window,
     obligation_past_paid_cycles_in_window,
     subscription_past_paid_cycles_in_window,
@@ -384,3 +386,112 @@ class TestSubscriptionPastPaidCycles:
             {date(2026, 5, 15): e_may15, date(2026, 5, 8): e_may8},
         )
         assert result == [(date(2026, 5, 15), e_may15), (date(2026, 5, 8), e_may8)]
+
+
+# --- Installment past-paid backward walker (round-2 follow-up) ---
+
+
+def _installment(
+    *,
+    start_date: date,
+    installments_count: int,
+    current_installment: int,
+) -> Installment:
+    # Minimal in-memory Installment. The walker exercises start_date + current_installment +
+    # installments_count; the rest are placeholders.
+    return Installment(
+        id=1,
+        user_id=1,
+        name="TV Samsung",
+        total_amount=Decimal("120000"),
+        installment_amount=Decimal("10000"),
+        currency="ARS",
+        installments_count=installments_count,
+        start_date=start_date,
+        current_installment=current_installment,
+        is_active=True,
+    )
+
+
+class TestInstallmentPastPaidCuotas:
+    def test_no_past_cuotas_when_current_installment_is_one(self):
+        # current_installment=1 means nothing has been paid yet — backward walk is empty.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=1)
+        e = _expense(date_val=date(2026, 1, 15))
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {date(2026, 1, 15): e})
+        assert result == []
+
+    def test_one_past_cuota_in_window_with_matching_expense(self):
+        # First cuota paid (current_installment=2 means cuota 1 already emitted). Viewing
+        # January, walk yields cuota #1 dated start_date.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=2)
+        e = _expense(date_val=date(2026, 1, 15), amount=Decimal("10000"))
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {date(2026, 1, 15): e})
+        assert result == [(1, date(2026, 1, 15), e)]
+
+    def test_skips_past_cuota_when_no_matching_expense(self):
+        # Cuota date is in window + idx < current_installment, but the auto-row hasn't
+        # been emitted (scheduler hasn't run for that cycle). Walker skips it.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=12, current_installment=2)
+        result = installment_past_paid_cuotas_in_window(inst, date(2026, 1, 1), date(2026, 1, 31), {})
+        assert result == []
+
+    def test_multiple_past_cuotas_all_in_window(self):
+        # Three cuotas paid (current_installment=4 → cuotas 1, 2, 3 are past).
+        inst = _installment(start_date=date(2026, 3, 10), installments_count=12, current_installment=4)
+        e1 = _expense(date_val=date(2026, 3, 10), amount=Decimal("10000"))
+        e2 = _expense(date_val=date(2026, 4, 10), amount=Decimal("10000"))
+        e3 = _expense(date_val=date(2026, 5, 10), amount=Decimal("10000"))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 3, 1),
+            date(2026, 5, 31),
+            {date(2026, 3, 10): e1, date(2026, 4, 10): e2, date(2026, 5, 10): e3},
+        )
+        assert result == [(1, date(2026, 3, 10), e1), (2, date(2026, 4, 10), e2), (3, date(2026, 5, 10), e3)]
+
+    def test_only_emits_cuotas_inside_window(self):
+        # 5 cuotas paid (current_installment=6 → cuotas 1..5 past). Viewing April only.
+        inst = _installment(start_date=date(2026, 1, 10), installments_count=12, current_installment=6)
+        e_apr = _expense(date_val=date(2026, 4, 10))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 4, 1),
+            date(2026, 4, 30),
+            {date(2026, 4, 10): e_apr},
+        )
+        # Cuotas 1 (Jan), 2 (Feb), 3 (Mar) drop because they're before period_start;
+        # cuota 5 (May) drops because it's after period_end; only cuota 4 (Apr) is emitted.
+        assert result == [(4, date(2026, 4, 10), e_apr)]
+
+    def test_fully_paid_installment_walks_through_all_cuotas(self):
+        # Edge case: current_installment > installments_count means fully paid. Forward
+        # walker won't emit anything; backward walker emits past cuotas as usual.
+        inst = _installment(start_date=date(2026, 1, 15), installments_count=3, current_installment=4)
+        e1 = _expense(date_val=date(2026, 1, 15))
+        e2 = _expense(date_val=date(2026, 2, 15))
+        e3 = _expense(date_val=date(2026, 3, 15))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 1, 1),
+            date(2026, 3, 31),
+            {date(2026, 1, 15): e1, date(2026, 2, 15): e2, date(2026, 3, 15): e3},
+        )
+        assert result == [(1, date(2026, 1, 15), e1), (2, date(2026, 2, 15), e2), (3, date(2026, 3, 15), e3)]
+
+    def test_short_month_clamp_for_day_31_start_no_drift(self):
+        # start_date=Jan 31, installments_count=12. Each cuota date = add_months(start_date, idx-1),
+        # which always uses start_date.day=31 → Feb 28 (clamped), Mar 31, Apr 30, May 31...
+        # NO drift because we recompute from start_date each time (vs the iterative advance
+        # pattern that caused the obligation drift bug).
+        inst = _installment(start_date=date(2026, 1, 31), installments_count=12, current_installment=4)
+        e_jan = _expense(date_val=date(2026, 1, 31))
+        e_feb = _expense(date_val=date(2026, 2, 28))
+        e_mar = _expense(date_val=date(2026, 3, 31))
+        result = installment_past_paid_cuotas_in_window(
+            inst,
+            date(2026, 1, 1),
+            date(2026, 3, 31),
+            {date(2026, 1, 31): e_jan, date(2026, 2, 28): e_feb, date(2026, 3, 31): e_mar},
+        )
+        assert result == [(1, date(2026, 1, 31), e_jan), (2, date(2026, 2, 28), e_feb), (3, date(2026, 3, 31), e_mar)]
