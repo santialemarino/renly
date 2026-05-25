@@ -330,7 +330,8 @@ Read-only timeline that aggregates every upcoming payment for a given calendar m
 "cuota_index": null, // installments only
 "installments_count": null, // installments only
 "recurrence": null, // obligations only
-"is_paid": false // obligations only — true when an expense with this payment_obligation_id falls inside the cycle
+"is_paid": false, // obligation / subscription / installment past cycles whose scheduler-emitted or linked expense exists
+"linked_expense_id": null // set on past-paid items; lets the frontend open the linked expense's edit dialog inline
 }
 ]
 }
