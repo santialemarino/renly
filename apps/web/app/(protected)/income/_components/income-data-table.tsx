@@ -30,6 +30,7 @@ import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-fo
 import { ROUTES } from '@/config/routes';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField, SortOrder } from '@/lib/api/income';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 function SortIcon({
   column,
@@ -234,7 +235,7 @@ export function IncomeDataTable({
             ) : (
               items.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell>{entry.date}</TableCell>
+                  <TableCell>{formatDateForLocale(entry.date, locale)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
                     {formatAmount(entry.convertedAmount ?? entry.amount, locale)}
                   </TableCell>

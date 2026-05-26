@@ -31,6 +31,7 @@ import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 function SortIcon({
   column,
@@ -250,7 +251,7 @@ export function ExpensesDataTable({
             ) : (
               items.map((expense) => (
                 <TableRow key={expense.id}>
-                  <TableCell>{expense.date}</TableCell>
+                  <TableCell>{formatDateForLocale(expense.date, locale)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
                     {formatAmount(expense.convertedAmount ?? expense.amount, locale)}
                   </TableCell>

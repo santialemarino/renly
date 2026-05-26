@@ -24,6 +24,7 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface CreditCardReconciliationsSectionProps {
@@ -87,7 +88,10 @@ export function CreditCardReconciliationsSection({
 
   function formatPeriodLabel(start: string, end: string): string {
     // YYYY-MM-DD -> Locale-aware short label using period_end as the anchor.
-    const endDate = new Date(end);
+    // Anchor at local midnight so negative-UTC-offset users don't read the
+    // previous month for an end-of-month period (matches `formatMonth` +
+    // `formatDateForLocale`).
+    const endDate = new Date(end + 'T00:00:00');
     return endDate.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: 'numeric' });
   }
 
@@ -185,7 +189,8 @@ export function CreditCardReconciliationsSection({
                                 {formatPeriodLabel(statement.periodStart, statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-xs text-muted-foreground">
-                                {statement.periodStart} → {statement.periodEnd}
+                                {formatDateForLocale(statement.periodStart, locale)} →{' '}
+                                {formatDateForLocale(statement.periodEnd, locale)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
                                 {formatAmount(statement.computedBalance, locale)}{' '}

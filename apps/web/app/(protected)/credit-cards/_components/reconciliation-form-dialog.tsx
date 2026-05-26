@@ -25,6 +25,7 @@ import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
+import { formatDateForLocale } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface ReconciliationFormDialogProps {
@@ -107,7 +108,10 @@ export function ReconciliationFormDialog({
         <DialogHeader>
           <DialogTitle>{t('form.title')}</DialogTitle>
           <p className="text-paragraph-sm text-muted-foreground">
-            {t('form.periodRange', { start: statement.periodStart, end: statement.periodEnd })}
+            {t('form.periodRange', {
+              start: formatDateForLocale(statement.periodStart, locale),
+              end: formatDateForLocale(statement.periodEnd, locale),
+            })}
           </p>
           {isStale && <StyledHint variant="warning">{t('form.staleBanner')}</StyledHint>}
           {isReplace && !isStale && statement.reconciliation && (

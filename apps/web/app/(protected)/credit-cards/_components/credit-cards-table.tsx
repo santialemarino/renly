@@ -44,6 +44,7 @@ import {
 import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField, SortOrder } from '@/lib/api/credit-cards';
 import { formatAmount } from '@/lib/utils/currency';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly.
@@ -193,7 +194,7 @@ function SettlementsSection({
                         <TableBody>
                           {settlements.map((s) => (
                             <TableRow key={s.id}>
-                              <TableCell>{s.date}</TableCell>
+                              <TableCell>{formatDateForLocale(s.date, locale)}</TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
                                 {formatAmount(s.amount, locale)}
                               </TableCell>
