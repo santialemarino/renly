@@ -54,7 +54,11 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
   const router = useRouter();
 
   const yearSuffix = tCommon('period.yearSuffix');
-  const schema = buildSettingsFormSchema(t('form.periodPresets.invalidFormat'));
+  const schema = buildSettingsFormSchema({
+    presetInvalidMsg: t('form.periodPresets.invalidFormat'),
+    maxGroupsInvalidMsg: t('form.maxGroups.invalidRange'),
+    groupWarningPctInvalidMsg: t('form.groupWarningPct.invalidRange'),
+  });
 
   const {
     control,

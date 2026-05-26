@@ -2,15 +2,19 @@ import type { KeyboardEvent } from 'react';
 
 import { getDecimalSeparator } from '@/lib/utils/locale';
 
-// Stackable keystroke + paste rules for numeric inputs. Each rule is a small,
-// independent function. Components compose the subset they need via
-// `composeKeyHandlers`. Two consumer components today: `LocaleAmountInput`
-// (decimal mode) and `IntegerInput` (integer mode).
+/*
+ * Stackable keystroke + paste rules for numeric inputs. Each rule is a small,
+ * independent function. Components compose the subset they need via
+ * `composeKeyHandlers`. Two consumer components today: `LocaleAmountInput`
+ * (decimal mode) and `IntegerInput` (integer mode).
+ */
 
 export type KeyRule = (e: KeyboardEvent<HTMLInputElement>) => void;
 
-// Runs each handler in order on every keystroke. `preventDefault()` is
-// idempotent so calling it from multiple handlers is safe.
+/*
+ * Runs each handler in order on every keystroke. `preventDefault()` is
+ * idempotent so calling it from multiple handlers is safe.
+ */
 export function composeKeyHandlers(...handlers: KeyRule[]): KeyRule {
   return (e) => {
     for (const handler of handlers) handler(e);
@@ -24,17 +28,21 @@ export function blockSignKeys(e: KeyboardEvent<HTMLInputElement>): void {
   }
 }
 
-// Block `e` and `E` (scientific notation). HTML5 `<input type="number">`
-// accepts them; we never want them in any of our numeric inputs.
+/*
+ * Block `e` and `E` (scientific notation). HTML5 `<input type="number">`
+ * accepts them; we never want them in any of our numeric inputs.
+ */
 export function blockScientificKeys(e: KeyboardEvent<HTMLInputElement>): void {
   if (e.key === 'e' || e.key === 'E') {
     e.preventDefault();
   }
 }
 
-// Decimal-mode rule: block the OTHER locale's decimal separator entirely.
-// en-US user can't type `,`; es-AR user can't type `.`. Closes the
-// mixed-notation parsing bug from the previous LocaleAmountInput.
+/*
+ * Decimal-mode rule: block the OTHER locale's decimal separator entirely.
+ * en-US user can't type `,`; es-AR user can't type `.`. Closes the
+ * mixed-notation parsing bug from the previous LocaleAmountInput.
+ */
 export function blockWrongLocaleDecimal(locale?: string): KeyRule {
   return (e) => {
     const decimal = getDecimalSeparator(locale);
@@ -45,19 +53,33 @@ export function blockWrongLocaleDecimal(locale?: string): KeyRule {
   };
 }
 
-// Decimal-mode rule: block typing a second occurrence of the current
-// locale's decimal separator. Pass the current display value via closure.
+/*
+ * Decimal-mode rule: block typing a second occurrence of the current locale's
+ * decimal separator — UNLESS the input's current selection overlaps the
+ * existing separator (in which case the keystroke would REPLACE it, not add a
+ * second one). Pass the current display value via closure.
+ */
 export function blockSecondDecimal(locale: string | undefined, currentValue: string): KeyRule {
   return (e) => {
     const decimal = getDecimalSeparator(locale);
-    if (e.key === decimal && currentValue.includes(decimal)) {
-      e.preventDefault();
-    }
+    if (e.key !== decimal) return;
+    const existingIdx = currentValue.indexOf(decimal);
+    if (existingIdx === -1) return;
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    // Selection [start, end) overlaps the existing separator at existingIdx
+    // when start <= existingIdx < end — that range will be replaced by the
+    // typed key, so the second-decimal block does not apply.
+    if (start <= existingIdx && existingIdx < end) return;
+    e.preventDefault();
   };
 }
 
-// Decimal-mode rule: when `maxDecimals === 0` (zero sub-unit currencies
-// like JPY/KRW), block the decimal separator entirely. Otherwise no-op.
+/*
+ * Decimal-mode rule: when `maxDecimals === 0` (zero sub-unit currencies
+ * like JPY/KRW), block the decimal separator entirely. Otherwise no-op.
+ */
 export function blockDecimalIfIntegerCurrency(
   locale: string | undefined,
   maxDecimals: number | undefined,
@@ -76,10 +98,12 @@ export function blockAllSeparators(e: KeyboardEvent<HTMLInputElement>): void {
   }
 }
 
-// Truncate the fractional part of a display string to `max` digits.
-// `max = 0` strips the decimal separator entirely. `max = undefined` means
-// no limit (returns the value unchanged). Pure function; called from the
-// onChange path of decimal-mode inputs.
+/*
+ * Truncate the fractional part of a display string to `max` digits.
+ * `max = 0` strips the decimal separator entirely. `max = undefined` means
+ * no limit (returns the value unchanged). Pure function; called from the
+ * onChange path of decimal-mode inputs.
+ */
 export function limitDecimalsInString(
   value: string,
   decimal: string,
@@ -94,12 +118,26 @@ export function limitDecimalsInString(
   return `${integer}${decimal}${fraction}`;
 }
 
-// Sanitize pasted text for decimal-mode inputs. Strategy: keep only digits
-// and separator chars, then pick the LAST separator as the decimal — every
-// earlier separator becomes thousand-grouping noise and is stripped. Works
-// for both `1,234.56` (en-US) and `1.234,56` (es-AR) regardless of the
-// active locale. The returned string uses the locale's decimal separator
-// so it round-trips through `normalizeAmountFromInput` cleanly.
+/*
+ * Sanitize any text for decimal-mode inputs — strips whitespace and anything
+ * that isn't a digit or the locale's decimal separator. Used as the change
+ * handler safety net so non-keystroke paths (IME, autofill, drag-drop,
+ * programmatic input) can't leak letters or whitespace into form state.
+ */
+export function sanitizeDecimalChars(text: string, locale?: string): string {
+  const decimal = getDecimalSeparator(locale);
+  const allowed = decimal === '.' ? /[^0-9.]/g : /[^0-9,]/g;
+  return text.replace(allowed, '');
+}
+
+/*
+ * Sanitize pasted text for decimal-mode inputs. Strategy: keep only digits
+ * and separator chars, then pick the LAST separator as the decimal — every
+ * earlier separator becomes thousand-grouping noise and is stripped. Works
+ * for both `1,234.56` (en-US) and `1.234,56` (es-AR) regardless of the
+ * active locale. The returned string uses the locale's decimal separator
+ * so it round-trips through `normalizeAmountFromInput` cleanly.
+ */
 export function sanitizeDecimalPaste(text: string, locale?: string): string {
   const cleaned = text.replace(/[^0-9.,]/g, '');
   if (!cleaned) return '';
@@ -117,6 +155,9 @@ export function sanitizeDecimalPaste(text: string, locale?: string): string {
   const decimal = getDecimalSeparator(locale);
   const integerPart = cleaned.slice(0, lastSepIdx).replace(/[.,]/g, '');
   const fractionPart = cleaned.slice(lastSepIdx + 1).replace(/[.,]/g, '');
+  // A bare separator (e.g. pasting just `,`) would yield a lone decimal char
+  // whose canonical form is `.` — `Number('.')` is NaN. Drop it instead.
+  if (!integerPart && !fractionPart) return '';
   return `${integerPart}${decimal}${fractionPart}`;
 }
 

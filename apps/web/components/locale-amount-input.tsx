@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useState } from 'react';
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import cc from 'currency-codes';
 import { useLocale } from 'next-intl';
 
@@ -18,6 +18,7 @@ import {
   blockWrongLocaleDecimal,
   composeKeyHandlers,
   limitDecimalsInString,
+  sanitizeDecimalChars,
   sanitizeDecimalPaste,
 } from '@/lib/utils/numeric-input';
 
@@ -36,7 +37,7 @@ interface LocaleAmountInputProps {
   'aria-invalid'?: boolean | 'true' | 'false';
 }
 
-// Locale-aware decimal amount input. Stores canonical `.`-decimal in form state; displays in the user's locale format (e.g. "1234,56" for es-AR, "1234.56" for en-US). Replaces `<Input type="number" step="0.01">` for amount and quantity fields — fixes Chrome's silent rejection of `1234,56` for ARS users. Rule stack (composable, defined in `lib/utils/numeric-input.ts`): block sign keys, block scientific notation, block the wrong-locale decimal separator, block a second decimal, block the decimal entirely for zero-precision currencies (JPY/KRW); paste handler uses "last separator wins" so `"1.234,56"` and `"1,234.56"` both yield 1234.56 regardless of locale; onChange truncates fractional digits to the currency's ISO sub-unit precision.
+// Locale-aware decimal amount input. Stores canonical `.`-decimal in form state; displays in the user's locale format (e.g. "1234,56" for es-AR, "1234.56" for en-US). Replaces `<Input type="number" step="0.01">` for amount and quantity fields — fixes Chrome's silent rejection of `1234,56` for ARS users. Rule stack (composable, defined in `lib/utils/numeric-input.ts`): block sign keys, block scientific notation, block the wrong-locale decimal separator, block a second decimal (selection-aware), block the decimal entirely for zero-precision currencies (JPY/KRW); change handler runs `sanitizeDecimalChars` so non-keystroke paths (IME, autofill, drag-drop, programmatic input) can't leak letters or whitespace into form state; paste handler uses "last separator wins" so `"1.234,56"` and `"1,234.56"` both yield 1234.56 regardless of locale; onChange truncates fractional digits to the currency's ISO sub-unit precision.
 const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
   ({ value = '', onChange, onBlur, name, currency, maxDecimals, ...rest }, ref) => {
     const locale = useLocale();
@@ -49,14 +50,29 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
           : undefined;
 
     const [displayValue, setDisplayValue] = useState(() => formatAmountForInput(value, locale));
+    const prevLocaleRef = useRef(locale);
 
-    // Re-sync display when canonical value changes externally (e.g. form.reset). Skip when round-tripping the current display would produce the same canonical — avoids clobbering a trailing decimal separator while typing.
+    // Re-sync display when canonical value changes externally (e.g. form.reset). Skip on locale switch when the display ends with EITHER separator — the user is mid-typing a decimal and the locale change shouldn't migrate the trailing separator. Value-only changes still run through the round-trip check below, so form.reset keeps working.
     useEffect(() => {
+      const localeChanged = prevLocaleRef.current !== locale;
+      prevLocaleRef.current = locale;
+      if (localeChanged && (displayValue.endsWith('.') || displayValue.endsWith(','))) return;
       if (normalizeAmountFromInput(displayValue, locale) !== value) {
         setDisplayValue(formatAmountForInput(value, locale));
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value, locale]);
+
+    // Re-truncate display when the precision cap tightens (e.g. user typed 123.45 under USD then switched currency to JPY). Independent from the value/locale resync so a precision change can't be masked by a no-op round-trip.
+    useEffect(() => {
+      if (effectiveMaxDecimals === undefined) return;
+      const limited = limitDecimalsInString(displayValue, decimal, effectiveMaxDecimals);
+      if (limited !== displayValue) {
+        setDisplayValue(limited);
+        onChange?.(normalizeAmountFromInput(limited, locale));
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [effectiveMaxDecimals]);
 
     function applyValue(next: string) {
       const limited = limitDecimalsInString(next, decimal, effectiveMaxDecimals);
@@ -65,7 +81,7 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
     }
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      applyValue(e.target.value);
+      applyValue(sanitizeDecimalChars(e.target.value, locale));
     }
 
     function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
@@ -88,6 +104,7 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
 
     return (
       <Input
+        {...rest}
         ref={ref}
         type="text"
         inputMode="decimal"
@@ -98,7 +115,6 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         autoComplete="off"
-        {...rest}
       />
     );
   },

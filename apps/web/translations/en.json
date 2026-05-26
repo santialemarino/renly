@@ -1356,13 +1356,15 @@
       "maxGroups": {
         "label": "Max groups",
         "hint": "Maximum number of investment groups allowed.",
-        "default": "Defaults to {value} if left empty."
+        "default": "Defaults to {value} if left empty.",
+        "invalidRange": "Must be a whole number of 1 or more."
       },
       "groupWarningPct": {
         "label": "Warning threshold (%)",
         "hint": "Show a warning when this percentage of max groups is reached.",
         "default": "Defaults to {value}% if left empty.",
-        "noDefault": "Leave empty to disable the warning."
+        "noDefault": "Leave empty to disable the warning.",
+        "invalidRange": "Must be a whole number between 1 and 100."
       },
       "dollarRate": {
         "label": "Dollar rate",

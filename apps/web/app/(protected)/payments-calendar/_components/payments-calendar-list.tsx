@@ -14,6 +14,7 @@ interface PaymentsCalendarListProps {
   month: number;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeCurrency?: string;
 }
 
 // Variant colour per entry type — keeps the timeline scannable.
@@ -33,6 +34,7 @@ export async function PaymentsCalendarList({
   month,
   preferredCurrencies,
   creditCards,
+  activeCurrency,
 }: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
   const locale = await getLocale();
@@ -123,7 +125,13 @@ export async function PaymentsCalendarList({
                       </div>
                     </div>
                     <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
-                      <span>{formatAmount(displayAmount, locale, item.currency)}</span>
+                      <span>
+                        {formatAmount(
+                          displayAmount,
+                          locale,
+                          item.convertedAmount ? activeCurrency : item.currency,
+                        )}
+                      </span>
                       {showOriginalCurrency && (
                         <span className="text-paragraph-xs text-muted-foreground">
                           {item.currency}

@@ -50,6 +50,7 @@ const IntegerInput = forwardRef<HTMLInputElement, IntegerInputProps>(
 
     return (
       <Input
+        {...rest}
         ref={ref}
         type="text"
         inputMode="numeric"
@@ -60,7 +61,6 @@ const IntegerInput = forwardRef<HTMLInputElement, IntegerInputProps>(
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         autoComplete="off"
-        {...rest}
       />
     );
   },

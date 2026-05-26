@@ -141,9 +141,11 @@ function RowActions({
 export function IncomeDataTable({
   data,
   preferredCurrencies,
+  activeCurrency,
 }: {
   data: IncomeListResponse;
   preferredCurrencies?: string[];
+  activeCurrency?: string;
 }) {
   const locale = useLocale();
   const t = useTranslations('income');
@@ -237,7 +239,11 @@ export function IncomeDataTable({
                 <TableRow key={entry.id}>
                   <TableCell>{formatDateForLocale(entry.date, locale)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(entry.convertedAmount ?? entry.amount, locale, entry.currency)}
+                    {formatAmount(
+                      entry.convertedAmount ?? entry.amount,
+                      locale,
+                      entry.convertedAmount ? activeCurrency : entry.currency,
+                    )}
                   </TableCell>
                   <TableCell>{entry.category ? t(`categories.${entry.category}`) : '—'}</TableCell>
                   <TableCell className="max-w-48 truncate text-muted-foreground">

@@ -70,6 +70,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         data={data}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeCurrency={currency}
       />
     </div>
   );

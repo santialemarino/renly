@@ -146,10 +146,12 @@ export function ExpensesDataTable({
   data,
   preferredCurrencies,
   creditCards,
+  activeCurrency,
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeCurrency?: string;
 }) {
   const locale = useLocale();
   const t = useTranslations('expenses');
@@ -256,7 +258,7 @@ export function ExpensesDataTable({
                     {formatAmount(
                       expense.convertedAmount ?? expense.amount,
                       locale,
-                      expense.currency,
+                      expense.convertedAmount ? activeCurrency : expense.currency,
                     )}
                   </TableCell>
                   <TableCell>
