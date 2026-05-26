@@ -37,7 +37,25 @@ interface LocaleAmountInputProps {
   'aria-invalid'?: boolean | 'true' | 'false';
 }
 
-// Locale-aware decimal amount input. Stores canonical `.`-decimal in form state; displays in the user's locale format (e.g. "1234,56" for es-AR, "1234.56" for en-US). Replaces `<Input type="number" step="0.01">` for amount and quantity fields — fixes Chrome's silent rejection of `1234,56` for ARS users. Rule stack (composable, defined in `lib/utils/numeric-input.ts`): block sign keys, block scientific notation, block the wrong-locale decimal separator, block a second decimal (selection-aware), block the decimal entirely for zero-precision currencies (JPY/KRW); change handler runs `sanitizeDecimalChars` so non-keystroke paths (IME, autofill, drag-drop, programmatic input) can't leak letters or whitespace into form state; paste handler uses "last separator wins" so `"1.234,56"` and `"1,234.56"` both yield 1234.56 regardless of locale; onChange truncates fractional digits to the currency's ISO sub-unit precision.
+/*
+ * Locale-aware decimal amount input. Stores canonical `.`-decimal in form state;
+ * displays in the user's locale format (e.g. "1234,56" for es-AR, "1234.56" for
+ * en-US). Replaces `<Input type="number" step="0.01">` for amount and quantity
+ * fields — fixes Chrome's silent rejection of `1234,56` for ARS users.
+ *
+ * Rule stack (composable, defined in `lib/utils/numeric-input.ts`):
+ *  - block sign keys, block scientific notation
+ *  - block the wrong-locale decimal separator
+ *  - block a second decimal (selection-aware: keystroke allowed when the input's
+ *    selection range overlaps the existing decimal)
+ *  - block the decimal entirely for zero-precision currencies (JPY/KRW)
+ *
+ * Change handler runs `sanitizeDecimalChars` so non-keystroke paths (IME, autofill,
+ * drag-drop, programmatic input) can't leak letters or whitespace into form state.
+ * Paste handler uses "last separator wins" so `"1.234,56"` and `"1,234.56"` both
+ * yield 1234.56 regardless of locale. `onChange` truncates fractional digits to
+ * the currency's ISO sub-unit precision.
+ */
 const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
   ({ value = '', onChange, onBlur, name, currency, maxDecimals, ...rest }, ref) => {
     const locale = useLocale();
@@ -52,7 +70,17 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
     const [displayValue, setDisplayValue] = useState(() => formatAmountForInput(value, locale));
     const prevLocaleRef = useRef(locale);
 
-    // Re-sync display when canonical value changes externally (e.g. form.reset). Skip on locale switch when the display ends with EITHER separator — the user is mid-typing a decimal and the locale change shouldn't migrate the trailing separator. Value-only changes still run through the round-trip check below, so form.reset keeps working.
+    /*
+     * Re-sync display when canonical value changes externally (e.g. form.reset).
+     * Skip on locale switch when the display ends with EITHER separator — the
+     * user is mid-typing a decimal and the locale change shouldn't migrate the
+     * trailing separator. Value-only changes still run through the round-trip
+     * check below, so form.reset keeps working.
+     *
+     * Deps are `[value, locale]` only on purpose: `displayValue` is a captured
+     * closure value (we read it to decide whether to re-sync) and re-running on
+     * every keystroke would create an infinite loop.
+     */
     useEffect(() => {
       const localeChanged = prevLocaleRef.current !== locale;
       prevLocaleRef.current = locale;
@@ -63,7 +91,13 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value, locale]);
 
-    // Re-truncate display when the precision cap tightens (e.g. user typed 123.45 under USD then switched currency to JPY). Independent from the value/locale resync so a precision change can't be masked by a no-op round-trip.
+    /*
+     * Re-truncate display when the precision cap tightens (e.g. user typed
+     * 123.45 under USD then switched currency to JPY). Independent from the
+     * value/locale resync so a precision change can't be masked by a no-op
+     * round-trip. Deps are `[effectiveMaxDecimals]` only — `displayValue` /
+     * `onChange` capture is intentional to avoid keystroke-driven re-runs.
+     */
     useEffect(() => {
       if (effectiveMaxDecimals === undefined) return;
       const limited = limitDecimalsInString(displayValue, decimal, effectiveMaxDecimals);
