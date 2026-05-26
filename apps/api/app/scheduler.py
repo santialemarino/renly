@@ -76,7 +76,7 @@ async def _update_cedear_ratios() -> None:
 
 
 def start_scheduler() -> None:
-    from datetime import datetime
+    from datetime import UTC, datetime
 
     # Exchange rates: run immediately on startup, then every 6 hours.
     scheduler.add_job(
@@ -85,7 +85,7 @@ def start_scheduler() -> None:
         hours=EXCHANGE_RATES_INTERVAL_HOURS,
         id="update_exchange_rates",
         replace_existing=True,
-        next_run_time=datetime.now(),
+        next_run_time=datetime.now(UTC),
     )
 
     # Asset prices: run daily at 22:00 UTC (after US + Argentine market close).
@@ -126,7 +126,7 @@ def start_scheduler() -> None:
         hour=CEDEAR_RATIOS_HOUR_UTC,
         id="update_cedear_ratios",
         replace_existing=True,
-        next_run_time=datetime.now(),
+        next_run_time=datetime.now(UTC),
     )
 
     scheduler.start()
