@@ -60,6 +60,7 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
         subscriptions={subscriptions}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeCurrency={currency}
       />
     </div>
   );

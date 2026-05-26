@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -67,6 +67,8 @@ export function SettlementFormDialog({
     },
   });
 
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+
   // Reset form when dialog opens — re-anchor currency to the card's primary bucket.
   useEffect(() => {
     if (open) {
@@ -127,6 +129,7 @@ export function SettlementFormDialog({
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
+                        currency={watchedCurrency || undefined}
                         placeholder={t('settlements.form.amountPlaceholder')}
                       />
                     </FormControl>

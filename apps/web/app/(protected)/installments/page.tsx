@@ -56,6 +56,7 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
         installments={installments}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeCurrency={currency}
       />
     </div>
   );

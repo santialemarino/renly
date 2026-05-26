@@ -1356,13 +1356,15 @@
       "maxGroups": {
         "label": "Máximo de grupos",
         "hint": "Cantidad máxima de grupos de inversiones permitidos.",
-        "default": "Por defecto {value} si se deja vacío."
+        "default": "Por defecto {value} si se deja vacío.",
+        "invalidRange": "Debe ser un número entero mayor o igual a 1."
       },
       "groupWarningPct": {
         "label": "Umbral de advertencia (%)",
         "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
         "default": "Por defecto {value}% si se deja vacío.",
-        "noDefault": "Dejá vacío para desactivar la advertencia."
+        "noDefault": "Dejá vacío para desactivar la advertencia.",
+        "invalidRange": "Debe ser un número entero entre 1 y 100."
       },
       "dollarRate": {
         "label": "Cotización del dólar",

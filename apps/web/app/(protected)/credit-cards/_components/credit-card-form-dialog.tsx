@@ -25,6 +25,7 @@ import {
   type CreditCardFormValues,
 } from '@/app/(protected)/credit-cards/credit-card-form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { IntegerInput } from '@/components/integer-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface CreditCardFormDialogProps {
@@ -126,11 +127,7 @@ export function CreditCardFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.closingDay.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        inputMode="numeric"
-                        placeholder={t('form.closingDay.placeholder')}
-                      />
+                      <IntegerInput {...field} placeholder={t('form.closingDay.placeholder')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -144,11 +141,7 @@ export function CreditCardFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.dueDay.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        inputMode="numeric"
-                        placeholder={t('form.dueDay.placeholder')}
-                      />
+                      <IntegerInput {...field} placeholder={t('form.dueDay.placeholder')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

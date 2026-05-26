@@ -65,6 +65,7 @@ export default async function PaymentObligationsPage({
         obligations={obligations}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeCurrency={currency}
       />
     </div>
   );

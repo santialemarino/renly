@@ -35,6 +35,7 @@ import {
 } from '@/app/(protected)/installments/installment-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { InfoHint } from '@/components/styled-hint';
@@ -271,6 +272,7 @@ export function InstallmentFormDialog({
                                 <TooltipTrigger asChild>
                                   <LocaleAmountInput
                                     {...field}
+                                    currency={watchedCurrency || undefined}
                                     placeholder={t('form.originalPrice.placeholder')}
                                     disabled={isLocked}
                                   />
@@ -335,6 +337,7 @@ export function InstallmentFormDialog({
                           <TooltipTrigger asChild>
                             <LocaleAmountInput
                               {...field}
+                              currency={watchedCurrency || undefined}
                               placeholder={t('form.installmentAmount.placeholder')}
                               disabled={isLocked}
                             />
@@ -356,9 +359,8 @@ export function InstallmentFormDialog({
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Input
+                            <IntegerInput
                               {...field}
-                              inputMode="numeric"
                               placeholder={t('form.installmentsCount.placeholder')}
                               disabled={isLocked}
                             />
@@ -547,9 +549,8 @@ export function InstallmentFormDialog({
                     <FormItem>
                       <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
                       <FormControl>
-                        <Input
+                        <IntegerInput
                           {...field}
-                          inputMode="numeric"
                           placeholder={t('form.currentInstallment.placeholder')}
                         />
                       </FormControl>

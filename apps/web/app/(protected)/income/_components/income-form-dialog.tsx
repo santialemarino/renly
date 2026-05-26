@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -65,6 +65,7 @@ export function IncomeFormDialog({
   });
 
   const isEdit = !!income;
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
   const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key), locale);
 
@@ -160,7 +161,11 @@ export function IncomeFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.amount.label')}</FormLabel>
                     <FormControl>
-                      <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
+                      <LocaleAmountInput
+                        {...field}
+                        currency={watchedCurrency || undefined}
+                        placeholder={t('form.amount.placeholder')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

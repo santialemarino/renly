@@ -79,12 +79,14 @@ interface SubscriptionsTableProps {
   subscriptions: Subscription[];
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeCurrency?: string;
 }
 
 export function SubscriptionsTable({
   subscriptions,
   preferredCurrencies,
   creditCards,
+  activeCurrency,
 }: SubscriptionsTableProps) {
   const locale = useLocale();
   const t = useTranslations('subscriptions');
@@ -212,7 +214,11 @@ export function SubscriptionsTable({
                   <TableRow key={sub.id} className={!sub.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{sub.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount, locale, sub.currency)}{' '}
+                      {formatAmount(
+                        displayAmount,
+                        locale,
+                        sub.convertedAmount ? activeCurrency : sub.currency,
+                      )}{' '}
                       {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>

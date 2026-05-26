@@ -55,6 +55,7 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
         month={month}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeCurrency={currency}
       />
     </div>
   );

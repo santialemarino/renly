@@ -54,7 +54,11 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <IncomeToolbar preferredCurrencies={preferredCurrencies} />
-      <IncomeDataTable data={data} preferredCurrencies={preferredCurrencies} />
+      <IncomeDataTable
+        data={data}
+        preferredCurrencies={preferredCurrencies}
+        activeCurrency={currency}
+      />
     </div>
   );
 }

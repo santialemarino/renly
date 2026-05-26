@@ -95,12 +95,14 @@ interface PaymentObligationsTableProps {
   obligations: PaymentObligation[];
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeCurrency?: string;
 }
 
 export function PaymentObligationsTable({
   obligations,
   preferredCurrencies,
   creditCards,
+  activeCurrency,
 }: PaymentObligationsTableProps) {
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
@@ -315,7 +317,11 @@ export function PaymentObligationsTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount, locale, o.currency)}{' '}
+                      {formatAmount(
+                        displayAmount,
+                        locale,
+                        o.convertedAmount ? activeCurrency : o.currency,
+                      )}{' '}
                       {o.convertedAmount ? '' : o.currency}
                     </TableCell>
                     <TableCell>{formatDateForLocale(o.nextDueDate, locale)}</TableCell>

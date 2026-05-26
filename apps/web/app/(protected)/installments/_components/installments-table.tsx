@@ -80,12 +80,14 @@ interface InstallmentsTableProps {
   installments: Installment[];
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeCurrency?: string;
 }
 
 export function InstallmentsTable({
   installments,
   preferredCurrencies,
   creditCards,
+  activeCurrency,
 }: InstallmentsTableProps) {
   const locale = useLocale();
   const t = useTranslations('installments');
@@ -237,18 +239,26 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(installmentDisplay, locale, inst.currency)}
+                      {formatAmount(
+                        installmentDisplay,
+                        locale,
+                        isConverted ? activeCurrency : inst.currency,
+                      )}
                       {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
                       <div>
-                        {formatAmount(String(totalToPay), locale, inst.currency)}
+                        {formatAmount(
+                          String(totalToPay),
+                          locale,
+                          isConverted ? activeCurrency : inst.currency,
+                        )}
                         {currencySuffix}
                       </div>
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">
                           {t('table.interestSubLine', {
-                            amount: `${formatAmount(String(interestAmount), locale, inst.currency)}${currencySuffix}`,
+                            amount: `${formatAmount(String(interestAmount), locale, isConverted ? activeCurrency : inst.currency)}${currencySuffix}`,
                           })}
                         </div>
                       )}

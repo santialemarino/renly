@@ -9,17 +9,33 @@ function presetField(invalidMsg: string) {
     .refine((v) => !v || PRESET_PATTERN.test(v), { message: invalidMsg });
 }
 
-export function buildSettingsFormSchema(presetInvalidMsg: string) {
+interface SettingsFormMessages {
+  presetInvalidMsg: string;
+  maxGroupsInvalidMsg: string;
+  groupWarningPctInvalidMsg: string;
+}
+
+export function buildSettingsFormSchema(messages: SettingsFormMessages) {
   return z.object({
     primaryCurrency: z.string().min(1),
     secondaryCurrency: z.string().nullable().optional(),
     preferredCurrencies: z.string().optional(),
-    periodPreset1: presetField(presetInvalidMsg),
-    periodPreset2: presetField(presetInvalidMsg),
-    periodPreset3: presetField(presetInvalidMsg),
-    periodPreset4: presetField(presetInvalidMsg),
-    maxGroups: z.string().optional(),
-    groupWarningPct: z.string().optional(),
+    periodPreset1: presetField(messages.presetInvalidMsg),
+    periodPreset2: presetField(messages.presetInvalidMsg),
+    periodPreset3: presetField(messages.presetInvalidMsg),
+    periodPreset4: presetField(messages.presetInvalidMsg),
+    maxGroups: z
+      .string()
+      .optional()
+      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1), {
+        message: messages.maxGroupsInvalidMsg,
+      }),
+    groupWarningPct: z
+      .string()
+      .optional()
+      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 100), {
+        message: messages.groupWarningPctInvalidMsg,
+      }),
     dollarRatePreference: z.string().optional(),
   });
 }
