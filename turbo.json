@@ -1,13 +1,7 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
-  "globalEnv": [
-    "CI",
-    "NEXTAUTH_SECRET",
-    "NEXTAUTH_URL",
-    "NEXT_PUBLIC_API_URL",
-    "PLAYWRIGHT_BASE_URL"
-  ],
+  "globalEnv": ["NEXTAUTH_SECRET", "NEXTAUTH_URL", "NEXT_PUBLIC_API_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

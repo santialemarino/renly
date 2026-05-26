@@ -48,6 +48,12 @@ apps/web/
 
 ## Running tests
 
+**First-time setup (one-off per machine):** browser binaries are not part of `pnpm install`. Run once:
+
+```bash
+pnpm --filter web exec playwright install chromium
+```
+
 From `apps/web/`:
 
 ```bash
@@ -64,9 +70,11 @@ Prerequisite: dev server must be running. In another terminal, from the repo roo
 pnpm dev
 ```
 
-Once `pnpm dev` is stable on a port other than 3000 (rare; check before assuming), pass `PLAYWRIGHT_BASE_URL=http://localhost:<port>` when running tests.
+If `pnpm dev` settles on a port other than 3000 (e.g. Next auto-bumps to 3001 when 3000 is busy), pass `PLAYWRIGHT_BASE_URL=http://localhost:<port>` when running tests. An empty `PLAYWRIGHT_BASE_URL=""` falls back to the default.
 
 **Bootstrap note:** until the first `.spec.ts` is written, `pnpm test:e2e` exits 1 with "No tests found". That is documented Playwright behavior, not a config error. The config is correct — adding the first spec makes the runner exit 0.
+
+**`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings.
 
 ## Conventions
 
@@ -79,7 +87,7 @@ Order of preference:
 3. `getByText('...')` only when the text is stable, untranslated, and unambiguous.
 4. CSS selectors as last resort.
 
-When adding interactive elements to a new component, add a `data-testid` attribute. Naming convention: kebab-case, scoped to context: `login-email-input`, `investment-create-submit`.
+**`data-testid` is a forward-going convention.** The codebase does not yet have testids on existing components. When writing a new spec, add the testids you need to the components you are testing as part of the same PR. Naming convention: kebab-case, scoped to context: `login-email-input`, `investment-create-submit`. Treat the testid addition as a normal frontend change (commit it alongside the spec).
 
 ### Auth and storage state
 
@@ -97,11 +105,11 @@ Headless by default. Pass `--headed` (or use `pnpm test:e2e:headed`) when visual
 
 ### Parallelization
 
-Off by default (`fullyParallel: false` in config). Enabled later when the suite is large enough that runtime matters and all tests are confirmed independent.
+Off by default — `fullyParallel: false` disables intra-file parallelism and `workers: 1` keeps files serial as well, so the suite is fully sequential regardless of environment. Increase `workers` (and consider `fullyParallel: true`) once the suite is large enough that runtime matters and all tests are confirmed independent.
 
 ### Retries
 
-`retries: 2` in CI, `0` locally. Local failures should be visible immediately, not absorbed.
+`retries: 2` in CI, `0` locally. Local failures should be visible immediately, not absorbed. CI detection respects `CI=false`/`0` as opt-outs (the config reads `process.env.CI` as a string and rejects those values explicitly).
 
 ### Timeouts
 
@@ -129,13 +137,14 @@ Defaults in `playwright.config.ts` are usually sufficient. If a specific test ne
 
 ### Session management
 
-`playwright-cli` keeps browser profile in memory by default within a session. Use named sessions when working in parallel:
+`playwright-cli` keeps browser profile in memory by default within a session. Use named sessions (`-s=<name>`) when working in parallel; the session flag scopes per-session commands like `open` / `close`:
 
 ```bash
 playwright-cli -s=renly open http://localhost:3000
-playwright-cli -s=renly list
 playwright-cli -s=renly close
 ```
+
+`playwright-cli list` is a global command that prints sessions across the machine; the `-s=` flag is ignored on `list`. Pass `--all` for cross-workspace scope when needed.
 
 ### Visual dashboard
 
@@ -165,7 +174,7 @@ Not yet implemented. When the user is ready, the plan is:
 - Trigger: `on: workflow_dispatch` only — runs only when the user clicks "Run workflow" in the Actions tab.
 - Job steps:
   1. Checkout the repo.
-  2. Set up Node 20 and pnpm.
+  2. Set up Node 22 (matches root `package.json` `engines.node: >=22`) and pnpm.
   3. Set up Postgres as a service container with the same image used in `pnpm db:init`.
   4. Install dependencies with `pnpm install --frozen-lockfile`.
   5. Run `pnpm db:init` to apply schema.

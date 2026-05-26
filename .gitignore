@@ -61,5 +61,5 @@ docs/internal/
 # Playwright
 apps/web/test-results/
 apps/web/playwright-report/
-apps/web/playwright/.cache/
+apps/web/tests/e2e/.auth/
 .playwright-cli/

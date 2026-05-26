@@ -17,6 +17,22 @@ http://localhost:3000
 
 From repo root: `pnpm check:web` — Next typegen + `tsc --noEmit`. Same as pre-commit/CI.
 
+## E2E tests (Playwright)
+
+Tests live in `tests/e2e/`. Config in `playwright.config.ts`. Scripts:
+
+- `pnpm test:e2e` — headless, single browser
+- `pnpm test:e2e:ui` — Playwright UI mode
+- `pnpm test:e2e:headed` — visible browser
+- `pnpm test:e2e:debug` — Playwright Inspector
+- `pnpm test:e2e:report` — open last HTML report
+
+First-time setup (one-off per machine): `pnpm exec playwright install chromium`.
+
+Prerequisite for every run: `pnpm dev` running on http://localhost:3000 (override with `PLAYWRIGHT_BASE_URL=...`).
+
+For full conventions (selectors, auth, fixtures, `playwright-cli` workflow), see the `e2e-testing` skill in `.claude/skills/e2e-testing/SKILL.md`.
+
 ## Structure
 
 - **`app/`** — App Router: `(auth)/` (login, signup), `(protected)/` (dashboard, etc.). One `page.tsx` per route; route-specific components in `_components/` next to the page.

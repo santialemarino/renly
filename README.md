@@ -49,20 +49,21 @@ pnpm dev
 
 **Lint & format**
 
-| Command                 | Description                                  |
-| ----------------------- | -------------------------------------------- |
-| `pnpm lint`             | ESLint — report errors                       |
-| `pnpm lint:fix`         | ESLint — auto-fix                            |
-| `pnpm format`           | Format everything (web + api)                |
-| `pnpm format:check`     | Check formatting — fails if unformatted (CI) |
-| `pnpm format:api`       | Ruff format on `apps/api`                    |
-| `pnpm format:check:api` | Ruff format check on `apps/api` (CI)         |
-| `pnpm format:web`       | Prettier write — JS/TS/CSS/JSON/MD           |
-| `pnpm format:check:web` | Prettier check (CI)                          |
-| `pnpm check:api`        | API app import check                         |
-| `pnpm check:web`        | Web TypeScript type check                    |
-| `pnpm check-types`      | TypeScript type check (all workspaces/turbo) |
-| `pnpm test:api`         | Run API unit tests (pytest)                  |
+| Command                      | Description                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `pnpm lint`                  | ESLint — report errors                                                                   |
+| `pnpm lint:fix`              | ESLint — auto-fix                                                                        |
+| `pnpm format`                | Format everything (web + api)                                                            |
+| `pnpm format:check`          | Check formatting — fails if unformatted (CI)                                             |
+| `pnpm format:api`            | Ruff format on `apps/api`                                                                |
+| `pnpm format:check:api`      | Ruff format check on `apps/api` (CI)                                                     |
+| `pnpm format:web`            | Prettier write — JS/TS/CSS/JSON/MD                                                       |
+| `pnpm format:check:web`      | Prettier check (CI)                                                                      |
+| `pnpm check:api`             | API app import check                                                                     |
+| `pnpm check:web`             | Web TypeScript type check                                                                |
+| `pnpm check-types`           | TypeScript type check (all workspaces/turbo)                                             |
+| `pnpm test:api`              | Run API unit tests (pytest)                                                              |
+| `pnpm --filter web test:e2e` | Run Playwright E2E tests (web) — needs `pnpm dev` and `playwright install chromium` once |
 
 ## Documentation
 
