@@ -193,7 +193,11 @@ export function CreditCardReconciliationsSection({
                                 {formatDateForLocale(statement.periodEnd, locale)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(statement.computedBalance, locale)}{' '}
+                                {formatAmount(
+                                  statement.computedBalance,
+                                  locale,
+                                  statement.currency,
+                                )}{' '}
                                 <span className="text-paragraph-xs text-muted-foreground">
                                   {statement.currency}
                                 </span>

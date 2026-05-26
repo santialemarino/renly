@@ -107,6 +107,7 @@ export function InstallmentFormDialog({
   const watchedInstallmentAmount = useWatch({ control: form.control, name: 'installmentAmount' });
   const watchedInstallmentsCount = useWatch({ control: form.control, name: 'installmentsCount' });
   const watchedOriginalPrice = useWatch({ control: form.control, name: 'originalPrice' });
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
   const isEdit = !!installment;
   const isLocked = isEdit && Number(installment.currentInstallment) > 1;
@@ -391,16 +392,28 @@ export function InstallmentFormDialog({
                       {watchedHasInterest && computedInterest !== null ? (
                         <>
                           {t('form.derived.totalToPay', {
-                            amount: formatAmount(String(computedTotalToPay), locale),
+                            amount: formatAmount(
+                              String(computedTotalToPay),
+                              locale,
+                              watchedCurrency || undefined,
+                            ),
                           })}
                           {' · '}
                           {t('form.derived.interest', {
-                            amount: formatAmount(String(computedInterest), locale),
+                            amount: formatAmount(
+                              String(computedInterest),
+                              locale,
+                              watchedCurrency || undefined,
+                            ),
                           })}
                         </>
                       ) : (
                         t('form.derived.total', {
-                          amount: formatAmount(String(computedTotalToPay), locale),
+                          amount: formatAmount(
+                            String(computedTotalToPay),
+                            locale,
+                            watchedCurrency || undefined,
+                          ),
                         })
                       )}
                     </div>

@@ -62,7 +62,9 @@ export function SettlementDeleteDialog({
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
           {t('settlements.delete.confirm', {
-            amount: displaySettlement ? formatAmount(displaySettlement.amount, locale) : '',
+            amount: displaySettlement
+              ? formatAmount(displaySettlement.amount, locale, displaySettlement.currency)
+              : '',
             currency: displaySettlement?.currency ?? '',
           })}
         </p>

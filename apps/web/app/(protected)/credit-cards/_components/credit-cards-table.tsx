@@ -196,7 +196,7 @@ function SettlementsSection({
                             <TableRow key={s.id}>
                               <TableCell>{formatDateForLocale(s.date, locale)}</TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(s.amount, locale)}
+                                {formatAmount(s.amount, locale, s.currency)}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
                               <TableCell className="max-w-48 truncate text-muted-foreground">
@@ -407,7 +407,7 @@ export function CreditCardsTable({
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (
                             <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <span>{formatAmount(bucket.balance, locale)}</span>
+                              <span>{formatAmount(bucket.balance, locale, bucket.currency)}</span>
                               <span className="text-paragraph-xs text-muted-foreground">
                                 {bucket.currency}
                               </span>

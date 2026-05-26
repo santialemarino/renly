@@ -237,18 +237,18 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(installmentDisplay, locale)}
+                      {formatAmount(installmentDisplay, locale, inst.currency)}
                       {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
                       <div>
-                        {formatAmount(String(totalToPay), locale)}
+                        {formatAmount(String(totalToPay), locale, inst.currency)}
                         {currencySuffix}
                       </div>
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">
                           {t('table.interestSubLine', {
-                            amount: `${formatAmount(String(interestAmount), locale)}${currencySuffix}`,
+                            amount: `${formatAmount(String(interestAmount), locale, inst.currency)}${currencySuffix}`,
                           })}
                         </div>
                       )}
