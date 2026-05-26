@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
@@ -40,6 +40,7 @@ export function InvestorDashboardDistribution({
   groupAllocation,
   forcedMode,
 }: InvestorDashboardDistributionProps) {
+  const locale = useLocale();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const [mode, setMode] = useState<Mode>(forcedMode ?? 'category');
@@ -139,7 +140,7 @@ export function InvestorDashboardDistribution({
                             {entry.name}
                           </span>
                           <span className="shrink-0 text-paragraph-xs-semibold">
-                            {formatPct(entry.percentage)}%
+                            {formatPct(entry.percentage, locale)}%
                           </span>
                           {entry.targetPercentage != null && (
                             <span
@@ -151,7 +152,7 @@ export function InvestorDashboardDistribution({
                                     : 'text-muted-foreground'
                               }`}
                             >
-                              ({formatPct(entry.targetPercentage)}%)
+                              ({formatPct(entry.targetPercentage, locale)}%)
                             </span>
                           )}
                         </div>
@@ -184,7 +185,7 @@ export function InvestorDashboardDistribution({
                       </Pie>
                       <Tooltip
                         animationDuration={TOOLTIP_ANIMATION_DURATION}
-                        formatter={(value) => formatValue(Number(value), { compact: true })}
+                        formatter={(value) => formatValue(Number(value), { locale, compact: true })}
                         contentStyle={{
                           backgroundColor: TOOLTIP_BG,
                           color: TOOLTIP_TEXT,

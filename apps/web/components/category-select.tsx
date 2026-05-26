@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, ChevronsUpDown, Tag } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -32,13 +32,14 @@ export function CategorySelect({
   surface = false,
   className,
 }: CategorySelectProps) {
+  const locale = useLocale();
   const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
 
   const isAll = value === CATEGORY_ALL;
   const label = isAll ? tCommon('allCategories') : tCommon(`categories.${value}`);
 
-  const items = [CATEGORY_ALL, ...sortCategoriesByLabel(tCommon)];
+  const items = [CATEGORY_ALL, ...sortCategoriesByLabel(tCommon, locale)];
 
   function handleSelect(selected: string) {
     onValueChange(selected);

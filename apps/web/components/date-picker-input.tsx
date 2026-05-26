@@ -3,9 +3,11 @@
 import { forwardRef } from 'react';
 import { format, parse } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
+import { useLocale } from 'next-intl';
 
 import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { getDateFnsLocale } from '@/lib/utils/locale';
 
 const DATE_FORMAT_DISPLAY = 'PPP';
 const DATE_FORMAT_VALUE = 'yyyy-MM-dd';
@@ -34,6 +36,8 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
     },
     ref,
   ) => {
+    const locale = useLocale();
+    const dateFnsLocale = getDateFnsLocale(locale);
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
 
@@ -68,7 +72,9 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             )}
           >
             <CalendarDays className="size-4 shrink-0 text-blue-800" />
-            {isValidDate ? format(date, DATE_FORMAT_DISPLAY) : placeholder}
+            {isValidDate
+              ? format(date, DATE_FORMAT_DISPLAY, { locale: dateFnsLocale })
+              : placeholder}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-auto" align="start">
@@ -77,6 +83,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             mode="single"
             selected={isValidDate ? date : undefined}
             onSelect={handleSelect}
+            locale={dateFnsLocale}
           />
         </PopoverContent>
       </Popover>

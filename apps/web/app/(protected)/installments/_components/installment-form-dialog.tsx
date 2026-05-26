@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -72,6 +72,7 @@ export function InstallmentFormDialog({
   creditCards,
   onSuccess,
 }: InstallmentFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('installments');
   const tCommon = useTranslations('common');
 
@@ -398,16 +399,16 @@ export function InstallmentFormDialog({
                       {watchedHasInterest && computedInterest !== null ? (
                         <>
                           {t('form.derived.totalToPay', {
-                            amount: formatAmount(String(computedTotalToPay)),
+                            amount: formatAmount(String(computedTotalToPay), locale),
                           })}
                           {' · '}
                           {t('form.derived.interest', {
-                            amount: formatAmount(String(computedInterest)),
+                            amount: formatAmount(String(computedInterest), locale),
                           })}
                         </>
                       ) : (
                         t('form.derived.total', {
-                          amount: formatAmount(String(computedTotalToPay)),
+                          amount: formatAmount(String(computedTotalToPay), locale),
                         })
                       )}
                     </div>

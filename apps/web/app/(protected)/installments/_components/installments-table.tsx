@@ -11,7 +11,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -86,6 +86,7 @@ export function InstallmentsTable({
   preferredCurrencies,
   creditCards,
 }: InstallmentsTableProps) {
+  const locale = useLocale();
   const t = useTranslations('installments');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -235,18 +236,18 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(installmentDisplay)}
+                      {formatAmount(installmentDisplay, locale)}
                       {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
                       <div>
-                        {formatAmount(String(totalToPay))}
+                        {formatAmount(String(totalToPay), locale)}
                         {currencySuffix}
                       </div>
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">
                           {t('table.interestSubLine', {
-                            amount: `${formatAmount(String(interestAmount))}${currencySuffix}`,
+                            amount: `${formatAmount(String(interestAmount), locale)}${currencySuffix}`,
                           })}
                         </div>
                       )}

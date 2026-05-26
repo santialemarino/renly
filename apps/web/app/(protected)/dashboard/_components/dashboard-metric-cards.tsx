@@ -1,7 +1,7 @@
 'use client';
 
 import { CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -13,6 +13,7 @@ interface DashboardMetricCardsProps {
 }
 
 export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
+  const locale = useLocale();
   const t = useTranslations('dashboard');
 
   return (
@@ -20,12 +21,12 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
       {/* Net Worth */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.netWorth')}</span>
-        <p className="text-heading-3">{formatValue(overview.netWorth)}</p>
+        <p className="text-heading-3">{formatValue(overview.netWorth, { locale })}</p>
         {overview.netWorthChange !== null && (
           <span className={cn('text-paragraph-xs', valueColor(overview.netWorthChange))}>
-            {formatSignedValue(overview.netWorthChange)}
+            {formatSignedValue(overview.netWorthChange, locale)}
             {overview.netWorthChangePct !== null && overview.netWorthChangePct !== 0 && (
-              <> ({formatSignedPct(overview.netWorthChangePct)})</>
+              <> ({formatSignedPct(overview.netWorthChangePct, locale)})</>
             )}{' '}
             {t('cards.vsLastMonth')}
           </span>
@@ -38,13 +39,13 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
         <span className="text-paragraph-sm text-muted-foreground">
           {t('cards.investmentValue')}
         </span>
-        <p className="text-heading-3">{formatValue(overview.investmentTotal)}</p>
+        <p className="text-heading-3">{formatValue(overview.investmentTotal, { locale })}</p>
         <div className="flex items-center gap-x-1.5">
           {overview.investmentGain !== 0 && (
             <span className={cn('text-paragraph-xs', valueColor(overview.investmentGain))}>
-              {formatSignedValue(overview.investmentGain)}
+              {formatSignedValue(overview.investmentGain, locale)}
               {overview.investmentGainPct !== null && overview.investmentGainPct !== 0 && (
-                <> ({formatSignedPct(overview.investmentGainPct)})</>
+                <> ({formatSignedPct(overview.investmentGainPct, locale)})</>
               )}
             </span>
           )}
@@ -61,7 +62,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
               valueColor(overview.totalIncome - overview.totalExpenses),
             )}
           >
-            {formatValue(overview.totalIncome - overview.totalExpenses)}
+            {formatValue(overview.totalIncome - overview.totalExpenses, { locale })}
           </p>
           {overview.totalIncome - overview.totalExpenses !== 0 &&
             (overview.totalIncome - overview.totalExpenses > 0 ? (
@@ -84,7 +85,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
               overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground',
             )}
           >
-            {formatValue(overview.creditCardBalance)}
+            {formatValue(overview.creditCardBalance, { locale })}
           </p>
           {overview.creditCardBalance > 0 && <CreditCard className="size-5 text-red-500" />}
         </div>

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, ChevronsUpDown, Tag } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -32,6 +32,7 @@ export function IncomeCategorySelect({
   surface = false,
   className,
 }: IncomeCategorySelectProps) {
+  const locale = useLocale();
   const t = useTranslations('income');
   const tCommon = useTranslations('common');
   const [open, setOpen] = useState(false);
@@ -39,7 +40,7 @@ export function IncomeCategorySelect({
   const isAll = value === CATEGORY_ALL;
   const label = isAll ? tCommon('allCategories') : t(`categories.${value}`);
 
-  const sorted = sortIncomeCategoriesByLabel((key) => t(key));
+  const sorted = sortIncomeCategoriesByLabel((key) => t(key), locale);
   const items = [CATEGORY_ALL, ...sorted];
 
   function handleSelect(selected: string) {

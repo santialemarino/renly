@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarHeaderProps {
   year: number;
@@ -45,7 +46,9 @@ export function PaymentsCalendarHeader({ year, month }: PaymentsCalendarHeaderPr
   }
 
   // Locale-aware month name (e.g. "May" / "mayo").
-  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'long' });
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
+    month: 'long',
+  });
 
   return (
     <div className="flex items-center justify-between gap-x-3 pb-1">

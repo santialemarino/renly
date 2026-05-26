@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -150,6 +150,7 @@ export function ExpensesDataTable({
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
 }) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -251,7 +252,7 @@ export function ExpensesDataTable({
                 <TableRow key={expense.id}>
                   <TableCell>{expense.date}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(expense.convertedAmount ?? expense.amount)}
+                    {formatAmount(expense.convertedAmount ?? expense.amount, locale)}
                   </TableCell>
                   <TableCell>
                     {expense.category ? t(`categories.${expense.category}`) : '—'}

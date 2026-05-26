@@ -1,6 +1,6 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   Area,
   AreaChart,
@@ -48,6 +48,7 @@ interface DashboardEvolutionProps {
 }
 
 export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) {
+  const locale = useLocale();
   const t = useTranslations('dashboard');
 
   const hasData = evolution.points.length > 0;
@@ -67,14 +68,14 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(value) => formatMonth(String(value))}
+                  tickFormatter={(value) => formatMonth(String(value), locale)}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <YAxis
-                  tickFormatter={(value) => formatAxisValue(Number(value))}
+                  tickFormatter={(value) => formatAxisValue(Number(value), locale)}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
@@ -83,8 +84,11 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                 />
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
-                  labelFormatter={(label) => formatMonth(String(label))}
-                  formatter={(value) => [formatAxisValue(Number(value)), t('chart.tooltipValue')]}
+                  labelFormatter={(label) => formatMonth(String(label), locale)}
+                  formatter={(value) => [
+                    formatAxisValue(Number(value), locale),
+                    t('chart.tooltipValue'),
+                  ]}
                   contentStyle={{
                     backgroundColor: TOOLTIP_BG,
                     color: TOOLTIP_TEXT,

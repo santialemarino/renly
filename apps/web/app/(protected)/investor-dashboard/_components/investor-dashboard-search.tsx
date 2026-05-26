@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, FolderOpen, Tag } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { SmartSearch, type SmartSearchGroup } from '@/components/smart-search';
 import { ROUTES } from '@/config/routes';
@@ -27,6 +27,7 @@ interface InvestorDashboardSearchProps {
 }
 
 export function InvestorDashboardSearch({ investments, groups }: InvestorDashboardSearchProps) {
+  const locale = useLocale();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -50,7 +51,7 @@ export function InvestorDashboardSearch({ investments, groups }: InvestorDashboa
     },
     {
       heading: t('search.categories'),
-      items: sortCategoriesByLabel(tCommon).map((cat) => ({
+      items: sortCategoriesByLabel(tCommon, locale).map((cat) => ({
         id: cat,
         label: tCommon(`categories.${cat}`),
         icon: <Tag className={ICON_CLASS} />,

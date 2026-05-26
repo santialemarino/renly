@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import type { DateRange } from 'react-day-picker';
 
 import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
@@ -13,6 +13,7 @@ import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/constants/period-presets';
+import { getDateFnsLocale } from '@/lib/utils/locale';
 import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 const DATE_FORMAT = 'MMM d, yyyy';
@@ -31,6 +32,8 @@ export function DashboardPeriodPicker({
   presets = PERIOD_PRESETS,
   className,
 }: DashboardPeriodPickerProps) {
+  const locale = useLocale();
+  const dateFnsLocale = getDateFnsLocale(locale);
   const t = useTranslations(translationNamespace);
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -107,7 +110,7 @@ export function DashboardPeriodPicker({
               >
                 <CalendarDays className="size-4" />
                 {isCustom && dateRange?.from && dateRange?.to
-                  ? `${format(dateRange.from, DATE_FORMAT)} – ${format(dateRange.to, DATE_FORMAT)}`
+                  ? `${format(dateRange.from, DATE_FORMAT, { locale: dateFnsLocale })} – ${format(dateRange.to, DATE_FORMAT, { locale: dateFnsLocale })}`
                   : t('period.custom')}
               </Button>
             </PopoverTrigger>
@@ -118,6 +121,7 @@ export function DashboardPeriodPicker({
                 selected={dateRange}
                 onSelect={setDateRange}
                 numberOfMonths={2}
+                locale={dateFnsLocale}
               />
               <div className="flex items-center justify-end gap-x-2 p-3">
                 <Button

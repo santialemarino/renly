@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -25,6 +25,7 @@ import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
 import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 interface ReconciliationFormDialogProps {
   open: boolean;
@@ -41,6 +42,7 @@ export function ReconciliationFormDialog({
   statement,
   onSuccess,
 }: ReconciliationFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('creditCards.reconciliations');
   const tCommon = useTranslations('common');
 
@@ -111,7 +113,9 @@ export function ReconciliationFormDialog({
           {isReplace && !isStale && statement.reconciliation && (
             <StyledHint variant="info">
               {t('form.replaceBanner', {
-                date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(),
+                date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(
+                  getLocaleTag(locale),
+                ),
               })}
             </StyledHint>
           )}
@@ -127,7 +131,7 @@ export function ReconciliationFormDialog({
             <div className="flex flex-col gap-y-1">
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
               <span className="text-paragraph tabular-nums">
-                {formatAmount(statement.computedBalance)}{' '}
+                {formatAmount(statement.computedBalance, locale)}{' '}
                 <span className="text-paragraph-xs text-muted-foreground">
                   {statement.currency}
                 </span>
@@ -164,7 +168,7 @@ export function ReconciliationFormDialog({
                   {t('form.difference')}
                 </span>
                 <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? '0' : formatAmount(String(diff))}{' '}
+                  {diff === 0 ? '0' : formatAmount(String(diff), locale)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {statement.currency}
                   </span>
@@ -172,12 +176,12 @@ export function ReconciliationFormDialog({
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'expense' &&
                     t('form.differenceExpensePreview', {
-                      amount: formatAmount(String(Math.abs(diff))),
+                      amount: formatAmount(String(Math.abs(diff)), locale),
                       currency: statement.currency,
                     })}
                   {diffSide === 'income' &&
                     t('form.differenceIncomePreview', {
-                      amount: formatAmount(String(Math.abs(diff))),
+                      amount: formatAmount(String(Math.abs(diff)), locale),
                       currency: statement.currency,
                     })}
                   {diffSide === 'zero' && t('form.differenceZeroPreview')}

@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingUp, Wallet } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -9,6 +9,7 @@ import { LinkCard } from '@/components/link-card';
 import { ROUTES } from '@/config/routes';
 import type { DashboardOverview } from '@/lib/api/dashboard';
 import { formatRatePct } from '@/lib/utils/format';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 const SAVINGS_RATE_HEALTHY = 0.2;
 const SAVINGS_RATE_MODERATE = 0.1;
@@ -35,7 +36,13 @@ interface DashboardFooterProps {
 }
 
 export function DashboardFooter({ overview }: DashboardFooterProps) {
+  const locale = useLocale();
   const t = useTranslations('dashboard');
+
+  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(locale), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -43,7 +50,7 @@ export function DashboardFooter({ overview }: DashboardFooterProps) {
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('health.savingsRate')}</span>
         <p className={cn('text-heading-3', savingsRateColor(overview.savingsRate))}>
-          {overview.savingsRate !== null ? formatRatePct(overview.savingsRate) : '—'}
+          {overview.savingsRate !== null ? formatRatePct(overview.savingsRate, locale) : '—'}
         </p>
         <span className="text-paragraph-xs text-muted-foreground">
           {t('health.savingsRateHint')}
@@ -56,7 +63,7 @@ export function DashboardFooter({ overview }: DashboardFooterProps) {
         </span>
         <p className={cn('text-heading-3', ratioColor(overview.incomeExpenseRatio))}>
           {overview.incomeExpenseRatio !== null
-            ? `${overview.incomeExpenseRatio.toFixed(2)}x`
+            ? `${ratioFormatter.format(overview.incomeExpenseRatio)}x`
             : '—'}
         </p>
         <span className="text-paragraph-xs text-muted-foreground">

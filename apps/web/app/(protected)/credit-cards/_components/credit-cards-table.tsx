@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -94,6 +94,7 @@ function SettlementsSection({
   bucketCurrencies: string[];
   expanded: boolean;
 }) {
+  const locale = useLocale();
   const t = useTranslations('creditCards');
   const router = useRouter();
   const [settlements, setSettlements] = useState<SettlementResult[]>([]);
@@ -194,7 +195,7 @@ function SettlementsSection({
                             <TableRow key={s.id}>
                               <TableCell>{s.date}</TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(s.amount)}
+                                {formatAmount(s.amount, locale)}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
                               <TableCell className="max-w-48 truncate text-muted-foreground">
@@ -271,6 +272,7 @@ export function CreditCardsTable({
   cards: CreditCard[];
   preferredCurrencies?: string[];
 }) {
+  const locale = useLocale();
   const t = useTranslations('creditCards');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -404,7 +406,7 @@ export function CreditCardsTable({
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (
                             <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <span>{formatAmount(bucket.balance)}</span>
+                              <span>{formatAmount(bucket.balance, locale)}</span>
                               <span className="text-paragraph-xs text-muted-foreground">
                                 {bucket.currency}
                               </span>

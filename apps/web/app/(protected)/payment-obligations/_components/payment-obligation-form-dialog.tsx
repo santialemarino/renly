@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -63,8 +63,10 @@ export function PaymentObligationFormDialog({
   creditCards,
   onSuccess,
 }: PaymentObligationFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const tCommon = useTranslations('common');
+  const tExpenses = useTranslations('expenses');
 
   const schema = useMemo(
     () => buildPaymentObligationFormSchema(tCommon('form.errors.required')),
@@ -92,8 +94,7 @@ export function PaymentObligationFormDialog({
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  const tExpenses = useTranslations('expenses');
-  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key));
+  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key), locale);
 
   // Reset form when dialog opens or obligation changes.
   useEffect(() => {

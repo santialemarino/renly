@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -29,6 +29,7 @@ export function ExpenseDeleteDialog({
   expense,
   onSuccess,
 }: ExpenseDeleteDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
   const [deleting, setDeleting] = useState(false);
 
@@ -54,7 +55,7 @@ export function ExpenseDeleteDialog({
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
           {t('delete.confirm', {
-            amount: formatAmount(expense.amount),
+            amount: formatAmount(expense.amount, locale),
             currency: expense.currency,
           })}
         </p>

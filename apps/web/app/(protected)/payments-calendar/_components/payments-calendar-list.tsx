@@ -6,6 +6,7 @@ import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_c
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import { formatAmount } from '@/lib/utils/currency';
+import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarListProps {
   items: PaymentsCalendarItem[];
@@ -37,7 +38,9 @@ export async function PaymentsCalendarList({
   const locale = await getLocale();
 
   if (items.length === 0) {
-    const monthName = new Date(year, month - 1, 1).toLocaleDateString(locale, { month: 'long' });
+    const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
+      month: 'long',
+    });
     return (
       <div className="rounded-lg border border-border py-10 text-center text-muted-foreground">
         {t('empty', { month: monthName.charAt(0).toUpperCase() + monthName.slice(1) })}
@@ -67,7 +70,10 @@ export async function PaymentsCalendarList({
         const dayItems = groups.get(dateStr) ?? [];
         const isToday = dateStr === todayIso;
         const day = new Date(`${dateStr}T00:00:00`);
-        const dayLabel = day.toLocaleDateString(locale, { weekday: 'long', day: 'numeric' });
+        const dayLabel = day.toLocaleDateString(getLocaleTag(locale), {
+          weekday: 'long',
+          day: 'numeric',
+        });
         return (
           <div key={dateStr} className="flex flex-col gap-y-2">
             <div
@@ -117,7 +123,7 @@ export async function PaymentsCalendarList({
                       </div>
                     </div>
                     <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
-                      <span>{formatAmount(displayAmount)}</span>
+                      <span>{formatAmount(displayAmount, locale)}</span>
                       {showOriginalCurrency && (
                         <span className="text-paragraph-xs text-muted-foreground">
                           {item.currency}
