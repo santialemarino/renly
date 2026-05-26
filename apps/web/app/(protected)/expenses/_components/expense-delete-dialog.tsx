@@ -55,7 +55,7 @@ export function ExpenseDeleteDialog({
         </DialogHeader>
         <p className="text-paragraph-sm text-muted-foreground">
           {t('delete.confirm', {
-            amount: formatAmount(expense.amount, locale),
+            amount: formatAmount(expense.amount, locale, expense.currency),
             currency: expense.currency,
           })}
         </p>

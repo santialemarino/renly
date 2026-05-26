@@ -368,9 +368,13 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && priceConverted && effectivePrice !== null && (
                           <span>
                             {t('form.price.converted', {
-                              originalPrice: formatAmount(String(fetchedPrice), locale),
+                              originalPrice: formatAmount(
+                                String(fetchedPrice),
+                                locale,
+                                fetchedPriceCurrency ?? undefined,
+                              ),
                               originalCurrency: fetchedPriceCurrency ?? '',
-                              price: formatAmount(String(effectivePrice), locale),
+                              price: formatAmount(String(effectivePrice), locale, baseCurrency),
                               currency: baseCurrency,
                             })}
                           </span>
@@ -378,7 +382,7 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && !priceConverted && hasEffectivePrice && (
                           <span>
                             {t('form.price.found', {
-                              price: formatAmount(String(effectivePrice), locale),
+                              price: formatAmount(String(effectivePrice), locale, baseCurrency),
                               currency: baseCurrency,
                             })}
                           </span>
@@ -386,7 +390,11 @@ export function SnapshotFormDialog({
                         {!priceLoading && hasPrice && !hasEffectivePrice && (
                           <span>
                             {t('form.price.noConversion', {
-                              price: formatAmount(String(fetchedPrice), locale),
+                              price: formatAmount(
+                                String(fetchedPrice),
+                                locale,
+                                fetchedPriceCurrency ?? undefined,
+                              ),
                               currency: fetchedPriceCurrency ?? '',
                             })}
                           </span>

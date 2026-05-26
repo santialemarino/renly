@@ -237,7 +237,7 @@ export function IncomeDataTable({
                 <TableRow key={entry.id}>
                   <TableCell>{formatDateForLocale(entry.date, locale)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(entry.convertedAmount ?? entry.amount, locale)}
+                    {formatAmount(entry.convertedAmount ?? entry.amount, locale, entry.currency)}
                   </TableCell>
                   <TableCell>{entry.category ? t(`categories.${entry.category}`) : '—'}</TableCell>
                   <TableCell className="max-w-48 truncate text-muted-foreground">

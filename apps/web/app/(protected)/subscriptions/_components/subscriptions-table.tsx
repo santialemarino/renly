@@ -212,7 +212,7 @@ export function SubscriptionsTable({
                   <TableRow key={sub.id} className={!sub.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{sub.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount, locale)}{' '}
+                      {formatAmount(displayAmount, locale, sub.currency)}{' '}
                       {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>

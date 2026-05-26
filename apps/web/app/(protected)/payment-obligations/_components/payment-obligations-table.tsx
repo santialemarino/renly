@@ -315,7 +315,8 @@ export function PaymentObligationsTable({
                       </div>
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(displayAmount, locale)} {o.convertedAmount ? '' : o.currency}
+                      {formatAmount(displayAmount, locale, o.currency)}{' '}
+                      {o.convertedAmount ? '' : o.currency}
                     </TableCell>
                     <TableCell>{formatDateForLocale(o.nextDueDate, locale)}</TableCell>
                     <TableCell>

@@ -253,7 +253,11 @@ export function ExpensesDataTable({
                 <TableRow key={expense.id}>
                   <TableCell>{formatDateForLocale(expense.date, locale)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(expense.convertedAmount ?? expense.amount, locale)}
+                    {formatAmount(
+                      expense.convertedAmount ?? expense.amount,
+                      locale,
+                      expense.currency,
+                    )}
                   </TableCell>
                   <TableCell>
                     {expense.category ? t(`categories.${expense.category}`) : '—'}

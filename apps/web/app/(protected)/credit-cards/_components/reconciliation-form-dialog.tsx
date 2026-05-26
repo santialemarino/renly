@@ -134,7 +134,7 @@ export function ReconciliationFormDialog({
             <div className="flex flex-col gap-y-1">
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
               <span className="text-paragraph tabular-nums">
-                {formatAmount(statement.computedBalance, locale)}{' '}
+                {formatAmount(statement.computedBalance, locale, statement.currency)}{' '}
                 <span className="text-paragraph-xs text-muted-foreground">
                   {statement.currency}
                 </span>
@@ -164,7 +164,7 @@ export function ReconciliationFormDialog({
                   {t('form.difference')}
                 </span>
                 <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? '0' : formatAmount(String(diff), locale)}{' '}
+                  {diff === 0 ? '0' : formatAmount(String(diff), locale, statement.currency)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {statement.currency}
                   </span>
@@ -172,12 +172,12 @@ export function ReconciliationFormDialog({
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'expense' &&
                     t('form.differenceExpensePreview', {
-                      amount: formatAmount(String(Math.abs(diff)), locale),
+                      amount: formatAmount(String(Math.abs(diff)), locale, statement.currency),
                       currency: statement.currency,
                     })}
                   {diffSide === 'income' &&
                     t('form.differenceIncomePreview', {
-                      amount: formatAmount(String(Math.abs(diff)), locale),
+                      amount: formatAmount(String(Math.abs(diff)), locale, statement.currency),
                       currency: statement.currency,
                     })}
                   {diffSide === 'zero' && t('form.differenceZeroPreview')}
