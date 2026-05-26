@@ -437,6 +437,7 @@ export function SnapshotFormDialog({
                       <FormControl>
                         <LocaleAmountInput
                           {...field}
+                          currency={baseCurrency}
                           placeholder={t('form.value.placeholder')}
                           className={cn(
                             'transition-colors',
@@ -532,6 +533,7 @@ export function SnapshotFormDialog({
                             <FormControl>
                               <LocaleAmountInput
                                 {...field}
+                                currency={baseCurrency}
                                 placeholder={t('form.transaction.amountPlaceholder')}
                                 className={cn(
                                   'transition-colors',

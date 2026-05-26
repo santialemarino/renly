@@ -26,6 +26,7 @@ import {
   buildSettingsFormSchema,
   type SettingsFormValues,
 } from '@/app/(protected)/preferences/preferences-form-schema';
+import { IntegerInput } from '@/components/integer-input';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -354,13 +355,7 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
               name="maxGroups"
               control={control}
               render={({ field }) => (
-                <Input
-                  {...field}
-                  surface
-                  type="number"
-                  min={1}
-                  placeholder={String(ENV_MAX_GROUPS)}
-                />
+                <IntegerInput {...field} surface placeholder={String(ENV_MAX_GROUPS)} />
               )}
             />
             <InfoHint>{t('form.maxGroups.default', { value: String(ENV_MAX_GROUPS) })}</InfoHint>
@@ -375,12 +370,9 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
               name="groupWarningPct"
               control={control}
               render={({ field }) => (
-                <Input
+                <IntegerInput
                   {...field}
                   surface
-                  type="number"
-                  min={1}
-                  max={100}
                   placeholder={
                     ENV_GROUP_WARNING_PCT != null ? String(ENV_GROUP_WARNING_PCT) : undefined
                   }

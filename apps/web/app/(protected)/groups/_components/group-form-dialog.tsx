@@ -140,6 +140,7 @@ export function GroupFormDialog({
                   <FormControl>
                     <LocaleAmountInput
                       {...field}
+                      maxDecimals={2}
                       placeholder={t('form.targetPercentage.placeholder')}
                     />
                   </FormControl>

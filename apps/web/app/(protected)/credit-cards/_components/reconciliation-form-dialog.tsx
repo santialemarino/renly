@@ -151,7 +151,11 @@ export function ReconciliationFormDialog({
                 <FormItem>
                   <FormLabel required>{t('form.bankBalance')}</FormLabel>
                   <FormControl>
-                    <LocaleAmountInput {...field} placeholder={t('form.bankBalancePlaceholder')} />
+                    <LocaleAmountInput
+                      {...field}
+                      currency={statement.currency}
+                      placeholder={t('form.bankBalancePlaceholder')}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

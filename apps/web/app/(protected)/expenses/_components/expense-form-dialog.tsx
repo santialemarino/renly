@@ -349,7 +349,11 @@ export function ExpenseFormDialog({
                     <FormItem className="flex-1">
                       <FormLabel required>{t('form.amount.label')}</FormLabel>
                       <FormControl>
-                        <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
+                        <LocaleAmountInput
+                          {...field}
+                          currency={watchedCurrency || undefined}
+                          placeholder={t('form.amount.placeholder')}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

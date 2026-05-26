@@ -79,6 +79,7 @@ export function SubscriptionFormDialog({
 
   const isEdit = !!subscription;
   const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
@@ -158,7 +159,11 @@ export function SubscriptionFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.amount.label')}</FormLabel>
                     <FormControl>
-                      <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
+                      <LocaleAmountInput
+                        {...field}
+                        currency={watchedCurrency || undefined}
+                        placeholder={t('form.amount.placeholder')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
