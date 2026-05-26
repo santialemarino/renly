@@ -18,8 +18,6 @@ import {
   DONUT_INNER_RADIUS,
   DONUT_OUTER_RADIUS,
   DONUT_PADDING_ANGLE,
-  FORMAT_THRESHOLD_MILLION,
-  FORMAT_THRESHOLD_THOUSAND,
   TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
@@ -27,21 +25,9 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
-import { formatPct } from '@/lib/utils/format';
+import { formatPct, formatValue } from '@/lib/utils/format';
 
 type Mode = 'category' | 'group';
-
-// Formats a number as a compact value.
-function formatValue(value: number): string {
-  if (value >= FORMAT_THRESHOLD_MILLION) return `${(value / FORMAT_THRESHOLD_MILLION).toFixed(1)}M`;
-  if (value >= FORMAT_THRESHOLD_THOUSAND)
-    return `${(value / FORMAT_THRESHOLD_THOUSAND).toFixed(0)}K`;
-  const hasDecimals = value % 1 !== 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
-  }).format(value);
-}
 
 interface InvestorDashboardDistributionProps {
   categoryAllocation: AllocationResponse;
@@ -198,7 +184,7 @@ export function InvestorDashboardDistribution({
                       </Pie>
                       <Tooltip
                         animationDuration={TOOLTIP_ANIMATION_DURATION}
-                        formatter={(value) => formatValue(Number(value))}
+                        formatter={(value) => formatValue(Number(value), { compact: true })}
                         contentStyle={{
                           backgroundColor: TOOLTIP_BG,
                           color: TOOLTIP_TEXT,
