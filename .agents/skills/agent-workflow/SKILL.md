@@ -19,6 +19,7 @@ Use **api-\*** skills when touching the backend; **web-\*** when touching the fr
 - **commit** — Commit message format, types, and staging rules. Load when creating a commit.
 - **pr-format** — PR title, body, branch name, and label conventions. Load when creating a pull request.
 - **testing** — Where tests live, how to run them, what to cover. Load when writing or running tests.
+- **e2e-testing** — End-to-end browser testing with Playwright in `apps/web`. Load when writing or running E2E tests, or when using `playwright-cli` to verify a feature during implementation.
 
 ## 2. Lints and checks before commit
 

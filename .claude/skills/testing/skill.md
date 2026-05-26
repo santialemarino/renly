@@ -8,7 +8,8 @@ description: Where tests live, how to run them, and what to test in the Renly re
 ## Current state
 
 - **API tests:** `apps/api/tests/unit/` — pytest. 28 unit tests for metrics helpers (period return, TWR, XIRR, invested capital, currency conversion).
-- **Web tests:** None planned for MVP.
+- **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. See the `e2e-testing` skill for full conventions, configuration, and the playwright-cli workflow.
+- **Web component/unit tests:** None planned. E2E is the only web test layer for now.
 - **Pre-commit:** `pnpm test:api` runs on every commit. Also runs in CI (`ci.api.yml`).
 
 ## Running tests
@@ -19,7 +20,15 @@ uv run pytest tests/ -v
 
 # From repo root
 pnpm test:api
+
+# From apps/web
+pnpm test:e2e
 ```
+
+## Boundary between layers
+
+- **API logic** (formulas, transformations, repository/service behavior) → pytest in `apps/api/tests/`.
+- **User-facing flows** (login, transactions, dashboard render, navigation) → Playwright E2E in `apps/web/tests/e2e/`. See `e2e-testing` for specifics.
 
 ## What to test (API)
 

@@ -5,3 +5,5 @@ dist
 build
 *.min.js
 pnpm-lock.yaml
+apps/web/playwright-report
+apps/web/test-results

@@ -57,3 +57,9 @@ yarn-error.log*
 
 # Internal docs — plans, costs, architecture, phase specs, decisions
 docs/internal/
+
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/tests/e2e/.auth/
+.playwright-cli/
