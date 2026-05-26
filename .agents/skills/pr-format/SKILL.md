@@ -111,6 +111,32 @@ Always `N/A`. Renly does not use formal acceptance criteria from tickets.
 - **Include** when the PR has UI changes (frontend/web). Use `<img>` tags with `width`/`height`/`alt` attributes. Videos as bare GitHub asset URLs.
 - **Omit entirely** for backend-only, docs-only, or API-only PRs. Don't include an empty section.
 
+**Sourcing screenshots and recordings.**
+
+When the PR includes UI changes and the work was verified using `playwright-cli`, prefer screenshots captured during that verification over manual screenshots:
+
+```bash
+playwright-cli screenshot --filename=feature-name-state.png
+```
+
+Upload the resulting PNGs as GitHub assets by drag-and-dropping them into the PR body editor on github.com (or via `gh pr edit --body-file <file>` with assets pre-uploaded). Paste the resulting asset URLs into `<img>` tags as usual.
+
+For multi-step flows, capture one screenshot per meaningful state (e.g. `login-empty.png`, `login-error.png`, `login-success.png`).
+
+For full-flow video, use:
+
+```bash
+playwright-cli video-start feature-name.webm
+# ... drive the flow ...
+playwright-cli video-stop
+```
+
+Upload the resulting webm/mp4 as a GitHub asset. Paste the bare URL in the PR body — GitHub renders it as an embedded video player.
+
+When the work was verified manually (no `playwright-cli` involved), capture screenshots using the OS tool (cmd+shift+4 on macOS) as before. The format of the section in the PR body is identical regardless of how the assets were sourced.
+
+This sub-section is opt-in: it only applies when `playwright-cli` was used. The base rule (when to include the section at all) is unchanged.
+
 ## Labels
 
 Apply from the repo's label set. Multiple labels are standard — always include layer labels when applicable.
