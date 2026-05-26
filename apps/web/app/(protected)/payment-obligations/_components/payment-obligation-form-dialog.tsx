@@ -63,8 +63,10 @@ export function PaymentObligationFormDialog({
   creditCards,
   onSuccess,
 }: PaymentObligationFormDialogProps) {
+  const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const tCommon = useTranslations('common');
+  const tExpenses = useTranslations('expenses');
 
   const schema = useMemo(
     () => buildPaymentObligationFormSchema(tCommon('form.errors.required')),
@@ -92,8 +94,6 @@ export function PaymentObligationFormDialog({
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  const locale = useLocale();
-  const tExpenses = useTranslations('expenses');
   const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key), locale);
 
   // Reset form when dialog opens or obligation changes.
