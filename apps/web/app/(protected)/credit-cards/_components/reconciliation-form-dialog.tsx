@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
 } from '@repo/ui/components';
 import { createOrReplaceReconciliation } from '@/app/(protected)/credit-cards/credit-card-actions';
 import {
@@ -21,10 +20,10 @@ import {
   type ReconciliationFormValues,
 } from '@/app/(protected)/credit-cards/reconciliation-form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
 import { formatAmount } from '@/lib/utils/currency';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 import { formatDateForLocale } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
 
@@ -152,14 +151,7 @@ export function ReconciliationFormDialog({
                 <FormItem>
                   <FormLabel required>{t('form.bankBalance')}</FormLabel>
                   <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      onKeyDown={blockNegativeNumberKeys}
-                      placeholder={t('form.bankBalancePlaceholder')}
-                    />
+                    <LocaleAmountInput {...field} placeholder={t('form.bankBalancePlaceholder')} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

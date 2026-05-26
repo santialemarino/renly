@@ -313,7 +313,7 @@
       },
       "amount": {
         "label": "Monto",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "currency": {
         "label": "Moneda",
@@ -416,7 +416,7 @@
       },
       "amount": {
         "label": "Monto",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "currency": {
         "label": "Moneda",
@@ -580,6 +580,7 @@
         "date": "Fecha",
         "datePlaceholder": "Elegí una fecha",
         "amount": "Monto",
+        "amountPlaceholder": "0,00",
         "currency": "Moneda",
         "bucket": "Saldo",
         "bucketPlaceholder": "Elegí la moneda del saldo",
@@ -694,7 +695,7 @@
       },
       "amount": {
         "label": "Monto",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "currency": {
         "label": "Moneda",
@@ -944,11 +945,11 @@
       },
       "originalPrice": {
         "label": "Precio original",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "installmentAmount": {
         "label": "Por cuota",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "currency": {
         "label": "Moneda",
@@ -1206,7 +1207,8 @@
       },
       "targetPercentage": {
         "label": "Objetivo de asignación (%)",
-        "placeholder": "Ingresá el porcentaje objetivo"
+        "placeholder": "Ingresá el porcentaje objetivo",
+        "invalidRange": "Debe estar entre 0 y 100"
       },
       "investments": {
         "label": "Inversiones",
@@ -1271,7 +1273,7 @@
       },
       "value": {
         "label": "Valor",
-        "placeholder": "0.00"
+        "placeholder": "0,00"
       },
       "quantity": {
         "label": "Acciones/unidades",
@@ -1290,7 +1292,9 @@
         "include": "Incluir una transacción para este período",
         "initialHint": "Este es el primer snapshot de esta inversión.\nConsiderá agregar una transacción de depósito o compra para registrar tu capital inicial invertido.",
         "amount": "Monto",
+        "amountPlaceholder": "0,00",
         "quantity": "Acciones/unidades",
+        "quantityPlaceholder": "0",
         "type": "Tipo",
         "types": {
           "deposit": "Depósito",

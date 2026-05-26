@@ -23,6 +23,7 @@ import {
 } from '@/app/(protected)/groups/groups-form-schema';
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { InvestmentGroup } from '@/lib/api/groups';
 
 interface GroupFormDialogProps {
@@ -47,12 +48,15 @@ export function GroupFormDialog({
 
   const isEdit = !!group;
 
-  const schema = buildGroupFormSchema(tCommon('form.errors.required'));
+  const schema = buildGroupFormSchema(
+    tCommon('form.errors.required'),
+    t('form.targetPercentage.invalidRange'),
+  );
   const form = useForm<GroupFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       name: group?.name ?? '',
-      targetPercentage: group?.targetPercentage ?? null,
+      targetPercentage: group?.targetPercentage != null ? String(group.targetPercentage) : '',
       investmentIds: group?.investmentIds ?? [],
     },
   });
@@ -61,7 +65,7 @@ export function GroupFormDialog({
     if (open) {
       form.reset({
         name: group?.name ?? '',
-        targetPercentage: group?.targetPercentage ?? null,
+        targetPercentage: group?.targetPercentage != null ? String(group.targetPercentage) : '',
         investmentIds: group?.investmentIds ?? [],
       });
     }
@@ -134,20 +138,9 @@ export function GroupFormDialog({
                 <FormItem>
                   <FormLabel>{t('form.targetPercentage.label')}</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step={0.01}
+                    <LocaleAmountInput
+                      {...field}
                       placeholder={t('form.targetPercentage.placeholder')}
-                      value={field.value ?? ''}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        field.onChange(v === '' ? null : Number(v));
-                      }}
-                      onBlur={field.onBlur}
-                      ref={field.ref}
-                      name={field.name}
                     />
                   </FormControl>
                   <FormMessage />

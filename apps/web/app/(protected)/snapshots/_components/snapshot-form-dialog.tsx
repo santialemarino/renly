@@ -16,7 +16,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Label,
   Select,
   SelectContent,
@@ -40,11 +39,11 @@ import {
 } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { formatAmount } from '@/lib/utils/currency';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly (DB cache hit).
@@ -428,12 +427,8 @@ export function SnapshotFormDialog({
                     <FormItem className="flex-1 min-w-0" {...(quantityMode ? { inert: true } : {})}>
                       <FormLabel required>{t('form.value.label')}</FormLabel>
                       <FormControl>
-                        <Input
+                        <LocaleAmountInput
                           {...field}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          onKeyDown={blockNegativeNumberKeys}
                           placeholder={t('form.value.placeholder')}
                           className={cn(
                             'transition-colors',
@@ -457,12 +452,8 @@ export function SnapshotFormDialog({
                       >
                         <FormLabel>{t('form.quantity.label')}</FormLabel>
                         <FormControl>
-                          <Input
+                          <LocaleAmountInput
                             {...field}
-                            type="number"
-                            step="any"
-                            min="0"
-                            onKeyDown={blockNegativeNumberKeys}
                             placeholder={t('form.quantity.placeholder')}
                             className={cn(
                               'transition-colors',
@@ -531,13 +522,9 @@ export function SnapshotFormDialog({
                           >
                             <FormLabel>{t('form.transaction.amount')}</FormLabel>
                             <FormControl>
-                              <Input
+                              <LocaleAmountInput
                                 {...field}
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                onKeyDown={blockNegativeNumberKeys}
-                                placeholder="0.00"
+                                placeholder={t('form.transaction.amountPlaceholder')}
                                 className={cn(
                                   'transition-colors',
                                   quantityMode && 'bg-muted text-muted-foreground',
@@ -560,13 +547,9 @@ export function SnapshotFormDialog({
                             >
                               <FormLabel>{t('form.transaction.quantity')}</FormLabel>
                               <FormControl>
-                                <Input
+                                <LocaleAmountInput
                                   {...field}
-                                  type="number"
-                                  step="any"
-                                  min="0"
-                                  onKeyDown={blockNegativeNumberKeys}
-                                  placeholder="0"
+                                  placeholder={t('form.transaction.quantityPlaceholder')}
                                   className={cn(
                                     'transition-colors',
                                     showToggle && !quantityMode && 'bg-muted text-muted-foreground',

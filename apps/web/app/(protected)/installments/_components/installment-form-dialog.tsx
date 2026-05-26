@@ -35,6 +35,7 @@ import {
 } from '@/app/(protected)/installments/installment-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { InfoHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -43,7 +44,6 @@ import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface InstallmentFormDialogProps {
   open: boolean;
@@ -268,12 +268,8 @@ export function InstallmentFormDialog({
                             <FormControl>
                               <Tooltip>
                                 <TooltipTrigger asChild>
-                                  <Input
+                                  <LocaleAmountInput
                                     {...field}
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    onKeyDown={blockNegativeNumberKeys}
                                     placeholder={t('form.originalPrice.placeholder')}
                                     disabled={isLocked}
                                   />
@@ -336,12 +332,8 @@ export function InstallmentFormDialog({
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Input
+                            <LocaleAmountInput
                               {...field}
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              onKeyDown={blockNegativeNumberKeys}
                               placeholder={t('form.installmentAmount.placeholder')}
                               disabled={isLocked}
                             />

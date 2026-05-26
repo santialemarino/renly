@@ -13,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -29,9 +28,9 @@ import {
 } from '@/app/(protected)/income/income-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { IncomeEntry } from '@/lib/api/income';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface IncomeFormDialogProps {
   open: boolean;
@@ -161,14 +160,7 @@ export function IncomeFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.amount.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.amount.placeholder')}
-                      />
+                      <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

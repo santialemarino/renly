@@ -14,7 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Select,
   SelectContent,
   SelectItem,
@@ -39,6 +38,7 @@ import {
 } from '@/app/(protected)/expenses/expenses-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
@@ -46,7 +46,6 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
 // When supplied (and `expense` is absent), the form opens in CREATE mode with values
@@ -350,14 +349,7 @@ export function ExpenseFormDialog({
                     <FormItem className="flex-1">
                       <FormLabel required>{t('form.amount.label')}</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          onKeyDown={blockNegativeNumberKeys}
-                          placeholder={t('form.amount.placeholder')}
-                        />
+                        <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

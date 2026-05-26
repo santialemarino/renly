@@ -32,12 +32,12 @@ import {
 } from '@/app/(protected)/subscriptions/subscription-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 interface SubscriptionFormDialogProps {
   open: boolean;
@@ -158,14 +158,7 @@ export function SubscriptionFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.amount.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.amount.placeholder')}
-                      />
+                      <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

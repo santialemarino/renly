@@ -33,13 +33,13 @@ import {
 } from '@/app/(protected)/payment-obligations/payment-obligation-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
-import { blockNegativeNumberKeys } from '@/lib/utils/form-events';
 
 // Form-internal sentinel for "no recurrence" — the API stores NULL, but a Select
 // can't bind to undefined cleanly, so we round-trip through an empty string and
@@ -176,14 +176,7 @@ export function PaymentObligationFormDialog({
                   <FormItem className="flex-1">
                     <FormLabel required>{t('form.amount.label')}</FormLabel>
                     <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        onKeyDown={blockNegativeNumberKeys}
-                        placeholder={t('form.amount.placeholder')}
-                      />
+                      <LocaleAmountInput {...field} placeholder={t('form.amount.placeholder')} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
