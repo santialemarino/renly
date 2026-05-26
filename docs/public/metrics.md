@@ -103,6 +103,40 @@ If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDE
 
 You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **group** (Retirement, Trading, Kids, etc.).
 
+## Liquidity
+
+**What it answers:** "What share of my income is already committed to fixed monthly costs?"
+
+Renly's liquidity card shows the ratio of your **fixed monthly commitments** to your **monthly income**:
+
+`liquidity = fixed_monthly_commitments / monthly_income`
+
+A higher number means more of your income is already spoken for by recurring costs. Above your configured threshold, the card turns amber; well above it, the card turns red.
+
+**What counts as a fixed monthly commitment:**
+
+- Every active **subscription** (Netflix, Spotify, gym) — amortised to its monthly equivalent (an annual plan counts as `amount / 12` per month, a biweekly plan as `amount × 26 / 12`).
+- Every active **installment plan** — contributes one monthly cuota until the plan finishes.
+- Every recurring **payment obligation** (electricity, ABL, internet) — amortised by recurrence (a bimonthly bill counts as `amount / 2` per month, quarterly as `/ 3`, annual as `/ 12`). One-off obligations don't count.
+- Credit card outstanding balance is **not** included — see [data model](data-model.md) for the reasoning. Card-funded subscriptions and installments are already in the count via their own rows.
+
+**What counts as monthly income:**
+
+The total income you logged over the last **90 days**, normalised to 30 days. For new users who haven't been logging income for 90 days yet, Renly uses your actual elapsed history (so 17 days of data → multiplied by 30/17 to reach a monthly figure). With fewer than 7 days of history, the card shows "—" with a hint to log income.
+
+**The four states:**
+
+| State   | When                                             | Colour    |
+| ------- | ------------------------------------------------ | --------- |
+| Healthy | Ratio is below your threshold                    | Green     |
+| Caution | Ratio is at or just above your threshold (≤10pp) | Amber     |
+| At risk | Ratio is more than 10pp above your threshold     | Red       |
+| Unknown | No income logged in the window, or ≥0 history    | Muted "—" |
+
+**Configuring the threshold:** Set `liquidity_threshold_pct` (1–99) in [Settings → Alerts & limits](data-model.md). The default is 40% — a common rule-of-thumb for personal finance. Adjust higher if your fixed costs naturally run higher (Argentine residents with installments + utilities often land in the 50–60% band), or lower if you want a tighter safety margin.
+
+**Cross-currency:** the ratio is computed in your display currency. Commitments and income are converted to that currency at today's rate before the division. When the currency switcher is on "Original," the card falls back to your primary currency (the same fallback the rest of the dashboard already uses).
+
 ---
 
 ## Note on currency conversion

@@ -372,21 +372,26 @@ Dashboard-oriented endpoints for income, expense, and cash flow metrics. All sup
 
 Aggregated endpoints combining investment portfolio and finance data for the home dashboard. All support optional `currency` conversion.
 
-| Method | Path                     | Description                                                                           |
-| ------ | ------------------------ | ------------------------------------------------------------------------------------- |
-| `GET`  | `/dashboard/overview`    | Net worth, investment KPIs, finance KPIs, savings rate, income/expense ratio.         |
-| `GET`  | `/dashboard/evolution`   | Monthly net worth series (investment value - cumulative card balance at each month).  |
-| `GET`  | `/dashboard/composition` | Investment allocation by category plus a liabilities segment for credit card balance. |
+| Method | Path                     | Description                                                                                                |
+| ------ | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/dashboard/overview`    | Net worth, investment KPIs, finance KPIs, savings rate, income/expense ratio.                              |
+| `GET`  | `/dashboard/evolution`   | Monthly net worth series (investment value - cumulative card balance at each month).                       |
+| `GET`  | `/dashboard/composition` | Investment allocation by category plus a liabilities segment for credit card balance.                      |
+| `GET`  | `/dashboard/liquidity`   | Liquidity health indicator: fixed monthly commitments / monthly income ratio classified against threshold. |
 
 **Query parameters (overview + evolution):** `currency`, `date_from` (YYYY-MM-DD), `date_to` (YYYY-MM-DD).
 
-**Query parameters (composition):** `currency` only (no date filtering — shows current allocation).
+**Query parameters (composition + liquidity):** `currency` only (no date filtering — shows current snapshot).
 
 **Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses).
 
 **Evolution response:** `points[]` with `date`, `investment_value`, `card_balance`, `net_worth` per month.
 
 **Composition response:** `items[]` with `label` (category name or "liabilities"), `value`, `percentage`. Plus `total_assets`, `total_liabilities`.
+
+**Liquidity response:** `ratio` (null when income is zero or history too short), `state` (`healthy` / `caution` / `at_risk` / `unknown`), `fixed_monthly_commitments`, `monthly_income`, `threshold` (integer percent), `income_window_days` (target = 90), `actual_window_days` (smaller during early app life), `currency`. Commitments amortise subscriptions / installments / recurring obligations to a monthly base; income is the user's last 90 days (or actual elapsed days, minimum 7) normalised to 30. Outstanding credit card balance is excluded — see [data model](data-model.md) for details. Configure the threshold via `liquidity_threshold_pct` on settings.
+
+**Classification bands:** `healthy` when `ratio × 100 < threshold`; `caution` when `threshold ≤ ratio × 100 < threshold + 10`; `at_risk` when `ratio × 100 ≥ threshold + 10`; `unknown` when income is zero or the user has fewer than 7 days of income history. The +10pp caution band is hardcoded.
 
 **Net worth formula:** `investment_total - credit_card_balance`. Cash accounts deferred — net worth currently excludes liquid cash.
 
@@ -417,18 +422,21 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 **Settings fields:**
 
-| Field                    | Type     | Description                                                                                                                                                                                                                         |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `primary_currency`       | string   | Main display currency (e.g., `USD`).                                                                                                                                                                                                |
-| `secondary_currency`     | string   | Secondary display currency (e.g., `ARS`).                                                                                                                                                                                           |
-| `preferred_currencies`   | string[] | Ordered list of currencies for the currency switcher.                                                                                                                                                                               |
-| `period_presets`         | object[] | Custom period presets for the dashboard date range selector.                                                                                                                                                                        |
-| `max_groups`             | int      | Maximum number of groups the user can create.                                                                                                                                                                                       |
-| `group_warning_pct`      | number   | Percentage threshold that triggers a group allocation warning.                                                                                                                                                                      |
-| `dollar_rate_preference` | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`.                                                                                                                                                             |
-| `shortcut_currencies`    | string[] | Currencies shown in the iOS Shortcut currency picker.                                                                                                                                                                               |
-| `timezone`               | string   | User's IANA timezone (e.g. `America/Argentina/Buenos_Aires`). Used by the auto-expense scheduler to fire cycles on the user's local calendar day. Defaults to UTC when unset. Validated server-side; invalid IANA names return 400. |
-| `timezone_mode`          | string   | `auto` or `manual`. In `auto`, the browser-detected timezone is silently kept in sync on every protected page load. In `manual`, the stored value never changes automatically.                                                      |
+| Field                     | Type     | Description                                                                                                                                                                                                                         |
+| ------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `primary_currency`        | string   | Main display currency (e.g., `USD`).                                                                                                                                                                                                |
+| `secondary_currency`      | string   | Secondary display currency (e.g., `ARS`).                                                                                                                                                                                           |
+| `preferred_currencies`    | string[] | Ordered list of currencies for the currency switcher.                                                                                                                                                                               |
+| `period_presets`          | object[] | Custom period presets for the dashboard date range selector.                                                                                                                                                                        |
+| `max_groups`              | int      | Maximum number of groups the user can create.                                                                                                                                                                                       |
+| `group_warning_pct`       | number   | Percentage threshold that triggers a group allocation warning.                                                                                                                                                                      |
+| `dollar_rate_preference`  | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`.                                                                                                                                                             |
+| `shortcut_currencies`     | string[] | Currencies shown in the iOS Shortcut currency picker.                                                                                                                                                                               |
+| `timezone`                | string   | User's IANA timezone (e.g. `America/Argentina/Buenos_Aires`). Used by the auto-expense scheduler to fire cycles on the user's local calendar day. Defaults to UTC when unset. Validated server-side; invalid IANA names return 400. |
+| `timezone_mode`           | string   | `auto` or `manual`. In `auto`, the browser-detected timezone is silently kept in sync on every protected page load. In `manual`, the stored value never changes automatically.                                                      |
+| `language`                | string   | User's preferred language code (`en` or `es`). Drives next-intl message loading.                                                                                                                                                    |
+| `language_mode`           | string   | `auto` or `manual` — same semantics as `timezone_mode` but for language.                                                                                                                                                            |
+| `liquidity_threshold_pct` | int      | Liquidity-alert threshold as integer percent (1–99). Drives the `/dashboard/liquidity` state classification. Null falls back to the backend default (`40`).                                                                         |
 
 ---
 

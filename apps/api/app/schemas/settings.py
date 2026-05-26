@@ -61,6 +61,10 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Language source: 'auto' (browser-detected, kept in sync) or 'manual' (locked).",
     )
+    liquidity_threshold_pct: int | None = Field(
+        default=None,
+        description="Liquidity-alert threshold as an integer percent (e.g. 40 = 40%). Null means use env / backend default.",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -113,6 +117,10 @@ class SettingsUpdate(RequestBase):
         default=None,
         description="Language source: 'auto' or 'manual'.",
     )
+    liquidity_threshold_pct: int | None = Field(
+        default=None,
+        description="Liquidity-alert threshold as integer percent. Must be in [1, 99].",
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -150,4 +158,13 @@ class SettingsUpdate(RequestBase):
             return None
         if value not in LANGUAGE_MODE_VALUES:
             raise ValueError(f"language_mode must be one of {LANGUAGE_MODE_VALUES}.")
+        return value
+
+    @field_validator("liquidity_threshold_pct")
+    @classmethod
+    def _validate_liquidity_threshold_pct(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not 1 <= value <= 99:
+            raise ValueError("liquidity_threshold_pct must be in [1, 99].")
         return value

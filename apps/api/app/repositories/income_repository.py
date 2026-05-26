@@ -62,6 +62,14 @@ async def delete(session: AsyncSession, entry: IncomeEntry) -> None:
     await session.delete(entry)
 
 
+# Earliest income entry date for a user. Returns None when the user has no income entries.
+# Used by the liquidity alert to size the income window during early app life.
+async def get_first_income_date(session: AsyncSession, user_id: int) -> date_type | None:
+    stmt = select(func.min(IncomeEntry.date)).where(IncomeEntry.user_id == user_id)
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 # Total income for a user within a date range, grouped by currency.
 async def sum_by_user(
     session: AsyncSession,
@@ -149,6 +157,7 @@ class IncomeRepository:
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
+    get_first_income_date = staticmethod(get_first_income_date)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

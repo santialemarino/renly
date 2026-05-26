@@ -17,6 +17,7 @@ interface SettingsRaw {
   timezone_mode: string | null;
   language: string | null;
   language_mode: string | null;
+  liquidity_threshold_pct: number | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -34,6 +35,7 @@ export interface SettingsData {
   timezoneMode: string | null;
   language: string | null;
   languageMode: string | null;
+  liquidityThresholdPct: number | null;
 }
 
 // --- Mappers ---
@@ -52,6 +54,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     timezoneMode: raw.timezone_mode,
     language: raw.language,
     languageMode: raw.language_mode,
+    liquidityThresholdPct: raw.liquidity_threshold_pct,
   };
 }
 

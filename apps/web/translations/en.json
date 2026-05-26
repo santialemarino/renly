@@ -162,6 +162,7 @@
       "groups": "Groups",
       "snapshots": "Snapshots",
       "preferences": "Preferences",
+      "alerts": "Alerts & limits",
       "localization": "Localization",
       "integrations": "Integrations"
     },
@@ -215,7 +216,13 @@
       "savingsRate": "Savings Rate",
       "savingsRateHint": "Income saved after expenses",
       "incomeExpenseRatio": "Income / Expense",
-      "incomeExpenseRatioHint": "How much you earn per unit spent"
+      "incomeExpenseRatioHint": "How much you earn per unit spent",
+      "liquidity": "Liquidity",
+      "liquidityHint": "Fixed commitments vs income",
+      "liquidityBreakdown": "{commitments} / {income}",
+      "liquidityThresholdHint": "Threshold: {pct}%",
+      "liquidityActualDaysHint": "Based on {days} days of data",
+      "liquidityZeroIncomeHint": "Log income to see your ratio"
     },
     "links": {
       "finances": "Finance Dashboard",
@@ -1343,7 +1350,7 @@
         "formatWithDefaults": "Comma-separated ISO codes. Defaults to {defaults} if left empty."
       },
       "sectionCurrencies": "Currencies",
-      "sectionDashboard": "Dashboard & Limits",
+      "sectionDisplay": "Display",
       "periodPresets": {
         "label": "Period presets",
         "hint": "Quick-access period buttons on the dashboard.",
@@ -1352,19 +1359,6 @@
         "emptyDefault": "Leave all fields empty to use the default presets.",
         "emptyDefaultWithValues": "Leave all fields empty to use the defaults ({defaults}).",
         "partialWarning": "Filling in at least one field replaces all defaults.\nOnce you fill in a field, only the presets you enter will be shown."
-      },
-      "maxGroups": {
-        "label": "Max groups",
-        "hint": "Maximum number of investment groups allowed.",
-        "default": "Defaults to {value} if left empty.",
-        "invalidRange": "Must be a whole number of 1 or more."
-      },
-      "groupWarningPct": {
-        "label": "Warning threshold (%)",
-        "hint": "Show a warning when this percentage of max groups is reached.",
-        "default": "Defaults to {value}% if left empty.",
-        "noDefault": "Leave empty to disable the warning.",
-        "invalidRange": "Must be a whole number between 1 and 100."
       },
       "dollarRate": {
         "label": "Dollar rate",
@@ -1382,6 +1376,43 @@
       },
       "saveSuccess": "Preferences saved.",
       "saveError": "Failed to save preferences."
+    }
+  },
+  "alerts": {
+    "metadata": {
+      "title": "Alerts & limits",
+      "description": "Configure thresholds and limits for dashboard health indicators."
+    },
+    "title": "Alerts & limits",
+    "subtitle": "Thresholds for dashboard indicators and account caps.",
+    "form": {
+      "sectionAccountLimits": "Account limits",
+      "sectionFinancialHealth": "Financial health",
+      "maxGroups": {
+        "label": "Max groups",
+        "hint": "Maximum number of investment groups allowed.",
+        "default": "Defaults to {value} if left empty.",
+        "invalidRange": "Must be a whole number of 1 or more."
+      },
+      "groupWarningPct": {
+        "label": "Group limit warning (%)",
+        "hint": "Show a warning when this percentage of max groups is reached.",
+        "default": "Defaults to {value}% if left empty.",
+        "noDefault": "Leave empty to disable the warning.",
+        "invalidRange": "Must be a whole number between 1 and 100."
+      },
+      "liquidityThreshold": {
+        "label": "Liquidity threshold (%)",
+        "hint": "Show a warning when fixed monthly commitments exceed this percentage of monthly income.",
+        "default": "Defaults to {value}% if left empty.",
+        "invalidRange": "Must be a whole number between 1 and 99."
+      },
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "saveSuccess": "Alerts saved.",
+      "saveError": "Failed to save alerts."
     }
   },
   "localization": {

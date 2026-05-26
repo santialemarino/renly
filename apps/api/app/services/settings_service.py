@@ -17,6 +17,7 @@ SETTINGS_KEY_TIMEZONE = "timezone"
 SETTINGS_KEY_TIMEZONE_MODE = "timezone_mode"
 SETTINGS_KEY_LANGUAGE = "language"
 SETTINGS_KEY_LANGUAGE_MODE = "language_mode"
+SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT = "liquidity_threshold_pct"
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -66,6 +67,8 @@ def _settings_to_response(settings: dict) -> dict:
     language = raw_language if isinstance(raw_language, str) and raw_language in SUPPORTED_LANGUAGES else None
     raw_language_mode = settings.get(SETTINGS_KEY_LANGUAGE_MODE)
     language_mode = raw_language_mode if isinstance(raw_language_mode, str) and raw_language_mode in LANGUAGE_MODE_VALUES else None
+    raw_liquidity_threshold = settings.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
+    liquidity_threshold_pct = raw_liquidity_threshold if isinstance(raw_liquidity_threshold, int) and 1 <= raw_liquidity_threshold <= 99 else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -79,6 +82,7 @@ def _settings_to_response(settings: dict) -> dict:
         "timezone_mode": timezone_mode,
         "language": language,
         "language_mode": language_mode,
+        "liquidity_threshold_pct": liquidity_threshold_pct,
     }
 
 
@@ -109,6 +113,7 @@ async def update_settings(
     timezone_mode: str | None = _NOT_SET,
     language: str | None = _NOT_SET,
     language_mode: str | None = _NOT_SET,
+    liquidity_threshold_pct: int | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -139,6 +144,8 @@ async def update_settings(
         settings[SETTINGS_KEY_LANGUAGE] = language
     if language_mode is not _NOT_SET:
         settings[SETTINGS_KEY_LANGUAGE_MODE] = language_mode
+    if liquidity_threshold_pct is not _NOT_SET:
+        settings[SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT] = liquidity_threshold_pct
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()

@@ -10,8 +10,6 @@ interface SaveSettingsParams {
   secondaryCurrency: string | null;
   preferredCurrencies?: string[] | null;
   periodPresets?: string[] | null;
-  maxGroups?: number | null;
-  groupWarningPct?: number | null;
   dollarRatePreference?: string | null;
 }
 
@@ -25,12 +23,6 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
   }
   if (params.periodPresets !== undefined) {
     body.period_presets = params.periodPresets;
-  }
-  if (params.maxGroups !== undefined) {
-    body.max_groups = params.maxGroups;
-  }
-  if (params.groupWarningPct !== undefined) {
-    body.group_warning_pct = params.groupWarningPct;
   }
   if (params.dollarRatePreference !== undefined) {
     body.dollar_rate_preference = params.dollarRatePreference;
@@ -59,5 +51,6 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     timezoneMode: raw.timezone_mode ?? null,
     language: raw.language ?? null,
     languageMode: raw.language_mode ?? null,
+    liquidityThresholdPct: raw.liquidity_threshold_pct ?? null,
   };
 }

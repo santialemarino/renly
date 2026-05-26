@@ -13,6 +13,7 @@ import { ROUTES } from '@/config/routes';
 import {
   getDashboardComposition,
   getDashboardEvolution,
+  getDashboardLiquidity,
   getDashboardOverview,
   type DashboardFilterParams,
 } from '@/lib/api/dashboard';
@@ -77,12 +78,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   };
 
   // Fetch all data in parallel.
-  let overview, evolution, composition;
+  let overview, evolution, composition, liquidity;
   try {
-    [overview, evolution, composition] = await Promise.all([
+    [overview, evolution, composition, liquidity] = await Promise.all([
       getDashboardOverview(filterParams),
       getDashboardEvolution(filterParams),
       getDashboardComposition({ currency }),
+      getDashboardLiquidity({ currency }),
     ]);
   } catch {
     return (
@@ -120,7 +122,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <DashboardComposition composition={composition.items} />
       </div>
 
-      <DashboardFooter overview={overview} />
+      <DashboardFooter overview={overview} liquidity={liquidity} />
     </div>
   );
 }

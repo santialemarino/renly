@@ -9,6 +9,7 @@ from app.deps.db import SessionDep
 from app.schemas.dashboard import (
     DashboardCompositionResponse,
     DashboardEvolutionResponse,
+    DashboardLiquidityResponse,
     DashboardOverviewResponse,
 )
 from app.services import dashboard_service
@@ -70,6 +71,22 @@ async def get_composition(
 ) -> DashboardCompositionResponse:
     dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_composition(
+        session,
+        current_user.id,
+        currency=currency,
+        dollar_preference=dp,
+    )
+
+
+# Returns the liquidity health indicator (fixed commitments / income ratio) for the dashboard footer.
+@router.get("/liquidity", response_model=DashboardLiquidityResponse)
+async def get_liquidity(
+    current_user: CurrentUser,
+    session: SessionDep,
+    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+) -> DashboardLiquidityResponse:
+    dp = await get_dollar_pref(session, current_user.id)
+    return await dashboard_service.get_liquidity(
         session,
         current_user.id,
         currency=currency,

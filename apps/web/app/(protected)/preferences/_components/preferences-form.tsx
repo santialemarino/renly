@@ -26,7 +26,6 @@ import {
   buildSettingsFormSchema,
   type SettingsFormValues,
 } from '@/app/(protected)/preferences/preferences-form-schema';
-import { IntegerInput } from '@/components/integer-input';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -37,7 +36,6 @@ import {
   FALLBACK_PRIMARY_CURRENCY,
   FALLBACK_SECONDARY_CURRENCY,
 } from '@/lib/constants/currency';
-import { ENV_GROUP_WARNING_PCT, ENV_MAX_GROUPS } from '@/lib/constants/groups';
 import { ENV_PERIOD_PRESETS, ENV_PRESET_CODES } from '@/lib/constants/period-presets';
 import { isCurrencySupported } from '@/lib/utils/currency';
 import { localizePreset } from '@/lib/utils/period-presets';
@@ -56,8 +54,6 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
   const yearSuffix = tCommon('period.yearSuffix');
   const schema = buildSettingsFormSchema({
     presetInvalidMsg: t('form.periodPresets.invalidFormat'),
-    maxGroupsInvalidMsg: t('form.maxGroups.invalidRange'),
-    groupWarningPctInvalidMsg: t('form.groupWarningPct.invalidRange'),
   });
 
   const {
@@ -76,8 +72,6 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
       periodPreset2: localizePreset(initialSettings.periodPresets?.[1], yearSuffix),
       periodPreset3: localizePreset(initialSettings.periodPresets?.[2], yearSuffix),
       periodPreset4: localizePreset(initialSettings.periodPresets?.[3], yearSuffix),
-      maxGroups: initialSettings.maxGroups?.toString() ?? '',
-      groupWarningPct: initialSettings.groupWarningPct?.toString() ?? '',
       dollarRatePreference: initialSettings.dollarRatePreference ?? DOLLAR_RATE_DEFAULT,
     },
   });
@@ -120,16 +114,11 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean) ?? [];
 
-      const maxGroupsNum = values.maxGroups ? parseInt(values.maxGroups, 10) : null;
-      const warningPctNum = values.groupWarningPct ? parseInt(values.groupWarningPct, 10) : null;
-
       await saveSettings({
         primaryCurrency: values.primaryCurrency,
         secondaryCurrency: values.secondaryCurrency ?? null,
         preferredCurrencies: preferredRaw.length > 0 ? preferredRaw : null,
         periodPresets: presets.length > 0 ? presets : null,
-        maxGroups: !isNaN(maxGroupsNum!) ? maxGroupsNum : null,
-        groupWarningPct: !isNaN(warningPctNum!) ? warningPctNum : null,
         dollarRatePreference: values.dollarRatePreference || null,
       });
 
@@ -142,8 +131,6 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
         periodPreset2: localizePreset(presets[1], yearSuffix),
         periodPreset3: localizePreset(presets[2], yearSuffix),
         periodPreset4: localizePreset(presets[3], yearSuffix),
-        maxGroups: maxGroupsNum?.toString() ?? '',
-        groupWarningPct: warningPctNum?.toString() ?? '',
         dollarRatePreference: values.dollarRatePreference,
       });
       router.refresh();
@@ -300,10 +287,10 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
           </div>
         </div>
 
-        {/* Right column — Dashboard & Limits */}
+        {/* Right column — Display */}
         <div className="flex flex-col max-w-md gap-y-3">
           <h3 className="text-paragraph-sm-semibold text-muted-foreground">
-            {t('form.sectionDashboard')}
+            {t('form.sectionDisplay')}
           </h3>
 
           <div className="flex flex-col gap-y-3">
@@ -348,46 +335,6 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
                 : t('form.periodPresets.emptyDefault')}
             </InfoHint>
             <InfoHint>{t('form.periodPresets.partialWarning')}</InfoHint>
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.maxGroups.label')}</Label>
-            <Hint>{t('form.maxGroups.hint')}</Hint>
-            <Controller
-              name="maxGroups"
-              control={control}
-              render={({ field }) => (
-                <IntegerInput {...field} surface placeholder={String(ENV_MAX_GROUPS)} />
-              )}
-            />
-            <InfoHint>{t('form.maxGroups.default', { value: String(ENV_MAX_GROUPS) })}</InfoHint>
-          </div>
-
-          <Separator />
-
-          <div className="flex flex-col gap-y-2">
-            <Label>{t('form.groupWarningPct.label')}</Label>
-            <Hint>{t('form.groupWarningPct.hint')}</Hint>
-            <Controller
-              name="groupWarningPct"
-              control={control}
-              render={({ field }) => (
-                <IntegerInput
-                  {...field}
-                  surface
-                  placeholder={
-                    ENV_GROUP_WARNING_PCT != null ? String(ENV_GROUP_WARNING_PCT) : undefined
-                  }
-                />
-              )}
-            />
-            <InfoHint>
-              {ENV_GROUP_WARNING_PCT != null
-                ? t('form.groupWarningPct.default', { value: String(ENV_GROUP_WARNING_PCT) })
-                : t('form.groupWarningPct.noDefault')}
-            </InfoHint>
           </div>
         </div>
       </div>

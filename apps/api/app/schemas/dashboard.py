@@ -51,3 +51,15 @@ class DashboardCompositionResponse(BaseModel):
     total_assets: Decimal = Field(description="Total investment portfolio value.")
     total_liabilities: Decimal = Field(description="Total credit card balance.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+
+
+# Liquidity health indicator (fixed monthly commitments vs monthly income) for the dashboard footer.
+class DashboardLiquidityResponse(BaseModel):
+    ratio: Decimal | None = Field(default=None, description="Commitments / income. Null when income is zero or history is insufficient.")
+    state: str = Field(description="One of: healthy, caution, at_risk, unknown.")
+    fixed_monthly_commitments: Decimal = Field(description="Monthly-equivalent commitments in display currency.")
+    monthly_income: Decimal = Field(description="Normalised monthly income over the income window.")
+    threshold: int = Field(description="User-configured threshold (integer percentage, e.g. 40 = 40%).")
+    income_window_days: int = Field(description="Target window length (90 days when fully populated).")
+    actual_window_days: int = Field(description="Actual window used for normalisation. Smaller than income_window_days during early app life.")
+    currency: str | None = Field(default=None, description="Display currency (null when 'Original' is selected).")

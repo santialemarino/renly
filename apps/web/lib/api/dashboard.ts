@@ -46,6 +46,17 @@ interface DashboardCompositionRaw {
   currency: string | null;
 }
 
+interface DashboardLiquidityRaw {
+  ratio: string | null;
+  state: 'healthy' | 'caution' | 'at_risk' | 'unknown';
+  fixed_monthly_commitments: string;
+  monthly_income: string;
+  threshold: number;
+  income_window_days: number;
+  actual_window_days: number;
+  currency: string | null;
+}
+
 // --- Frontend types (camelCase) ---
 
 export interface DashboardOverview {
@@ -90,6 +101,19 @@ export interface DashboardComposition {
   currency: string | null;
 }
 
+export type LiquidityState = 'healthy' | 'caution' | 'at_risk' | 'unknown';
+
+export interface DashboardLiquidity {
+  ratio: number | null;
+  state: LiquidityState;
+  fixedMonthlyCommitments: number;
+  monthlyIncome: number;
+  threshold: number;
+  incomeWindowDays: number;
+  actualWindowDays: number;
+  currency: string | null;
+}
+
 // --- Mappers ---
 
 function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
@@ -127,6 +151,19 @@ function mapCompositionItem(raw: CompositionItemRaw): CompositionItem {
     label: raw.label,
     value: Number(raw.value),
     percentage: Number(raw.percentage),
+  };
+}
+
+function mapLiquidity(raw: DashboardLiquidityRaw): DashboardLiquidity {
+  return {
+    ratio: raw.ratio !== null ? Number(raw.ratio) : null,
+    state: raw.state,
+    fixedMonthlyCommitments: Number(raw.fixed_monthly_commitments),
+    monthlyIncome: Number(raw.monthly_income),
+    threshold: raw.threshold,
+    incomeWindowDays: raw.income_window_days,
+    actualWindowDays: raw.actual_window_days,
+    currency: raw.currency,
   };
 }
 
@@ -189,4 +226,17 @@ export async function getDashboardComposition(
     totalLiabilities: Number(raw.total_liabilities),
     currency: raw.currency,
   };
+}
+
+export async function getDashboardLiquidity(
+  params: Omit<DashboardFilterParams, 'dateFrom' | 'dateTo'> = {},
+): Promise<DashboardLiquidity> {
+  const qs = new URLSearchParams();
+  if (params.currency) qs.append('currency', params.currency);
+  const query = qs.toString();
+  const url = `/dashboard/liquidity${query ? `?${query}` : ''}`;
+  const res = await authenticatedFetch(url, { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to fetch dashboard liquidity');
+  const raw: DashboardLiquidityRaw = await res.json();
+  return mapLiquidity(raw);
 }

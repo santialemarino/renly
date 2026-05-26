@@ -162,6 +162,7 @@
       "groups": "Grupos",
       "snapshots": "Snapshots",
       "preferences": "Preferencias",
+      "alerts": "Alertas y límites",
       "localization": "Localización",
       "integrations": "Integraciones"
     },
@@ -215,7 +216,13 @@
       "savingsRate": "Tasa de Ahorro",
       "savingsRateHint": "Ingreso ahorrado después de gastos",
       "incomeExpenseRatio": "Ingreso / Gasto",
-      "incomeExpenseRatioHint": "Cuánto ganás por cada unidad gastada"
+      "incomeExpenseRatioHint": "Cuánto ganás por cada unidad gastada",
+      "liquidity": "Liquidez",
+      "liquidityHint": "Compromisos fijos vs ingresos",
+      "liquidityBreakdown": "{commitments} / {income}",
+      "liquidityThresholdHint": "Umbral: {pct}%",
+      "liquidityActualDaysHint": "Basado en {days} días de datos",
+      "liquidityZeroIncomeHint": "Registrá ingresos para ver tu ratio"
     },
     "links": {
       "finances": "Dashboard Financiero",
@@ -1343,7 +1350,7 @@
         "formatWithDefaults": "Códigos ISO separados por coma. Por defecto {defaults} si se deja vacío."
       },
       "sectionCurrencies": "Monedas",
-      "sectionDashboard": "Dashboard y Límites",
+      "sectionDisplay": "Visualización",
       "periodPresets": {
         "label": "Presets de periodo",
         "hint": "Botones de acceso rápido de periodo en el dashboard.",
@@ -1352,19 +1359,6 @@
         "emptyDefault": "Dejá todos los campos vacíos para usar los presets predeterminados.",
         "emptyDefaultWithValues": "Dejá todos los campos vacíos para usar los presets predeterminados ({defaults}).",
         "partialWarning": "Completar al menos un campo reemplaza todos los predeterminados.\nUna vez completado un campo, solo se mostrarán los presets que ingreses."
-      },
-      "maxGroups": {
-        "label": "Máximo de grupos",
-        "hint": "Cantidad máxima de grupos de inversiones permitidos.",
-        "default": "Por defecto {value} si se deja vacío.",
-        "invalidRange": "Debe ser un número entero mayor o igual a 1."
-      },
-      "groupWarningPct": {
-        "label": "Umbral de advertencia (%)",
-        "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
-        "default": "Por defecto {value}% si se deja vacío.",
-        "noDefault": "Dejá vacío para desactivar la advertencia.",
-        "invalidRange": "Debe ser un número entero entre 1 y 100."
       },
       "dollarRate": {
         "label": "Cotización del dólar",
@@ -1382,6 +1376,43 @@
       },
       "saveSuccess": "Preferencias guardadas.",
       "saveError": "No se pudieron guardar las preferencias."
+    }
+  },
+  "alerts": {
+    "metadata": {
+      "title": "Alertas y límites",
+      "description": "Configurá umbrales y límites para los indicadores del dashboard."
+    },
+    "title": "Alertas y límites",
+    "subtitle": "Umbrales para indicadores del dashboard y topes de la cuenta.",
+    "form": {
+      "sectionAccountLimits": "Límites de la cuenta",
+      "sectionFinancialHealth": "Salud financiera",
+      "maxGroups": {
+        "label": "Máximo de grupos",
+        "hint": "Cantidad máxima de grupos de inversiones permitidos.",
+        "default": "Por defecto {value} si se deja vacío.",
+        "invalidRange": "Debe ser un número entero mayor o igual a 1."
+      },
+      "groupWarningPct": {
+        "label": "Advertencia de límite de grupos (%)",
+        "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
+        "default": "Por defecto {value}% si se deja vacío.",
+        "noDefault": "Dejá vacío para desactivar la advertencia.",
+        "invalidRange": "Debe ser un número entero entre 1 y 100."
+      },
+      "liquidityThreshold": {
+        "label": "Umbral de liquidez (%)",
+        "hint": "Mostrar advertencia cuando los compromisos mensuales fijos superen este porcentaje del ingreso mensual.",
+        "default": "Por defecto {value}% si se deja vacío.",
+        "invalidRange": "Debe ser un número entero entre 1 y 99."
+      },
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "saveSuccess": "Alertas guardadas.",
+      "saveError": "No se pudieron guardar las alertas."
     }
   },
   "localization": {

@@ -52,5 +52,7 @@ async def update_settings(
         kwargs["language"] = payload["language"]
     if "language_mode" in payload:
         kwargs["language_mode"] = payload["language_mode"]
+    if "liquidity_threshold_pct" in payload:
+        kwargs["liquidity_threshold_pct"] = payload["liquidity_threshold_pct"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

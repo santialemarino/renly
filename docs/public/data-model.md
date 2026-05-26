@@ -161,6 +161,11 @@ Each user has personal preferences that control how the app behaves:
 - Dashboard period presets and display options
 - Which currencies to show in the iOS Shortcut currency picker (defaults to primary + secondary)
 - The user's timezone (IANA name like `America/Argentina/Buenos_Aires`) plus a mode flag (`auto` or `manual`). In auto mode the browser-detected timezone is silently kept in sync on every page load; in manual mode the stored value sticks until the user changes it. The auto-expense scheduler uses this to fire recurring charges on the user's local calendar day instead of the server's UTC day.
+- The user's language (`en` or `es`) plus a mode flag (`auto` or `manual`) — mirrors the timezone pattern.
+- Account caps and warning thresholds: `max_groups`, `group_warning_pct` (when investment groups approach the cap, the UI warns).
+- The **liquidity-alert threshold** (`liquidity_threshold_pct`, integer 1–99). Drives the colour band on the dashboard's Liquidity card — see [metrics](metrics.md) for the formula. Defaults to 40% when unset.
+
+**Why credit card balance is excluded from the liquidity ratio:** Renly's data model doesn't yet distinguish between users who pay their card in full each month (where the balance is just timing noise) and users who carry a balance (where a real monthly payment exists). Including the full outstanding balance would over-report dramatically for the first group; making up a "minimum payment" without a stored field would fabricate numbers. Card-funded subscriptions / installments / obligations are already in the count via their own rows, so they're not missed. A future enhancement may add an optional `monthly_payment` field per card for users with revolving debt.
 
 ---
 
