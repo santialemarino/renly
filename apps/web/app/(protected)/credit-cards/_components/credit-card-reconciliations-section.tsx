@@ -88,7 +88,10 @@ export function CreditCardReconciliationsSection({
 
   function formatPeriodLabel(start: string, end: string): string {
     // YYYY-MM-DD -> Locale-aware short label using period_end as the anchor.
-    const endDate = new Date(end);
+    // Anchor at local midnight so negative-UTC-offset users don't read the
+    // previous month for an end-of-month period (matches `formatMonth` +
+    // `formatDateForLocale`).
+    const endDate = new Date(end + 'T00:00:00');
     return endDate.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: 'numeric' });
   }
 
