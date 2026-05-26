@@ -1,5 +1,6 @@
 # Request/response schemas for settings endpoints (HTTP contract).
 
+from decimal import Decimal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
@@ -65,6 +66,18 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Liquidity-alert threshold as an integer percent (e.g. 40 = 40%). Null means use env / backend default.",
     )
+    savings_rate_healthy_pct: int | None = Field(
+        default=None,
+        description="Savings rate at or above this percent renders green on the dashboard. Null = backend default (20).",
+    )
+    savings_rate_moderate_pct: int | None = Field(
+        default=None,
+        description="Savings rate at or above this percent (but below healthy) renders amber. Null = backend default (10).",
+    )
+    income_expense_ratio_healthy: Decimal | None = Field(
+        default=None,
+        description="Income/expense ratio at or above this value renders green. Null = backend default (1.5).",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -121,6 +134,18 @@ class SettingsUpdate(RequestBase):
         default=None,
         description="Liquidity-alert threshold as integer percent. Must be in [1, 99].",
     )
+    savings_rate_healthy_pct: int | None = Field(
+        default=None,
+        description="Savings rate healthy threshold (integer percent in [1, 99]).",
+    )
+    savings_rate_moderate_pct: int | None = Field(
+        default=None,
+        description="Savings rate moderate threshold (integer percent in [1, 99]).",
+    )
+    income_expense_ratio_healthy: Decimal | None = Field(
+        default=None,
+        description="Income/expense ratio healthy threshold. Must be in [0.1, 10.0].",
+    )
 
     @field_validator("timezone")
     @classmethod
@@ -167,4 +192,22 @@ class SettingsUpdate(RequestBase):
             return None
         if not 1 <= value <= 99:
             raise ValueError("liquidity_threshold_pct must be in [1, 99].")
+        return value
+
+    @field_validator("savings_rate_healthy_pct", "savings_rate_moderate_pct")
+    @classmethod
+    def _validate_savings_rate_pct(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not 1 <= value <= 99:
+            raise ValueError("savings rate threshold must be in [1, 99].")
+        return value
+
+    @field_validator("income_expense_ratio_healthy")
+    @classmethod
+    def _validate_income_expense_ratio_healthy(cls, value: Decimal | None) -> Decimal | None:
+        if value is None:
+            return None
+        if not Decimal("0.1") <= value <= Decimal("10.0"):
+            raise ValueError("income_expense_ratio_healthy must be in [0.1, 10.0].")
         return value

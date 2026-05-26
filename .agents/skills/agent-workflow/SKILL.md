@@ -60,6 +60,7 @@ After implementation and before committing, audit every changed or created file 
 
 - **`__init__.py` / `__all__` / import blocks** are alphabetically ordered.
 - **No dead imports** from deleted files.
+- **Env vars:** every new `process.env.NEXT_PUBLIC_*` read on the web or `os.getenv(...)` read on the API must have a matching entry in `.env.example` (in the right topical position) AND in `.env` (the gitignored local-dev copy). PR body must call them out under an `**Env vars:**` sub-section.
 - **Docs and memory** updated per section 4 below.
 
 ## 4. Keep docs and memory current

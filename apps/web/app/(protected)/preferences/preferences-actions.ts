@@ -52,5 +52,9 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     language: raw.language ?? null,
     languageMode: raw.language_mode ?? null,
     liquidityThresholdPct: raw.liquidity_threshold_pct ?? null,
+    savingsRateHealthyPct: raw.savings_rate_healthy_pct ?? null,
+    savingsRateModeratePct: raw.savings_rate_moderate_pct ?? null,
+    incomeExpenseRatioHealthy:
+      raw.income_expense_ratio_healthy != null ? Number(raw.income_expense_ratio_healthy) : null,
   };
 }

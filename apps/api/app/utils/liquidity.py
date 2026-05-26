@@ -6,10 +6,11 @@ from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
 
+from app.models.credit_card import CreditCard
 from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
-from app.services.payment_obligation_service import OBLIGATION_MONTH_STEP
+from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal("0")
@@ -46,13 +47,15 @@ STATE_AT_RISK = "at_risk"
 STATE_UNKNOWN = "unknown"
 
 
-# Sums fixed monthly commitments across active subscriptions, installments, and recurring
-# obligations, amortised to a monthly base. Returns per-currency totals; the service layer
-# pivots via display currency.
+# Sums fixed monthly commitments across active subscriptions, installments, recurring
+# obligations, and credit cards with a stated monthly_payment (for revolving-debt users).
+# Amortised to a monthly base. Returns per-currency totals; the service layer pivots via
+# display currency.
 def compute_fixed_monthly_commitments(
     subscriptions: list[Subscription],
     installments: list[Installment],
     obligations: list[PaymentObligation],
+    credit_cards: list[CreditCard],
 ) -> dict[str, Decimal]:
     totals: dict[str, Decimal] = defaultdict(lambda: ZERO)
 
@@ -75,6 +78,14 @@ def compute_fixed_monthly_commitments(
         if months_step is None:
             continue
         totals[obl.currency] += obl.amount / Decimal(months_step)
+
+    for card in credit_cards:
+        # Only revolving-debt users (those who fill monthly_payment) contribute here.
+        # Pay-in-full users leave monthly_payment NULL — their card-funded subs/installments
+        # are already in the count via their own rows.
+        if card.monthly_payment is None:
+            continue
+        totals[card.currency] += card.monthly_payment
 
     return dict(totals)
 

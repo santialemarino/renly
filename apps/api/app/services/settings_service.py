@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -18,6 +20,9 @@ SETTINGS_KEY_TIMEZONE_MODE = "timezone_mode"
 SETTINGS_KEY_LANGUAGE = "language"
 SETTINGS_KEY_LANGUAGE_MODE = "language_mode"
 SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT = "liquidity_threshold_pct"
+SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT = "savings_rate_healthy_pct"
+SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT = "savings_rate_moderate_pct"
+SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY = "income_expense_ratio_healthy"
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -69,6 +74,19 @@ def _settings_to_response(settings: dict) -> dict:
     language_mode = raw_language_mode if isinstance(raw_language_mode, str) and raw_language_mode in LANGUAGE_MODE_VALUES else None
     raw_liquidity_threshold = settings.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
     liquidity_threshold_pct = raw_liquidity_threshold if isinstance(raw_liquidity_threshold, int) and 1 <= raw_liquidity_threshold <= 99 else None
+    raw_savings_healthy = settings.get(SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT)
+    savings_rate_healthy_pct = raw_savings_healthy if isinstance(raw_savings_healthy, int) and 1 <= raw_savings_healthy <= 99 else None
+    raw_savings_moderate = settings.get(SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT)
+    savings_rate_moderate_pct = raw_savings_moderate if isinstance(raw_savings_moderate, int) and 1 <= raw_savings_moderate <= 99 else None
+    raw_ie_ratio = settings.get(SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY)
+    income_expense_ratio_healthy: Decimal | None = None
+    if isinstance(raw_ie_ratio, (int, float, str)):
+        try:
+            candidate = Decimal(str(raw_ie_ratio))
+            if Decimal("0.1") <= candidate <= Decimal("10.0"):
+                income_expense_ratio_healthy = candidate
+        except (ArithmeticError, ValueError):
+            income_expense_ratio_healthy = None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -83,6 +101,9 @@ def _settings_to_response(settings: dict) -> dict:
         "language": language,
         "language_mode": language_mode,
         "liquidity_threshold_pct": liquidity_threshold_pct,
+        "savings_rate_healthy_pct": savings_rate_healthy_pct,
+        "savings_rate_moderate_pct": savings_rate_moderate_pct,
+        "income_expense_ratio_healthy": income_expense_ratio_healthy,
     }
 
 
@@ -114,6 +135,9 @@ async def update_settings(
     language: str | None = _NOT_SET,
     language_mode: str | None = _NOT_SET,
     liquidity_threshold_pct: int | None = _NOT_SET,
+    savings_rate_healthy_pct: int | None = _NOT_SET,
+    savings_rate_moderate_pct: int | None = _NOT_SET,
+    income_expense_ratio_healthy: Decimal | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -146,6 +170,13 @@ async def update_settings(
         settings[SETTINGS_KEY_LANGUAGE_MODE] = language_mode
     if liquidity_threshold_pct is not _NOT_SET:
         settings[SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT] = liquidity_threshold_pct
+    if savings_rate_healthy_pct is not _NOT_SET:
+        settings[SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT] = savings_rate_healthy_pct
+    if savings_rate_moderate_pct is not _NOT_SET:
+        settings[SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT] = savings_rate_moderate_pct
+    if income_expense_ratio_healthy is not _NOT_SET:
+        # JSONB doesn't natively encode Decimal; store as string so the round-trip survives.
+        settings[SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY] = str(income_expense_ratio_healthy) if income_expense_ratio_healthy is not None else None
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()

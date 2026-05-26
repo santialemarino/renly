@@ -21,8 +21,10 @@ from app.schemas.dashboard import (
     DashboardLiquidityResponse,
     DashboardOverviewResponse,
     NetWorthEvolutionPoint,
+    SkippedLiquidityEntity,
 )
 from app.services import credit_card_service, finance_metrics_service, metrics_service
+from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.liquidity import (
     LIQUIDITY_INCOME_MIN_HISTORY_DAYS,
     LIQUIDITY_INCOME_WINDOW_DAYS,
@@ -278,18 +280,40 @@ async def get_liquidity(
     lookup = await build_rate_lookup(session, dollar_preference) if currency else None
     rate_map_today = lookup.get_rate_map_at(today) if lookup else None
 
-    # Commitments: load active rows from the three sources, amortise to monthly-equivalent
+    # Commitments: load active rows from the four sources, amortise to monthly-equivalent
     # per currency via the pure helper, then sum-convert to display currency at today's rate.
     subscriptions = await subscription_repository.list_by_user(session, user_id, active_only=True)
     installments = await installment_repository.list_by_user(session, user_id, active_only=True)
     obligations = await payment_obligation_repository.list_by_user(session, user_id, active_only=True)
-    commitments_by_currency = compute_fixed_monthly_commitments(subscriptions, installments, obligations)
+    cards = await credit_card_repository.list_by_user(session, user_id, active_only=True)
+    commitments_by_currency = compute_fixed_monthly_commitments(subscriptions, installments, obligations, cards)
 
     commitments_total = ZERO
+    unsupported_currencies: set[str] = set()
     for cur, val in commitments_by_currency.items():
         if currency and rate_map_today and cur != currency:
+            if cur not in rate_map_today:
+                # Conversion would no-op silently; flag the currency so the diagnostic can list
+                # affected entities and exclude their amount from the displayed ratio.
+                unsupported_currencies.add(cur)
+                continue
             val = convert_value(val, cur, currency, rate_map_today)
         commitments_total += val
+
+    skipped_entities: list[SkippedLiquidityEntity] = []
+    if unsupported_currencies:
+        for sub in subscriptions:
+            if sub.currency in unsupported_currencies:
+                skipped_entities.append(SkippedLiquidityEntity(type="subscription", name=sub.name, currency=sub.currency))
+        for inst in installments:
+            if inst.currency in unsupported_currencies and inst.current_installment <= inst.installments_count:
+                skipped_entities.append(SkippedLiquidityEntity(type="installment", name=inst.name, currency=inst.currency))
+        for obl in obligations:
+            if obl.currency in unsupported_currencies and (obl.recurrence or "") in OBLIGATION_MONTH_STEP:
+                skipped_entities.append(SkippedLiquidityEntity(type="obligation", name=obl.name, currency=obl.currency))
+        for card in cards:
+            if card.currency in unsupported_currencies and card.monthly_payment is not None:
+                skipped_entities.append(SkippedLiquidityEntity(type="credit_card", name=card.name, currency=card.currency))
 
     # Income window sizing follows the user's actual income history. Below the minimum
     # history threshold (or zero history) the card renders 'unknown' — one paycheck
@@ -305,6 +329,7 @@ async def get_liquidity(
             income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
             actual_window_days=0,
             currency=currency,
+            skipped_entities=skipped_entities,
         )
 
     elapsed_days = (today - first_income_date).days + 1
@@ -318,6 +343,7 @@ async def get_liquidity(
             income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
             actual_window_days=elapsed_days,
             currency=currency,
+            skipped_entities=skipped_entities,
         )
 
     actual_window_days = min(LIQUIDITY_INCOME_WINDOW_DAYS, elapsed_days)
@@ -346,6 +372,7 @@ async def get_liquidity(
             income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
             actual_window_days=actual_window_days,
             currency=currency,
+            skipped_entities=skipped_entities,
         )
 
     ratio = commitments_total / monthly_income
@@ -360,4 +387,5 @@ async def get_liquidity(
         income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
         actual_window_days=actual_window_days,
         currency=currency,
+        skipped_entities=skipped_entities,
     )

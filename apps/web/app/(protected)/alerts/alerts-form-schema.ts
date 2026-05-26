@@ -4,6 +4,8 @@ interface AlertsFormMessages {
   maxGroupsInvalidMsg: string;
   groupWarningPctInvalidMsg: string;
   liquidityThresholdInvalidMsg: string;
+  savingsRateInvalidMsg: string;
+  incomeExpenseRatioInvalidMsg: string;
 }
 
 export function buildAlertsFormSchema(messages: AlertsFormMessages) {
@@ -25,6 +27,24 @@ export function buildAlertsFormSchema(messages: AlertsFormMessages) {
       .optional()
       .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 99), {
         message: messages.liquidityThresholdInvalidMsg,
+      }),
+    savingsRateHealthyPct: z
+      .string()
+      .optional()
+      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 99), {
+        message: messages.savingsRateInvalidMsg,
+      }),
+    savingsRateModeratePct: z
+      .string()
+      .optional()
+      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 99), {
+        message: messages.savingsRateInvalidMsg,
+      }),
+    incomeExpenseRatioHealthy: z
+      .string()
+      .optional()
+      .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 0.1 && Number(v) <= 10), {
+        message: messages.incomeExpenseRatioInvalidMsg,
       }),
   });
 }

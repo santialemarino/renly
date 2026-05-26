@@ -222,7 +222,8 @@
       "liquidityBreakdown": "{commitments} / {income}",
       "liquidityThresholdHint": "Umbral: {pct}%",
       "liquidityActualDaysHint": "Basado en {days} días de datos",
-      "liquidityZeroIncomeHint": "Registrá ingresos para ver tu ratio"
+      "liquidityZeroIncomeHint": "Registrá ingresos para ver tu ratio",
+      "liquiditySkippedHint": "{count, plural, one {# entidad omitida} other {# entidades omitidas}} (moneda no soportada)"
     },
     "links": {
       "finances": "Dashboard Financiero",
@@ -543,6 +544,12 @@
         "noResults": "No se encontraron monedas."
       },
       "invalidDay": "Debe ser un numero entre 1 y 31.",
+      "monthlyPayment": {
+        "label": "Pago mensual",
+        "placeholder": "0",
+        "hint": "Opcional. Si arrastrás saldo en esta tarjeta y pagás un monto típico cada mes, ponelo acá — cuenta como compromiso fijo en la tarjeta de Liquidez. Dejá vacío si la pagás en su totalidad.",
+        "invalid": "Debe ser un número no negativo."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -1406,6 +1413,26 @@
         "hint": "Mostrar advertencia cuando los compromisos mensuales fijos superen este porcentaje del ingreso mensual.",
         "default": "Por defecto {value}% si se deja vacío.",
         "invalidRange": "Debe ser un número entero entre 1 y 99."
+      },
+      "savingsRateHealthy": {
+        "label": "Tasa de ahorro — saludable (%)",
+        "hint": "Ahorrar al menos este porcentaje del ingreso se muestra en verde en el dashboard.",
+        "default": "Por defecto {value}% si se deja vacío."
+      },
+      "savingsRateModerate": {
+        "label": "Tasa de ahorro — moderada (%)",
+        "hint": "Ahorrar por debajo del umbral saludable pero al menos este valor se muestra en ámbar. Por debajo, rojo.",
+        "default": "Por defecto {value}% si se deja vacío.",
+        "invalidRange": "Debe ser un número entero entre 1 y 99."
+      },
+      "savingsRate": {
+        "invalidRange": "Debe ser un número entero entre 1 y 99."
+      },
+      "incomeExpenseRatio": {
+        "label": "Ratio ingreso / gasto — saludable",
+        "hint": "Ratio ingreso/gasto a partir de este valor se muestra en verde. El break-even (1) se muestra en ámbar. Por debajo, rojo.",
+        "default": "Por defecto {value} si se deja vacío.",
+        "invalidRange": "Debe ser un número entre 0.1 y 10."
       },
       "cta": {
         "label": "Guardar",

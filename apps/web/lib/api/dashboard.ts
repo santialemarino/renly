@@ -46,6 +46,12 @@ interface DashboardCompositionRaw {
   currency: string | null;
 }
 
+interface SkippedLiquidityEntityRaw {
+  type: 'subscription' | 'installment' | 'obligation' | 'credit_card';
+  name: string;
+  currency: string;
+}
+
 interface DashboardLiquidityRaw {
   ratio: string | null;
   state: 'healthy' | 'caution' | 'at_risk' | 'unknown';
@@ -55,6 +61,7 @@ interface DashboardLiquidityRaw {
   income_window_days: number;
   actual_window_days: number;
   currency: string | null;
+  skipped_entities: SkippedLiquidityEntityRaw[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -103,6 +110,12 @@ export interface DashboardComposition {
 
 export type LiquidityState = 'healthy' | 'caution' | 'at_risk' | 'unknown';
 
+export interface SkippedLiquidityEntity {
+  type: 'subscription' | 'installment' | 'obligation' | 'credit_card';
+  name: string;
+  currency: string;
+}
+
 export interface DashboardLiquidity {
   ratio: number | null;
   state: LiquidityState;
@@ -112,6 +125,7 @@ export interface DashboardLiquidity {
   incomeWindowDays: number;
   actualWindowDays: number;
   currency: string | null;
+  skippedEntities: SkippedLiquidityEntity[];
 }
 
 // --- Mappers ---
@@ -164,6 +178,11 @@ function mapLiquidity(raw: DashboardLiquidityRaw): DashboardLiquidity {
     incomeWindowDays: raw.income_window_days,
     actualWindowDays: raw.actual_window_days,
     currency: raw.currency,
+    skippedEntities: (raw.skipped_entities ?? []).map((e) => ({
+      type: e.type,
+      name: e.name,
+      currency: e.currency,
+    })),
   };
 }
 

@@ -222,7 +222,8 @@
       "liquidityBreakdown": "{commitments} / {income}",
       "liquidityThresholdHint": "Threshold: {pct}%",
       "liquidityActualDaysHint": "Based on {days} days of data",
-      "liquidityZeroIncomeHint": "Log income to see your ratio"
+      "liquidityZeroIncomeHint": "Log income to see your ratio",
+      "liquiditySkippedHint": "{count, plural, one {# entity} other {# entities}} skipped (unsupported currency)"
     },
     "links": {
       "finances": "Finance Dashboard",
@@ -543,6 +544,12 @@
         "noResults": "No currencies found."
       },
       "invalidDay": "Must be a number between 1 and 31.",
+      "monthlyPayment": {
+        "label": "Monthly payment",
+        "placeholder": "0",
+        "hint": "Optional. If you carry a balance on this card and pay a typical amount each month, set it here — it counts as a fixed commitment on the Liquidity card. Leave empty when you pay in full.",
+        "invalid": "Must be a non-negative number."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -1406,6 +1413,26 @@
         "hint": "Show a warning when fixed monthly commitments exceed this percentage of monthly income.",
         "default": "Defaults to {value}% if left empty.",
         "invalidRange": "Must be a whole number between 1 and 99."
+      },
+      "savingsRateHealthy": {
+        "label": "Savings rate — healthy (%)",
+        "hint": "Saving at or above this percentage of income renders green on the dashboard.",
+        "default": "Defaults to {value}% if left empty."
+      },
+      "savingsRateModerate": {
+        "label": "Savings rate — moderate (%)",
+        "hint": "Saving below healthy but at or above this renders amber. Below this renders red.",
+        "default": "Defaults to {value}% if left empty.",
+        "invalidRange": "Must be a whole number between 1 and 99."
+      },
+      "savingsRate": {
+        "invalidRange": "Must be a whole number between 1 and 99."
+      },
+      "incomeExpenseRatio": {
+        "label": "Income / expense ratio — healthy",
+        "hint": "Income/expense ratio at or above this renders green. Break-even (1) renders amber. Below renders red.",
+        "default": "Defaults to {value} if left empty.",
+        "invalidRange": "Must be a number between 0.1 and 10."
       },
       "cta": {
         "label": "Save",

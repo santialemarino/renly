@@ -8,16 +8,7 @@ from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.repositories import payment_obligation_repository
-from app.utils.dates import add_months_anchored
-
-# Recurrence pattern -> calendar-month step. Public so the Payments Calendar
-# (forward / backward walkers) and the expense -> obligation auto-advance share a single map.
-OBLIGATION_MONTH_STEP: dict[str, int] = {
-    "monthly": 1,
-    "bimonthly": 2,
-    "quarterly": 3,
-    "annual": 12,
-}
+from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
 
 
 # List payment obligations for a user with optional search, sorting, and archive filtering.

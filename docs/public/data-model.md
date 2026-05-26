@@ -163,9 +163,13 @@ Each user has personal preferences that control how the app behaves:
 - The user's timezone (IANA name like `America/Argentina/Buenos_Aires`) plus a mode flag (`auto` or `manual`). In auto mode the browser-detected timezone is silently kept in sync on every page load; in manual mode the stored value sticks until the user changes it. The auto-expense scheduler uses this to fire recurring charges on the user's local calendar day instead of the server's UTC day.
 - The user's language (`en` or `es`) plus a mode flag (`auto` or `manual`) — mirrors the timezone pattern.
 - Account caps and warning thresholds: `max_groups`, `group_warning_pct` (when investment groups approach the cap, the UI warns).
-- The **liquidity-alert threshold** (`liquidity_threshold_pct`, integer 1–99). Drives the colour band on the dashboard's Liquidity card — see [metrics](metrics.md) for the formula. Defaults to 40% when unset.
+- The **dashboard health-indicator thresholds** — all user-configurable from the `/alerts` page, with sensible defaults when unset:
+  - `liquidity_threshold_pct` (integer 1–99, default 40) — drives the Liquidity card.
+  - `savings_rate_healthy_pct` (integer 1–99, default 20) — Savings Rate "healthy" cut-off.
+  - `savings_rate_moderate_pct` (integer 1–99, default 10) — Savings Rate "moderate" cut-off (below this is "at risk").
+  - `income_expense_ratio_healthy` (decimal `[0.1, 10.0]`, default 1.5) — Income/Expense ratio "healthy" cut-off. The "amber" pivot is break-even (1.0) and stays hardcoded.
 
-**Why credit card balance is excluded from the liquidity ratio:** Renly's data model doesn't yet distinguish between users who pay their card in full each month (where the balance is just timing noise) and users who carry a balance (where a real monthly payment exists). Including the full outstanding balance would over-report dramatically for the first group; making up a "minimum payment" without a stored field would fabricate numbers. Card-funded subscriptions / installments / obligations are already in the count via their own rows, so they're not missed. A future enhancement may add an optional `monthly_payment` field per card for users with revolving debt.
+**Credit card revolving-debt handling:** credit cards have an optional `monthly_payment` column. When **set**, the value counts as a fixed monthly commitment in the dashboard Liquidity ratio (typical use: revolving-debt users who carry a balance and pay a roughly constant amount each month). When **null**, the card is treated as paid-in-full and excluded from the ratio — the timing of card spending vs settlement is just balance noise, not a real future commitment. Card-funded subscriptions / installments / obligations are already in the ratio via their own rows regardless of `monthly_payment`. Matches how YNAB and Monarch model revolving debt.
 
 ---
 

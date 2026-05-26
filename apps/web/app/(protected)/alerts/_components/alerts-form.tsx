@@ -13,9 +13,15 @@ import {
   type AlertsFormValues,
 } from '@/app/(protected)/alerts/alerts-form-schema';
 import { IntegerInput } from '@/components/integer-input';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { InfoHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ENV_GROUP_WARNING_PCT, ENV_MAX_GROUPS } from '@/lib/constants/groups';
+import {
+  ENV_INCOME_EXPENSE_RATIO_HEALTHY,
+  ENV_SAVINGS_RATE_HEALTHY_PCT,
+  ENV_SAVINGS_RATE_MODERATE_PCT,
+} from '@/lib/constants/health-thresholds';
 import { ENV_LIQUIDITY_THRESHOLD_PCT } from '@/lib/constants/liquidity';
 
 interface AlertsFormProps {
@@ -31,6 +37,8 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
     maxGroupsInvalidMsg: t('form.maxGroups.invalidRange'),
     groupWarningPctInvalidMsg: t('form.groupWarningPct.invalidRange'),
     liquidityThresholdInvalidMsg: t('form.liquidityThreshold.invalidRange'),
+    savingsRateInvalidMsg: t('form.savingsRate.invalidRange'),
+    incomeExpenseRatioInvalidMsg: t('form.incomeExpenseRatio.invalidRange'),
   });
 
   const {
@@ -44,28 +52,35 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
       maxGroups: initialSettings.maxGroups?.toString() ?? '',
       groupWarningPct: initialSettings.groupWarningPct?.toString() ?? '',
       liquidityThresholdPct: initialSettings.liquidityThresholdPct?.toString() ?? '',
+      savingsRateHealthyPct: initialSettings.savingsRateHealthyPct?.toString() ?? '',
+      savingsRateModeratePct: initialSettings.savingsRateModeratePct?.toString() ?? '',
+      incomeExpenseRatioHealthy: initialSettings.incomeExpenseRatioHealthy?.toString() ?? '',
     },
   });
 
   async function onSubmit(values: AlertsFormValues) {
     try {
-      const maxGroupsNum = values.maxGroups ? parseInt(values.maxGroups, 10) : null;
-      const warningPctNum = values.groupWarningPct ? parseInt(values.groupWarningPct, 10) : null;
-      const liquidityNum = values.liquidityThresholdPct
-        ? parseInt(values.liquidityThresholdPct, 10)
-        : null;
+      const toIntOrNull = (raw?: string): number | null => {
+        if (!raw) return null;
+        const n = parseInt(raw, 10);
+        return Number.isNaN(n) ? null : n;
+      };
+      const toFloatOrNull = (raw?: string): number | null => {
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isNaN(n) ? null : n;
+      };
 
       await saveAlerts({
-        maxGroups: !isNaN(maxGroupsNum!) ? maxGroupsNum : null,
-        groupWarningPct: !isNaN(warningPctNum!) ? warningPctNum : null,
-        liquidityThresholdPct: !isNaN(liquidityNum!) ? liquidityNum : null,
+        maxGroups: toIntOrNull(values.maxGroups),
+        groupWarningPct: toIntOrNull(values.groupWarningPct),
+        liquidityThresholdPct: toIntOrNull(values.liquidityThresholdPct),
+        savingsRateHealthyPct: toIntOrNull(values.savingsRateHealthyPct),
+        savingsRateModeratePct: toIntOrNull(values.savingsRateModeratePct),
+        incomeExpenseRatioHealthy: toFloatOrNull(values.incomeExpenseRatioHealthy),
       });
 
-      reset({
-        maxGroups: maxGroupsNum?.toString() ?? '',
-        groupWarningPct: warningPctNum?.toString() ?? '',
-        liquidityThresholdPct: liquidityNum?.toString() ?? '',
-      });
+      reset(values);
       router.refresh();
       toast.success(t('form.saveSuccess'), { id: 'alerts-save' });
     } catch {
@@ -144,6 +159,75 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
             <InfoHint>
               {t('form.liquidityThreshold.default', {
                 value: String(ENV_LIQUIDITY_THRESHOLD_PCT),
+              })}
+            </InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.savingsRateHealthy.label')}</Label>
+            <Hint>{t('form.savingsRateHealthy.hint')}</Hint>
+            <Controller
+              name="savingsRateHealthyPct"
+              control={control}
+              render={({ field }) => (
+                <IntegerInput
+                  {...field}
+                  surface
+                  placeholder={String(ENV_SAVINGS_RATE_HEALTHY_PCT)}
+                />
+              )}
+            />
+            <InfoHint>
+              {t('form.savingsRateHealthy.default', {
+                value: String(ENV_SAVINGS_RATE_HEALTHY_PCT),
+              })}
+            </InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.savingsRateModerate.label')}</Label>
+            <Hint>{t('form.savingsRateModerate.hint')}</Hint>
+            <Controller
+              name="savingsRateModeratePct"
+              control={control}
+              render={({ field }) => (
+                <IntegerInput
+                  {...field}
+                  surface
+                  placeholder={String(ENV_SAVINGS_RATE_MODERATE_PCT)}
+                />
+              )}
+            />
+            <InfoHint>
+              {t('form.savingsRateModerate.default', {
+                value: String(ENV_SAVINGS_RATE_MODERATE_PCT),
+              })}
+            </InfoHint>
+          </div>
+
+          <Separator />
+
+          <div className="flex flex-col gap-y-2">
+            <Label>{t('form.incomeExpenseRatio.label')}</Label>
+            <Hint>{t('form.incomeExpenseRatio.hint')}</Hint>
+            <Controller
+              name="incomeExpenseRatioHealthy"
+              control={control}
+              render={({ field }) => (
+                <LocaleAmountInput
+                  {...field}
+                  maxDecimals={2}
+                  placeholder={String(ENV_INCOME_EXPENSE_RATIO_HEALTHY)}
+                />
+              )}
+            />
+            <InfoHint>
+              {t('form.incomeExpenseRatio.default', {
+                value: String(ENV_INCOME_EXPENSE_RATIO_HEALTHY),
               })}
             </InfoHint>
           </div>

@@ -53,6 +53,13 @@ class DashboardCompositionResponse(BaseModel):
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
 
 
+# Single skipped commitment whose currency couldn't be converted to the display currency.
+class SkippedLiquidityEntity(BaseModel):
+    type: str = Field(description="Entity type: subscription, installment, obligation, or credit_card.")
+    name: str = Field(description="User-facing name of the skipped entity.")
+    currency: str = Field(description="The unsupported currency of the entity.")
+
+
 # Liquidity health indicator (fixed monthly commitments vs monthly income) for the dashboard footer.
 class DashboardLiquidityResponse(BaseModel):
     ratio: Decimal | None = Field(default=None, description="Commitments / income. Null when income is zero or history is insufficient.")
@@ -63,3 +70,7 @@ class DashboardLiquidityResponse(BaseModel):
     income_window_days: int = Field(description="Target window length (90 days when fully populated).")
     actual_window_days: int = Field(description="Actual window used for normalisation. Smaller than income_window_days during early app life.")
     currency: str | None = Field(default=None, description="Display currency (null when 'Original' is selected).")
+    skipped_entities: list[SkippedLiquidityEntity] = Field(
+        default_factory=list,
+        description="Commitments excluded because their currency couldn't be converted to display currency. Empty in normal operation.",
+    )

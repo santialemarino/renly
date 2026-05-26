@@ -92,6 +92,7 @@ async def create_card(
     closing_day: int,
     due_day: int,
     currency: str,
+    monthly_payment: Decimal | None = None,
 ) -> CreditCard:
     card = CreditCard(
         user_id=user.id,
@@ -99,6 +100,7 @@ async def create_card(
         closing_day=closing_day,
         due_day=due_day,
         currency=currency,
+        monthly_payment=monthly_payment,
     )
     card = await credit_card_repository.create(session, card)
     await session.commit()

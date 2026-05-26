@@ -17,6 +17,15 @@ BILLING_CYCLE_QUARTERLY = "quarterly"
 BILLING_CYCLE_BIWEEKLY = "biweekly"
 BILLING_CYCLE_WEEKLY = "weekly"
 
+# Payment obligation recurrence -> calendar-month step. Shared by the Payments Calendar
+# forward/backward walkers, the expense->obligation auto-advance, and the liquidity helper.
+OBLIGATION_MONTH_STEP: dict[str, int] = {
+    "monthly": 1,
+    "bimonthly": 2,
+    "quarterly": 3,
+    "annual": 12,
+}
+
 
 # Adds N calendar months to a date, clamping the day to the last valid day of the target month.
 # Example: add_months(2026-01-31, 1) -> 2026-02-28 (or 2026-02-29 in leap years).

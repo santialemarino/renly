@@ -228,15 +228,18 @@ CREATE INDEX idx_cedear_ratios_ticker ON cedear_ratios(ticker, effective_date DE
 -- User-owned credit cards (liability accounts).
 -- closing_day and due_day are 1-31 day-of-month values.
 CREATE TABLE credit_cards (
-  id          BIGSERIAL PRIMARY KEY,
-  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name        VARCHAR(100) NOT NULL,
-  closing_day INTEGER NOT NULL CHECK (closing_day >= 1 AND closing_day <= 31),
-  due_day     INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
-  currency    VARCHAR(3) NOT NULL,
-  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name            VARCHAR(100) NOT NULL,
+  closing_day     INTEGER NOT NULL CHECK (closing_day >= 1 AND closing_day <= 31),
+  due_day         INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
+  currency        VARCHAR(3) NOT NULL,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  -- Optional typical monthly payment toward this card (for revolving-debt users).
+  -- When set, counts as a fixed monthly commitment in the liquidity ratio.
+  monthly_payment NUMERIC(18,2) CHECK (monthly_payment IS NULL OR monthly_payment >= 0),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);

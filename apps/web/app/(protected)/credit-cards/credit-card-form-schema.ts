@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 import { CREDIT_CARD_NAME_MAX } from '@/lib/constants/api-constants';
 
-export function buildCreditCardFormSchema(requiredMsg: string, invalidDayMsg: string) {
+export function buildCreditCardFormSchema(
+  requiredMsg: string,
+  invalidDayMsg: string,
+  invalidMonthlyPaymentMsg: string,
+) {
   const dayField = z
     .string()
     .min(1, { message: requiredMsg })
@@ -15,6 +19,12 @@ export function buildCreditCardFormSchema(requiredMsg: string, invalidDayMsg: st
     closingDay: dayField,
     dueDay: dayField,
     currency: z.string().min(1, { message: requiredMsg }),
+    monthlyPayment: z
+      .string()
+      .optional()
+      .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 0), {
+        message: invalidMonthlyPaymentMsg,
+      }),
   });
 }
 

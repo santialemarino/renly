@@ -118,7 +118,7 @@ A higher number means more of your income is already spoken for by recurring cos
 - Every active **subscription** (Netflix, Spotify, gym) — amortised to its monthly equivalent (an annual plan counts as `amount / 12` per month, a biweekly plan as `amount × 26 / 12`).
 - Every active **installment plan** — contributes one monthly cuota until the plan finishes.
 - Every recurring **payment obligation** (electricity, ABL, internet) — amortised by recurrence (a bimonthly bill counts as `amount / 2` per month, quarterly as `/ 3`, annual as `/ 12`). One-off obligations don't count.
-- Credit card outstanding balance is **not** included — see [data model](data-model.md) for the reasoning. Card-funded subscriptions and installments are already in the count via their own rows.
+- Credit cards **with `monthly_payment` set** — revolving-debt users state the typical amount they pay each month; that value counts as a fixed commitment. Cards without `monthly_payment` (pay-in-full users) are excluded. Card-funded subscriptions and installments are always counted via their own rows, regardless of `monthly_payment`.
 
 **What counts as monthly income:**
 

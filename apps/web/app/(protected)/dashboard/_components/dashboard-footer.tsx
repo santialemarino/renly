@@ -8,26 +8,26 @@ import { cn } from '@repo/ui/lib';
 import { LinkCard } from '@/components/link-card';
 import { ROUTES } from '@/config/routes';
 import type { DashboardLiquidity, DashboardOverview, LiquidityState } from '@/lib/api/dashboard';
+import { INCOME_EXPENSE_RATIO_BREAKEVEN } from '@/lib/constants/health-thresholds';
 import { formatRatePct, formatValue } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
 
-const SAVINGS_RATE_HEALTHY = 0.2;
-const SAVINGS_RATE_MODERATE = 0.1;
-const INCOME_EXPENSE_RATIO_HEALTHY = 1.5;
-
-// Returns color class for savings rate thresholds.
-function savingsRateColor(rate: number | null): string {
+// Returns color class for savings rate, comparing the raw ratio (e.g. 0.20) against the user's
+// healthy / moderate thresholds (stored as integer percents like 20 / 10).
+function savingsRateColor(rate: number | null, healthyPct: number, moderatePct: number): string {
   if (rate === null) return 'text-muted-foreground';
-  if (rate >= SAVINGS_RATE_HEALTHY) return 'text-emerald-600';
-  if (rate >= SAVINGS_RATE_MODERATE) return 'text-amber-500';
+  const ratePct = rate * 100;
+  if (ratePct >= healthyPct) return 'text-emerald-600';
+  if (ratePct >= moderatePct) return 'text-amber-500';
   return 'text-red-500';
 }
 
-// Returns color class for income/expense ratio thresholds.
-function ratioColor(ratio: number | null): string {
+// Returns color class for income/expense ratio against the user's healthy threshold + the
+// hardcoded break-even point (mathematical constant — ratio of 1 means break-even).
+function ratioColor(ratio: number | null, healthy: number): string {
   if (ratio === null) return 'text-muted-foreground';
-  if (ratio >= INCOME_EXPENSE_RATIO_HEALTHY) return 'text-emerald-600';
-  if (ratio >= 1) return 'text-amber-500';
+  if (ratio >= healthy) return 'text-emerald-600';
+  if (ratio >= INCOME_EXPENSE_RATIO_BREAKEVEN) return 'text-amber-500';
   return 'text-red-500';
 }
 
@@ -42,9 +42,18 @@ function liquidityColor(state: LiquidityState): string {
 interface DashboardFooterProps {
   overview: DashboardOverview;
   liquidity: DashboardLiquidity;
+  savingsRateHealthyPct: number;
+  savingsRateModeratePct: number;
+  incomeExpenseRatioHealthy: number;
 }
 
-export function DashboardFooter({ overview, liquidity }: DashboardFooterProps) {
+export function DashboardFooter({
+  overview,
+  liquidity,
+  savingsRateHealthyPct,
+  savingsRateModeratePct,
+  incomeExpenseRatioHealthy,
+}: DashboardFooterProps) {
   const locale = useLocale();
   const t = useTranslations('dashboard');
 
@@ -55,6 +64,7 @@ export function DashboardFooter({ overview, liquidity }: DashboardFooterProps) {
 
   const showWindowHint =
     liquidity.actualWindowDays > 0 && liquidity.actualWindowDays < liquidity.incomeWindowDays;
+  const skippedCount = liquidity.skippedEntities.length;
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -62,7 +72,12 @@ export function DashboardFooter({ overview, liquidity }: DashboardFooterProps) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card compact>
           <span className="text-paragraph-sm text-muted-foreground">{t('health.savingsRate')}</span>
-          <p className={cn('text-heading-3', savingsRateColor(overview.savingsRate))}>
+          <p
+            className={cn(
+              'text-heading-3',
+              savingsRateColor(overview.savingsRate, savingsRateHealthyPct, savingsRateModeratePct),
+            )}
+          >
             {overview.savingsRate !== null ? formatRatePct(overview.savingsRate, locale) : '—'}
           </p>
           <span className="text-paragraph-xs text-muted-foreground">
@@ -74,7 +89,12 @@ export function DashboardFooter({ overview, liquidity }: DashboardFooterProps) {
           <span className="text-paragraph-sm text-muted-foreground">
             {t('health.incomeExpenseRatio')}
           </span>
-          <p className={cn('text-heading-3', ratioColor(overview.incomeExpenseRatio))}>
+          <p
+            className={cn(
+              'text-heading-3',
+              ratioColor(overview.incomeExpenseRatio, incomeExpenseRatioHealthy),
+            )}
+          >
             {overview.incomeExpenseRatio !== null
               ? `${ratioFormatter.format(overview.incomeExpenseRatio)}x`
               : '—'}
@@ -105,6 +125,12 @@ export function DashboardFooter({ overview, liquidity }: DashboardFooterProps) {
                     {t('health.liquidityActualDaysHint', {
                       days: String(liquidity.actualWindowDays),
                     })}
+                  </>
+                )}
+                {skippedCount > 0 && (
+                  <>
+                    {' · '}
+                    {t('health.liquiditySkippedHint', { count: skippedCount })}
                   </>
                 )}
               </span>
