@@ -14,6 +14,13 @@ class CreditCardCreate(RequestBase):
     closing_day: int = Field(description="Statement closing day (1-31).", ge=1, le=31)
     due_day: int = Field(description="Payment due day (1-31).", ge=1, le=31)
     currency: str = Field(description="Card currency (ISO 4217).", max_length=3)
+    monthly_payment: Decimal | None = Field(
+        default=None,
+        description="Optional typical monthly payment for revolving-debt users. Counts in the liquidity ratio when set.",
+        max_digits=18,
+        decimal_places=2,
+        ge=0,
+    )
 
 
 # Body for PUT /credit-cards/{id}. Partial update.
@@ -23,6 +30,13 @@ class CreditCardUpdate(RequestBase):
     due_day: int | None = Field(default=None, description="Payment due day (1-31).", ge=1, le=31)
     currency: str | None = Field(default=None, description="Card currency (ISO 4217).", max_length=3)
     is_active: bool | None = Field(default=None, description="Whether the card is active.")
+    monthly_payment: Decimal | None = Field(
+        default=None,
+        description="Optional typical monthly payment. Send null to clear; counts in the liquidity ratio when set.",
+        max_digits=18,
+        decimal_places=2,
+        ge=0,
+    )
 
 
 # Per-currency bucket balance on a credit card (Phase 3 dual-currency model).
@@ -42,6 +56,10 @@ class CreditCardResponse(BaseModel):
     due_day: int = Field(description="Payment due day (1-31).")
     currency: str = Field(description="Primary statement currency (ISO 4217).")
     is_active: bool = Field(description="Whether the card is active.")
+    monthly_payment: Decimal | None = Field(
+        default=None,
+        description="Optional typical monthly payment. When set, counts in the liquidity ratio.",
+    )
     balances: list[CardBucketBalanceResponse] = Field(
         default_factory=list,
         description="Per-currency bucket balances. Primary first, then any other currency with activity.",

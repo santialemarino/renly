@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   BarChart3,
+  Bell,
   CalendarClock,
   ChevronRight,
   CircleDollarSign,
@@ -75,6 +76,7 @@ const PORTFOLIO_GROUP = [
 
 const SETTINGS_GROUP = [
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
+  { key: 'alerts', href: ROUTES.alerts, icon: Bell },
   { key: 'localization', href: ROUTES.localization, icon: Globe },
   { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
 ] as const;

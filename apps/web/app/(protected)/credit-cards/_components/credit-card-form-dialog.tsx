@@ -26,6 +26,7 @@ import {
 } from '@/app/(protected)/credit-cards/credit-card-form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
+import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface CreditCardFormDialogProps {
@@ -47,7 +48,12 @@ export function CreditCardFormDialog({
   const tCommon = useTranslations('common');
 
   const schema = useMemo(
-    () => buildCreditCardFormSchema(tCommon('form.errors.required'), t('form.invalidDay')),
+    () =>
+      buildCreditCardFormSchema(
+        tCommon('form.errors.required'),
+        t('form.invalidDay'),
+        t('form.monthlyPayment.invalid'),
+      ),
     [t, tCommon],
   );
 
@@ -58,6 +64,7 @@ export function CreditCardFormDialog({
       closingDay: '',
       dueDay: '',
       currency: '',
+      monthlyPayment: '',
     },
   });
 
@@ -71,6 +78,7 @@ export function CreditCardFormDialog({
         closingDay: card ? String(card.closingDay) : '',
         dueDay: card ? String(card.dueDay) : '',
         currency: card?.currency ?? '',
+        monthlyPayment: card?.monthlyPayment != null ? String(card.monthlyPayment) : '',
       });
     }
   }, [open, card, form]);
@@ -171,6 +179,27 @@ export function CreditCardFormDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="monthlyPayment"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('form.monthlyPayment.label')}</FormLabel>
+                  <FormControl>
+                    <LocaleAmountInput
+                      {...field}
+                      currency={form.watch('currency') || undefined}
+                      placeholder={t('form.monthlyPayment.placeholder')}
+                    />
+                  </FormControl>
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.monthlyPayment.hint')}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </form>
         </Form>
 

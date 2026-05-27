@@ -18,6 +18,7 @@ export const ROUTES = {
   groups: '/groups',
   snapshots: '/snapshots',
   preferences: '/preferences',
+  alerts: '/alerts',
   localization: '/localization',
   integrations: '/integrations',
 } as const;

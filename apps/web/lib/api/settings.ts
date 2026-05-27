@@ -17,6 +17,10 @@ interface SettingsRaw {
   timezone_mode: string | null;
   language: string | null;
   language_mode: string | null;
+  liquidity_threshold_pct: number | null;
+  savings_rate_healthy_pct: number | null;
+  savings_rate_moderate_pct: number | null;
+  income_expense_ratio_healthy: string | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -34,6 +38,10 @@ export interface SettingsData {
   timezoneMode: string | null;
   language: string | null;
   languageMode: string | null;
+  liquidityThresholdPct: number | null;
+  savingsRateHealthyPct: number | null;
+  savingsRateModeratePct: number | null;
+  incomeExpenseRatioHealthy: number | null;
 }
 
 // --- Mappers ---
@@ -52,6 +60,11 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     timezoneMode: raw.timezone_mode,
     language: raw.language,
     languageMode: raw.language_mode,
+    liquidityThresholdPct: raw.liquidity_threshold_pct,
+    savingsRateHealthyPct: raw.savings_rate_healthy_pct,
+    savingsRateModeratePct: raw.savings_rate_moderate_pct,
+    incomeExpenseRatioHealthy:
+      raw.income_expense_ratio_healthy !== null ? Number(raw.income_expense_ratio_healthy) : null,
   };
 }
 

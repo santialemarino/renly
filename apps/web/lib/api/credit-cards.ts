@@ -16,6 +16,7 @@ interface CreditCardRaw {
   due_day: number;
   currency: string;
   is_active: boolean;
+  monthly_payment: string | null;
   balances: CardBucketBalanceRaw[];
   has_expenses: boolean;
   created_at: string;
@@ -47,6 +48,7 @@ export interface CreditCard {
   dueDay: number;
   currency: string;
   isActive: boolean;
+  monthlyPayment: number | null;
   balances: CardBucketBalance[];
   hasExpenses: boolean;
   createdAt: string;
@@ -74,6 +76,7 @@ function mapCreditCard(raw: CreditCardRaw): CreditCard {
     dueDay: raw.due_day,
     currency: raw.currency,
     isActive: raw.is_active,
+    monthlyPayment: raw.monthly_payment !== null ? Number(raw.monthly_payment) : null,
     balances: raw.balances.map((b) => ({ currency: b.currency, balance: b.balance })),
     hasExpenses: raw.has_expenses,
     createdAt: raw.created_at,

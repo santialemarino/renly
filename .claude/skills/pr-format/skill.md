@@ -91,6 +91,7 @@ Always `N/A`. Renly does not use a ticket tracker.
 - Be detailed — close to implementation-plan level. Mention component names, file paths, props, patterns.
 - End with cross-cutting sub-sections when applicable:
   - **`Translations:`** — when i18n keys were added or changed (EN + ES).
+  - **`Env vars:`** — when new environment variables were added or removed (`NEXT_PUBLIC_*` on the web, backend `os.getenv` reads). List each key, its default, and which `.env.example` was updated. Required by the [[feedback_update_env_files]] rule — reviewers should not have to grep for new env surface.
 - Do not include a Docs sub-section. Documentation changes are part of the feature — the code summary already conveys what changed.
 
 **What NOT to include in the summary:**
@@ -119,19 +120,42 @@ When the PR includes UI changes and the work was verified using `playwright-cli`
 playwright-cli screenshot --filename=feature-name-state.png
 ```
 
-Upload the resulting PNGs as GitHub assets by drag-and-dropping them into the PR body editor on github.com (or via `gh pr edit --body-file <file>` with assets pre-uploaded). Paste the resulting asset URLs into `<img>` tags as usual.
-
 For multi-step flows, capture one screenshot per meaningful state (e.g. `login-empty.png`, `login-error.png`, `login-success.png`).
 
-For full-flow video, use:
+For full-flow video, use (commands verified against the bundled CLI):
 
 ```bash
-playwright-cli video-start feature-name.webm
+playwright-cli -s=<session> video-start /abs/path/to/feature-name.webm
 # ... drive the flow ...
-playwright-cli video-stop
+playwright-cli -s=<session> video-stop
 ```
 
-Upload the resulting webm/mp4 as a GitHub asset. Paste the bare URL in the PR body — GitHub renders it as an embedded video player.
+**Hosting assets without committing them to the repo.** The cleanest path inside GitHub depends on whether the agent has a browser session or not:
+
+1. **Drag-and-drop in the PR body editor on github.com** — produces canonical `github.com/user-attachments/assets/<uuid>` URLs that render images inline AND turn `.webm`/`.mp4` into an embedded video player. This is the gold standard, but **agents cannot do this from the CLI** — the upload endpoint requires a browser session cookie and CSRF token. If the user is happy to paste them in themselves (Cmd+V from clipboard or drag-and-drop the file), this is the best option.
+
+2. **GitHub prerelease assets via `gh release` (agent-driven, no browser).** When the agent has to host the files itself, create a public **prerelease** tagged for the PR (e.g. `pr-<num>-screenshots`) and upload the assets there:
+
+   ```bash
+   gh release create pr-<num>-screenshots --prerelease \
+     --title "PR #<num> — <feature> screenshots" \
+     --notes "Screenshots for PR #<num>. Not a version release — assets only." \
+     file1.png file2.png feature-name.webm
+   ```
+
+   Assets are reachable at the stable URL:
+
+   ```
+   https://github.com/<owner>/<repo>/releases/download/<tag>/<filename>
+   ```
+
+   Paste those URLs into `<img src="...">` tags. They render inline as images. The video URL will be a download link (not an embedded player — only `user-attachments` URLs render as players).
+
+   Mention the prerelease tag in the Screenshots section so reviewers know where the assets live (e.g. "Hosted as `pr-92-screenshots` prerelease — no commits to the repo.").
+
+3. **`gh gist create` does NOT accept binary files** (the gh CLI rejects them with `binary file not supported`). Skip this option.
+
+4. **Committing screenshots to the repo** (e.g. `docs/pr-screenshots/<feature>/`) works but pollutes the main history with ~1MB of binaries per visual PR. Avoid unless the user explicitly asks for it.
 
 When the work was verified manually (no `playwright-cli` involved), capture screenshots using the OS tool (cmd+shift+4 on macOS) as before. The format of the section in the PR body is identical regardless of how the assets were sourced.
 

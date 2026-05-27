@@ -124,13 +124,27 @@ Defaults in `playwright.config.ts` are usually sufficient. If a specific test ne
 1. Implement the code change for the feature.
 2. Ensure `pnpm dev` is running (ask the user to start it if it is not).
 3. Drive the new flow with `playwright-cli`:
+
    ```bash
-   playwright-cli goto http://localhost:3000/<route>
-   playwright-cli snapshot                              # see element refs
-   playwright-cli click e15                             # interact using refs
-   playwright-cli fill e22 "value"
-   playwright-cli screenshot --filename=feature-name-state.png
+   playwright-cli -s=renly open http://localhost:3000/<route>  # first command per session
+   playwright-cli -s=renly snapshot                             # see element refs
+   playwright-cli -s=renly click e15                            # interact using refs
+   playwright-cli -s=renly fill e22 "value"
+   playwright-cli -s=renly screenshot --filename=/abs/path/feature-name-state.png
    ```
+
+   **All commands need the `-s=<session>` flag once you've opened a named session** — without it they target the default unnamed session.
+
+   For full-flow video recording (commands verified against the bundled CLI):
+
+   ```bash
+   playwright-cli -s=renly video-start /abs/path/feature-name.webm
+   # ... drive the flow ...
+   playwright-cli -s=renly video-stop
+   ```
+
+   Absolute paths are required for both screenshots and video; relative paths can no-op silently depending on the agent's cwd. See the `pr-format` skill for the rules about hosting the assets in the PR body.
+
 4. If the flow has issues, iterate on the code, refresh, re-verify.
 5. When satisfied, capture the final screenshots needed for the PR (see `pr-format` skill).
 6. Decide if a `.spec.ts` is warranted (see "When to write a Playwright test" above). If yes, write it now, then run `pnpm test:e2e` to confirm it passes.

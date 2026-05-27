@@ -13,11 +13,17 @@ import { ROUTES } from '@/config/routes';
 import {
   getDashboardComposition,
   getDashboardEvolution,
+  getDashboardLiquidity,
   getDashboardOverview,
   type DashboardFilterParams,
 } from '@/lib/api/dashboard';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import {
+  ENV_INCOME_EXPENSE_RATIO_HEALTHY,
+  ENV_SAVINGS_RATE_HEALTHY_PCT,
+  ENV_SAVINGS_RATE_MODERATE_PCT,
+} from '@/lib/constants/health-thresholds';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
@@ -77,12 +83,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   };
 
   // Fetch all data in parallel.
-  let overview, evolution, composition;
+  let overview, evolution, composition, liquidity;
   try {
-    [overview, evolution, composition] = await Promise.all([
+    [overview, evolution, composition, liquidity] = await Promise.all([
       getDashboardOverview(filterParams),
       getDashboardEvolution(filterParams),
       getDashboardComposition({ currency }),
+      getDashboardLiquidity({ currency }),
     ]);
   } catch {
     return (
@@ -120,7 +127,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         <DashboardComposition composition={composition.items} />
       </div>
 
-      <DashboardFooter overview={overview} />
+      <DashboardFooter
+        overview={overview}
+        liquidity={liquidity}
+        savingsRateHealthyPct={settings?.savingsRateHealthyPct ?? ENV_SAVINGS_RATE_HEALTHY_PCT}
+        savingsRateModeratePct={settings?.savingsRateModeratePct ?? ENV_SAVINGS_RATE_MODERATE_PCT}
+        incomeExpenseRatioHealthy={
+          settings?.incomeExpenseRatioHealthy ?? ENV_INCOME_EXPENSE_RATIO_HEALTHY
+        }
+      />
     </div>
   );
 }

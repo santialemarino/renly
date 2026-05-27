@@ -22,8 +22,7 @@ from app.repositories import (
     subscription_repository,
 )
 from app.services import card_reconciliation_service, credit_card_service
-from app.services.payment_obligation_service import OBLIGATION_MONTH_STEP
-from app.utils.dates import add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month, step_back_by_cycle
+from app.utils.dates import OBLIGATION_MONTH_STEP, add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month, step_back_by_cycle
 
 
 # Aggregates calendar items for the given month. Order: by date ascending,

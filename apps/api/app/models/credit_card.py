@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from sqlmodel import Field, SQLModel
 
@@ -16,5 +17,11 @@ class CreditCard(SQLModel, table=True):
     due_day: int = Field(description="Payment due day (1-31).")
     currency: str = Field(max_length=3, description="Card currency (ISO 4217).")
     is_active: bool = Field(default=True, description="Whether the card is active.")
+    monthly_payment: Decimal | None = Field(
+        default=None,
+        max_digits=18,
+        decimal_places=2,
+        description="Optional monthly payment (revolving-debt users). When set, counts as a fixed commitment in the liquidity ratio.",
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

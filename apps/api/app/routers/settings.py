@@ -52,5 +52,13 @@ async def update_settings(
         kwargs["language"] = payload["language"]
     if "language_mode" in payload:
         kwargs["language_mode"] = payload["language_mode"]
+    if "liquidity_threshold_pct" in payload:
+        kwargs["liquidity_threshold_pct"] = payload["liquidity_threshold_pct"]
+    if "savings_rate_healthy_pct" in payload:
+        kwargs["savings_rate_healthy_pct"] = payload["savings_rate_healthy_pct"]
+    if "savings_rate_moderate_pct" in payload:
+        kwargs["savings_rate_moderate_pct"] = payload["savings_rate_moderate_pct"]
+    if "income_expense_ratio_healthy" in payload:
+        kwargs["income_expense_ratio_healthy"] = payload["income_expense_ratio_healthy"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

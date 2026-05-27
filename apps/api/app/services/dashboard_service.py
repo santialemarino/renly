@@ -2,6 +2,7 @@
 
 import calendar as _calendar
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,15 +10,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.expense_repository import expense_repository
+from app.repositories.income_repository import income_repository
+from app.repositories.installment_repository import installment_repository
+from app.repositories.payment_obligation_repository import payment_obligation_repository
+from app.repositories.subscription_repository import subscription_repository
 from app.schemas.dashboard import (
     CompositionItem,
     DashboardCompositionResponse,
     DashboardEvolutionResponse,
+    DashboardLiquidityResponse,
     DashboardOverviewResponse,
     NetWorthEvolutionPoint,
+    SkippedLiquidityEntity,
 )
 from app.services import credit_card_service, finance_metrics_service, metrics_service
+from app.utils.dates import OBLIGATION_MONTH_STEP
+from app.utils.liquidity import (
+    LIQUIDITY_INCOME_MIN_HISTORY_DAYS,
+    LIQUIDITY_INCOME_WINDOW_DAYS,
+    STATE_UNKNOWN,
+    classify_liquidity,
+    compute_fixed_monthly_commitments,
+    compute_monthly_income,
+)
 from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
+from app.utils.settings import get_liquidity_threshold
 
 ZERO = Decimal("0")
 
@@ -244,4 +261,131 @@ async def get_composition(
         total_assets=total_assets,
         total_liabilities=card_balance,
         currency=currency,
+    )
+
+
+# Computes the liquidity health indicator: ratio of fixed monthly commitments to normalised
+# monthly income, classified against the user's threshold. Phase 3 Step 6.
+async def get_liquidity(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    dollar_preference: str | None = None,
+) -> DashboardLiquidityResponse:
+    threshold = await get_liquidity_threshold(session, user_id)
+    today = date_type.today()
+
+    # Build the rate lookup once — reused for commitments + income conversions.
+    lookup = await build_rate_lookup(session, dollar_preference) if currency else None
+    rate_map_today = lookup.get_rate_map_at(today) if lookup else None
+
+    # Commitments: load active rows from the four sources, amortise to monthly-equivalent
+    # per currency via the pure helper, then sum-convert to display currency at today's rate.
+    subscriptions = await subscription_repository.list_by_user(session, user_id, active_only=True)
+    installments = await installment_repository.list_by_user(session, user_id, active_only=True)
+    obligations = await payment_obligation_repository.list_by_user(session, user_id, active_only=True)
+    cards = await credit_card_repository.list_by_user(session, user_id, active_only=True)
+    commitments_by_currency = compute_fixed_monthly_commitments(subscriptions, installments, obligations, cards)
+
+    commitments_total = ZERO
+    unsupported_currencies: set[str] = set()
+    for cur, val in commitments_by_currency.items():
+        if currency and rate_map_today and cur != currency:
+            if cur not in rate_map_today:
+                # Conversion would no-op silently; flag the currency so the diagnostic can list
+                # affected entities and exclude their amount from the displayed ratio.
+                unsupported_currencies.add(cur)
+                continue
+            val = convert_value(val, cur, currency, rate_map_today)
+        commitments_total += val
+
+    skipped_entities: list[SkippedLiquidityEntity] = []
+    if unsupported_currencies:
+        for sub in subscriptions:
+            if sub.currency in unsupported_currencies:
+                skipped_entities.append(SkippedLiquidityEntity(type="subscription", name=sub.name, currency=sub.currency))
+        for inst in installments:
+            if inst.currency in unsupported_currencies and inst.current_installment <= inst.installments_count:
+                skipped_entities.append(SkippedLiquidityEntity(type="installment", name=inst.name, currency=inst.currency))
+        for obl in obligations:
+            if obl.currency in unsupported_currencies and (obl.recurrence or "") in OBLIGATION_MONTH_STEP:
+                skipped_entities.append(SkippedLiquidityEntity(type="obligation", name=obl.name, currency=obl.currency))
+        for card in cards:
+            if card.currency in unsupported_currencies and card.monthly_payment is not None:
+                skipped_entities.append(SkippedLiquidityEntity(type="credit_card", name=card.name, currency=card.currency))
+
+    # Income window sizing follows the user's actual income history. Below the minimum
+    # history threshold (or zero history) the card renders 'unknown' — one paycheck
+    # doesn't make a baseline.
+    first_income_date = await income_repository.get_first_income_date(session, user_id)
+    if first_income_date is None:
+        return DashboardLiquidityResponse(
+            ratio=None,
+            state=STATE_UNKNOWN,
+            fixed_monthly_commitments=commitments_total,
+            monthly_income=ZERO,
+            threshold=threshold,
+            income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
+            actual_window_days=0,
+            currency=currency,
+            skipped_entities=skipped_entities,
+        )
+
+    elapsed_days = (today - first_income_date).days + 1
+    if elapsed_days < LIQUIDITY_INCOME_MIN_HISTORY_DAYS:
+        return DashboardLiquidityResponse(
+            ratio=None,
+            state=STATE_UNKNOWN,
+            fixed_monthly_commitments=commitments_total,
+            monthly_income=ZERO,
+            threshold=threshold,
+            income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
+            actual_window_days=elapsed_days,
+            currency=currency,
+            skipped_entities=skipped_entities,
+        )
+
+    actual_window_days = min(LIQUIDITY_INCOME_WINDOW_DAYS, elapsed_days)
+    window_start = today - timedelta(days=actual_window_days - 1)
+    income_by_currency = await income_repository.sum_by_user(
+        session,
+        user_id,
+        date_from=window_start,
+        date_to=today,
+    )
+    monthly_income = compute_monthly_income(
+        income_by_currency,
+        days=actual_window_days,
+        target_currency=currency,
+        lookup=lookup,
+        anchor_date=today,
+    )
+
+    if monthly_income == ZERO:
+        return DashboardLiquidityResponse(
+            ratio=None,
+            state=STATE_UNKNOWN,
+            fixed_monthly_commitments=commitments_total,
+            monthly_income=ZERO,
+            threshold=threshold,
+            income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
+            actual_window_days=actual_window_days,
+            currency=currency,
+            skipped_entities=skipped_entities,
+        )
+
+    ratio = commitments_total / monthly_income
+    state = classify_liquidity(ratio, threshold)
+
+    return DashboardLiquidityResponse(
+        ratio=ratio,
+        state=state,
+        fixed_monthly_commitments=commitments_total,
+        monthly_income=monthly_income,
+        threshold=threshold,
+        income_window_days=LIQUIDITY_INCOME_WINDOW_DAYS,
+        actual_window_days=actual_window_days,
+        currency=currency,
+        skipped_entities=skipped_entities,
     )

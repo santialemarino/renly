@@ -88,6 +88,7 @@ async def create_card(
         closing_day=body.closing_day,
         due_day=body.due_day,
         currency=body.currency,
+        monthly_payment=body.monthly_payment,
     )
     return _to_response(card, [], False)
 

@@ -11,8 +11,6 @@ function presetField(invalidMsg: string) {
 
 interface SettingsFormMessages {
   presetInvalidMsg: string;
-  maxGroupsInvalidMsg: string;
-  groupWarningPctInvalidMsg: string;
 }
 
 export function buildSettingsFormSchema(messages: SettingsFormMessages) {
@@ -24,18 +22,6 @@ export function buildSettingsFormSchema(messages: SettingsFormMessages) {
     periodPreset2: presetField(messages.presetInvalidMsg),
     periodPreset3: presetField(messages.presetInvalidMsg),
     periodPreset4: presetField(messages.presetInvalidMsg),
-    maxGroups: z
-      .string()
-      .optional()
-      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1), {
-        message: messages.maxGroupsInvalidMsg,
-      }),
-    groupWarningPct: z
-      .string()
-      .optional()
-      .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 100), {
-        message: messages.groupWarningPctInvalidMsg,
-      }),
     dollarRatePreference: z.string().optional(),
   });
 }

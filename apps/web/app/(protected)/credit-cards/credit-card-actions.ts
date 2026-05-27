@@ -11,20 +11,28 @@ import {
 } from '@/lib/api/card-reconciliations';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
+function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
+  const { closingDay, dueDay, monthlyPayment, ...rest } = values;
+  return {
+    ...rest,
+    closing_day: Number(closingDay),
+    due_day: Number(dueDay),
+    monthly_payment: monthlyPayment && monthlyPayment.trim() !== '' ? Number(monthlyPayment) : null,
+  };
+}
+
 export async function createCreditCard(values: CreditCardFormValues): Promise<void> {
-  const { closingDay, dueDay, ...rest } = values;
   const res = await authenticatedFetch('/credit-cards', {
     method: 'POST',
-    body: { ...rest, closing_day: Number(closingDay), due_day: Number(dueDay) },
+    body: buildCardBody(values),
   });
   if (!res.ok) throw new Error('Failed to create credit card');
 }
 
 export async function updateCreditCard(id: number, values: CreditCardFormValues): Promise<void> {
-  const { closingDay, dueDay, ...rest } = values;
   const res = await authenticatedFetch(`/credit-cards/${id}`, {
     method: 'PUT',
-    body: { ...rest, closing_day: Number(closingDay), due_day: Number(dueDay) },
+    body: buildCardBody(values),
   });
   if (!res.ok) throw new Error('Failed to update credit card');
 }
