@@ -21,7 +21,7 @@ import { InfoHint } from '@/components/styled-hint';
 
 // iCloud share link for the iOS Shortcut.
 const ICLOUD_LINK: string | null =
-  'https://www.icloud.com/shortcuts/9df471a3efa04885b3b8c778ddc6389b';
+  'https://www.icloud.com/shortcuts/8df8f795056349efaa407c0e29af30e7';
 
 interface IntegrationsShortcutProps {
   initialCurrencies: string[] | null;
