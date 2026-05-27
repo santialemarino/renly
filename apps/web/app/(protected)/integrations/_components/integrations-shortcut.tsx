@@ -20,7 +20,8 @@ import { saveShortcutCurrencies } from '@/app/(protected)/integrations/integrati
 import { InfoHint } from '@/components/styled-hint';
 
 // iCloud share link for the iOS Shortcut.
-const ICLOUD_LINK: string | null = null;
+const ICLOUD_LINK: string | null =
+  'https://www.icloud.com/shortcuts/9df471a3efa04885b3b8c778ddc6389b';
 
 interface IntegrationsShortcutProps {
   initialCurrencies: string[] | null;
