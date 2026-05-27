@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
+from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.schemas.subscription import SubscriptionCreate, SubscriptionResponse, SubscriptionUpdate
@@ -74,11 +75,11 @@ async def get_subscription(
     return resp
 
 
-# Create a new subscription.
+# Create a new subscription. Supports both JWT (web) and API key (iOS Shortcut) auth.
 @router.post("", response_model=SubscriptionResponse, status_code=status.HTTP_201_CREATED)
 async def create_subscription(
     body: SubscriptionCreate,
-    current_user: CurrentUser,
+    current_user: JwtOrApiKeyUser,
     session: SessionDep,
 ) -> SubscriptionResponse:
     subscription = await subscription_service.create_subscription(

@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
 
+from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.schemas.installment import InstallmentCreate, InstallmentResponse, InstallmentUpdate
@@ -76,11 +77,11 @@ async def get_installment(
     return resp
 
 
-# Create a new installment plan.
+# Create a new installment plan. Supports both JWT (web) and API key (iOS Shortcut) auth.
 @router.post("", response_model=InstallmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_installment(
     body: InstallmentCreate,
-    current_user: CurrentUser,
+    current_user: JwtOrApiKeyUser,
     session: SessionDep,
 ) -> InstallmentResponse:
     installment = await installment_service.create_installment(

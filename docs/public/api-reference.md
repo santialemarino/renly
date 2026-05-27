@@ -244,7 +244,7 @@ Recurring charges (e.g. Netflix, Spotify, gym). The daily scheduler auto-generat
 | Method   | Path                  | Description                                                                       |
 | -------- | --------------------- | --------------------------------------------------------------------------------- |
 | `GET`    | `/subscriptions`      | List subscriptions with search, sorting, archive filter, and currency conversion. |
-| `POST`   | `/subscriptions`      | Create a new subscription.                                                        |
+| `POST`   | `/subscriptions`      | Create a new subscription. **Supports both JWT and API key auth.**                |
 | `GET`    | `/subscriptions/{id}` | Get a single subscription by ID.                                                  |
 | `PUT`    | `/subscriptions/{id}` | Update a subscription. Only provided fields are changed.                          |
 | `DELETE` | `/subscriptions/{id}` | Delete a subscription.                                                            |
@@ -262,7 +262,7 @@ Cuotas (installment plans, e.g. TV Samsung 12x). The daily scheduler auto-genera
 | Method   | Path                 | Description                                                                           |
 | -------- | -------------------- | ------------------------------------------------------------------------------------- |
 | `GET`    | `/installments`      | List installment plans with search, sorting, archive filter, and currency conversion. |
-| `POST`   | `/installments`      | Create a new installment plan.                                                        |
+| `POST`   | `/installments`      | Create a new installment plan. **Supports both JWT and API key auth.**                |
 | `GET`    | `/installments/{id}` | Get a single installment plan by ID.                                                  |
 | `PUT`    | `/installments/{id}` | Update an installment plan. Only provided fields are changed.                         |
 | `DELETE` | `/installments/{id}` | Delete an installment plan.                                                           |
@@ -407,7 +407,7 @@ API keys provide long-lived authentication for external tools (e.g., iOS Shortcu
 | `POST`   | `/api-keys`      | Generate a new API key. Returns the raw key (shown once). |
 | `DELETE` | `/api-keys/{id}` | Revoke an API key (soft-delete).                          |
 
-**Authentication with API keys:** Include the raw key as a Bearer token in the `Authorization` header, the same way you would with a JWT. The server tries JWT validation first, then falls back to API key verification. Currently only `POST /expenses` accepts API key auth (for iOS Shortcut expense entry).
+**Authentication with API keys:** Include the raw key as a Bearer token in the `Authorization` header, the same way you would with a JWT. The server tries JWT validation first, then falls back to API key verification. API key auth is accepted on the endpoints the iOS Shortcut needs to drive its three logging flows: `POST /expenses`, `POST /subscriptions`, `POST /installments`, plus the read-only `GET /credit-cards` and `GET /settings` it uses to populate pickers.
 
 ---
 
