@@ -153,9 +153,13 @@ playwright-cli -s=<session> video-stop
 
    Mention the prerelease tag in the Screenshots section so reviewers know where the assets live (e.g. "Hosted as `pr-92-screenshots` prerelease — no commits to the repo.").
 
+   **Note:** `gh release create` creates a real Git tag (e.g. `pr-92-screenshots`). It accumulates one tag per visual PR. Delete after merge with `git tag -d pr-<num>-screenshots && git push --delete origin pr-<num>-screenshots` if you don't want them piling up.
+
 3. **`gh gist create` does NOT accept binary files** (the gh CLI rejects them with `binary file not supported`). Skip this option.
 
 4. **Committing screenshots to the repo** (e.g. `docs/pr-screenshots/<feature>/`) works but pollutes the main history with ~1MB of binaries per visual PR. Avoid unless the user explicitly asks for it.
+
+**Hybrid workflow for visual-heavy PRs.** Path 1 (drag-drop) and path 2 (prerelease) can be combined when you want the inline video player without giving up the agent-driven flow. The agent uploads all PNGs via `gh release` (instant, no user step); the user then Cmd+Vs the `.webm`/`.mp4` directly into the PR body editor on github.com to produce a `user-attachments/assets/<uuid>` URL that renders as an embedded `<video>` player. The two paths coexist in the same PR body.
 
 When the work was verified manually (no `playwright-cli` involved), capture screenshots using the OS tool (cmd+shift+4 on macOS) as before. The format of the section in the PR body is identical regardless of how the assets were sourced.
 
