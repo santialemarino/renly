@@ -178,6 +178,8 @@ The official `playwright-cli` skill is installed under `~/.claude/skills/playwri
 
 After each command, the CLI outputs a snapshot of the current page state with element refs (`e15`, `e23`, etc.). Use those refs in subsequent commands. The full snapshot is also saved to `.playwright-cli/page-<timestamp>.yml` in the working directory. That directory is gitignored.
 
+**Refs are stable across actions within a session.** Once you've snapshotted a page, you can chain `click e15` → `fill e22 "value"` → `click e30` without re-running `snapshot` between them — the refs keep pointing to the same elements. Only re-snapshot when the page itself changes (navigation, dialog open/close, dynamic content load).
+
 ## Future: CI integration
 
 Not yet implemented. When the user is ready, the plan is:
