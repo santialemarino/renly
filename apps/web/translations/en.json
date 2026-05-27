@@ -1529,14 +1529,14 @@
     },
     "shortcut": {
       "title": "iOS Shortcut",
-      "description": "Log expenses from your phone with a single tap.",
+      "description": "Log expenses, subscriptions, and installments from your phone with a single tap.",
       "downloadLink": "Download Shortcut",
       "downloadPending": "Shortcut download link will be available soon. Use the setup instructions below to build it manually.",
       "saveSuccess": "Shortcut currencies saved.",
       "saveError": "Failed to save shortcut currencies.",
       "currencies": {
         "label": "Shortcut currencies",
-        "hint": "Currencies shown in the shortcut when logging an expense.",
+        "hint": "Currencies shown in the shortcut when logging an expense, subscription, or installment.",
         "placeholder": "Enter ISO codes (e.g. ARS, USD)",
         "save": "Save",
         "saving": "Saving...",

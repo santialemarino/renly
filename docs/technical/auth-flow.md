@@ -88,6 +88,8 @@ For external tools (iOS Shortcuts, automations) that can't go through a browser 
 The following endpoints accept API key auth (used by the iOS Shortcut). All other endpoints require JWT. The `JwtOrApiKeyUser` dependency is used instead of `CurrentUser` on endpoints that support both.
 
 - `POST /expenses` — create an expense from the shortcut.
+- `POST /subscriptions` — create a subscription when the shortcut's "Is this a subscription?" toggle is on.
+- `POST /installments` — create an installment plan when the shortcut's "Is this an installment?" toggle is on.
 - `GET /settings` — fetch shortcut currencies and user preferences.
 - `GET /credit-cards` — list cards for the credit card picker in the shortcut.
 

@@ -26,7 +26,7 @@ If you've ever tried to track your portfolio across multiple brokers in a spread
 | ----- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | Investments         | Track investments, automatic pricing for stocks/CEDEARs/crypto/bonds, multi-currency support, monthly snapshots, dashboard with returns and allocation |
 | 2     | Money Flow          | Income and expense tracking, financial dashboard, iOS Shortcut for quick expense entry                                                                 |
-| 3     | Structured Expenses | Subscriptions, installment payments, monthly budgets, alerts                                                                                           |
+| 3     | Structured Expenses | Subscriptions, installment payments, monthly budgets, alerts, iOS Shortcut v2 for logging subscriptions and installments                               |
 | 4     | Planning            | Savings goals, future commitments timeline, liquidity alerts                                                                                           |
 | 5     | Utilities           | Return calculators, goal simulators, scenario comparators                                                                                              |
 | 6     | Automation          | Email parsing for automatic expense capture, broker integrations                                                                                       |

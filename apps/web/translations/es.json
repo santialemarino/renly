@@ -1529,14 +1529,14 @@
     },
     "shortcut": {
       "title": "Atajo de iOS",
-      "description": "Registra gastos desde tu celular con un solo toque.",
+      "description": "Registra gastos, suscripciones y cuotas desde tu celular con un solo toque.",
       "downloadLink": "Descargar Atajo",
       "downloadPending": "El link de descarga del atajo estara disponible pronto. Usa las instrucciones de instalacion para crearlo manualmente.",
       "saveSuccess": "Monedas del atajo guardadas.",
       "saveError": "No se pudieron guardar las monedas del atajo.",
       "currencies": {
         "label": "Monedas del atajo",
-        "hint": "Monedas que se muestran en el atajo al registrar un gasto.",
+        "hint": "Monedas que se muestran en el atajo al registrar un gasto, suscripción o cuota.",
         "placeholder": "Ingresa codigos ISO (ej. ARS, USD)",
         "save": "Guardar",
         "saving": "Guardando...",
