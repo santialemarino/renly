@@ -101,7 +101,24 @@ The project has three documentation tiers:
 - **Never stage `docs/internal/`** — internal docs (architecture, phase specs, costs, decisions) are gitignored.
 - **Never stage temporary markdown files** (e.g. scratch notes, plan drafts, ad-hoc `.md` files) unless the user explicitly asks to commit a specific file by name. When staging, always list files individually — never `git add .` or `git add -A` — so stray files are not accidentally included.
 
-## 6. Other habits
+## 6. Skill mirrors (`.claude/skills/` ↔ `.agents/skills/`)
+
+Skills under `.claude/skills/` are mirrored to `.agents/skills/` for Codex. Most content is byte-equal across the two trees — but a few skills carry **intentional per-agent drift** that must be preserved when editing. Concretely, today's documented drift:
+
+- **Cross-references to Claude memory files (`[[memory-name]]` syntax).** Claude resolves these against `~/.claude/projects/<slug>/memory/`. Codex doesn't have access to that directory, so the `[[link]]` references must be dropped on the `.agents/` side (or rephrased into plain prose). Example: `pr-format` skill's `**Env vars:**` bullet — Claude version cites the `[[feedback_update_env_files]]` rule; Codex version says the equivalent in plain prose.
+- **Meta-doc references in `pr-format`'s "What NOT to include in the summary" bullet.** Claude version mentions `CLAUDE.md`, `README.md`, memory files, `.claude/` contents. Codex version additionally mentions `AGENTS.md` and `.agents/`.
+- **`agent-workflow`'s memory rule line** (legacy from PR #91 setup): Claude version says "update Claude memory files"; Codex version says "do not update Claude memory files" (Codex can't reach them).
+
+**Rules when editing a mirrored skill:**
+
+- Make the change in BOTH mirrors in the same edit pass.
+- **Never `cp .claude/skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md`** — this stomps the intentional drift silently. Always use targeted edits + verify with `diff .claude/skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md` afterward.
+- When you introduce a new `[[memory-link]]`-style reference in `.claude/skills/`, write the equivalent prose form in `.agents/skills/` (don't carry the `[[link]]` over).
+- When in doubt about whether content should mirror, default to **mirror in shared content, drift in agent-specific phrasing**. The skills are intentionally not lockstep.
+
+Skill names confirmed to have intentional drift today: `agent-workflow`, `pr-format`. Other skills (`e2e-testing`, `testing`, `api-layering`, `api-methods-entities`, `web-structure`, `web-components-pages`, `commit`) are byte-equal across mirrors. If you discover new drift that should be added here, update both this section and `playwright-setup-report.md`'s mirror byte-equality open question (or close it once the convention is fully written down).
+
+## 7. Other habits
 
 - **Scope:** Know which app you’re in (`apps/api` vs `apps/web`). Use the right tooling (e.g. `uv` in API, `pnpm --filter web` for web).
 - **After big refactors:** Run `pnpm check:api` and `pnpm check:web` once to catch import/model/type errors before the user hits pre-commit.
