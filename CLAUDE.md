@@ -34,3 +34,7 @@ pnpm lint:fix     # ESLint auto-fix
 - Never stage `.claude/projects/` — gitignored for a reason
 - Never stage temporary `.md` files unless the user explicitly names them
 - Pre-commit runs lint-staged + `check:api` + `check:web` + `test:api` — don't commit code that would fail these
+
+## PR asset upload policy
+
+**OFF by default.** The agent verifies every UI change with `playwright-cli` per the `e2e-testing` skill — capturing screenshots/videos locally as part of that verification is fine — but the **Screenshots & Recordings** section is omitted from the PR body unless I explicitly ask for assets on that PR. Per-PR opt-in only; no standing "upload always" mode. When I ask, follow the hosting paths in the `pr-format` skill.

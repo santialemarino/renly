@@ -119,6 +119,8 @@ Defaults in `playwright.config.ts` are usually sufficient. If a specific test ne
 
 `playwright-cli` is installed globally on the dev machine. Use it to drive a real browser while implementing features, verify behavior, and capture screenshots for PR documentation.
 
+**Verification is mandatory; PR asset upload is a separate, repo-configurable concern.** For any UI change, the agent must drive the new flow with `playwright-cli` regardless of whether the captured screenshots/videos will end up in the PR body. The "paste assets into the PR body" step is governed by the repo's PR asset upload policy (`CLAUDE.md` / `AGENTS.md`) and the `pr-format` skill's Screenshots & Recordings section. Default when no policy is declared: assets are NOT uploaded unless the user explicitly asks per PR.
+
 ### Typical agent flow
 
 1. Implement the code change for the feature.
