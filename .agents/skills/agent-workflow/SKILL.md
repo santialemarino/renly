@@ -84,16 +84,14 @@ The project has three documentation tiers:
 
 **When to update each tier:**
 
-- **`docs/internal/decisions.md`:** When a design decision is made or an existing one changes — add or update the entry with context, options considered, decision, and why. Also log **open questions** with full detail so they can be picked up cold in a future session.
-- **`docs/internal/implementation-plan.md`:** After finishing significant work — update phase status (built, remaining). Same cadence as `project_status.md` memory.
-- **`docs/internal/architecture.md`:** When Phase 1 architecture changes materially (new endpoint, new table, new flow). Less frequent than implementation-plan.
+- **`docs/internal/` (gitignored):** The agent's local memory holds the canonical list of which files in this tier to update for which event (design decisions, phase progress, architecture changes, frozen audits, etc.). Manage per those local rules.
 - **`docs/public/`:** When a change affects a public doc’s accuracy — new endpoint → `api-reference.md`, new metric → `metrics.md`, new category capability → `investment-categories.md`. Keep language accessible for non-technical readers.
 - **`docs/technical/`:** When implementation details change — new provider → `external-providers.md`, auth change → `auth-flow.md`, new env var → `env-vars.md`, new scheduled job → `scheduler.md`.
 
 ### Skills and memory
 
 - **When to update skills:** Less often. Update a skill when you change a **convention** or **structure** (e.g. new layer, new place for components, new comment style). If you only added a feature following existing conventions, you usually don’t need to edit a skill.
-- **Memory:** In Codex, keep committed docs and the final response current. Do not update Claude memory files unless the user explicitly asks. Skip memory updates for trivial fixes.
+- **Memory:** After finishing significant work, update the agent's local memory per the agent's own memory rules. Each agent (Claude, Codex, others) has its own memory system at its own path. Do not write to another agent's memory directory. Skip memory updates for trivial fixes.
 
 ## 5. What NOT to commit
 
@@ -103,20 +101,15 @@ The project has three documentation tiers:
 
 ## 6. Skill mirrors (`.claude/skills/` ↔ `.agents/skills/`)
 
-Skills under `.agents/skills/` are mirrored from `.claude/skills/` (Claude's tree). Most content is byte-equal across the two trees — but a few skills carry **intentional per-agent drift** that must be preserved when editing. Concretely, today's documented drift:
-
-- **Cross-references to Claude memory files.** Claude uses `[[memory-name]]` link syntax to cross-reference memory files under `~/.claude/projects/<slug>/memory/`. Codex doesn't have access to that path, so any such link reference must be dropped or rephrased into plain prose on the `.agents/` side. Example: `pr-format` skill's `**Env vars:**` bullet — Claude version cites `[[feedback_update_env_files]]`; Codex version says the equivalent in plain prose.
-- **Meta-doc references in `pr-format`'s "What NOT to include in the summary" bullet.** Codex version additionally mentions `AGENTS.md` and `.agents/`; Claude version doesn't.
-- **`agent-workflow`'s memory rule line:** Claude version says "update Claude memory files"; Codex version says "do not update Claude memory files" (Codex can't reach them).
+Skills under `.claude/skills/` and `.agents/skills/` are mirrored — Claude reads from the first tree, Codex from the second. The mirrors are kept **byte-equal**. There is no intentional drift; if you spot a difference between the two trees that isn't a transient mid-edit state, treat it as a bug.
 
 **Rules when editing a mirrored skill:**
 
 - Make the change in BOTH mirrors in the same edit pass.
-- **Never `cp .agents/skills/<name>/SKILL.md .claude/skills/<name>/SKILL.md`** (or the reverse) — this stomps the intentional drift silently. Always use targeted edits + verify with `diff .claude/skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md` afterward.
-- When you remove a `[[memory-link]]`-style reference from `.claude/skills/`, write the equivalent prose form in `.agents/skills/` instead — don't carry the `[[link]]` over.
-- When in doubt about whether content should mirror, default to **mirror in shared content, drift in agent-specific phrasing**. The skills are intentionally not lockstep.
-
-Skill names confirmed to have intentional drift today: `agent-workflow`, `pr-format`. Other skills (`e2e-testing`, `testing`, `api-layering`, `api-methods-entities`, `web-structure`, `web-components-pages`, `commit`) are byte-equal across mirrors. If you discover new drift that should be added here, update both this section and `playwright-setup-report.md`'s mirror byte-equality open question (or close it once the convention is fully written down).
+- **Never `cp .claude/skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md`** (or the reverse) — even though byte-equality is the goal, the safer path is targeted edits + a `diff .claude/skills/<name>/SKILL.md .agents/skills/<name>/SKILL.md` check afterward (catches per-agent specifics that snuck in mid-edit).
+- **Don't introduce agent-specific cross-references that wouldn't resolve on the other side.** Examples to avoid: Claude `[[memory-link]]` syntax pointing to Claude-only memory files; by-name references to gitignored files only one agent has. When you want to cite a per-agent convention, write the rule's content inline in both mirrors instead.
+- **Use agent-agnostic language for things that vary per agent.** "Manage per the agent's local memory rules" works for both Claude and Codex (each interprets it in its own environment). "Update Claude memory files" or "Codex doesn't have memory" would force drift.
+- When in doubt about whether content should mirror, default to **mirror it**. Drift creates a maintenance tax that has rarely been worth it in this repo.
 
 ## 7. Other habits
 

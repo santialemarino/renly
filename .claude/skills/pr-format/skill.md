@@ -91,12 +91,12 @@ Always `N/A`. Renly does not use a ticket tracker.
 - Be detailed — close to implementation-plan level. Mention component names, file paths, props, patterns.
 - End with cross-cutting sub-sections when applicable:
   - **`Translations:`** — when i18n keys were added or changed (EN + ES).
-  - **`Env vars:`** — when new environment variables were added or removed (`NEXT_PUBLIC_*` on the web, backend `os.getenv` reads). List each key, its default, and which `.env.example` was updated. Required by the [[feedback_update_env_files]] rule — reviewers should not have to grep for new env surface.
+  - **`Env vars:`** — when new environment variables were added or removed (`NEXT_PUBLIC_*` on the web, backend `os.getenv` reads). List each key, its default, and which `.env.example` was updated. Reviewers should not have to grep for new env surface.
 - Do not include a Docs sub-section. Documentation changes are part of the feature — the code summary already conveys what changed.
 
 **What NOT to include in the summary:**
 
-- **Internal docs / meta-documentation changes.** Don't mention updates to skills, `CLAUDE.md`, `README.md`, memory files, or `.claude/` contents.
+- **Internal docs / meta-documentation changes.** Don't mention updates to skills, `CLAUDE.md`, `AGENTS.md`, `README.md`, memory files, `.claude/`, or `.agents/` contents.
 - **External platform changes.** Don't describe actions taken on external platforms as changes "we made."
 
 ### Migration Required
