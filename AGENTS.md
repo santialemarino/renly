@@ -35,6 +35,10 @@ pnpm lint:fix
 - Never stage temporary markdown files unless the user explicitly names them.
 - Pre-commit runs lint-staged plus `check:api`, `check:web`, and `test:api`; do not commit code that would fail those checks.
 
+## PR asset upload policy
+
+OFF by default. The agent verifies every UI change with `playwright-cli` per the `e2e-testing` skill — capturing screenshots/videos locally as part of that verification is fine — but the Screenshots & Recordings section is omitted from the PR body unless I explicitly ask for assets on that PR. Per-PR opt-in only; no standing "upload always" mode. When I ask, follow the hosting paths in the `pr-format` skill.
+
 ## Architecture rules
 
 - Use API skills for backend work: `api-layering` and `api-methods-entities`.

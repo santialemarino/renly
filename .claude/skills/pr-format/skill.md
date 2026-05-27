@@ -109,8 +109,12 @@ Always `N/A`. Renly does not use formal acceptance criteria from tickets.
 
 ### Screenshots & Recordings
 
-- **Include** when the PR has UI changes (frontend/web). Use `<img>` tags with `width`/`height`/`alt` attributes. Videos as bare GitHub asset URLs.
-- **Omit entirely** for backend-only, docs-only, or API-only PRs. Don't include an empty section.
+**Whether to include this section is governed by the repo's PR asset upload policy.** Check the repo's `CLAUDE.md` / `AGENTS.md` for a "PR asset upload policy" section. Default behavior when no policy is declared: **OFF — omit the section unless the user explicitly asks for assets on the current PR.** Verification of UI changes via `playwright-cli` (see the `e2e-testing` skill) is **always required** regardless of the upload policy — only the "paste the captured assets into the PR body" step is toggled.
+
+**When the section is included** (policy opts in, OR the user explicitly asks for assets on this PR):
+
+- Include only when the PR has UI changes (frontend/web). Use `<img>` tags with `width`/`height`/`alt` attributes. Videos as bare GitHub asset URLs.
+- Omit for backend-only, docs-only, or API-only PRs even when the policy is opt-in. Don't include an empty section.
 
 **Sourcing screenshots and recordings.**
 
