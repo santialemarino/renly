@@ -9,6 +9,10 @@ import { useTranslations } from 'next-intl';
 import { Button, SearchInput } from '@repo/ui/components';
 import { ExpenseCategorySelect } from '@/app/(protected)/expenses/_components/expense-category-select';
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import {
+  LinkedPlanAmountMismatchDialog,
+  type LinkedPlanMismatch,
+} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -40,6 +44,10 @@ export function ExpensesToolbar({
   const [, startTransition] = useTransition();
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
+  // Amount-mismatch follow-up prompt (Phase 3, follow-up Item 6). The expense form
+  // fires onLinkedPlanSave only when the saved amount differs from the linked plan's
+  // current amount — we stash it here so the dialog survives the form's close animation.
+  const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
 
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
   const selectedPaymentMethod = searchParams.get('payment_method') ?? CATEGORY_ALL;
@@ -124,6 +132,25 @@ export function ExpensesToolbar({
           activeSubscriptions={activeSubscriptions}
           activeInstallments={activeInstallments}
           onSuccess={() => router.refresh()}
+          onLinkedPlanSave={(values, plan) =>
+            setMismatch({
+              type: plan.type,
+              planId: plan.id,
+              planName: plan.name,
+              enteredAmount: values.amount,
+              currentAmount: plan.amount,
+              currency: plan.currency,
+            })
+          }
+        />
+
+        <LinkedPlanAmountMismatchDialog
+          mismatch={mismatch}
+          onClose={() => setMismatch(null)}
+          onConfirmed={() => {
+            setMismatch(null);
+            router.refresh();
+          }}
         />
       </div>
     </LayoutGroup>

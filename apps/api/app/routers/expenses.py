@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.domain import AdvanceResult, ReverseResult
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.expense import (
     AutoChargeMatch,
@@ -13,9 +14,11 @@ from app.schemas.expense import (
     AutoChargeMatchSourcePlan,
     CycleAdvancePreviewResponse,
     ExpenseCreate,
+    ExpenseDeleteResponse,
     ExpenseListResponse,
     ExpenseResponse,
     ExpenseUpdate,
+    PlanCursorChange,
 )
 from app.services import expense_service
 from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
@@ -42,6 +45,19 @@ def _convert_entry(
     elif target_currency and entry_currency == target_currency:
         resp.converted_amount = resp.amount
     return resp
+
+
+# Maps an AdvanceResult / ReverseResult to the PlanCursorChange response field.
+def _cursor_change(result: AdvanceResult | ReverseResult | None) -> PlanCursorChange | None:
+    if result is None:
+        return None
+    return PlanCursorChange(
+        plan_type=result.plan_type,
+        plan_id=result.plan_id,
+        plan_name=result.plan_name,
+        previous_cursor=result.previous_cursor,
+        new_cursor=result.new_cursor,
+    )
 
 
 # List expenses with optional filters, pagination, and currency conversion.
@@ -153,6 +169,7 @@ async def cycle_advance_preview(
         would_advance=decision.would_advance,
         distance_days=decision.distance_days,
         next_expected_date=decision.next_expected_date,
+        multi_jump=decision.multi_jump,
     )
 
 
@@ -174,13 +191,15 @@ async def get_expense(
 
 
 # Create a new expense. Supports both JWT (web) and API key (iOS Shortcut) auth.
+# cursor_change on the response (when populated) carries the advance emitted by a
+# linked obligation / subscription / installment (Phase 3, follow-up Item 7).
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense(
     body: ExpenseCreate,
     current_user: JwtOrApiKeyUser,
     session: SessionDep,
 ) -> ExpenseResponse:
-    entry = await expense_service.create_expense(
+    entry, advance_result = await expense_service.create_expense(
         session,
         current_user,
         date=body.date,
@@ -195,10 +214,14 @@ async def create_expense(
         subscription_id=body.subscription_id,
         installment_id=body.installment_id,
     )
-    return ExpenseResponse.model_validate(entry)
+    resp = ExpenseResponse.model_validate(entry)
+    resp.cursor_change = _cursor_change(advance_result)
+    return resp
 
 
-# Update an existing expense.
+# Update an existing expense. cursor_change on the response (when populated) carries
+# the reverse emitted by an unlink that targeted the most-recent linked expense
+# (Phase 3, follow-up Item 10).
 @router.put("/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
     expense_id: int,
@@ -207,15 +230,21 @@ async def update_expense(
     session: SessionDep,
 ) -> ExpenseResponse:
     payload = body.model_dump(exclude_unset=True)
-    entry = await expense_service.update_expense(session, expense_id, current_user, **payload)
-    return ExpenseResponse.model_validate(entry)
+    entry, reverse_result = await expense_service.update_expense(session, expense_id, current_user, **payload)
+    resp = ExpenseResponse.model_validate(entry)
+    resp.cursor_change = _cursor_change(reverse_result)
+    return resp
 
 
-# Delete an expense. Returns 204.
-@router.delete("/{expense_id}", status_code=status.HTTP_204_NO_CONTENT)
+# Delete an expense. Returns 200 with an optional cursor change (Phase 3, follow-up
+# Item 10) emitted by a reverse-on-unlink walk when the deleted row was the most-recent
+# linked expense for a commitment. Was 204 in Step D+E; switched to 200 + body so the
+# delete confirmation toast can announce the schedule walk-back symmetric to create / update.
+@router.delete("/{expense_id}", response_model=ExpenseDeleteResponse)
 async def delete_expense(
     expense_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> None:
-    await expense_service.delete_expense(session, expense_id, current_user)
+) -> ExpenseDeleteResponse:
+    reverse_result = await expense_service.delete_expense(session, expense_id, current_user)
+    return ExpenseDeleteResponse(cursor_change=_cursor_change(reverse_result))

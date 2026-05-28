@@ -61,64 +61,88 @@ def _inst(
 
 class TestComputeSubscriptionAdvanceForManualEntry:
     def test_exact_match_on_cursor_advances(self):
-        # entry = cursor itself -> in tolerance + at-cursor; advances.
+        # entry = cursor itself -> matched cycle == cursor; advances.
         sub = _sub(next_billing_date=date(2026, 6, 15))
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 6, 15))
         assert decision.would_advance is True
         assert decision.distance_days == 0
         assert decision.next_expected_date == date(2026, 6, 15)
+        assert decision.multi_jump is False
 
-    def test_in_tolerance_after_cursor_advances(self):
-        # entry 10 days after cursor; monthly tolerance = 15 days.
+    def test_in_tolerance_after_cursor_still_matches_current_advances(self):
+        # entry 10 days after cursor; closest is the cursor itself (Jun 15), not Jul 15.
+        # Per Item 9 the advance fires because matched cycle == current cursor.
         sub = _sub(next_billing_date=date(2026, 6, 15))
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 6, 25))
         assert decision.would_advance is True
         assert decision.distance_days == 10
+        assert decision.next_expected_date == date(2026, 6, 15)
+        assert decision.multi_jump is False
 
-    def test_back_dated_within_tolerance_does_not_advance(self):
-        # entry 10 days BEFORE the cursor matches the prior May 15 cycle. In tolerance
-        # by day-count, but back-dated -> do not advance.
+    def test_back_dated_does_not_advance(self):
+        # entry 10 days BEFORE the cursor matches the prior May 15 cycle (< current).
+        # Per Item 9 back-dated entries never advance — flagged multi_jump=False since
+        # the matched cycle is BEHIND the cursor, not ahead.
         sub = _sub(next_billing_date=date(2026, 6, 15))
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 5, 25))
         assert decision.would_advance is False
         assert decision.next_expected_date == date(2026, 5, 15)
+        assert decision.multi_jump is False
+
+    def test_pre_payment_two_cycles_ahead_does_not_advance(self):
+        # User pre-pays cuota Aug 15 when cursor is at May 15 — matched cycle is ahead
+        # by 3 months. Per Item 9 (Option C) the link saves but cursor stays put; the
+        # scheduler back-fills May / Jun / Jul on schedule, then dedups Aug at the
+        # partial UNIQUE INDEX. multi_jump=True so the toast can explain.
+        sub = _sub(next_billing_date=date(2026, 5, 15))
+        decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 8, 15))
+        assert decision.would_advance is False
+        assert decision.next_expected_date == date(2026, 8, 15)
+        assert decision.multi_jump is True
 
     def test_annual_cap_rejects_three_month_off_entry(self):
-        # Annual tolerance caps at MAX_TOLERANCE_DAYS = 60, so 90 days off is rejected
-        # despite half the cycle being ~182 days.
+        # Annual cycle; entry 91 days off matches the closest annual cycle (Jun 15),
+        # which equals the current cursor — but the same-cycle distance is huge so
+        # this exercises the closest-cycle math, NOT the tolerance number that Item 9
+        # removed. Distance reported; would_advance still True (matched == current).
         sub = _sub(next_billing_date=date(2026, 6, 15), billing_cycle=BILLING_CYCLE_ANNUAL)
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 9, 14))
-        assert decision.would_advance is False
+        assert decision.would_advance is True
         assert decision.distance_days == 91
+        assert decision.multi_jump is False
 
-    def test_weekly_tolerance_is_three_days(self):
-        # Weekly cycle, entry 4 days after -> closest is the NEXT week's cycle (3 days
-        # away) which IS within tolerance. Verifies the closest-cycle math, not just
-        # the tolerance number.
+    def test_weekly_entry_closest_to_next_week_does_not_advance(self):
+        # Weekly cycle, entry 4 days after cursor -> closest is the NEXT week's cycle
+        # (3 days away), which is AHEAD of the cursor. Item 9 treats this as a one-step
+        # jump ahead: link saves, cursor stays, multi_jump=True. The scheduler emits
+        # the original cycle on its date and dedups the next.
         sub = _sub(next_billing_date=date(2026, 6, 15), billing_cycle=BILLING_CYCLE_WEEKLY)
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 6, 19))
-        assert decision.would_advance is True
+        assert decision.would_advance is False
         assert decision.distance_days == 3
+        assert decision.multi_jump is True
 
     def test_anchor_day_31_walks_without_drift(self):
         # cursor anchored on day 31 -> entry near May 31 should match May 31, not
         # drift back to Apr 30. Validates the closest helper honours anchor_day.
+        # cursor at Mar 31 + entry May 30 -> matched May 31 sits ahead of cursor by
+        # two cycles -> multi_jump=True.
         sub = _sub(next_billing_date=date(2026, 3, 31), billing_cycle=BILLING_CYCLE_MONTHLY, anchor_day=31)
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 5, 30))
-        assert decision.would_advance is True
+        assert decision.would_advance is False
         assert decision.next_expected_date == date(2026, 5, 31)
+        assert decision.multi_jump is True
 
-    def test_quarterly_anchor_31_mid_gap_rejects(self):
-        # Regression for the cycle_tolerance bug: when an earlier impl forwarded the
-        # caller's anchor_day into advance_by_cycle to measure the nominal length, a
-        # quarterly cycle anchored on day 31 yielded `advance(Jan 1, quarterly, 31) =
-        # Apr 30` -> nominal 119 days -> tolerance 59 days (off by +14). Mid-gap
-        # entries 46 days from the closest cycle would then incorrectly advance.
-        # Correct tolerance is 45; this entry must be rejected.
+    def test_quarterly_anchor_31_mid_gap_still_pins_to_current_cursor(self):
+        # Regression for the cycle_tolerance signature bug: anchor_day=31 must not
+        # inflate the closest-cycle math. cursor at Jul 31, entry Sep 15 -> closest
+        # is the cursor itself (46 days away) since the next cycle Oct 31 is 46 days
+        # away too; closest-helper picks the cursor on tie. matched == current -> advance.
         sub = _sub(next_billing_date=date(2026, 7, 31), billing_cycle=BILLING_CYCLE_QUARTERLY, anchor_day=31)
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 9, 15))
-        assert decision.would_advance is False
+        assert decision.would_advance is True
         assert decision.distance_days == 46
+        assert decision.multi_jump is False
 
 
 # --- compute_installment_advance_for_manual_entry ---
@@ -130,37 +154,45 @@ class TestComputeInstallmentAdvanceForManualEntry:
         decision = compute_installment_advance_for_manual_entry(inst, date(2026, 1, 1))
         assert decision.would_advance is True
         assert decision.next_expected_date == date(2026, 1, 1)
+        assert decision.multi_jump is False
 
     def test_in_tolerance_after_cursor_advances(self):
-        # current = 3 -> cursor cuota is Mar 1; entry Mar 10 (9 days, within 15).
+        # current = 3 -> cursor cuota is Mar 1; entry Mar 10. Matched cuota = 3, equals
+        # current_installment -> advances.
         inst = _inst(start_date=date(2026, 1, 1), current_installment=3, installments_count=12)
         decision = compute_installment_advance_for_manual_entry(inst, date(2026, 3, 10))
         assert decision.would_advance is True
         assert decision.next_expected_date == date(2026, 3, 1)
+        assert decision.multi_jump is False
 
     def test_back_dated_before_cursor_does_not_advance(self):
-        # current = 5 (Mar/Apr/May already advanced), entry Feb 1 -> matches cuota 2
-        # which is < current cursor. Should not advance.
+        # current = 5, entry Feb 1 -> matches cuota 2 (< current cursor). multi_jump is
+        # False because the matched cuota sits BEHIND the cursor, not ahead.
         inst = _inst(start_date=date(2026, 1, 1), current_installment=5, installments_count=12)
         decision = compute_installment_advance_for_manual_entry(inst, date(2026, 2, 1))
         assert decision.would_advance is False
         assert decision.next_expected_date == date(2026, 2, 1)
+        assert decision.multi_jump is False
 
     def test_fully_paid_plan_does_not_advance(self):
         # current_installment > count means the plan is done. closest_installment_cuota
-        # returns None, advance never fires.
+        # returns None, advance never fires; multi_jump stays False (sentinel response).
         inst = _inst(start_date=date(2026, 1, 1), current_installment=13, installments_count=12)
         decision = compute_installment_advance_for_manual_entry(inst, date(2026, 6, 15))
         assert decision.would_advance is False
+        assert decision.multi_jump is False
 
-    def test_jumping_ahead_advances_past_skipped_cuotas(self):
-        # User pays cuota 5 directly when current = 1 — the helper accepts (idx >= current)
-        # and the caller will skip cuotas 1..4. Per the 3b plan "Multi-late entries get
-        # one advance per save event" — this is the intended behaviour.
+    def test_jumping_ahead_does_not_advance_scheduler_catches_up(self):
+        # Regression for Item 9: a 12-cuota plan at current=1 + entry on cuota 5's date.
+        # Pre-Item-9 the cursor would jump to cuota 6, silently skipping rows for cuotas
+        # 1..4 (silent data loss). Per Option C the link saves but the cursor stays put;
+        # the scheduler back-fills cuotas 1..4 on their own dates and dedups cuota 5 at
+        # the partial UNIQUE INDEX, so every cuota gets an expense row naturally.
         inst = _inst(start_date=date(2026, 1, 1), current_installment=1, installments_count=12)
         decision = compute_installment_advance_for_manual_entry(inst, date(2026, 5, 1))
-        assert decision.would_advance is True
+        assert decision.would_advance is False
         assert decision.next_expected_date == date(2026, 5, 1)
+        assert decision.multi_jump is True
 
 
 # --- Scheduler doesn't double-emit after a manual-entry advance ---

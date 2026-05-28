@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
 from app.config import settings  # noqa: F401 — ensures settings are validated on startup
 from app.domain import (
@@ -123,6 +124,37 @@ async def reconciliation_period_mismatch_handler(_request, exc: ReconciliationPe
     return JSONResponse(
         status_code=400,
         content={"detail": exc.message},
+    )
+
+
+# Maps SQLAlchemy IntegrityError to a clean 409 (Phase 3, follow-up Item 8.2). The most
+# common case in this codebase: a manual expense whose date exactly matches a scheduler-
+# emitted row on the same plan, hitting the partial UNIQUE INDEX on (subscription_id, date)
+# / (installment_id, date). The asyncpg layer surfaces `constraint_name` on the wrapped
+# exception when available — falls back to substring matching on the message text so the
+# handler still fires across driver / version variations.
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(_request, exc: IntegrityError):
+    orig = exc.orig
+    constraint_name = getattr(orig, "constraint_name", None)
+    msg_text = str(orig) if orig is not None else str(exc)
+
+    def matches(name: str) -> bool:
+        return constraint_name == name or name in msg_text
+
+    if matches("idx_expense_entries_subscription_date"):
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "A charge is already recorded for this subscription on that date."},
+        )
+    if matches("idx_expense_entries_installment_date"):
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "A charge is already recorded for this installment on that date."},
+        )
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Conflict — a duplicate or constraint violation prevented the change."},
     )
 
 

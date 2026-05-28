@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Select,
@@ -16,6 +16,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import type { Installment } from '@/lib/api/installments';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // "Linked to subscription / installment" dropdown on the expense form (Phase 3, follow-up 3a).
 // One combined dropdown with two SelectGroups (Subscriptions + Installments). Sibling of
@@ -141,6 +142,7 @@ export function LinkedSubInstallmentSelect({
   formCreditCardId,
   onChange,
 }: LinkedSubInstallmentSelectProps) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
 
   // Sort within each group: match -> unknown -> mismatch, then next-cycle-date ASC.
@@ -192,7 +194,7 @@ export function LinkedSubInstallmentSelect({
                 value !== null && value.kind === 'subscription' && value.id === sub.id;
               return (
                 <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
-                  <div className="flex items-center gap-x-2">
+                  <div className="flex min-w-0 items-center gap-x-2">
                     <CircleDot
                       className={cn(
                         'size-3 shrink-0 transition-colors',
@@ -200,7 +202,14 @@ export function LinkedSubInstallmentSelect({
                       )}
                       aria-hidden
                     />
-                    <span>{sub.name}</span>
+                    <span className="truncate">{sub.name}</span>
+                    {/* Next-cycle date in a muted sub-label so the user can see what
+                        they're linking against (Phase 3, follow-up Item 8.1). */}
+                    <span className="text-paragraph-xs text-muted-foreground">
+                      {t('form.linkedSubInstallment.nextCycleHint', {
+                        date: formatDateForLocale(sub.nextBillingDate, locale),
+                      })}
+                    </span>
                   </div>
                 </SelectItem>
               );
@@ -210,7 +219,7 @@ export function LinkedSubInstallmentSelect({
         {hasInstallments && (
           <SelectGroup>
             <SelectLabel>{t('form.linkedSubInstallment.installmentsLabel')}</SelectLabel>
-            {sortedInstallments.map(({ inst, status }) => {
+            {sortedInstallments.map(({ inst, status, nextChargeDate }) => {
               const isSelected =
                 value !== null && value.kind === 'installment' && value.id === inst.id;
               // Progress label matches the installments table convention:
@@ -219,7 +228,7 @@ export function LinkedSubInstallmentSelect({
               const paid = Math.max(0, inst.currentInstallment - 1);
               return (
                 <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
-                  <div className="flex items-center gap-x-2">
+                  <div className="flex min-w-0 items-center gap-x-2">
                     <CircleDot
                       className={cn(
                         'size-3 shrink-0 transition-colors',
@@ -227,8 +236,14 @@ export function LinkedSubInstallmentSelect({
                       )}
                       aria-hidden
                     />
-                    <span>
+                    <span className="truncate">
                       {inst.name} ({paid}/{inst.installmentsCount})
+                    </span>
+                    {/* Next-cuota date in a muted sub-label (Phase 3, follow-up Item 8.1). */}
+                    <span className="text-paragraph-xs text-muted-foreground">
+                      {t('form.linkedSubInstallment.nextCycleHint', {
+                        date: formatDateForLocale(nextChargeDate, locale),
+                      })}
                     </span>
                   </div>
                 </SelectItem>

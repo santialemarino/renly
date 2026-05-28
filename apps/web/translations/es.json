@@ -20,6 +20,26 @@
         "serverError": "Algo salió mal. Intentá de nuevo más tarde."
       }
     },
+    "amountMismatch": {
+      "obligation": {
+        "title": "¿Actualizar monto esperado?",
+        "description": "Pagaste {enteredAmount} {currency} por \"{planName}\" pero su monto esperado actual es {currentAmount} {currency}. ¿Querés que el próximo monto esperado de la obligación sea {enteredAmount} {currency}?",
+        "confirm": "Sí, actualizar",
+        "decline": "No, mantener actual",
+        "updating": "Actualizando...",
+        "updateSuccess": "Monto de la obligación actualizado.",
+        "updateError": "No se pudo actualizar el monto de la obligación."
+      },
+      "subscription": {
+        "title": "¿Actualizar el monto esperado?",
+        "description": "Pagaste {enteredAmount} {currency} por \"{planName}\" pero el monto esperado actual es {currentAmount} {currency}. ¿Querés actualizar el monto esperado de la suscripción a {enteredAmount} {currency}?",
+        "confirm": "Sí, actualizar",
+        "decline": "No, mantener",
+        "updating": "Actualizando...",
+        "updateSuccess": "Monto de la suscripción actualizado.",
+        "updateError": "No se pudo actualizar el monto de la suscripción."
+      }
+    },
     "categories": {
       "cedears": "CEDEARs",
       "corporate_bonds": "Obligaciones Negociables",
@@ -473,6 +493,7 @@
       "linkedSubInstallment": {
         "label": "Asociado a suscripción o cuota",
         "placeholder": "Elegí una suscripción o cuota (opcional)",
+        "nextCycleHint": "· próximo {date}",
         "none": "Sin asociar",
         "subscriptionsLabel": "Suscripciones",
         "installmentsLabel": "Cuotas",
@@ -485,7 +506,21 @@
       },
       "createSuccess": "Gasto creado.",
       "updateSuccess": "Gasto actualizado.",
-      "saveError": "No se pudo guardar el gasto."
+      "saveError": "No se pudo guardar el gasto.",
+      "cursorAdvanceToast": {
+        "obligation": "Próximo vencimiento de {planName} actualizado a {newCursor}.",
+        "obligationArchived": "{planName} marcada como pagada.",
+        "subscription": "Próximo cobro de {planName} actualizado a {newCursor}.",
+        "installment": "{planName} avanzó a la cuota {newCursor} de {totalCount}.",
+        "installmentArchived": "{planName} pagada en su totalidad."
+      },
+      "cursorReverseToast": {
+        "obligation": "Próximo vencimiento de {planName} retrocedió a {newCursor}.",
+        "obligationReactivated": "{planName} reactivada.",
+        "subscription": "Próximo cobro de {planName} retrocedió a {newCursor}.",
+        "installment": "{planName} retrocedió a la cuota {newCursor} de {totalCount}.",
+        "installmentReactivated": "{planName} reactivada."
+      }
     },
     "delete": {
       "title": "Eliminar gasto",
@@ -810,15 +845,6 @@
       "archiveError": "No se pudo archivar la obligación.",
       "unarchiveSuccess": "Obligación desarchivada.",
       "unarchiveError": "No se pudo desarchivar la obligación."
-    },
-    "markPaid": {
-      "amountMismatchTitle": "¿Actualizar monto esperado?",
-      "amountMismatchDescription": "Pagaste {enteredAmount} {currency} por \"{obligationName}\" pero su monto esperado actual es {currentAmount} {currency}. ¿Querés que el próximo monto esperado de la obligación sea {enteredAmount} {currency}?",
-      "amountMismatchConfirm": "Sí, actualizar",
-      "amountMismatchDecline": "No, mantener actual",
-      "amountMismatchUpdating": "Actualizando...",
-      "amountUpdateSuccess": "Monto de la obligación actualizado.",
-      "amountUpdateError": "No se pudo actualizar el monto de la obligación."
     },
     "form": {
       "titleCreate": "Agregar obligación",

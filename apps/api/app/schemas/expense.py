@@ -50,6 +50,11 @@ class ExpenseCreate(RequestBase):
 
 
 # Body for PUT /expenses/{id}. Partial update.
+# Commitment FKs (payment_obligation_id / subscription_id / installment_id) follow the
+# JSON Merge Patch (RFC 7396) convention: omitting the key leaves the link untouched;
+# sending `null` explicitly clears it. The router relays only fields the client set via
+# `model_dump(exclude_unset=True)`, so the service can distinguish the two intents by
+# checking `key in fields` (Phase 3, follow-up Item 10).
 class ExpenseUpdate(RequestBase):
     date: date_type | None = Field(default=None, description="Expense date.")
     amount: Decimal | None = Field(default=None, description="Expense amount.", gt=0, max_digits=18, decimal_places=2)
@@ -58,9 +63,58 @@ class ExpenseUpdate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.")
     payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    payment_obligation_id: int | None = Field(
+        default=None,
+        description="Linked payment obligation id. Omit to leave unchanged; send null to clear (Phase 3, follow-up Item 10).",
+    )
+    subscription_id: int | None = Field(
+        default=None,
+        description=(
+            "Linked subscription id. Omit to leave unchanged; send null to clear. "
+            "Mutually exclusive with the other two FKs (Phase 3, follow-up Item 10)."
+        ),
+    )
+    installment_id: int | None = Field(
+        default=None,
+        description=(
+            "Linked installment id. Omit to leave unchanged; send null to clear. "
+            "Mutually exclusive with the other two FKs (Phase 3, follow-up Item 10)."
+        ),
+    )
+
+    # Mirrors ExpenseCreate's validator: an expense pays at most one commitment-type.
+    # Only validates the fields the client actually set (omitted FKs don't count).
+    @model_validator(mode="after")
+    def validate_commitment_link_exclusivity(self) -> "ExpenseUpdate":
+        provided = self.model_fields_set
+        link_count = sum(
+            1 for key in ("payment_obligation_id", "subscription_id", "installment_id") if key in provided and getattr(self, key) is not None
+        )
+        if link_count > 1:
+            raise ValueError("At most one of payment_obligation_id, subscription_id, installment_id may be set.")
+        return self
 
 
-# Response for a single expense entry.
+# Cursor change emitted by a linked plan on create / update / delete (Phase 3,
+# follow-up Item 7). The frontend composes a follow-up toast line — "Netflix's next
+# billing date moved to Jun 27, 2026." — branching on plan_type. previous_cursor /
+# new_cursor are stringified — ISO date for obligation/subscription, decimal index
+# for installment; new_cursor is empty when the plan archived (one-off obligation
+# Marked Paid, installment past its final cuota), previous_cursor is empty when the
+# plan re-activated via reverse.
+class PlanCursorChange(BaseModel):
+    plan_type: str = Field(description="Plan type (obligation, subscription, installment).")
+    plan_id: int = Field(description="Plan id.")
+    plan_name: str = Field(description="Plan name (for the toast copy).")
+    previous_cursor: str = Field(description="Cursor value before the change. Empty when re-activating an archived plan.")
+    new_cursor: str = Field(description="Cursor value after the change. Empty when the plan archived.")
+
+
+# Response for a single expense entry. cursor_change is populated only on mutations
+# that fired an advance (POST) or reverse (PUT with unlink) — list responses and bare
+# GETs leave it null. Keeping cursor_change on the expense response itself rather than
+# wrapping preserves the iOS Shortcut's direct field access on POST (Phase 3, follow-up
+# Item 7).
 class ExpenseResponse(BaseModel):
     id: int = Field(description="Expense id.")
     date: date_type = Field(description="Expense date.")
@@ -77,8 +131,19 @@ class ExpenseResponse(BaseModel):
     installment_id: int | None = Field(default=None, description="Linked installment plan id (Phase 3, follow-up 3a).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
+    cursor_change: PlanCursorChange | None = Field(
+        default=None, description="Cursor change emitted by a linked plan on POST / PUT, or null when nothing moved (Phase 3, follow-up Item 7)."
+    )
 
     model_config = {"from_attributes": True}
+
+
+# Response for DELETE /expenses/{id} (Phase 3, follow-up Item 10). Carries an optional
+# cursor change when the deleted row was the most-recent linked expense for a commitment.
+class ExpenseDeleteResponse(BaseModel):
+    cursor_change: PlanCursorChange | None = Field(
+        default=None, description="Cursor change emitted by a reverse-on-unlink walk, or null when nothing moved."
+    )
 
 
 # Source plan (subscription or installment) referenced by an auto-charge match.
@@ -100,14 +165,19 @@ class AutoChargeMatchResponse(BaseModel):
     match: AutoChargeMatch | None = Field(default=None, description="The matching auto-generated expense, or null.")
 
 
-# Response for GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b). The frontend
-# calls this from the expense form before save: when `would_advance` is False the UI
-# surfaces a soft-confirm dialog ("entry far from next expected cycle; cursor will not
-# advance") before continuing with the create.
+# Response for GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b, revised by Item 9).
+# The frontend calls this from the expense form before save: when `would_advance` is False
+# the UI surfaces a soft-confirm dialog (e.g. "entry far from next expected cycle; cursor
+# will not advance") before continuing with the create. `multi_jump` is True when the
+# entry matches a cycle ahead of the current cursor (pre-pay / mis-click) — the link is
+# saved, the cursor stays put, and the scheduler back-fills intermediate cycles naturally.
 class CycleAdvancePreviewResponse(BaseModel):
-    would_advance: bool = Field(description="Whether saving the expense would advance the plan's cursor past the matched cycle.")
+    would_advance: bool = Field(description="Whether saving the expense would advance the plan's cursor to the matched cycle's next step.")
     distance_days: int = Field(description="Absolute day distance between the entry date and the closest cycle.")
     next_expected_date: date_type = Field(description="The closest cycle the entry was matched against (informational when would_advance=False).")
+    multi_jump: bool = Field(
+        default=False, description="True when the matched cycle is ahead of the current cursor by more than one step (pre-pay / mis-click)."
+    )
 
 
 # Paginated response for GET /expenses.

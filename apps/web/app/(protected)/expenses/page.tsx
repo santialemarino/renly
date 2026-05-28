@@ -77,6 +77,9 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         data={data}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeObligations={activeObligations}
+        activeSubscriptions={activeSubscriptions}
+        activeInstallments={activeInstallments}
         activeCurrency={currency}
       />
     </div>

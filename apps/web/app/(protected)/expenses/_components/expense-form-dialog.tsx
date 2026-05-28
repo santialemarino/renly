@@ -22,6 +22,7 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
+import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import {
   LinkedObligationSelect,
   obligationMatchStatus,
@@ -38,6 +39,7 @@ import {
   updateExpense,
   type AutoChargeMatch,
   type CycleAdvancePreview,
+  type PlanCursorChange,
 } from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
@@ -80,10 +82,75 @@ interface ExpenseFormDialogProps {
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
   onSuccess: () => void;
-  // Optional post-save hook used by the obligations table to show a follow-up amount-mismatch
-  // prompt. Fires AFTER a successful Mark Paid create, BEFORE the form closes — the parent's
-  // dialog can mount as a sibling and survive the form's close animation.
-  onMarkPaidSave?: (savedValues: ExpenseFormValues) => void;
+  // Optional post-save hook for the amount-mismatch follow-up prompt (Phase 3, follow-up
+  // Item 6). Fires AFTER a successful save and BEFORE the form closes — the parent's
+  // dialog can mount as a sibling and survive the form's close animation. The dialog
+  // computes the mismatch internally and only fires the callback when (a) the saved
+  // amount differs from the linked plan's current amount by more than AMOUNT_TOLERANCE
+  // AND (b) the entry's currency matches the plan's currency (cross-currency comparison
+  // would be semantically muddled — the prompt is about updating the plan's expected
+  // amount, which only makes sense in the plan's own currency). Installments are
+  // deliberately excluded: their per-cuota drift is taxes/fees/FX rather than plan
+  // changes, and LOCKED_FIELDS in installment_service forbids amount edits after
+  // current_installment > 1.
+  onLinkedPlanSave?: (
+    savedValues: ExpenseFormValues,
+    plan: {
+      type: 'obligation' | 'subscription';
+      id: number;
+      name: string;
+      amount: string;
+      currency: string;
+    },
+  ) => void;
+}
+
+// Tolerance for the amount-mismatch prompt — anything within 0.01 currency unit is
+// treated as equal (avoids prompting on rounding noise from string-to-number conversion).
+const AMOUNT_TOLERANCE = 0.01;
+
+// Resolves the linked plan (obligation or subscription) from the saved form values,
+// looking it up in the active plans the parent prop-drilled. Returns null when no FK
+// is set or the looked-up plan can't be found (e.g. user picked a plan that's since been
+// archived — should be rare since active lists are server-fetched fresh per render).
+function detectLinkedPlan(
+  values: ExpenseFormValues,
+  activeObligations: PaymentObligation[] | undefined,
+  activeSubscriptions: Subscription[] | undefined,
+): {
+  type: 'obligation' | 'subscription';
+  id: number;
+  name: string;
+  amount: string;
+  currency: string;
+} | null {
+  if (values.paymentObligationId) {
+    const o = activeObligations?.find((x) => x.id === values.paymentObligationId);
+    if (o)
+      return { type: 'obligation', id: o.id, name: o.name, amount: o.amount, currency: o.currency };
+  }
+  if (values.subscriptionId) {
+    const s = activeSubscriptions?.find((x) => x.id === values.subscriptionId);
+    if (s)
+      return {
+        type: 'subscription',
+        id: s.id,
+        name: s.name,
+        amount: s.amount,
+        currency: s.currency,
+      };
+  }
+  return null;
+}
+
+// Compares two amount strings with the standard tolerance. Returns true when the saved
+// amount differs from the plan's expected amount by more than AMOUNT_TOLERANCE. Non-finite
+// inputs are treated as "no mismatch" — invalid form state shouldn't trigger the prompt.
+function amountsDiffer(savedAmount: string, planAmount: string): boolean {
+  const entered = Number(savedAmount);
+  const current = Number(planAmount);
+  if (!Number.isFinite(entered) || !Number.isFinite(current)) return false;
+  return Math.abs(entered - current) > AMOUNT_TOLERANCE;
 }
 
 export function ExpenseFormDialog({
@@ -97,7 +164,7 @@ export function ExpenseFormDialog({
   activeSubscriptions,
   activeInstallments,
   onSuccess,
-  onMarkPaidSave,
+  onLinkedPlanSave,
 }: ExpenseFormDialogProps) {
   const locale = useLocale();
   const t = useTranslations('expenses');
@@ -134,15 +201,16 @@ export function ExpenseFormDialog({
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  // Linked-obligation dropdown is offered only on CREATE (not edit; the update endpoint
-  // doesn't accept the FK) and only when the page has provided active obligations.
-  const showLinkedObligation = !isEdit && (activeObligations?.length ?? 0) > 0;
+  // Linked-obligation dropdown is offered on CREATE and EDIT (Phase 3, follow-up Item 10).
+  // The update endpoint now accepts the FK as a JSON-Merge-Patch field; selecting "None"
+  // clears the link and the server reverses the obligation's cursor when this row was the
+  // most-recent linked expense.
+  const showLinkedObligation = (activeObligations?.length ?? 0) > 0;
   const selectedObligation = activeObligations?.find((o) => o.id === watchedPaymentObligationId);
-  // Linked-sub/installment dropdown is offered only on CREATE (Phase 3, follow-up 3a) and
-  // hidden when the form is opened via Mark Paid — the obligation FK is locked in that flow
-  // and the sub/installment dropdown would be mutually exclusive noise.
+  // Linked-sub/installment dropdown is offered on CREATE and EDIT (Phase 3, follow-up Item 10),
+  // and hidden when the form is opened via Mark Paid — the obligation FK is locked in that
+  // flow and the sub/installment dropdown would be mutually exclusive noise.
   const showLinkedSubInstallment =
-    !isEdit &&
     !prefillFromObligation &&
     ((activeSubscriptions?.length ?? 0) > 0 || (activeInstallments?.length ?? 0) > 0);
   const selectedSubInstallment: LinkedSubInstallmentValue | null =
@@ -293,17 +361,27 @@ export function ExpenseFormDialog({
 
   async function doSubmit(values: ExpenseFormValues) {
     try {
+      let cursorChange: PlanCursorChange | null;
       if (isEdit) {
-        await updateExpense(expense.id, values);
-        toast.success(t('form.updateSuccess'));
+        cursorChange = await updateExpense(expense.id, values);
+        announceSave(t('form.updateSuccess'), cursorChange, isEdit);
       } else {
-        await createExpense(values);
-        toast.success(t('form.createSuccess'));
-        // Mark-Paid post-save hook fires BEFORE close so the parent can mount any
-        // follow-up dialog (e.g. the amount-mismatch prompt) as a sibling that
-        // survives this dialog's close animation.
-        if (prefillFromObligation && onMarkPaidSave) {
-          onMarkPaidSave(values);
+        cursorChange = await createExpense(values);
+        announceSave(t('form.createSuccess'), cursorChange, isEdit);
+      }
+      // Amount-mismatch hook (Phase 3, follow-up Item 6). Fires for both create and
+      // edit flows whenever the saved amount differs from the linked plan's current
+      // expected amount by more than AMOUNT_TOLERANCE. Installments are excluded —
+      // see onLinkedPlanSave's prop doc. Fires BEFORE close so the parent can mount
+      // a follow-up dialog as a sibling that survives this dialog's close animation.
+      if (onLinkedPlanSave) {
+        const linkedPlan = detectLinkedPlan(values, activeObligations, activeSubscriptions);
+        if (
+          linkedPlan &&
+          linkedPlan.currency === values.currency &&
+          amountsDiffer(values.amount, linkedPlan.amount)
+        ) {
+          onLinkedPlanSave(values, linkedPlan);
         }
       }
       onSuccess();
@@ -314,6 +392,24 @@ export function ExpenseFormDialog({
     } catch {
       toast.error(t('form.saveError'));
     }
+  }
+
+  // Composes the success toast with an optional cursor-change line (Phase 3, follow-up
+  // Item 7). When cursor_change is set the toast reads e.g. "Expense created. Netflix's
+  // next billing date moved to Jun 27, 2026."; otherwise the bare success message.
+  function announceSave(baseMessage: string, cursorChange: PlanCursorChange | null, edit: boolean) {
+    if (!cursorChange) {
+      toast.success(baseMessage);
+      return;
+    }
+    // Create + linked FK = forward advance; edit + cleared FK = reverse on the prior plan.
+    const direction = edit ? 'reverse' : 'advance';
+    const resolution = resolveCursorToast(cursorChange, direction, locale, activeInstallments);
+    if (!resolution) {
+      toast.success(baseMessage);
+      return;
+    }
+    toast.success(`${baseMessage} ${t(`form.${resolution.key}`, resolution.params)}`);
   }
 
   async function onSubmit(values: ExpenseFormValues) {

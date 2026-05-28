@@ -6,7 +6,7 @@ from app.domain.currency import (
     get_ars_pair,
     is_supported,
 )
-from app.domain.cycle_advance import CycleAdvanceDecision
+from app.domain.cycle_advance import AdvanceResult, CycleAdvanceDecision, ReverseResult
 from app.domain.errors import (
     CurrencyChangeBlockedError,
     ExchangeRateUnavailableError,
@@ -18,6 +18,7 @@ from app.domain.errors import (
 from app.domain.payments_calendar import CalendarItem
 
 __all__ = [
+    "AdvanceResult",
     "CalendarItem",
     "CardBucketBalance",
     "CurrencyChangeBlockedError",
@@ -27,6 +28,7 @@ __all__ = [
     "InstallmentLockedFieldError",
     "NotFoundError",
     "ReconciliationPeriodMismatchError",
+    "ReverseResult",
     "SUPPORTED_CURRENCIES",
     "get_ars_pair",
     "is_supported",
