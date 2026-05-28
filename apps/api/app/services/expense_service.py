@@ -62,6 +62,8 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
 
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
 # When payment_obligation_id is set, advances or archives the linked obligation atomically (Phase 3, Step E).
+# subscription_id / installment_id are stored on the row but do not advance the scheduler's cursor in 3a —
+# that's deferred to 3b (smart dedup + auto-advance).
 async def create_expense(
     session: AsyncSession,
     user: User,
@@ -75,6 +77,8 @@ async def create_expense(
     credit_card_id: int | None = None,
     source: str = "manual",
     payment_obligation_id: int | None = None,
+    subscription_id: int | None = None,
+    installment_id: int | None = None,
 ) -> ExpenseEntry:
     entry = ExpenseEntry(
         user_id=user.id,
@@ -87,6 +91,8 @@ async def create_expense(
         credit_card_id=credit_card_id,
         source=source,
         payment_obligation_id=payment_obligation_id,
+        subscription_id=subscription_id,
+        installment_id=installment_id,
     )
     entry = await expense_repository.create(session, entry)
     if credit_card_id is not None:

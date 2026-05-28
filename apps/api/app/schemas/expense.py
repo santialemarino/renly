@@ -4,7 +4,7 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase
@@ -24,6 +24,30 @@ class ExpenseCreate(RequestBase):
         default=None,
         description="When set, links the expense to an obligation and auto-advances next_due_date (Phase 3, Step E).",
     )
+    subscription_id: int | None = Field(
+        default=None,
+        description=(
+            "When set, links the expense to a subscription. Mutually exclusive with payment_obligation_id / installment_id (Phase 3, follow-up 3a)."
+        ),
+    )
+    installment_id: int | None = Field(
+        default=None,
+        description=(
+            "When set, links the expense to an installment plan. Mutually exclusive with "
+            "payment_obligation_id / subscription_id (Phase 3, follow-up 3a)."
+        ),
+    )
+
+    # An expense pays at most one commitment-type. Three nullable FKs (payment_obligation_id /
+    # subscription_id / installment_id) coexist on the row, but only one may be set on the
+    # same insert. The DB allows arbitrary combinations; this validator is the user-facing
+    # guardrail at the request boundary.
+    @model_validator(mode="after")
+    def validate_commitment_link_exclusivity(self) -> "ExpenseCreate":
+        link_count = sum(1 for value in (self.payment_obligation_id, self.subscription_id, self.installment_id) if value is not None)
+        if link_count > 1:
+            raise ValueError("At most one of payment_obligation_id, subscription_id, installment_id may be set.")
+        return self
 
 
 # Body for PUT /expenses/{id}. Partial update.
@@ -50,6 +74,8 @@ class ExpenseResponse(BaseModel):
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     source: str = Field(description="Entry origin (manual, shortcut, auto, email_parsed).")
     payment_obligation_id: int | None = Field(default=None, description="Linked payment obligation id (Phase 3, Step E).")
+    subscription_id: int | None = Field(default=None, description="Linked subscription id (Phase 3, follow-up 3a).")
+    installment_id: int | None = Field(default=None, description="Linked installment plan id (Phase 3, follow-up 3a).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

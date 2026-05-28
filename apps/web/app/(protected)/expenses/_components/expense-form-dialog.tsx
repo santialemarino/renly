@@ -27,6 +27,11 @@ import {
   obligationMatchStatus,
 } from '@/app/(protected)/expenses/_components/linked-obligation-select';
 import {
+  LinkedSubInstallmentSelect,
+  subInstallmentMatchStatus,
+  type LinkedSubInstallmentValue,
+} from '@/app/(protected)/expenses/_components/linked-sub-installment-select';
+import {
   createExpense,
   getAutoChargeMatch,
   updateExpense,
@@ -42,7 +47,9 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
+import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
@@ -68,6 +75,8 @@ interface ExpenseFormDialogProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
   onSuccess: () => void;
   // Optional post-save hook used by the obligations table to show a follow-up amount-mismatch
   // prompt. Fires AFTER a successful Mark Paid create, BEFORE the form closes — the parent's
@@ -83,6 +92,8 @@ export function ExpenseFormDialog({
   preferredCurrencies,
   creditCards,
   activeObligations,
+  activeSubscriptions,
+  activeInstallments,
   onSuccess,
   onMarkPaidSave,
 }: ExpenseFormDialogProps) {
@@ -103,6 +114,8 @@ export function ExpenseFormDialog({
       paymentMethod: undefined,
       creditCardId: undefined,
       paymentObligationId: undefined,
+      subscriptionId: undefined,
+      installmentId: undefined,
     },
   });
 
@@ -114,6 +127,8 @@ export function ExpenseFormDialog({
     control: form.control,
     name: 'paymentObligationId',
   });
+  const watchedSubscriptionId = useWatch({ control: form.control, name: 'subscriptionId' });
+  const watchedInstallmentId = useWatch({ control: form.control, name: 'installmentId' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
@@ -121,6 +136,33 @@ export function ExpenseFormDialog({
   // doesn't accept the FK) and only when the page has provided active obligations.
   const showLinkedObligation = !isEdit && (activeObligations?.length ?? 0) > 0;
   const selectedObligation = activeObligations?.find((o) => o.id === watchedPaymentObligationId);
+  // Linked-sub/installment dropdown is offered only on CREATE (Phase 3, follow-up 3a) and
+  // hidden when the form is opened via Mark Paid — the obligation FK is locked in that flow
+  // and the sub/installment dropdown would be mutually exclusive noise.
+  const showLinkedSubInstallment =
+    !isEdit &&
+    !prefillFromObligation &&
+    ((activeSubscriptions?.length ?? 0) > 0 || (activeInstallments?.length ?? 0) > 0);
+  const selectedSubInstallment: LinkedSubInstallmentValue | null =
+    watchedSubscriptionId !== undefined
+      ? { kind: 'subscription', id: watchedSubscriptionId }
+      : watchedInstallmentId !== undefined
+        ? { kind: 'installment', id: watchedInstallmentId }
+        : null;
+  const selectedSubInstallmentPlan: Subscription | Installment | undefined =
+    selectedSubInstallment?.kind === 'subscription'
+      ? activeSubscriptions?.find((s) => s.id === selectedSubInstallment.id)
+      : selectedSubInstallment?.kind === 'installment'
+        ? activeInstallments?.find((i) => i.id === selectedSubInstallment.id)
+        : undefined;
+  const subInstallmentMismatch =
+    selectedSubInstallmentPlan !== undefined &&
+    subInstallmentMatchStatus(
+      selectedSubInstallmentPlan,
+      watchedCurrency || undefined,
+      watchedPaymentMethod,
+      watchedCreditCardId,
+    ) === 'mismatch';
   // Mismatch warning fires only on a confirmed conflict ('mismatch' status). 'unknown' (form
   // not fully filled yet) suppresses both the dot and the warning. Shows in both enabled
   // and disabled (Mark Paid) states so the user sees when their edits diverge from the
@@ -149,6 +191,8 @@ export function ExpenseFormDialog({
           paymentMethod: (expense.paymentMethod ?? undefined) as ExpenseFormValues['paymentMethod'],
           creditCardId: expense.creditCardId ?? undefined,
           paymentObligationId: expense.paymentObligationId ?? undefined,
+          subscriptionId: expense.subscriptionId ?? undefined,
+          installmentId: expense.installmentId ?? undefined,
         });
       } else if (prefillFromObligation) {
         form.reset({
@@ -160,6 +204,8 @@ export function ExpenseFormDialog({
           paymentMethod: prefillFromObligation.paymentMethod,
           creditCardId: prefillFromObligation.creditCardId,
           paymentObligationId: prefillFromObligation.paymentObligationId,
+          subscriptionId: undefined,
+          installmentId: undefined,
         });
       } else {
         form.reset({
@@ -171,6 +217,8 @@ export function ExpenseFormDialog({
           paymentMethod: undefined,
           creditCardId: undefined,
           paymentObligationId: undefined,
+          subscriptionId: undefined,
+          installmentId: undefined,
         });
       }
     }
@@ -474,6 +522,13 @@ export function ExpenseFormDialog({
                           formCreditCardId={watchedCreditCardId}
                           onChange={(id) => {
                             field.onChange(id ?? undefined);
+                            // Mutual exclusivity (Phase 3, follow-up 3a): an expense pays at
+                            // most one commitment-type. Picking an obligation clears the
+                            // sub/installment selection.
+                            if (id !== null) {
+                              form.setValue('subscriptionId', undefined);
+                              form.setValue('installmentId', undefined);
+                            }
                             // Auto-fill expense category from the obligation when the user
                             // hasn't picked one. Doesn't overwrite an explicit choice.
                             if (id !== null) {
@@ -500,6 +555,42 @@ export function ExpenseFormDialog({
                     </FormItem>
                   )}
                 />
+              )}
+
+              {showLinkedSubInstallment && (
+                <FormItem>
+                  <FormLabel>{t('form.linkedSubInstallment.label')}</FormLabel>
+                  <FormControl>
+                    <LinkedSubInstallmentSelect
+                      subscriptions={activeSubscriptions ?? []}
+                      installments={activeInstallments ?? []}
+                      value={selectedSubInstallment}
+                      formCurrency={watchedCurrency || undefined}
+                      formPaymentMethod={watchedPaymentMethod}
+                      formCreditCardId={watchedCreditCardId}
+                      onChange={(next) => {
+                        // Mutual exclusivity: picking a sub/installment clears the obligation
+                        // and the sibling FK on the same row.
+                        if (next === null) {
+                          form.setValue('subscriptionId', undefined);
+                          form.setValue('installmentId', undefined);
+                          return;
+                        }
+                        form.setValue('paymentObligationId', undefined);
+                        if (next.kind === 'subscription') {
+                          form.setValue('subscriptionId', next.id);
+                          form.setValue('installmentId', undefined);
+                        } else {
+                          form.setValue('installmentId', next.id);
+                          form.setValue('subscriptionId', undefined);
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <StyledHint variant="warning" show={subInstallmentMismatch}>
+                    {t('form.linkedSubInstallment.mismatch')}
+                  </StyledHint>
+                </FormItem>
               )}
 
               <FormField

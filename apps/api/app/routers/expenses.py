@@ -158,6 +158,8 @@ async def create_expense(
         credit_card_id=body.credit_card_id,
         source=body.source,
         payment_obligation_id=body.payment_obligation_id,
+        subscription_id=body.subscription_id,
+        installment_id=body.installment_id,
     )
     return ExpenseResponse.model_validate(entry)
 

@@ -465,6 +465,14 @@
         "lockedFromMarkPaid": "Asociado desde \"Marcar pagada\" — la obligación avanza al guardar.",
         "mismatch": "Atención: la moneda, método de pago o tarjeta esperada por esta obligación es distinta a la que ingresaste."
       },
+      "linkedSubInstallment": {
+        "label": "Asociado a suscripción o cuota",
+        "placeholder": "Elegí una suscripción o cuota (opcional)",
+        "none": "Sin asociar",
+        "subscriptionsLabel": "Suscripciones",
+        "installmentsLabel": "Cuotas",
+        "mismatch": "Atención: la moneda, método de pago o tarjeta esperada por este plan es distinta a la que ingresaste."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
