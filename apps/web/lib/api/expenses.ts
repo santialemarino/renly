@@ -16,6 +16,8 @@ interface ExpenseRaw {
   credit_card_id: number | null;
   source: string;
   payment_obligation_id: number | null;
+  subscription_id: number | null;
+  installment_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +44,8 @@ export interface Expense {
   creditCardId: number | null;
   source: string;
   paymentObligationId: number | null;
+  subscriptionId: number | null;
+  installmentId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,6 +89,8 @@ function mapExpense(raw: ExpenseRaw): Expense {
     creditCardId: raw.credit_card_id,
     source: raw.source,
     paymentObligationId: raw.payment_obligation_id,
+    subscriptionId: raw.subscription_id,
+    installmentId: raw.installment_id,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };

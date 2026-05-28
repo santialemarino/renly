@@ -12,7 +12,9 @@ import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expens
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
+import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
@@ -20,10 +22,14 @@ export function ExpensesToolbar({
   preferredCurrencies,
   creditCards,
   activeObligations,
+  activeSubscriptions,
+  activeInstallments,
 }: {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
 }) {
   const t = useTranslations('expenses');
   const router = useRouter();
@@ -115,6 +121,8 @@ export function ExpensesToolbar({
           preferredCurrencies={preferredCurrencies}
           creditCards={creditCards}
           activeObligations={activeObligations}
+          activeSubscriptions={activeSubscriptions}
+          activeInstallments={activeInstallments}
           onSuccess={() => router.refresh()}
         />
       </div>

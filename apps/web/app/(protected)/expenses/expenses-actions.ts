@@ -16,6 +16,8 @@ interface ExpenseRaw {
   credit_card_id: number | null;
   source: string;
   payment_obligation_id: number | null;
+  subscription_id: number | null;
+  installment_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -38,13 +40,22 @@ export async function getExpenseById(id: number): Promise<Expense> {
     creditCardId: raw.credit_card_id,
     source: raw.source,
     paymentObligationId: raw.payment_obligation_id,
+    subscriptionId: raw.subscription_id,
+    installmentId: raw.installment_id,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
 }
 
 export async function createExpense(values: ExpenseFormValues): Promise<void> {
-  const { paymentMethod, creditCardId, paymentObligationId, ...rest } = values;
+  const {
+    paymentMethod,
+    creditCardId,
+    paymentObligationId,
+    subscriptionId,
+    installmentId,
+    ...rest
+  } = values;
   const res = await authenticatedFetch('/expenses', {
     method: 'POST',
     body: {
@@ -52,15 +63,18 @@ export async function createExpense(values: ExpenseFormValues): Promise<void> {
       payment_method: paymentMethod,
       credit_card_id: creditCardId,
       payment_obligation_id: paymentObligationId ?? null,
+      subscription_id: subscriptionId ?? null,
+      installment_id: installmentId ?? null,
     },
   });
   if (!res.ok) throw new Error('Failed to create expense');
 }
 
 export async function updateExpense(id: number, values: ExpenseFormValues): Promise<void> {
-  // paymentObligationId intentionally excluded — the update endpoint doesn't accept the FK
-  // (the link is set at creation only; correcting an over-advance is done via the
-  // obligation's own form).
+  // paymentObligationId / subscriptionId / installmentId intentionally excluded — the update
+  // endpoint doesn't accept the three commitment FKs (links are set at creation only;
+  // correcting an over-advance is done via the obligation / plan's own form). Reverse-on-
+  // unlink semantics are deferred to the bundled reverse-advance feature (Bucket 2).
   const res = await authenticatedFetch(`/expenses/${id}`, {
     method: 'PUT',
     body: {

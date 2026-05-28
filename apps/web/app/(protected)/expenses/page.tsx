@@ -6,8 +6,10 @@ import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expens
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
+import { getInstallments } from '@/lib/api/installments';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getSettings } from '@/lib/api/settings';
+import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -34,11 +36,14 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards, activeObligations] = await Promise.all([
-    getSettings().catch(() => null),
-    getCreditCards().catch(() => []),
-    getPaymentObligations({ showArchived: false }).catch(() => []),
-  ]);
+  const [settings, creditCards, activeObligations, activeSubscriptions, activeInstallments] =
+    await Promise.all([
+      getSettings().catch(() => null),
+      getCreditCards().catch(() => []),
+      getPaymentObligations({ showArchived: false }).catch(() => []),
+      getSubscriptions({ showArchived: false }).catch(() => []),
+      getInstallments({ showArchived: false }).catch(() => []),
+    ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
@@ -65,6 +70,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
         activeObligations={activeObligations}
+        activeSubscriptions={activeSubscriptions}
+        activeInstallments={activeInstallments}
       />
       <ExpensesDataTable
         data={data}
