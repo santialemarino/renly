@@ -177,6 +177,11 @@ def can_convert(from_currency: str, to_currency: str) -> bool:
 # Converts a value between any two supported currencies via USD as pivot.
 # rate_map: {currency: Decimal} where each value is "1 USD = X <currency>".
 # USD itself has an implicit rate of 1. Returns value unchanged if same or unsupported.
+# The result is quantized to 2 decimal places: every response schema field that holds a
+# converted amount declares `decimal_places=2, max_digits=18`, and the raw `value /
+# from_rate * to_rate` runs under Python's default 28-digit Decimal precision — which
+# produces 26-digit results on non-terminating divisions (e.g. ARS -> BRL via USD).
+# Without quantization those overflow the Pydantic validator and surface as 500s.
 def convert_value(
     value: Decimal,
     from_currency: str,
@@ -189,7 +194,7 @@ def convert_value(
     to_rate = rate_map.get(to_currency)
     if from_rate is None or to_rate is None:
         return value
-    return value / from_rate * to_rate
+    return (value / from_rate * to_rate).quantize(Decimal("0.01"))
 
 
 # Mapping from non-ARS currency code to its USD pair. ARS uses the dollar-preference pair.

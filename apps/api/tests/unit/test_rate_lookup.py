@@ -129,3 +129,46 @@ class TestConvertValueHistorical:
         rate_map = lookup.get_rate_map_at(date(2026, 1, 1))
         # 50 BRL = 10 USD = 10 EUR.
         assert convert_value(Decimal("50"), "BRL", "EUR", rate_map) == Decimal("10")
+
+    def test_non_terminating_division_is_quantized_to_two_decimals(self):
+        # Regression: raw `value / from_rate * to_rate` runs under Python's default 28-digit
+        # Decimal context, so 1/3*5 = Decimal('1.666666666666666666666666667') (28 digits).
+        # Every response schema field that holds a converted amount declares max_digits=18,
+        # so the un-quantized result overflowed the Pydantic validator and surfaced as 500s
+        # on `GET /payments-calendar?currency=BRL` (and every other display-currency switch
+        # whose rate combo didn't terminate cleanly). The fix quantizes to 2 decimal places
+        # inside `convert_value` — verified here by counting digits on the returned Decimal.
+        rates = {
+            ExchangeRatePair.USD_ARS_MEP: [_rate(ExchangeRatePair.USD_ARS_MEP, date(2026, 1, 1), "3")],
+            ExchangeRatePair.USD_BRL: [_rate(ExchangeRatePair.USD_BRL, date(2026, 1, 1), "5")],
+        }
+        lookup = RateLookup("mep", rates)
+        rate_map = lookup.get_rate_map_at(date(2026, 1, 1))
+        # 1 ARS / 3 (ARS per USD) * 5 (BRL per USD) = 1.6666... -> banker's-rounded to 1.67.
+        result = convert_value(Decimal("1"), "ARS", "BRL", rate_map)
+        assert result == Decimal("1.67")
+        # Total digit count must fit the 18-digit Pydantic ceiling; quantize forces 2 places.
+        _sign, digits, exponent = result.as_tuple()
+        assert len(digits) <= 18
+        assert exponent == -2
+
+    def test_identity_conversion_preserves_input_decimal(self):
+        # When from == to, convert_value short-circuits and returns the input unchanged.
+        # Confirm the quantize step does NOT apply on the identity path (the caller's
+        # precision is left as-is, matching prior behaviour).
+        rates: dict[ExchangeRatePair, list] = {}
+        lookup = RateLookup("mep", rates)
+        rate_map = lookup.get_rate_map_at(date(2026, 1, 1)) or {}
+        unchanged = convert_value(Decimal("1.234"), "USD", "USD", rate_map)
+        assert unchanged == Decimal("1.234")
+
+    def test_unsupported_pair_returns_value_unchanged(self):
+        # When either side is missing from the rate map, convert_value bails early and
+        # returns the input unchanged (no quantization applied — matches prior behaviour).
+        rates = {
+            ExchangeRatePair.USD_BRL: [_rate(ExchangeRatePair.USD_BRL, date(2026, 1, 1), "5")],
+        }
+        lookup = RateLookup("mep", rates)
+        rate_map = lookup.get_rate_map_at(date(2026, 1, 1))
+        # ARS rate is missing -> bail, return input untouched.
+        assert convert_value(Decimal("1.234"), "ARS", "BRL", rate_map) == Decimal("1.234")

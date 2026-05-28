@@ -276,19 +276,17 @@ class TestConvertValue:
         assert result == Decimal("100")
 
     def test_eur_to_ars_via_pivot(self):
-        # 100 EUR → USD: 100 / 0.92. USD → ARS: * 1400.
+        # 100 EUR → USD: 100 / 0.92 = 108.6956... . USD → ARS: * 1400 = 152173.9130... .
+        # Quantized to 2 places.
         result = convert_value(Decimal("100"), "EUR", "ARS", self.RATE_MAP)
-        expected = Decimal("100") / Decimal("0.92") * Decimal("1400")
-        assert result == expected
+        assert result == Decimal("152173.91")
 
     def test_brl_to_gbp_via_pivot(self):
         # 550 BRL → USD: 550 / 5.5 = 100. USD → GBP: 100 * 0.79 = 79.
         result = convert_value(Decimal("550"), "BRL", "GBP", self.RATE_MAP)
-        expected = Decimal("550") / Decimal("5.5") * Decimal("0.79")
-        assert result == expected
+        assert result == Decimal("79.00")
 
     def test_eur_to_usd(self):
-        # 100 EUR → USD: 100 / 0.92.
+        # 100 EUR → USD: 100 / 0.92 = 108.6956... . Quantized to 2 places (banker's rounding -> .70).
         result = convert_value(Decimal("100"), "EUR", "USD", self.RATE_MAP)
-        expected = Decimal("100") / Decimal("0.92") * Decimal("1")
-        assert result == expected
+        assert result == Decimal("108.70")
