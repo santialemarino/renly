@@ -20,6 +20,7 @@ from app.utils.dates import (
     add_months,
     advance_by_cycle,
     local_hour_for_user,
+    step_back_by_cycle,
     today_in_timezone,
 )
 
@@ -59,6 +60,76 @@ def subscription_dates_to_emit(
             break
         cursor = nxt
     return dates
+
+
+# Returns the subscription cycle date closest to `target_date` measured by absolute
+# day distance (Phase 3, follow-up 3b). Walks the cycle anchored on next_billing_date
+# forward or backward — including PAST cycles before the current cursor — and picks
+# the candidate with the smallest |target - cycle|. Pure function; the caller checks
+# whether the returned date is within tolerance and whether it sits at-or-after the
+# current cursor before advancing. Defensive safety cap on the walk prevents runaway
+# loops on degenerate cycles.
+def closest_subscription_cycle(
+    next_billing_date: date_type,
+    billing_cycle: str,
+    target_date: date_type,
+    *,
+    anchor_day: int | None = None,
+) -> date_type:
+    if anchor_day is None:
+        anchor_day = next_billing_date.day
+    # Forward walk first if the target is at-or-after the cursor.
+    if target_date >= next_billing_date:
+        cursor = next_billing_date
+        steps = 0
+        while steps < 1000:
+            nxt = advance_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
+            if nxt <= cursor or nxt > target_date:
+                break
+            cursor = nxt
+            steps += 1
+        nxt = advance_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
+        if nxt <= cursor:
+            return cursor
+        return cursor if abs((cursor - target_date).days) <= abs((nxt - target_date).days) else nxt
+    # Backward walk: the target is before the current cursor.
+    cursor = next_billing_date
+    steps = 0
+    while steps < 1000:
+        prev = step_back_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
+        if prev >= cursor or prev < target_date:
+            break
+        cursor = prev
+        steps += 1
+    prev = step_back_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
+    if prev >= cursor:
+        return cursor
+    return cursor if abs((cursor - target_date).days) <= abs((prev - target_date).days) else prev
+
+
+# Returns the (cuota_index, cuota_date) closest to `target_date` for an installment plan,
+# or None when the plan is already fully paid (`current_installment > installments_count`).
+# Cuota indices are 1-based; cuota_date = add_months(start_date, idx - 1). Pure function;
+# the caller checks tolerance and whether idx >= current_installment before advancing.
+def closest_installment_cuota(
+    start_date: date_type,
+    current_installment: int,
+    installments_count: int,
+    target_date: date_type,
+) -> tuple[int, date_type] | None:
+    if current_installment > installments_count:
+        return None
+    # Closed-form approximation: compare target's month offset from start_date to the
+    # cuota grid, then check the 1-step neighbourhood to absorb the short-month clamp.
+    months_diff = (target_date.year - start_date.year) * 12 + (target_date.month - start_date.month)
+    approx_idx = months_diff + 1
+    candidates: list[tuple[int, date_type]] = []
+    for idx in (approx_idx - 1, approx_idx, approx_idx + 1):
+        clamped = max(1, min(idx, installments_count))
+        cuota_date = add_months(start_date, clamped - 1)
+        candidates.append((clamped, cuota_date))
+    best = min(candidates, key=lambda pair: abs((pair[1] - target_date).days))
+    return best
 
 
 # Returns (cuota_index, cuota_date) pairs an installment should have emitted up

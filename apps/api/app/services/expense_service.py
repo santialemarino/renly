@@ -4,11 +4,16 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import CycleAdvanceDecision, NotFoundError
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import expense_repository, installment_repository, subscription_repository
-from app.services import card_reconciliation_service, payment_obligation_service
+from app.services import (
+    card_reconciliation_service,
+    installment_service,
+    payment_obligation_service,
+    subscription_service,
+)
 
 # Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
 # user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
@@ -62,8 +67,10 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
 
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
 # When payment_obligation_id is set, advances or archives the linked obligation atomically (Phase 3, Step E).
-# subscription_id / installment_id are stored on the row but do not advance the scheduler's cursor in 3a —
-# that's deferred to 3b (smart dedup + auto-advance).
+# When subscription_id or installment_id is set, advances the plan's cursor past the matched cycle
+# when the entry is within tolerance and at-or-after the current cursor (Phase 3, follow-up 3b);
+# out-of-tolerance / back-dated entries are persisted with the FK but leave the cursor untouched.
+# The advance branches are atomic with the expense insert before the single session.commit().
 async def create_expense(
     session: AsyncSession,
     user: User,
@@ -99,6 +106,10 @@ async def create_expense(
         await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
     if payment_obligation_id is not None:
         await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
+    if subscription_id is not None:
+        await subscription_service.advance_for_manual_entry(session, subscription_id, user, date)
+    if installment_id is not None:
+        await installment_service.advance_for_manual_entry(session, installment_id, user, date)
     await session.commit()
     return entry
 
@@ -183,3 +194,30 @@ async def find_auto_charge_match(
         source_plan_id=plan.id,
         source_plan_name=plan.name,
     )
+
+
+# Returns the preview decision for a manual entry's effect on the linked plan's cursor
+# (Phase 3, follow-up 3b). The frontend calls this from the expense form to decide whether
+# to show the soft-confirm dialog before save. Exactly one of subscription_id / installment_id
+# must be provided; raises NotFoundError when the referenced plan doesn't belong to the user.
+# The "neither set" branch is defensive — the router enforces mutual exclusivity with 400 —
+# and is unreachable in practice via the HTTP path.
+async def find_cycle_advance_decision(
+    session: AsyncSession,
+    user: User,
+    *,
+    subscription_id: int | None = None,
+    installment_id: int | None = None,
+    entry_date: date_type,
+) -> CycleAdvanceDecision:
+    if subscription_id is not None:
+        sub = await subscription_repository.get_by_id(session, subscription_id, user.id)
+        if sub is None:
+            raise NotFoundError("Subscription not found.")
+        return subscription_service.compute_subscription_advance_for_manual_entry(sub, entry_date)
+    if installment_id is not None:
+        inst = await installment_repository.get_by_id(session, installment_id, user.id)
+        if inst is None:
+            raise NotFoundError("Installment not found.")
+        return installment_service.compute_installment_advance_for_manual_entry(inst, entry_date)
+    raise NotFoundError("Either subscription_id or installment_id is required.")

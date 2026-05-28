@@ -6,6 +6,7 @@ from app.domain.currency import (
     get_ars_pair,
     is_supported,
 )
+from app.domain.cycle_advance import CycleAdvanceDecision
 from app.domain.errors import (
     CurrencyChangeBlockedError,
     ExchangeRateUnavailableError,
@@ -20,6 +21,7 @@ __all__ = [
     "CalendarItem",
     "CardBucketBalance",
     "CurrencyChangeBlockedError",
+    "CycleAdvanceDecision",
     "ExchangeRateUnavailableError",
     "HasLinkedExpensesError",
     "InstallmentLockedFieldError",
