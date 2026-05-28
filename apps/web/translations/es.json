@@ -1539,20 +1539,20 @@
       "title": "Atajo de iOS",
       "description": "Registra gastos, suscripciones y cuotas desde tu celular con un solo toque.",
       "downloadLink": "Descargar Atajo",
-      "downloadPending": "El link de descarga del atajo estara disponible pronto. Usa las instrucciones de instalacion para crearlo manualmente.",
+      "downloadPending": "El link de descarga del atajo estará disponible pronto. Usa las instrucciones de instalación para crearlo manualmente.",
       "saveSuccess": "Monedas del atajo guardadas.",
       "saveError": "No se pudieron guardar las monedas del atajo.",
       "currencies": {
         "label": "Monedas del atajo",
         "hint": "Monedas que se muestran en el atajo al registrar un gasto, suscripción o cuota.",
-        "placeholder": "Ingresa codigos ISO (ej. ARS, USD)",
+        "placeholder": "Ingresa códigos ISO (ej. ARS, USD)",
         "save": "Guardar",
         "saving": "Guardando...",
-        "format": "Codigos ISO separados por coma. Deja vacio para desactivar.",
-        "formatWithDefaults": "Codigos ISO separados por coma. Por defecto {defaults} si se deja vacio."
+        "format": "Códigos ISO separados por coma. Deja vacío para desactivar.",
+        "formatWithDefaults": "Códigos ISO separados por coma. Por defecto {defaults} si se deja vacío."
       },
       "instructions": {
-        "title": "Como instalar",
+        "title": "Cómo instalar",
         "step1": "Toca el link de descarga para obtener el atajo.",
         "step2": "Cuando se te pida, toca \"Agregar Atajo\" para instalarlo.",
         "step3": "Abre el atajo e ingresa tu URL de API y clave API cuando se solicite (solo la primera vez).",
