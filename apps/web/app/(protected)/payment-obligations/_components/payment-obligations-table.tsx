@@ -176,7 +176,6 @@ export function PaymentObligationsTable({
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
       paymentObligationId: obligation.id,
-      obligationName: obligation.name,
     });
   }
 

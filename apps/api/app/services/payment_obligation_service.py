@@ -148,27 +148,30 @@ async def advance_or_archive(session: AsyncSession, obligation_id: int, user: Us
 # (one-off; date is already correct since archive didn't move it). Caller commits. Used by
 # expense_service when the most-recent linked expense for an obligation is deleted or
 # unlinked (Phase 3, follow-up Item 10). Returns a ReverseResult with the cursor delta
-# for Item 7's toast — `previous_cursor` reads empty for one-off re-activations so the
-# frontend can branch on the archive state. No-op when the obligation can't be found.
+# for Item 7's toast — `previous_cursor` reads empty (the archive sentinel) for one-off
+# re-activations so the frontend can branch on the archive state. Recurring obligations
+# never re-activate here: `compute_obligation_advance` only sets `is_active=False` for
+# one-off (recurrence=None); a recurring obligation with `is_active=False` reflects a
+# manual user archive, which the reverse must NOT override. No-op when the obligation
+# can't be found.
 async def reverse_for_unlink(session: AsyncSession, obligation_id: int, user: User) -> ReverseResult | None:
     obligation = await payment_obligation_repository.get_by_id(session, obligation_id, user.id)
     if obligation is None:
         return None
     previous_date = obligation.next_due_date
-    previous_active = obligation.is_active
+    reactivated = False
     if obligation.recurrence is None:
         # One-off obligations don't walk the date back; the archive flip is what undoes the advance.
         obligation.is_active = True
+        reactivated = True
     elif obligation.recurrence in OBLIGATION_MONTH_STEP:
         # Recurring obligations step back by their full recurrence cycle, mirroring the
-        # forward advance in compute_obligation_advance.
+        # forward advance in compute_obligation_advance. is_active is left untouched.
         obligation.next_due_date = add_months_anchored(
             obligation.next_due_date,
             -OBLIGATION_MONTH_STEP[obligation.recurrence],
             obligation.anchor_day,
         )
-        if not previous_active:
-            obligation.is_active = True
     else:
         # Unknown recurrence: defensive default mirrors compute_obligation_advance's no-op.
         return None
@@ -177,6 +180,6 @@ async def reverse_for_unlink(session: AsyncSession, obligation_id: int, user: Us
         plan_type="obligation",
         plan_id=obligation.id,
         plan_name=obligation.name,
-        previous_cursor="" if not previous_active else previous_date.isoformat(),
+        previous_cursor="" if reactivated else previous_date.isoformat(),
         new_cursor=obligation.next_due_date.isoformat(),
     )

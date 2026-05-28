@@ -68,7 +68,6 @@ export interface PrefillFromObligation {
   creditCardId?: number;
   category?: ExpenseFormValues['category'];
   paymentObligationId: number;
-  obligationName: string;
 }
 
 interface ExpenseFormDialogProps {
@@ -317,8 +316,8 @@ export function ExpenseFormDialog({
 
   // Soft confirmation when a manual entry linked to a subscription / installment is far
   // enough from the closest expected cycle that the cursor will NOT advance (Phase 3,
-  // follow-up 3b). Fires only on CREATE; edit doesn't reach the linked-sub/installment
-  // dropdown so the FK never changes from edits.
+  // follow-up 3b). Fires only on CREATE — edit doesn't trigger advance per Item 10
+  // (only delete / unlink reverses the cursor), so the preview is unnecessary there.
   const [cycleAdvancePending, setCycleAdvancePending] = useState<{
     values: ExpenseFormValues;
     preview: CycleAdvancePreview;
@@ -448,7 +447,8 @@ export function ExpenseFormDialog({
     // subscription / installment AND set a date, ask the backend whether saving will
     // advance the plan's cursor. If not, surface a soft-confirm dialog so the user
     // understands the FK is still saved but the schedule stays put. CREATE only —
-    // the form hides the linked-sub/installment dropdown on edit.
+    // Item 10 lets the dropdowns appear on edit too, but edit never triggers an advance
+    // (only delete / unlink reverses), so the preview is unnecessary there.
     if (!isEdit && values.date && (values.subscriptionId || values.installmentId)) {
       try {
         const preview = await getCycleAdvancePreview({

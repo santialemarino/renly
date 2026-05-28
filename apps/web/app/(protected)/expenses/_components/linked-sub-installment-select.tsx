@@ -21,13 +21,14 @@ import { formatDateForLocale } from '@/lib/utils/format';
 // "Linked to subscription / installment" dropdown on the expense form (Phase 3, follow-up 3a).
 // One combined dropdown with two SelectGroups (Subscriptions + Installments). Sibling of
 // LinkedObligationSelect — mutual exclusivity across the three FKs is enforced one level up
-// by the form. Tri-state match model mirrors LinkedObligationSelect:
+// by the form. Rendered in both CREATE and EDIT modes after Item 10 (the FK is now editable
+// on PUT); only Mark Paid hides it via the prefill gate in ExpenseFormDialog. Tri-state
+// match model mirrors LinkedObligationSelect:
 //   - 'match'    : every comparable plan field is filled on the form AND equals (green dot).
 //   - 'mismatch' : at least one filled-on-both-sides field disagrees (no dot, warning fires).
 //   - 'unknown'  : a form field needed for comparison is empty (no dot, no warning).
 // The 'unknown' state avoids prematurely showing the green dot when the user has only
-// filled half the form. In CREATE mode the dot stays visible (no disabled-mode here —
-// Mark Paid prefill never opens this dropdown, see ExpenseFormDialog).
+// filled half the form.
 
 export type MatchStatus = 'match' | 'mismatch' | 'unknown';
 

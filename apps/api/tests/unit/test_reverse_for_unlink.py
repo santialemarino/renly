@@ -163,6 +163,24 @@ class TestInstallmentReverseForUnlink:
         result = await installment_service.reverse_for_unlink(session, 999, USER)
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_user_archived_mid_plan_keeps_is_active_false(self, monkeypatch):
+        # User manually archived an installment mid-plan (current=5, count=12, is_active=False).
+        # Reverse walks current back to 4 but MUST NOT re-activate — the advance never archives
+        # mid-plan, so is_active=False here reflects an explicit user choice that the reverse
+        # has no business overriding. previous_cursor reads "5" (the value pre-decrement), NOT
+        # the archive sentinel.
+        inst = _inst(start_date=date(2026, 1, 1), current_installment=5, installments_count=12, is_active=False)
+        session = AsyncMock()
+        monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
+        monkeypatch.setattr(installment_service.installment_repository, "save", AsyncMock())
+        result = await installment_service.reverse_for_unlink(session, 1, USER)
+        assert result is not None
+        assert result.previous_cursor == "5"
+        assert result.new_cursor == "4"
+        assert inst.current_installment == 4
+        assert inst.is_active is False
+
 
 # --- payment_obligation_service.reverse_for_unlink ---
 
@@ -259,6 +277,26 @@ class TestObligationReverseForUnlink:
         )
         result = await payment_obligation_service.reverse_for_unlink(session, 999, USER)
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_recurring_user_archived_keeps_is_active_false(self, monkeypatch):
+        # User manually archived a recurring obligation (is_active=False) after a payment.
+        # Reverse walks the date back but MUST NOT re-activate — the forward advance never
+        # archives a recurring obligation, so is_active=False here reflects an explicit user
+        # choice. previous_cursor reads the prior date (not the archive sentinel).
+        obl = _obligation(next_due_date=date(2026, 7, 15), recurrence="monthly", is_active=False)
+        session = AsyncMock()
+        monkeypatch.setattr(
+            payment_obligation_service.payment_obligation_repository,
+            "get_by_id",
+            AsyncMock(return_value=obl),
+        )
+        monkeypatch.setattr(payment_obligation_service.payment_obligation_repository, "save", AsyncMock())
+        result = await payment_obligation_service.reverse_for_unlink(session, 1, USER)
+        assert result is not None
+        assert result.previous_cursor == "2026-07-15"
+        assert result.new_cursor == "2026-06-15"
+        assert obl.is_active is False
 
 
 # --- AdvanceResult population on the existing advance helpers (Phase 3, follow-up Item 7) ---

@@ -157,7 +157,9 @@ def compute_installment_advance_for_manual_entry(installment: Installment, entry
 # cursor moved (Phase 3, follow-up Item 7); None when no advance fired (multi-jump,
 # back-dated, plan already fully paid, or the installment can't be found). Flips
 # `is_active = False` when the advance carries the cursor past the final cuota — the
-# result's `new_cursor` reads empty to signal the archive transition.
+# result's `new_cursor` reads empty to signal the archive transition. Per Item 9's
+# narrowed predicate `would_advance` only fires when the matched cuota equals the
+# current cursor, so the post-advance cursor is always `current_installment + 1`.
 async def advance_for_manual_entry(session: AsyncSession, installment_id: int, user: User, entry_date: date_type) -> AdvanceResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
     if installment is None:
@@ -166,14 +168,7 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
     if not decision.would_advance:
         return None
     previous = installment.current_installment
-    # Re-derive the matched cuota index from the stored cuota date. closest_installment_cuota
-    # guarantees `next_expected_date == start_date + (idx - 1) months`, so the index can be
-    # recovered from the month delta without re-running the helper.
-    months_offset = (decision.next_expected_date.year - installment.start_date.year) * 12 + (
-        decision.next_expected_date.month - installment.start_date.month
-    )
-    matched_idx = months_offset + 1
-    installment.current_installment = matched_idx + 1
+    installment.current_installment = previous + 1
     archived = installment.current_installment > installment.installments_count
     if archived:
         installment.is_active = False
@@ -189,10 +184,12 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
 
 # Walks `current_installment` back by one cuota (Phase 3, follow-up Item 10). Caller
 # commits. Used by expense_service when the most-recent linked expense for an installment
-# is deleted or unlinked. Re-activates the plan when the reverse moves it back inside the
-# cuota grid (a prior advance to current=count+1 had flipped is_active to False). No-op
-# when the installment can't be found, doesn't belong to the user, or the cursor is
-# already at cuota 1 — there's no cuota 0 to step back to.
+# is deleted or unlinked. Re-activates the plan ONLY when stepping back from the exact
+# auto-archived state `current = count + 1` (the position the advance set when paying
+# the final cuota) — a manual user-archive mid-plan stays archived. No-op when the
+# installment can't be found, doesn't belong to the user, or the cursor is already at
+# cuota 1 (no cuota 0 to step back to). `previous_cursor` reads empty (the archive
+# sentinel) only when the reverse re-activates a fully-paid plan.
 async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User) -> ReverseResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
     if installment is None:
@@ -200,15 +197,15 @@ async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: U
     if installment.current_installment <= 1:
         return None
     previous_cursor = installment.current_installment
-    previous_active = installment.is_active
+    reactivated = previous_cursor == installment.installments_count + 1
     installment.current_installment -= 1
-    if not previous_active and installment.current_installment <= installment.installments_count:
+    if reactivated:
         installment.is_active = True
     await installment_repository.save(session, installment)
     return ReverseResult(
         plan_type="installment",
         plan_id=installment.id,
         plan_name=installment.name,
-        previous_cursor="" if not previous_active else str(previous_cursor),
+        previous_cursor="" if reactivated else str(previous_cursor),
         new_cursor=str(installment.current_installment),
     )

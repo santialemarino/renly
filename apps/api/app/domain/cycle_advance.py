@@ -41,8 +41,8 @@ class AdvanceResult:
 # or unlinked (Phase 3, follow-up Item 10). Symmetric to AdvanceResult — the response
 # schema exposes it on PUT / DELETE so Item 7's toast composes the reverse copy. When
 # a one-off obligation or fully-paid installment re-activates as part of the reverse,
-# `previous_cursor` reads "archived" so the frontend can distinguish from a same-date
-# reverse on the active path.
+# `previous_cursor` reads as an empty string (the archive sentinel) so the frontend
+# can distinguish from a same-date reverse on the active path.
 @dataclass(frozen=True)
 class ReverseResult:
     plan_type: PlanType
