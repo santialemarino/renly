@@ -77,13 +77,14 @@ def advance_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = None)
 # matching (Phase 3, follow-up 3b). Computed as min(cycle_length_in_days // 2, MAX_TOLERANCE_DAYS):
 # half the cycle's nominal length, capped so annual / quarterly cycles don't loosen the
 # match window past two months. Examples: weekly -> 3, biweekly -> 7, monthly -> 15,
-# quarterly -> 45, annual -> 60 (capped). Anchor_day is forwarded into advance_by_cycle
-# so day-of-month cycles measure their length from a fixed-day reference; weekly /
-# biweekly ignore the anchor by definition.
-def cycle_tolerance_days(cycle: str, *, anchor_day: int | None = None) -> int:
+# quarterly -> 45, annual -> 60 (capped). The cycle length is anchor-independent for all
+# supported cycles (weekly/biweekly are pure day arithmetic; monthly/quarterly/annual
+# advance by calendar months from a fixed day-1 reference), so this helper takes only
+# the cycle string. A naive impl that forwarded the caller's anchor_day would yield a
+# clamped advance (e.g. Jan 1 -> Feb 28 with anchor_day=31) and inflate the tolerance.
+def cycle_tolerance_days(cycle: str) -> int:
     reference = date_type(2026, 1, 1)
-    day = anchor_day if anchor_day is not None else reference.day
-    nominal_length = (advance_by_cycle(reference, cycle, anchor_day=day) - reference).days
+    nominal_length = (advance_by_cycle(reference, cycle, anchor_day=reference.day) - reference).days
     return min(nominal_length // 2, MAX_TOLERANCE_DAYS)
 
 

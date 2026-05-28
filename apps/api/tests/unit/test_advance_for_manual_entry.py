@@ -6,7 +6,13 @@ from app.models.subscription import Subscription
 from app.services.auto_expense_service import installment_cuotas_to_emit, subscription_dates_to_emit
 from app.services.installment_service import compute_installment_advance_for_manual_entry
 from app.services.subscription_service import compute_subscription_advance_for_manual_entry
-from app.utils.dates import BILLING_CYCLE_ANNUAL, BILLING_CYCLE_MONTHLY, BILLING_CYCLE_WEEKLY, advance_by_cycle
+from app.utils.dates import (
+    BILLING_CYCLE_ANNUAL,
+    BILLING_CYCLE_MONTHLY,
+    BILLING_CYCLE_QUARTERLY,
+    BILLING_CYCLE_WEEKLY,
+    advance_by_cycle,
+)
 
 # Pure decision helpers used by the soft-confirm preview endpoint and the actual
 # write path in expense_service.create_expense (Phase 3, follow-up 3b). Both paths
@@ -101,6 +107,18 @@ class TestComputeSubscriptionAdvanceForManualEntry:
         decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 5, 30))
         assert decision.would_advance is True
         assert decision.next_expected_date == date(2026, 5, 31)
+
+    def test_quarterly_anchor_31_mid_gap_rejects(self):
+        # Regression for the cycle_tolerance bug: when an earlier impl forwarded the
+        # caller's anchor_day into advance_by_cycle to measure the nominal length, a
+        # quarterly cycle anchored on day 31 yielded `advance(Jan 1, quarterly, 31) =
+        # Apr 30` -> nominal 119 days -> tolerance 59 days (off by +14). Mid-gap
+        # entries 46 days from the closest cycle would then incorrectly advance.
+        # Correct tolerance is 45; this entry must be rejected.
+        sub = _sub(next_billing_date=date(2026, 7, 31), billing_cycle=BILLING_CYCLE_QUARTERLY, anchor_day=31)
+        decision = compute_subscription_advance_for_manual_entry(sub, date(2026, 9, 15))
+        assert decision.would_advance is False
+        assert decision.distance_days == 46
 
 
 # --- compute_installment_advance_for_manual_entry ---

@@ -3,12 +3,11 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import InstallmentLockedFieldError, NotFoundError
+from app.domain import CycleAdvanceDecision, InstallmentLockedFieldError, NotFoundError
 from app.models.installment import Installment
 from app.models.user import User
 from app.repositories import installment_repository
 from app.services.auto_expense_service import closest_installment_cuota
-from app.services.subscription_service import CycleAdvanceDecision
 from app.utils.dates import BILLING_CYCLE_MONTHLY, cycle_tolerance_days
 
 # Contractual fields locked once any cuota has been charged (current_installment > 1).

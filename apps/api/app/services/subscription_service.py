@@ -1,26 +1,14 @@
-from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import CycleAdvanceDecision, NotFoundError
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import subscription_repository
 from app.services.auto_expense_service import closest_subscription_cycle
 from app.utils.dates import advance_by_cycle, cycle_tolerance_days
-
-
-# Result of a manual-entry advance decision. `would_advance` reflects the same predicate
-# used by `advance_for_manual_entry` so the preview endpoint and the actual write stay
-# in lock-step. `next_expected_date` is the closest cycle the entry was matched against
-# (informational for the soft-confirm dialog when `would_advance` is False).
-@dataclass(frozen=True)
-class CycleAdvanceDecision:
-    would_advance: bool
-    distance_days: int
-    next_expected_date: date_type
 
 
 # List subscriptions for a user with optional search, sorting, and archive filtering.
@@ -126,7 +114,7 @@ def compute_subscription_advance_for_manual_entry(subscription: Subscription, en
         anchor_day=subscription.anchor_day,
     )
     distance_days = abs((entry_date - closest).days)
-    tolerance = cycle_tolerance_days(subscription.billing_cycle, anchor_day=subscription.anchor_day)
+    tolerance = cycle_tolerance_days(subscription.billing_cycle)
     in_tolerance = distance_days <= tolerance
     not_back_dated = closest >= subscription.next_billing_date
     return CycleAdvanceDecision(

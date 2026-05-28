@@ -185,6 +185,18 @@ class TestCycleToleranceDays:
         # advance_by_cycle's fallback is monthly, so the tolerance follows.
         assert cycle_tolerance_days("fortnightly") == 15
 
+    def test_anchor_independent_signature(self):
+        # Regression: an earlier implementation accepted an anchor_day kwarg and forwarded
+        # it into advance_by_cycle. With anchor_day=31 the Jan 1 reference advanced to
+        # Feb 28 (clamped), inflating the "nominal length" from 31 to 58 days and the
+        # monthly tolerance from 15 to 29. The fix dropped the param entirely — cycle
+        # length is anchor-independent for all supported cycles. This test pins the
+        # signature so a future re-add can't silently re-introduce the bug.
+        import inspect
+
+        sig = inspect.signature(cycle_tolerance_days)
+        assert list(sig.parameters.keys()) == ["cycle"]
+
 
 # --- resolve_day_in_month ---
 
