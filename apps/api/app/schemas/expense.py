@@ -33,8 +33,7 @@ class ExpenseCreate(RequestBase):
     installment_id: int | None = Field(
         default=None,
         description=(
-            "When set, links the expense to an installment plan. Mutually exclusive with "
-            "payment_obligation_id / subscription_id (Phase 3, follow-up 3a)."
+            "When set, links the expense to an installment. Mutually exclusive with payment_obligation_id / subscription_id (Phase 3, follow-up 3a)."
         ),
     )
 

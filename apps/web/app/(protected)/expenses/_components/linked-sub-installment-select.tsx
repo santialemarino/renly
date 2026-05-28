@@ -46,6 +46,8 @@ interface LinkedSubInstallmentSelectProps {
 
 const NONE_VALUE = 'none';
 
+const STATUS_RANK: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
+
 // SelectItem values are prefixed so a single dropdown can encode both entity types
 // without colliding ids (a subscription with id=3 and an installment with id=3 are
 // different selections).
@@ -69,6 +71,8 @@ function decodeValue(raw: string): LinkedSubInstallmentValue | null {
 // form has a value for that comparable field, we check equality; if the form is empty
 // for a comparable field, we mark unknown. Plan fields that are null act as wildcards.
 // Used for both subscriptions and installments — both expose the same three fields.
+// Mirrors obligationMatchStatus; amount is intentionally NOT compared (price can drift
+// from the plan's expected value without invalidating the link).
 function planMatchStatus(
   plan: {
     currency: string;
@@ -116,7 +120,17 @@ function installmentNextChargeDate(installment: Installment): string {
   return start.toISOString().slice(0, 10);
 }
 
-const STATUS_RANK: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
+// Dot color rules:
+//   - match               -> emerald (positive selection aid, regardless of selection).
+//   - unknown             -> muted (form not fully filled, no signal yet).
+//   - mismatch + selected -> amber (pairs 1:1 with the StyledHint warning below).
+//   - mismatch + unselected -> muted (avoid lighting up the dropdown with amber on
+//                              browse — sort order already deprioritises them).
+function dotColorClass(status: MatchStatus, isSelected: boolean): string {
+  if (status === 'match') return 'text-emerald-500';
+  if (status === 'mismatch' && isSelected) return 'text-amber-500';
+  return 'text-muted-foreground';
+}
 
 export function LinkedSubInstallmentSelect({
   subscriptions,
@@ -176,17 +190,14 @@ export function LinkedSubInstallmentSelect({
             {sortedSubscriptions.map(({ sub, status }) => {
               const isSelected =
                 value !== null && value.kind === 'subscription' && value.id === sub.id;
-              const dotColor =
-                status === 'match'
-                  ? 'text-emerald-500'
-                  : status === 'mismatch' && isSelected
-                    ? 'text-amber-500'
-                    : 'text-muted-foreground';
               return (
                 <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
                   <div className="flex items-center gap-x-2">
                     <CircleDot
-                      className={cn('size-3 shrink-0 transition-colors', dotColor)}
+                      className={cn(
+                        'size-3 shrink-0 transition-colors',
+                        dotColorClass(status, isSelected),
+                      )}
                       aria-hidden
                     />
                     <span>{sub.name}</span>
@@ -202,21 +213,22 @@ export function LinkedSubInstallmentSelect({
             {sortedInstallments.map(({ inst, status }) => {
               const isSelected =
                 value !== null && value.kind === 'installment' && value.id === inst.id;
-              const dotColor =
-                status === 'match'
-                  ? 'text-emerald-500'
-                  : status === 'mismatch' && isSelected
-                    ? 'text-amber-500'
-                    : 'text-muted-foreground';
+              // Progress label matches the installments table convention:
+              // `paid / total` where paid = current_installment - 1 (clamped to 0).
+              // So "0/10" = none paid yet; "10/10" = fully paid.
+              const paid = Math.max(0, inst.currentInstallment - 1);
               return (
                 <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
                   <div className="flex items-center gap-x-2">
                     <CircleDot
-                      className={cn('size-3 shrink-0 transition-colors', dotColor)}
+                      className={cn(
+                        'size-3 shrink-0 transition-colors',
+                        dotColorClass(status, isSelected),
+                      )}
                       aria-hidden
                     />
                     <span>
-                      {inst.name} ({inst.currentInstallment}/{inst.installmentsCount})
+                      {inst.name} ({paid}/{inst.installmentsCount})
                     </span>
                   </div>
                 </SelectItem>

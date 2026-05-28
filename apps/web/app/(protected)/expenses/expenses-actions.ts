@@ -71,9 +71,10 @@ export async function createExpense(values: ExpenseFormValues): Promise<void> {
 }
 
 export async function updateExpense(id: number, values: ExpenseFormValues): Promise<void> {
-  // paymentObligationId intentionally excluded — the update endpoint doesn't accept the FK
-  // (the link is set at creation only; correcting an over-advance is done via the
-  // obligation's own form).
+  // paymentObligationId / subscriptionId / installmentId intentionally excluded — the update
+  // endpoint doesn't accept the three commitment FKs (links are set at creation only;
+  // correcting an over-advance is done via the obligation / plan's own form). Reverse-on-
+  // unlink semantics are deferred to the bundled reverse-advance feature (Bucket 2).
   const res = await authenticatedFetch(`/expenses/${id}`, {
     method: 'PUT',
     body: {
