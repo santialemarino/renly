@@ -36,6 +36,14 @@ export interface PlanCursorChange {
   newCursor: string;
 }
 
+// Bundle of cursor deltas returned by create / update mutations. Both fields can fire
+// simultaneously on a FK swap — the OLD plan loses this expense (reverse) and the NEW
+// plan gains it (advance). The form composes the toast with potentially both lines.
+export interface ExpenseMutationOutcome {
+  advance: PlanCursorChange | null;
+  reverse: PlanCursorChange | null;
+}
+
 interface PlanCursorChangeRaw {
   plan_type: 'obligation' | 'subscription' | 'installment';
   plan_id: number;
@@ -80,7 +88,19 @@ export async function getExpenseById(id: number): Promise<Expense> {
   };
 }
 
-export async function createExpense(values: ExpenseFormValues): Promise<PlanCursorChange | null> {
+type ExpenseMutationRaw = ExpenseRaw & {
+  advance_change: PlanCursorChangeRaw | null;
+  reverse_change: PlanCursorChangeRaw | null;
+};
+
+function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
+  return {
+    advance: mapCursorChange(raw.advance_change),
+    reverse: mapCursorChange(raw.reverse_change),
+  };
+}
+
+export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationOutcome> {
   const {
     paymentMethod,
     creditCardId,
@@ -101,17 +121,18 @@ export async function createExpense(values: ExpenseFormValues): Promise<PlanCurs
     },
   });
   if (!res.ok) throw new Error('Failed to create expense');
-  const raw: ExpenseRaw & { cursor_change: PlanCursorChangeRaw | null } = await res.json();
-  return mapCursorChange(raw.cursor_change);
+  return mapMutationOutcome(await res.json());
 }
 
 export async function updateExpense(
   id: number,
   values: ExpenseFormValues,
-): Promise<PlanCursorChange | null> {
+): Promise<ExpenseMutationOutcome> {
   // Commitment FKs follow JSON Merge Patch semantics: pass `null` to clear an existing
-  // link, pass an id to swap to a different plan. The server reverses the prior plan's
-  // cursor when the most-recent linked expense is unlinked (Phase 3, follow-up Item 10).
+  // link, pass an id to swap to a different plan. The server fires the symmetric advance /
+  // reverse model — clear / swap reverses the OLD plan; add / swap advances the NEW plan.
+  // A swap can populate both `advance` and `reverse` in the outcome (Phase 3, follow-up
+  // Items 10 + audit round 2).
   const res = await authenticatedFetch(`/expenses/${id}`, {
     method: 'PUT',
     body: {
@@ -128,15 +149,14 @@ export async function updateExpense(
     },
   });
   if (!res.ok) throw new Error('Failed to update expense');
-  const raw: ExpenseRaw & { cursor_change: PlanCursorChangeRaw | null } = await res.json();
-  return mapCursorChange(raw.cursor_change);
+  return mapMutationOutcome(await res.json());
 }
 
 export async function deleteExpense(id: number): Promise<PlanCursorChange | null> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete expense');
-  const raw: { cursor_change: PlanCursorChangeRaw | null } = await res.json();
-  return mapCursorChange(raw.cursor_change);
+  const raw: { reverse_change: PlanCursorChangeRaw | null } = await res.json();
+  return mapCursorChange(raw.reverse_change);
 }
 
 // Result of a manual-dupe expense lookup (Phase 3, Step D).

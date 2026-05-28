@@ -120,16 +120,24 @@ async def create_expense(
 
 # Update an existing expense entry. Only provided fields are changed.
 # Marks stale on both the prior and the new (card, currency, date) when either has credit_card_id.
-# When the user explicitly clears a commitment FK (Phase 3, follow-up Item 10 — JSON Merge Patch
-# convention: omitted key = no change, null = clear) AND this expense was the most-recent linked
-# expense for that FK, the plan's cursor walks back one step. Returns (entry, reverse_result) so
-# the response can carry the cursor delta for Item 7's toast.
+# Commitment FK transitions trigger the symmetric advance / reverse model (Phase 3, follow-up
+# Items 10 + symmetric edit, audit round 2). For each FK type independently:
+#   - X -> None (clear)          : reverse OLD plan if this expense was its most-recent linked.
+#   - None -> Y (add)            : advance NEW plan (subject to Item 9's matched-equals-current rule).
+#   - X -> Y (swap, same type)   : reverse OLD plan + advance NEW plan.
+#   - cross-type swap            : reverse OLD plan + advance NEW plan (different plan types).
+#   - unchanged                  : no-op.
+# Mutual exclusivity at the row level (at most one OLD FK set) + the Pydantic validator
+# (at most one NEW FK set) means at most one reverse target and at most one advance target
+# fire per update — so the response carries at most one of each. Returns
+# (entry, advance_result, reverse_result) so the router can populate the response's
+# advance_change + reverse_change fields for the frontend toast.
 async def update_expense(
     session: AsyncSession,
     expense_id: int,
     user: User,
     **fields: object,
-) -> tuple[ExpenseEntry, ReverseResult | None]:
+) -> tuple[ExpenseEntry, AdvanceResult | None, ReverseResult | None]:
     entry = await get_expense(session, expense_id, user)
     old_card_id = entry.credit_card_id
     old_currency = entry.currency
@@ -138,28 +146,36 @@ async def update_expense(
     old_subscription_id = entry.subscription_id
     old_installment_id = entry.installment_id
 
-    # Detect explicit unlinks (FK was set, client explicitly sent null). Independent checks
-    # per FK — mutual exclusivity at the schema level guarantees at most one transitions to
-    # None at a time, but checking each keeps the rule legible and defensive.
-    unlink_obligation = "payment_obligation_id" in fields and fields["payment_obligation_id"] is None and old_obligation_id is not None
-    unlink_subscription = "subscription_id" in fields and fields["subscription_id"] is None and old_subscription_id is not None
-    unlink_installment = "installment_id" in fields and fields["installment_id"] is None and old_installment_id is not None
+    # New FK values: if the client set the field, take their value; otherwise hold the
+    # prior value (no change). Preserves the JSON Merge Patch convention (omitted = unchanged).
+    new_obligation_id = fields["payment_obligation_id"] if "payment_obligation_id" in fields else old_obligation_id
+    new_subscription_id = fields["subscription_id"] if "subscription_id" in fields else old_subscription_id
+    new_installment_id = fields["installment_id"] if "installment_id" in fields else old_installment_id
 
-    # Resolve most-recent-linked BEFORE mutation — once we save the row with the cleared FK,
-    # it would no longer count itself in the most-recent check.
+    # Reverse target: OLD plan that loses this expense. At most one fires (mutual exclusivity
+    # on the row guarantees at most one old FK is set). Resolve most-recent BEFORE mutation
+    # so the check sees the row still linked.
     reverse_target: tuple[str, int] | None = None
-    if unlink_obligation:
-        assert old_obligation_id is not None
+    if old_obligation_id is not None and new_obligation_id != old_obligation_id:
         if await expense_repository.is_most_recent_linked_obligation_expense(session, user.id, old_obligation_id, entry.id):
             reverse_target = ("obligation", old_obligation_id)
-    elif unlink_subscription:
-        assert old_subscription_id is not None
+    elif old_subscription_id is not None and new_subscription_id != old_subscription_id:
         if await expense_repository.is_most_recent_linked_subscription_expense(session, user.id, old_subscription_id, entry.id):
             reverse_target = ("subscription", old_subscription_id)
-    elif unlink_installment:
-        assert old_installment_id is not None
+    elif old_installment_id is not None and new_installment_id != old_installment_id:
         if await expense_repository.is_most_recent_linked_installment_expense(session, user.id, old_installment_id, entry.id):
             reverse_target = ("installment", old_installment_id)
+
+    # Advance target: NEW plan that gains this expense. At most one fires (Pydantic validator
+    # caps NEW FKs at one set value). Fires on add (None -> Y) and on swap (X -> Y where Y
+    # differs from X across same or different FK types).
+    advance_target: tuple[str, int] | None = None
+    if new_obligation_id is not None and new_obligation_id != old_obligation_id:
+        advance_target = ("obligation", new_obligation_id)
+    elif new_subscription_id is not None and new_subscription_id != old_subscription_id:
+        advance_target = ("subscription", new_subscription_id)
+    elif new_installment_id is not None and new_installment_id != old_installment_id:
+        advance_target = ("installment", new_installment_id)
 
     for key, value in fields.items():
         setattr(entry, key, value)
@@ -181,9 +197,19 @@ async def update_expense(
         elif plan_type == "installment":
             reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user)
 
+    advance_result: AdvanceResult | None = None
+    if advance_target is not None:
+        plan_type, plan_id = advance_target
+        if plan_type == "obligation":
+            advance_result = await payment_obligation_service.advance_or_archive(session, plan_id, user)
+        elif plan_type == "subscription":
+            advance_result = await subscription_service.advance_for_manual_entry(session, plan_id, user, entry.date)
+        elif plan_type == "installment":
+            advance_result = await installment_service.advance_for_manual_entry(session, plan_id, user, entry.date)
+
     await session.commit()
     await session.refresh(entry)
-    return entry, reverse_result
+    return entry, advance_result, reverse_result
 
 
 # Delete an expense entry. Marks any reconciliation covering the entry's date stale.

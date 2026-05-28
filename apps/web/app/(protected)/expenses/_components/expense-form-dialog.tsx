@@ -39,7 +39,7 @@ import {
   updateExpense,
   type AutoChargeMatch,
   type CycleAdvancePreview,
-  type PlanCursorChange,
+  type ExpenseMutationOutcome,
 } from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
@@ -360,13 +360,13 @@ export function ExpenseFormDialog({
 
   async function doSubmit(values: ExpenseFormValues) {
     try {
-      let cursorChange: PlanCursorChange | null;
+      let outcome: ExpenseMutationOutcome;
       if (isEdit) {
-        cursorChange = await updateExpense(expense.id, values);
-        announceSave(t('form.updateSuccess'), cursorChange, isEdit);
+        outcome = await updateExpense(expense.id, values);
+        announceSave(t('form.updateSuccess'), outcome);
       } else {
-        cursorChange = await createExpense(values);
-        announceSave(t('form.createSuccess'), cursorChange, isEdit);
+        outcome = await createExpense(values);
+        announceSave(t('form.createSuccess'), outcome);
       }
       // Amount-mismatch hook (Phase 3, follow-up Item 6). Fires for both create and
       // edit flows whenever the saved amount differs from the linked plan's current
@@ -393,22 +393,23 @@ export function ExpenseFormDialog({
     }
   }
 
-  // Composes the success toast with an optional cursor-change line (Phase 3, follow-up
-  // Item 7). When cursor_change is set the toast reads e.g. "Expense created. Netflix's
-  // next billing date moved to Jun 27, 2026."; otherwise the bare success message.
-  function announceSave(baseMessage: string, cursorChange: PlanCursorChange | null, edit: boolean) {
-    if (!cursorChange) {
-      toast.success(baseMessage);
-      return;
+  // Composes the success toast with optional cursor-change lines (Phase 3, follow-up
+  // Item 7). The symmetric edit model can fire both a reverse (on the OLD plan losing
+  // this expense) and an advance (on the NEW plan gaining it) — e.g. a FK swap. We
+  // announce reverse first, then advance, so the toast reads in temporal order:
+  // "Expense updated. ABL's next due date moved back to Jun 5. ARBA's next due date
+  // moved to Jul 10."
+  function announceSave(baseMessage: string, outcome: ExpenseMutationOutcome) {
+    const lines: string[] = [baseMessage];
+    if (outcome.reverse) {
+      const r = resolveCursorToast(outcome.reverse, 'reverse', locale, activeInstallments);
+      if (r) lines.push(t(`form.${r.key}`, r.params));
     }
-    // Create + linked FK = forward advance; edit + cleared FK = reverse on the prior plan.
-    const direction = edit ? 'reverse' : 'advance';
-    const resolution = resolveCursorToast(cursorChange, direction, locale, activeInstallments);
-    if (!resolution) {
-      toast.success(baseMessage);
-      return;
+    if (outcome.advance) {
+      const a = resolveCursorToast(outcome.advance, 'advance', locale, activeInstallments);
+      if (a) lines.push(t(`form.${a.key}`, a.params));
     }
-    toast.success(`${baseMessage} ${t(`form.${resolution.key}`, resolution.params)}`);
+    toast.success(lines.join(' '));
   }
 
   async function onSubmit(values: ExpenseFormValues) {

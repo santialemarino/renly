@@ -110,11 +110,12 @@ class PlanCursorChange(BaseModel):
     new_cursor: str = Field(description="Cursor value after the change. Empty when the plan archived.")
 
 
-# Response for a single expense entry. cursor_change is populated only on mutations
-# that fired an advance (POST) or reverse (PUT with unlink) — list responses and bare
-# GETs leave it null. Keeping cursor_change on the expense response itself rather than
-# wrapping preserves the iOS Shortcut's direct field access on POST (Phase 3, follow-up
-# Item 7).
+# Response for a single expense entry. advance_change / reverse_change carry the cursor
+# deltas emitted by the linked-plan symmetric model on POST / PUT — null when nothing
+# moved (which is the case for GETs and the list response). Keeping these on the expense
+# response itself rather than wrapping preserves the iOS Shortcut's direct field access
+# on POST (Phase 3, follow-up Item 7). Update can populate both simultaneously when a FK
+# swap fires reverse on the old plan AND advance on the new plan.
 class ExpenseResponse(BaseModel):
     id: int = Field(description="Expense id.")
     date: date_type = Field(description="Expense date.")
@@ -131,18 +132,25 @@ class ExpenseResponse(BaseModel):
     installment_id: int | None = Field(default=None, description="Linked installment plan id (Phase 3, follow-up 3a).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
-    cursor_change: PlanCursorChange | None = Field(
-        default=None, description="Cursor change emitted by a linked plan on POST / PUT, or null when nothing moved (Phase 3, follow-up Item 7)."
+    advance_change: PlanCursorChange | None = Field(
+        default=None,
+        description="Cursor advance fired by a linked plan gaining this expense (POST always, PUT on add / swap). Null when nothing advanced.",
+    )
+    reverse_change: PlanCursorChange | None = Field(
+        default=None,
+        description="Cursor reverse fired by a linked plan losing this expense (PUT on clear / swap). Null when nothing reversed.",
     )
 
     model_config = {"from_attributes": True}
 
 
 # Response for DELETE /expenses/{id} (Phase 3, follow-up Item 10). Carries an optional
-# cursor change when the deleted row was the most-recent linked expense for a commitment.
+# reverse-cursor change when the deleted row was the most-recent linked expense for a
+# commitment. Delete never advances — only the reverse_change field is populated.
 class ExpenseDeleteResponse(BaseModel):
-    cursor_change: PlanCursorChange | None = Field(
-        default=None, description="Cursor change emitted by a reverse-on-unlink walk, or null when nothing moved."
+    reverse_change: PlanCursorChange | None = Field(
+        default=None,
+        description="Cursor reverse emitted when the deleted row was the most-recent linked expense for a commitment, or null when nothing reversed.",
     )
 
 

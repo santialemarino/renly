@@ -191,7 +191,7 @@ async def get_expense(
 
 
 # Create a new expense. Supports both JWT (web) and API key (iOS Shortcut) auth.
-# cursor_change on the response (when populated) carries the advance emitted by a
+# advance_change on the response (when populated) carries the advance emitted by a
 # linked obligation / subscription / installment (Phase 3, follow-up Item 7).
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense(
@@ -215,13 +215,14 @@ async def create_expense(
         installment_id=body.installment_id,
     )
     resp = ExpenseResponse.model_validate(entry)
-    resp.cursor_change = _cursor_change(advance_result)
+    resp.advance_change = _cursor_change(advance_result)
     return resp
 
 
-# Update an existing expense. cursor_change on the response (when populated) carries
-# the reverse emitted by an unlink that targeted the most-recent linked expense
-# (Phase 3, follow-up Item 10).
+# Update an existing expense. advance_change + reverse_change on the response carry the
+# cursor deltas emitted by the symmetric FK-transition model (Phase 3, follow-up Items 10
+# + audit round 2): edit can fire reverse on the OLD plan (clear / swap) AND advance on
+# the NEW plan (add / swap). Both can be populated simultaneously on a swap.
 @router.put("/{expense_id}", response_model=ExpenseResponse)
 async def update_expense(
     expense_id: int,
@@ -230,16 +231,17 @@ async def update_expense(
     session: SessionDep,
 ) -> ExpenseResponse:
     payload = body.model_dump(exclude_unset=True)
-    entry, reverse_result = await expense_service.update_expense(session, expense_id, current_user, **payload)
+    entry, advance_result, reverse_result = await expense_service.update_expense(session, expense_id, current_user, **payload)
     resp = ExpenseResponse.model_validate(entry)
-    resp.cursor_change = _cursor_change(reverse_result)
+    resp.advance_change = _cursor_change(advance_result)
+    resp.reverse_change = _cursor_change(reverse_result)
     return resp
 
 
-# Delete an expense. Returns 200 with an optional cursor change (Phase 3, follow-up
-# Item 10) emitted by a reverse-on-unlink walk when the deleted row was the most-recent
-# linked expense for a commitment. Was 204 in Step D+E; switched to 200 + body so the
-# delete confirmation toast can announce the schedule walk-back symmetric to create / update.
+# Delete an expense. Returns 200 with an optional reverse_change (Phase 3, follow-up
+# Item 10) emitted when the deleted row was the most-recent linked expense for a commitment.
+# Was 204 in Step D+E; switched to 200 + body so the delete confirmation toast can
+# announce the schedule walk-back symmetric to create / update.
 @router.delete("/{expense_id}", response_model=ExpenseDeleteResponse)
 async def delete_expense(
     expense_id: int,
@@ -247,4 +249,4 @@ async def delete_expense(
     session: SessionDep,
 ) -> ExpenseDeleteResponse:
     reverse_result = await expense_service.delete_expense(session, expense_id, current_user)
-    return ExpenseDeleteResponse(cursor_change=_cursor_change(reverse_result))
+    return ExpenseDeleteResponse(reverse_change=_cursor_change(reverse_result))
