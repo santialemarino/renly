@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -7,6 +8,19 @@ from app.domain import NotFoundError
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import subscription_repository
+from app.services.auto_expense_service import closest_subscription_cycle
+from app.utils.dates import advance_by_cycle, cycle_tolerance_days
+
+
+# Result of a manual-entry advance decision. `would_advance` reflects the same predicate
+# used by `advance_for_manual_entry` so the preview endpoint and the actual write stay
+# in lock-step. `next_expected_date` is the closest cycle the entry was matched against
+# (informational for the soft-confirm dialog when `would_advance` is False).
+@dataclass(frozen=True)
+class CycleAdvanceDecision:
+    would_advance: bool
+    distance_days: int
+    next_expected_date: date_type
 
 
 # List subscriptions for a user with optional search, sorting, and archive filtering.
@@ -95,3 +109,51 @@ async def delete_subscription(session: AsyncSession, subscription_id: int, user:
     subscription = await get_subscription(session, subscription_id, user)
     await subscription_repository.delete(session, subscription)
     await session.commit()
+
+
+# Pure helper: decides whether a manual entry on `entry_date` should advance the
+# subscription's `next_billing_date` cursor (Phase 3, follow-up 3b). The advance fires
+# only when the entry is within tolerance of the closest cycle AND the matched cycle
+# sits at-or-after the current cursor (back-dated entries before the cursor never
+# rewind the schedule — that's the reverse-advance feature's job). The dataclass is
+# shaped to feed both the actual write path and the preview endpoint without redoing
+# the math.
+def compute_subscription_advance_for_manual_entry(subscription: Subscription, entry_date: date_type) -> CycleAdvanceDecision:
+    closest = closest_subscription_cycle(
+        subscription.next_billing_date,
+        subscription.billing_cycle,
+        entry_date,
+        anchor_day=subscription.anchor_day,
+    )
+    distance_days = abs((entry_date - closest).days)
+    tolerance = cycle_tolerance_days(subscription.billing_cycle, anchor_day=subscription.anchor_day)
+    in_tolerance = distance_days <= tolerance
+    not_back_dated = closest >= subscription.next_billing_date
+    return CycleAdvanceDecision(
+        would_advance=in_tolerance and not_back_dated,
+        distance_days=distance_days,
+        next_expected_date=closest,
+    )
+
+
+# Advances `next_billing_date` past the cycle matched by a manual expense entry.
+# Caller commits — this stages the change inside the expense-create transaction so the
+# advance is atomic with the linked expense insert. Returns True when the cursor moved;
+# False when the entry was out of tolerance or back-dated (the soft-confirm dialog
+# already informed the user before they hit Save). No-op when the subscription can't
+# be found or doesn't belong to the user. Per the 3b plan: at most one advance per
+# save event, so we move the cursor exactly one cycle past the matched date.
+async def advance_for_manual_entry(session: AsyncSession, subscription_id: int, user: User, entry_date: date_type) -> bool:
+    subscription = await subscription_repository.get_by_id(session, subscription_id, user.id)
+    if subscription is None:
+        return False
+    decision = compute_subscription_advance_for_manual_entry(subscription, entry_date)
+    if not decision.would_advance:
+        return False
+    subscription.next_billing_date = advance_by_cycle(
+        decision.next_expected_date,
+        subscription.billing_cycle,
+        anchor_day=subscription.anchor_day,
+    )
+    await subscription_repository.save(session, subscription)
+    return True

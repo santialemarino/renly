@@ -1,7 +1,7 @@
 from datetime import date as date_type
 from decimal import Decimal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
@@ -11,6 +11,7 @@ from app.schemas.expense import (
     AutoChargeMatch,
     AutoChargeMatchResponse,
     AutoChargeMatchSourcePlan,
+    CycleAdvancePreviewResponse,
     ExpenseCreate,
     ExpenseListResponse,
     ExpenseResponse,
@@ -119,6 +120,39 @@ async def auto_charge_match(
             source=result.source,
             source_plan=AutoChargeMatchSourcePlan(id=result.source_plan_id, name=result.source_plan_name),
         )
+    )
+
+
+# Preview the effect of saving a manual expense linked to a subscription or installment
+# (Phase 3, follow-up 3b). Returns would_advance + distance + matched cycle so the
+# expense form can show a soft-confirm dialog when the entry is out of tolerance / back-
+# dated. Mirrors the auto-charge-match lookup pattern. Declared above GET /{id} so the
+# static slug isn't shadowed by the parametrised route. Exactly one of subscription_id
+# / installment_id must be set.
+@router.get("/cycle-advance-preview", response_model=CycleAdvancePreviewResponse)
+async def cycle_advance_preview(
+    current_user: CurrentUser,
+    session: SessionDep,
+    entry_date: date_type = Query(description="Date of the candidate manual entry."),
+    subscription_id: int | None = Query(default=None, description="Subscription id (mutually exclusive with installment_id)."),
+    installment_id: int | None = Query(default=None, description="Installment id (mutually exclusive with subscription_id)."),
+) -> CycleAdvancePreviewResponse:
+    if (subscription_id is None) == (installment_id is None):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Exactly one of subscription_id or installment_id must be set.",
+        )
+    decision = await expense_service.find_cycle_advance_decision(
+        session,
+        current_user,
+        subscription_id=subscription_id,
+        installment_id=installment_id,
+        entry_date=entry_date,
+    )
+    return CycleAdvancePreviewResponse(
+        would_advance=decision.would_advance,
+        distance_days=decision.distance_days,
+        next_expected_date=decision.next_expected_date,
     )
 
 

@@ -2,6 +2,8 @@ from datetime import UTC, date, datetime
 
 from app.services.auto_expense_service import (
     AUTO_EXPENSES_HOUR_LOCAL,
+    closest_installment_cuota,
+    closest_subscription_cycle,
     installment_cuotas_to_emit,
     subscription_dates_to_emit,
 )
@@ -170,6 +172,75 @@ class TestInstallmentCuotasToEmit:
             (3, date(2026, 3, 31)),
             (4, date(2026, 4, 30)),
         ]
+
+
+# --- closest_subscription_cycle ---
+
+
+class TestClosestSubscriptionCycle:
+    # Finds the cycle date nearest to a target manual-entry date. Walks forward or
+    # backward from next_billing_date; the caller decides whether the returned cycle
+    # is within tolerance and at-or-after the cursor.
+
+    def test_target_equals_cursor_returns_cursor(self):
+        cursor = date(2026, 6, 15)
+        assert closest_subscription_cycle(cursor, BILLING_CYCLE_MONTHLY, cursor) == cursor
+
+    def test_target_before_cursor_within_one_cycle_returns_past_cycle(self):
+        # cursor = Jun 15, target = May 25 -> past cycle May 15 is closer (10 days)
+        # than Jun 15 (21 days).
+        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 5, 25)) == date(2026, 5, 15)
+
+    def test_target_after_cursor_within_window_returns_cursor(self):
+        # cursor = Jun 15, target = Jun 20 -> Jun 15 (5 days) closer than Jul 15 (25 days).
+        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 6, 20)) == date(2026, 6, 15)
+
+    def test_target_well_after_cursor_walks_forward(self):
+        # cursor = Jun 15, target = Aug 15 -> Aug 15 is exactly the second cycle ahead.
+        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 8, 15)) == date(2026, 8, 15)
+
+    def test_anchor_day_31_walks_without_drift(self):
+        # cursor = Mar 31 anchor=31, target = May 28 -> closest is May 31 (3 days)
+        # not Apr 30 (28 days).
+        result = closest_subscription_cycle(date(2026, 3, 31), BILLING_CYCLE_MONTHLY, date(2026, 5, 28), anchor_day=31)
+        assert result == date(2026, 5, 31)
+
+    def test_weekly_walks_in_seven_day_steps(self):
+        # cursor = Jun 15 (Mon), target = Jun 24 -> cycle Jun 22 (2 days) closer than Jun 29 (5 days).
+        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_WEEKLY, date(2026, 6, 24)) == date(2026, 6, 22)
+
+    def test_target_in_distant_past_walks_backward(self):
+        # cursor = Jun 15, target = Jan 20 -> closest cycle Jan 15 (5 days) not Feb 15 (26 days).
+        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 1, 20)) == date(2026, 1, 15)
+
+
+# --- closest_installment_cuota ---
+
+
+class TestClosestInstallmentCuota:
+    def test_target_on_cuota_grid_returns_exact_match(self):
+        # start = Jan 1, current = 1, count = 12, target = Apr 1 -> cuota 4.
+        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2026, 4, 1)) == (4, date(2026, 4, 1))
+
+    def test_target_between_cuotas_picks_closer(self):
+        # start = Jan 1, target = Apr 20 -> cuota 4 (Apr 1, 19 days) closer than cuota 5 (May 1, 11 days).
+        # Actually May 1 (11 days) is closer than Apr 1 (19 days), so cuota 5.
+        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2026, 4, 20)) == (5, date(2026, 5, 1))
+
+    def test_target_before_first_cuota_clamps_to_one(self):
+        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2025, 12, 15)) == (1, date(2026, 1, 1))
+
+    def test_target_after_last_cuota_clamps_to_count(self):
+        # start = Jan 1, count = 3 -> final cuota Mar 1. Target Aug 1 still returns 3 (clamped).
+        assert closest_installment_cuota(date(2026, 1, 1), 1, 3, date(2026, 8, 1)) == (3, date(2026, 3, 1))
+
+    def test_returns_none_when_plan_fully_paid(self):
+        # current_installment > installments_count means plan is done; can't advance further.
+        assert closest_installment_cuota(date(2026, 1, 1), 13, 12, date(2026, 6, 15)) is None
+
+    def test_short_month_clamp_does_not_skew_closest(self):
+        # start = Jan 31 -> cuota 2 clamps to Feb 28. Target Feb 28 -> exact match on cuota 2.
+        assert closest_installment_cuota(date(2026, 1, 31), 1, 6, date(2026, 2, 28)) == (2, date(2026, 2, 28))
 
 
 # --- Timezone-aware eligibility (Step G) ---

@@ -139,3 +139,38 @@ export async function getAutoChargeMatch(params: {
     sourcePlan: raw.match.source_plan,
   };
 }
+
+// Preview decision returned by GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b).
+// The expense form calls this before save when the user has linked a subscription or
+// installment; would_advance=false drives a soft-confirm dialog before continuing.
+export interface CycleAdvancePreview {
+  wouldAdvance: boolean;
+  distanceDays: number;
+  nextExpectedDate: string;
+}
+
+interface CycleAdvancePreviewRaw {
+  would_advance: boolean;
+  distance_days: number;
+  next_expected_date: string;
+}
+
+export async function getCycleAdvancePreview(params: {
+  entryDate: string;
+  subscriptionId?: number;
+  installmentId?: number;
+}): Promise<CycleAdvancePreview> {
+  const qs = new URLSearchParams({ entry_date: params.entryDate });
+  if (params.subscriptionId !== undefined) qs.set('subscription_id', String(params.subscriptionId));
+  if (params.installmentId !== undefined) qs.set('installment_id', String(params.installmentId));
+  const res = await authenticatedFetch(`/expenses/cycle-advance-preview?${qs.toString()}`, {
+    method: 'GET',
+  });
+  if (!res.ok) throw new Error('Failed to look up cycle advance preview');
+  const raw: CycleAdvancePreviewRaw = await res.json();
+  return {
+    wouldAdvance: raw.would_advance,
+    distanceDays: raw.distance_days,
+    nextExpectedDate: raw.next_expected_date,
+  };
+}

@@ -34,8 +34,10 @@ import {
 import {
   createExpense,
   getAutoChargeMatch,
+  getCycleAdvancePreview,
   updateExpense,
   type AutoChargeMatch,
+  type CycleAdvancePreview,
 } from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
@@ -245,6 +247,16 @@ export function ExpenseFormDialog({
     match: AutoChargeMatch;
   } | null>(null);
 
+  // Soft confirmation when a manual entry linked to a subscription / installment is far
+  // enough from the closest expected cycle that the cursor will NOT advance (Phase 3,
+  // follow-up 3b). Fires only on CREATE; edit doesn't reach the linked-sub/installment
+  // dropdown so the FK never changes from edits.
+  const [cycleAdvancePending, setCycleAdvancePending] = useState<{
+    values: ExpenseFormValues;
+    preview: CycleAdvancePreview;
+    planName: string;
+  } | null>(null);
+
   // Clear pending soft-confirmations when the form dialog closes. Otherwise a
   // dupe-match lookup that resolves AFTER the user cancels the form would surface
   // a confirmation dialog with no form behind it (race condition on async submit).
@@ -252,6 +264,7 @@ export function ExpenseFormDialog({
     if (!open) {
       setNovelCurrencyPending(null);
       setAutoChargeMatch(null);
+      setCycleAdvancePending(null);
     }
   }, [open]);
 
@@ -264,6 +277,10 @@ export function ExpenseFormDialog({
   const lastAutoChargeMatch = useRef(autoChargeMatch);
   if (autoChargeMatch) lastAutoChargeMatch.current = autoChargeMatch;
   const autoChargeMatchDisplay = autoChargeMatch ?? lastAutoChargeMatch.current;
+
+  const lastCycleAdvancePending = useRef(cycleAdvancePending);
+  if (cycleAdvancePending) lastCycleAdvancePending.current = cycleAdvancePending;
+  const cycleAdvanceDisplay = cycleAdvancePending ?? lastCycleAdvancePending.current;
 
   function selectedNovelCurrencyCardName(values: ExpenseFormValues): string | null {
     if (values.paymentMethod !== 'credit_card') return null;
@@ -293,6 +310,7 @@ export function ExpenseFormDialog({
       onOpenChange(false);
       setNovelCurrencyPending(null);
       setAutoChargeMatch(null);
+      setCycleAdvancePending(null);
     } catch {
       toast.error(t('form.saveError'));
     }
@@ -324,6 +342,29 @@ export function ExpenseFormDialog({
         });
         if (match) {
           setAutoChargeMatch({ values, match });
+          return;
+        }
+      } catch {
+        // Silent fail — better to allow save than block the user on a lookup error.
+      }
+    }
+    // Cycle-advance preview (Phase 3, follow-up 3b). When the user has linked a
+    // subscription / installment AND set a date, ask the backend whether saving will
+    // advance the plan's cursor. If not, surface a soft-confirm dialog so the user
+    // understands the FK is still saved but the schedule stays put. CREATE only —
+    // the form hides the linked-sub/installment dropdown on edit.
+    if (!isEdit && values.date && (values.subscriptionId || values.installmentId)) {
+      try {
+        const preview = await getCycleAdvancePreview({
+          entryDate: values.date,
+          subscriptionId: values.subscriptionId,
+          installmentId: values.installmentId,
+        });
+        if (!preview.wouldAdvance) {
+          const planName = values.subscriptionId
+            ? (activeSubscriptions?.find((s) => s.id === values.subscriptionId)?.name ?? '')
+            : (activeInstallments?.find((i) => i.id === values.installmentId)?.name ?? '');
+          setCycleAdvancePending({ values, preview, planName });
           return;
         }
       } catch {
@@ -680,6 +721,40 @@ export function ExpenseFormDialog({
               disabled={form.formState.isSubmitting}
             >
               {t('form.autoChargeMatch.confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cycle-advance out-of-tolerance confirmation (Phase 3, follow-up 3b). Same
+          sibling pattern as novel-currency / auto-charge — fires when the user has
+          linked a subscription or installment but the entry date is far from the
+          next expected cycle, so the plan's cursor will not advance on save. */}
+      <Dialog
+        open={!!cycleAdvancePending}
+        onOpenChange={(open) => !open && setCycleAdvancePending(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('form.cycleAdvance.title')}</DialogTitle>
+          </DialogHeader>
+          <p className="text-paragraph-sm text-muted-foreground">
+            {t('form.cycleAdvance.description', {
+              planName: cycleAdvanceDisplay?.planName ?? '',
+              nextExpectedDate: cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
+              distanceDays: cycleAdvanceDisplay?.preview.distanceDays ?? 0,
+            })}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCycleAdvancePending(null)}>
+              {t('form.cancel')}
+            </Button>
+            <Button
+              blue
+              onClick={() => cycleAdvancePending && doSubmit(cycleAdvancePending.values)}
+              disabled={form.formState.isSubmitting}
+            >
+              {t('form.cycleAdvance.confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

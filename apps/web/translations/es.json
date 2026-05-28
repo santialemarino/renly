@@ -458,6 +458,11 @@
         "description": "Parece que un cargo automático de {planName} del {existingDate} coincide con este gasto. ¿Cargar igual?",
         "confirm": "Cargar igual"
       },
+      "cycleAdvance": {
+        "title": "Lejos del próximo ciclo esperado",
+        "description": "Este gasto está a {distanceDays} días del próximo ciclo esperado de {planName} ({nextExpectedDate}). La planificación no avanzará. ¿Continuar?",
+        "confirm": "Guardar sin avanzar"
+      },
       "linkedObligation": {
         "label": "Asociado a obligación",
         "placeholder": "Elegí una obligación (opcional)",

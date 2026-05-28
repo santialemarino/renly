@@ -100,6 +100,16 @@ class AutoChargeMatchResponse(BaseModel):
     match: AutoChargeMatch | None = Field(default=None, description="The matching auto-generated expense, or null.")
 
 
+# Response for GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b). The frontend
+# calls this from the expense form before save: when `would_advance` is False the UI
+# surfaces a soft-confirm dialog ("entry far from next expected cycle; cursor will not
+# advance") before continuing with the create.
+class CycleAdvancePreviewResponse(BaseModel):
+    would_advance: bool = Field(description="Whether saving the expense would advance the plan's cursor past the matched cycle.")
+    distance_days: int = Field(description="Absolute day distance between the entry date and the closest cycle.")
+    next_expected_date: date_type = Field(description="The closest cycle the entry was matched against (informational when would_advance=False).")
+
+
 # Paginated response for GET /expenses.
 class ExpenseListResponse(BaseModel):
     items: list[ExpenseResponse] = Field(description="Expenses on this page.")

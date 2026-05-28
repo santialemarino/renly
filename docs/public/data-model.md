@@ -132,6 +132,8 @@ A subscription represents a recurring charge (e.g. Netflix, Spotify, gym). Each 
 
 A daily scheduled job auto-generates one expense entry per billing cycle and advances `next_billing_date` to the next future cycle. Subscriptions registered with a past `next_billing_date` are back-filled in a single tick — every missed cycle gets its own historical-dated expense.
 
+`next_billing_date` is scheduler-owned but also advanced by manual entries linked to the subscription when the entry sits within cycle tolerance of the closest expected cycle (the same cursor moves whether the charge came from the auto-emitter or the user's manual save). Out-of-tolerance / back-dated manual entries persist with the FK but leave the cursor untouched. Tolerance scales with the cycle: `min(cycle_length_in_days // 2, 60)`.
+
 The day-of-month is preserved across short-month clamps via an internal `anchor_day` field (1-31, auto-derived from `next_billing_date.day` and not exposed in the form). A subscription billed on the 31st walks Jan 31 → Feb 28 → Mar 31 → Apr 30 → May 31 without drifting to day-28. Weekly and biweekly cycles ignore `anchor_day` since they advance by literal days.
 
 ### Installments
@@ -139,6 +141,8 @@ The day-of-month is preserved across short-month clamps via an internal `anchor_
 An installment plan represents a multi-cuota purchase (e.g. "TV Samsung 12x"). Each plan has a name, total amount, per-cuota amount, currency, total cuota count, the index of the next cuota to issue, an active flag, and a start date. Like subscriptions, it optionally links to a payment method and credit card.
 
 A daily scheduled job auto-generates one expense entry per cuota at its real cuota date (`start_date + (n-1) months`), increments `current_installment`, and flips `is_active` to `false` when the last cuota is issued. Plans registered with a past `start_date` back-fill all due cuotas in a single tick.
+
+`current_installment` is scheduler-owned but also advanced by manual entries linked to the plan when the entry sits within tolerance of the closest cuota (using the monthly cycle's 15-day window since cuotas are by definition month-spaced). Out-of-tolerance / back-dated manual entries persist with the FK but leave the cursor untouched. A manual entry that matches a cuota strictly after the current cursor advances `current_installment` past that cuota — implicitly skipping the cuotas in between (consistent with the "Multi-late entries get one advance per save event" rule).
 
 Once any cuota has been charged (`current_installment > 1`), the contractual fields on the plan -- `total_amount`, `installment_amount`, `installments_count`, `currency`, `start_date`, `payment_method`, `credit_card_id` -- are locked. Always editable: name, current_installment (manual correction), is_active (archive). Attempting to change a locked field returns a 400 with code `installment_locked_field`.
 

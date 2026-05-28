@@ -175,7 +175,7 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 
 **Payment obligation link:** `POST /expenses` accepts an optional `payment_obligation_id` (nullable). When set, the server (a) inserts the expense with the FK and (b) auto-advances the linked obligation in the same transaction — recurring obligations move `next_due_date` forward by one cycle (anchor-day preserved via `add_months_anchored`); one-off obligations flip `is_active=false`. The FK is informational on the expense side and is returned by `GET /expenses/{id}` and the list response. Editing or deleting a linked expense does NOT reverse the advance.
 
-**Subscription / installment link:** `POST /expenses` also accepts optional `subscription_id` and `installment_id` (both nullable). At most one of `payment_obligation_id`, `subscription_id`, `installment_id` may be set on the same row — an expense pays exactly one commitment-type. The scheduler sets these FKs when auto-emitting cycle charges; the web form's "Linked to subscription or installment" dropdown lets users set them on manual entries. The FKs are returned on `GET /expenses/{id}` and the list response. Setting one does NOT advance the linked plan's cursor (`next_billing_date` / `current_installment`) — that smart-dedup behaviour is deferred to a follow-up; today the partial UNIQUE INDEX on `(subscription_id, date)` / `(installment_id, date)` handles dedup only when the user's date EXACTLY matches the scheduler's emit date.
+**Subscription / installment link:** `POST /expenses` also accepts optional `subscription_id` and `installment_id` (both nullable). At most one of `payment_obligation_id`, `subscription_id`, `installment_id` may be set on the same row — an expense pays exactly one commitment-type. The scheduler sets these FKs when auto-emitting cycle charges; the web form's "Linked to subscription or installment" dropdown lets users set them on manual entries. The FKs are returned on `GET /expenses/{id}` and the list response. When a manual entry is **within tolerance** of the closest expected cycle AND that cycle sits at-or-after the current cursor, the server advances the plan's cursor (`subscriptions.next_billing_date` or `installments.current_installment`) past the matched cycle atomically with the expense insert. Out-of-tolerance / back-dated entries persist the FK but leave the cursor untouched (the web form shows a soft-confirm dialog before save in that case). Tolerance is computed per cycle: `min(cycle_length_in_days // 2, 60)` — weekly→3, biweekly→7, monthly→15, quarterly→45, annual→60 (capped).
 
 **Amount validation:** `amount` must be greater than zero on all create and update endpoints (expenses, income, settlements). Returns 422 if zero or negative.
 
@@ -190,6 +190,16 @@ Groups are user-defined labels for organizing investments (e.g., "Retirement", "
 **Match rule:** existing `expense_entries` with `source IN ('subscription', 'installment')` AND same `credit_card_id` AND same `currency` AND exact `amount` match AND `date` within ±15 days of the supplied `date`. When `exclude_expense_id` is set, that row is excluded from the result. Newest match wins; only the first match is returned.
 
 **Response:** `{ "match": null }` when no row matches; otherwise `{ "match": { "expense_id", "date", "source": "subscription" | "installment", "source_plan": { "id", "name" } } }`. The `source_plan.name` is the subscription / installment name for display in the confirmation dialog.
+
+### Cycle-advance preview (Phase 3, follow-up 3b)
+
+`GET /expenses/cycle-advance-preview` is a lookup endpoint the expense form calls before submitting a manual entry linked to a subscription or installment, to decide whether the plan's cursor will advance on save. When the cursor won't advance, the form shows a soft-confirm dialog so the user understands the FK still saves but the schedule stays put.
+
+**Query parameters:** `entry_date` (YYYY-MM-DD, required), `subscription_id` (int, optional), `installment_id` (int, optional). Exactly one of `subscription_id` / `installment_id` must be set; supplying neither or both returns 400.
+
+**Decision rule:** finds the closest cycle to `entry_date` (subscription: walks forward/backward by `billing_cycle` from `next_billing_date`; installment: clamps to `[1, installments_count]` around `start_date + (idx - 1) months`). Advance fires when the absolute day distance is within tolerance AND the matched cycle sits at-or-after the current cursor. Back-dated entries within tolerance never rewind the schedule. Returns 404 when the referenced plan doesn't belong to the user.
+
+**Response:** `{ "would_advance": bool, "distance_days": int, "next_expected_date": "YYYY-MM-DD" }`. The `next_expected_date` is the closest cycle the entry was matched against (informational when `would_advance=false`).
 
 ---
 
