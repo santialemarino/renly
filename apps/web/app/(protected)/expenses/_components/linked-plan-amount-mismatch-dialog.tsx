@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -42,9 +42,16 @@ export function LinkedPlanAmountMismatchDialog({
   onClose,
   onConfirmed,
 }: LinkedPlanAmountMismatchDialogProps) {
-  // Picks the obligation or subscription sub-namespace based on plan.type; defaults to
-  // obligation when no mismatch is set (dialog is closed — the value won't surface).
-  const tType = useTranslations(`common.amountMismatch.${mismatch?.type ?? 'obligation'}` as const);
+  // Preserve the last non-null mismatch through the dialog's close animation so the
+  // title / description / labels don't blank out as the dialog fades — same pattern
+  // the form's novel-currency / auto-charge-match / cycle-advance dialogs use.
+  const lastMismatch = useRef(mismatch);
+  if (mismatch) lastMismatch.current = mismatch;
+  const display = mismatch ?? lastMismatch.current;
+  // Picks the obligation or subscription sub-namespace based on the displayed plan
+  // type; defaults to obligation when no mismatch has ever been set (initial render
+  // before any open — the value never surfaces visibly).
+  const tType = useTranslations(`common.amountMismatch.${display?.type ?? 'obligation'}` as const);
   const [updating, setUpdating] = useState(false);
 
   async function confirm() {
@@ -67,10 +74,10 @@ export function LinkedPlanAmountMismatchDialog({
 
   const title = tType('title');
   const description = tType('description', {
-    planName: mismatch?.planName ?? '',
-    enteredAmount: mismatch?.enteredAmount ?? '',
-    currentAmount: mismatch?.currentAmount ?? '',
-    currency: mismatch?.currency ?? '',
+    planName: display?.planName ?? '',
+    enteredAmount: display?.enteredAmount ?? '',
+    currentAmount: display?.currentAmount ?? '',
+    currency: display?.currency ?? '',
   });
   const confirmLabel = updating ? tType('updating') : tType('confirm');
   const declineLabel = tType('decline');
