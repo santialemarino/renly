@@ -1,5 +1,6 @@
 'use server';
 
+import { ExpenseConflictError } from '@/app/(protected)/expenses/expenses-errors';
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import type { Expense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
@@ -103,18 +104,6 @@ function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
     advance: mapCursorChange(raw.advance_change),
     reverse: mapCursorChange(raw.reverse_change),
   };
-}
-
-// 409 from POST/PUT carries a user-readable `detail` string from the backend's
-// IntegrityError handler (Phase 3, follow-up Item 8.2) — typically the partial UNIQUE
-// INDEX on (subscription_id, date) / (installment_id, date) catching a duplicate
-// scheduler-emitted charge on the same plan+date. We tag the error so the caller can
-// surface the backend message verbatim instead of a generic "Failed to save expense".
-export class ExpenseConflictError extends Error {
-  constructor(public detail: string) {
-    super(detail);
-    this.name = 'ExpenseConflictError';
-  }
 }
 
 async function readErrorDetail(res: Response): Promise<string | null> {

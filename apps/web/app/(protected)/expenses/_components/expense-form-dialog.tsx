@@ -34,7 +34,6 @@ import {
 } from '@/app/(protected)/expenses/_components/linked-sub-installment-select';
 import {
   createExpense,
-  ExpenseConflictError,
   getAutoChargeMatch,
   getCycleAdvancePreview,
   updateExpense,
@@ -42,6 +41,7 @@ import {
   type CycleAdvancePreview,
   type ExpenseMutationOutcome,
 } from '@/app/(protected)/expenses/expenses-actions';
+import { ExpenseConflictError } from '@/app/(protected)/expenses/expenses-errors';
 import {
   buildExpenseFormSchema,
   type ExpenseFormValues,
