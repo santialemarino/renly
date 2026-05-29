@@ -112,14 +112,13 @@ export function subInstallmentMatchStatus(
   return planMatchStatus(plan, formCurrency, formPaymentMethod, formCreditCardId);
 }
 
-// Synthetic "next cycle date" for installments: start_date + (current_installment - 1) months.
-// Drift on anchor-day-31 short-month clamping doesn't matter for sort ordering — the items
-// still land in roughly-correct calendar order. Returns a YYYY-MM-DD string so it compares
-// directly against subscription.nextBillingDate via localeCompare.
+// Next cuota date for installments — reads the server-computed `next_cuota_date` so the
+// dropdown sort matches the installments table + the SQL `make_interval` ordering exactly,
+// including month-end clamping (Jan 31 + 1 month → Feb 28). Falls back to start_date when
+// the field is null (fully-paid plans, which shouldn't surface here because the dropdown
+// is fed active-only, but the guard keeps the sort comparator total).
 function installmentNextChargeDate(installment: Installment): string {
-  const start = new Date(installment.startDate + 'T00:00:00Z');
-  start.setUTCMonth(start.getUTCMonth() + (installment.currentInstallment - 1));
-  return start.toISOString().slice(0, 10);
+  return installment.nextCuotaDate ?? installment.startDate;
 }
 
 // Dot color rules:

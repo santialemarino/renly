@@ -28,7 +28,9 @@ interface LinkedExpenseEditTriggerProps {
 // The expense form is the same dialog used elsewhere; the user can edit (including
 // changing or clearing the linked FK per Item 10), delete, or just inspect, then
 // close to return to the calendar. Active plans are prop-drilled so the linked-FK
-// dropdowns render with the user's current plans.
+// dropdowns render with the user's current plans. `onLinkedPlanSave` is intentionally
+// NOT wired — the amount-mismatch follow-up prompt (Item 6) is scoped to the /expenses
+// + Mark-Paid flows; the calendar's inline edit just lets the user fix the row and go.
 export function LinkedExpenseEditTrigger({
   linkedExpenseId,
   preferredCurrencies,

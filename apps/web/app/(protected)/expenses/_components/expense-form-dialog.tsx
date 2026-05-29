@@ -451,9 +451,11 @@ export function ExpenseFormDialog({
     // Cycle-advance preview (Phase 3, follow-up 3b). When the user has linked a
     // subscription / installment AND set a date, ask the backend whether saving will
     // advance the plan's cursor. If not, surface a soft-confirm dialog so the user
-    // understands the FK is still saved but the schedule stays put. CREATE only —
-    // Item 10 lets the dropdowns appear on edit too, but edit never triggers an advance
-    // (only delete / unlink reverses), so the preview is unnecessary there.
+    // understands the FK is still saved but the schedule stays put. CREATE only — the
+    // symmetric edit model (audit round 2) can also fire an advance on edit-add / swap,
+    // but the cursor delta surfaces in the response toast either way; we keep the
+    // preview to the create flow because that's where the user is actively choosing
+    // a date for the first time.
     if (!isEdit && values.date && (values.subscriptionId || values.installmentId)) {
       try {
         const preview = await getCycleAdvancePreview({

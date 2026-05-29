@@ -281,9 +281,9 @@ Cuotas (installment plans, e.g. TV Samsung 12x). The daily scheduler auto-genera
 | `PUT`    | `/installments/{id}` | Update an installment plan. Only provided fields are changed.                         |
 | `DELETE` | `/installments/{id}` | Delete an installment plan.                                                           |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `total_amount`, `installment_amount`, `currency`, `installments_count`, `current_installment`, `start_date`), `sort_order`, `show_archived`, `currency`.
+**Query parameters (list):** `search`, `sort_by` (`name`, `total_amount`, `installment_amount`, `currency`, `installments_count`, `current_installment`, `start_date`, `next_cuota_date`), `sort_order`, `show_archived`, `currency`. Default order is `next_cuota_date DESC` so the table leads with the plan due next.
 
-**Installment fields:** `name`, `total_amount` (> 0), `installment_amount` (> 0), `currency`, `installments_count` (≥ 1), `current_installment` (≥ 1; default 1), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `start_date`. Responses include `converted_total_amount` and `converted_installment_amount` when `currency` query param is provided.
+**Installment fields:** `name`, `total_amount` (> 0), `installment_amount` (> 0), `currency`, `installments_count` (≥ 1), `current_installment` (≥ 1; default 1), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `start_date`. Responses also include `next_cuota_date` (computed = `start_date + (current_installment - 1) months` with month-end clamping; `null` once the plan is fully paid) and `converted_total_amount` / `converted_installment_amount` when `currency` query param is provided.
 
 **Lifecycle:** `is_active` flips to `false` automatically when the scheduler issues the last cuota (`current_installment > installments_count`). The user can also archive/unarchive a plan manually via `PUT /installments/{id}` with `is_active`.
 
