@@ -848,23 +848,25 @@ export function ExpenseFormDialog({
           <DialogHeader>
             <DialogTitle>{t('form.cycleAdvance.title')}</DialogTitle>
           </DialogHeader>
-          <p className="text-paragraph-sm text-muted-foreground">
-            {cycleAdvanceDisplay?.preview.multiJump
-              ? t('form.cycleAdvance.descriptionMultiJump', {
-                  planName: cycleAdvanceDisplay?.planName ?? '',
-                  nextExpectedDate: formatDateForLocale(
-                    cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
-                    locale,
-                  ),
-                })
-              : t('form.cycleAdvance.descriptionBackDated', {
-                  planName: cycleAdvanceDisplay?.planName ?? '',
-                  nextExpectedDate: formatDateForLocale(
-                    cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
-                    locale,
-                  ),
-                })}
-          </p>
+          {cycleAdvanceDisplay && (
+            <p className="text-paragraph-sm text-muted-foreground">
+              {cycleAdvanceDisplay.preview.multiJump
+                ? t('form.cycleAdvance.descriptionMultiJump', {
+                    planName: cycleAdvanceDisplay.planName,
+                    nextExpectedDate: formatDateForLocale(
+                      cycleAdvanceDisplay.preview.nextExpectedDate,
+                      locale,
+                    ),
+                  })
+                : t('form.cycleAdvance.descriptionBackDated', {
+                    planName: cycleAdvanceDisplay.planName,
+                    nextExpectedDate: formatDateForLocale(
+                      cycleAdvanceDisplay.preview.nextExpectedDate,
+                      locale,
+                    ),
+                  })}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCycleAdvancePending(null)}>
               {t('form.cancel')}
