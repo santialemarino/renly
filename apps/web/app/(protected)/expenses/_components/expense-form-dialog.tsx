@@ -41,7 +41,6 @@ import {
   type CycleAdvancePreview,
   type ExpenseMutationOutcome,
 } from '@/app/(protected)/expenses/expenses-actions';
-import { ExpenseConflictError } from '@/app/(protected)/expenses/expenses-errors';
 import {
   buildExpenseFormSchema,
   type ExpenseFormValues,
@@ -362,14 +361,17 @@ export function ExpenseFormDialog({
 
   async function doSubmit(values: ExpenseFormValues) {
     try {
-      let outcome: ExpenseMutationOutcome;
-      if (isEdit) {
-        outcome = await updateExpense(expense.id, values);
-        announceSave(t('form.updateSuccess'), outcome);
-      } else {
-        outcome = await createExpense(values);
-        announceSave(t('form.createSuccess'), outcome);
+      const result = isEdit ? await updateExpense(expense.id, values) : await createExpense(values);
+      // 409 conflict (Phase 3, follow-up Item 8.2) is returned as data rather than thrown:
+      // Next.js Server Actions strip prototype chains across the boundary, so a thrown
+      // class instance can't be identified with `instanceof` on the client. Surfacing
+      // the backend's detail message keeps the partial-UNIQUE-INDEX hit ("A charge is
+      // already recorded for this subscription on that date.") actionable.
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
       }
+      announceSave(t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'), result.outcome);
       // Amount-mismatch hook (Phase 3, follow-up Item 6). Fires for both create and
       // edit flows whenever the saved amount differs from the linked plan's current
       // expected amount by more than AMOUNT_TOLERANCE. Installments are excluded —
@@ -390,16 +392,8 @@ export function ExpenseFormDialog({
       setNovelCurrencyPending(null);
       setAutoChargeMatch(null);
       setCycleAdvancePending(null);
-    } catch (err) {
-      // Surface the backend's 409 detail (Phase 3, follow-up Item 8.2) verbatim — the
-      // partial UNIQUE INDEX message ("A charge is already recorded for this subscription
-      // on that date.") is more actionable than the generic save-error toast. Other
-      // failures fall back to the generic message.
-      if (err instanceof ExpenseConflictError) {
-        toast.error(err.detail);
-      } else {
-        toast.error(t('form.saveError'));
-      }
+    } catch {
+      toast.error(t('form.saveError'));
     }
   }
 

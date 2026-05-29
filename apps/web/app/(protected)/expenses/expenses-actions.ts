@@ -1,6 +1,5 @@
 'use server';
 
-import { ExpenseConflictError } from '@/app/(protected)/expenses/expenses-errors';
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import type { Expense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
@@ -47,6 +46,16 @@ export interface ExpenseMutationOutcome {
   advance: PlanCursorChange | null;
   reverse: PlanCursorChange | null;
 }
+
+// Discriminated result so the form can branch without `instanceof` (Next.js Server Action
+// boundary strips prototype chains — a thrown class instance arrives at the client as a
+// plain Error, so an `instanceof` check silently returns false and the user sees the
+// generic save-error toast instead of the backend's 409 detail). Returning the conflict
+// as data keeps the type information across the boundary; only truly unexpected failures
+// (network, 500) still throw.
+export type ExpenseMutationResult =
+  | { ok: true; outcome: ExpenseMutationOutcome }
+  | { ok: false; conflictDetail: string };
 
 interface PlanCursorChangeRaw {
   plan_type: 'obligation' | 'subscription' | 'installment';
@@ -115,7 +124,7 @@ async function readErrorDetail(res: Response): Promise<string | null> {
   }
 }
 
-export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationOutcome> {
+export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationResult> {
   const {
     paymentMethod,
     creditCardId,
@@ -138,17 +147,17 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
   if (!res.ok) {
     if (res.status === 409) {
       const detail = await readErrorDetail(res);
-      if (detail) throw new ExpenseConflictError(detail);
+      if (detail) return { ok: false, conflictDetail: detail };
     }
     throw new Error('Failed to create expense');
   }
-  return mapMutationOutcome(await res.json());
+  return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
 export async function updateExpense(
   id: number,
   values: ExpenseFormValues,
-): Promise<ExpenseMutationOutcome> {
+): Promise<ExpenseMutationResult> {
   // Commitment FKs follow JSON Merge Patch semantics: pass `null` to clear an existing
   // link, pass an id to swap to a different plan. The server fires the symmetric advance /
   // reverse model — clear / swap reverses the OLD plan; add / swap advances the NEW plan.
@@ -172,11 +181,11 @@ export async function updateExpense(
   if (!res.ok) {
     if (res.status === 409) {
       const detail = await readErrorDetail(res);
-      if (detail) throw new ExpenseConflictError(detail);
+      if (detail) return { ok: false, conflictDetail: detail };
     }
     throw new Error('Failed to update expense');
   }
-  return mapMutationOutcome(await res.json());
+  return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
 export async function deleteExpense(id: number): Promise<PlanCursorChange | null> {
