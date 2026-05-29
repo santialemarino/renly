@@ -4,7 +4,10 @@ import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
 import type { CreditCard } from '@/lib/api/credit-cards';
+import type { Installment } from '@/lib/api/installments';
+import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
+import type { Subscription } from '@/lib/api/subscriptions';
 import { formatAmount } from '@/lib/utils/currency';
 import { getLocaleTag } from '@/lib/utils/locale';
 
@@ -14,6 +17,9 @@ interface PaymentsCalendarListProps {
   month: number;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
   activeCurrency?: string;
 }
 
@@ -34,6 +40,9 @@ export async function PaymentsCalendarList({
   month,
   preferredCurrencies,
   creditCards,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
   activeCurrency,
 }: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
@@ -150,6 +159,9 @@ export async function PaymentsCalendarList({
                       linkedExpenseId={item.linkedExpenseId}
                       preferredCurrencies={preferredCurrencies}
                       creditCards={creditCards}
+                      activeObligations={activeObligations}
+                      activeSubscriptions={activeSubscriptions}
+                      activeInstallments={activeInstallments}
                     >
                       {rowContent}
                     </LinkedExpenseEditTrigger>

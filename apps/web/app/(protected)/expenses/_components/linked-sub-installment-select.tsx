@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Select,
@@ -16,17 +16,19 @@ import {
 import { cn } from '@repo/ui/lib';
 import type { Installment } from '@/lib/api/installments';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // "Linked to subscription / installment" dropdown on the expense form (Phase 3, follow-up 3a).
 // One combined dropdown with two SelectGroups (Subscriptions + Installments). Sibling of
 // LinkedObligationSelect — mutual exclusivity across the three FKs is enforced one level up
-// by the form. Tri-state match model mirrors LinkedObligationSelect:
+// by the form. Rendered in both CREATE and EDIT modes after Item 10 (the FK is now editable
+// on PUT); only Mark Paid hides it via the prefill gate in ExpenseFormDialog. Tri-state
+// match model mirrors LinkedObligationSelect:
 //   - 'match'    : every comparable plan field is filled on the form AND equals (green dot).
 //   - 'mismatch' : at least one filled-on-both-sides field disagrees (no dot, warning fires).
 //   - 'unknown'  : a form field needed for comparison is empty (no dot, no warning).
 // The 'unknown' state avoids prematurely showing the green dot when the user has only
-// filled half the form. In CREATE mode the dot stays visible (no disabled-mode here —
-// Mark Paid prefill never opens this dropdown, see ExpenseFormDialog).
+// filled half the form.
 
 export type MatchStatus = 'match' | 'mismatch' | 'unknown';
 
@@ -110,14 +112,13 @@ export function subInstallmentMatchStatus(
   return planMatchStatus(plan, formCurrency, formPaymentMethod, formCreditCardId);
 }
 
-// Synthetic "next cycle date" for installments: start_date + (current_installment - 1) months.
-// Drift on anchor-day-31 short-month clamping doesn't matter for sort ordering — the items
-// still land in roughly-correct calendar order. Returns a YYYY-MM-DD string so it compares
-// directly against subscription.nextBillingDate via localeCompare.
+// Next cuota date for installments — reads the server-computed `next_cuota_date` so the
+// dropdown sort matches the installments table + the SQL `make_interval` ordering exactly,
+// including month-end clamping (Jan 31 + 1 month → Feb 28). Falls back to start_date when
+// the field is null (fully-paid plans, which shouldn't surface here because the dropdown
+// is fed active-only, but the guard keeps the sort comparator total).
 function installmentNextChargeDate(installment: Installment): string {
-  const start = new Date(installment.startDate + 'T00:00:00Z');
-  start.setUTCMonth(start.getUTCMonth() + (installment.currentInstallment - 1));
-  return start.toISOString().slice(0, 10);
+  return installment.nextCuotaDate ?? installment.startDate;
 }
 
 // Dot color rules:
@@ -141,7 +142,9 @@ export function LinkedSubInstallmentSelect({
   formCreditCardId,
   onChange,
 }: LinkedSubInstallmentSelectProps) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
 
   // Sort within each group: match -> unknown -> mismatch, then next-cycle-date ASC.
   // Two separate sorted lists rather than one merged list — the SelectGroups stay
@@ -192,7 +195,7 @@ export function LinkedSubInstallmentSelect({
                 value !== null && value.kind === 'subscription' && value.id === sub.id;
               return (
                 <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
-                  <div className="flex items-center gap-x-2">
+                  <div className="flex min-w-0 items-center gap-x-2">
                     <CircleDot
                       className={cn(
                         'size-3 shrink-0 transition-colors',
@@ -200,7 +203,16 @@ export function LinkedSubInstallmentSelect({
                       )}
                       aria-hidden
                     />
-                    <span>{sub.name}</span>
+                    <span className="truncate">{sub.name}</span>
+                    {/* Next-cycle date in a muted sub-label so the user can see what
+                        they're linking against (Phase 3, follow-up Item 8.1). Sources
+                        the format string from `common.nextCycleHint` so the linked-
+                        obligation dropdown can reuse the exact same copy. */}
+                    <span className="text-paragraph-xs text-muted-foreground">
+                      {tCommon('nextCycleHint', {
+                        date: formatDateForLocale(sub.nextBillingDate, locale),
+                      })}
+                    </span>
                   </div>
                 </SelectItem>
               );
@@ -210,7 +222,7 @@ export function LinkedSubInstallmentSelect({
         {hasInstallments && (
           <SelectGroup>
             <SelectLabel>{t('form.linkedSubInstallment.installmentsLabel')}</SelectLabel>
-            {sortedInstallments.map(({ inst, status }) => {
+            {sortedInstallments.map(({ inst, status, nextChargeDate }) => {
               const isSelected =
                 value !== null && value.kind === 'installment' && value.id === inst.id;
               // Progress label matches the installments table convention:
@@ -219,7 +231,7 @@ export function LinkedSubInstallmentSelect({
               const paid = Math.max(0, inst.currentInstallment - 1);
               return (
                 <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
-                  <div className="flex items-center gap-x-2">
+                  <div className="flex min-w-0 items-center gap-x-2">
                     <CircleDot
                       className={cn(
                         'size-3 shrink-0 transition-colors',
@@ -227,8 +239,14 @@ export function LinkedSubInstallmentSelect({
                       )}
                       aria-hidden
                     />
-                    <span>
+                    <span className="truncate">
                       {inst.name} ({paid}/{inst.installmentsCount})
+                    </span>
+                    {/* Next-cuota date in a muted sub-label (Phase 3, follow-up Item 8.1). */}
+                    <span className="text-paragraph-xs text-muted-foreground">
+                      {tCommon('nextCycleHint', {
+                        date: formatDateForLocale(nextChargeDate, locale),
+                      })}
                     </span>
                   </div>
                 </SelectItem>

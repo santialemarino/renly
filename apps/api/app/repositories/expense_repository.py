@@ -359,6 +359,68 @@ async def linked_installment_expenses_by_date(
     return grouped
 
 
+# Returns True when `expense_id` is the most-recent linked expense (by date DESC, id DESC)
+# for the given obligation. Used by the reverse-on-unlink hook (Phase 3, follow-up Item 10):
+# the obligation's cursor walks back only when the row being deleted / unlinked was the
+# newest linked expense — middle-of-chain deletions leave the cursor alone. Single-query.
+async def is_most_recent_linked_obligation_expense(
+    session: AsyncSession,
+    user_id: int,
+    obligation_id: int,
+    expense_id: int,
+) -> bool:
+    stmt = (
+        select(ExpenseEntry.id)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.payment_obligation_id == obligation_id)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    newest_id = result.scalar_one_or_none()
+    return newest_id == expense_id
+
+
+# Returns True when `expense_id` is the most-recent linked expense for the given subscription.
+# Mirror of is_most_recent_linked_obligation_expense; same most-recent-only reverse rule.
+async def is_most_recent_linked_subscription_expense(
+    session: AsyncSession,
+    user_id: int,
+    subscription_id: int,
+    expense_id: int,
+) -> bool:
+    stmt = (
+        select(ExpenseEntry.id)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.subscription_id == subscription_id)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    newest_id = result.scalar_one_or_none()
+    return newest_id == expense_id
+
+
+# Returns True when `expense_id` is the most-recent linked expense for the given installment.
+# Mirror of is_most_recent_linked_obligation_expense; same most-recent-only reverse rule.
+async def is_most_recent_linked_installment_expense(
+    session: AsyncSession,
+    user_id: int,
+    installment_id: int,
+    expense_id: int,
+) -> bool:
+    stmt = (
+        select(ExpenseEntry.id)
+        .where(ExpenseEntry.user_id == user_id)
+        .where(ExpenseEntry.installment_id == installment_id)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+        .limit(1)
+    )
+    result = await session.execute(stmt)
+    newest_id = result.scalar_one_or_none()
+    return newest_id == expense_id
+
+
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     count_by_credit_card = staticmethod(count_by_credit_card)
@@ -367,6 +429,9 @@ class ExpenseRepository:
     delete = staticmethod(delete)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
+    is_most_recent_linked_installment_expense = staticmethod(is_most_recent_linked_installment_expense)
+    is_most_recent_linked_obligation_expense = staticmethod(is_most_recent_linked_obligation_expense)
+    is_most_recent_linked_subscription_expense = staticmethod(is_most_recent_linked_subscription_expense)
     linked_installment_expenses_by_date = staticmethod(linked_installment_expenses_by_date)
     linked_subscription_expenses_by_date = staticmethod(linked_subscription_expenses_by_date)
     list_by_user_filtered = staticmethod(list_by_user_filtered)

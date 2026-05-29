@@ -17,11 +17,6 @@ BILLING_CYCLE_QUARTERLY = "quarterly"
 BILLING_CYCLE_BIWEEKLY = "biweekly"
 BILLING_CYCLE_WEEKLY = "weekly"
 
-# Upper bound for the cycle-tolerance window (Phase 3, follow-up 3b). Annual cycles would
-# otherwise yield ±182 days, which is too loose for "this entry belongs to that cycle"
-# semantics; 60 days caps the slack at roughly two months for any cycle.
-MAX_TOLERANCE_DAYS = 60
-
 # Payment obligation recurrence -> calendar-month step. Shared by the Payments Calendar
 # forward/backward walkers, the expense->obligation auto-advance, and the liquidity helper.
 OBLIGATION_MONTH_STEP: dict[str, int] = {
@@ -71,21 +66,6 @@ def advance_by_cycle(d: date_type, cycle: str, *, anchor_day: int | None = None)
     if cycle == BILLING_CYCLE_WEEKLY:
         return d + timedelta(days=7)
     return add_months_anchored(d, 1, day)
-
-
-# Returns the +/- tolerance window (in days) for "this manual entry belongs to that cycle"
-# matching (Phase 3, follow-up 3b). Computed as min(cycle_length_in_days // 2, MAX_TOLERANCE_DAYS):
-# half the cycle's nominal length, capped so annual / quarterly cycles don't loosen the
-# match window past two months. Examples: weekly -> 3, biweekly -> 7, monthly -> 15,
-# quarterly -> 45, annual -> 60 (capped). The cycle length is anchor-independent for all
-# supported cycles (weekly/biweekly are pure day arithmetic; monthly/quarterly/annual
-# advance by calendar months from a fixed day-1 reference), so this helper takes only
-# the cycle string. A naive impl that forwarded the caller's anchor_day would yield a
-# clamped advance (e.g. Jan 1 -> Feb 28 with anchor_day=31) and inflate the tolerance.
-def cycle_tolerance_days(cycle: str) -> int:
-    reference = date_type(2026, 1, 1)
-    nominal_length = (advance_by_cycle(reference, cycle, anchor_day=reference.day) - reference).days
-    return min(nominal_length // 2, MAX_TOLERANCE_DAYS)
 
 
 # Inverse of advance_by_cycle — steps a date backward by one full billing cycle.

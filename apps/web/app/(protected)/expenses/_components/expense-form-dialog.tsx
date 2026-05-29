@@ -22,6 +22,7 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
+import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import {
   LinkedObligationSelect,
   obligationMatchStatus,
@@ -38,6 +39,7 @@ import {
   updateExpense,
   type AutoChargeMatch,
   type CycleAdvancePreview,
+  type ExpenseMutationOutcome,
 } from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
@@ -55,6 +57,7 @@ import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
 // When supplied (and `expense` is absent), the form opens in CREATE mode with values
@@ -66,7 +69,6 @@ export interface PrefillFromObligation {
   creditCardId?: number;
   category?: ExpenseFormValues['category'];
   paymentObligationId: number;
-  obligationName: string;
 }
 
 interface ExpenseFormDialogProps {
@@ -80,10 +82,75 @@ interface ExpenseFormDialogProps {
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
   onSuccess: () => void;
-  // Optional post-save hook used by the obligations table to show a follow-up amount-mismatch
-  // prompt. Fires AFTER a successful Mark Paid create, BEFORE the form closes — the parent's
-  // dialog can mount as a sibling and survive the form's close animation.
-  onMarkPaidSave?: (savedValues: ExpenseFormValues) => void;
+  // Optional post-save hook for the amount-mismatch follow-up prompt (Phase 3, follow-up
+  // Item 6). Fires AFTER a successful save and BEFORE the form closes — the parent's
+  // dialog can mount as a sibling and survive the form's close animation. The dialog
+  // computes the mismatch internally and only fires the callback when (a) the saved
+  // amount differs from the linked plan's current amount by more than AMOUNT_TOLERANCE
+  // AND (b) the entry's currency matches the plan's currency (cross-currency comparison
+  // would be semantically muddled — the prompt is about updating the plan's expected
+  // amount, which only makes sense in the plan's own currency). Installments are
+  // deliberately excluded: their per-cuota drift is taxes/fees/FX rather than plan
+  // changes, and LOCKED_FIELDS in installment_service forbids amount edits after
+  // current_installment > 1.
+  onLinkedPlanSave?: (
+    savedValues: ExpenseFormValues,
+    plan: {
+      type: 'obligation' | 'subscription';
+      id: number;
+      name: string;
+      amount: string;
+      currency: string;
+    },
+  ) => void;
+}
+
+// Tolerance for the amount-mismatch prompt — anything within 0.01 currency unit is
+// treated as equal (avoids prompting on rounding noise from string-to-number conversion).
+const AMOUNT_TOLERANCE = 0.01;
+
+// Resolves the linked plan (obligation or subscription) from the saved form values,
+// looking it up in the active plans the parent prop-drilled. Returns null when no FK
+// is set or the looked-up plan can't be found (e.g. user picked a plan that's since been
+// archived — should be rare since active lists are server-fetched fresh per render).
+function detectLinkedPlan(
+  values: ExpenseFormValues,
+  activeObligations: PaymentObligation[] | undefined,
+  activeSubscriptions: Subscription[] | undefined,
+): {
+  type: 'obligation' | 'subscription';
+  id: number;
+  name: string;
+  amount: string;
+  currency: string;
+} | null {
+  if (values.paymentObligationId) {
+    const o = activeObligations?.find((x) => x.id === values.paymentObligationId);
+    if (o)
+      return { type: 'obligation', id: o.id, name: o.name, amount: o.amount, currency: o.currency };
+  }
+  if (values.subscriptionId) {
+    const s = activeSubscriptions?.find((x) => x.id === values.subscriptionId);
+    if (s)
+      return {
+        type: 'subscription',
+        id: s.id,
+        name: s.name,
+        amount: s.amount,
+        currency: s.currency,
+      };
+  }
+  return null;
+}
+
+// Compares two amount strings with the standard tolerance. Returns true when the saved
+// amount differs from the plan's expected amount by more than AMOUNT_TOLERANCE. Non-finite
+// inputs are treated as "no mismatch" — invalid form state shouldn't trigger the prompt.
+function amountsDiffer(savedAmount: string, planAmount: string): boolean {
+  const entered = Number(savedAmount);
+  const current = Number(planAmount);
+  if (!Number.isFinite(entered) || !Number.isFinite(current)) return false;
+  return Math.abs(entered - current) > AMOUNT_TOLERANCE;
 }
 
 export function ExpenseFormDialog({
@@ -97,7 +164,7 @@ export function ExpenseFormDialog({
   activeSubscriptions,
   activeInstallments,
   onSuccess,
-  onMarkPaidSave,
+  onLinkedPlanSave,
 }: ExpenseFormDialogProps) {
   const locale = useLocale();
   const t = useTranslations('expenses');
@@ -134,15 +201,16 @@ export function ExpenseFormDialog({
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  // Linked-obligation dropdown is offered only on CREATE (not edit; the update endpoint
-  // doesn't accept the FK) and only when the page has provided active obligations.
-  const showLinkedObligation = !isEdit && (activeObligations?.length ?? 0) > 0;
+  // Linked-obligation dropdown is offered on CREATE and EDIT (Phase 3, follow-up Item 10).
+  // The update endpoint now accepts the FK as a JSON-Merge-Patch field; selecting "None"
+  // clears the link and the server reverses the obligation's cursor when this row was the
+  // most-recent linked expense.
+  const showLinkedObligation = (activeObligations?.length ?? 0) > 0;
   const selectedObligation = activeObligations?.find((o) => o.id === watchedPaymentObligationId);
-  // Linked-sub/installment dropdown is offered only on CREATE (Phase 3, follow-up 3a) and
-  // hidden when the form is opened via Mark Paid — the obligation FK is locked in that flow
-  // and the sub/installment dropdown would be mutually exclusive noise.
+  // Linked-sub/installment dropdown is offered on CREATE and EDIT (Phase 3, follow-up Item 10),
+  // and hidden when the form is opened via Mark Paid — the obligation FK is locked in that
+  // flow and the sub/installment dropdown would be mutually exclusive noise.
   const showLinkedSubInstallment =
-    !isEdit &&
     !prefillFromObligation &&
     ((activeSubscriptions?.length ?? 0) > 0 || (activeInstallments?.length ?? 0) > 0);
   const selectedSubInstallment: LinkedSubInstallmentValue | null =
@@ -249,8 +317,8 @@ export function ExpenseFormDialog({
 
   // Soft confirmation when a manual entry linked to a subscription / installment is far
   // enough from the closest expected cycle that the cursor will NOT advance (Phase 3,
-  // follow-up 3b). Fires only on CREATE; edit doesn't reach the linked-sub/installment
-  // dropdown so the FK never changes from edits.
+  // follow-up 3b). Fires only on CREATE — edit doesn't trigger advance per Item 10
+  // (only delete / unlink reverses the cursor), so the preview is unnecessary there.
   const [cycleAdvancePending, setCycleAdvancePending] = useState<{
     values: ExpenseFormValues;
     preview: CycleAdvancePreview;
@@ -293,17 +361,30 @@ export function ExpenseFormDialog({
 
   async function doSubmit(values: ExpenseFormValues) {
     try {
-      if (isEdit) {
-        await updateExpense(expense.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createExpense(values);
-        toast.success(t('form.createSuccess'));
-        // Mark-Paid post-save hook fires BEFORE close so the parent can mount any
-        // follow-up dialog (e.g. the amount-mismatch prompt) as a sibling that
-        // survives this dialog's close animation.
-        if (prefillFromObligation && onMarkPaidSave) {
-          onMarkPaidSave(values);
+      const result = isEdit ? await updateExpense(expense.id, values) : await createExpense(values);
+      // 409 conflict (Phase 3, follow-up Item 8.2) is returned as data rather than thrown:
+      // Next.js Server Actions strip prototype chains across the boundary, so a thrown
+      // class instance can't be identified with `instanceof` on the client. Surfacing
+      // the backend's detail message keeps the partial-UNIQUE-INDEX hit ("A charge is
+      // already recorded for this subscription on that date.") actionable.
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
+      announceSave(t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'), result.outcome);
+      // Amount-mismatch hook (Phase 3, follow-up Item 6). Fires for both create and
+      // edit flows whenever the saved amount differs from the linked plan's current
+      // expected amount by more than AMOUNT_TOLERANCE. Installments are excluded —
+      // see onLinkedPlanSave's prop doc. Fires BEFORE close so the parent can mount
+      // a follow-up dialog as a sibling that survives this dialog's close animation.
+      if (onLinkedPlanSave) {
+        const linkedPlan = detectLinkedPlan(values, activeObligations, activeSubscriptions);
+        if (
+          linkedPlan &&
+          linkedPlan.currency === values.currency &&
+          amountsDiffer(values.amount, linkedPlan.amount)
+        ) {
+          onLinkedPlanSave(values, linkedPlan);
         }
       }
       onSuccess();
@@ -314,6 +395,25 @@ export function ExpenseFormDialog({
     } catch {
       toast.error(t('form.saveError'));
     }
+  }
+
+  // Composes the success toast with optional cursor-change lines (Phase 3, follow-up
+  // Item 7). The symmetric edit model can fire both a reverse (on the OLD plan losing
+  // this expense) and an advance (on the NEW plan gaining it) — e.g. a FK swap. We
+  // announce reverse first, then advance, so the toast reads in temporal order:
+  // "Expense updated. ABL's next due date moved back to Jun 5. ARBA's next due date
+  // moved to Jul 10."
+  function announceSave(baseMessage: string, outcome: ExpenseMutationOutcome) {
+    const lines: string[] = [baseMessage];
+    if (outcome.reverse) {
+      const r = resolveCursorToast(outcome.reverse, 'reverse', locale);
+      if (r) lines.push(t(`form.${r.key}`, r.params));
+    }
+    if (outcome.advance) {
+      const a = resolveCursorToast(outcome.advance, 'advance', locale);
+      if (a) lines.push(t(`form.${a.key}`, a.params));
+    }
+    toast.success(lines.join(' '));
   }
 
   async function onSubmit(values: ExpenseFormValues) {
@@ -351,8 +451,11 @@ export function ExpenseFormDialog({
     // Cycle-advance preview (Phase 3, follow-up 3b). When the user has linked a
     // subscription / installment AND set a date, ask the backend whether saving will
     // advance the plan's cursor. If not, surface a soft-confirm dialog so the user
-    // understands the FK is still saved but the schedule stays put. CREATE only —
-    // the form hides the linked-sub/installment dropdown on edit.
+    // understands the FK is still saved but the schedule stays put. CREATE only — the
+    // symmetric edit model (audit round 2) can also fire an advance on edit-add / swap,
+    // but the cursor delta surfaces in the response toast either way; we keep the
+    // preview to the create flow because that's where the user is actively choosing
+    // a date for the first time.
     if (!isEdit && values.date && (values.subscriptionId || values.installmentId)) {
       try {
         const preview = await getCycleAdvancePreview({
@@ -726,10 +829,13 @@ export function ExpenseFormDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Cycle-advance out-of-tolerance confirmation (Phase 3, follow-up 3b). Same
-          sibling pattern as novel-currency / auto-charge — fires when the user has
-          linked a subscription or installment but the entry date is far from the
-          next expected cycle, so the plan's cursor will not advance on save. */}
+      {/* Cycle-advance soft-confirm (Phase 3, follow-up 3b). Same sibling pattern as
+          novel-currency / auto-charge — fires when the user has linked a subscription
+          or installment but the entry's matched cycle isn't the plan's current cursor,
+          so the schedule won't advance on save. Copy branches on `multi_jump`: the
+          future-cycle case (matched cycle ahead of cursor — pre-pay / mis-click) reads
+          differently from the back-dated case (matched cycle behind cursor — already
+          emitted by the scheduler). */}
       <Dialog
         open={!!cycleAdvancePending}
         onOpenChange={(open) => !open && setCycleAdvancePending(null)}
@@ -738,13 +844,25 @@ export function ExpenseFormDialog({
           <DialogHeader>
             <DialogTitle>{t('form.cycleAdvance.title')}</DialogTitle>
           </DialogHeader>
-          <p className="text-paragraph-sm text-muted-foreground">
-            {t('form.cycleAdvance.description', {
-              planName: cycleAdvanceDisplay?.planName ?? '',
-              nextExpectedDate: cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
-              distanceDays: cycleAdvanceDisplay?.preview.distanceDays ?? 0,
-            })}
-          </p>
+          {cycleAdvanceDisplay && (
+            <p className="text-paragraph-sm text-muted-foreground">
+              {cycleAdvanceDisplay.preview.multiJump
+                ? t('form.cycleAdvance.descriptionMultiJump', {
+                    planName: cycleAdvanceDisplay.planName,
+                    nextExpectedDate: formatDateForLocale(
+                      cycleAdvanceDisplay.preview.nextExpectedDate,
+                      locale,
+                    ),
+                  })
+                : t('form.cycleAdvance.descriptionBackDated', {
+                    planName: cycleAdvanceDisplay.planName,
+                    nextExpectedDate: formatDateForLocale(
+                      cycleAdvanceDisplay.preview.nextExpectedDate,
+                      locale,
+                    ),
+                  })}
+            </p>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCycleAdvancePending(null)}>
               {t('form.cancel')}

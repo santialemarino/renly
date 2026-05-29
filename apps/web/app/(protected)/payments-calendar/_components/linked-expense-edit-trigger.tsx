@@ -9,22 +9,35 @@ import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expens
 import { getExpenseById } from '@/app/(protected)/expenses/expenses-actions';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
+import type { Installment } from '@/lib/api/installments';
+import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import type { Subscription } from '@/lib/api/subscriptions';
 
 interface LinkedExpenseEditTriggerProps {
   linkedExpenseId: number;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
   children: React.ReactNode;
 }
 
 // Wraps a Paid-cycle row on the Payments Calendar with a click handler that fetches
 // the linked expense by id and opens its edit dialog in-place — no page navigation.
-// The expense form is the same dialog used elsewhere; the user can edit, delete, or
-// just inspect, then close to return to the calendar.
+// The expense form is the same dialog used elsewhere; the user can edit (including
+// changing or clearing the linked FK per Item 10), delete, or just inspect, then
+// close to return to the calendar. Active plans are prop-drilled so the linked-FK
+// dropdowns render with the user's current plans. `onLinkedPlanSave` is intentionally
+// NOT wired — the amount-mismatch follow-up prompt (Item 6) is scoped to the /expenses
+// + Mark-Paid flows; the calendar's inline edit just lets the user fix the row and go.
 export function LinkedExpenseEditTrigger({
   linkedExpenseId,
   preferredCurrencies,
   creditCards,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
   children,
 }: LinkedExpenseEditTriggerProps) {
   const t = useTranslations('paymentsCalendar');
@@ -67,6 +80,9 @@ export function LinkedExpenseEditTrigger({
         expense={expense ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeObligations={activeObligations}
+        activeSubscriptions={activeSubscriptions}
+        activeInstallments={activeInstallments}
         onSuccess={() => router.refresh()}
       />
     </>

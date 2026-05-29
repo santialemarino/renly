@@ -1,8 +1,19 @@
-from sqlalchemy import asc, desc
+from sqlalchemy import Date, asc, cast, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.installment import Installment
+
+# Derived expression matching the `InstallmentResponse.next_cuota_date` computed field.
+# Lets the table sort by next-cuota order without an O(n) post-query Python re-sort —
+# `make_interval` is a PostgreSQL built-in that handles month-end clamping the same
+# way `add_months` does on the Python side (e.g. Jan 31 + 1 month → Feb 28), so the
+# SQL order matches the response values exactly. Cast back to Date because
+# `date + interval` returns timestamp in PG.
+_next_cuota_date_expr = cast(
+    Installment.start_date + func.make_interval(0, Installment.current_installment - 1),
+    Date,
+)
 
 _SORT_COLUMNS = {
     "name": Installment.name,
@@ -12,6 +23,7 @@ _SORT_COLUMNS = {
     "installments_count": Installment.installments_count,
     "current_installment": Installment.current_installment,
     "start_date": Installment.start_date,
+    "next_cuota_date": _next_cuota_date_expr,
 }
 
 
@@ -32,7 +44,9 @@ async def list_by_user(
         stmt = stmt.where(Installment.name.ilike(f"%{search}%"))
     sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
     order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else Installment.start_date.desc()
+    # Default order: most-recent first by the derived next-cuota date — keeps the
+    # default view aligned with what the table now leads with.
+    order_clause = order_fn(sort_col) if sort_col is not None else _next_cuota_date_expr.desc()
     stmt = stmt.order_by(order_clause)
     result = await session.execute(stmt)
     return list(result.scalars().all())

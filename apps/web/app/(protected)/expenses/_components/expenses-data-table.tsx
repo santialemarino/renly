@@ -27,9 +27,16 @@ import {
 import { cn } from '@repo/ui/lib';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import {
+  LinkedPlanAmountMismatchDialog,
+  type LinkedPlanMismatch,
+} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
+import type { Installment } from '@/lib/api/installments';
+import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import type { Subscription } from '@/lib/api/subscriptions';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -73,11 +80,19 @@ function RowActions({
   expense,
   preferredCurrencies,
   creditCards,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
+  onMismatch,
   onSuccess,
 }: {
   expense: Expense;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
+  onMismatch: (mismatch: LinkedPlanMismatch) => void;
   onSuccess: () => void;
 }) {
   const t = useTranslations('expenses');
@@ -129,7 +144,20 @@ function RowActions({
         expense={expense}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        activeObligations={activeObligations}
+        activeSubscriptions={activeSubscriptions}
+        activeInstallments={activeInstallments}
         onSuccess={onSuccess}
+        onLinkedPlanSave={(values, plan) =>
+          onMismatch({
+            type: plan.type,
+            planId: plan.id,
+            planName: plan.name,
+            enteredAmount: values.amount,
+            currentAmount: plan.amount,
+            currency: plan.currency,
+          })
+        }
       />
 
       <ExpenseDeleteDialog
@@ -146,11 +174,17 @@ export function ExpensesDataTable({
   data,
   preferredCurrencies,
   creditCards,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
   activeCurrency,
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
   activeCurrency?: string;
 }) {
   const locale = useLocale();
@@ -158,6 +192,10 @@ export function ExpensesDataTable({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  // Amount-mismatch follow-up prompt fired from the edit dialog (Phase 3, follow-up
+  // Item 6). Lives at the table level rather than per row so the prompt survives the
+  // edit dialog's close animation and works the same on any row.
+  const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
 
   const sortBy = (searchParams.get('sort_by') as ExpenseSortField | null) ?? null;
   const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
@@ -275,6 +313,10 @@ export function ExpensesDataTable({
                       expense={expense}
                       preferredCurrencies={preferredCurrencies}
                       creditCards={creditCards}
+                      activeObligations={activeObligations}
+                      activeSubscriptions={activeSubscriptions}
+                      activeInstallments={activeInstallments}
+                      onMismatch={setMismatch}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>
@@ -284,6 +326,15 @@ export function ExpensesDataTable({
           </TableBody>
         </Table>
       </div>
+
+      <LinkedPlanAmountMismatchDialog
+        mismatch={mismatch}
+        onClose={() => setMismatch(null)}
+        onConfirmed={() => {
+          setMismatch(null);
+          router.refresh();
+        }}
+      />
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">

@@ -20,6 +20,26 @@
         "serverError": "Something went wrong. Please try again later."
       }
     },
+    "amountMismatch": {
+      "obligation": {
+        "title": "Update expected amount?",
+        "description": "You paid {enteredAmount} {currency} for \"{planName}\" but its current expected amount is {currentAmount} {currency}. Should the obligation's next expected amount be updated to {enteredAmount} {currency}?",
+        "confirm": "Yes, update",
+        "decline": "No, keep current",
+        "updating": "Updating...",
+        "updateSuccess": "Obligation amount updated.",
+        "updateError": "Failed to update obligation amount."
+      },
+      "subscription": {
+        "title": "Update expected amount?",
+        "description": "You paid {enteredAmount} {currency} for \"{planName}\" but its current expected amount is {currentAmount} {currency}. Should the subscription's expected amount be updated to {enteredAmount} {currency}?",
+        "confirm": "Yes, update",
+        "decline": "No, keep current",
+        "updating": "Updating...",
+        "updateSuccess": "Subscription amount updated.",
+        "updateError": "Failed to update subscription amount."
+      }
+    },
     "categories": {
       "cedears": "CEDEARs",
       "corporate_bonds": "Corporate Bonds",
@@ -59,7 +79,8 @@
       "cancel": "Cancel",
       "confirm": "Confirm",
       "loading": "Processing..."
-    }
+    },
+    "nextCycleHint": "· next {date}"
   },
   "login": {
     "metadata": {
@@ -459,8 +480,9 @@
         "confirm": "Continue anyway"
       },
       "cycleAdvance": {
-        "title": "Far from next expected cycle",
-        "description": "This entry is {distanceDays} days from {planName}'s next expected cycle ({nextExpectedDate}). The plan's schedule will not advance. Continue?",
+        "title": "The plan's schedule will not advance",
+        "descriptionMultiJump": "This entry matches a future cycle of {planName} ({nextExpectedDate}), ahead of the current schedule. The plan stays where it is — the scheduler will back-fill the earlier cycles. Continue?",
+        "descriptionBackDated": "This entry is far from {planName}'s current cycle (closest match: {nextExpectedDate}). The plan stays where it is. Continue?",
         "confirm": "Save without advancing"
       },
       "linkedObligation": {
@@ -485,7 +507,21 @@
       },
       "createSuccess": "Expense created.",
       "updateSuccess": "Expense updated.",
-      "saveError": "Failed to save expense."
+      "saveError": "Failed to save expense.",
+      "cursorAdvanceToast": {
+        "obligation": "{planName}'s next due date moved to {newCursor}.",
+        "obligationArchived": "{planName} marked as paid.",
+        "subscription": "{planName}'s next billing date moved to {newCursor}.",
+        "installment": "{planName}: {paidCount} of {totalCount} cuotas paid.",
+        "installmentArchived": "{planName} fully paid."
+      },
+      "cursorReverseToast": {
+        "obligation": "{planName}'s next due date moved back to {newCursor}.",
+        "obligationReactivated": "{planName} re-activated.",
+        "subscription": "{planName}'s next billing date moved back to {newCursor}.",
+        "installment": "{planName}: {paidCount} of {totalCount} cuotas paid.",
+        "installmentReactivated": "{planName} re-activated."
+      }
     },
     "delete": {
       "title": "Delete expense",
@@ -811,15 +847,6 @@
       "unarchiveSuccess": "Obligation unarchived.",
       "unarchiveError": "Failed to unarchive obligation."
     },
-    "markPaid": {
-      "amountMismatchTitle": "Update expected amount?",
-      "amountMismatchDescription": "You paid {enteredAmount} {currency} for \"{obligationName}\" but its current expected amount is {currentAmount} {currency}. Should the obligation's next expected amount be updated to {enteredAmount} {currency}?",
-      "amountMismatchConfirm": "Yes, update",
-      "amountMismatchDecline": "No, keep current",
-      "amountMismatchUpdating": "Updating...",
-      "amountUpdateSuccess": "Obligation amount updated.",
-      "amountUpdateError": "Failed to update obligation amount."
-    },
     "form": {
       "titleCreate": "Add payment obligation",
       "titleEdit": "Edit payment obligation",
@@ -937,7 +964,7 @@
       "totalAmount": "Total",
       "interestSubLine": "Includes {amount} interest",
       "progress": "Progress",
-      "startDate": "Start date",
+      "nextCuotaDate": "Next cuota",
       "paymentMethod": "Payment method",
       "actions": "Actions",
       "empty": "No installment plans found."

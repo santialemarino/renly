@@ -15,6 +15,7 @@ interface InstallmentRaw {
   installments_count: number;
   current_installment: number;
   start_date: string;
+  next_cuota_date: string | null;
   payment_method: string | null;
   credit_card_id: number | null;
   is_active: boolean;
@@ -35,6 +36,11 @@ export interface Installment {
   installmentsCount: number;
   currentInstallment: number;
   startDate: string;
+  // Derived from `start_date + (current_installment - 1) months` server-side so the
+  // installments table can render the next-due-date in the column where subscriptions
+  // show `next_billing_date` and obligations show `next_due_date`. Null when the plan
+  // is fully paid (`current_installment > installments_count`).
+  nextCuotaDate: string | null;
   paymentMethod: string | null;
   creditCardId: number | null;
   isActive: boolean;
@@ -56,6 +62,7 @@ function mapInstallment(raw: InstallmentRaw): Installment {
     installmentsCount: raw.installments_count,
     currentInstallment: raw.current_installment,
     startDate: raw.start_date,
+    nextCuotaDate: raw.next_cuota_date,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
     isActive: raw.is_active,
@@ -73,7 +80,8 @@ export type InstallmentSortField =
   | 'currency'
   | 'installments_count'
   | 'current_installment'
-  | 'start_date';
+  | 'start_date'
+  | 'next_cuota_date';
 export type SortOrder = 'asc' | 'desc';
 
 export interface GetInstallmentsParams {

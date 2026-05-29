@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import AdvanceResult, NotFoundError, ReverseResult
 from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
@@ -121,13 +121,65 @@ def compute_obligation_advance(next_due_date: date_type, recurrence: str | None,
 
 # Advances next_due_date one recurrence cycle (recurring) or archives the obligation (one-off).
 # Caller commits — this stages the change inside the expense-create transaction so the advance
-# is atomic with the linked expense insert (Phase 3, Step E). No-op when the obligation
-# can't be found or doesn't belong to the user.
-async def advance_or_archive(session: AsyncSession, obligation_id: int, user: User) -> None:
+# is atomic with the linked expense insert (Phase 3, Step E). Returns an AdvanceResult so the
+# expense create response can carry enough context for the frontend toast (Phase 3, follow-up
+# Item 7) — `new_cursor` is empty when a one-off obligation flips to is_active=False. None
+# when the obligation can't be found or doesn't belong to the user.
+async def advance_or_archive(session: AsyncSession, obligation_id: int, user: User) -> AdvanceResult | None:
     obligation = await payment_obligation_repository.get_by_id(session, obligation_id, user.id)
     if obligation is None:
-        return
+        return None
+    previous = obligation.next_due_date
     obligation.next_due_date, obligation.is_active = compute_obligation_advance(
         obligation.next_due_date, obligation.recurrence, obligation.anchor_day
     )
     await payment_obligation_repository.save(session, obligation)
+    archived = not obligation.is_active
+    return AdvanceResult(
+        plan_type="obligation",
+        plan_id=obligation.id,
+        plan_name=obligation.name,
+        previous_cursor=previous.isoformat(),
+        new_cursor="" if archived else obligation.next_due_date.isoformat(),
+    )
+
+
+# Walks next_due_date back one recurrence cycle (recurring) or re-activates the obligation
+# (one-off; date is already correct since archive didn't move it). Caller commits. Used by
+# expense_service when the most-recent linked expense for an obligation is deleted or
+# unlinked (Phase 3, follow-up Item 10). Returns a ReverseResult with the cursor delta
+# for Item 7's toast — `previous_cursor` reads empty (the archive sentinel) for one-off
+# re-activations so the frontend can branch on the archive state. Recurring obligations
+# never re-activate here: `compute_obligation_advance` only sets `is_active=False` for
+# one-off (recurrence=None); a recurring obligation with `is_active=False` reflects a
+# manual user archive, which the reverse must NOT override. No-op when the obligation
+# can't be found.
+async def reverse_for_unlink(session: AsyncSession, obligation_id: int, user: User) -> ReverseResult | None:
+    obligation = await payment_obligation_repository.get_by_id(session, obligation_id, user.id)
+    if obligation is None:
+        return None
+    previous_date = obligation.next_due_date
+    reactivated = False
+    if obligation.recurrence is None:
+        # One-off obligations don't walk the date back; the archive flip is what undoes the advance.
+        obligation.is_active = True
+        reactivated = True
+    elif obligation.recurrence in OBLIGATION_MONTH_STEP:
+        # Recurring obligations step back by their full recurrence cycle, mirroring the
+        # forward advance in compute_obligation_advance. is_active is left untouched.
+        obligation.next_due_date = add_months_anchored(
+            obligation.next_due_date,
+            -OBLIGATION_MONTH_STEP[obligation.recurrence],
+            obligation.anchor_day,
+        )
+    else:
+        # Unknown recurrence: defensive default mirrors compute_obligation_advance's no-op.
+        return None
+    await payment_obligation_repository.save(session, obligation)
+    return ReverseResult(
+        plan_type="obligation",
+        plan_id=obligation.id,
+        plan_name=obligation.name,
+        previous_cursor="" if reactivated else previous_date.isoformat(),
+        new_cursor=obligation.next_due_date.isoformat(),
+    )

@@ -37,7 +37,10 @@ async def list_installments(
     search: str | None = Query(default=None, description="Filter installments by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
-        description="Column to sort by (name, total_amount, installment_amount, currency, installments_count, current_installment, start_date).",
+        description=(
+            "Column to sort by (name, total_amount, installment_amount, currency, "
+            "installments_count, current_installment, start_date, next_cuota_date)."
+        ),
     ),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (completed) installments."),

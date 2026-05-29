@@ -2,11 +2,12 @@
 
 import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // "Linked to obligation" dropdown on the expense form (Phase 3 follow-up to Step E).
 // Tri-state match model:
@@ -70,7 +71,9 @@ export function LinkedObligationSelect({
   formCreditCardId,
   onChange,
 }: LinkedObligationSelectProps) {
+  const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
 
   // Sort: 'match' first, then 'unknown', then 'mismatch'. Tiebreak by next_due_date ASC.
   const sorted = useMemo(() => {
@@ -116,14 +119,23 @@ export function LinkedObligationSelect({
                 : 'text-muted-foreground';
           return (
             <SelectItem key={obligation.id} value={String(obligation.id)}>
-              <div className="flex items-center gap-x-2">
+              <div className="flex min-w-0 items-center gap-x-2">
                 {!disabled && (
                   <CircleDot
                     className={cn('size-3 shrink-0 transition-colors', dotColor)}
                     aria-hidden
                   />
                 )}
-                <span>{obligation.name}</span>
+                <span className="truncate">{obligation.name}</span>
+                {/* Next-due-date in a muted sub-label so the dropdown matches the
+                    sub/installment dropdown's Item 8.1 affordance — the user can see
+                    what they're linking against without opening another tab. Shared
+                    `common.nextCycleHint` copy so both dropdowns stay in sync. */}
+                <span className="text-paragraph-xs text-muted-foreground">
+                  {tCommon('nextCycleHint', {
+                    date: formatDateForLocale(obligation.nextDueDate, locale),
+                  })}
+                </span>
               </div>
             </SelectItem>
           );

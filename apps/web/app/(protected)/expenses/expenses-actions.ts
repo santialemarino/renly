@@ -22,6 +22,62 @@ interface ExpenseRaw {
   updated_at: string;
 }
 
+// Cursor change emitted by a linked plan on create / update / delete (Phase 3,
+// follow-up Item 7). The form composes a follow-up toast line — "Netflix's next
+// billing date moved to Jun 27, 2026." — branching on planType. previousCursor /
+// newCursor are stringified — ISO date for obligation/subscription, decimal index
+// for installment; newCursor is empty when the plan archived, previousCursor is
+// empty when the plan re-activated via reverse. totalCount is populated for
+// installments only (the plan's `installments_count`) so the toast renders
+// "cuota N of M" without a client-side lookup against a stale active-plans list.
+export interface PlanCursorChange {
+  planType: 'obligation' | 'subscription' | 'installment';
+  planId: number;
+  planName: string;
+  previousCursor: string;
+  newCursor: string;
+  totalCount: number | null;
+}
+
+// Bundle of cursor deltas returned by create / update mutations. Both fields can fire
+// simultaneously on a FK swap — the OLD plan loses this expense (reverse) and the NEW
+// plan gains it (advance). The form composes the toast with potentially both lines.
+export interface ExpenseMutationOutcome {
+  advance: PlanCursorChange | null;
+  reverse: PlanCursorChange | null;
+}
+
+// Discriminated result so the form can branch without `instanceof` (Next.js Server Action
+// boundary strips prototype chains — a thrown class instance arrives at the client as a
+// plain Error, so an `instanceof` check silently returns false and the user sees the
+// generic save-error toast instead of the backend's 409 detail). Returning the conflict
+// as data keeps the type information across the boundary; only truly unexpected failures
+// (network, 500) still throw.
+export type ExpenseMutationResult =
+  | { ok: true; outcome: ExpenseMutationOutcome }
+  | { ok: false; conflictDetail: string };
+
+interface PlanCursorChangeRaw {
+  plan_type: 'obligation' | 'subscription' | 'installment';
+  plan_id: number;
+  plan_name: string;
+  previous_cursor: string;
+  new_cursor: string;
+  total_count: number | null;
+}
+
+function mapCursorChange(raw: PlanCursorChangeRaw | null): PlanCursorChange | null {
+  if (!raw) return null;
+  return {
+    planType: raw.plan_type,
+    planId: raw.plan_id,
+    planName: raw.plan_name,
+    previousCursor: raw.previous_cursor,
+    newCursor: raw.new_cursor,
+    totalCount: raw.total_count,
+  };
+}
+
 // Fetches a single expense by id. Used by the Payments Calendar to open the linked
 // expense's edit dialog when the user clicks a Paid badge.
 export async function getExpenseById(id: number): Promise<Expense> {
@@ -47,7 +103,28 @@ export async function getExpenseById(id: number): Promise<Expense> {
   };
 }
 
-export async function createExpense(values: ExpenseFormValues): Promise<void> {
+type ExpenseMutationRaw = ExpenseRaw & {
+  advance_change: PlanCursorChangeRaw | null;
+  reverse_change: PlanCursorChangeRaw | null;
+};
+
+function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
+  return {
+    advance: mapCursorChange(raw.advance_change),
+    reverse: mapCursorChange(raw.reverse_change),
+  };
+}
+
+async function readErrorDetail(res: Response): Promise<string | null> {
+  try {
+    const body: { detail?: unknown } = await res.json();
+    return typeof body.detail === 'string' ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationResult> {
   const {
     paymentMethod,
     creditCardId,
@@ -67,14 +144,25 @@ export async function createExpense(values: ExpenseFormValues): Promise<void> {
       installment_id: installmentId ?? null,
     },
   });
-  if (!res.ok) throw new Error('Failed to create expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) return { ok: false, conflictDetail: detail };
+    }
+    throw new Error('Failed to create expense');
+  }
+  return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
-export async function updateExpense(id: number, values: ExpenseFormValues): Promise<void> {
-  // paymentObligationId / subscriptionId / installmentId intentionally excluded — the update
-  // endpoint doesn't accept the three commitment FKs (links are set at creation only;
-  // correcting an over-advance is done via the obligation / plan's own form). Reverse-on-
-  // unlink semantics are deferred to the bundled reverse-advance feature (Bucket 2).
+export async function updateExpense(
+  id: number,
+  values: ExpenseFormValues,
+): Promise<ExpenseMutationResult> {
+  // Commitment FKs follow JSON Merge Patch semantics: pass `null` to clear an existing
+  // link, pass an id to swap to a different plan. The server fires the symmetric advance /
+  // reverse model — clear / swap reverses the OLD plan; add / swap advances the NEW plan.
+  // A swap can populate both `advance` and `reverse` in the outcome (Phase 3, follow-up
+  // Items 10 + audit round 2).
   const res = await authenticatedFetch(`/expenses/${id}`, {
     method: 'PUT',
     body: {
@@ -85,14 +173,26 @@ export async function updateExpense(id: number, values: ExpenseFormValues): Prom
       notes: values.notes,
       payment_method: values.paymentMethod,
       credit_card_id: values.creditCardId,
+      payment_obligation_id: values.paymentObligationId ?? null,
+      subscription_id: values.subscriptionId ?? null,
+      installment_id: values.installmentId ?? null,
     },
   });
-  if (!res.ok) throw new Error('Failed to update expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) return { ok: false, conflictDetail: detail };
+    }
+    throw new Error('Failed to update expense');
+  }
+  return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
-export async function deleteExpense(id: number): Promise<void> {
+export async function deleteExpense(id: number): Promise<PlanCursorChange | null> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete expense');
+  const raw: { reverse_change: PlanCursorChangeRaw | null } = await res.json();
+  return mapCursorChange(raw.reverse_change);
 }
 
 // Result of a manual-dupe expense lookup (Phase 3, Step D).
@@ -140,19 +240,23 @@ export async function getAutoChargeMatch(params: {
   };
 }
 
-// Preview decision returned by GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b).
-// The expense form calls this before save when the user has linked a subscription or
-// installment; would_advance=false drives a soft-confirm dialog before continuing.
+// Preview decision returned by GET /expenses/cycle-advance-preview (Phase 3, follow-up 3b,
+// revised by Item 9). The expense form calls this before save when the user has linked
+// a subscription or installment; would_advance=false drives a soft-confirm dialog before
+// continuing. multi_jump=true means the matched cycle is ahead of the current cursor
+// (pre-pay / mis-click) — link saved, scheduler back-fills intermediate cycles.
 export interface CycleAdvancePreview {
   wouldAdvance: boolean;
   distanceDays: number;
   nextExpectedDate: string;
+  multiJump: boolean;
 }
 
 interface CycleAdvancePreviewRaw {
   would_advance: boolean;
   distance_days: number;
   next_expected_date: string;
+  multi_jump: boolean;
 }
 
 export async function getCycleAdvancePreview(params: {
@@ -172,5 +276,6 @@ export async function getCycleAdvancePreview(params: {
     wouldAdvance: raw.would_advance,
     distanceDays: raw.distance_days,
     nextExpectedDate: raw.next_expected_date,
+    multiJump: raw.multi_jump,
   };
 }

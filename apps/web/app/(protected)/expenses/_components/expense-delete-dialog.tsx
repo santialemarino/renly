@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@repo/ui/components';
+import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import { deleteExpense } from '@/app/(protected)/expenses/expenses-actions';
 import type { Expense } from '@/lib/api/expenses';
 import { formatAmount } from '@/lib/utils/currency';
@@ -36,8 +37,18 @@ export function ExpenseDeleteDialog({
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteExpense(expense.id);
-      toast.success(t('delete.success'));
+      const cursorChange = await deleteExpense(expense.id);
+      const baseMessage = t('delete.success');
+      if (cursorChange) {
+        const resolution = resolveCursorToast(cursorChange, 'reverse', locale);
+        if (resolution) {
+          toast.success(`${baseMessage} ${t(`form.${resolution.key}`, resolution.params)}`);
+        } else {
+          toast.success(baseMessage);
+        }
+      } else {
+        toast.success(baseMessage);
+      }
       onOpenChange(false);
       onSuccess();
     } catch {
