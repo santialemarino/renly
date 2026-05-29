@@ -490,7 +490,8 @@
         "placeholder": "Select an obligation (optional)",
         "none": "Not linked",
         "lockedFromMarkPaid": "Linked from \"Mark paid\" — the obligation will advance on save.",
-        "mismatch": "Heads up: this obligation's expected currency, payment method, or card differs from your entry."
+        "mismatch": "Heads up: this obligation's expected currency, payment method, or card differs from your entry.",
+        "archivedGroupLabel": "Currently linked (archived)"
       },
       "linkedSubInstallment": {
         "label": "Linked to subscription or installment",
@@ -498,7 +499,8 @@
         "none": "Not linked",
         "subscriptionsLabel": "Subscriptions",
         "installmentsLabel": "Installments",
-        "mismatch": "Heads up: this plan's expected currency, payment method, or card differs from your entry."
+        "mismatch": "Heads up: this plan's expected currency, payment method, or card differs from your entry.",
+        "archivedGroupLabel": "Currently linked (archived)"
       },
       "cancel": "Cancel",
       "cta": {

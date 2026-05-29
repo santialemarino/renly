@@ -83,6 +83,10 @@ export interface GetPaymentObligationsParams {
   sortBy?: PaymentObligationSortField;
   sortOrder?: SortOrder;
   showArchived?: boolean;
+  // Archived obligation ids to include alongside the active set — used by the expense
+  // edit dialog so a row linked to a since-archived obligation can still surface in
+  // the linked-FK dropdown. Server ignores when showArchived=true.
+  includeIds?: number[];
   currency?: string;
 }
 
@@ -94,6 +98,9 @@ export async function getPaymentObligations(
   if (params.sortBy) qs.set('sort_by', params.sortBy);
   if (params.sortOrder) qs.set('sort_order', params.sortOrder);
   if (params.showArchived) qs.set('show_archived', 'true');
+  if (params.includeIds && params.includeIds.length > 0) {
+    for (const id of params.includeIds) qs.append('include_ids', String(id));
+  }
   if (params.currency) qs.set('currency', params.currency);
 
   const endpoint = qs.toString() ? `/payment-obligations?${qs.toString()}` : '/payment-obligations';

@@ -4,7 +4,15 @@ import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/components';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { formatDateForLocale } from '@/lib/utils/format';
@@ -62,6 +70,53 @@ export function obligationMatchStatus(
   return anyUnknown ? 'unknown' : 'match';
 }
 
+// Renders one obligation row inside the dropdown. Extracted so the active and the
+// archived-currently-linked groups share rendering — the only difference between them
+// is the wrapping SelectGroup + label.
+function ObligationRow({
+  obligation,
+  status,
+  isSelected,
+  disabled,
+  locale,
+  nextCycleHint,
+}: {
+  obligation: PaymentObligation;
+  status: MatchStatus;
+  isSelected: boolean;
+  disabled: boolean | undefined;
+  locale: string;
+  nextCycleHint: (params: { date: string }) => string;
+}) {
+  // Dot color rules:
+  //   - match               -> emerald (positive selection aid, regardless of selection).
+  //   - unknown             -> muted (form not fully filled, no signal yet).
+  //   - mismatch + selected -> amber (pairs 1:1 with the StyledHint warning below).
+  //   - mismatch + unselected -> muted (avoid lighting up the dropdown with amber
+  //                              on browse — sort order already deprioritises them).
+  //   - disabled mode (Mark Paid) -> dot suppressed entirely so the trigger text
+  //                              aligns naturally to the left with no phantom indent.
+  const dotColor =
+    status === 'match'
+      ? 'text-emerald-500'
+      : status === 'mismatch' && isSelected
+        ? 'text-amber-500'
+        : 'text-muted-foreground';
+  return (
+    <SelectItem value={String(obligation.id)}>
+      <div className="flex min-w-0 items-center gap-x-2">
+        {!disabled && (
+          <CircleDot className={cn('size-3 shrink-0 transition-colors', dotColor)} aria-hidden />
+        )}
+        <span className="truncate">{obligation.name}</span>
+        <span className="text-paragraph-xs text-muted-foreground">
+          {nextCycleHint({ date: formatDateForLocale(obligation.nextDueDate, locale) })}
+        </span>
+      </div>
+    </SelectItem>
+  );
+}
+
 export function LinkedObligationSelect({
   obligations,
   value,
@@ -75,19 +130,33 @@ export function LinkedObligationSelect({
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
-  // Sort: 'match' first, then 'unknown', then 'mismatch'. Tiebreak by next_due_date ASC.
-  const sorted = useMemo(() => {
-    const withStatus = obligations.map((o) => ({
-      obligation: o,
-      status: obligationMatchStatus(o, formCurrency, formPaymentMethod, formCreditCardId),
-    }));
+  // Partition into active vs archived. Archived obligations enter via `include_ids` from
+  // the page server component when an in-scope expense links to a since-archived row
+  // (Phase 3 audit-round-3 follow-up). Active rows go in the main list with the existing
+  // match-aware sort; archived rows go in a separate "Currently linked (archived)" group
+  // at the bottom — the user can keep or change the link but doesn't browse archived plans
+  // for new links.
+  const { activeSorted, archivedSorted } = useMemo(() => {
     const rank: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
-    withStatus.sort((a, b) => {
+    const active: { obligation: PaymentObligation; status: MatchStatus }[] = [];
+    const archived: { obligation: PaymentObligation; status: MatchStatus }[] = [];
+    for (const o of obligations) {
+      const entry = {
+        obligation: o,
+        status: obligationMatchStatus(o, formCurrency, formPaymentMethod, formCreditCardId),
+      };
+      (o.isActive ? active : archived).push(entry);
+    }
+    // Same match-aware sort within each bucket. Archived sort by next_due_date alone
+    // matters less (UI groups them under a clear label) but stays consistent.
+    const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = rank[a.status] - rank[b.status];
       if (rankDiff !== 0) return rankDiff;
       return a.obligation.nextDueDate.localeCompare(b.obligation.nextDueDate);
-    });
-    return withStatus;
+    };
+    active.sort(sortBy);
+    archived.sort(sortBy);
+    return { activeSorted: active, archivedSorted: archived };
   }, [obligations, formCurrency, formPaymentMethod, formCreditCardId]);
 
   return (
@@ -101,45 +170,33 @@ export function LinkedObligationSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_VALUE}>{t('form.linkedObligation.none')}</SelectItem>
-        {sorted.map(({ obligation, status }) => {
-          const isSelected = obligation.id === value;
-          // Dot color rules:
-          //   - match               -> emerald (positive selection aid, regardless of selection).
-          //   - unknown             -> muted (form not fully filled, no signal yet).
-          //   - mismatch + selected -> amber (pairs 1:1 with the StyledHint warning below).
-          //   - mismatch + unselected -> muted (avoid lighting up the dropdown with amber
-          //                              on browse — sort order already deprioritises them).
-          //   - disabled mode (Mark Paid) -> dot suppressed entirely so the trigger text
-          //                              aligns naturally to the left with no phantom indent.
-          const dotColor =
-            status === 'match'
-              ? 'text-emerald-500'
-              : status === 'mismatch' && isSelected
-                ? 'text-amber-500'
-                : 'text-muted-foreground';
-          return (
-            <SelectItem key={obligation.id} value={String(obligation.id)}>
-              <div className="flex min-w-0 items-center gap-x-2">
-                {!disabled && (
-                  <CircleDot
-                    className={cn('size-3 shrink-0 transition-colors', dotColor)}
-                    aria-hidden
-                  />
-                )}
-                <span className="truncate">{obligation.name}</span>
-                {/* Next-due-date in a muted sub-label so the dropdown matches the
-                    sub/installment dropdown's Item 8.1 affordance — the user can see
-                    what they're linking against without opening another tab. Shared
-                    `common.nextCycleHint` copy so both dropdowns stay in sync. */}
-                <span className="text-paragraph-xs text-muted-foreground">
-                  {tCommon('nextCycleHint', {
-                    date: formatDateForLocale(obligation.nextDueDate, locale),
-                  })}
-                </span>
-              </div>
-            </SelectItem>
-          );
-        })}
+        {activeSorted.map(({ obligation, status }) => (
+          <ObligationRow
+            key={obligation.id}
+            obligation={obligation}
+            status={status}
+            isSelected={obligation.id === value}
+            disabled={disabled}
+            locale={locale}
+            nextCycleHint={(p) => tCommon('nextCycleHint', p)}
+          />
+        ))}
+        {archivedSorted.length > 0 && (
+          <SelectGroup>
+            <SelectLabel>{t('form.linkedObligation.archivedGroupLabel')}</SelectLabel>
+            {archivedSorted.map(({ obligation, status }) => (
+              <ObligationRow
+                key={obligation.id}
+                obligation={obligation}
+                status={status}
+                isSelected={obligation.id === value}
+                disabled={disabled}
+                locale={locale}
+                nextCycleHint={(p) => tCommon('nextCycleHint', p)}
+              />
+            ))}
+          </SelectGroup>
+        )}
       </SelectContent>
     </Select>
   );

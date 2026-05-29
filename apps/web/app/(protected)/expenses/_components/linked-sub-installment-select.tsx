@@ -147,38 +147,98 @@ export function LinkedSubInstallmentSelect({
   const tCommon = useTranslations('common');
 
   // Sort within each group: match -> unknown -> mismatch, then next-cycle-date ASC.
-  // Two separate sorted lists rather than one merged list — the SelectGroups stay
-  // visually distinct (Subscriptions / Installments) so cross-group sorting would
-  // muddle the grouping.
+  // Active and archived go in separate buckets — archived plans enter via `include_ids`
+  // when an in-scope expense links to a since-archived row (Phase 3 audit-round-3
+  // follow-up); they render in a single "Currently linked (archived)" group at the
+  // bottom regardless of type so the user can see what an edit row's link is even
+  // when the plan no longer appears in active lists.
   const sortedSubscriptions = useMemo(() => {
-    const withStatus = subscriptions.map((s) => ({
-      sub: s,
-      status: planMatchStatus(s, formCurrency, formPaymentMethod, formCreditCardId),
-    }));
-    withStatus.sort((a, b) => {
+    const active: { sub: Subscription; status: MatchStatus }[] = [];
+    const archived: { sub: Subscription; status: MatchStatus }[] = [];
+    for (const s of subscriptions) {
+      const entry = {
+        sub: s,
+        status: planMatchStatus(s, formCurrency, formPaymentMethod, formCreditCardId),
+      };
+      (s.isActive ? active : archived).push(entry);
+    }
+    const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = STATUS_RANK[a.status] - STATUS_RANK[b.status];
       if (rankDiff !== 0) return rankDiff;
       return a.sub.nextBillingDate.localeCompare(b.sub.nextBillingDate);
-    });
-    return withStatus;
+    };
+    active.sort(sortBy);
+    archived.sort(sortBy);
+    return { active, archived };
   }, [subscriptions, formCurrency, formPaymentMethod, formCreditCardId]);
 
   const sortedInstallments = useMemo(() => {
-    const withStatus = installments.map((i) => ({
-      inst: i,
-      status: planMatchStatus(i, formCurrency, formPaymentMethod, formCreditCardId),
-      nextChargeDate: installmentNextChargeDate(i),
-    }));
-    withStatus.sort((a, b) => {
+    const active: { inst: Installment; status: MatchStatus; nextChargeDate: string }[] = [];
+    const archived: { inst: Installment; status: MatchStatus; nextChargeDate: string }[] = [];
+    for (const i of installments) {
+      const entry = {
+        inst: i,
+        status: planMatchStatus(i, formCurrency, formPaymentMethod, formCreditCardId),
+        nextChargeDate: installmentNextChargeDate(i),
+      };
+      (i.isActive ? active : archived).push(entry);
+    }
+    const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = STATUS_RANK[a.status] - STATUS_RANK[b.status];
       if (rankDiff !== 0) return rankDiff;
       return a.nextChargeDate.localeCompare(b.nextChargeDate);
-    });
-    return withStatus;
+    };
+    active.sort(sortBy);
+    archived.sort(sortBy);
+    return { active, archived };
   }, [installments, formCurrency, formPaymentMethod, formCreditCardId]);
 
-  const hasSubscriptions = sortedSubscriptions.length > 0;
-  const hasInstallments = sortedInstallments.length > 0;
+  const hasActiveSubscriptions = sortedSubscriptions.active.length > 0;
+  const hasActiveInstallments = sortedInstallments.active.length > 0;
+  const hasArchivedLinked =
+    sortedSubscriptions.archived.length + sortedInstallments.archived.length > 0;
+
+  // SubscriptionRow / InstallmentRow rendered both as active and as archived; the only
+  // difference between groups is the wrapping SelectGroup label, so we inline the cells.
+  const renderSubRow = (sub: Subscription, status: MatchStatus) => {
+    const isSelected = value !== null && value.kind === 'subscription' && value.id === sub.id;
+    return (
+      <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
+        <div className="flex min-w-0 items-center gap-x-2">
+          <CircleDot
+            className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
+            aria-hidden
+          />
+          <span className="truncate">{sub.name}</span>
+          <span className="text-paragraph-xs text-muted-foreground">
+            {tCommon('nextCycleHint', { date: formatDateForLocale(sub.nextBillingDate, locale) })}
+          </span>
+        </div>
+      </SelectItem>
+    );
+  };
+  const renderInstRow = (inst: Installment, status: MatchStatus, nextChargeDate: string) => {
+    const isSelected = value !== null && value.kind === 'installment' && value.id === inst.id;
+    // Progress label matches the installments table convention:
+    // `paid / total` where paid = current_installment - 1 (clamped to 0).
+    const paid = Math.max(0, inst.currentInstallment - 1);
+    return (
+      <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
+        <div className="flex min-w-0 items-center gap-x-2">
+          <CircleDot
+            className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
+            aria-hidden
+          />
+          <span className="truncate">
+            {inst.name} ({paid}/{inst.installmentsCount})
+          </span>
+          <span className="text-paragraph-xs text-muted-foreground">
+            {tCommon('nextCycleHint', { date: formatDateForLocale(nextChargeDate, locale) })}
+          </span>
+        </div>
+      </SelectItem>
+    );
+  };
 
   return (
     <Select value={encodeValue(value)} onValueChange={(v) => onChange(decodeValue(v))}>
@@ -187,71 +247,27 @@ export function LinkedSubInstallmentSelect({
       </SelectTrigger>
       <SelectContent>
         <SelectItem value={NONE_VALUE}>{t('form.linkedSubInstallment.none')}</SelectItem>
-        {hasSubscriptions && (
+        {hasActiveSubscriptions && (
           <SelectGroup>
             <SelectLabel>{t('form.linkedSubInstallment.subscriptionsLabel')}</SelectLabel>
-            {sortedSubscriptions.map(({ sub, status }) => {
-              const isSelected =
-                value !== null && value.kind === 'subscription' && value.id === sub.id;
-              return (
-                <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
-                  <div className="flex min-w-0 items-center gap-x-2">
-                    <CircleDot
-                      className={cn(
-                        'size-3 shrink-0 transition-colors',
-                        dotColorClass(status, isSelected),
-                      )}
-                      aria-hidden
-                    />
-                    <span className="truncate">{sub.name}</span>
-                    {/* Next-cycle date in a muted sub-label so the user can see what
-                        they're linking against (Phase 3, follow-up Item 8.1). Sources
-                        the format string from `common.nextCycleHint` so the linked-
-                        obligation dropdown can reuse the exact same copy. */}
-                    <span className="text-paragraph-xs text-muted-foreground">
-                      {tCommon('nextCycleHint', {
-                        date: formatDateForLocale(sub.nextBillingDate, locale),
-                      })}
-                    </span>
-                  </div>
-                </SelectItem>
-              );
-            })}
+            {sortedSubscriptions.active.map(({ sub, status }) => renderSubRow(sub, status))}
           </SelectGroup>
         )}
-        {hasInstallments && (
+        {hasActiveInstallments && (
           <SelectGroup>
             <SelectLabel>{t('form.linkedSubInstallment.installmentsLabel')}</SelectLabel>
-            {sortedInstallments.map(({ inst, status, nextChargeDate }) => {
-              const isSelected =
-                value !== null && value.kind === 'installment' && value.id === inst.id;
-              // Progress label matches the installments table convention:
-              // `paid / total` where paid = current_installment - 1 (clamped to 0).
-              // So "0/10" = none paid yet; "10/10" = fully paid.
-              const paid = Math.max(0, inst.currentInstallment - 1);
-              return (
-                <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
-                  <div className="flex min-w-0 items-center gap-x-2">
-                    <CircleDot
-                      className={cn(
-                        'size-3 shrink-0 transition-colors',
-                        dotColorClass(status, isSelected),
-                      )}
-                      aria-hidden
-                    />
-                    <span className="truncate">
-                      {inst.name} ({paid}/{inst.installmentsCount})
-                    </span>
-                    {/* Next-cuota date in a muted sub-label (Phase 3, follow-up Item 8.1). */}
-                    <span className="text-paragraph-xs text-muted-foreground">
-                      {tCommon('nextCycleHint', {
-                        date: formatDateForLocale(nextChargeDate, locale),
-                      })}
-                    </span>
-                  </div>
-                </SelectItem>
-              );
-            })}
+            {sortedInstallments.active.map(({ inst, status, nextChargeDate }) =>
+              renderInstRow(inst, status, nextChargeDate),
+            )}
+          </SelectGroup>
+        )}
+        {hasArchivedLinked && (
+          <SelectGroup>
+            <SelectLabel>{t('form.linkedSubInstallment.archivedGroupLabel')}</SelectLabel>
+            {sortedSubscriptions.archived.map(({ sub, status }) => renderSubRow(sub, status))}
+            {sortedInstallments.archived.map(({ inst, status, nextChargeDate }) =>
+              renderInstRow(inst, status, nextChargeDate),
+            )}
           </SelectGroup>
         )}
       </SelectContent>
