@@ -14,10 +14,17 @@ from app.services import (
     payment_obligation_service,
     subscription_service,
 )
+from app.utils.dates import OBLIGATION_MONTH_STEP
 
 # Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
 # user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
 DUPE_MATCH_WINDOW_DAYS = 15
+
+# Cap for the multi-cycle Mark Paid path (Phase 3, follow-up Item 2). Mirrors the web
+# constant MAX_CYCLES_TO_ADVANCE in apps/web/app/(protected)/expenses/expenses-form-schema.ts.
+# Enforced at the schema layer via `Field(le=...)` on ExpenseCreate.cycles_to_advance; the
+# service references this constant for defensive guards.
+MAX_CYCLES_PER_MARK_PAID = 12
 
 
 # Result of an auto-charge match lookup. Returned by find_auto_charge_match and
@@ -65,11 +72,12 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
     return entry
 
 
-# Inserts the expense row and stages the reconciliation-stale mark when a credit card is set.
-# Extracted (Phase 3, follow-up Item 2) so create_expense and create_expenses_for_obligation_cycles
-# can share the per-row insert + stale-mark pattern without duplication. Does NOT commit and
-# does NOT advance any plan cursor — caller owns the transaction boundary and any subsequent
-# cursor mutation. Mirrors the field shape of ExpenseEntry / ExpenseCreate.
+# Inserts the expense row. Extracted (Phase 3, follow-up Item 2) so create_expense and
+# create_expenses_for_obligation_cycles can share the per-row insert pattern without
+# duplication. Does NOT commit, does NOT advance any plan cursor, and does NOT stage the
+# reconciliation-stale mark — caller owns the transaction boundary and is responsible for
+# the stale-mark (only needed once per (card, currency, date) regardless of how many rows
+# the caller inserts). Mirrors the field shape of ExpenseEntry / ExpenseCreate.
 async def _insert_expense_row(
     session: AsyncSession,
     user: User,
@@ -100,10 +108,7 @@ async def _insert_expense_row(
         subscription_id=subscription_id,
         installment_id=installment_id,
     )
-    entry = await expense_repository.create(session, entry)
-    if credit_card_id is not None:
-        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
-    return entry
+    return await expense_repository.create(session, entry)
 
 
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
@@ -146,6 +151,8 @@ async def create_expense(
         subscription_id=subscription_id,
         installment_id=installment_id,
     )
+    if credit_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
     advance_result: AdvanceResult | None = None
     if payment_obligation_id is not None:
         advance_result = await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
@@ -161,12 +168,17 @@ async def create_expense(
 # Inserts `cycles` expense rows all dated `date` and advances next_due_date `cycles` times
 # before a single session.commit() — all-or-nothing. Returns (last_entry, advance_result) where
 # advance_result spans the full walk: previous_cursor is the obligation's cursor BEFORE the
-# loop, new_cursor is where it ended after the final advance. Raises ValueError when the
-# obligation can't be found or is one-off (router maps to 400). Caller must guarantee
-# `cycles >= 1` and `cycles <= MAX_CYCLES_PER_MARK_PAID` (schema enforces); a single-cycle
-# call here behaves identically to create_expense with the same arguments. sub/installment
-# IDs are forbidden by the schema validator on the multi-cycle path so they're not threaded
-# through.
+# loop, new_cursor is where it ended after the final advance. The session's framework-level
+# context manager (db.py:get_session) rolls back on any raised exception, so the function
+# doesn't need its own try/except — any in-loop raise discards every pending insert + cursor
+# mutation. The reconciliation stale mark fires ONCE after the loop (idempotent regardless of
+# how many rows landed). Raises:
+#   - NotFoundError when the obligation can't be found / isn't owned (router → 404 via global handler)
+#   - ValueError when the obligation isn't recurring with a known recurrence pattern, when cycles
+#     is outside [1, MAX_CYCLES_PER_MARK_PAID], or when a concurrent transaction deletes the
+#     obligation mid-loop (router → 400 via its try/except).
+# Sub/installment IDs are forbidden by the schema validator on the multi-cycle path so they're
+# not threaded through.
 async def create_expenses_for_obligation_cycles(
     session: AsyncSession,
     user: User,
@@ -181,10 +193,19 @@ async def create_expenses_for_obligation_cycles(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
     source: str = "manual",
-) -> tuple[ExpenseEntry, AdvanceResult | None]:
+) -> tuple[ExpenseEntry, AdvanceResult]:
+    # Defensive cycles bound. The schema enforces 1..MAX_CYCLES_PER_MARK_PAID on the HTTP
+    # path; this guard catches internal callers and survives `python -O` (`assert` would not).
+    if cycles < 1 or cycles > MAX_CYCLES_PER_MARK_PAID:
+        raise ValueError(f"cycles must be in [1, {MAX_CYCLES_PER_MARK_PAID}].")
+
     obligation = await payment_obligation_service.get_obligation(session, payment_obligation_id, user)
-    if obligation.recurrence is None:
-        raise ValueError("cycles_to_advance > 1 requires a recurring obligation.")
+    # Recurrence must be a known cycle value — None is one-off, any string not in
+    # OBLIGATION_MONTH_STEP would otherwise pass the `is None` check but produce N
+    # rows with a frozen cursor (compute_obligation_advance returns the date unchanged
+    # for unrecognised recurrence values).
+    if obligation.recurrence is None or obligation.recurrence not in OBLIGATION_MONTH_STEP:
+        raise ValueError("Multi-cycle Mark Paid requires a recurring obligation with a known recurrence pattern.")
 
     first_previous_cursor: str | None = None
     last_entry: ExpenseEntry | None = None
@@ -203,16 +224,28 @@ async def create_expenses_for_obligation_cycles(
             source=source,
             payment_obligation_id=payment_obligation_id,
         )
-        last_advance = await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
-        if first_previous_cursor is None and last_advance is not None:
-            first_previous_cursor = last_advance.previous_cursor
+        advance = await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
+        # advance_or_archive returns None only when the obligation can't be found —
+        # a concurrent delete between the initial get_obligation and this lookup. Surface
+        # explicitly rather than silently dropping the cursor change from the response
+        # toast (which would also leave dangling FK rows in the partial batch).
+        if advance is None:
+            raise ValueError("Linked obligation disappeared mid-loop.")
+        last_advance = advance
+        if first_previous_cursor is None:
+            first_previous_cursor = advance.previous_cursor
+
+    # Stale-mark fires once for the whole batch (idempotent + every row shares card+currency+date).
+    if credit_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
 
     # Coalesce so the toast reads "before loop -> after N advances" instead of "step N-1 -> step N".
-    if last_advance is not None and first_previous_cursor is not None:
-        last_advance = replace(last_advance, previous_cursor=first_previous_cursor)
+    # last_entry / last_advance / first_previous_cursor are all guaranteed non-None at this point
+    # because cycles >= 1 and the loop body raises rather than yielding None.
+    assert last_entry is not None and last_advance is not None and first_previous_cursor is not None
+    coalesced = replace(last_advance, previous_cursor=first_previous_cursor)
     await session.commit()
-    assert last_entry is not None  # cycles >= 1 guaranteed by schema; loop ran at least once.
-    return last_entry, last_advance
+    return last_entry, coalesced
 
 
 # Update an existing expense entry. Only provided fields are changed.

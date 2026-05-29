@@ -160,6 +160,134 @@ class TestCreateExpensesForObligationCycles:
         session.commit.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_unknown_recurrence_raises_before_any_insert(self, monkeypatch):
+        # Recurrence is a string value not in OBLIGATION_MONTH_STEP (e.g. legacy 'fortnightly',
+        # DB drift, or a future migration that adds a recurrence before the dict is updated).
+        # The schema (PaymentObligation.recurrence is free-form str | None) doesn't enforce the
+        # enum, so the service must catch it — otherwise the loop would silently emit N rows
+        # while compute_obligation_advance's defensive no-op left the cursor frozen.
+        _mock_insert(monkeypatch, _entry())
+        _mock_get_obligation(monkeypatch, _obligation(recurrence="fortnightly"))
+        advance_mock = AsyncMock()
+        monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
+        session = AsyncMock()
+
+        with pytest.raises(ValueError, match="known recurrence pattern"):
+            await expense_service.create_expenses_for_obligation_cycles(
+                session,
+                USER,
+                cycles=3,
+                date=date(2026, 5, 28),
+                amount=Decimal("12500"),
+                currency="ARS",
+                payment_obligation_id=7,
+            )
+
+        expense_service.expense_repository.create.assert_not_called()
+        advance_mock.assert_not_called()
+        session.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_cycles", [0, -1, 13, 100])
+    async def test_cycles_out_of_range_raises_before_any_lookup(self, monkeypatch, bad_cycles):
+        # Defensive cycles bound. Schema enforces 1..MAX_CYCLES_PER_MARK_PAID on the HTTP
+        # path; this guard catches internal callers and survives `python -O` (assert would
+        # not). The check runs BEFORE the obligation lookup, so a bad cycles value never
+        # touches the DB.
+        _mock_insert(monkeypatch, _entry())
+        get_mock = AsyncMock()
+        monkeypatch.setattr(payment_obligation_service, "get_obligation", get_mock)
+        advance_mock = AsyncMock()
+        monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
+        session = AsyncMock()
+
+        with pytest.raises(ValueError, match="cycles must be in"):
+            await expense_service.create_expenses_for_obligation_cycles(
+                session,
+                USER,
+                cycles=bad_cycles,
+                date=date(2026, 5, 28),
+                amount=Decimal("12500"),
+                currency="ARS",
+                payment_obligation_id=7,
+            )
+
+        get_mock.assert_not_called()
+        expense_service.expense_repository.create.assert_not_called()
+        advance_mock.assert_not_called()
+        session.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_concurrent_delete_mid_loop_raises_and_skips_commit(self, monkeypatch):
+        # If a concurrent transaction deletes the obligation between iterations, the next
+        # advance_or_archive call returns None (obligation not found). Pre-fix the loop
+        # silently overwrote last_advance to None and committed N dangling FK rows with no
+        # toast; now the loop raises ValueError and the framework rolls back. Mid-loop
+        # invariant: the session.commit() at the bottom never fires when advance returns
+        # None on any iteration.
+        entry = _entry()
+        _mock_insert(monkeypatch, entry)
+        _mock_get_obligation(monkeypatch, _obligation())
+        advances: list[AdvanceResult | None] = [
+            AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-05-15", new_cursor="2026-06-15"),
+            None,
+        ]
+        advance_mock = AsyncMock(side_effect=advances)
+        monkeypatch.setattr(payment_obligation_service, "advance_or_archive", advance_mock)
+        session = AsyncMock()
+
+        with pytest.raises(ValueError, match="disappeared mid-loop"):
+            await expense_service.create_expenses_for_obligation_cycles(
+                session,
+                USER,
+                cycles=3,
+                date=date(2026, 5, 28),
+                amount=Decimal("12500"),
+                currency="ARS",
+                payment_obligation_id=7,
+            )
+
+        assert advance_mock.await_count == 2
+        assert expense_service.expense_repository.create.await_count == 2
+        session.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_mark_stale_fires_once_per_batch_not_per_iteration(self, monkeypatch):
+        # _insert_expense_row no longer touches card_reconciliation_service (the hoist
+        # avoids N redundant indexed lookups for the same card+currency+date). The
+        # multi-cycle function fires mark_stale_for_date exactly once after the loop —
+        # idempotent regardless of how many rows the batch emitted.
+        entry = _entry()
+        entry.credit_card_id = 42
+        _mock_insert(monkeypatch, entry)
+        _mock_get_obligation(monkeypatch, _obligation())
+        advances = [
+            AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-05-15", new_cursor="2026-06-15"),
+            AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-06-15", new_cursor="2026-07-15"),
+            AdvanceResult(plan_type="obligation", plan_id=7, plan_name="ABL", previous_cursor="2026-07-15", new_cursor="2026-08-15"),
+        ]
+        monkeypatch.setattr(payment_obligation_service, "advance_or_archive", AsyncMock(side_effect=advances))
+        stale_mock = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale_mock)
+        session = AsyncMock()
+
+        await expense_service.create_expenses_for_obligation_cycles(
+            session,
+            USER,
+            cycles=3,
+            date=date(2026, 5, 28),
+            amount=Decimal("12500"),
+            currency="ARS",
+            payment_obligation_id=7,
+            credit_card_id=42,
+        )
+
+        # 3 inserts, 1 stale-mark (was 3 pre-hoist).
+        assert expense_service.expense_repository.create.await_count == 3
+        assert stale_mock.await_count == 1
+        stale_mock.assert_awaited_once_with(session, 42, "ARS", date(2026, 5, 28))
+
+    @pytest.mark.asyncio
     async def test_mid_loop_exception_skips_commit(self, monkeypatch):
         # Atomicity guarantee: if advance_or_archive blows up mid-loop (e.g. obligation
         # deleted by a concurrent transaction), the service must not commit. The session

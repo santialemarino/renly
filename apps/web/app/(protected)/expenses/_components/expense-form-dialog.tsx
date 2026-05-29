@@ -225,7 +225,10 @@ export function ExpenseFormDialog({
   const [showCyclesToAdvance, setShowCyclesToAdvance] = useState(false);
   useEffect(() => {
     if (open) {
-      setShowCyclesToAdvance(!!prefillFromObligation && prefillFromObligation.recurrence !== null);
+      // Loose nullish check (`!= null`) — defensive against a future API mapper or alternate
+      // caller passing `undefined` instead of the documented `null` for one-off obligations.
+      // Both must hide the Cycles input.
+      setShowCyclesToAdvance(!!prefillFromObligation && prefillFromObligation.recurrence != null);
     }
   }, [open, prefillFromObligation]);
 
@@ -307,7 +310,7 @@ export function ExpenseFormDialog({
           paymentObligationId: prefillFromObligation.paymentObligationId,
           subscriptionId: undefined,
           installmentId: undefined,
-          cyclesToAdvance: prefillFromObligation.recurrence !== null ? '1' : undefined,
+          cyclesToAdvance: prefillFromObligation.recurrence != null ? '1' : undefined,
         });
       } else {
         form.reset({
@@ -608,7 +611,7 @@ export function ExpenseFormDialog({
                           name="cyclesToAdvance"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel required>{t('form.cyclesToAdvance.label')}</FormLabel>
+                              <FormLabel>{t('form.cyclesToAdvance.label')}</FormLabel>
                               <FormControl>
                                 <IntegerInput
                                   value={field.value ?? ''}
