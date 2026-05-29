@@ -51,7 +51,7 @@ def _to_response(
 
 
 # Aggregated read-only timeline for a calendar month. Sources: subscriptions,
-# installment cuotas, payment obligations, and credit-card due dates.
+# installments, payment obligations, and credit-card due dates.
 @router.get("", response_model=PaymentsCalendarResponse)
 async def get_payments_calendar(
     current_user: CurrentUser,

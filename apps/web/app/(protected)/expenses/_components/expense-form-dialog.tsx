@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -43,10 +43,12 @@ import {
 } from '@/app/(protected)/expenses/expenses-actions';
 import {
   buildExpenseFormSchema,
+  MAX_CYCLES_TO_ADVANCE,
   type ExpenseFormValues,
 } from '@/app/(protected)/expenses/expenses-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -62,6 +64,9 @@ import { formatDateForLocale } from '@/lib/utils/format';
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
 // When supplied (and `expense` is absent), the form opens in CREATE mode with values
 // copied from the obligation and the FK set so the server auto-advances on save.
+// `recurrence` mirrors the source obligation's recurrence string (null for one-off);
+// the form surfaces the "Cycles to pre-pay" input only when this is non-null (Phase 3,
+// follow-up Item 2) — one-off obligations don't have multiple cycles to pre-pay.
 export interface PrefillFromObligation {
   amount: string;
   currency: string;
@@ -69,6 +74,7 @@ export interface PrefillFromObligation {
   creditCardId?: number;
   category?: ExpenseFormValues['category'];
   paymentObligationId: number;
+  recurrence: string | null;
 }
 
 interface ExpenseFormDialogProps {
@@ -90,9 +96,9 @@ interface ExpenseFormDialogProps {
   // AND (b) the entry's currency matches the plan's currency (cross-currency comparison
   // would be semantically muddled — the prompt is about updating the plan's expected
   // amount, which only makes sense in the plan's own currency). Installments are
-  // deliberately excluded: their per-cuota drift is taxes/fees/FX rather than plan
-  // changes, and LOCKED_FIELDS in installment_service forbids amount edits after
-  // current_installment > 1.
+  // deliberately excluded: their per-installment drift is taxes/fees/FX rather than
+  // plan changes, and LOCKED_FIELDS in installment_service forbids amount edits
+  // after current_installment > 1.
   onLinkedPlanSave?: (
     savedValues: ExpenseFormValues,
     plan: {
@@ -170,7 +176,14 @@ export function ExpenseFormDialog({
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
-  const schema = useMemo(() => buildExpenseFormSchema(tCommon('form.errors.required')), [tCommon]);
+  const schema = useMemo(
+    () =>
+      buildExpenseFormSchema({
+        requiredMsg: tCommon('form.errors.required'),
+        invalidCyclesMsg: t('form.cyclesToAdvance.errors.invalid', { max: MAX_CYCLES_TO_ADVANCE }),
+      }),
+    [tCommon, t],
+  );
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(schema),
@@ -185,6 +198,7 @@ export function ExpenseFormDialog({
       paymentObligationId: undefined,
       subscriptionId: undefined,
       installmentId: undefined,
+      cyclesToAdvance: undefined,
     },
   });
 
@@ -200,6 +214,20 @@ export function ExpenseFormDialog({
   const watchedInstallmentId = useWatch({ control: form.control, name: 'installmentId' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
   const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
+  // Multi-cycle Mark Paid input is visible only for recurring obligations on the prefill
+  // path (Phase 3, follow-up Item 2). One-off obligations / regular create flows hide it.
+  // State-latched at open-time rather than derived live: when the dialog is closing,
+  // `prefillFromObligation` is already cleared by the parent (setMarkPaidPrefill(null)),
+  // so a live derivation would flip `showCyclesToAdvance` to false mid-close and trigger
+  // a visible layout shift inside the closing dialog (cycles shrinks, category grows).
+  // Holding the value across close keeps the visible content stable until the dialog
+  // unmounts; it gets re-evaluated on the next open.
+  const [showCyclesToAdvance, setShowCyclesToAdvance] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setShowCyclesToAdvance(!!prefillFromObligation && prefillFromObligation.recurrence !== null);
+    }
+  }, [open, prefillFromObligation]);
 
   // Linked-obligation dropdown is offered on CREATE and EDIT (Phase 3, follow-up Item 10).
   // The update endpoint now accepts the FK as a JSON-Merge-Patch field; selecting "None"
@@ -249,6 +277,8 @@ export function ExpenseFormDialog({
   const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key), locale);
 
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
+  // cyclesToAdvance defaults to '1' only on a recurring-obligation prefill (Phase 3,
+  // follow-up Item 2); stays undefined elsewhere so the action sends 1 implicitly.
   useEffect(() => {
     if (open) {
       if (expense) {
@@ -263,6 +293,7 @@ export function ExpenseFormDialog({
           paymentObligationId: expense.paymentObligationId ?? undefined,
           subscriptionId: expense.subscriptionId ?? undefined,
           installmentId: expense.installmentId ?? undefined,
+          cyclesToAdvance: undefined,
         });
       } else if (prefillFromObligation) {
         form.reset({
@@ -276,6 +307,7 @@ export function ExpenseFormDialog({
           paymentObligationId: prefillFromObligation.paymentObligationId,
           subscriptionId: undefined,
           installmentId: undefined,
+          cyclesToAdvance: prefillFromObligation.recurrence !== null ? '1' : undefined,
         });
       } else {
         form.reset({
@@ -289,6 +321,7 @@ export function ExpenseFormDialog({
           paymentObligationId: undefined,
           subscriptionId: undefined,
           installmentId: undefined,
+          cyclesToAdvance: undefined,
         });
       }
     }
@@ -553,101 +586,158 @@ export function ExpenseFormDialog({
                 />
               </div>
 
-              <div className="flex min-w-0 items-start gap-x-3">
-                <FormField
-                  control={form.control}
-                  name="category"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>{t('form.category.label')}</FormLabel>
-                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder={t('form.category.placeholder')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {sortedCategories.map((cat) => (
-                            <SelectItem key={cat} value={cat}>
-                              {t(`categories.${cat}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="paymentMethod"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                      <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                        <FormControl>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {PAYMENT_METHODS.map((method) => (
-                            <SelectItem key={method} value={method}>
-                              {t(`paymentMethods.${method}`)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <AnimatePresence initial={false}>
-                {showCreditCard && (
-                  <motion.div
-                    key="credit-card"
-                    layout
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    style={{ marginTop: -16 }}
-                  >
-                    <div className="pt-4">
-                      <FormField
-                        control={form.control}
-                        name="creditCardId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                            <Select
-                              value={field.value?.toString() ?? ''}
-                              onValueChange={(v) => field.onChange(Number(v))}
-                            >
+              {/* Cycles to pre-pay slides in horizontally next to Category on the Mark Paid */}
+              {/* recurring path (Phase 3, follow-up Item 2). Category expands to full width */}
+              {/* otherwise. Same LayoutGroup + popLayout pattern as the investments form's */}
+              {/* ticker + broker row, mirrored for the conditional-left-field case. */}
+              <LayoutGroup>
+                <div className="flex min-w-0 items-start gap-x-3">
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {showCyclesToAdvance && (
+                      <motion.div
+                        key="cycles-to-advance"
+                        layout
+                        initial={{ opacity: 0, width: 0, marginRight: -12, overflow: 'hidden' }}
+                        animate={{ opacity: 1, width: 'auto', marginRight: 0, overflow: 'visible' }}
+                        exit={{ opacity: 0, width: 0, marginRight: -12, overflow: 'hidden' }}
+                        transition={{ duration: ANIMATION_DEFAULT }}
+                        className="flex-1 min-w-0"
+                      >
+                        <FormField
+                          control={form.control}
+                          name="cyclesToAdvance"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel required>{t('form.cyclesToAdvance.label')}</FormLabel>
                               <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                                </SelectTrigger>
+                                <IntegerInput
+                                  value={field.value ?? ''}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  name={field.name}
+                                  placeholder="1"
+                                />
                               </FormControl>
-                              <SelectContent>
-                                {activeCards.map((card) => (
-                                  <SelectItem key={card.id} value={card.id.toString()}>
-                                    {card.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <motion.div
+                    layout
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                    className="flex-1 min-w-0"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="category"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.category.label')}</FormLabel>
+                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder={t('form.category.placeholder')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {sortedCategories.map((cat) => (
+                                <SelectItem key={cat} value={cat}>
+                                  {t(`categories.${cat}`)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </motion.div>
-                )}
-              </AnimatePresence>
+                </div>
+              </LayoutGroup>
+
+              {/* Credit Card slides in horizontally next to Payment Method when */}
+              {/* payment_method = credit_card (replaces the prior standalone vertical-reveal */}
+              {/* row). Same pattern as the Cycles + Category row above. */}
+              <LayoutGroup>
+                <div className="flex min-w-0 items-start gap-x-3">
+                  <motion.div
+                    layout
+                    transition={{ duration: ANIMATION_DEFAULT }}
+                    className="flex-1 min-w-0"
+                  >
+                    <FormField
+                      control={form.control}
+                      name="paymentMethod"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
+                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {PAYMENT_METHODS.map((method) => (
+                                <SelectItem key={method} value={method}>
+                                  {t(`paymentMethods.${method}`)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </motion.div>
+
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {showCreditCard && (
+                      <motion.div
+                        key="credit-card"
+                        layout
+                        initial={{ opacity: 0, width: 0, marginLeft: -12, overflow: 'hidden' }}
+                        animate={{ opacity: 1, width: 'auto', marginLeft: 0, overflow: 'visible' }}
+                        exit={{ opacity: 0, width: 0, marginLeft: -12, overflow: 'hidden' }}
+                        transition={{ duration: ANIMATION_DEFAULT }}
+                        className="flex-1 min-w-0"
+                      >
+                        <FormField
+                          control={form.control}
+                          name="creditCardId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('form.creditCard.label')}</FormLabel>
+                              <Select
+                                value={field.value?.toString() ?? ''}
+                                onValueChange={(v) => field.onChange(Number(v))}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder={t('form.creditCard.placeholder')} />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {activeCards.map((card) => (
+                                    <SelectItem key={card.id} value={card.id.toString()}>
+                                      {card.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </LayoutGroup>
 
               {showLinkedObligation && activeObligations && (
                 <FormField

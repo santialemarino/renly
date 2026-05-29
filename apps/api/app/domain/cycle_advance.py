@@ -27,9 +27,10 @@ class CycleAdvanceDecision:
 # so the expense create response can carry enough information for the frontend toast.
 # `previous_cursor` / `new_cursor` are stringified for uniformity across plan types — the
 # frontend formats per `plan_type`. `new_cursor` is empty when the plan archived (one-off
-# obligation Marked Paid, installment past its final cuota). `total_count` is populated for
-# installments (the plan's `installments_count`) so the toast can read "cuota 2 of 12"
-# without a client-side lookup against a potentially-stale active-plans list.
+# obligation Marked Paid, installment past its final step). `total_count` is populated for
+# installments (the plan's `installments_count`) so the toast can read "2 of 12
+# installments paid" without a client-side lookup against a potentially-stale
+# active-plans list.
 @dataclass(frozen=True)
 class AdvanceResult:
     plan_type: PlanType

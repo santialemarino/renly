@@ -9,7 +9,7 @@ from app.models.user import User
 from app.repositories import installment_repository
 from app.services.auto_expense_service import closest_installment_cuota
 
-# Contractual fields locked once any cuota has been charged (current_installment > 1).
+# Contractual fields locked once any installment has been charged (current_installment > 1).
 # Always editable: name, current_installment (manual correction), is_active (archive).
 LOCKED_FIELDS = (
     "total_amount",
@@ -97,8 +97,8 @@ async def create_installment(
 
 
 # Update an existing installment plan. Only provided fields are changed.
-# Once any cuota has been charged (current_installment > 1), contractual fields are locked
-# and modifying them raises InstallmentLockedFieldError (mapped to 400).
+# Once any installment has been charged (current_installment > 1), contractual fields are
+# locked and modifying them raises InstallmentLockedFieldError (mapped to 400).
 async def update_installment(
     session: AsyncSession,
     installment_id: int,
@@ -127,11 +127,11 @@ async def delete_installment(session: AsyncSession, installment_id: int, user: U
 
 # Pure helper: decides whether a manual entry on `entry_date` should advance the
 # installment's `current_installment` cursor (Phase 3, follow-up 3b, revised by Item 9).
-# Per Option C the advance fires ONLY when the matched cuota index equals the current
-# cursor (`idx == current_installment`). When the matched cuota is ahead (pre-pay /
-# mis-click) the link is saved but the cursor stays put — the scheduler's back-fill
-# loop + the partial UNIQUE INDEX dedup catch up naturally, so intermediate cuotas
-# still get expense rows instead of being silently skipped. `multi_jump` surfaces that
+# Per Option C the advance fires ONLY when the matched installment index equals the
+# current cursor (`idx == current_installment`). When the matched installment is ahead
+# (pre-pay / mis-click) the link is saved but the cursor stays put — the scheduler's
+# back-fill loop + the partial UNIQUE INDEX dedup catch up naturally, so intermediate
+# installments still get expense rows instead of being silently skipped. `multi_jump` surfaces that
 # case so Item 7's cursor-advance toast can compose the right copy. Returns
 # `would_advance=False` with a sentinel `next_expected_date` (the plan's start_date)
 # when the plan is fully paid; the soft-confirm dialog UX only renders for non-advance
@@ -155,14 +155,14 @@ def compute_installment_advance_for_manual_entry(installment: Installment, entry
     )
 
 
-# Advances `current_installment` past the cuota matched by a manual expense entry.
+# Advances `current_installment` past the installment matched by a manual expense entry.
 # Caller commits — this stages the change inside the expense-create transaction so the
 # advance is atomic with the linked expense insert. Returns an AdvanceResult when the
 # cursor moved (Phase 3, follow-up Item 7); None when no advance fired (multi-jump,
 # back-dated, plan already fully paid, or the installment can't be found). Flips
-# `is_active = False` when the advance carries the cursor past the final cuota — the
-# result's `new_cursor` reads empty to signal the archive transition. Per Item 9's
-# narrowed predicate `would_advance` only fires when the matched cuota equals the
+# `is_active = False` when the advance carries the cursor past the final installment —
+# the result's `new_cursor` reads empty to signal the archive transition. Per Item 9's
+# narrowed predicate `would_advance` only fires when the matched installment equals the
 # current cursor, so the post-advance cursor is always `current_installment + 1`.
 async def advance_for_manual_entry(session: AsyncSession, installment_id: int, user: User, entry_date: date_type) -> AdvanceResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
@@ -187,14 +187,14 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
     )
 
 
-# Walks `current_installment` back by one cuota (Phase 3, follow-up Item 10). Caller
+# Walks `current_installment` back by one step (Phase 3, follow-up Item 10). Caller
 # commits. Used by expense_service when the most-recent linked expense for an installment
 # is deleted or unlinked. Re-activates the plan ONLY when stepping back from the exact
 # auto-archived state `current = count + 1` (the position the advance set when paying
-# the final cuota) — a manual user-archive mid-plan stays archived. No-op when the
+# the final installment) — a manual user-archive mid-plan stays archived. No-op when the
 # installment can't be found, doesn't belong to the user, or the cursor is already at
-# cuota 1 (no cuota 0 to step back to). `previous_cursor` reads empty (the archive
-# sentinel) only when the reverse re-activates a fully-paid plan.
+# installment 1 (no installment 0 to step back to). `previous_cursor` reads empty (the
+# archive sentinel) only when the reverse re-activates a fully-paid plan.
 async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User) -> ReverseResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
     if installment is None:

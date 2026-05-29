@@ -65,3 +65,56 @@ class TestExpenseCreateCommitmentLinkExclusivity:
                 subscription_id=3,
                 installment_id=11,
             )
+
+
+# --- ExpenseCreate.cycles_to_advance ---
+
+# Multi-cycle Mark Paid (Phase 3, follow-up Item 2): N >= 1, capped at 12. cycles > 1
+# requires payment_obligation_id (multi-cycle is meaningful only for a recurring
+# obligation; the obligation-recurrence DB check lives in the service). sub/installment
+# IDs are forbidden alongside cycles > 1 — caught by the mutual-exclusivity rule above
+# since cycles > 1 requires obligation set.
+
+
+class TestExpenseCreateCyclesToAdvance:
+    def test_default_is_one(self):
+        body = ExpenseCreate(**BASE_FIELDS)
+        assert body.cycles_to_advance == 1
+
+    def test_minimum_value_is_one(self):
+        with pytest.raises(ValidationError):
+            ExpenseCreate(**BASE_FIELDS, cycles_to_advance=0)
+
+    def test_maximum_value_is_twelve(self):
+        body = ExpenseCreate(**BASE_FIELDS, payment_obligation_id=7, cycles_to_advance=12)
+        assert body.cycles_to_advance == 12
+
+    def test_above_twelve_rejected(self):
+        with pytest.raises(ValidationError):
+            ExpenseCreate(**BASE_FIELDS, payment_obligation_id=7, cycles_to_advance=13)
+
+    def test_cycles_one_without_obligation_is_valid(self):
+        # cycles=1 path is the standard single-row create — no obligation requirement.
+        body = ExpenseCreate(**BASE_FIELDS, cycles_to_advance=1)
+        assert body.cycles_to_advance == 1
+        assert body.payment_obligation_id is None
+
+    def test_cycles_above_one_without_obligation_rejected(self):
+        with pytest.raises(ValidationError):
+            ExpenseCreate(**BASE_FIELDS, cycles_to_advance=3)
+
+    def test_cycles_above_one_with_subscription_rejected(self):
+        # cycles>1 + subscription_id violates the mutex-with-obligation rule indirectly:
+        # cycles>1 requires obligation set, but obligation + subscription is mutually
+        # exclusive. ValidationError is raised for the missing-obligation reason.
+        with pytest.raises(ValidationError):
+            ExpenseCreate(**BASE_FIELDS, subscription_id=3, cycles_to_advance=3)
+
+    def test_cycles_above_one_with_installment_rejected(self):
+        with pytest.raises(ValidationError):
+            ExpenseCreate(**BASE_FIELDS, installment_id=11, cycles_to_advance=3)
+
+    def test_cycles_above_one_with_obligation_is_valid(self):
+        body = ExpenseCreate(**BASE_FIELDS, payment_obligation_id=7, cycles_to_advance=4)
+        assert body.cycles_to_advance == 4
+        assert body.payment_obligation_id == 7

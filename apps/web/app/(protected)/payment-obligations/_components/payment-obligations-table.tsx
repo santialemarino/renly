@@ -167,6 +167,8 @@ export function PaymentObligationsTable({
 
   // Mark paid opens the expense form pre-filled from the obligation (Phase 3, Step E).
   // The server auto-advances next_due_date on save (or archives one-off obligations).
+  // `recurrence` is threaded so the form can surface the "Cycles to pre-pay" input on
+  // recurring obligations only (Phase 3, follow-up Item 2).
   function handleMarkPaid(obligation: PaymentObligation) {
     setMarkPaidPrefill({
       amount: obligation.amount,
@@ -176,6 +178,7 @@ export function PaymentObligationsTable({
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
       paymentObligationId: obligation.id,
+      recurrence: obligation.recurrence,
     });
   }
 

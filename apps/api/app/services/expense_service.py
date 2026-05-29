@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -65,6 +65,47 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
     return entry
 
 
+# Inserts the expense row and stages the reconciliation-stale mark when a credit card is set.
+# Extracted (Phase 3, follow-up Item 2) so create_expense and create_expenses_for_obligation_cycles
+# can share the per-row insert + stale-mark pattern without duplication. Does NOT commit and
+# does NOT advance any plan cursor — caller owns the transaction boundary and any subsequent
+# cursor mutation. Mirrors the field shape of ExpenseEntry / ExpenseCreate.
+async def _insert_expense_row(
+    session: AsyncSession,
+    user: User,
+    *,
+    date: date_type,
+    amount: Decimal,
+    currency: str,
+    category: ExpenseCategory | None = None,
+    notes: str | None = None,
+    payment_method: str | None = None,
+    credit_card_id: int | None = None,
+    source: str = "manual",
+    payment_obligation_id: int | None = None,
+    subscription_id: int | None = None,
+    installment_id: int | None = None,
+) -> ExpenseEntry:
+    entry = ExpenseEntry(
+        user_id=user.id,
+        date=date,
+        amount=amount,
+        currency=currency,
+        category=category,
+        notes=notes,
+        payment_method=payment_method,
+        credit_card_id=credit_card_id,
+        source=source,
+        payment_obligation_id=payment_obligation_id,
+        subscription_id=subscription_id,
+        installment_id=installment_id,
+    )
+    entry = await expense_repository.create(session, entry)
+    if credit_card_id is not None:
+        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
+    return entry
+
+
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
 # When payment_obligation_id is set, advances or archives the linked obligation atomically (Phase 3, Step E).
 # When subscription_id or installment_id is set, advances the plan's cursor past the matched cycle
@@ -90,8 +131,9 @@ async def create_expense(
     subscription_id: int | None = None,
     installment_id: int | None = None,
 ) -> tuple[ExpenseEntry, AdvanceResult | None]:
-    entry = ExpenseEntry(
-        user_id=user.id,
+    entry = await _insert_expense_row(
+        session,
+        user,
         date=date,
         amount=amount,
         currency=currency,
@@ -104,9 +146,6 @@ async def create_expense(
         subscription_id=subscription_id,
         installment_id=installment_id,
     )
-    entry = await expense_repository.create(session, entry)
-    if credit_card_id is not None:
-        await card_reconciliation_service.mark_stale_for_date(session, credit_card_id, currency, date)
     advance_result: AdvanceResult | None = None
     if payment_obligation_id is not None:
         advance_result = await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
@@ -116,6 +155,64 @@ async def create_expense(
         advance_result = await installment_service.advance_for_manual_entry(session, installment_id, user, date)
     await session.commit()
     return entry, advance_result
+
+
+# Pre-pays N obligation cycles atomically in one Mark Paid click (Phase 3, follow-up Item 2).
+# Inserts `cycles` expense rows all dated `date` and advances next_due_date `cycles` times
+# before a single session.commit() — all-or-nothing. Returns (last_entry, advance_result) where
+# advance_result spans the full walk: previous_cursor is the obligation's cursor BEFORE the
+# loop, new_cursor is where it ended after the final advance. Raises ValueError when the
+# obligation can't be found or is one-off (router maps to 400). Caller must guarantee
+# `cycles >= 1` and `cycles <= MAX_CYCLES_PER_MARK_PAID` (schema enforces); a single-cycle
+# call here behaves identically to create_expense with the same arguments. sub/installment
+# IDs are forbidden by the schema validator on the multi-cycle path so they're not threaded
+# through.
+async def create_expenses_for_obligation_cycles(
+    session: AsyncSession,
+    user: User,
+    *,
+    cycles: int,
+    date: date_type,
+    amount: Decimal,
+    currency: str,
+    payment_obligation_id: int,
+    category: ExpenseCategory | None = None,
+    notes: str | None = None,
+    payment_method: str | None = None,
+    credit_card_id: int | None = None,
+    source: str = "manual",
+) -> tuple[ExpenseEntry, AdvanceResult | None]:
+    obligation = await payment_obligation_service.get_obligation(session, payment_obligation_id, user)
+    if obligation.recurrence is None:
+        raise ValueError("cycles_to_advance > 1 requires a recurring obligation.")
+
+    first_previous_cursor: str | None = None
+    last_entry: ExpenseEntry | None = None
+    last_advance: AdvanceResult | None = None
+    for _ in range(cycles):
+        last_entry = await _insert_expense_row(
+            session,
+            user,
+            date=date,
+            amount=amount,
+            currency=currency,
+            category=category,
+            notes=notes,
+            payment_method=payment_method,
+            credit_card_id=credit_card_id,
+            source=source,
+            payment_obligation_id=payment_obligation_id,
+        )
+        last_advance = await payment_obligation_service.advance_or_archive(session, payment_obligation_id, user)
+        if first_previous_cursor is None and last_advance is not None:
+            first_previous_cursor = last_advance.previous_cursor
+
+    # Coalesce so the toast reads "before loop -> after N advances" instead of "step N-1 -> step N".
+    if last_advance is not None and first_previous_cursor is not None:
+        last_advance = replace(last_advance, previous_cursor=first_previous_cursor)
+    await session.commit()
+    assert last_entry is not None  # cycles >= 1 guaranteed by schema; loop ran at least once.
+    return last_entry, last_advance
 
 
 # Update an existing expense entry. Only provided fields are changed.

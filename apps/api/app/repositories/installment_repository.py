@@ -5,7 +5,7 @@ from sqlmodel import select
 from app.models.installment import Installment
 
 # Derived expression matching the `InstallmentResponse.next_cuota_date` computed field.
-# Lets the table sort by next-cuota order without an O(n) post-query Python re-sort —
+# Lets the table sort by next-installment order without an O(n) post-query Python re-sort —
 # `make_interval` is a PostgreSQL built-in that handles month-end clamping the same
 # way `add_months` does on the Python side (e.g. Jan 31 + 1 month → Feb 28), so the
 # SQL order matches the response values exactly. Cast back to Date because
@@ -52,7 +52,7 @@ async def list_by_user(
         stmt = stmt.where(Installment.name.ilike(f"%{search}%"))
     sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
     order_fn = desc if sort_order == "desc" else asc
-    # Default order: most-recent first by the derived next-cuota date — keeps the
+    # Default order: most-recent first by the derived next-installment date — keeps the
     # default view aligned with what the table now leads with.
     order_clause = order_fn(sort_col) if sort_col is not None else _next_cuota_date_expr.desc()
     stmt = stmt.order_by(order_clause)
