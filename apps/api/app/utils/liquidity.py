@@ -66,7 +66,7 @@ def compute_fixed_monthly_commitments(
         totals[sub.currency] += sub.amount * factor
 
     for inst in installments:
-        # Fully-paid plans (current_installment past final cuota) aren't commitments.
+        # Fully-paid plans (current_installment past the final installment) aren't commitments.
         if inst.current_installment > inst.installments_count:
             continue
         totals[inst.currency] += inst.installment_amount

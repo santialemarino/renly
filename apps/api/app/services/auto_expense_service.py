@@ -109,12 +109,12 @@ def closest_subscription_cycle(
     return cursor if abs((cursor - target_date).days) <= abs((prev - target_date).days) else prev
 
 
-# Returns the (cuota_index, cuota_date) closest to `target_date` for an installment plan,
-# or None when the plan is already fully paid (`current_installment > installments_count`).
-# Cuota indices are 1-based; cuota_date = add_months(start_date, idx - 1). Pure function;
-# the caller checks whether the matched cuota equals the current cursor before advancing
-# (Item 9, Option C). The closest-cuota math implicitly enforces a half-month window
-# around the cursor.
+# Returns the (index, date) of the installment closest to `target_date` for an installment
+# plan, or None when the plan is already fully paid (`current_installment > installments_count`).
+# Indices are 1-based; date = add_months(start_date, idx - 1). Pure function; the caller
+# checks whether the matched installment equals the current cursor before advancing
+# (Item 9, Option C). The closest-installment math implicitly enforces a half-month
+# window around the cursor.
 def closest_installment_cuota(
     start_date: date_type,
     current_installment: int,
@@ -124,7 +124,7 @@ def closest_installment_cuota(
     if current_installment > installments_count:
         return None
     # Closed-form approximation: compare target's month offset from start_date to the
-    # cuota grid, then check the 1-step neighbourhood to absorb the short-month clamp.
+    # installment grid, then check the 1-step neighbourhood to absorb the short-month clamp.
     months_diff = (target_date.year - start_date.year) * 12 + (target_date.month - start_date.month)
     approx_idx = months_diff + 1
     candidates: list[tuple[int, date_type]] = []
@@ -136,9 +136,9 @@ def closest_installment_cuota(
     return best
 
 
-# Returns (cuota_index, cuota_date) pairs an installment should have emitted up
-# to and including today. Pure function — does not mutate the installment record.
-# cuota_index is 1-based; cuota_date is start_date + (index - 1) months.
+# Returns (index, date) pairs an installment plan should have emitted up to and
+# including today. Pure function — does not mutate the installment record.
+# Indices are 1-based; date is start_date + (index - 1) months.
 def installment_cuotas_to_emit(
     start_date: date_type,
     current_installment: int,
@@ -295,8 +295,8 @@ async def _generate_installment_expenses(
                 )
             )
             created += 1
-        # Advance the cuota counter past the last emitted cuota; flip the plan
-        # inactive once we're past the final cuota.
+        # Advance the installment counter past the last emitted index; flip the plan
+        # inactive once we're past the final installment.
         last_idx = cuotas[-1][0]
         inst.current_installment = last_idx + 1
         if inst.current_installment > inst.installments_count:

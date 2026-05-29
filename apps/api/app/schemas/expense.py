@@ -36,16 +36,31 @@ class ExpenseCreate(RequestBase):
             "When set, links the expense to an installment. Mutually exclusive with payment_obligation_id / subscription_id (Phase 3, follow-up 3a)."
         ),
     )
+    cycles_to_advance: int = Field(
+        default=1,
+        ge=1,
+        le=12,
+        description=(
+            "Number of obligation cycles to pre-pay in one Mark Paid click (Phase 3, follow-up Item 2). "
+            "Requires payment_obligation_id set and the obligation must be recurring; raises 400 otherwise. "
+            "All N expenses share the same insert date (the request's `date`)."
+        ),
+    )
 
     # An expense pays at most one commitment-type. Three nullable FKs (payment_obligation_id /
     # subscription_id / installment_id) coexist on the row, but only one may be set on the
     # same insert. The DB allows arbitrary combinations; this validator is the user-facing
-    # guardrail at the request boundary.
+    # guardrail at the request boundary. The cycles_to_advance > 1 rule lives here too:
+    # multi-cycle Mark Paid only makes sense for a recurring obligation, so sub/installment
+    # IDs are forbidden alongside cycles > 1 (the obligation-recurrence check is in the
+    # service since it requires a DB lookup).
     @model_validator(mode="after")
     def validate_commitment_link_exclusivity(self) -> "ExpenseCreate":
         link_count = sum(1 for value in (self.payment_obligation_id, self.subscription_id, self.installment_id) if value is not None)
         if link_count > 1:
             raise ValueError("At most one of payment_obligation_id, subscription_id, installment_id may be set.")
+        if self.cycles_to_advance > 1 and self.payment_obligation_id is None:
+            raise ValueError("cycles_to_advance > 1 requires payment_obligation_id to be set.")
         return self
 
 
@@ -100,10 +115,10 @@ class ExpenseUpdate(RequestBase):
 # billing date moved to Jun 27, 2026." — branching on plan_type. previous_cursor /
 # new_cursor are stringified — ISO date for obligation/subscription, decimal index
 # for installment; new_cursor is empty when the plan archived (one-off obligation
-# Marked Paid, installment past its final cuota), previous_cursor is empty when the
+# Marked Paid, installment past its final step), previous_cursor is empty when the
 # plan re-activated via reverse. total_count is populated for installments only —
-# the plan's `installments_count`, so the toast renders "cuota 2 of 12" without a
-# client-side lookup against a potentially-stale active-plans list.
+# the plan's `installments_count`, so the toast renders "2 of 12 installments paid"
+# without a client-side lookup against a potentially-stale active-plans list.
 class PlanCursorChange(BaseModel):
     plan_type: str = Field(description="Plan type (obligation, subscription, installment).")
     plan_id: int = Field(description="Plan id.")
@@ -113,7 +128,8 @@ class PlanCursorChange(BaseModel):
     total_count: int | None = Field(
         default=None,
         description=(
-            "Total cuotas for installments (None for obligation / subscription). Lets the toast render 'cuota N of M' without a client-side lookup."
+            "Total installments for installment plans (None for obligation / subscription). "
+            "Lets the toast render 'N of M installments paid' without a client-side lookup."
         ),
     )
 

@@ -194,28 +194,50 @@ async def get_expense(
 
 # Create a new expense. Supports both JWT (web) and API key (iOS Shortcut) auth.
 # advance_change on the response (when populated) carries the advance emitted by a
-# linked obligation / subscription / installment (Phase 3, follow-up Item 7).
+# linked obligation / subscription / installment (Phase 3, follow-up Item 7). When
+# body.cycles_to_advance > 1 (Phase 3, follow-up Item 2), the request inserts N rows
+# atomically and walks the obligation cursor N steps in a single transaction; the
+# response carries the last-inserted entry and an advance spanning the whole walk.
 @router.post("", response_model=ExpenseResponse, status_code=status.HTTP_201_CREATED)
 async def create_expense(
     body: ExpenseCreate,
     current_user: JwtOrApiKeyUser,
     session: SessionDep,
 ) -> ExpenseResponse:
-    entry, advance_result = await expense_service.create_expense(
-        session,
-        current_user,
-        date=body.date,
-        amount=body.amount,
-        currency=body.currency,
-        category=body.category,
-        notes=body.notes,
-        payment_method=body.payment_method,
-        credit_card_id=body.credit_card_id,
-        source=body.source,
-        payment_obligation_id=body.payment_obligation_id,
-        subscription_id=body.subscription_id,
-        installment_id=body.installment_id,
-    )
+    if body.cycles_to_advance > 1:
+        try:
+            entry, advance_result = await expense_service.create_expenses_for_obligation_cycles(
+                session,
+                current_user,
+                cycles=body.cycles_to_advance,
+                date=body.date,
+                amount=body.amount,
+                currency=body.currency,
+                category=body.category,
+                notes=body.notes,
+                payment_method=body.payment_method,
+                credit_card_id=body.credit_card_id,
+                source=body.source,
+                payment_obligation_id=body.payment_obligation_id,  # type: ignore[arg-type]
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    else:
+        entry, advance_result = await expense_service.create_expense(
+            session,
+            current_user,
+            date=body.date,
+            amount=body.amount,
+            currency=body.currency,
+            category=body.category,
+            notes=body.notes,
+            payment_method=body.payment_method,
+            credit_card_id=body.credit_card_id,
+            source=body.source,
+            payment_obligation_id=body.payment_obligation_id,
+            subscription_id=body.subscription_id,
+            installment_id=body.installment_id,
+        )
     resp = ExpenseResponse.model_validate(entry)
     resp.advance_change = _cursor_change(advance_result)
     return resp

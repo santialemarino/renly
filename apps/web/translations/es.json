@@ -465,6 +465,12 @@
         "label": "Tarjeta de crédito",
         "placeholder": "Seleccioná una tarjeta"
       },
+      "cyclesToAdvance": {
+        "label": "Ciclos a pre-pagar",
+        "errors": {
+          "invalid": "Ingresá un número entre 1 y {max}."
+        }
+      },
       "notes": {
         "label": "Notas",
         "placeholder": "Notas opcionales..."

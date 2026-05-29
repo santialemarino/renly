@@ -118,15 +118,15 @@ async def _subscription_items(
     return items
 
 
-# Installment cuotas that fall in the period.
+# Installments that fall in the period.
 #
-# Forward projection: emits each unpaid future cuota (`current_installment..installments_count`)
+# Forward projection: emits each unpaid future installment (`current_installment..installments_count`)
 # whose `start_date + (idx - 1) months` lands inside the window. Uses the installment's
 # current `installment_amount` + currency (the field lock guarantees these don't drift
-# after the first cuota fires).
+# after the first installment fires).
 #
-# Backward projection: emits each PAST cuota (`1..current_installment - 1`) whose date
-# lands inside the window AND whose scheduler-emitted expense row exists. is_paid=True.
+# Backward projection: emits each PAST installment (`1..current_installment - 1`) whose
+# date lands inside the window AND whose scheduler-emitted expense row exists. is_paid=True.
 async def _installment_items(
     session: AsyncSession,
     user: User,
@@ -148,7 +148,7 @@ async def _installment_items(
     items: list[CalendarItem] = []
     for inst in installments:
         paid_expenses = paid_by_inst.get(inst.id, {})
-        # Forward: unpaid future cuotas.
+        # Forward: unpaid future installments.
         for idx in range(inst.current_installment, inst.installments_count + 1):
             cuota_date = add_months(inst.start_date, idx - 1)
             if cuota_date < period_start:
@@ -170,7 +170,7 @@ async def _installment_items(
                     is_paid=False,
                 )
             )
-        # Backward: past paid cuotas inside the window.
+        # Backward: past paid installments inside the window.
         for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, paid_expenses):
             items.append(
                 CalendarItem(
@@ -403,11 +403,12 @@ def subscription_past_paid_cycles_in_window(
     return pairs
 
 
-# Returns (cuota_index, cuota_date, linked_expense) tuples for every PAST cuota of an
-# installment inside the window whose scheduler-emitted expense row exists. Cuota dates
-# are deterministic (start_date + (idx-1) months), iteration bounded by [1, current_installment).
-# `paid_expenses_by_date` is the pre-loaded window-restricted dict; lookup is unambiguous
-# because the partial UNIQUE INDEX on (installment_id, date) allows at most one row per cuota.
+# Returns (index, date, linked_expense) tuples for every PAST installment of an
+# installment plan inside the window whose scheduler-emitted expense row exists.
+# Installment dates are deterministic (start_date + (idx-1) months), iteration bounded
+# by [1, current_installment). `paid_expenses_by_date` is the pre-loaded window-restricted
+# dict; lookup is unambiguous because the partial UNIQUE INDEX on (installment_id, date)
+# allows at most one row per installment.
 def installment_past_paid_cuotas_in_window(
     inst: Installment,
     period_start: date_type,

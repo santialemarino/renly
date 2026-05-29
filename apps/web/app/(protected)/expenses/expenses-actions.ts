@@ -29,7 +29,8 @@ interface ExpenseRaw {
 // for installment; newCursor is empty when the plan archived, previousCursor is
 // empty when the plan re-activated via reverse. totalCount is populated for
 // installments only (the plan's `installments_count`) so the toast renders
-// "cuota N of M" without a client-side lookup against a stale active-plans list.
+// "N of M installments paid" without a client-side lookup against a stale
+// active-plans list.
 export interface PlanCursorChange {
   planType: 'obligation' | 'subscription' | 'installment';
   planId: number;
@@ -131,8 +132,14 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
     paymentObligationId,
     subscriptionId,
     installmentId,
+    cyclesToAdvance,
     ...rest
   } = values;
+  // cyclesToAdvance is a digit-only string from IntegerInput; empty / undefined means
+  // "default to 1" (single-cycle path). The backend enforces 1..12 in the schema; the
+  // form schema mirrors that range and the Mark Paid dialog hides the field for
+  // one-off obligations + non-Mark-Paid flows.
+  const cycles = cyclesToAdvance ? Number(cyclesToAdvance) : 1;
   const res = await authenticatedFetch('/expenses', {
     method: 'POST',
     body: {
@@ -142,6 +149,7 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
       payment_obligation_id: paymentObligationId ?? null,
       subscription_id: subscriptionId ?? null,
       installment_id: installmentId ?? null,
+      cycles_to_advance: cycles,
     },
   });
   if (!res.ok) {
