@@ -4,9 +4,10 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.schemas.base import RequestBase
+from app.utils.dates import add_months
 
 
 # Body for POST /installments.
@@ -36,7 +37,12 @@ class InstallmentUpdate(RequestBase):
     start_date: date_type | None = Field(default=None, description="Date of the first cuota.")
 
 
-# Response for a single installment.
+# Response for a single installment. `next_cuota_date` is derived from `start_date +
+# (current_installment - 1) months` via `add_months` (month-end clamping included) so
+# the installments table can render the next-due-date the same way the subscriptions
+# and payment-obligations tables do (`next_billing_date` / `next_due_date`). Returns
+# None for archived plans (`current_installment > installments_count`) so the cell
+# can degrade to "—" instead of displaying a misleading post-final date.
 class InstallmentResponse(BaseModel):
     id: int = Field(description="Installment id.")
     name: str = Field(description="Installment plan name.")
@@ -62,3 +68,13 @@ class InstallmentResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+    # Derived from start_date + (current_installment - 1) months. Computed Pydantic
+    # field so callers don't have to re-derive it client-side; serialised under the
+    # same JSON key as a stored field.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def next_cuota_date(self) -> date_type | None:
+        if self.current_installment > self.installments_count:
+            return None
+        return add_months(self.start_date, self.current_installment - 1)

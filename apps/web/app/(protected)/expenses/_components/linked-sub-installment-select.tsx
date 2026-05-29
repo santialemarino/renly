@@ -145,6 +145,7 @@ export function LinkedSubInstallmentSelect({
 }: LinkedSubInstallmentSelectProps) {
   const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
 
   // Sort within each group: match -> unknown -> mismatch, then next-cycle-date ASC.
   // Two separate sorted lists rather than one merged list — the SelectGroups stay
@@ -205,9 +206,11 @@ export function LinkedSubInstallmentSelect({
                     />
                     <span className="truncate">{sub.name}</span>
                     {/* Next-cycle date in a muted sub-label so the user can see what
-                        they're linking against (Phase 3, follow-up Item 8.1). */}
+                        they're linking against (Phase 3, follow-up Item 8.1). Sources
+                        the format string from `common.nextCycleHint` so the linked-
+                        obligation dropdown can reuse the exact same copy. */}
                     <span className="text-paragraph-xs text-muted-foreground">
-                      {t('form.linkedSubInstallment.nextCycleHint', {
+                      {tCommon('nextCycleHint', {
                         date: formatDateForLocale(sub.nextBillingDate, locale),
                       })}
                     </span>
@@ -242,7 +245,7 @@ export function LinkedSubInstallmentSelect({
                     </span>
                     {/* Next-cuota date in a muted sub-label (Phase 3, follow-up Item 8.1). */}
                     <span className="text-paragraph-xs text-muted-foreground">
-                      {t('form.linkedSubInstallment.nextCycleHint', {
+                      {tCommon('nextCycleHint', {
                         date: formatDateForLocale(nextChargeDate, locale),
                       })}
                     </span>

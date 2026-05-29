@@ -79,7 +79,8 @@
       "cancel": "Cancelar",
       "confirm": "Confirmar",
       "loading": "Procesando..."
-    }
+    },
+    "nextCycleHint": "· próximo {date}"
   },
   "login": {
     "metadata": {
@@ -494,7 +495,6 @@
       "linkedSubInstallment": {
         "label": "Asociado a suscripción o cuota",
         "placeholder": "Elegí una suscripción o cuota (opcional)",
-        "nextCycleHint": "· próximo {date}",
         "none": "Sin asociar",
         "subscriptionsLabel": "Suscripciones",
         "installmentsLabel": "Cuotas",
@@ -964,7 +964,7 @@
       "totalAmount": "Total",
       "interestSubLine": "Incluye {amount} de interés",
       "progress": "Progreso",
-      "startDate": "Fecha de inicio",
+      "nextCuotaDate": "Próxima cuota",
       "paymentMethod": "Forma de pago",
       "actions": "Acciones",
       "empty": "No se encontraron planes de cuotas."

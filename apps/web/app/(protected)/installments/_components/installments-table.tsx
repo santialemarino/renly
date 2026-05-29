@@ -197,11 +197,11 @@ export function InstallmentsTable({
               <TableHead>
                 <button
                   type="button"
-                  onClick={() => handleSortChange('start_date')}
+                  onClick={() => handleSortChange('next_cuota_date')}
                   className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
                 >
-                  {t('table.startDate')}
-                  <SortIcon column="start_date" sortBy={sortBy} sortOrder={sortOrder} />
+                  {t('table.nextCuotaDate')}
+                  <SortIcon column="next_cuota_date" sortBy={sortBy} sortOrder={sortOrder} />
                 </button>
               </TableHead>
               <TableHead>{t('table.paymentMethod')}</TableHead>
@@ -266,7 +266,9 @@ export function InstallmentsTable({
                     <TableCell className="text-paragraph-sm-medium tabular-nums">
                       {progressLabel}
                     </TableCell>
-                    <TableCell>{formatDateForLocale(inst.startDate, locale)}</TableCell>
+                    <TableCell>
+                      {inst.nextCuotaDate ? formatDateForLocale(inst.nextCuotaDate, locale) : '—'}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {inst.paymentMethod ? t(`paymentMethods.${inst.paymentMethod}`) : '—'}
                     </TableCell>

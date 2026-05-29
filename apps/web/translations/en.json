@@ -79,7 +79,8 @@
       "cancel": "Cancel",
       "confirm": "Confirm",
       "loading": "Processing..."
-    }
+    },
+    "nextCycleHint": "· next {date}"
   },
   "login": {
     "metadata": {
@@ -497,7 +498,6 @@
         "none": "Not linked",
         "subscriptionsLabel": "Subscriptions",
         "installmentsLabel": "Installments",
-        "nextCycleHint": "· next {date}",
         "mismatch": "Heads up: this plan's expected currency, payment method, or card differs from your entry."
       },
       "cancel": "Cancel",
@@ -964,7 +964,7 @@
       "totalAmount": "Total",
       "interestSubLine": "Includes {amount} interest",
       "progress": "Progress",
-      "startDate": "Start date",
+      "nextCuotaDate": "Next cuota",
       "paymentMethod": "Payment method",
       "actions": "Actions",
       "empty": "No installment plans found."
