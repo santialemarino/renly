@@ -149,10 +149,14 @@ export function LinkedSubInstallmentSelect({
   // Sort within each group: match -> unknown -> mismatch, then next-cycle-date ASC.
   // Active and archived go in separate buckets — archived plans enter via `include_ids`
   // when an in-scope expense links to a since-archived row (Phase 3 audit-round-3
-  // follow-up); they render in a single "Currently linked (archived)" group at the
-  // bottom regardless of type so the user can see what an edit row's link is even
-  // when the plan no longer appears in active lists.
+  // follow-up). The server-side fetch is page-wide — it pulls in ALL archived plans
+  // linked by any expense in scope — but the dropdown only surfaces the archived plan
+  // the CURRENT row is actually linked to (via `value`). Without this filter, opening
+  // Expense A's edit would show archived plans linked to Expense B, and the "Currently
+  // linked (archived)" label would be a half-truth.
   const sortedSubscriptions = useMemo(() => {
+    const isCurrentArchivedSub = (id: number) =>
+      value !== null && value.kind === 'subscription' && value.id === id;
     const active: { sub: Subscription; status: MatchStatus }[] = [];
     const archived: { sub: Subscription; status: MatchStatus }[] = [];
     for (const s of subscriptions) {
@@ -160,7 +164,11 @@ export function LinkedSubInstallmentSelect({
         sub: s,
         status: planMatchStatus(s, formCurrency, formPaymentMethod, formCreditCardId),
       };
-      (s.isActive ? active : archived).push(entry);
+      if (s.isActive) {
+        active.push(entry);
+      } else if (isCurrentArchivedSub(s.id)) {
+        archived.push(entry);
+      }
     }
     const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = STATUS_RANK[a.status] - STATUS_RANK[b.status];
@@ -170,9 +178,11 @@ export function LinkedSubInstallmentSelect({
     active.sort(sortBy);
     archived.sort(sortBy);
     return { active, archived };
-  }, [subscriptions, formCurrency, formPaymentMethod, formCreditCardId]);
+  }, [subscriptions, value, formCurrency, formPaymentMethod, formCreditCardId]);
 
   const sortedInstallments = useMemo(() => {
+    const isCurrentArchivedInst = (id: number) =>
+      value !== null && value.kind === 'installment' && value.id === id;
     const active: { inst: Installment; status: MatchStatus; nextChargeDate: string }[] = [];
     const archived: { inst: Installment; status: MatchStatus; nextChargeDate: string }[] = [];
     for (const i of installments) {
@@ -181,7 +191,11 @@ export function LinkedSubInstallmentSelect({
         status: planMatchStatus(i, formCurrency, formPaymentMethod, formCreditCardId),
         nextChargeDate: installmentNextChargeDate(i),
       };
-      (i.isActive ? active : archived).push(entry);
+      if (i.isActive) {
+        active.push(entry);
+      } else if (isCurrentArchivedInst(i.id)) {
+        archived.push(entry);
+      }
     }
     const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = STATUS_RANK[a.status] - STATUS_RANK[b.status];
@@ -191,7 +205,7 @@ export function LinkedSubInstallmentSelect({
     active.sort(sortBy);
     archived.sort(sortBy);
     return { active, archived };
-  }, [installments, formCurrency, formPaymentMethod, formCreditCardId]);
+  }, [installments, value, formCurrency, formPaymentMethod, formCreditCardId]);
 
   const hasActiveSubscriptions = sortedSubscriptions.active.length > 0;
   const hasActiveInstallments = sortedInstallments.active.length > 0;
