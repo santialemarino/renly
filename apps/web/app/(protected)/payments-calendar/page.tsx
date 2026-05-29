@@ -30,14 +30,10 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards, activeObligations, activeSubscriptions, activeInstallments] =
-    await Promise.all([
-      getSettings().catch(() => null),
-      getCreditCards().catch(() => []),
-      getPaymentObligations({ showArchived: false }).catch(() => []),
-      getSubscriptions({ showArchived: false }).catch(() => []),
-      getInstallments({ showArchived: false }).catch(() => []),
-    ]);
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
@@ -51,6 +47,31 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const month = parseYearMonth(params.month) ?? now.getMonth() + 1;
 
   const calendar = await getPaymentsCalendar({ year, month, currency });
+
+  // Collect linked-plan source ids from paid calendar items so the inline-edit dialog
+  // can render plan names for since-archived links (Phase 3 audit-round-3 follow-up).
+  // Only paid items are clickable → only their linked plans need to be in scope.
+  const linkedObligationIds = Array.from(
+    new Set(
+      calendar.items.filter((i) => i.type === 'obligation' && i.isPaid).map((i) => i.sourceId),
+    ),
+  );
+  const linkedSubscriptionIds = Array.from(
+    new Set(
+      calendar.items.filter((i) => i.type === 'subscription' && i.isPaid).map((i) => i.sourceId),
+    ),
+  );
+  const linkedInstallmentIds = Array.from(
+    new Set(
+      calendar.items.filter((i) => i.type === 'installment' && i.isPaid).map((i) => i.sourceId),
+    ),
+  );
+
+  const [activeObligations, activeSubscriptions, activeInstallments] = await Promise.all([
+    getPaymentObligations({ showArchived: false, includeIds: linkedObligationIds }).catch(() => []),
+    getSubscriptions({ showArchived: false, includeIds: linkedSubscriptionIds }).catch(() => []),
+    getInstallments({ showArchived: false, includeIds: linkedInstallmentIds }).catch(() => []),
+  ]);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

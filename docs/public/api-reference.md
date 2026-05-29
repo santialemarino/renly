@@ -263,7 +263,7 @@ Recurring charges (e.g. Netflix, Spotify, gym). The daily scheduler auto-generat
 | `PUT`    | `/subscriptions/{id}` | Update a subscription. Only provided fields are changed.                          |
 | `DELETE` | `/subscriptions/{id}` | Delete a subscription.                                                            |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `billing_cycle`, `next_billing_date`), `sort_order` (`asc`/`desc`), `show_archived`, `currency` (display currency for conversion).
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `billing_cycle`, `next_billing_date`), `sort_order` (`asc`/`desc`), `show_archived`, `include_ids` (repeated archived subscription ids to surface alongside the active set — used by the expense edit dialog so a row linked to a since-archived subscription still resolves to the plan name; ignored when `show_archived=true`), `currency` (display currency for conversion).
 
 **Subscription fields:** `name`, `amount` (> 0), `currency` (ISO 4217), `billing_cycle` (`monthly`, `annual`, `quarterly`, `biweekly`, `weekly`), `payment_method` (optional; `cash`, `debit`, `transfer`, `credit_card`), `credit_card_id` (when payment_method = credit_card), `is_active`, `next_billing_date`. Responses also include `converted_amount` when `currency` query param is provided.
 
@@ -281,7 +281,7 @@ Cuotas (installment plans, e.g. TV Samsung 12x). The daily scheduler auto-genera
 | `PUT`    | `/installments/{id}` | Update an installment plan. Only provided fields are changed.                         |
 | `DELETE` | `/installments/{id}` | Delete an installment plan.                                                           |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `total_amount`, `installment_amount`, `currency`, `installments_count`, `current_installment`, `start_date`, `next_cuota_date`), `sort_order`, `show_archived`, `currency`. Default order is `next_cuota_date DESC` so the table leads with the plan due next.
+**Query parameters (list):** `search`, `sort_by` (`name`, `total_amount`, `installment_amount`, `currency`, `installments_count`, `current_installment`, `start_date`, `next_cuota_date`), `sort_order`, `show_archived`, `include_ids` (repeated archived plan ids to surface alongside the active set — used by the expense edit dialog so a row linked to a since-archived plan still resolves to the plan name; ignored when `show_archived=true`), `currency`. Default order is `next_cuota_date DESC` so the table leads with the plan due next.
 
 **Installment fields:** `name`, `total_amount` (> 0), `installment_amount` (> 0), `currency`, `installments_count` (≥ 1), `current_installment` (≥ 1; default 1), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `start_date`. Responses also include `next_cuota_date` (computed = `start_date + (current_installment - 1) months` with month-end clamping; `null` once the plan is fully paid) and `converted_total_amount` / `converted_installment_amount` when `currency` query param is provided.
 
@@ -303,7 +303,7 @@ Recurring or one-off payment obligations (e.g. electricity, ABL, internet). Surf
 | `PUT`    | `/payment-obligations/{id}` | Update an obligation. Only provided fields are changed.                         |
 | `DELETE` | `/payment-obligations/{id}` | Delete an obligation.                                                           |
 
-**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `next_due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `currency`.
+**Query parameters (list):** `search`, `sort_by` (`name`, `amount`, `currency`, `next_due_date`, `recurrence`, `category`), `sort_order`, `show_archived`, `include_ids` (repeated archived obligation ids to surface alongside the active set — used by the expense edit dialog so a row linked to a since-archived obligation still resolves to the obligation name; ignored when `show_archived=true`), `currency`.
 
 **Obligation fields:** `name`, `amount` (> 0), `currency`, `next_due_date` (anchor for the next occurrence — recurring obligations project forward from this), `recurrence` (optional; `monthly`, `bimonthly`, `quarterly`, `annual`, or omitted for one-off), `category` (optional, free-form user label, max 100 chars — e.g. "ABL", "Cable"), `expense_category` (optional, structured enum reusing `ExpenseCategory` — used to pre-fill Mark Paid + feed finance breakdowns), `payment_method` (optional), `credit_card_id` (optional), `is_active`, `notes` (optional), `last_payment_date` (computed, read-only — date of the most recent linked expense, surfaces on archived one-off rows as a "Paid on" indicator). Responses include `converted_amount` when `currency` query param is provided.
 

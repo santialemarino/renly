@@ -12,6 +12,8 @@ from app.utils.dates import advance_by_cycle, step_back_by_cycle
 
 
 # List subscriptions for a user with optional search, sorting, and archive filtering.
+# `include_ids` lets callers widen an active-only listing with specific archived plans
+# so the expense edit dialog can still render the plan name of a since-archived link.
 async def list_subscriptions(
     session: AsyncSession,
     user: User,
@@ -20,6 +22,7 @@ async def list_subscriptions(
     sort_by: str | None = None,
     sort_order: str = "asc",
     active_only: bool = True,
+    include_ids: list[int] | None = None,
 ) -> list[Subscription]:
     return await subscription_repository.list_by_user(
         session,
@@ -28,6 +31,7 @@ async def list_subscriptions(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=active_only,
+        include_ids=include_ids,
     )
 
 

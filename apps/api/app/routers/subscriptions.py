@@ -39,6 +39,14 @@ async def list_subscriptions(
     ),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) subscriptions."),
+    include_ids: list[int] | None = Query(
+        default=None,
+        description=(
+            "Archived subscription ids to include alongside the active set. Used by the expense edit "
+            "dialog so a row linked to a since-archived subscription can still render the plan name in "
+            "the dropdown. Ignored when show_archived=true (everything is already included)."
+        ),
+    ),
     currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[SubscriptionResponse]:
     subscriptions = await subscription_service.list_subscriptions(
@@ -48,6 +56,7 @@ async def list_subscriptions(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=not show_archived,
+        include_ids=include_ids,
     )
 
     rate_map = None

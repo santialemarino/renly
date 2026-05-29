@@ -43,6 +43,14 @@ async def list_obligations(
     ),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) obligations."),
+    include_ids: list[int] | None = Query(
+        default=None,
+        description=(
+            "Archived obligation ids to include alongside the active set. Used by the expense edit "
+            "dialog so a row linked to a since-archived obligation can still render the obligation "
+            "name in the dropdown. Ignored when show_archived=true (everything is already included)."
+        ),
+    ),
     currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[PaymentObligationResponse]:
     obligations = await payment_obligation_service.list_obligations(
@@ -52,6 +60,7 @@ async def list_obligations(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=not show_archived,
+        include_ids=include_ids,
     )
 
     rate_map = None

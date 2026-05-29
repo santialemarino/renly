@@ -36,14 +36,10 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards, activeObligations, activeSubscriptions, activeInstallments] =
-    await Promise.all([
-      getSettings().catch(() => null),
-      getCreditCards().catch(() => []),
-      getPaymentObligations({ showArchived: false }).catch(() => []),
-      getSubscriptions({ showArchived: false }).catch(() => []),
-      getInstallments({ showArchived: false }).catch(() => []),
-    ]);
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
@@ -62,6 +58,26 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });
+
+  // Collect linked-plan ids from the loaded page so the edit dropdowns can still render
+  // the plan name when an expense links to a since-archived plan (Phase 3 audit-round-3
+  // follow-up). Backend's `include_ids` widens the active-only listing with these specific
+  // archived rows; active plans not in include_ids are unaffected.
+  const linkedObligationIds = Array.from(
+    new Set(data.items.map((e) => e.paymentObligationId).filter((x): x is number => x !== null)),
+  );
+  const linkedSubscriptionIds = Array.from(
+    new Set(data.items.map((e) => e.subscriptionId).filter((x): x is number => x !== null)),
+  );
+  const linkedInstallmentIds = Array.from(
+    new Set(data.items.map((e) => e.installmentId).filter((x): x is number => x !== null)),
+  );
+
+  const [activeObligations, activeSubscriptions, activeInstallments] = await Promise.all([
+    getPaymentObligations({ showArchived: false, includeIds: linkedObligationIds }).catch(() => []),
+    getSubscriptions({ showArchived: false, includeIds: linkedSubscriptionIds }).catch(() => []),
+    getInstallments({ showArchived: false, includeIds: linkedInstallmentIds }).catch(() => []),
+  ]);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

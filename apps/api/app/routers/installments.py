@@ -44,6 +44,14 @@ async def list_installments(
     ),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (completed) installments."),
+    include_ids: list[int] | None = Query(
+        default=None,
+        description=(
+            "Archived plan ids to include alongside the active set. Used by the expense edit dialog "
+            "so a row linked to a since-archived plan can still render the plan name in the dropdown. "
+            "Ignored when show_archived=true (everything is already included)."
+        ),
+    ),
     currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[InstallmentResponse]:
     installments = await installment_service.list_installments(
@@ -53,6 +61,7 @@ async def list_installments(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=not show_archived,
+        include_ids=include_ids,
     )
 
     rate_map = None

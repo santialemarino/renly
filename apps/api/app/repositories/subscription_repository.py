@@ -1,4 +1,4 @@
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -14,6 +14,10 @@ _SORT_COLUMNS = {
 
 
 # List subscriptions for a user with optional search, sorting, and active filtering.
+# `include_ids` (only honoured when `active_only=True`) widens the active filter so
+# the listed archived plans pointed to by include_ids are still returned — used by
+# the expense form's edit dialog so a row linked to a since-archived plan can still
+# render the plan name in the linked-FK dropdown (Phase 3 audit-round-3 follow-up).
 async def list_by_user(
     session: AsyncSession,
     user_id: int,
@@ -22,10 +26,14 @@ async def list_by_user(
     sort_by: str | None = None,
     sort_order: str = "asc",
     active_only: bool = True,
+    include_ids: list[int] | None = None,
 ) -> list[Subscription]:
     stmt = select(Subscription).where(Subscription.user_id == user_id)
     if active_only:
-        stmt = stmt.where(Subscription.is_active.is_(True))
+        if include_ids:
+            stmt = stmt.where(or_(Subscription.is_active.is_(True), Subscription.id.in_(include_ids)))
+        else:
+            stmt = stmt.where(Subscription.is_active.is_(True))
     if search:
         stmt = stmt.where(Subscription.name.ilike(f"%{search}%"))
     sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None

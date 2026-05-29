@@ -12,6 +12,8 @@ from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
 
 
 # List payment obligations for a user with optional search, sorting, and archive filtering.
+# `include_ids` lets callers widen an active-only listing with specific archived obligations
+# so the expense edit dialog can still render the obligation name of a since-archived link.
 async def list_obligations(
     session: AsyncSession,
     user: User,
@@ -20,6 +22,7 @@ async def list_obligations(
     sort_by: str | None = None,
     sort_order: str = "asc",
     active_only: bool = True,
+    include_ids: list[int] | None = None,
 ) -> list[PaymentObligation]:
     return await payment_obligation_repository.list_by_user(
         session,
@@ -28,6 +31,7 @@ async def list_obligations(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=active_only,
+        include_ids=include_ids,
     )
 
 
