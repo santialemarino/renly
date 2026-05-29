@@ -66,9 +66,11 @@ def subscription_dates_to_emit(
 # day distance (Phase 3, follow-up 3b). Walks the cycle anchored on next_billing_date
 # forward or backward — including PAST cycles before the current cursor — and picks
 # the candidate with the smallest |target - cycle|. Pure function; the caller checks
-# whether the returned date is within tolerance and whether it sits at-or-after the
-# current cursor before advancing. Defensive safety cap on the walk prevents runaway
-# loops on degenerate cycles.
+# whether the matched cycle equals the current cursor before advancing (Item 9, Option C).
+# The closest-cycle math implicitly enforces a half-cycle window around the cursor — an
+# entry within half a cycle of the cursor matches it; further out, it matches a neighbour
+# and the strict-equality predicate refuses to advance. Defensive safety cap on the walk
+# prevents runaway loops on degenerate cycles.
 def closest_subscription_cycle(
     next_billing_date: date_type,
     billing_cycle: str,
@@ -110,7 +112,9 @@ def closest_subscription_cycle(
 # Returns the (cuota_index, cuota_date) closest to `target_date` for an installment plan,
 # or None when the plan is already fully paid (`current_installment > installments_count`).
 # Cuota indices are 1-based; cuota_date = add_months(start_date, idx - 1). Pure function;
-# the caller checks tolerance and whether idx >= current_installment before advancing.
+# the caller checks whether the matched cuota equals the current cursor before advancing
+# (Item 9, Option C). The closest-cuota math implicitly enforces a half-month window
+# around the cursor.
 def closest_installment_cuota(
     start_date: date_type,
     current_installment: int,

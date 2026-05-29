@@ -179,6 +179,7 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
         plan_name=installment.name,
         previous_cursor=str(previous),
         new_cursor="" if archived else str(installment.current_installment),
+        total_count=installment.installments_count,
     )
 
 
@@ -208,4 +209,5 @@ async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: U
         plan_name=installment.name,
         previous_cursor="" if reactivated else str(previous_cursor),
         new_cursor=str(installment.current_installment),
+        total_count=installment.installments_count,
     )

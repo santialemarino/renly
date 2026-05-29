@@ -479,8 +479,9 @@
         "confirm": "Continue anyway"
       },
       "cycleAdvance": {
-        "title": "Far from next expected cycle",
-        "description": "This entry is {distanceDays} days from {planName}'s next expected cycle ({nextExpectedDate}). The plan's schedule will not advance. Continue?",
+        "title": "The plan's schedule will not advance",
+        "descriptionMultiJump": "This entry matches a future cycle of {planName} ({nextExpectedDate}), ahead of the current schedule. The plan stays where it is — the scheduler will back-fill the earlier cycles. Continue?",
+        "descriptionBackDated": "This entry is far from {planName}'s current cycle (closest match: {nextExpectedDate}). The plan stays where it is. Continue?",
         "confirm": "Save without advancing"
       },
       "linkedObligation": {

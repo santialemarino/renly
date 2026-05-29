@@ -27,13 +27,16 @@ interface ExpenseRaw {
 // billing date moved to Jun 27, 2026." — branching on planType. previousCursor /
 // newCursor are stringified — ISO date for obligation/subscription, decimal index
 // for installment; newCursor is empty when the plan archived, previousCursor is
-// empty when the plan re-activated via reverse.
+// empty when the plan re-activated via reverse. totalCount is populated for
+// installments only (the plan's `installments_count`) so the toast renders
+// "cuota N of M" without a client-side lookup against a stale active-plans list.
 export interface PlanCursorChange {
   planType: 'obligation' | 'subscription' | 'installment';
   planId: number;
   planName: string;
   previousCursor: string;
   newCursor: string;
+  totalCount: number | null;
 }
 
 // Bundle of cursor deltas returned by create / update mutations. Both fields can fire
@@ -50,6 +53,7 @@ interface PlanCursorChangeRaw {
   plan_name: string;
   previous_cursor: string;
   new_cursor: string;
+  total_count: number | null;
 }
 
 function mapCursorChange(raw: PlanCursorChangeRaw | null): PlanCursorChange | null {
@@ -60,6 +64,7 @@ function mapCursorChange(raw: PlanCursorChangeRaw | null): PlanCursorChange | nu
     planName: raw.plan_name,
     previousCursor: raw.previous_cursor,
     newCursor: raw.new_cursor,
+    totalCount: raw.total_count,
   };
 }
 
@@ -100,6 +105,27 @@ function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
   };
 }
 
+// 409 from POST/PUT carries a user-readable `detail` string from the backend's
+// IntegrityError handler (Phase 3, follow-up Item 8.2) — typically the partial UNIQUE
+// INDEX on (subscription_id, date) / (installment_id, date) catching a duplicate
+// scheduler-emitted charge on the same plan+date. We tag the error so the caller can
+// surface the backend message verbatim instead of a generic "Failed to save expense".
+export class ExpenseConflictError extends Error {
+  constructor(public detail: string) {
+    super(detail);
+    this.name = 'ExpenseConflictError';
+  }
+}
+
+async function readErrorDetail(res: Response): Promise<string | null> {
+  try {
+    const body: { detail?: unknown } = await res.json();
+    return typeof body.detail === 'string' ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationOutcome> {
   const {
     paymentMethod,
@@ -120,7 +146,13 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
       installment_id: installmentId ?? null,
     },
   });
-  if (!res.ok) throw new Error('Failed to create expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) throw new ExpenseConflictError(detail);
+    }
+    throw new Error('Failed to create expense');
+  }
   return mapMutationOutcome(await res.json());
 }
 
@@ -148,7 +180,13 @@ export async function updateExpense(
       installment_id: values.installmentId ?? null,
     },
   });
-  if (!res.ok) throw new Error('Failed to update expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) throw new ExpenseConflictError(detail);
+    }
+    throw new Error('Failed to update expense');
+  }
   return mapMutationOutcome(await res.json());
 }
 

@@ -57,6 +57,7 @@ def _cursor_change(result: AdvanceResult | ReverseResult | None) -> PlanCursorCh
         plan_name=result.plan_name,
         previous_cursor=result.previous_cursor,
         new_cursor=result.new_cursor,
+        total_count=result.total_count,
     )
 
 
@@ -140,9 +141,10 @@ async def auto_charge_match(
 
 
 # Preview the effect of saving a manual expense linked to a subscription or installment
-# (Phase 3, follow-up 3b). Returns would_advance + distance + matched cycle so the
-# expense form can show a soft-confirm dialog when the entry is out of tolerance / back-
-# dated. Mirrors the auto-charge-match lookup pattern. Declared above GET /{id} so the
+# (Phase 3, follow-up 3b). Returns would_advance + distance + matched cycle + multi_jump
+# so the expense form can show a soft-confirm dialog when the cursor won't advance —
+# multi-jump (matched cycle ahead of cursor) vs back-dated (matched behind) gets different
+# copy. Mirrors the auto-charge-match lookup pattern. Declared above GET /{id} so the
 # static slug isn't shadowed by the parametrised route. Exactly one of subscription_id
 # / installment_id must be set.
 @router.get("/cycle-advance-preview", response_model=CycleAdvancePreviewResponse)

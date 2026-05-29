@@ -28,7 +28,7 @@ interface LinkedExpenseEditTriggerProps {
 // The expense form is the same dialog used elsewhere; the user can edit (including
 // changing or clearing the linked FK per Item 10), delete, or just inspect, then
 // close to return to the calendar. Active plans are prop-drilled so the linked-FK
-// dropdowns render and Item 7's installment cursor toast can resolve totalCount.
+// dropdowns render with the user's current plans.
 export function LinkedExpenseEditTrigger({
   linkedExpenseId,
   preferredCurrencies,

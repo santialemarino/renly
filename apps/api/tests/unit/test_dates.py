@@ -6,12 +6,10 @@ from app.utils.dates import (
     BILLING_CYCLE_MONTHLY,
     BILLING_CYCLE_QUARTERLY,
     BILLING_CYCLE_WEEKLY,
-    MAX_TOLERANCE_DAYS,
     add_months,
     add_months_anchored,
     advance_by_cycle,
     compute_statement_period,
-    cycle_tolerance_days,
     local_hour_for_user,
     resolve_day_in_month,
     step_back_by_cycle,
@@ -150,52 +148,6 @@ class TestStepBackByCycle:
     def test_unknown_cycle_falls_back_to_monthly(self):
         # Defensive — same fallback as the forward variant.
         assert step_back_by_cycle(date(2026, 6, 15), "fortnightly") == date(2026, 5, 15)
-
-
-# --- cycle_tolerance_days ---
-
-
-class TestCycleToleranceDays:
-    # Hybrid formula min(cycle_length // 2, 60). Calibrates "this manual entry belongs
-    # to that cycle" matching to the cycle's nominal length: weekly cycles tolerate
-    # less drift than annual ones, but the cap prevents annual cycles from accepting
-    # entries half a year off.
-
-    def test_weekly_yields_three_days(self):
-        # 7 // 2 = 3.
-        assert cycle_tolerance_days(BILLING_CYCLE_WEEKLY) == 3
-
-    def test_biweekly_yields_seven_days(self):
-        # 14 // 2 = 7.
-        assert cycle_tolerance_days(BILLING_CYCLE_BIWEEKLY) == 7
-
-    def test_monthly_yields_fifteen_days(self):
-        # 31 // 2 = 15 (Jan 1 -> Feb 1 = 31 days).
-        assert cycle_tolerance_days(BILLING_CYCLE_MONTHLY) == 15
-
-    def test_quarterly_yields_forty_five_days(self):
-        # 90 // 2 = 45 (Jan 1 -> Apr 1 = 90 days).
-        assert cycle_tolerance_days(BILLING_CYCLE_QUARTERLY) == 45
-
-    def test_annual_caps_at_max_tolerance(self):
-        # 365 // 2 = 182, but capped at MAX_TOLERANCE_DAYS = 60.
-        assert cycle_tolerance_days(BILLING_CYCLE_ANNUAL) == MAX_TOLERANCE_DAYS
-
-    def test_unknown_cycle_falls_back_to_monthly_tolerance(self):
-        # advance_by_cycle's fallback is monthly, so the tolerance follows.
-        assert cycle_tolerance_days("fortnightly") == 15
-
-    def test_anchor_independent_signature(self):
-        # Regression: an earlier implementation accepted an anchor_day kwarg and forwarded
-        # it into advance_by_cycle. With anchor_day=31 the Jan 1 reference advanced to
-        # Feb 28 (clamped), inflating the "nominal length" from 31 to 58 days and the
-        # monthly tolerance from 15 to 29. The fix dropped the param entirely — cycle
-        # length is anchor-independent for all supported cycles. This test pins the
-        # signature so a future re-add can't silently re-introduce the bug.
-        import inspect
-
-        sig = inspect.signature(cycle_tolerance_days)
-        assert list(sig.parameters.keys()) == ["cycle"]
 
 
 # --- resolve_day_in_month ---

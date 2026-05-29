@@ -126,6 +126,7 @@ class TestInstallmentReverseForUnlink:
         assert result.plan_type == "installment"
         assert result.previous_cursor == "5"
         assert result.new_cursor == "4"
+        assert result.total_count == 12
         assert inst.current_installment == 4
         assert inst.is_active is True
 
@@ -338,6 +339,7 @@ class TestAdvanceResultPopulation:
         assert result.plan_type == "installment"
         assert result.previous_cursor == "12"
         assert result.new_cursor == ""
+        assert result.total_count == 12
         assert inst.is_active is False
 
     @pytest.mark.asyncio

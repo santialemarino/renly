@@ -15,14 +15,12 @@ import {
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import { deleteExpense } from '@/app/(protected)/expenses/expenses-actions';
 import type { Expense } from '@/lib/api/expenses';
-import type { Installment } from '@/lib/api/installments';
 import { formatAmount } from '@/lib/utils/currency';
 
 interface ExpenseDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   expense: Expense;
-  activeInstallments?: Installment[];
   onSuccess: () => void;
 }
 
@@ -30,7 +28,6 @@ export function ExpenseDeleteDialog({
   open,
   onOpenChange,
   expense,
-  activeInstallments,
   onSuccess,
 }: ExpenseDeleteDialogProps) {
   const locale = useLocale();
@@ -43,7 +40,7 @@ export function ExpenseDeleteDialog({
       const cursorChange = await deleteExpense(expense.id);
       const baseMessage = t('delete.success');
       if (cursorChange) {
-        const resolution = resolveCursorToast(cursorChange, 'reverse', locale, activeInstallments);
+        const resolution = resolveCursorToast(cursorChange, 'reverse', locale);
         if (resolution) {
           toast.success(`${baseMessage} ${t(`form.${resolution.key}`, resolution.params)}`);
         } else {

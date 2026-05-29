@@ -164,7 +164,6 @@ function RowActions({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         expense={expense}
-        activeInstallments={activeInstallments}
         onSuccess={onSuccess}
       />
     </>

@@ -479,8 +479,9 @@
         "confirm": "Cargar igual"
       },
       "cycleAdvance": {
-        "title": "Lejos del próximo ciclo esperado",
-        "description": "Este gasto está a {distanceDays} días del próximo ciclo esperado de {planName} ({nextExpectedDate}). La planificación no avanzará. ¿Continuar?",
+        "title": "La planificación no avanzará",
+        "descriptionMultiJump": "Este gasto coincide con un ciclo futuro de {planName} ({nextExpectedDate}), adelantado al ciclo actual. La planificación se queda donde está — el agendador completará automáticamente los ciclos intermedios. ¿Continuar?",
+        "descriptionBackDated": "Este gasto está lejos del ciclo actual de {planName} (ciclo más cercano: {nextExpectedDate}). La planificación se queda donde está. ¿Continuar?",
         "confirm": "Guardar sin avanzar"
       },
       "linkedObligation": {

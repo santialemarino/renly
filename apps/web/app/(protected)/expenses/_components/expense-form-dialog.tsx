@@ -34,6 +34,7 @@ import {
 } from '@/app/(protected)/expenses/_components/linked-sub-installment-select';
 import {
   createExpense,
+  ExpenseConflictError,
   getAutoChargeMatch,
   getCycleAdvancePreview,
   updateExpense,
@@ -57,6 +58,7 @@ import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
+import { formatDateForLocale } from '@/lib/utils/format';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
 // When supplied (and `expense` is absent), the form opens in CREATE mode with values
@@ -388,8 +390,16 @@ export function ExpenseFormDialog({
       setNovelCurrencyPending(null);
       setAutoChargeMatch(null);
       setCycleAdvancePending(null);
-    } catch {
-      toast.error(t('form.saveError'));
+    } catch (err) {
+      // Surface the backend's 409 detail (Phase 3, follow-up Item 8.2) verbatim — the
+      // partial UNIQUE INDEX message ("A charge is already recorded for this subscription
+      // on that date.") is more actionable than the generic save-error toast. Other
+      // failures fall back to the generic message.
+      if (err instanceof ExpenseConflictError) {
+        toast.error(err.detail);
+      } else {
+        toast.error(t('form.saveError'));
+      }
     }
   }
 
@@ -402,11 +412,11 @@ export function ExpenseFormDialog({
   function announceSave(baseMessage: string, outcome: ExpenseMutationOutcome) {
     const lines: string[] = [baseMessage];
     if (outcome.reverse) {
-      const r = resolveCursorToast(outcome.reverse, 'reverse', locale, activeInstallments);
+      const r = resolveCursorToast(outcome.reverse, 'reverse', locale);
       if (r) lines.push(t(`form.${r.key}`, r.params));
     }
     if (outcome.advance) {
-      const a = resolveCursorToast(outcome.advance, 'advance', locale, activeInstallments);
+      const a = resolveCursorToast(outcome.advance, 'advance', locale);
       if (a) lines.push(t(`form.${a.key}`, a.params));
     }
     toast.success(lines.join(' '));
@@ -823,10 +833,13 @@ export function ExpenseFormDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Cycle-advance out-of-tolerance confirmation (Phase 3, follow-up 3b). Same
-          sibling pattern as novel-currency / auto-charge — fires when the user has
-          linked a subscription or installment but the entry date is far from the
-          next expected cycle, so the plan's cursor will not advance on save. */}
+      {/* Cycle-advance soft-confirm (Phase 3, follow-up 3b). Same sibling pattern as
+          novel-currency / auto-charge — fires when the user has linked a subscription
+          or installment but the entry's matched cycle isn't the plan's current cursor,
+          so the schedule won't advance on save. Copy branches on `multi_jump`: the
+          future-cycle case (matched cycle ahead of cursor — pre-pay / mis-click) reads
+          differently from the back-dated case (matched cycle behind cursor — already
+          emitted by the scheduler). */}
       <Dialog
         open={!!cycleAdvancePending}
         onOpenChange={(open) => !open && setCycleAdvancePending(null)}
@@ -836,11 +849,21 @@ export function ExpenseFormDialog({
             <DialogTitle>{t('form.cycleAdvance.title')}</DialogTitle>
           </DialogHeader>
           <p className="text-paragraph-sm text-muted-foreground">
-            {t('form.cycleAdvance.description', {
-              planName: cycleAdvanceDisplay?.planName ?? '',
-              nextExpectedDate: cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
-              distanceDays: cycleAdvanceDisplay?.preview.distanceDays ?? 0,
-            })}
+            {cycleAdvanceDisplay?.preview.multiJump
+              ? t('form.cycleAdvance.descriptionMultiJump', {
+                  planName: cycleAdvanceDisplay?.planName ?? '',
+                  nextExpectedDate: formatDateForLocale(
+                    cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
+                    locale,
+                  ),
+                })
+              : t('form.cycleAdvance.descriptionBackDated', {
+                  planName: cycleAdvanceDisplay?.planName ?? '',
+                  nextExpectedDate: formatDateForLocale(
+                    cycleAdvanceDisplay?.preview.nextExpectedDate ?? '',
+                    locale,
+                  ),
+                })}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCycleAdvancePending(null)}>

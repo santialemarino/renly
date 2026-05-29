@@ -1,5 +1,4 @@
 import type { PlanCursorChange } from '@/app/(protected)/expenses/expenses-actions';
-import type { Installment } from '@/lib/api/installments';
 import { formatDateForLocale } from '@/lib/utils/format';
 
 // Resolves the translation key + parameters for the cursor-change toast line that
@@ -9,7 +8,9 @@ import { formatDateForLocale } from '@/lib/utils/format';
 // rather than passed as raw ISO strings so the toast reads naturally to the user.
 // Returns null when the cursorChange carries no meaningful payload (defensive — the
 // backend only emits advance_change / reverse_change when something moved, but null-safe
-// routing here keeps the call sites simple).
+// routing here keeps the call sites simple). totalCount for installments comes from the
+// backend payload directly so the toast doesn't depend on the caller's (potentially
+// stale) active-plans list.
 
 export type ToastDirection = 'advance' | 'reverse';
 
@@ -22,10 +23,9 @@ export function resolveCursorToast(
   cursorChange: PlanCursorChange,
   direction: ToastDirection,
   locale: string,
-  activeInstallments?: Installment[],
 ): CursorToastResolution | null {
   const ns = direction === 'advance' ? 'cursorAdvanceToast' : 'cursorReverseToast';
-  const { planType, planName, newCursor, previousCursor } = cursorChange;
+  const { planType, planName, newCursor, previousCursor, totalCount } = cursorChange;
 
   if (planType === 'subscription') {
     // Subscriptions only walk dates back and forth — they never archive on advance
@@ -60,11 +60,9 @@ export function resolveCursorToast(
     if (direction === 'reverse' && previousCursor === '') {
       return { key: `${ns}.installmentReactivated`, params: { planName } };
     }
-    const plan = activeInstallments?.find((i) => i.id === cursorChange.planId);
-    const totalCount = plan?.installmentsCount ?? 0;
     return {
       key: `${ns}.installment`,
-      params: { planName, newCursor, totalCount },
+      params: { planName, newCursor, totalCount: totalCount ?? 0 },
     };
   }
 

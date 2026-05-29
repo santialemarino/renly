@@ -127,9 +127,9 @@ def compute_subscription_advance_for_manual_entry(subscription: Subscription, en
 # Caller commits — this stages the change inside the expense-create transaction so the
 # advance is atomic with the linked expense insert. Returns an AdvanceResult when the
 # cursor moved (Phase 3, follow-up Item 7) so the expense create response can carry
-# enough context for the frontend toast; None when no advance fired (out of tolerance,
-# multi-jump, back-dated, or the subscription can't be found / doesn't belong to the
-# user). Per the 3b plan: at most one advance per save event.
+# enough context for the frontend toast; None when no advance fired (matched cycle ahead
+# of or behind the cursor — multi-jump / back-dated — or the subscription can't be found
+# / doesn't belong to the user). Per the 3b plan: at most one advance per save event.
 async def advance_for_manual_entry(session: AsyncSession, subscription_id: int, user: User, entry_date: date_type) -> AdvanceResult | None:
     subscription = await subscription_repository.get_by_id(session, subscription_id, user.id)
     if subscription is None:

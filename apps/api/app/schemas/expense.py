@@ -101,13 +101,21 @@ class ExpenseUpdate(RequestBase):
 # new_cursor are stringified — ISO date for obligation/subscription, decimal index
 # for installment; new_cursor is empty when the plan archived (one-off obligation
 # Marked Paid, installment past its final cuota), previous_cursor is empty when the
-# plan re-activated via reverse.
+# plan re-activated via reverse. total_count is populated for installments only —
+# the plan's `installments_count`, so the toast renders "cuota 2 of 12" without a
+# client-side lookup against a potentially-stale active-plans list.
 class PlanCursorChange(BaseModel):
     plan_type: str = Field(description="Plan type (obligation, subscription, installment).")
     plan_id: int = Field(description="Plan id.")
     plan_name: str = Field(description="Plan name (for the toast copy).")
     previous_cursor: str = Field(description="Cursor value before the change. Empty when re-activating an archived plan.")
     new_cursor: str = Field(description="Cursor value after the change. Empty when the plan archived.")
+    total_count: int | None = Field(
+        default=None,
+        description=(
+            "Total cuotas for installments (None for obligation / subscription). Lets the toast render 'cuota N of M' without a client-side lookup."
+        ),
+    )
 
 
 # Response for a single expense entry. advance_change / reverse_change carry the cursor
