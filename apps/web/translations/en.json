@@ -512,14 +512,14 @@
         "obligation": "{planName}'s next due date moved to {newCursor}.",
         "obligationArchived": "{planName} marked as paid.",
         "subscription": "{planName}'s next billing date moved to {newCursor}.",
-        "installment": "{planName} progress moved to cuota {newCursor} of {totalCount}.",
+        "installment": "{planName}: {paidCount} of {totalCount} cuotas paid.",
         "installmentArchived": "{planName} fully paid."
       },
       "cursorReverseToast": {
         "obligation": "{planName}'s next due date moved back to {newCursor}.",
         "obligationReactivated": "{planName} re-activated.",
         "subscription": "{planName}'s next billing date moved back to {newCursor}.",
-        "installment": "{planName} progress moved back to cuota {newCursor} of {totalCount}.",
+        "installment": "{planName}: {paidCount} of {totalCount} cuotas paid.",
         "installmentReactivated": "{planName} re-activated."
       }
     },

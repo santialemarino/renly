@@ -60,9 +60,14 @@ export function resolveCursorToast(
     if (direction === 'reverse' && previousCursor === '') {
       return { key: `${ns}.installmentReactivated`, params: { planName } };
     }
+    // Toast uses the installments-table convention: `paidCount = current_installment - 1`
+    // (the cursor stores "next cuota to pay", the table + toast show "cuotas paid"). Without
+    // this, advance fires "moved to cuota 2 of 3" while the table reads "1/3" — same plan,
+    // two different framings.
+    const paidCount = Math.max(0, Number(newCursor) - 1);
     return {
       key: `${ns}.installment`,
-      params: { planName, newCursor, totalCount: totalCount ?? 0 },
+      params: { planName, paidCount, totalCount: totalCount ?? 0 },
     };
   }
 

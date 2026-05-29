@@ -512,14 +512,14 @@
         "obligation": "Próximo vencimiento de {planName} actualizado a {newCursor}.",
         "obligationArchived": "{planName} marcada como pagada.",
         "subscription": "Próximo cobro de {planName} actualizado a {newCursor}.",
-        "installment": "{planName} avanzó a la cuota {newCursor} de {totalCount}.",
+        "installment": "{planName}: {paidCount} de {totalCount} cuotas pagadas.",
         "installmentArchived": "{planName} pagada en su totalidad."
       },
       "cursorReverseToast": {
         "obligation": "Próximo vencimiento de {planName} retrocedió a {newCursor}.",
         "obligationReactivated": "{planName} reactivada.",
         "subscription": "Próximo cobro de {planName} retrocedió a {newCursor}.",
-        "installment": "{planName} retrocedió a la cuota {newCursor} de {totalCount}.",
+        "installment": "{planName}: {paidCount} de {totalCount} cuotas pagadas.",
         "installmentReactivated": "{planName} reactivada."
       }
     },
