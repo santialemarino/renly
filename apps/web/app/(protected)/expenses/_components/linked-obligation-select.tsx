@@ -132,10 +132,11 @@ export function LinkedObligationSelect({
 
   // Partition into active vs archived. Archived obligations enter via `include_ids` from
   // the page server component when an in-scope expense links to a since-archived row
-  // (Phase 3 audit-round-3 follow-up). Active rows go in the main list with the existing
-  // match-aware sort; archived rows go in a separate "Currently linked (archived)" group
-  // at the bottom — the user can keep or change the link but doesn't browse archived plans
-  // for new links.
+  // (Phase 3 audit-round-3 follow-up). The server-side fetch is page-wide — it pulls in
+  // ALL archived obligations linked by any expense in scope — but the dropdown only
+  // surfaces the one the CURRENT row is actually linked to (via `value`). Without this
+  // filter, opening Expense A's edit would show archived plans linked to Expense B in
+  // the same list, and the "Currently linked (archived)" label would be a half-truth.
   const { activeSorted, archivedSorted } = useMemo(() => {
     const rank: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
     const active: { obligation: PaymentObligation; status: MatchStatus }[] = [];
@@ -145,10 +146,14 @@ export function LinkedObligationSelect({
         obligation: o,
         status: obligationMatchStatus(o, formCurrency, formPaymentMethod, formCreditCardId),
       };
-      (o.isActive ? active : archived).push(entry);
+      // Archived plans only render when they match the row's current FK — otherwise
+      // they're dropped entirely (active plans in the wider fetch are unaffected).
+      if (o.isActive) {
+        active.push(entry);
+      } else if (value !== null && o.id === value) {
+        archived.push(entry);
+      }
     }
-    // Same match-aware sort within each bucket. Archived sort by next_due_date alone
-    // matters less (UI groups them under a clear label) but stays consistent.
     const sortBy = (a: (typeof active)[number], b: (typeof active)[number]) => {
       const rankDiff = rank[a.status] - rank[b.status];
       if (rankDiff !== 0) return rankDiff;
@@ -157,7 +162,7 @@ export function LinkedObligationSelect({
     active.sort(sortBy);
     archived.sort(sortBy);
     return { activeSorted: active, archivedSorted: archived };
-  }, [obligations, formCurrency, formPaymentMethod, formCreditCardId]);
+  }, [obligations, value, formCurrency, formPaymentMethod, formCreditCardId]);
 
   return (
     <Select
