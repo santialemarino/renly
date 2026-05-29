@@ -7,9 +7,9 @@ import { formatDateForLocale } from '@/lib/utils/format';
 // Direction selects the namespace (`cursorAdvanceToast` vs `cursorReverseToast`);
 // plan-specific branches pick the right key. Date values are formatted via the locale
 // rather than passed as raw ISO strings so the toast reads naturally to the user.
-// Returns null when the cursor_change carries no meaningful payload (defensive — the
-// backend only emits cursor_change when something moved, but null-safe routing here
-// keeps the call sites simple).
+// Returns null when the cursorChange carries no meaningful payload (defensive — the
+// backend only emits advance_change / reverse_change when something moved, but null-safe
+// routing here keeps the call sites simple).
 
 export type ToastDirection = 'advance' | 'reverse';
 
