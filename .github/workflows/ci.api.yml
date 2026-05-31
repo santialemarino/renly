@@ -42,11 +42,11 @@ jobs:
           # Dummy values — pydantic-settings requires these fields to be present at import time.
           # No DB connection or JWT signing happens during this step.
           DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/renly
-          JWT_SECRET: ci-secret
+          JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
         run: uv run python -c "from app.main import app"
 
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/renly
-          JWT_SECRET: ci-secret
+          JWT_SECRET: ci-dummy-jwt-secret-min-32-chars-padding
         run: uv run pytest tests/ -v

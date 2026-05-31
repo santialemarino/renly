@@ -8,12 +8,12 @@ Base URL: `/api` (all paths below are relative to this).
 
 ## Authentication
 
-| Method | Path             | Description                                               |
-| ------ | ---------------- | --------------------------------------------------------- |
-| `POST` | `/auth/register` | Create a new account. Returns a JWT.                      |
-| `POST` | `/auth/login`    | Sign in with email and password. Returns a JWT.           |
-| `POST` | `/auth/logout`   | Sign out. Invalidates all existing tokens for the user.   |
-| `GET`  | `/auth/me`       | Returns the current authenticated user (id, name, email). |
+| Method | Path             | Description                                                     |
+| ------ | ---------------- | --------------------------------------------------------------- |
+| `POST` | `/auth/register` | Create a new account. Returns a JWT.                            |
+| `POST` | `/auth/login`    | Sign in with email and password. Returns a JWT.                 |
+| `POST` | `/auth/logout`   | Sign out. Invalidates all existing tokens for the user.         |
+| `GET`  | `/auth/me`       | Returns the current authenticated user (id, name, email, plan). |
 
 ---
 

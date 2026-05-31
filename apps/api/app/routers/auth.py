@@ -58,4 +58,5 @@ async def me(current_user: CurrentUser) -> MeResponse:
         uid=current_user.id,
         email=current_user.email,
         name=current_user.name,
+        plan=current_user.plan,
     )

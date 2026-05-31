@@ -63,6 +63,19 @@ async function main() {
     cwd: ROOT,
   });
 
+  // Mark the freshly-built schema as current for Alembic so future migrations apply cleanly.
+  console.log('Stamping Alembic head (alembic_version)...');
+  try {
+    execSync('uv run alembic stamp head', {
+      stdio: 'inherit',
+      cwd: path.join(ROOT, 'apps/api'),
+    });
+  } catch {
+    console.warn(
+      'Could not stamp Alembic head (is uv installed?). Run `uv run alembic stamp head` from apps/api, or `pnpm db:migrate`.',
+    );
+  }
+
   console.log(
     'Database initialized. Use DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly in apps/api/.env',
   );

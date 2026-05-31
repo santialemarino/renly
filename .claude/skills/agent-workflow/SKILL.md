@@ -70,7 +70,7 @@ Docs describe **how things work now**, not “what we changed” (no changelog-s
 ### READMEs and DB schema
 
 - **On every change:** If your change affects setup, structure, a specific flow or how to run/check something, update the relevant README (root, `apps/api`, `apps/web`) so it still says how things work. One source of truth; no drift.
-- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, update `apps/api/database/01_create_tables.sql` to reflect the current state. This script must always rebuild the DB from zero correctly. Never add migration-style comments (“added column X”) — just keep the CREATE statements current.
+- **DB schema changes:** If you add, remove, or modify a table, column, index, enum, or trigger, do BOTH: (1) update `apps/api/database/01_create_tables.sql` to reflect the current state — it must always rebuild the DB from zero correctly, so never add migration-style comments (“added column X”), just keep the CREATE statements current; and (2) add an Alembic migration under `apps/api/migrations/versions/` for the same change so existing databases upgrade without a rebuild. The SQL script is the canonical full schema for fresh builds (`pnpm db:init` applies it and stamps Alembic to head); migrations carry incremental changes for live DBs (`pnpm db:migrate` = `alembic upgrade head`). Generate one with `pnpm --filter api run migrate:make "message"`, review it, then run it. Keep the two in sync in the same change.
 
 ### Documentation tiers (`docs/`)
 
