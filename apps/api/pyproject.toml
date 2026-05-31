@@ -41,6 +41,10 @@ packages = ["app"]
 [tool.ruff]
 line-length = 150
 target-version = "py313"
+# Alembic-generated migration files are not hand-written; don't lint/format them.
+# force-exclude so the exclusion also applies when pre-commit/lint-staged passes explicit paths.
+extend-exclude = ["migrations"]
+force-exclude = true
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

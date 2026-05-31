@@ -42,10 +42,11 @@ pnpm dev
 
 **DB**
 
-| Command        | Description                                                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:init` | Start Postgres and apply schema (first time)                                                                                      |
-| `pnpm db:fork` | Fork DB from `DATABASE_URL` into a local container (see [docs/technical/local-db-forking.md](docs/technical/local-db-forking.md)) |
+| Command           | Description                                                                                                                       |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm db:init`    | Start Postgres and apply schema (first time)                                                                                      |
+| `pnpm db:fork`    | Fork DB from `DATABASE_URL` into a local container (see [docs/technical/local-db-forking.md](docs/technical/local-db-forking.md)) |
+| `pnpm db:migrate` | Apply pending Alembic migrations to the DB (`alembic upgrade head`)                                                               |
 
 **Lint & format**
 

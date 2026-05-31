@@ -30,7 +30,8 @@
     "test:api": "pnpm --filter api run test",
     "prepare": "husky",
     "db:init": "node scripts/db-init.mjs",
-    "db:fork": "node scripts/db-fork.mjs"
+    "db:fork": "node scripts/db-fork.mjs",
+    "db:migrate": "pnpm --filter api run migrate"
   },
   "lint-staged": {
     "apps/api/**/*.py": [

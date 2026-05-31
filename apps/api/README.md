@@ -23,6 +23,15 @@ Docs (Swagger): http://localhost:8000/docs
 
 From repo root: `pnpm check:api` — same as pre-commit/CI; catches import and model errors. (Runs `uv run python -c "from app.main import app"` in `apps/api`.)
 
+## Migrations
+
+Schema is managed two ways that stay in sync:
+
+- `apps/api/database/01_create_tables.sql` — the canonical full schema. `pnpm db:init` builds a fresh DB from it and stamps Alembic to head.
+- Alembic migrations (`apps/api/migrations/versions/`) — incremental changes for existing databases. `pnpm db:migrate` (`alembic upgrade head`) brings a live DB up to date.
+
+When you change the schema, update **both**: edit `01_create_tables.sql` and add a migration — `pnpm --filter api run migrate:make "describe the change"` (autogenerates against the models), review the generated file under `migrations/versions/`, then `pnpm db:migrate`.
+
 ## Structure
 
 Request flow: **router → service → repository → DB**. Routers are HTTP-only; services hold business logic; repositories do data access. Schemas for request/response; `deps/` for FastAPI dependencies.
