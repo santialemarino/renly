@@ -2,6 +2,7 @@
 
 from pydantic import BaseModel, Field
 
+from app.models.user import UserPlan
 from app.schemas.base import RequestBase
 
 
@@ -30,3 +31,4 @@ class MeResponse(BaseModel):
     uid: int = Field(description="User id.")
     email: str = Field(description="User email.")
     name: str = Field(description="User display name.")
+    plan: UserPlan = Field(description="Plan tier (free or pro).")

@@ -27,7 +27,7 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 
 ### Me
 
-`GET /auth/me` returns `{uid, email, name}` for the authenticated user.
+`GET /auth/me` returns `{uid, email, name, plan}` for the authenticated user.
 
 ## JWT structure
 
@@ -110,7 +110,7 @@ The following endpoints accept API key auth (used by the iOS Shortcut). All othe
 User submits email + password
   → NextAuth Credentials.authorize()
   → loginRequest(email, password)        // POST /auth/login → {access_token, expires_in}
-  → meRequest(access_token)              // GET /auth/me → {uid, email, name}
+  → meRequest(access_token)              // GET /auth/me → {uid, email, name, plan}
   → returns User object to NextAuth with accessToken + expiresIn
 ```
 

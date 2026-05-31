@@ -77,6 +77,11 @@ CREATE TYPE income_category AS ENUM (
   'other'
 );
 
+CREATE TYPE user_plan AS ENUM (
+  'free',
+  'pro'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -89,6 +94,7 @@ CREATE TABLE users (
   email         VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   session_epoch BIGINT NOT NULL DEFAULT 0,
+  plan          user_plan NOT NULL DEFAULT 'free',
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

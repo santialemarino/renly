@@ -12,6 +12,7 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     NotFoundError,
+    PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
 from app.routers import (
@@ -107,6 +108,14 @@ async def installment_locked_field_handler(_request, exc: InstallmentLockedField
 async def not_found_exception_handler(_request, exc: NotFoundError):
     return JSONResponse(
         status_code=404,
+        content={"detail": exc.message},
+    )
+
+
+@app.exception_handler(PlanRequiredError)
+async def plan_required_handler(_request, exc: PlanRequiredError):
+    return JSONResponse(
+        status_code=402,
         content={"detail": exc.message},
     )
 

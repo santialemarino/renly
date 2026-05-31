@@ -41,6 +41,13 @@ class NotFoundError(Exception):
         super().__init__(message)
 
 
+# The current user's plan does not include this feature; an upgrade is required. Mapped to 402 by the API.
+class PlanRequiredError(Exception):
+    def __init__(self, message: str = "This feature requires a Pro plan.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
 # Reconciliation period bounds are inconsistent (e.g. period_start > period_end). Mapped to 400 by the API.
 class ReconciliationPeriodMismatchError(Exception):
     def __init__(self, message: str = "Reconciliation period is invalid.") -> None:

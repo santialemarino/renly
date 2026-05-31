@@ -13,6 +13,7 @@ from app.domain.errors import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     NotFoundError,
+    PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
 from app.domain.payments_calendar import CalendarItem
@@ -27,6 +28,7 @@ __all__ = [
     "HasLinkedExpensesError",
     "InstallmentLockedFieldError",
     "NotFoundError",
+    "PlanRequiredError",
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
     "SUPPORTED_CURRENCIES",
