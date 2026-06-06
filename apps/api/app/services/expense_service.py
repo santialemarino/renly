@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, ReverseResult
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
-from app.repositories import expense_repository, installment_repository, subscription_repository
+from app.repositories import (
+    credit_card_repository,
+    expense_repository,
+    installment_repository,
+    payment_obligation_repository,
+    subscription_repository,
+)
 from app.services import (
     card_reconciliation_service,
     installment_service,
@@ -111,6 +117,28 @@ async def _insert_expense_row(
     return await expense_repository.create(session, entry)
 
 
+# Validates that every provided FK belongs to the user, raising NotFoundError (router -> 404) for
+# any that don't. Stops an expense from being attached to — or stale-marking — another user's
+# credit card / payment obligation / subscription / installment (SEC-4).
+async def _validate_owned_fks(
+    session: AsyncSession,
+    user: User,
+    *,
+    credit_card_id: int | None = None,
+    payment_obligation_id: int | None = None,
+    subscription_id: int | None = None,
+    installment_id: int | None = None,
+) -> None:
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
+    if payment_obligation_id is not None and await payment_obligation_repository.get_by_id(session, payment_obligation_id, user.id) is None:
+        raise NotFoundError("Payment obligation not found")
+    if subscription_id is not None and await subscription_repository.get_by_id(session, subscription_id, user.id) is None:
+        raise NotFoundError("Subscription not found")
+    if installment_id is not None and await installment_repository.get_by_id(session, installment_id, user.id) is None:
+        raise NotFoundError("Installment not found")
+
+
 # Create a new expense entry. Marks any reconciliation covering the entry's date stale (Phase 3, Step 5).
 # When payment_obligation_id is set, advances or archives the linked obligation atomically (Phase 3, Step E).
 # When subscription_id or installment_id is set, advances the plan's cursor past the matched cycle
@@ -136,6 +164,14 @@ async def create_expense(
     subscription_id: int | None = None,
     installment_id: int | None = None,
 ) -> tuple[ExpenseEntry, AdvanceResult | None]:
+    await _validate_owned_fks(
+        session,
+        user,
+        credit_card_id=credit_card_id,
+        payment_obligation_id=payment_obligation_id,
+        subscription_id=subscription_id,
+        installment_id=installment_id,
+    )
     entry = await _insert_expense_row(
         session,
         user,
@@ -199,6 +235,9 @@ async def create_expenses_for_obligation_cycles(
     if cycles < 1 or cycles > MAX_CYCLES_PER_MARK_PAID:
         raise ValueError(f"cycles must be in [1, {MAX_CYCLES_PER_MARK_PAID}].")
 
+    # SEC-4: get_obligation below validates the obligation FK, but the card FK has no other
+    # owner check before its post-loop stale-mark, so validate it here.
+    await _validate_owned_fks(session, user, credit_card_id=credit_card_id)
     obligation = await payment_obligation_service.get_obligation(session, payment_obligation_id, user)
     # Recurrence must be a known cycle value — None is one-off, any string not in
     # OBLIGATION_MONTH_STEP would otherwise pass the `is None` check but produce N
@@ -281,6 +320,7 @@ async def update_expense(
     new_obligation_id = fields["payment_obligation_id"] if "payment_obligation_id" in fields else old_obligation_id
     new_subscription_id = fields["subscription_id"] if "subscription_id" in fields else old_subscription_id
     new_installment_id = fields["installment_id"] if "installment_id" in fields else old_installment_id
+    new_card_id = fields["credit_card_id"] if "credit_card_id" in fields else old_card_id
 
     # Reverse target: OLD plan that loses this expense. At most one fires (mutual exclusivity
     # on the row guarantees at most one old FK is set). Resolve most-recent BEFORE mutation
@@ -306,6 +346,17 @@ async def update_expense(
         advance_target = ("subscription", new_subscription_id)
     elif new_installment_id is not None and new_installment_id != old_installment_id:
         advance_target = ("installment", new_installment_id)
+
+    # SEC-4: validate any newly-set or changed FK belongs to the user before mutating the row or
+    # stale-marking a card. Unchanged FKs were already validated when first attached.
+    await _validate_owned_fks(
+        session,
+        user,
+        credit_card_id=new_card_id if new_card_id != old_card_id else None,
+        payment_obligation_id=new_obligation_id if new_obligation_id != old_obligation_id else None,
+        subscription_id=new_subscription_id if new_subscription_id != old_subscription_id else None,
+        installment_id=new_installment_id if new_installment_id != old_installment_id else None,
+    )
 
     for key, value in fields.items():
         setattr(entry, key, value)
