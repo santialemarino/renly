@@ -15,6 +15,8 @@ Base URL: `/api` (all paths below are relative to this).
 | `POST` | `/auth/logout`   | Sign out. Invalidates all existing tokens for the user.         |
 | `GET`  | `/auth/me`       | Returns the current authenticated user (id, name, email, plan). |
 
+Registration requires a valid email address and a password of at least 12 characters that has not appeared in a known public data breach. Emails are case-insensitive (`Foo@x.com` and `foo@x.com` are the same account).
+
 ---
 
 ## Investments

@@ -7,17 +7,20 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 ### Register
 
 1. `POST /auth/register` receives `{name, email, password}`.
-2. Checks if email already exists — returns 409 if taken.
-3. Hashes password with bcrypt (`bcrypt.gensalt()` — default 12 rounds).
-4. Creates user via `user_repository.create()`, commits.
-5. Generates JWT and returns `{access_token, expires_in}`.
+2. The request schema validates `email` as a real address (`EmailStr`) and normalizes it to lowercase, and enforces a 12-character minimum password — invalid input returns 422.
+3. Checks if email already exists — returns 409 if taken. The lookup lowercases the email, so `Foo@x.com` and `foo@x.com` are the same account.
+4. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open so an external outage never blocks signup.
+5. Hashes password with bcrypt (`bcrypt.gensalt()` — default 12 rounds).
+6. Creates user via `user_repository.create()`, commits.
+7. Generates JWT and returns `{access_token, expires_in}`.
 
 ### Login
 
 1. `POST /auth/login` receives `{email, password}`.
-2. Looks up user by email. Verifies password with `bcrypt.checkpw()`.
-3. Returns 401 if user not found or password mismatch.
-4. Generates JWT and returns `{access_token, expires_in}`.
+2. The request schema validates and lowercases `email` (`EmailStr`), so login is case-insensitive in the address.
+3. Looks up user by email. Verifies password with `bcrypt.checkpw()`.
+4. Returns 401 if user not found or password mismatch.
+5. Generates JWT and returns `{access_token, expires_in}`.
 
 ### Logout
 
@@ -160,6 +163,8 @@ userSignOut()                    // server action in auth.ts
 
 ## Security notes
 
+- Emails are validated (`EmailStr`) and stored lowercase; lookups lowercase their input, so accounts are case-insensitive by email and case-variant duplicates cannot be created.
+- Registration requires a 12-character minimum password and rejects passwords found in the HIBP Pwned Passwords corpus (queried via k-anonymity; the breach check fails open on HIBP outage).
 - bcrypt uses `gensalt()` which defaults to 12 rounds.
 - `JWT_SECRET` and `NEXTAUTH_SECRET` **must be the same value** — the backend signs tokens that NextAuth stores and the backend later validates.
 - No refresh token mechanism — expiry forces full re-login.

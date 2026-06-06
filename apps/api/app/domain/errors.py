@@ -41,6 +41,13 @@ class NotFoundError(Exception):
         super().__init__(message)
 
 
+# Password appears in a known data breach (HIBP). Mapped to 400 by the API.
+class PasswordBreachedError(Exception):
+    def __init__(self) -> None:
+        self.message = "This password has appeared in a known data breach. Please choose a different password."
+        super().__init__(self.message)
+
+
 # The current user's plan does not include this feature; an upgrade is required. Mapped to 402 by the API.
 class PlanRequiredError(Exception):
     def __init__(self, message: str = "This feature requires a Pro plan.") -> None:
