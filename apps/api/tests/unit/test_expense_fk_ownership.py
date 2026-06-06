@@ -57,9 +57,7 @@ class TestCreateExpenseOwnership:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError, match="Credit card not found"):
-            await expense_service.create_expense(
-                session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", credit_card_id=42
-            )
+            await expense_service.create_expense(session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", credit_card_id=42)
 
         create_mock.assert_not_called()
         session.commit.assert_not_called()
@@ -71,9 +69,7 @@ class TestCreateExpenseOwnership:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError, match="Payment obligation not found"):
-            await expense_service.create_expense(
-                session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", payment_obligation_id=7
-            )
+            await expense_service.create_expense(session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", payment_obligation_id=7)
 
     @pytest.mark.asyncio
     async def test_foreign_subscription_raises(self, monkeypatch):
@@ -82,9 +78,7 @@ class TestCreateExpenseOwnership:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError, match="Subscription not found"):
-            await expense_service.create_expense(
-                session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", subscription_id=9
-            )
+            await expense_service.create_expense(session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", subscription_id=9)
 
     @pytest.mark.asyncio
     async def test_foreign_installment_raises(self, monkeypatch):
@@ -93,9 +87,7 @@ class TestCreateExpenseOwnership:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError, match="Installment not found"):
-            await expense_service.create_expense(
-                session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", installment_id=3
-            )
+            await expense_service.create_expense(session, USER, date=date(2026, 6, 5), amount=Decimal("100"), currency="USD", installment_id=3)
 
     @pytest.mark.asyncio
     async def test_owned_credit_card_proceeds_to_insert(self, monkeypatch):
