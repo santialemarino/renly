@@ -31,6 +31,10 @@ const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
   // Send the full URL same-origin, only the origin cross-origin, and nothing on downgrade.
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  // Turn off powerful browser features the app never uses, so injected or third-party code
+  // can't request them. Clipboard (used by the copy button) keeps its default same-origin
+  // allowance since it isn't listed here.
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
   { key: 'Content-Security-Policy-Report-Only', value: contentSecurityPolicyReportOnly },
 ];
 
