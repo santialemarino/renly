@@ -1,21 +1,29 @@
 # Request/response schemas for auth endpoints (HTTP contract).
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, EmailStr, Field
 
 from app.models.user import UserPlan
 from app.schemas.base import RequestBase
+
+# Minimum password length enforced at registration.
+MIN_PASSWORD_LENGTH = 12
+
+# Validated email lowercased so case variants map to the same account.
+NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
 
 
 # Body for POST /auth/register. Creates a new user.
 class RegisterRequest(RequestBase):
     name: str = Field(description="Full name of the user.")
-    email: str = Field(description="Email address (unique).")
-    password: str = Field(description="Plain password (will be hashed).")
+    email: NormalizedEmail = Field(description="Email address (unique, normalized to lowercase).")
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); minimum 12 characters.")
 
 
 # Body for POST /auth/login. Authenticates an existing user.
 class LoginRequest(RequestBase):
-    email: str = Field(description="User email.")
+    email: NormalizedEmail = Field(description="User email (normalized to lowercase).")
     password: str = Field(description="Plain password.")
 
 

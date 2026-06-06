@@ -12,6 +12,7 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     NotFoundError,
+    PasswordBreachedError,
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
@@ -108,6 +109,14 @@ async def installment_locked_field_handler(_request, exc: InstallmentLockedField
 async def not_found_exception_handler(_request, exc: NotFoundError):
     return JSONResponse(
         status_code=404,
+        content={"detail": exc.message},
+    )
+
+
+@app.exception_handler(PasswordBreachedError)
+async def password_breached_handler(_request, exc: PasswordBreachedError):
+    return JSONResponse(
+        status_code=400,
         content={"detail": exc.message},
     )
 

@@ -6,9 +6,9 @@ from sqlmodel import select
 from app.models.user import User
 
 
-# Fetches user by email from the database.
+# Fetches user by email from the database. Lowercases the input so lookups are case-insensitive.
 async def get_by_email(session: AsyncSession, email: str) -> User | None:
-    result = await session.execute(select(User).where(User.email == email))
+    result = await session.execute(select(User).where(User.email == email.lower()))
     return result.scalar_one_or_none()
 
 

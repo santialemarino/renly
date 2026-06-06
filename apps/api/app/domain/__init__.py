@@ -13,6 +13,7 @@ from app.domain.errors import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     NotFoundError,
+    PasswordBreachedError,
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "HasLinkedExpensesError",
     "InstallmentLockedFieldError",
     "NotFoundError",
+    "PasswordBreachedError",
     "PlanRequiredError",
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
