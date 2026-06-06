@@ -1,0 +1,7 @@
+{
+  "scripts": {
+    "setup": "pnpm install && if [ \"$CONDUCTOR_IS_LOCAL\" = \"1\" ] && command -v uv >/dev/null 2>&1; then (cd apps/api && uv sync --extra dev); fi",
+    "run": "pnpm dev"
+  },
+  "runScriptMode": "nonconcurrent"
+}
