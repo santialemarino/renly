@@ -51,6 +51,9 @@ def _entry() -> ExpenseEntry:
 @pytest.fixture(autouse=True)
 def _silence_stale(monkeypatch):
     monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", AsyncMock())
+    # The SEC-4 ownership guard validates the card FK before the obligation lookup; the
+    # obligation itself is validated by the mocked get_obligation. Stub the card lookup owned.
+    monkeypatch.setattr(expense_service.credit_card_repository, "get_by_id", AsyncMock(return_value=object()))
 
 
 def _mock_insert(monkeypatch, entry: ExpenseEntry):

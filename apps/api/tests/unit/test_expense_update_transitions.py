@@ -56,6 +56,10 @@ def _silence_card_stale(monkeypatch):
     # mark_stale_for_date is fired on every update_expense when credit_card_id is set on
     # the prior or new row. Stubbing it keeps the transition tests focused on FK logic.
     monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", AsyncMock())
+    # The SEC-4 ownership guard runs before the transition logic. These tests operate on
+    # owned FKs, so stub every ownership lookup as "owned" to keep the focus on orchestration.
+    for repo in ("credit_card_repository", "payment_obligation_repository", "subscription_repository", "installment_repository"):
+        monkeypatch.setattr(getattr(expense_service, repo), "get_by_id", AsyncMock(return_value=object()))
 
 
 def _mock_repos(monkeypatch, entry: ExpenseEntry):
