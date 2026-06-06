@@ -94,3 +94,11 @@ To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:w
 - **Build images (from repo root):**
   - API: `docker build -f docker/api.Dockerfile .`
   - Web: `docker build -f docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=https://api.example.com .`
+
+## Conductor / worktrees
+
+Configured for [Conductor](https://conductor.build) — or any `git worktree`-based parallel-agent workflow — via `conductor.json` and `.worktreeinclude`:
+
+- **`scripts.setup`** runs `pnpm install` and warms the API venv (`uv sync`); **`scripts.run`** is `pnpm dev`.
+- **`runScriptMode` is `nonconcurrent`**: only one workspace serves the app at a time, because all worktrees share the single `renly-postgres` container and the fixed dev ports (web 3000, api 8000). Agents in other worktrees still edit code and run `pnpm test:api` (which mocks the DB) with no contention. Running multiple live apps at once would need `$CONDUCTOR_PORT` wired into the dev scripts plus a per-worktree DB via `pnpm db:fork` — intentionally not set up.
+- **`.worktreeinclude`** copies the gitignored files a fresh worktree needs: `apps/api/.env`, `apps/web/.env`, and `.claude/settings.json` (so the agent inherits the repo's permission allowlist instead of the global one).
