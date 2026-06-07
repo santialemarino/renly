@@ -16,7 +16,7 @@ class IncomeCreate(RequestBase):
     amount: Decimal = Field(description="Income amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for PUT /income/{id}. Partial update.
@@ -25,7 +25,7 @@ class IncomeUpdate(RequestBase):
     amount: Decimal | None = Field(default=None, description="Income amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Response for a single income entry.

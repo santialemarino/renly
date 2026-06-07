@@ -16,7 +16,7 @@ class SnapshotCreate(RequestBase):
     value: Decimal = Field(description="Total value on this date.", max_digits=18, decimal_places=2)
     quantity: Decimal | None = Field(default=None, description="Shares/units.", max_digits=18, decimal_places=6)
     currency: Currency = Field(description="Currency of the value.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Response for GET list and POST. One snapshot per investment per date.

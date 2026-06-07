@@ -18,7 +18,7 @@ class TransactionCreate(RequestBase):
     quantity: Decimal | None = Field(default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6)
     currency: Currency = Field(description="Amount currency.")
     type: TransactionType = Field(description="Transaction kind (buy, sell, deposit, withdrawal).")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for PUT /investments/{id}/transactions/{tx_id}. Partial update; only updates provided fields.
@@ -28,7 +28,7 @@ class TransactionUpdate(RequestBase):
     quantity: Decimal | None = Field(default=None, description="Shares/units transacted.", max_digits=18, decimal_places=6)
     currency: Currency | None = Field(default=None, description="Amount currency.")
     type: TransactionType | None = Field(default=None, description="Transaction kind.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Response for GET list, GET one, POST and PUT.
