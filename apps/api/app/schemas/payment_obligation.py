@@ -28,7 +28,7 @@ class PaymentObligationCreate(RequestBase):
     )
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for PUT /payment-obligations/{id}. Partial update.
@@ -43,7 +43,7 @@ class PaymentObligationUpdate(RequestBase):
     payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the obligation is active.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Response for a single payment obligation.

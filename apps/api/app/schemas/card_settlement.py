@@ -14,7 +14,7 @@ class CardSettlementCreate(RequestBase):
     date: date_type = Field(description="Settlement date.")
     amount: Decimal = Field(description="Amount paid.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Response for a single card settlement.

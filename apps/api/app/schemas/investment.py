@@ -23,7 +23,7 @@ class InvestmentCreate(RequestBase):
     base_currency: str = Field(description="Reporting currency (ISO 4217 code).", max_length=10)
     ticker: str | None = Field(default=None, description="Symbol for auto-price-fetching (e.g. AAPL).", max_length=20)
     broker: str | None = Field(default=None, description="Broker or account name.", max_length=100)
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for PUT /investments/{id}. Partial update; only provided fields are updated.
@@ -33,7 +33,7 @@ class InvestmentUpdate(RequestBase):
     base_currency: str | None = Field(default=None, description="Reporting currency (ISO 4217 code).", max_length=10)
     ticker: str | None = Field(default=None, description="Symbol for auto-price-fetching.", max_length=20)
     broker: str | None = Field(default=None, description="Broker or account name.", max_length=100)
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
 # Body for PUT /investments/{id}/groups. Replaces group membership for this investment.

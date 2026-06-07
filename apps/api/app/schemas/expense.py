@@ -16,7 +16,7 @@ class ExpenseCreate(RequestBase):
     amount: Decimal = Field(description="Expense amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     source: str = Field(default="manual", description="Entry origin (manual, shortcut, auto, email_parsed).", max_length=20)
@@ -75,7 +75,7 @@ class ExpenseUpdate(RequestBase):
     amount: Decimal | None = Field(default=None, description="Expense amount.", gt=0, max_digits=18, decimal_places=2)
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
-    notes: str | None = Field(default=None, description="Optional notes.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
     payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     payment_obligation_id: int | None = Field(
