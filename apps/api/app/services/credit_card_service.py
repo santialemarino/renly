@@ -176,6 +176,7 @@ async def create_settlement(
     await get_card(session, card_id, user)
     settlement = CardSettlement(
         credit_card_id=card_id,
+        user_id=user.id,
         date=date,
         amount=amount,
         currency=currency,

@@ -17,7 +17,7 @@ if config.config_file_name is not None:
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=settings.admin_database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -33,7 +33,9 @@ def do_run_migrations(connection):
 
 
 async def run_migrations_online() -> None:
-    engine = create_async_engine(settings.database_url)
+    # Migrations run as the table owner (admin URL): they must ALTER TABLE / CREATE POLICY and
+    # provision the restricted role, none of which the RLS-subject request role can do (SEC-15).
+    engine = create_async_engine(settings.admin_database_url)
     async with engine.connect() as connection:
         await connection.run_sync(do_run_migrations)
     await engine.dispose()

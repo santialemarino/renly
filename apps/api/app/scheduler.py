@@ -4,7 +4,8 @@ import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from app.db import AsyncSessionLocal
+# Background jobs run with no user context, so they use the privileged (RLS-bypassing) session.
+from app.db import AdminSessionLocal
 from app.services import (
     asset_price_service,
     auto_expense_service,
@@ -28,7 +29,7 @@ CEDEAR_RATIOS_HOUR_UTC = 0
 # Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them.
 async def _update_exchange_rates() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             await exchange_rate_service.fetch_and_store_latest(session)
     except Exception:
         logger.exception("Scheduled exchange rate update failed.")
@@ -37,7 +38,7 @@ async def _update_exchange_rates() -> None:
 # Fetches latest asset prices for all ticker-linked investments.
 async def _update_asset_prices() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             count = await asset_price_service.refresh_all_prices(session)
             logger.info("Scheduled asset price update: %d prices stored.", count)
     except Exception:
@@ -47,7 +48,7 @@ async def _update_asset_prices() -> None:
 # Generates auto-snapshots for ticker-linked investments using latest prices.
 async def _generate_auto_snapshots() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             count = await auto_snapshot_service.generate_auto_snapshots(session)
             logger.info("Scheduled auto-snapshots: %d snapshots created.", count)
     except Exception:
@@ -58,7 +59,7 @@ async def _generate_auto_snapshots() -> None:
 # Loops retroactively per record so missed cycles back-fill on the next tick.
 async def _generate_auto_expenses() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             count = await auto_expense_service.generate_auto_expenses(session)
             logger.info("Scheduled auto-expenses: %d entries created.", count)
     except Exception:
@@ -68,7 +69,7 @@ async def _generate_auto_expenses() -> None:
 # Fetches CEDEAR ratios from Banco Comafi.
 async def _update_cedear_ratios() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             count = await cedear_ratio_service.fetch_and_store_ratios(session)
             logger.info("Scheduled CEDEAR ratio update: %d ratios stored.", count)
     except Exception:

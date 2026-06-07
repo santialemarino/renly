@@ -77,7 +77,9 @@ async function main() {
   }
 
   console.log(
-    'Database initialized. Use DATABASE_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly in apps/api/.env',
+    'Database initialized (schema also provisions the restricted renly_app role + RLS policies). In apps/api/.env set:\n' +
+      '  DATABASE_URL=postgresql+asyncpg://renly_app:renly_app@localhost:5432/renly        (restricted, RLS-subject request role)\n' +
+      '  DATABASE_ADMIN_URL=postgresql+asyncpg://renly:renly@localhost:5432/renly           (owner role: scheduler, migrations, auth bootstrap)',
   );
 }
 

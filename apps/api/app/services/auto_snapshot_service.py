@@ -53,6 +53,7 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
         snapshots.append(
             InvestmentSnapshot(
                 investment_id=inv.id,
+                user_id=inv.user_id,
                 date=today,
                 value=Decimal(str(round(value, 2))),
                 quantity=quantity,

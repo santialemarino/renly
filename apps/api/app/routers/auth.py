@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 
 from app.config import settings
 from app.deps.auth import CurrentUser
-from app.deps.db import SessionDep
+from app.deps.db import AdminSessionDep, SessionDep
 from app.rate_limit import LOGIN_LIMIT, REGISTER_LIMIT, limiter
 from app.schemas.auth import LoginRequest, MeResponse, RegisterRequest, TokenResponse
 from app.services import auth_service
@@ -14,9 +14,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # Anti-enumeration (AUTH-5, M1 part): a duplicate email returns a generic 400 — the same response
 # as any other rejected registration — instead of a 409 that confirms the address has an account.
 # The full always-uniform response + "you already have an account" email lands in M2 (SHELL-3).
+# Uses the privileged session: there is no user context yet, and the new row's id can't satisfy
+# the users RLS policy, so the insert + email lookup run as the owner (bypasses RLS) (SEC-15).
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_LIMIT)
-async def register(request: Request, body: RegisterRequest, session: SessionDep) -> TokenResponse:
+async def register(request: Request, body: RegisterRequest, session: AdminSessionDep) -> TokenResponse:
     existing = await auth_service.get_user_by_email(session, body.email)
     if existing:
         raise HTTPException(
@@ -33,9 +35,11 @@ async def register(request: Request, body: RegisterRequest, session: SessionDep)
 
 
 # Authenticates by email/password and returns a JWT. Returns 401 if invalid.
+# Uses the privileged session: the by-email lookup is pre-auth (no user context), so it bypasses
+# the users RLS policy (SEC-15).
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_LIMIT)
-async def login(request: Request, body: LoginRequest, session: SessionDep) -> TokenResponse:
+async def login(request: Request, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
     user = await auth_service.get_user_by_email(session, body.email)
     if not user or not auth_service.verify_password(body.password, user.password_hash):
         raise HTTPException(

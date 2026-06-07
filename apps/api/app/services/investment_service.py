@@ -224,6 +224,7 @@ async def upsert_snapshot(
         return existing
     snapshot = InvestmentSnapshot(
         investment_id=investment_id,
+        user_id=user.id,
         date=snapshot_date,
         value=value,
         quantity=quantity,
@@ -275,6 +276,7 @@ async def create_transaction(
     await get_investment(session, investment_id, user)
     transaction = Transaction(
         investment_id=investment_id,
+        user_id=user.id,
         date=transaction_date,
         amount=amount,
         quantity=quantity,

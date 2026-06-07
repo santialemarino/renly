@@ -123,9 +123,12 @@ CREATE INDEX idx_investments_user_active ON investments(user_id, is_active);
 -- Investment snapshots
 -- Total value of an investment at a point in time (typically end of month).
 -- UNIQUE(investment_id, date) enforces one snapshot per investment per month.
+-- user_id is denormalized from the parent investment so the row-level-security policy
+-- (SEC-15) is a direct user_id check instead of a per-row EXISTS-join to investments.
 CREATE TABLE investment_snapshots (
   id            BIGSERIAL PRIMARY KEY,
   investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date          DATE NOT NULL,
   value         NUMERIC(18, 2) NOT NULL,
   quantity      NUMERIC(18, 6),
@@ -138,13 +141,16 @@ CREATE TABLE investment_snapshots (
 );
 
 CREATE INDEX idx_snapshots_investment_date ON investment_snapshots(investment_id, date DESC);
+CREATE INDEX idx_snapshots_user_id ON investment_snapshots(user_id);
 
 -- Transactions
 -- Every capital movement: buy, sell, deposit, withdrawal.
 -- Stored in original currency — conversion happens at query time.
+-- user_id is denormalized from the parent investment for the row-level-security policy (SEC-15).
 CREATE TABLE transactions (
   id            BIGSERIAL PRIMARY KEY,
   investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date          DATE NOT NULL,
   amount        NUMERIC(18, 2) NOT NULL,
   quantity      NUMERIC(18, 6),
@@ -156,6 +162,7 @@ CREATE TABLE transactions (
 );
 
 CREATE INDEX idx_transactions_investment_date ON transactions(investment_id, date DESC);
+CREATE INDEX idx_transactions_user_id ON transactions(user_id);
 
 -- Exchange rates
 -- Historical rate by pair and date. Auto-updated via scheduled job.
@@ -275,9 +282,11 @@ CREATE INDEX idx_income_entries_reconciliation_id
 
 -- Card settlements (credit card payments — not expenses).
 -- Reduces card liability and bank balance simultaneously (net-zero on patrimony).
+-- user_id is denormalized from the parent credit card for the row-level-security policy (SEC-15).
 CREATE TABLE card_settlements (
   id              BIGSERIAL PRIMARY KEY,
   credit_card_id  BIGINT NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   date            DATE NOT NULL,
   amount          NUMERIC(18, 2) NOT NULL,
   currency        VARCHAR(3) NOT NULL,
@@ -287,6 +296,7 @@ CREATE TABLE card_settlements (
 );
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);
+CREATE INDEX idx_card_settlements_user_id ON card_settlements(user_id);
 
 -- Subscriptions (recurring charges; e.g. Netflix, Spotify, gym).
 -- Auto-generates monthly expense_entries via the scheduler (Phase 3, Step 3).
@@ -575,4 +585,134 @@ CREATE TRIGGER trg_payment_obligations_updated_at
 CREATE TRIGGER trg_card_reconciliations_updated_at
   BEFORE UPDATE ON card_reconciliations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------------------------------------------------------------------------
+-- Row-Level Security (SEC-15) — database-enforced per-user isolation
+--
+-- Two roles carry the design:
+--   * the table owner / migration role (the role that runs this script and the
+--     scheduler + auth bootstrap) keeps full access — it bypasses RLS because it
+--     owns the tables, which is what background jobs and pre-auth lookups need;
+--   * a restricted login role (renly_app) is granted DML but is NOT the owner and
+--     has NOBYPASSRLS, so every request connection is subject to the policies below.
+--
+-- Each request sets `app.current_user_id` per transaction (SET LOCAL, re-applied on
+-- every BEGIN by the app's session layer because connection pooling reuses connections).
+-- Policies compare the row's owner against that GUC; with no GUC set, the helper returns
+-- NULL and the comparison excludes every row (a context-less session reads nothing).
+-- ENABLE (not FORCE) ROW LEVEL SECURITY is deliberate: FORCE would also subject the
+-- owner role, breaking the scheduler and pre-auth reads that legitimately span users.
+-- ---------------------------------------------------------------------------
+
+-- Restricted request role. Cluster-global, so guard creation for shared clusters.
+-- The password is a local-dev default; production provisions the role with a real secret.
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'renly_app') THEN
+    CREATE ROLE renly_app LOGIN PASSWORD 'renly_app' NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+  END IF;
+END $$;
+
+-- Resolves the current request's user id from the per-transaction GUC. The two-arg
+-- current_setting(..., true) returns NULL when the GUC was never set (instead of erroring),
+-- and NULLIF maps an empty string to NULL, so a context-less session simply matches no rows.
+CREATE OR REPLACE FUNCTION app_current_user_id() RETURNS BIGINT
+  LANGUAGE sql STABLE
+  AS $$ SELECT NULLIF(current_setting('app.current_user_id', true), '')::bigint $$;
+
+-- Grant the restricted role table/sequence access (RLS, not GRANTs, enforces isolation).
+-- Default privileges cover tables/sequences added by future migrations run as the owner.
+GRANT USAGE ON SCHEMA public TO renly_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO renly_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO renly_app;
+GRANT EXECUTE ON FUNCTION app_current_user_id() TO renly_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO renly_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO renly_app;
+
+-- The users table keys on its own id (a user may read/write only its own row).
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY users_self_isolation ON users
+  USING (id = app_current_user_id())
+  WITH CHECK (id = app_current_user_id());
+
+-- Tables owned directly via a user_id column: identical owner-match policy on each.
+ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investments_user_isolation ON investments
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE investment_snapshots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_snapshots_user_isolation ON investment_snapshots
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY transactions_user_isolation ON transactions
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE investment_groups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_groups_user_isolation ON investment_groups
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE credit_cards ENABLE ROW LEVEL SECURITY;
+CREATE POLICY credit_cards_user_isolation ON credit_cards
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE income_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY income_entries_user_isolation ON income_entries
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE card_settlements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY card_settlements_user_isolation ON card_settlements
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY subscriptions_user_isolation ON subscriptions
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY installments_user_isolation ON installments
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE expense_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY expense_entries_user_isolation ON expense_entries
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE card_reconciliations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY card_reconciliations_user_isolation ON card_reconciliations
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE payment_obligations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY payment_obligations_user_isolation ON payment_obligations
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+CREATE POLICY api_keys_user_isolation ON api_keys
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY user_settings_user_isolation ON user_settings
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+-- investment_group_members is a pure junction (composite PK, no surrogate user column).
+-- Isolation is keyed through the parent investment via an EXISTS-join — both parents
+-- belong to the same user (enforced by the SEC-4 cross-tenant FK checks), so checking
+-- the investment side is sufficient and the lookup hits the investments primary key.
+ALTER TABLE investment_group_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_group_members_isolation ON investment_group_members
+  USING (
+    EXISTS (
+      SELECT 1 FROM investments i
+      WHERE i.id = investment_group_members.investment_id
+        AND i.user_id = app_current_user_id()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM investments i
+      WHERE i.id = investment_group_members.investment_id
+        AND i.user_id = app_current_user_id()
+    )
+  );
+
+-- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
+-- pair/ticker (not by user) and are intentionally left without RLS so every request
+-- connection can read them; the scheduler writes them under the owner role.
 
