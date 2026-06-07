@@ -116,14 +116,27 @@ async def fetch_and_store_prices(
     return count
 
 
-# Fetches prices for all ticker-linked investments in parallel. Returns total prices stored.
+# Fetches prices for all ticker-linked investments in the DB in parallel. Returns total prices stored.
+# System-wide refresh — reserved for the scheduler job. User-triggered refreshes use refresh_user_prices.
 async def refresh_all_prices(session: AsyncSession) -> int:
     from app.repositories.investment_repository import investment_repository
 
+    investments = await investment_repository.list_with_ticker(session)
+    return await _refresh_prices_for_investments(session, investments)
+
+
+# Fetches prices for the user's ticker-linked investments in parallel. Returns total prices stored.
+async def refresh_user_prices(session: AsyncSession, user_id: int) -> int:
+    from app.repositories.investment_repository import investment_repository
+
+    investments = await investment_repository.list_with_ticker_by_user(session, user_id)
+    return await _refresh_prices_for_investments(session, investments)
+
+
+# Fetches prices for the given ticker-linked investments in parallel and stores them. Returns total prices stored.
+async def _refresh_prices_for_investments(session: AsyncSession, investments: list[Investment]) -> int:
     # Clear per-cycle caches so providers re-download fresh data.
     price_providers.clear_fci_cache()
-
-    investments = await investment_repository.list_with_ticker(session)
 
     # Fetch prices from external APIs in parallel (no DB access in fetch functions).
     async def _fetch_one(inv: Investment) -> tuple[Investment, PriceResult]:

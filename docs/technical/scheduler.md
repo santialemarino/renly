@@ -47,7 +47,7 @@ AUTO_EXPENSES_HOUR_LOCAL = 1
 | **Service call** | `asset_price_service.refresh_all_prices(session)`                                                                                                         |
 | **What it does** | Iterates all ticker-linked investments, calls the appropriate price provider for each, stores results in `asset_prices`. Logs the count of prices stored. |
 
-Runs after US and Argentine market close. Individual ticker failures are skipped (not the entire job).
+Runs after US and Argentine market close. Individual ticker failures are skipped (not the entire job). `refresh_all_prices` is the **system-wide** refresh and is reserved for this scheduled job; the on-demand `POST /asset-prices/refresh` endpoint instead calls `refresh_user_prices(session, user_id)`, which fetches only the calling user's tickers.
 
 ### 3. Auto-snapshots
 

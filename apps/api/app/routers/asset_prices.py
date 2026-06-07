@@ -84,11 +84,11 @@ async def get_price_history(
     return [AssetPriceResponse.model_validate(p) for p in prices]
 
 
-# Triggers an on-demand price refresh for all ticker-linked investments.
+# Triggers an on-demand price refresh for the caller's ticker-linked investments only.
 @router.post("/refresh", response_model=RefreshPricesResponse, status_code=status.HTTP_202_ACCEPTED)
 async def refresh_prices(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> RefreshPricesResponse:
-    count = await asset_price_service.refresh_all_prices(session)
+    count = await asset_price_service.refresh_user_prices(session, current_user.id)
     return RefreshPricesResponse(prices_stored=count)

@@ -501,12 +501,12 @@ Most endpoints also accept these common filters:
 
 ## Asset Prices
 
-| Method | Path                            | Description                                                                                   |
-| ------ | ------------------------------- | --------------------------------------------------------------------------------------------- |
-| `GET`  | `/asset-prices/{ticker}`        | Price history for a ticker. Optional: `start_date`, `end_date`.                               |
-| `GET`  | `/asset-prices/{ticker}/latest` | Latest stored price for a ticker.                                                             |
-| `GET`  | `/asset-prices/{ticker}/lookup` | Price for a ticker on a specific date. Fetches from the provider if not already stored.       |
-| `POST` | `/asset-prices/refresh`         | Trigger an on-demand price refresh for all ticker-linked investments. Returns 202 (accepted). |
+| Method | Path                            | Description                                                                                        |
+| ------ | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `GET`  | `/asset-prices/{ticker}`        | Price history for a ticker. Optional: `start_date`, `end_date`.                                    |
+| `GET`  | `/asset-prices/{ticker}/latest` | Latest stored price for a ticker.                                                                  |
+| `GET`  | `/asset-prices/{ticker}/lookup` | Price for a ticker on a specific date. Fetches from the provider if not already stored.            |
+| `POST` | `/asset-prices/refresh`         | Trigger an on-demand price refresh for your own ticker-linked investments. Returns 202 (accepted). |
 
 **Lookup query parameters:** `date` (required), `category` (required -- determines which provider to use), `convert_to` (optional -- target currency for price conversion).
 

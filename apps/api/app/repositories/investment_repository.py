@@ -104,6 +104,18 @@ async def list_with_ticker(session: AsyncSession) -> list[Investment]:
     return list(result.scalars().all())
 
 
+# Returns the user's active investments that have a ticker set.
+async def list_with_ticker_by_user(session: AsyncSession, user_id: int) -> list[Investment]:
+    result = await session.execute(
+        select(Investment).where(
+            Investment.user_id == user_id,
+            Investment.is_active == True,  # noqa: E712
+            Investment.ticker.is_not(None),
+        )
+    )
+    return list(result.scalars().all())
+
+
 # Persists a new investment and flushes to get the id.
 async def create(session: AsyncSession, investment: Investment) -> Investment:
     session.add(investment)
@@ -124,6 +136,7 @@ class InvestmentRepository:
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_with_ticker = staticmethod(list_with_ticker)
+    list_with_ticker_by_user = staticmethod(list_with_ticker_by_user)
     save = staticmethod(save)
 
 
