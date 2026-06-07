@@ -103,7 +103,7 @@ export async function fetchPriceForDate(
   };
 }
 
-// Triggers on-demand price refresh for all ticker-linked investments.
+// Triggers on-demand price refresh for the caller's ticker-linked investments.
 export async function refreshPrices(): Promise<{ pricesStored: number }> {
   const res = await authenticatedFetch('/asset-prices/refresh', { method: 'POST' });
   if (!res.ok) throw new Error('Failed to refresh prices');
