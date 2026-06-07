@@ -4,15 +4,16 @@ All environment variables used by the Renly backend and frontend, with defaults 
 
 ## Backend (`apps/api/.env`)
 
-| Variable              | Required | Default                 | Description                                                                                                                                                                                                                                       |
-| --------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`        | Yes      | —                       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`)                                                                                                                                                                  |
-| `JWT_SECRET`          | Yes      | —                       | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend                                                                                                                                     |
-| `JWT_ALGORITHM`       | No       | `HS256`                 | JWT signing algorithm                                                                                                                                                                                                                             |
-| `JWT_EXPIRE_MINUTES`  | No       | `10080`                 | JWT expiration in minutes (default: 7 days)                                                                                                                                                                                                       |
-| `ENVIRONMENT`         | No       | `development`           | Deployment environment: `development` or `production`. In `production`, `/docs` `/redoc` `/openapi.json` are disabled and debug/tracebacks are off                                                                                                |
-| `CORS_ORIGINS`        | No       | `http://localhost:3000` | Comma-separated list of allowed CORS origins (e.g. `https://app.renly.com,https://renly.com`)                                                                                                                                                     |
-| `TRUSTED_PROXY_COUNT` | No       | `0`                     | Number of trusted reverse proxies in front of the app, used to read the real client IP from `X-Forwarded-For` for rate limiting. `0` = reached directly. Behind a proxy/LB, set to the hop count or per-IP limits collapse onto the proxy address |
+| Variable              | Required | Default                      | Description                                                                                                                                                                                                                                                    |
+| --------------------- | -------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | Yes      | —                            | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`) for request connections. Must be a **restricted role** (NOBYPASSRLS, not the table owner/superuser) so Row-Level Security applies (SEC-15); the owner is exempt from policies |
+| `DATABASE_ADMIN_URL`  | No       | falls back to `DATABASE_URL` | Privileged connection (table owner) for context-less work: the scheduler, Alembic migrations, and pre-auth lookups (login/register/API-key verification). Bypasses RLS. **Production must set a distinct owner URL** or RLS is effectively disabled            |
+| `JWT_SECRET`          | Yes      | —                            | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend                                                                                                                                                  |
+| `JWT_ALGORITHM`       | No       | `HS256`                      | JWT signing algorithm                                                                                                                                                                                                                                          |
+| `JWT_EXPIRE_MINUTES`  | No       | `10080`                      | JWT expiration in minutes (default: 7 days)                                                                                                                                                                                                                    |
+| `ENVIRONMENT`         | No       | `development`                | Deployment environment: `development` or `production`. In `production`, `/docs` `/redoc` `/openapi.json` are disabled and debug/tracebacks are off                                                                                                             |
+| `CORS_ORIGINS`        | No       | `http://localhost:3000`      | Comma-separated list of allowed CORS origins (e.g. `https://app.renly.com,https://renly.com`)                                                                                                                                                                  |
+| `TRUSTED_PROXY_COUNT` | No       | `0`                          | Number of trusted reverse proxies in front of the app, used to read the real client IP from `X-Forwarded-For` for rate limiting. `0` = reached directly. Behind a proxy/LB, set to the hop count or per-IP limits collapse onto the proxy address              |
 
 ## Frontend (`apps/web/.env`)
 
@@ -49,6 +50,7 @@ The `docker-compose.yml` passes these to services via `environment`:
 | `POSTGRES_PASSWORD`   | postgres        | `renly`                 |
 | `POSTGRES_DB`         | postgres        | `renly`                 |
 | `DATABASE_URL`        | api             | from `.env`             |
+| `DATABASE_ADMIN_URL`  | api             | from `.env`             |
 | `JWT_SECRET`          | api             | from `.env`             |
 | `JWT_ALGORITHM`       | api             | from `.env`             |
 | `JWT_EXPIRE_MINUTES`  | api             | from `.env`             |

@@ -13,6 +13,7 @@ class CardSettlement(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     credit_card_id: int = Field(foreign_key="credit_cards.id", description="Card being paid.")
+    user_id: int = Field(foreign_key="users.id", description="Owner (denormalized from the parent credit card for row-level security).")
     date: date_type = Field(description="Settlement date.")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount paid.")
     currency: str = Field(max_length=3, description="Currency (ISO 4217).")

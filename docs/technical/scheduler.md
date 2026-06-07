@@ -8,7 +8,7 @@ APScheduler-based background job system for periodic data fetching and auto-snap
 
 The scheduler uses `APScheduler.AsyncIOScheduler` and integrates with FastAPI's lifespan. `start_scheduler()` is called on app startup; `stop_scheduler()` on shutdown.
 
-Each job wrapper creates its own `AsyncSessionLocal()` session (not tied to a request) and catches all exceptions at the top level — a failing job logs the error and does not crash the application.
+Each job wrapper creates its own `AdminSessionLocal()` session (not tied to a request) and catches all exceptions at the top level — a failing job logs the error and does not crash the application. Background jobs run with no user context, so they use the **privileged** session (`DATABASE_ADMIN_URL`, the table owner) which bypasses Row-Level Security (SEC-15) — a single job legitimately spans every user's rows.
 
 ## Configuration constants
 
@@ -89,7 +89,7 @@ Every job wrapper follows the same pattern:
 ```python
 async def _job_name() -> None:
     try:
-        async with AsyncSessionLocal() as session:
+        async with AdminSessionLocal() as session:
             await service.method(session)
     except Exception:
         logger.exception("Scheduled <job> failed.")

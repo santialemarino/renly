@@ -25,6 +25,7 @@ class Transaction(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     investment_id: int = Field(foreign_key="investments.id", description="Parent investment.")
+    user_id: int = Field(foreign_key="users.id", description="Owner (denormalized from the parent investment for row-level security).")
     date: date_type = Field(description="Transaction date.")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount (positive).")
     quantity: Decimal | None = Field(default=None, max_digits=18, decimal_places=6, description="Shares/units transacted.")

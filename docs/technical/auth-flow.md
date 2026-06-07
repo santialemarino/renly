@@ -11,14 +11,14 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 3. Checks if the email already exists. To avoid leaking which emails have accounts (AUTH-5), a duplicate returns a **generic `400`** — the same response as any other rejected registration — instead of a `409` that confirms the address is taken. The lookup lowercases the email, so `Foo@x.com` and `foo@x.com` are the same account. (The full anti-enumeration pattern — a uniform response plus a "you already have an account" email — lands with email infrastructure in M2.)
 4. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open so an external outage never blocks signup.
 5. Hashes password with bcrypt (`bcrypt.gensalt()` — default 12 rounds).
-6. Creates user via `user_repository.create()`, commits.
+6. Creates user via `user_repository.create()`, commits. Register runs on the **privileged session** (`DATABASE_ADMIN_URL`): there is no user context yet and the new row's id can't satisfy the `users` RLS policy, so the insert + email lookup bypass RLS (SEC-15).
 7. Generates JWT and returns `{access_token, expires_in}`.
 
 ### Login
 
 1. `POST /auth/login` receives `{email, password}`.
 2. The request schema validates and lowercases `email` (`EmailStr`), so login is case-insensitive in the address.
-3. Looks up user by email. Verifies password with `bcrypt.checkpw()`.
+3. Looks up user by email on the **privileged session** (`DATABASE_ADMIN_URL`) — the lookup is pre-auth, so it bypasses the `users` RLS policy (SEC-15). Verifies password with `bcrypt.checkpw()`.
 4. Returns 401 if user not found or password mismatch.
 5. Generates JWT and returns `{access_token, expires_in}`.
 
@@ -60,7 +60,7 @@ The `get_current_user()` dependency in `app/deps/auth.py` runs on every protecte
 1. Extracts Bearer token from `Authorization` header via `HTTPBearer()`.
 2. Decodes JWT with `jose.jwt.decode()` using `JWT_SECRET` and `HS256`.
 3. Extracts `sub` (user ID) and `session_epoch` from the payload.
-4. Fetches user from DB by ID.
+4. Sets the request's RLS context from the (trusted) token's user id (`set_session_user`), then fetches the user from the DB by ID — the `users` policy lets the user read its own row.
 5. Compares token's `session_epoch` with the user's current `session_epoch` — rejects if they differ (token was issued before a logout).
 6. Returns the `User` model instance.
 
@@ -82,7 +82,7 @@ For external tools (iOS Shortcuts, automations) that can't go through a browser 
 
 - **Raw key:** generated with `secrets.token_urlsafe(32)` (43 characters).
 - **Stored as:** bcrypt hash (`key_hash` column) + first 8 characters unencrypted (`key_prefix` column).
-- **Verification flow:** extract prefix from the Bearer token → query `api_keys` table by prefix (indexed, O(1)) → bcrypt-verify the full key against matching candidates. This avoids scanning all keys.
+- **Verification flow:** extract prefix from the Bearer token → query `api_keys` table by prefix (indexed, O(1)) → bcrypt-verify the full key against matching candidates. This avoids scanning all keys. The prefix lookup runs on the **privileged session** (no user context yet, so it bypasses the `api_keys` RLS policy); once the user is resolved, the request session's RLS context is set to that user (SEC-15).
 - **Last used tracking:** `last_used_at` updated on each successful verification.
 - **Revocation:** `DELETE /api-keys/{id}` sets `is_active = false` (soft-delete). Revoked keys fail verification immediately.
 
@@ -95,6 +95,25 @@ The following endpoints accept API key auth (used by the iOS Shortcut). All othe
 - `POST /installments` — create an installment plan when the shortcut's "Is this an installment?" toggle is on.
 - `GET /settings` — fetch shortcut currencies and user preferences.
 - `GET /credit-cards` — list cards for the credit card picker in the shortcut.
+
+---
+
+## Database-level isolation (Row-Level Security)
+
+A second, database-enforced isolation layer (SEC-15) sits under the application's `user_id` filters: even if a code path forgets to scope a query, Postgres itself prevents one user from reading or writing another's rows.
+
+### Two roles
+
+- **Restricted request role** (`DATABASE_URL`, e.g. `renly_app`): `NOBYPASSRLS`, not the table owner. Every HTTP request connects as this role, so all policies apply.
+- **Privileged owner role** (`DATABASE_ADMIN_URL`): owns the tables and therefore bypasses RLS. Used only for work with no user context — the scheduler, Alembic migrations, and pre-auth lookups (login, register, API-key verification). RLS is `ENABLE`d, not `FORCE`d, precisely so the owner stays exempt.
+
+### Per-request user context
+
+After authentication resolves the user id, `set_session_user()` (`app/db.py`) stashes it on the SQLAlchemy session. An `after_begin` event listener issues `SET LOCAL app.current_user_id = <id>` at the start of **every** transaction on that session — re-applied per transaction because `SET LOCAL` is cleared on `COMMIT` and pooled connections are reused (a service that commits mid-request and then reads would otherwise lose the context). JWT requests set the context from the trusted token before loading the user; the API-key path resolves the user on the privileged session first, then sets the request session's context.
+
+### Policies
+
+Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_group_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
 
 ---
 

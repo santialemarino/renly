@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from app.config import settings
+from app.db import set_session_user
 from app.deps.db import SessionDep
 from app.models.user import User
 
@@ -34,6 +35,10 @@ async def get_current_user(
             raise invalid
     except (JWTError, ValueError):
         raise invalid
+
+    # Set the RLS context from the trusted token before any DB read so the user's own row is
+    # visible under the users policy, and the rest of the request runs scoped to this user.
+    set_session_user(session, user_id)
 
     user = await session.get(User, user_id)
     if user is None:
