@@ -4,14 +4,15 @@ All environment variables used by the Renly backend and frontend, with defaults 
 
 ## Backend (`apps/api/.env`)
 
-| Variable             | Required | Default                 | Description                                                                                                                                        |
-| -------------------- | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`       | Yes      | —                       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`)                                                                   |
-| `JWT_SECRET`         | Yes      | —                       | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend                                      |
-| `JWT_ALGORITHM`      | No       | `HS256`                 | JWT signing algorithm                                                                                                                              |
-| `JWT_EXPIRE_MINUTES` | No       | `10080`                 | JWT expiration in minutes (default: 7 days)                                                                                                        |
-| `ENVIRONMENT`        | No       | `development`           | Deployment environment: `development` or `production`. In `production`, `/docs` `/redoc` `/openapi.json` are disabled and debug/tracebacks are off |
-| `CORS_ORIGINS`       | No       | `http://localhost:3000` | Comma-separated list of allowed CORS origins (e.g. `https://app.renly.com,https://renly.com`)                                                      |
+| Variable              | Required | Default                 | Description                                                                                                                                                                                                                                       |
+| --------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`        | Yes      | —                       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`)                                                                                                                                                                  |
+| `JWT_SECRET`          | Yes      | —                       | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend                                                                                                                                     |
+| `JWT_ALGORITHM`       | No       | `HS256`                 | JWT signing algorithm                                                                                                                                                                                                                             |
+| `JWT_EXPIRE_MINUTES`  | No       | `10080`                 | JWT expiration in minutes (default: 7 days)                                                                                                                                                                                                       |
+| `ENVIRONMENT`         | No       | `development`           | Deployment environment: `development` or `production`. In `production`, `/docs` `/redoc` `/openapi.json` are disabled and debug/tracebacks are off                                                                                                |
+| `CORS_ORIGINS`        | No       | `http://localhost:3000` | Comma-separated list of allowed CORS origins (e.g. `https://app.renly.com,https://renly.com`)                                                                                                                                                     |
+| `TRUSTED_PROXY_COUNT` | No       | `0`                     | Number of trusted reverse proxies in front of the app, used to read the real client IP from `X-Forwarded-For` for rate limiting. `0` = reached directly. Behind a proxy/LB, set to the hop count or per-IP limits collapse onto the proxy address |
 
 ## Frontend (`apps/web/.env`)
 

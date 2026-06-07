@@ -191,10 +191,13 @@ def create_app(app_settings: Settings | None = None) -> FastAPI:
     for router in _ROUTERS:
         app.include_router(router)
 
-    # Middleware added last is outermost: CORS wraps everything (so 4xx/5xx still get CORS
-    # headers and preflight is handled before rate limiting), then body-size, then rate limit.
-    app.add_middleware(SlowAPIMiddleware)
+    # Middleware added last is outermost: CORS wraps everything (so 4xx/5xx still get CORS headers
+    # and preflight is handled before rate limiting), then rate limit, then the body-size limit
+    # innermost. Body-size goes last/innermost on purpose: its streaming guard raises an
+    # HTTPException that FastAPI's body parsing re-raises into the 413 handler, and keeping it next
+    # to the route avoids any outer BaseHTTPMiddleware (e.g. SlowAPI) wrapping that exception.
     app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=app_settings.cors_origins,

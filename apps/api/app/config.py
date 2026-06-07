@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     environment: Environment = Environment.development
     # Allowed CORS origins, comma-separated in the env (e.g. "https://app.renly.com,https://renly.com").
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
+    # Number of trusted reverse proxies in front of the app. 0 (default) means the app is reached
+    # directly, so the peer address is the client. When > 0, the client IP used for rate limiting is
+    # read from X-Forwarded-For counting this many hops from the right (the proxy-appended end), which
+    # is spoof-resistant; set it to the real proxy/LB hop count in production or per-IP limits collapse
+    # onto the proxy address. Must match the deployment — too high lets clients spoof their rate-limit key.
+    trusted_proxy_count: int = 0
 
     # Rejects a missing or weak JWT secret at startup; a short/guessable secret makes every token forgeable.
     @field_validator("jwt_secret")

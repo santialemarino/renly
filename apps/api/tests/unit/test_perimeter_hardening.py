@@ -1,12 +1,13 @@
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from app.config import Environment, Settings
 from app.db import get_session
 from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
-from app.rate_limit import limiter
+from app.rate_limit import client_ip, limiter
 
 # Perimeter-hardening coverage for the M1 bundle: rate limiting + 429 (SEC-1), docs lockdown
 # (SEC-7), catch-all 500 handler (SEC-8), env-driven CORS (SEC-9), request body-size limit
@@ -157,6 +158,43 @@ class TestBodySizeLimit:
         # A normal small body passes the size middleware (reaches the handler → 401 for unknown user).
         response = client.post("/auth/login", json={"email": "a@b.com", "password": _PASSWORD})
         assert response.status_code == 401
+
+    def test_oversized_chunked_body_rejected_with_413(self):
+        client = _client()
+
+        # A generator body makes httpx use Transfer-Encoding: chunked (no Content-Length), so the
+        # declared-length fast path is skipped and the streaming byte counter must catch it.
+        def _stream():
+            yield b"x" * (MAX_REQUEST_BODY_BYTES + 1)
+
+        response = client.post("/auth/login", content=_stream(), headers={"content-type": "application/json"})
+        assert response.status_code == 413
+        assert response.json() == {"detail": "Request body too large."}
+
+
+# --- SEC-1 (follow-up): client IP behind a reverse proxy ---
+
+
+def _request(headers: dict[str, str], peer: str) -> Request:
+    raw = [(key.lower().encode(), value.encode()) for key, value in headers.items()]
+    return Request({"type": "http", "headers": raw, "client": (peer, 0)})
+
+
+class TestClientIpResolution:
+    def test_direct_ignores_forwarded_header(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(trusted_proxy_count=0))
+        # Reached directly: X-Forwarded-For is attacker-controlled and must be ignored.
+        assert client_ip(_request({"X-Forwarded-For": "1.2.3.4"}, "10.0.0.1")) == "10.0.0.1"
+
+    def test_behind_one_proxy_reads_real_client(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(trusted_proxy_count=1))
+        assert client_ip(_request({"X-Forwarded-For": "1.2.3.4"}, "10.0.0.1")) == "1.2.3.4"
+
+    def test_prepended_spoof_entries_ignored(self, monkeypatch):
+        monkeypatch.setattr("app.rate_limit.settings", _settings(trusted_proxy_count=1))
+        # The client prepends fake IPs; counting one hop from the right still yields the proxy-appended IP.
+        forwarded = {"X-Forwarded-For": "9.9.9.9, 8.8.8.8, 1.2.3.4"}
+        assert client_ip(_request(forwarded, "10.0.0.1")) == "1.2.3.4"
 
 
 # --- AUTH-5 (M1 part): register no longer leaks email existence via a bare 409 ---
