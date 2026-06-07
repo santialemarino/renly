@@ -8,7 +8,7 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 
 1. `POST /auth/register` receives `{name, email, password}`.
 2. The request schema validates `email` as a real address (`EmailStr`) and normalizes it to lowercase, and enforces a 12-character minimum password — invalid input returns 422.
-3. Checks if email already exists — returns 409 if taken. The lookup lowercases the email, so `Foo@x.com` and `foo@x.com` are the same account.
+3. Checks if the email already exists. To avoid leaking which emails have accounts (AUTH-5), a duplicate returns a **generic `400`** — the same response as any other rejected registration — instead of a `409` that confirms the address is taken. The lookup lowercases the email, so `Foo@x.com` and `foo@x.com` are the same account. (The full anti-enumeration pattern — a uniform response plus a "you already have an account" email — lands with email infrastructure in M2.)
 4. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open so an external outage never blocks signup.
 5. Hashes password with bcrypt (`bcrypt.gensalt()` — default 12 rounds).
 6. Creates user via `user_repository.create()`, commits.
@@ -170,3 +170,6 @@ userSignOut()                    // server action in auth.ts
 - No refresh token mechanism — expiry forces full re-login.
 - `session_epoch` provides immediate token revocation on logout without a blocklist.
 - `trustHost: true` is set in NextAuth config (required for non-Vercel deployments).
+- **Rate limiting (SEC-1):** all routes share a global default limit, with tighter per-route limits on the credential-accepting auth endpoints (`POST /auth/login`, `POST /auth/register`) to slow brute-force and account-flooding. The limiter keys by authenticated user id when a valid bearer token is present, otherwise by client IP; exceeding a limit returns a generic `429` with a `Retry-After` header. The client IP is the connection peer by default; when deployed behind a reverse proxy set `TRUSTED_PROXY_COUNT` to the proxy hop count so the real client IP is read from `X-Forwarded-For` (otherwise every client collapses onto the proxy address and shares one bucket). In-memory storage for now (single instance) — swap to Redis when scaling out. Configured in `app/rate_limit.py`.
+- **Registration is intentionally non-committal on duplicate emails** (AUTH-5, M1 part) — see Register step 3.
+- **Perimeter (SEC-7/8/9/12):** in `production` (`ENVIRONMENT=production`) the API docs (`/docs`, `/redoc`, `/openapi.json`) are disabled and debug is off; a catch-all handler returns a generic `500` (`{"detail": "Internal server error."}`) with no stack trace. CORS origins are env-driven (`CORS_ORIGINS`). A request body-size limit (`BodySizeLimitMiddleware`, 1 MiB) rejects oversized payloads with `413` — both an oversized declared `Content-Length` and bodies that exceed the cap while streaming (so chunked requests without a `Content-Length` can't bypass it).

@@ -43,4 +43,4 @@ From here: `uv run pytest tests/ -v`
 
 ## Env
 
-`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`. Copy from `.env.example`. External API URLs (DolarApi, Frankfurter, CoinGecko, Comafi) are constants in the service layer.
+`.env` with: `DATABASE_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=10080`, `ENVIRONMENT` (`development`/`production` — `production` disables docs and debug), `CORS_ORIGINS` (comma-separated allowed origins), `TRUSTED_PROXY_COUNT` (reverse-proxy hop count for client-IP rate limiting; `0` when reached directly). Copy from `.env.example`. External API URLs (DolarApi, Frankfurter, CoinGecko, Comafi) are constants in the service layer.
