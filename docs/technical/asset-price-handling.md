@@ -68,11 +68,11 @@ All schedule constants are defined at the top of `scheduler.py`. The asset price
 
 ### 5. API endpoints
 
-| Endpoint                        | Method | Description                                                            |
-| ------------------------------- | ------ | ---------------------------------------------------------------------- |
-| `/asset-prices/{ticker}/latest` | GET    | Latest stored price for a ticker                                       |
-| `/asset-prices/{ticker}`        | GET    | Price history with optional `start_date`/`end_date` query params       |
-| `/asset-prices/refresh`         | POST   | Triggers on-demand price fetch for all ticker-linked investments (202) |
+| Endpoint                        | Method | Description                                                                     |
+| ------------------------------- | ------ | ------------------------------------------------------------------------------- |
+| `/asset-prices/{ticker}/latest` | GET    | Latest stored price for a ticker                                                |
+| `/asset-prices/{ticker}`        | GET    | Price history with optional `start_date`/`end_date` query params                |
+| `/asset-prices/refresh`         | POST   | Triggers on-demand price fetch for the caller's ticker-linked investments (202) |
 
 All endpoints require authentication.
 
@@ -108,7 +108,7 @@ On the last day of each month (at 23:00 UTC, after the daily price fetch), the s
 5. Skip if a snapshot already exists for today (manual or auto).
 6. Skip if no price data is available for the ticker.
 
-The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`) — it does not create auto-snapshots (those only come from the monthly scheduled job). Auto-generated snapshots can be edited like any other snapshot. The `source` field is stored but not displayed in the grid.
+The "Refresh prices" button in the snapshots toolbar triggers a price-only refresh on demand (`POST /asset-prices/refresh`), scoped to the calling user's own ticker-linked investments — it does not create auto-snapshots (those only come from the monthly scheduled job, which refreshes every user's tickers system-wide). Auto-generated snapshots can be edited like any other snapshot. The `source` field is stored but not displayed in the grid.
 
 ### 7. Historical price lookup
 
