@@ -1,22 +1,27 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.config import settings
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.rate_limit import LOGIN_LIMIT, REGISTER_LIMIT, limiter
 from app.schemas.auth import LoginRequest, MeResponse, RegisterRequest, TokenResponse
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# Creates a new user and returns a JWT. Returns 409 if email already registered.
+# Creates a new user and returns a JWT.
+# Anti-enumeration (AUTH-5, M1 part): a duplicate email returns a generic 400 — the same response
+# as any other rejected registration — instead of a 409 that confirms the address has an account.
+# The full always-uniform response + "you already have an account" email lands in M2 (SHELL-3).
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, session: SessionDep) -> TokenResponse:
-    user = await auth_service.get_user_by_email(session, body.email)
-    if user:
+@limiter.limit(REGISTER_LIMIT)
+async def register(request: Request, body: RegisterRequest, session: SessionDep) -> TokenResponse:
+    existing = await auth_service.get_user_by_email(session, body.email)
+    if existing:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Registration could not be completed.",
         )
 
     user = await auth_service.register_user(session, body.name, body.email, body.password)
@@ -29,7 +34,8 @@ async def register(body: RegisterRequest, session: SessionDep) -> TokenResponse:
 
 # Authenticates by email/password and returns a JWT. Returns 401 if invalid.
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, session: SessionDep) -> TokenResponse:
+@limiter.limit(LOGIN_LIMIT)
+async def login(request: Request, body: LoginRequest, session: SessionDep) -> TokenResponse:
     user = await auth_service.get_user_by_email(session, body.email)
     if not user or not auth_service.verify_password(body.password, user.password_hash):
         raise HTTPException(

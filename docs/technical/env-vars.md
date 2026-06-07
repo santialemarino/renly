@@ -4,12 +4,14 @@ All environment variables used by the Renly backend and frontend, with defaults 
 
 ## Backend (`apps/api/.env`)
 
-| Variable             | Required | Default | Description                                                                                                   |
-| -------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`       | Yes      | —       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`)                              |
-| `JWT_SECRET`         | Yes      | —       | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend |
-| `JWT_ALGORITHM`      | No       | `HS256` | JWT signing algorithm                                                                                         |
-| `JWT_EXPIRE_MINUTES` | No       | `10080` | JWT expiration in minutes (default: 7 days)                                                                   |
+| Variable             | Required | Default                 | Description                                                                                                                                        |
+| -------------------- | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Yes      | —                       | Async Postgres connection string (`postgresql+asyncpg://user:pass@host:port/db`)                                                                   |
+| `JWT_SECRET`         | Yes      | —                       | Secret key for signing JWTs; min 32 chars, validated at startup. Must match `NEXTAUTH_SECRET` on the frontend                                      |
+| `JWT_ALGORITHM`      | No       | `HS256`                 | JWT signing algorithm                                                                                                                              |
+| `JWT_EXPIRE_MINUTES` | No       | `10080`                 | JWT expiration in minutes (default: 7 days)                                                                                                        |
+| `ENVIRONMENT`        | No       | `development`           | Deployment environment: `development` or `production`. In `production`, `/docs` `/redoc` `/openapi.json` are disabled and debug/tracebacks are off |
+| `CORS_ORIGINS`       | No       | `http://localhost:3000` | Comma-separated list of allowed CORS origins (e.g. `https://app.renly.com,https://renly.com`)                                                      |
 
 ## Frontend (`apps/web/.env`)
 

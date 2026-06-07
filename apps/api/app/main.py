@@ -1,11 +1,15 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.exc import IntegrityError
 
-from app.config import settings  # noqa: F401 — ensures settings are validated on startup
+from app.config import Settings
+from app.config import settings as default_settings
 from app.domain import (
     CurrencyChangeBlockedError,
     ExchangeRateUnavailableError,
@@ -16,6 +20,8 @@ from app.domain import (
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
+from app.middleware import BodySizeLimitMiddleware
+from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import (
     api_keys,
     asset_prices,
@@ -38,6 +44,8 @@ from app.routers import (
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -46,103 +54,42 @@ async def lifespan(_app: FastAPI):
     stop_scheduler()
 
 
-app = FastAPI(
-    title="Renly API",
-    description="Renly backend — personal finance (investments, metrics, exchange rates)",
-    version="0.1.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(api_keys.router)
-app.include_router(asset_prices.router)
-app.include_router(auth.router)
-app.include_router(credit_cards.router)
-app.include_router(dashboard.router)
-app.include_router(exchange_rates.router)
-app.include_router(expenses.router)
-app.include_router(finance_metrics.router)
-app.include_router(groups.router)
-app.include_router(income.router)
-app.include_router(installments.router)
-app.include_router(investments.router)
-app.include_router(metrics.router)
-app.include_router(payment_obligations.router)
-app.include_router(payments_calendar.router)
-app.include_router(settings_router.router)
-app.include_router(snapshot_grid.router)
-app.include_router(subscriptions.router)
+# --- Exception handlers ---
 
 
-@app.exception_handler(CurrencyChangeBlockedError)
-async def currency_change_blocked_handler(_request, exc: CurrencyChangeBlockedError):
-    return JSONResponse(
-        status_code=409,
-        content={"detail": exc.message},
-    )
+async def currency_change_blocked_handler(_request: Request, exc: CurrencyChangeBlockedError):
+    return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
-@app.exception_handler(HasLinkedExpensesError)
-async def has_linked_expenses_handler(_request, exc: HasLinkedExpensesError):
-    return JSONResponse(
-        status_code=409,
-        content={"detail": exc.message},
-    )
+async def has_linked_expenses_handler(_request: Request, exc: HasLinkedExpensesError):
+    return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
-@app.exception_handler(InstallmentLockedFieldError)
-async def installment_locked_field_handler(_request, exc: InstallmentLockedFieldError):
+async def installment_locked_field_handler(_request: Request, exc: InstallmentLockedFieldError):
     return JSONResponse(
         status_code=400,
         content={"detail": exc.message, "code": exc.code, "fields": exc.fields},
     )
 
 
-@app.exception_handler(NotFoundError)
-async def not_found_exception_handler(_request, exc: NotFoundError):
-    return JSONResponse(
-        status_code=404,
-        content={"detail": exc.message},
-    )
+async def not_found_exception_handler(_request: Request, exc: NotFoundError):
+    return JSONResponse(status_code=404, content={"detail": exc.message})
 
 
-@app.exception_handler(PasswordBreachedError)
-async def password_breached_handler(_request, exc: PasswordBreachedError):
-    return JSONResponse(
-        status_code=400,
-        content={"detail": exc.message},
-    )
+async def password_breached_handler(_request: Request, exc: PasswordBreachedError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
-@app.exception_handler(PlanRequiredError)
-async def plan_required_handler(_request, exc: PlanRequiredError):
-    return JSONResponse(
-        status_code=402,
-        content={"detail": exc.message},
-    )
+async def plan_required_handler(_request: Request, exc: PlanRequiredError):
+    return JSONResponse(status_code=402, content={"detail": exc.message})
 
 
-@app.exception_handler(ExchangeRateUnavailableError)
-async def exchange_rate_unavailable_handler(_request, exc: ExchangeRateUnavailableError):
-    return JSONResponse(
-        status_code=503,
-        content={"detail": exc.message},
-    )
+async def exchange_rate_unavailable_handler(_request: Request, exc: ExchangeRateUnavailableError):
+    return JSONResponse(status_code=503, content={"detail": exc.message})
 
 
-@app.exception_handler(ReconciliationPeriodMismatchError)
-async def reconciliation_period_mismatch_handler(_request, exc: ReconciliationPeriodMismatchError):
-    return JSONResponse(
-        status_code=400,
-        content={"detail": exc.message},
-    )
+async def reconciliation_period_mismatch_handler(_request: Request, exc: ReconciliationPeriodMismatchError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
 # Maps SQLAlchemy IntegrityError to a clean 409 (Phase 3, follow-up Item 8.2). The most
@@ -151,8 +98,7 @@ async def reconciliation_period_mismatch_handler(_request, exc: ReconciliationPe
 # / (installment_id, date). The asyncpg layer surfaces `constraint_name` on the wrapped
 # exception when available — falls back to substring matching on the message text so the
 # handler still fires across driver / version variations.
-@app.exception_handler(IntegrityError)
-async def integrity_error_handler(_request, exc: IntegrityError):
+async def integrity_error_handler(_request: Request, exc: IntegrityError):
     orig = exc.orig
     constraint_name = getattr(orig, "constraint_name", None)
     msg_text = str(orig) if orig is not None else str(exc)
@@ -176,6 +122,94 @@ async def integrity_error_handler(_request, exc: IntegrityError):
     )
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+# Catch-all for any unhandled exception (SEC-8). Logs the trace server-side and returns a
+# generic JSON body — never a stack trace — so production leaks nothing. Bypassed when debug
+# is on (non-production), where Starlette returns its own traceback for local debugging.
+async def unhandled_exception_handler(_request: Request, exc: Exception):
+    logger.exception("Unhandled exception", exc_info=exc)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
+
+
+_ROUTERS = (
+    api_keys.router,
+    asset_prices.router,
+    auth.router,
+    credit_cards.router,
+    dashboard.router,
+    exchange_rates.router,
+    expenses.router,
+    finance_metrics.router,
+    groups.router,
+    income.router,
+    installments.router,
+    investments.router,
+    metrics.router,
+    payment_obligations.router,
+    payments_calendar.router,
+    settings_router.router,
+    snapshot_grid.router,
+    subscriptions.router,
+)
+
+_EXCEPTION_HANDLERS = {
+    CurrencyChangeBlockedError: currency_change_blocked_handler,
+    HasLinkedExpensesError: has_linked_expenses_handler,
+    InstallmentLockedFieldError: installment_locked_field_handler,
+    NotFoundError: not_found_exception_handler,
+    PasswordBreachedError: password_breached_handler,
+    PlanRequiredError: plan_required_handler,
+    ExchangeRateUnavailableError: exchange_rate_unavailable_handler,
+    ReconciliationPeriodMismatchError: reconciliation_period_mismatch_handler,
+    IntegrityError: integrity_error_handler,
+    RateLimitExceeded: rate_limit_exceeded_handler,
+    Exception: unhandled_exception_handler,
+}
+
+
+# Builds the FastAPI app. Docs and debug are locked down in production (SEC-7/8); CORS origins
+# come from settings (SEC-9); rate limiting and the body-size limit are wired as middleware (SEC-1/12).
+def create_app(app_settings: Settings | None = None) -> FastAPI:
+    app_settings = app_settings or default_settings
+    docs_enabled = not app_settings.is_production
+
+    app = FastAPI(
+        title="Renly API",
+        description="Renly backend — personal finance (investments, metrics, exchange rates)",
+        version="0.1.0",
+        lifespan=lifespan,
+        debug=app_settings.debug,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
+
+    app.state.limiter = limiter
+
+    for exc_type, handler in _EXCEPTION_HANDLERS.items():
+        app.add_exception_handler(exc_type, handler)
+
+    for router in _ROUTERS:
+        app.include_router(router)
+
+    # Middleware added last is outermost: CORS wraps everything (so 4xx/5xx still get CORS
+    # headers and preflight is handled before rate limiting), then body-size, then rate limit.
+    app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=app_settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Liveness probe; exempt from rate limiting so uptime checks never trip the limiter.
+    @app.get("/health")
+    @limiter.exempt
+    def health():
+        return {"status": "ok"}
+
+    return app
+
+
+app = create_app()
