@@ -89,6 +89,22 @@
       "resent": "Sent — check your inbox.",
       "backToLogin": "Back to log in",
       "resendIn": "Resend in {seconds}s"
+    },
+    "passwordMeter": {
+      "title": "Strength",
+      "strength": {
+        "strong": "Strong",
+        "moderate": "Moderate",
+        "weak": "Weak"
+      },
+      "requirements": {
+        "title": "Password must include:",
+        "characters": "At least {length} characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "number": "One number",
+        "special": "One special character (!@#$%^&*)"
+      }
     }
   },
   "login": {
@@ -153,26 +169,6 @@
       },
       "errors": {
         "passwordRejected": "This password can't be used. Please choose a different one."
-      }
-    },
-    "redirecting": {
-      "title": "Account created!",
-      "description": "Logging you in..."
-    },
-    "passwordMeter": {
-      "title": "Strength",
-      "strength": {
-        "strong": "Strong",
-        "moderate": "Moderate",
-        "weak": "Weak"
-      },
-      "requirements": {
-        "title": "Password must include:",
-        "characters": "At least 8 characters",
-        "uppercase": "One uppercase letter",
-        "lowercase": "One lowercase letter",
-        "number": "One number",
-        "special": "One special character (!@#$%^&*)"
       }
     }
   },

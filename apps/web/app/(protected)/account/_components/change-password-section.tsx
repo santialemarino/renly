@@ -8,7 +8,6 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Button, Input } from '@repo/ui/components';
-import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import { changePasswordAction } from '@/app/(protected)/account/account-actions';
 import {
   changePasswordSchema,
@@ -16,6 +15,7 @@ import {
 } from '@/app/(protected)/account/form-schemas';
 import { userSignOut } from '@/auth';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { PasswordMeter } from '@/components/password-meter';
 import { LOGIN_ROUTE } from '@/config/routes';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,

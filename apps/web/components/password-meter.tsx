@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
+import { PASSWORD_MIN_LENGTH } from '@/lib/constants/form';
 
 type PasswordCheck = 'characters' | 'uppercase' | 'lowercase' | 'number' | 'special';
 type PasswordStrength = 'strong' | 'moderate' | 'weak' | 'empty';
@@ -61,7 +62,7 @@ export function PasswordMeter({
   showErrors?: boolean;
   className?: string;
 }) {
-  const t = useTranslations('signup.passwordMeter');
+  const t = useTranslations('common.passwordMeter');
 
   const checkStrength = useCallback((checks: Record<PasswordCheck, boolean>): PasswordStrength => {
     const count = Object.values(checks).filter(Boolean).length;
@@ -115,7 +116,7 @@ export function PasswordMeter({
             <CheckItem
               key={check}
               checked={passingChecks[check]}
-              label={t(`requirements.${check}`)}
+              label={t(`requirements.${check}`, { length: PASSWORD_MIN_LENGTH })}
               isInvalid={showErrors && !passingChecks[check]}
             />
           ))}

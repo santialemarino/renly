@@ -6,7 +6,6 @@ import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
-import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import { signupFormSchema, type SignupFormData } from '@/app/(auth)/signup/form-schema';
 import {
   Form,
@@ -17,6 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/form';
+import { PasswordMeter } from '@/components/password-meter';
 import { PasswordRejectedError, registerRequest } from '@/lib/auth-api';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,

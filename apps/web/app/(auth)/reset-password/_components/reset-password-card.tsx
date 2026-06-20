@@ -18,12 +18,12 @@ import {
 } from '@repo/ui/components';
 import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
-import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import {
   resetPasswordFormSchema,
   type ResetPasswordFormData,
 } from '@/app/(auth)/reset-password/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { PasswordMeter } from '@/components/password-meter';
 import { ROUTES } from '@/config/routes';
 import { PasswordRejectedError, resetPasswordRequest } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';

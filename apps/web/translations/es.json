@@ -89,6 +89,22 @@
       "resent": "Enviado: revisá tu bandeja de entrada.",
       "backToLogin": "Volver al inicio de sesión",
       "resendIn": "Reenviar en {seconds}s"
+    },
+    "passwordMeter": {
+      "title": "Fortaleza",
+      "strength": {
+        "strong": "Fuerte",
+        "moderate": "Moderada",
+        "weak": "Débil"
+      },
+      "requirements": {
+        "title": "La contraseña debe incluir:",
+        "characters": "Al menos {length} caracteres",
+        "uppercase": "Una letra mayúscula",
+        "lowercase": "Una letra minúscula",
+        "number": "Un número",
+        "special": "Un carácter especial (!@#$%^&*)"
+      }
     }
   },
   "login": {
@@ -153,26 +169,6 @@
       },
       "errors": {
         "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente."
-      }
-    },
-    "redirecting": {
-      "title": "Cuenta creada!",
-      "description": "Iniciando sesión..."
-    },
-    "passwordMeter": {
-      "title": "Fortaleza",
-      "strength": {
-        "strong": "Fuerte",
-        "moderate": "Moderada",
-        "weak": "Débil"
-      },
-      "requirements": {
-        "title": "La contraseña debe incluir:",
-        "characters": "Al menos 8 caracteres",
-        "uppercase": "Una letra mayúscula",
-        "lowercase": "Una letra minúscula",
-        "number": "Un número",
-        "special": "Un carácter especial (!@#$%^&*)"
       }
     }
   },
