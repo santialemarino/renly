@@ -7,6 +7,9 @@ export const ROUTES = {
   auth: {
     login: '/login',
     signup: '/signup',
+    forgotPassword: '/forgot-password',
+    resetPassword: '/reset-password',
+    verifyEmail: '/verify-email',
   },
   dashboard: '/dashboard',
   financeDashboard: '/finance-dashboard',
@@ -25,10 +28,17 @@ export const ROUTES = {
   alerts: '/alerts',
   localization: '/localization',
   integrations: '/integrations',
+  account: '/account',
 } as const;
 
 /** All auth routes — accessible without a session */
-export const AUTH_ROUTES = [ROUTES.auth.login, ROUTES.auth.signup] as const;
+export const AUTH_ROUTES = [
+  ROUTES.auth.login,
+  ROUTES.auth.signup,
+  ROUTES.auth.forgotPassword,
+  ROUTES.auth.resetPassword,
+  ROUTES.auth.verifyEmail,
+] as const;
 
 /** Public, unauthenticated routes — the marketing landing and legal pages. */
 export const PUBLIC_ROUTES = [

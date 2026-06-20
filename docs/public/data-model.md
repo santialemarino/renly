@@ -10,6 +10,8 @@ This page explains how Renly organizes your data. No technical background requir
 
 Each person has their own account with completely isolated data. Your investments, settings, and metrics are private to you -- no one else can see or modify them.
 
+New accounts confirm their email address (via a link sent at signup) before they can log in. From the account settings page you can change your email or password, export all of your data as a JSON file, and permanently delete your account. Changing your password — or resetting a forgotten one — signs you out everywhere else. Verification and reset links are single-use and expire.
+
 ### Investments
 
 An investment is any financial holding you want to track. It could be a stock, a term deposit, a dollar position, a mutual fund, crypto, a bond, real estate, or anything else.

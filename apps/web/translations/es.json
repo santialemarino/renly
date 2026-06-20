@@ -81,6 +81,31 @@
       "loading": "Procesando..."
     },
     "nextCycleHint": "· próximo {date}",
+    "checkEmail": {
+      "title": "Revisá tu correo",
+      "description": "Si {email} se puede usar, le enviamos un mensaje con los próximos pasos. Abrilo para continuar y revisá el spam si no lo ves en tu bandeja de entrada.",
+      "resend": "Reenviar correo",
+      "resending": "Enviando…",
+      "resent": "Enviado: revisá tu bandeja de entrada.",
+      "backToLogin": "Volver al inicio de sesión",
+      "resendIn": "Reenviar en {seconds}s"
+    },
+    "passwordMeter": {
+      "title": "Fortaleza",
+      "strength": {
+        "strong": "Fuerte",
+        "moderate": "Moderada",
+        "weak": "Débil"
+      },
+      "requirements": {
+        "title": "La contraseña debe incluir:",
+        "characters": "Al menos {length} caracteres",
+        "uppercase": "Una letra mayúscula",
+        "lowercase": "Una letra minúscula",
+        "number": "Un número",
+        "special": "Un carácter especial (!@#$%^&*)"
+      }
+    },
     "cookieConsent": {
       "message": "Renly usa cookies esenciales para mantener tu sesión y recordar tus preferencias. No las usamos para publicidad ni seguimiento de terceros.",
       "accept": "Entendido",
@@ -126,7 +151,8 @@
       "signup": {
         "title": "¿No tenés una cuenta?",
         "cta": "Registrate"
-      }
+      },
+      "forgotPassword": "¿Olvidaste tu contraseña?"
     }
   },
   "signup": {
@@ -161,27 +187,7 @@
         "cta": "Iniciar sesión"
       },
       "errors": {
-        "emailTaken": "Este correo ya está registrado"
-      }
-    },
-    "redirecting": {
-      "title": "Cuenta creada!",
-      "description": "Iniciando sesión..."
-    },
-    "passwordMeter": {
-      "title": "Fortaleza",
-      "strength": {
-        "strong": "Fuerte",
-        "moderate": "Moderada",
-        "weak": "Débil"
-      },
-      "requirements": {
-        "title": "La contraseña debe incluir:",
-        "characters": "Al menos 8 caracteres",
-        "uppercase": "Una letra mayúscula",
-        "lowercase": "Una letra minúscula",
-        "number": "Un número",
-        "special": "Un carácter especial (!@#$%^&*)"
+        "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente."
       }
     }
   },
@@ -204,7 +210,8 @@
       "preferences": "Preferencias",
       "alerts": "Alertas y límites",
       "localization": "Localización",
-      "integrations": "Integraciones"
+      "integrations": "Integraciones",
+      "account": "Cuenta"
     },
     "navGroups": {
       "finances": "Finanzas",
@@ -1616,6 +1623,146 @@
         "step2": "Cuando se te pida, toca \"Agregar Atajo\" para instalarlo.",
         "step3": "Abre el atajo e ingresa tu URL de API y clave API cuando se solicite (solo la primera vez).",
         "step4": "Ejecuta el atajo desde la pantalla de inicio, widget o Siri."
+      }
+    }
+  },
+  "forgotPassword": {
+    "metadata": {
+      "title": "Recuperar contraseña",
+      "description": "Restablecé tu contraseña de Renly"
+    },
+    "title": "Restablecer tu contraseña",
+    "description": "Ingresá tu correo y te enviaremos un enlace para restablecer tu contraseña.",
+    "sent": "Si {email} tiene una cuenta, le enviamos un enlace para restablecer la contraseña. Abrilo para elegir una nueva y revisá el spam si no lo ves en tu bandeja de entrada.",
+    "backToLogin": "Volver al inicio de sesión",
+    "form": {
+      "email": {
+        "label": "Correo",
+        "placeholder": "Ingresá tu correo"
+      },
+      "cta": {
+        "label": "Enviar enlace",
+        "loading": "Enviando…"
+      }
+    },
+    "sentTitle": "Revisá tu correo"
+  },
+  "resetPassword": {
+    "metadata": {
+      "title": "Restablecer contraseña",
+      "description": "Elegí una nueva contraseña"
+    },
+    "title": "Elegí una nueva contraseña",
+    "success": "Tu contraseña fue restablecida. Ya podés iniciar sesión con tu nueva contraseña.",
+    "backToLogin": "Volver al inicio de sesión",
+    "form": {
+      "password": {
+        "label": "Nueva contraseña",
+        "placeholder": "Creá una contraseña"
+      },
+      "confirmPassword": {
+        "label": "Confirmar contraseña",
+        "placeholder": "Repetí tu contraseña"
+      },
+      "cta": {
+        "label": "Restablecer contraseña",
+        "loading": "Restableciendo…"
+      },
+      "errors": {
+        "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente.",
+        "invalidToken": "Este enlace no es válido o expiró. Solicitá uno nuevo."
+      }
+    },
+    "successTitle": "Contraseña restablecida",
+    "errorTitle": "Enlace no válido o expirado",
+    "requestNewLink": "Solicitar un nuevo enlace"
+  },
+  "verifyEmail": {
+    "metadata": {
+      "title": "Verificar correo",
+      "description": "Confirmá tu dirección de correo"
+    },
+    "loading": "Confirmando tu correo…",
+    "goToLogin": "Ir al inicio de sesión",
+    "status": {
+      "verified": {
+        "title": "Correo verificado",
+        "description": "Tu correo fue verificado. Ya podés iniciar sesión."
+      },
+      "changed": {
+        "title": "Correo actualizado",
+        "description": "Tu nueva dirección de correo fue confirmada. Iniciá sesión nuevamente."
+      },
+      "error": {
+        "title": "Enlace no válido o expirado",
+        "description": "Este enlace no es válido o expiró. Solicitá uno nuevo."
+      }
+    }
+  },
+  "account": {
+    "metadata": {
+      "title": "Cuenta",
+      "description": "Administrá tu cuenta"
+    },
+    "title": "Cuenta",
+    "subtitle": "Administrá tu correo, contraseña y datos de la cuenta.",
+    "password": {
+      "title": "Contraseña",
+      "description": "Cambiá la contraseña que usás para iniciar sesión.",
+      "currentLabel": "Contraseña actual",
+      "newLabel": "Nueva contraseña",
+      "confirmLabel": "Confirmar nueva contraseña",
+      "cta": {
+        "label": "Cambiar contraseña",
+        "loading": "Cambiando…"
+      },
+      "success": "Tu contraseña fue cambiada. Iniciá sesión nuevamente.",
+      "errors": {
+        "invalidCurrent": "La contraseña actual es incorrecta.",
+        "rejected": "No se puede usar esta contraseña. Elegí una diferente."
+      }
+    },
+    "email": {
+      "title": "Dirección de correo",
+      "current": "Correo actual: {email}",
+      "newLabel": "Nuevo correo",
+      "placeholder": "Ingresá el nuevo correo",
+      "passwordLabel": "Contraseña actual",
+      "cta": {
+        "label": "Cambiar correo",
+        "loading": "Enviando…"
+      },
+      "success": "Si esa dirección está disponible, enviamos un enlace de confirmación a {email}.",
+      "errors": {
+        "invalidPassword": "La contraseña es incorrecta."
+      }
+    },
+    "danger": {
+      "title": "Zona de riesgo",
+      "description": "Exportá tus datos o eliminá tu cuenta de forma permanente.",
+      "export": {
+        "title": "Exportar tus datos",
+        "description": "Descargá todos tus datos de Renly en un archivo JSON.",
+        "label": "Exportar",
+        "loading": "Preparando…",
+        "success": "Tu exportación de datos fue descargada."
+      },
+      "delete": {
+        "title": "Eliminar cuenta",
+        "description": "Eliminá tu cuenta y todos tus datos de forma permanente. No se puede deshacer.",
+        "label": "Eliminar cuenta",
+        "errors": {
+          "invalidPassword": "La contraseña es incorrecta."
+        },
+        "dialog": {
+          "title": "¿Eliminar tu cuenta?",
+          "description": "Esto elimina de forma permanente tu cuenta y todos los datos asociados. Esta acción no se puede deshacer.",
+          "passwordLabel": "Contraseña",
+          "confirmLabel": "Escribí {email} para confirmar",
+          "cancel": "Cancelar",
+          "confirm": "Eliminar cuenta",
+          "deleting": "Eliminando…"
+        }
       }
     }
   },

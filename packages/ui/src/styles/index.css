@@ -121,6 +121,21 @@
   animation: focus-bump-soft 0.3s ease-in-out;
 }
 
+/* Gentlest focus bump — for text links, where even the soft 1.15 is too much movement. */
+@keyframes focus-bump-subtle {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@utility animate-focus-bump-subtle {
+  animation: focus-bump-subtle 0.3s ease-in-out;
+}
+
 /* Collapsible expand/collapse animations (used by Radix Collapsible) */
 @keyframes collapsible-down {
   from {

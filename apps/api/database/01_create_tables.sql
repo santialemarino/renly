@@ -82,21 +82,29 @@ CREATE TYPE user_plan AS ENUM (
   'pro'
 );
 
+CREATE TYPE auth_token_type AS ENUM (
+  'email_verification',
+  'password_reset',
+  'email_change'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
 
 -- Users table
--- Very few records (2-3 trusted family users). Passwords hashed with bcrypt.
+-- Passwords hashed with bcrypt. email_verified_at is NULL until the user confirms their address
+-- via the AUTH-1 verification link (login is gated on it); it is set on verification or email change.
 CREATE TABLE users (
-  id            BIGSERIAL PRIMARY KEY,
-  name          VARCHAR(255) NOT NULL,
-  email         VARCHAR(255) NOT NULL UNIQUE,
-  password_hash VARCHAR(255) NOT NULL,
-  session_epoch BIGINT NOT NULL DEFAULT 0,
-  plan          user_plan NOT NULL DEFAULT 'free',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                BIGSERIAL PRIMARY KEY,
+  name              VARCHAR(255) NOT NULL,
+  email             VARCHAR(255) NOT NULL UNIQUE,
+  password_hash     VARCHAR(255) NOT NULL,
+  email_verified_at TIMESTAMPTZ,
+  session_epoch     BIGINT NOT NULL DEFAULT 0,
+  plan              user_plan NOT NULL DEFAULT 'free',
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Investments table
@@ -503,6 +511,26 @@ CREATE TABLE user_settings (
 
 CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
 
+-- Auth tokens (AUTH-1/2/8): single-use, time-limited tokens for email verification, password
+-- reset, and email change. Only the SHA-256 hash of the high-entropy raw token is stored — the
+-- raw value lives only in the emailed link. consumed_at enforces single use; expires_at bounds the
+-- validity window. new_email holds the pending address for email_change tokens (NULL otherwise).
+-- Timestamps are TIMESTAMP WITHOUT TIME ZONE (naive UTC) because the service compares them against
+-- naive utcnow() (the SQLModel datetime mapping), so the driver must round-trip them as naive.
+CREATE TABLE auth_tokens (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash  VARCHAR(64) NOT NULL UNIQUE,
+  token_type  auth_token_type NOT NULL,
+  new_email   VARCHAR(255),
+  expires_at  TIMESTAMP NOT NULL,
+  consumed_at TIMESTAMP,
+  created_at  TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX idx_auth_tokens_user_id ON auth_tokens(user_id);
+CREATE INDEX idx_auth_tokens_user_type ON auth_tokens(user_id, token_type);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -689,6 +717,15 @@ CREATE POLICY api_keys_user_isolation ON api_keys
 
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY user_settings_user_isolation ON user_settings
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+-- auth_tokens are owned via user_id. Every flow that touches this table runs on the privileged
+-- session and bypasses RLS: the pre-auth flows (verify-email/reset confirm, forgot-password) have no
+-- user context, and the authenticated email-change request uses the privileged session so its
+-- target-address availability check can see other accounts. This per-user policy is therefore
+-- defense-in-depth — no request-session path inserts or reads here.
+ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY auth_tokens_user_isolation ON auth_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 -- investment_group_members is a pure junction (composite PK, no surrogate user column).

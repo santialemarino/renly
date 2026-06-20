@@ -4,6 +4,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 
+from app.models.auth_token import AuthTokenType
 from app.models.user import UserPlan
 from app.schemas.base import RequestBase
 
@@ -40,3 +41,34 @@ class MeResponse(BaseModel):
     email: str = Field(description="User email.")
     name: str = Field(description="User display name.")
     plan: UserPlan = Field(description="Plan tier (free or pro).")
+    email_verified: bool = Field(description="Whether the email address has been verified.")
+
+
+# Body for POST /auth/verify-email/request and POST /auth/forgot-password. Identifies the address to
+# (re)send a verification or reset email to; the response is uniform whether or not it has an account.
+class EmailActionRequest(RequestBase):
+    email: NormalizedEmail = Field(description="Email address to act on (normalized to lowercase).")
+
+
+# Body for POST /auth/verify-email/confirm. Confirms an email-verification or email-change token.
+class ConfirmEmailRequest(RequestBase):
+    token: str = Field(description="Raw token from the emailed verification link.")
+
+
+# Body for POST /auth/reset-password. Sets a new password from a reset token.
+class ResetPasswordRequest(RequestBase):
+    token: str = Field(description="Raw token from the emailed reset link.")
+    password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="New plain password (will be hashed); minimum 12 characters.")
+
+
+# Uniform response for register / verify-request / forgot-password / change-email. Carries no
+# account-existence signal — only a generic acknowledgement message.
+class MessageResponse(BaseModel):
+    detail: str = Field(description="Generic acknowledgement message.")
+
+
+# Response for POST /auth/verify-email/confirm. token_type lets the web tailor its confirmation copy
+# (a fresh verification vs an email change).
+class ConfirmEmailResponse(BaseModel):
+    detail: str = Field(description="Human-readable confirmation message.")
+    token_type: AuthTokenType = Field(description="Which flow the token completed (email_verification or email_change).")

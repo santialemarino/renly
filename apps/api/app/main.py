@@ -12,9 +12,12 @@ from app.config import Settings
 from app.config import settings as default_settings
 from app.domain import (
     CurrencyChangeBlockedError,
+    EmailNotVerifiedError,
     ExchangeRateUnavailableError,
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
+    InvalidCredentialsError,
+    InvalidTokenError,
     NotFoundError,
     PasswordBreachedError,
     PlanRequiredError,
@@ -36,6 +39,7 @@ from app.routers import (
     income,
     installments,
     investments,
+    me,
     metrics,
     payment_obligations,
     payments_calendar,
@@ -71,6 +75,18 @@ async def installment_locked_field_handler(_request: Request, exc: InstallmentLo
         status_code=400,
         content={"detail": exc.message, "code": exc.code, "fields": exc.fields},
     )
+
+
+async def email_not_verified_handler(_request: Request, exc: EmailNotVerifiedError):
+    return JSONResponse(status_code=403, content={"detail": exc.message})
+
+
+async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsError):
+    return JSONResponse(status_code=401, content={"detail": exc.message})
+
+
+async def invalid_token_handler(_request: Request, exc: InvalidTokenError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
 async def not_found_exception_handler(_request: Request, exc: NotFoundError):
@@ -144,6 +160,7 @@ _ROUTERS = (
     income.router,
     installments.router,
     investments.router,
+    me.router,
     metrics.router,
     payment_obligations.router,
     payments_calendar.router,
@@ -154,8 +171,11 @@ _ROUTERS = (
 
 _EXCEPTION_HANDLERS = {
     CurrencyChangeBlockedError: currency_change_blocked_handler,
+    EmailNotVerifiedError: email_not_verified_handler,
     HasLinkedExpensesError: has_linked_expenses_handler,
     InstallmentLockedFieldError: installment_locked_field_handler,
+    InvalidCredentialsError: invalid_credentials_handler,
+    InvalidTokenError: invalid_token_handler,
     NotFoundError: not_found_exception_handler,
     PasswordBreachedError: password_breached_handler,
     PlanRequiredError: plan_required_handler,

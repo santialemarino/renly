@@ -1,18 +1,23 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
-import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import { signupFormSchema, type SignupFormData } from '@/app/(auth)/signup/form-schema';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
-import { ROUTES } from '@/config/routes';
-import { EmailTakenError, registerRequest } from '@/lib/auth-api';
+import {
+  Form,
+  FormControl,
+  FormError,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/form';
+import { PasswordMeter } from '@/components/password-meter';
+import { PasswordRejectedError, registerRequest } from '@/lib/auth-api';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,
   PASSWORD_CONTAINS_NUMBER_REGEX,
@@ -21,17 +26,14 @@ import {
   PASSWORD_MIN_LENGTH,
 } from '@/lib/constants/form';
 
-const REDIRECT_DELAY_MS = 1500;
-
 interface SignupFormProps {
-  onSuccess: () => void;
+  onSuccess: (email: string) => void;
   onError: () => void;
 }
 
 export function SignupForm({ onSuccess, onError }: SignupFormProps) {
   const t = useTranslations('signup');
   const tCommon = useTranslations('common');
-  const router = useRouter();
 
   const form = useForm<SignupFormData>({
     defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
@@ -55,27 +57,14 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
 
   const onSubmit = async (data: SignupFormData) => {
     try {
+      // Anti-enumeration: the API returns the same response whether or not the email is taken, so
+      // there is no auto-login — the user verifies via the emailed link, then logs in.
       await registerRequest({ name: data.name, email: data.email, password: data.password });
-
-      const res = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
-        callbackUrl: ROUTES.home,
-      });
-
-      if (res?.ok) {
-        onSuccess();
-        await new Promise((resolve) => setTimeout(resolve, REDIRECT_DELAY_MS));
-        router.push(ROUTES.home);
-      } else {
-        onError();
-        form.setError('root', { message: tCommon('form.errors.serverError') });
-      }
+      onSuccess(data.email);
     } catch (err) {
       onError();
-      if (err instanceof EmailTakenError) {
-        form.setError('email', { message: t('form.errors.emailTaken') });
+      if (err instanceof PasswordRejectedError) {
+        form.setError('password', { message: t('form.errors.passwordRejected') });
       } else {
         form.setError('root', { message: tCommon('form.errors.serverError') });
       }
@@ -85,7 +74,7 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
   return (
     <Form {...form}>
       <form
-        className="flex flex-col px-6 gap-y-6"
+        className="flex flex-col px-6 gap-y-8"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
       >
@@ -172,13 +161,9 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
               </FormItem>
             )}
           />
-        </div>
 
-        {form.formState.errors.root && (
-          <p className="text-paragraph-sm text-destructive text-center">
-            {form.formState.errors.root.message}
-          </p>
-        )}
+          <FormError message={form.formState.errors.root?.message} />
+        </div>
 
         <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
