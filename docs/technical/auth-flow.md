@@ -22,13 +22,23 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 3. Looks up user by email on the **privileged session** (`DATABASE_ADMIN_URL`) — the lookup is pre-auth, so it bypasses the `users` RLS policy (SEC-15). Verifies password with `bcrypt.checkpw()`.
 4. Returns 401 if user not found or password mismatch.
 5. Returns **403** (`EmailNotVerifiedError`) if the password is correct but `email_verified_at` is null — the email must be verified first (AUTH-1). Accounts created before email verification existed were grandfathered as verified by the `0004` migration, so they are unaffected.
-6. Generates JWT and returns `{access_token, expires_in}`.
+6. Generates a short-lived access token (JWT) **and** issues a refresh token (AUTH-7), returning `{access_token, expires_in, refresh_token, refresh_expires_in}`. `remember_me: true` in the body gives the refresh token the long window; otherwise it gets the short one (see Refresh below).
+
+### Refresh / session continuity (AUTH-7)
+
+The access token is short-lived (`JWT_EXPIRE_MINUTES`, default 30 min); a **rotating refresh token** keeps the session alive without re-login. `POST /auth/refresh` `{refresh_token}` returns a fresh `{access_token, expires_in, refresh_token, refresh_expires_in}`.
+
+- **Storage:** refresh tokens live in their own `refresh_tokens` table, mirroring `auth_tokens` — only the **SHA-256 hash** of the high-entropy raw token (`secrets.token_urlsafe(32)`) is stored. Each row carries a `family_id` (one login's rotation lineage), the `session_epoch` it was minted under, `remember_me`, `expires_at`, and `consumed_at`/`revoked_at`.
+- **Rotation + reuse-detection:** refresh is single-use. A valid token is marked `consumed_at` and its successor minted in the same family. Re-presenting an already-consumed token within a short grace window (30 s) is treated as a benign replay and returns a fresh rotation (this absorbs NextAuth's App-Router races, where middleware refreshes for the response while the same request's RSC tree still holds the pre-rotation cookie); **beyond** the grace window it is treated as theft and the **whole family is revoked**.
+- **Revocation tied to `session_epoch`:** a refresh only succeeds when the token's `session_epoch` still matches the user's. Any epoch bump (logout, password reset, password/email change) therefore invalidates every outstanding refresh token, exactly like it invalidates access tokens.
+- **Lifetimes:** `remember_me` selects the (sliding) window — `REFRESH_TOKEN_REMEMBER_DAYS` (30 d) for a remembered login, `REFRESH_TOKEN_DEFAULT_HOURS` (12 h) otherwise. When the refresh token itself expires, the user logs in again.
+- **Session:** `/auth/refresh` is pre-auth (it carries a refresh token, not an access token), so it runs on the **privileged session** like login. Returns **401** when the token is unknown, expired, revoked, reused, or epoch-stale. A per-login `delete_expired_by_user` purge keeps the table tidy across logins; a global periodic purge of expired rows is a follow-up (INFRA-10).
 
 ### Logout
 
 1. `POST /auth/logout` (requires auth).
 2. Increments `user.session_epoch` by 1 and saves.
-3. All existing JWTs for that user become invalid (their `session_epoch` claim no longer matches).
+3. All existing JWTs for that user become invalid (their `session_epoch` claim no longer matches), and so do all outstanding refresh tokens (their `session_epoch` no longer matches on the next `/auth/refresh`).
 
 ### Me
 
@@ -59,7 +69,7 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 - `GET /me/export` — returns the user's full data set as a downloadable JSON document (`Content-Disposition: attachment`). Excludes the password hash and api-key hashes/prefixes.
 - `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
 
-`auth_tokens` is under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches it runs on the privileged (owner) session and bypasses RLS — the pre-auth flows have no user context, and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policy is defense-in-depth (SEC-15).
+`auth_tokens` (and `refresh_tokens`, AUTH-7) are under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches them runs on the privileged (owner) session and bypasses RLS — the pre-auth flows have no user context (login issues a refresh token before any request-session context exists; `/auth/refresh` carries a refresh token, not an access token), and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policies are defense-in-depth (SEC-15).
 
 ## JWT structure
 
@@ -74,11 +84,13 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 
 **Configuration** (from `app/config.py`, sourced from `.env`):
 
-| Setting              | Default  | Description                                |
-| -------------------- | -------- | ------------------------------------------ |
-| `JWT_SECRET`         | required | Signing key (must match `NEXTAUTH_SECRET`) |
-| `JWT_ALGORITHM`      | `HS256`  | HMAC-SHA256                                |
-| `JWT_EXPIRE_MINUTES` | `10080`  | 7 days                                     |
+| Setting                       | Default  | Description                                         |
+| ----------------------------- | -------- | --------------------------------------------------- |
+| `JWT_SECRET`                  | required | Signing key (must match `NEXTAUTH_SECRET`)          |
+| `JWT_ALGORITHM`               | `HS256`  | HMAC-SHA256                                         |
+| `JWT_EXPIRE_MINUTES`          | `30`     | Access token lifetime (short; refreshed via AUTH-7) |
+| `REFRESH_TOKEN_REMEMBER_DAYS` | `30`     | Refresh token lifetime for a "remember me" login    |
+| `REFRESH_TOKEN_DEFAULT_HOURS` | `12`     | Refresh token lifetime for an ordinary login        |
 
 **Signing:** `jose.jwt.encode(payload, secret, algorithm="HS256")`.
 
@@ -158,12 +170,14 @@ Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WI
 ### Login flow
 
 ```
-User submits email + password
+User submits email + password (+ "Remember me")
   → NextAuth Credentials.authorize()
-  → loginRequest(email, password)        // POST /auth/login → {access_token, expires_in}
-  → meRequest(access_token)              // GET /auth/me → {uid, email, name, plan, email_verified}
-  → returns User object to NextAuth with accessToken + expiresIn
+  → loginRequest(email, password, rememberMe)  // POST /auth/login → {access_token, expires_in, refresh_token, refresh_expires_in}
+  → meRequest(access_token)                     // GET /auth/me → {uid, email, name, plan, email_verified}
+  → returns User object to NextAuth with accessToken + expiresIn + refreshToken + refreshExpiresIn
 ```
+
+The login form has a **Remember me** checkbox (in the row beside "Forgot your password?"); its value is passed through `signIn` → `authorize` → `loginRequest` so the backend sizes the refresh-token window.
 
 Login can also fail with **403** when the email isn't verified yet (`loginRequest` returns null for any non-OK status, so NextAuth surfaces a generic credentials error); the login page links to **Forgot password** and signup users land on a "check your email" screen they can resend from.
 
@@ -175,11 +189,9 @@ Login can also fail with **403** when the email isn't verified yet (`loginReques
 
 ### JWT callback
 
-On initial sign-in, stores `uid`, `email`, `name`, `accessToken`, and `accessTokenExpires` (computed as `Date.now() + expiresIn * 1000`) in the NextAuth JWT.
+On initial sign-in, stores `uid`, `email`, `name`, `accessToken`, `accessTokenExpires` (computed as `Date.now() + expiresIn * 1000`), `refreshToken`, and `refreshTokenExpires` in the NextAuth JWT. The refresh token stays **inside the encrypted NextAuth JWT and is never exposed to the session** (the client only ever sees the access token).
 
-On subsequent requests, checks if `accessTokenExpires` has passed. If expired, sets `error: 'SessionExpired'` on the token to force re-login.
-
-There is no token refresh — when the backend JWT expires, the user must log in again.
+On subsequent requests, if the access token is still valid (with a 60 s skew) the token is returned unchanged. Otherwise the callback **silently renews** it via `refreshRequest(refreshToken)` → `POST /auth/refresh`, storing the new access token + the rotated refresh token. The renewal runs on every navigation through the NextAuth middleware (`proxy.ts`). Only when there is no usable refresh token, or the backend rejects it (expired / revoked / reused / epoch-stale → 401), does the callback set `error: 'SessionExpired'`, which the authorized callback turns into a redirect to login.
 
 ### Session callback
 
@@ -223,8 +235,8 @@ userSignOut()                    // server action in auth.ts
 - Registration requires a 12-character minimum password and rejects passwords found in the HIBP Pwned Passwords corpus (queried via k-anonymity; the breach check fails open on HIBP outage).
 - bcrypt uses `gensalt()` which defaults to 12 rounds.
 - `JWT_SECRET` and `NEXTAUTH_SECRET` **must be the same value** — the backend signs tokens that NextAuth stores and the backend later validates.
-- No refresh token mechanism — expiry forces full re-login.
-- `session_epoch` provides immediate token revocation on logout without a blocklist.
+- **Refresh tokens (AUTH-7):** a short access token is paired with a rotating, single-use refresh token (stored as a SHA-256 hash in `refresh_tokens`). Rotation + reuse-detection means a stolen-and-replayed token (outside a 30 s grace window) revokes the whole family; the access token is only useful for `JWT_EXPIRE_MINUTES`. The refresh token is held only inside the encrypted NextAuth JWT, never exposed to the client session. See **Refresh / session continuity** above.
+- `session_epoch` provides immediate token revocation on logout without a blocklist — it invalidates outstanding **access and refresh** tokens alike (a refresh only succeeds while its minted-at epoch matches the user's).
 - `trustHost: true` is set in NextAuth config (required for non-Vercel deployments).
 - **Rate limiting (SEC-1):** all routes share a global default limit, with tighter per-route limits on the credential-accepting auth endpoints (`POST /auth/login`, `POST /auth/register`) to slow brute-force and account-flooding. The limiter keys by authenticated user id when a valid bearer token is present, otherwise by client IP; exceeding a limit returns a generic `429` with a `Retry-After` header. The client IP is the connection peer by default; when deployed behind a reverse proxy set `TRUSTED_PROXY_COUNT` to the proxy hop count so the real client IP is read from `X-Forwarded-For` (otherwise every client collapses onto the proxy address and shares one bucket). In-memory storage for now (single instance) — swap to Redis when scaling out. Configured in `app/rate_limit.py`.
 - **Registration never reveals which emails have accounts** (AUTH-5, completed in M2): a uniform `202` for every attempt, with a verification link emailed to a new address and a "you already have an account" notice to an existing one. The same uniform-response treatment covers `verify-email/request`, `forgot-password`, and `change-email`. Account emails go through a swappable `EmailService` port (`EMAIL_PROVIDER`: `console`/`resend`); single-use, time-limited tokens are stored as SHA-256 hashes in `auth_tokens`. Email verification gates login; password reset and password change bump `session_epoch` to invalidate existing sessions.

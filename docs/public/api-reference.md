@@ -8,16 +8,17 @@ Base URL: `/api` (all paths below are relative to this).
 
 ## Authentication
 
-| Method | Path                         | Description                                                                             |
-| ------ | ---------------------------- | --------------------------------------------------------------------------------------- |
-| `POST` | `/auth/register`             | Create a new account. Always returns a uniform `202`; a verification email is sent.     |
-| `POST` | `/auth/login`                | Sign in with email and password. Returns a JWT. `403` if the email is not yet verified. |
-| `POST` | `/auth/logout`               | Sign out. Invalidates all existing tokens for the user.                                 |
-| `GET`  | `/auth/me`                   | Returns the current authenticated user (id, name, email, plan, email_verified).         |
-| `POST` | `/auth/verify-email/request` | (Re)send the email-verification link. Uniform `202`.                                    |
-| `POST` | `/auth/verify-email/confirm` | Confirm a verification or email-change token. Body: `{ token }`.                        |
-| `POST` | `/auth/forgot-password`      | Send a password-reset link. Uniform `202`.                                              |
-| `POST` | `/auth/reset-password`       | Set a new password from a reset token. Body: `{ token, password }`. Kills sessions.     |
+| Method | Path                         | Description                                                                                                                                                           |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/auth/register`             | Create a new account. Always returns a uniform `202`; a verification email is sent.                                                                                   |
+| `POST` | `/auth/login`                | Sign in with email and password. Returns an access token + a refresh token. `remember_me: true` makes the session long-lived. `403` if the email is not yet verified. |
+| `POST` | `/auth/refresh`              | Exchange a refresh token for a new access token (and a rotated refresh token). Body: `{ refresh_token }`. `401` if it is expired, revoked, or reused.                 |
+| `POST` | `/auth/logout`               | Sign out. Invalidates all existing tokens for the user.                                                                                                               |
+| `GET`  | `/auth/me`                   | Returns the current authenticated user (id, name, email, plan, email_verified).                                                                                       |
+| `POST` | `/auth/verify-email/request` | (Re)send the email-verification link. Uniform `202`.                                                                                                                  |
+| `POST` | `/auth/verify-email/confirm` | Confirm a verification or email-change token. Body: `{ token }`.                                                                                                      |
+| `POST` | `/auth/forgot-password`      | Send a password-reset link. Uniform `202`.                                                                                                                            |
+| `POST` | `/auth/reset-password`       | Set a new password from a reset token. Body: `{ token, password }`. Kills sessions.                                                                                   |
 
 ### Account self-service (`/me`)
 
