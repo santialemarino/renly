@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_JWT_SECRET_LENGTH = 32
@@ -11,6 +11,13 @@ MIN_JWT_SECRET_LENGTH = 32
 class Environment(StrEnum):
     development = "development"
     production = "production"
+
+
+# Transactional email provider (SHELL-3). console logs the message (local dev / tests); resend
+# sends via the Resend HTTP API. Swappable behind the EmailService port without code changes.
+class EmailProvider(StrEnum):
+    console = "console"
+    resend = "resend"
 
 
 class Settings(BaseSettings):
@@ -35,6 +42,14 @@ class Settings(BaseSettings):
     # is spoof-resistant; set it to the real proxy/LB hop count in production or per-IP limits collapse
     # onto the proxy address. Must match the deployment — too high lets clients spoof their rate-limit key.
     trusted_proxy_count: int = 0
+    # Transactional email (SHELL-3). Provider selector + credentials; console (default) logs the
+    # message for local dev, resend sends via the Resend API (api key + verified sender required).
+    email_provider: EmailProvider = EmailProvider.console
+    email_api_key: str | None = None
+    email_from: str = "Renly <onboarding@resend.dev>"
+    # Public base URL of the web app, used to build the links embedded in account emails
+    # (verification, password reset). No trailing slash.
+    web_base_url: str = "http://localhost:3000"
 
     # Rejects a missing or weak JWT secret at startup; a short/guessable secret makes every token forgeable.
     @field_validator("jwt_secret")
@@ -51,6 +66,14 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
         return value
+
+    # Rejects the resend email provider without an API key at startup; otherwise account emails
+    # (verification, reset) would silently fail to send once the app is live.
+    @model_validator(mode="after")
+    def _validate_email_provider(self) -> "Settings":
+        if self.email_provider == EmailProvider.resend and not self.email_api_key:
+            raise ValueError("email_api_key is required when email_provider is 'resend'.")
+        return self
 
     # Privileged DB URL for context-less work; falls back to the request URL when not configured.
     @property

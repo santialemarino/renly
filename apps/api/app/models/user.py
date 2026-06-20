@@ -22,6 +22,7 @@ class User(SQLModel, table=True):
     name: str = Field(max_length=255, description="Display name.")
     email: str = Field(max_length=255, unique=True, description="Unique email.")
     password_hash: str = Field(max_length=255, description="Bcrypt hash.")
+    email_verified_at: datetime | None = Field(default=None, description="When the email was verified; NULL = unverified (AUTH-1).")
     session_epoch: int = Field(default=0, description="Bumped on logout; JWT must match.")
     plan: UserPlan = Field(sa_column=Column(SAEnum(UserPlan, name="user_plan"), nullable=False, server_default="free"))
     created_at: datetime = Field(default_factory=utcnow)

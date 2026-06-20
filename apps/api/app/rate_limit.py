@@ -16,6 +16,11 @@ DEFAULT_LIMIT = "100/minute"
 # Tight limits for credential-accepting auth routes (brute-force / account-flood defense).
 LOGIN_LIMIT = "5/minute"
 REGISTER_LIMIT = "3/hour"
+# Tight limits on email-dispatching account routes (anti-abuse: each call can send an email).
+VERIFY_EMAIL_LIMIT = "5/hour"
+FORGOT_PASSWORD_LIMIT = "5/hour"
+RESET_PASSWORD_LIMIT = "10/hour"
+CHANGE_EMAIL_LIMIT = "5/hour"
 
 
 # Resolves the client IP to throttle by. When trusted_proxy_count is 0 the app is reached directly,

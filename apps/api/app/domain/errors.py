@@ -34,6 +34,27 @@ class InstallmentLockedFieldError(Exception):
         super().__init__(self.message)
 
 
+# Email address has not been verified yet; login (or a gated action) is blocked. Mapped to 403 by the API.
+class EmailNotVerifiedError(Exception):
+    def __init__(self, message: str = "Please verify your email address before logging in.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
+# Re-authentication failed (wrong current password) on a sensitive action. Mapped to 401 by the API.
+class InvalidCredentialsError(Exception):
+    def __init__(self, message: str = "The password you entered is incorrect.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
+# An account-lifecycle token is invalid, expired, or already used (AUTH-1/2/8). Mapped to 400 by the API.
+class InvalidTokenError(Exception):
+    def __init__(self, message: str = "This link is invalid or has expired. Please request a new one.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
 # Resource not found or not owned by the current user. Mapped to 404 by the API.
 class NotFoundError(Exception):
     def __init__(self, message: str = "Not found") -> None:

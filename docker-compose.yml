@@ -32,6 +32,10 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ALGORITHM=${JWT_ALGORITHM}
       - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES}
+      - WEB_BASE_URL=${WEB_BASE_URL}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER}
+      - EMAIL_API_KEY=${EMAIL_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
 
   web:
     container_name: renly-web

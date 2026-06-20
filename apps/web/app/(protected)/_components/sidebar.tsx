@@ -25,6 +25,7 @@ import {
   SlidersHorizontal,
   Table2,
   TrendingUp,
+  UserCog,
   Wallet,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -75,6 +76,7 @@ const PORTFOLIO_GROUP = [
 ] as const;
 
 const SETTINGS_GROUP = [
+  { key: 'account', href: ROUTES.account, icon: UserCog },
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
   { key: 'alerts', href: ROUTES.alerts, icon: Bell },
   { key: 'localization', href: ROUTES.localization, icon: Globe },
