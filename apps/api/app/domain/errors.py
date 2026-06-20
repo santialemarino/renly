@@ -48,6 +48,13 @@ class InvalidCredentialsError(Exception):
         super().__init__(message)
 
 
+# A refresh token is unknown, expired, revoked, or reused (AUTH-7). Mapped to 401 by the API.
+class InvalidRefreshTokenError(Exception):
+    def __init__(self, message: str = "Your session has expired. Please log in again.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
 # An account-lifecycle token is invalid, expired, or already used (AUTH-1/2/8). Mapped to 400 by the API.
 class InvalidTokenError(Exception):
     def __init__(self, message: str = "This link is invalid or has expired. Please request a new one.") -> None:

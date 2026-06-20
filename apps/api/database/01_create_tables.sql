@@ -531,6 +531,31 @@ CREATE TABLE auth_tokens (
 CREATE INDEX idx_auth_tokens_user_id ON auth_tokens(user_id);
 CREATE INDEX idx_auth_tokens_user_type ON auth_tokens(user_id, token_type);
 
+-- Refresh tokens (AUTH-7)
+-- Long-lived, rotating refresh token for silent access-token renewal ("remember me"). Issued
+-- alongside the access token at login and rotated single-use on every /auth/refresh: each refresh
+-- consumes the presented token and mints its successor in the same family. Only the SHA-256 hash of
+-- the high-entropy raw token is stored. family_id groups one login's rotation lineage; re-presenting
+-- a consumed token (outside a short grace window) is treated as theft and revokes the whole family.
+-- session_epoch is the user's epoch at mint time — a later bump (logout / password change) makes the
+-- token invalid. remember_me selects the (sliding) validity window. Timestamps are TIMESTAMP WITHOUT
+-- TIME ZONE (naive UTC) to match the service's naive utcnow() comparisons.
+CREATE TABLE refresh_tokens (
+  id            BIGSERIAL PRIMARY KEY,
+  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash    VARCHAR(64) NOT NULL UNIQUE,
+  family_id     VARCHAR(32) NOT NULL,
+  session_epoch BIGINT NOT NULL,
+  remember_me   BOOLEAN NOT NULL,
+  expires_at    TIMESTAMP NOT NULL,
+  consumed_at   TIMESTAMP,
+  revoked_at    TIMESTAMP,
+  created_at    TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_refresh_tokens_family ON refresh_tokens(family_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -726,6 +751,14 @@ CREATE POLICY user_settings_user_isolation ON user_settings
 -- defense-in-depth — no request-session path inserts or reads here.
 ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY auth_tokens_user_isolation ON auth_tokens
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+-- refresh_tokens are owned via user_id. Like auth_tokens, every flow that touches this table runs on
+-- the privileged session and bypasses RLS: login issues a token before any request-session context
+-- exists, and /auth/refresh is pre-auth (it carries a refresh token, not an access token). This
+-- per-user policy is therefore defense-in-depth — no request-session path inserts or reads here.
+ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
+CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 -- investment_group_members is a pure junction (composite PK, no surrogate user column).

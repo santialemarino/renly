@@ -26,13 +26,21 @@ class RegisterRequest(RequestBase):
 class LoginRequest(RequestBase):
     email: NormalizedEmail = Field(description="User email (normalized to lowercase).")
     password: str = Field(description="Plain password.")
+    remember_me: bool = Field(default=False, description="When true, the refresh token gets the long 'remember me' window so the session persists.")
 
 
-# Response for login and register. Contains JWT and expiry.
+# Body for POST /auth/refresh. Exchanges a refresh token for a new access token (AUTH-7).
+class RefreshRequest(RequestBase):
+    refresh_token: str = Field(description="The refresh token returned by login or a prior refresh.")
+
+
+# Response for login and refresh. Carries the access token plus the rotating refresh token (AUTH-7).
 class TokenResponse(BaseModel):
     access_token: str = Field(description="Signed JWT for Authorization header.")
     token_type: str = Field(default="bearer", description="Token type (bearer).")
-    expires_in: int = Field(description="Token lifetime in seconds.")
+    expires_in: int = Field(description="Access token lifetime in seconds.")
+    refresh_token: str = Field(description="Opaque refresh token; exchange at POST /auth/refresh for a new access token.")
+    refresh_expires_in: int = Field(description="Refresh token lifetime in seconds.")
 
 
 # Response for GET /auth/me. Current authenticated user info.

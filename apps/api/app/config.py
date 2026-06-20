@@ -32,7 +32,14 @@ class Settings(BaseSettings):
     database_admin_url: str | None = None
     jwt_secret: str
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 10080
+    # Access token lifetime. Kept short (AUTH-7): the web silently exchanges the refresh token for a
+    # new access token when this expires, so a stolen access token is only useful briefly.
+    jwt_expire_minutes: int = 30
+    # Refresh token lifetimes (AUTH-7). A "remember me" login gets the long window; an ordinary login
+    # the short one. Both slide on each rotation. When the refresh token itself expires, the user must
+    # log in again.
+    refresh_token_remember_days: int = 30
+    refresh_token_default_hours: int = 12
     environment: Environment = Environment.development
     # Allowed CORS origins, comma-separated in the env (e.g. "https://app.renly.com,https://renly.com").
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
