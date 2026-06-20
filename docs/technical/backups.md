@@ -1,34 +1,14 @@
 # Backups & Restore
 
 Renly's data lives in a single PostgreSQL database, so backups are the last line of defense
-against data loss. There are **two layers** (SHELL-4 / INFRA-4):
-
-1. **Supabase automated backups** — the managed platform's built-in backups (enabled at go-live).
-2. **`pg_dump` backstop** — a self-managed logical dump (`pnpm db:backup`) that runs on a schedule
-   and is portable to any Postgres, independent of the hosting provider.
-
-Both point at the same database. The backstop exists so a restore never depends solely on the
-provider's console, and so dumps can be pulled off-platform.
+against data loss. The repo provides a **`pg_dump`-based backup + a rehearsed restore** that works
+against any PostgreSQL, independent of the hosting provider, so a restore never depends on a
+specific platform's console. If the managed Postgres host chosen at go-live also offers its own
+automated backups (daily snapshots / point-in-time recovery), enable those as an additional layer.
 
 ---
 
-## Layer 1 — Supabase automated backups
-
-At go-live, the database is hosted on Supabase. Enable backups in the Supabase dashboard
-(**Database → Backups**):
-
-- **Daily backups** are included on paid tiers; retention depends on the plan.
-- **Point-in-time recovery (PITR)** is the stronger option (restore to any second within the
-  retention window) and is recommended once there are real users.
-- Restores are performed from the Supabase dashboard (new project / restore-in-place per their
-  flow). Follow Supabase's restore docs for the exact steps for the active plan.
-
-Supabase backups are managed entirely on the platform — there is nothing to configure in this
-repo for them beyond turning them on.
-
----
-
-## Layer 2 — `pg_dump` backstop (`pnpm db:backup`)
+## Backup (`pnpm db:backup`)
 
 A compressed logical dump created with a throwaway `postgres:16-alpine` container (no host
 `pg_dump` needed). Output goes to `backups/renly-<YYYYMMDD-HHMMSS>.sql.gz` (the `backups/`
@@ -53,12 +33,12 @@ BACKUP_DATABASE_URL='postgresql://OWNER:PASS@HOST:PORT/DB' pnpm db:backup
 The dump uses `--no-owner --no-acl --clean --if-exists`, making it portable to a fresh Postgres
 (ownership/role grants are not embedded — see the role caveat under Restore).
 
-### Scheduling the backstop (production)
+### Scheduling (production)
 
 Run `pnpm db:backup` on a schedule on the host (e.g. a daily cron job or the platform's scheduled
 task), with `BACKUP_DATABASE_URL` set to the production owner URL, and copy the resulting
-`backups/*.sql.gz` to off-platform storage (e.g. object storage). This is a backstop to the
-Supabase backups, not a replacement for them.
+`backups/*.sql.gz` to off-platform storage (e.g. object storage). Treat this as the primary,
+host-independent backup; any provider-native backups complement it.
 
 ---
 
