@@ -719,9 +719,11 @@ ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY user_settings_user_isolation ON user_settings
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
--- auth_tokens are owned via user_id. The pre-auth flows (verify-email/reset confirm, forgot-password)
--- look up by token_hash on the privileged session (no user context, bypasses RLS); the authenticated
--- email-change request creates its token on the request session, where this policy permits its own row.
+-- auth_tokens are owned via user_id. Every flow that touches this table runs on the privileged
+-- session and bypasses RLS: the pre-auth flows (verify-email/reset confirm, forgot-password) have no
+-- user context, and the authenticated email-change request uses the privileged session so its
+-- target-address availability check can see other accounts. This per-user policy is therefore
+-- defense-in-depth — no request-session path inserts or reads here.
 ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY auth_tokens_user_isolation ON auth_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());

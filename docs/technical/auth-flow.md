@@ -59,7 +59,7 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 - `GET /me/export` — returns the user's full data set as a downloadable JSON document (`Content-Disposition: attachment`). Excludes the password hash and api-key hashes/prefixes.
 - `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
 
-`auth_tokens` is under RLS keyed on `user_id` like every other user-owned table; the pre-auth flows operate on the privileged (owner) session, the authenticated email-change request creates its token on the request session where the policy permits the user's own row (SEC-15).
+`auth_tokens` is under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches it runs on the privileged (owner) session and bypasses RLS — the pre-auth flows have no user context, and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policy is defense-in-depth (SEC-15).
 
 ## JWT structure
 
