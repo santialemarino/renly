@@ -22,6 +22,20 @@ def _settings(**overrides) -> Settings:
     return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **overrides)
 
 
+# Stub HIBP breach check (no network) — treats every password as clean.
+async def _not_breached(_plain: str) -> bool:
+    return False
+
+
+# Fake email adapter recording the messages it would send instead of hitting a provider.
+class _FakeEmailService:
+    def __init__(self, sent: list) -> None:
+        self._sent = sent
+
+    async def send(self, message) -> None:
+        self._sent.append(message)
+
+
 # Builds a TestClient over a fresh app, stubbing the DB session so auth routes need no database.
 def _client(*, settings: Settings | None = None, existing_user: User | None = None) -> TestClient:
     app = create_app(settings or _settings())
@@ -33,6 +47,9 @@ def _client(*, settings: Settings | None = None, existing_user: User | None = No
     class _Session:
         async def execute(self, *args, **kwargs):
             return _Result()
+
+        async def commit(self):
+            return None
 
     async def _fake_session():
         yield _Session()
@@ -199,19 +216,26 @@ class TestClientIpResolution:
         assert client_ip(_request(forwarded, "10.0.0.1")) == "1.2.3.4"
 
 
-# --- AUTH-5 (M1 part): register no longer leaks email existence via a bare 409 ---
+# --- AUTH-5 (completed in M2): register returns a uniform 202 and never leaks email existence ---
 
 
 class TestRegisterAntiEnumeration:
-    def test_duplicate_email_returns_generic_400_not_409(self):
+    def test_duplicate_email_returns_uniform_202(self, monkeypatch):
+        # No network: stub the HIBP breach check and the email send.
+        monkeypatch.setattr("app.services.auth_service.is_password_breached", _not_breached)
+        sent: list = []
+        monkeypatch.setattr("app.services.auth_service.get_email_service", lambda: _FakeEmailService(sent))
+
         existing = User(id=1, name="Santi", email="taken@example.com", password_hash="hash")
         client = _client(existing_user=existing)
         response = client.post(
             "/auth/register",
             json={"name": "Santi", "email": "taken@example.com", "password": _PASSWORD},
         )
-        assert response.status_code == 400
-        # The body must not confirm the address is registered.
+        assert response.status_code == 202
+        # The body must not confirm the address is registered — just a generic acknowledgement.
         body = response.json()
-        assert body == {"detail": "Registration could not be completed."}
         assert "registered" not in body["detail"].lower()
+        # The existing address is emailed the "you already have an account" notice, not a leak.
+        assert len(sent) == 1
+        assert sent[0].to == "taken@example.com"

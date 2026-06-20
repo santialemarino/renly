@@ -23,8 +23,14 @@ export function LoginCard() {
         <CardHeader>
           <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-y-4">
           <LoginForm />
+          <a
+            href={ROUTES.auth.forgotPassword}
+            className="self-center hover:underline text-paragraph-sm-medium text-blue-700"
+          >
+            {t('form.forgotPassword')}
+          </a>
         </CardContent>
         <CardFooter className="justify-center gap-x-1 text-paragraph-sm text-muted-foreground">
           <span>{t('form.signup.title')}</span>

@@ -1,6 +1,6 @@
 # Renly API Reference
 
-All endpoints require authentication via a Bearer token (JWT) in the `Authorization` header, except for `POST /auth/register` and `POST /auth/login`. Some endpoints also accept API key authentication (see API Keys section).
+All endpoints require authentication via a Bearer token (JWT) in the `Authorization` header, except for the pre-auth endpoints under `/auth` (register, login, email verification, and password reset). Some endpoints also accept API key authentication (see API Keys section).
 
 Base URL: `/api` (all paths below are relative to this).
 
@@ -8,14 +8,29 @@ Base URL: `/api` (all paths below are relative to this).
 
 ## Authentication
 
-| Method | Path             | Description                                                     |
-| ------ | ---------------- | --------------------------------------------------------------- |
-| `POST` | `/auth/register` | Create a new account. Returns a JWT.                            |
-| `POST` | `/auth/login`    | Sign in with email and password. Returns a JWT.                 |
-| `POST` | `/auth/logout`   | Sign out. Invalidates all existing tokens for the user.         |
-| `GET`  | `/auth/me`       | Returns the current authenticated user (id, name, email, plan). |
+| Method | Path                         | Description                                                                             |
+| ------ | ---------------------------- | --------------------------------------------------------------------------------------- |
+| `POST` | `/auth/register`             | Create a new account. Always returns a uniform `202`; a verification email is sent.     |
+| `POST` | `/auth/login`                | Sign in with email and password. Returns a JWT. `403` if the email is not yet verified. |
+| `POST` | `/auth/logout`               | Sign out. Invalidates all existing tokens for the user.                                 |
+| `GET`  | `/auth/me`                   | Returns the current authenticated user (id, name, email, plan, email_verified).         |
+| `POST` | `/auth/verify-email/request` | (Re)send the email-verification link. Uniform `202`.                                    |
+| `POST` | `/auth/verify-email/confirm` | Confirm a verification or email-change token. Body: `{ token }`.                        |
+| `POST` | `/auth/forgot-password`      | Send a password-reset link. Uniform `202`.                                              |
+| `POST` | `/auth/reset-password`       | Set a new password from a reset token. Body: `{ token, password }`. Kills sessions.     |
 
-Registration requires a valid email address and a password of at least 12 characters that has not appeared in a known public data breach. Emails are case-insensitive (`Foo@x.com` and `foo@x.com` are the same account).
+### Account self-service (`/me`)
+
+Authenticated; each sensitive action re-verifies the current password.
+
+| Method   | Path                  | Description                                                                                |
+| -------- | --------------------- | ------------------------------------------------------------------------------------------ |
+| `POST`   | `/me/change-password` | Change the password (verifies current). Bumps the session epoch.                           |
+| `POST`   | `/me/change-email`    | Request an email change; emails a confirmation link to the new address. Uniform `202`.     |
+| `GET`    | `/me/export`          | Download the user's full data set as a JSON file. Excludes password and API-key secrets.   |
+| `DELETE` | `/me`                 | Permanently delete the account. Body: `{ password, confirmation }` (confirmation = email). |
+
+Registration requires a valid email address and a password of at least 12 characters that has not appeared in a known public data breach. Emails are case-insensitive (`Foo@x.com` and `foo@x.com` are the same account). To protect privacy, registration, verification, password-reset, and email-change requests all return a **uniform response** that never reveals whether an email already has an account — the relevant message is emailed to the address instead. A new account must verify its email (via the emailed link) before it can log in.
 
 ---
 

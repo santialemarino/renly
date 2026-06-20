@@ -80,7 +80,15 @@
       "confirm": "Confirm",
       "loading": "Processing..."
     },
-    "nextCycleHint": "· next {date}"
+    "nextCycleHint": "· next {date}",
+    "checkEmail": {
+      "title": "Check your email",
+      "description": "We sent a verification link to {email}. Click it to activate your account.",
+      "resend": "Resend email",
+      "resending": "Sending…",
+      "resent": "Sent — check your inbox.",
+      "backToLogin": "Back to log in"
+    }
   },
   "login": {
     "metadata": {
@@ -107,7 +115,8 @@
       "signup": {
         "title": "Don't have an account?",
         "cta": "Sign up"
-      }
+      },
+      "forgotPassword": "Forgot your password?"
     }
   },
   "signup": {
@@ -142,7 +151,7 @@
         "cta": "Log in"
       },
       "errors": {
-        "emailTaken": "This email is already registered"
+        "passwordRejected": "This password can't be used. Please choose a different one."
       }
     },
     "redirecting": {
@@ -185,7 +194,8 @@
       "preferences": "Preferences",
       "alerts": "Alerts & limits",
       "localization": "Localization",
-      "integrations": "Integrations"
+      "integrations": "Integrations",
+      "account": "Account"
     },
     "navGroups": {
       "finances": "Finances",
@@ -1597,6 +1607,135 @@
         "step2": "When prompted, tap \"Add Shortcut\" to install it.",
         "step3": "Open the shortcut, enter your API URL and API key when prompted (first run only).",
         "step4": "Run the shortcut from your home screen, widget, or Siri."
+      }
+    }
+  },
+  "forgotPassword": {
+    "metadata": {
+      "title": "Forgot Password",
+      "description": "Reset your Renly password"
+    },
+    "title": "Reset your password",
+    "description": "Enter your email and we'll send you a link to reset your password.",
+    "sent": "If an account exists for that email, we've sent a password reset link. Check your inbox.",
+    "backToLogin": "Back to log in",
+    "form": {
+      "email": {
+        "label": "Email",
+        "placeholder": "Enter your email"
+      },
+      "cta": {
+        "label": "Send reset link",
+        "loading": "Sending…"
+      }
+    }
+  },
+  "resetPassword": {
+    "metadata": {
+      "title": "Reset Password",
+      "description": "Choose a new password"
+    },
+    "title": "Choose a new password",
+    "success": "Your password has been reset. You can now log in with your new password.",
+    "backToLogin": "Back to log in",
+    "form": {
+      "password": {
+        "label": "New password",
+        "placeholder": "Create a password"
+      },
+      "confirmPassword": {
+        "label": "Confirm password",
+        "placeholder": "Repeat your password"
+      },
+      "cta": {
+        "label": "Reset password",
+        "loading": "Resetting…"
+      },
+      "errors": {
+        "passwordRejected": "This password can't be used. Please choose a different one.",
+        "invalidToken": "This reset link is invalid or has expired. Please request a new one.",
+        "missingToken": "This reset link is invalid or has expired. Please request a new one."
+      }
+    }
+  },
+  "verifyEmail": {
+    "metadata": {
+      "title": "Verify Email",
+      "description": "Confirm your email address"
+    },
+    "title": "Email verification",
+    "loading": "Confirming your email…",
+    "goToLogin": "Go to log in",
+    "status": {
+      "verified": "Your email is verified. You can now log in.",
+      "changed": "Your new email address is confirmed. Please log in again.",
+      "error": "This link is invalid or has expired. Please request a new one."
+    }
+  },
+  "account": {
+    "metadata": {
+      "title": "Account",
+      "description": "Manage your account"
+    },
+    "title": "Account",
+    "subtitle": "Manage your email, password, and account data.",
+    "password": {
+      "title": "Password",
+      "description": "Change the password you use to log in.",
+      "currentLabel": "Current password",
+      "newLabel": "New password",
+      "confirmLabel": "Confirm new password",
+      "cta": {
+        "label": "Change password",
+        "loading": "Changing…"
+      },
+      "success": "Your password has been changed. Please log in again.",
+      "errors": {
+        "invalidCurrent": "The current password is incorrect.",
+        "rejected": "This password can't be used. Please choose a different one."
+      }
+    },
+    "email": {
+      "title": "Email address",
+      "current": "Current email: {email}",
+      "newLabel": "New email",
+      "placeholder": "Enter the new email",
+      "passwordLabel": "Current password",
+      "cta": {
+        "label": "Change email",
+        "loading": "Sending…"
+      },
+      "success": "If that address is available, we've sent a confirmation link to {email}.",
+      "errors": {
+        "invalidPassword": "The password is incorrect."
+      }
+    },
+    "danger": {
+      "title": "Danger zone",
+      "description": "Export your data or permanently delete your account.",
+      "export": {
+        "title": "Export your data",
+        "description": "Download all your Renly data as a JSON file.",
+        "label": "Export",
+        "loading": "Preparing…",
+        "success": "Your data export has been downloaded."
+      },
+      "delete": {
+        "title": "Delete account",
+        "description": "Permanently delete your account and all your data. This cannot be undone.",
+        "label": "Delete account",
+        "errors": {
+          "invalidPassword": "The password is incorrect."
+        },
+        "dialog": {
+          "title": "Delete your account?",
+          "description": "This permanently deletes your account and all associated data. This action cannot be undone.",
+          "passwordLabel": "Password",
+          "confirmLabel": "Type {email} to confirm",
+          "cancel": "Cancel",
+          "confirm": "Delete account",
+          "deleting": "Deleting…"
+        }
       }
     }
   }

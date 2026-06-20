@@ -107,3 +107,20 @@ The service fetches both in parallel (`asyncio.gather`). Selection: newer source
 3. Add it to the mapping (`_CATEGORY_PROVIDERS` or `EXCHANGE_RATE_PROVIDERS`).
 4. Update `CATEGORY_CAPABILITIES` in the frontend if it affects a category.
 5. No service or router changes needed.
+
+## Transactional email (SHELL-3)
+
+Account-lifecycle emails (verification, password reset, "you already have an account", email-change
+confirmation) go through the same port-and-adapter shape, in `services/email_service.py`:
+
+- **`EmailService`** — the port (abstract `send(EmailMessage)`).
+- **`ConsoleEmailService`** — logs the message to the API logs. Default for local dev / tests, so
+  the verification/reset links are visible without a real provider.
+- **`ResendEmailService`** — sends via the Resend HTTP API (`POST https://api.resend.com/emails`).
+- **`get_email_service()`** — the selector: returns the adapter for `EMAIL_PROVIDER` (`console` |
+  `resend`), cached. Resend requires `EMAIL_API_KEY` (validated at startup) and `EMAIL_FROM`.
+
+Message bodies are built by pure functions in `services/email_templates.py` (one per email type),
+each returning an `EmailMessage`. To swap providers, add an adapter and one branch in the selector;
+no caller changes. Emails are sent best-effort after the DB transaction commits (`auth_service._safe_send`),
+so a provider outage never blocks or de-uniforms the request — the user can re-request the email.
