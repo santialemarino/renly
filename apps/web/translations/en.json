@@ -80,7 +80,26 @@
       "confirm": "Confirm",
       "loading": "Processing..."
     },
-    "nextCycleHint": "· next {date}"
+    "nextCycleHint": "· next {date}",
+    "cookieConsent": {
+      "message": "Renly uses essential cookies to keep you signed in and remember your preferences. We don't use them for advertising or third-party tracking.",
+      "accept": "Got it",
+      "learnMore": "Privacy Policy"
+    },
+    "publicHeader": {
+      "login": "Log in",
+      "signup": "Sign up"
+    },
+    "publicFooter": {
+      "tagline": "Personal finance for Argentine investors.",
+      "disclaimerShort": "Renly is an informational tool and does not provide financial advice.",
+      "links": {
+        "privacy": "Privacy",
+        "terms": "Terms",
+        "disclaimer": "Disclaimer"
+      },
+      "rights": "All rights reserved."
+    }
   },
   "login": {
     "metadata": {
@@ -1599,5 +1618,225 @@
         "step4": "Run the shortcut from your home screen, widget, or Siri."
       }
     }
+  },
+  "landing": {
+    "metadata": {
+      "title": "Renly — Track your investments and master your money",
+      "description": "Renly is a personal finance app for Argentine investors. Track your portfolio across brokers, see accurate returns, and manage income and expenses in one place."
+    },
+    "hero": {
+      "title": "Your whole portfolio, finally in one place",
+      "subtitle": "Renly replaces your spreadsheet with something faster, smarter, and better-looking — built for investors juggling multiple Argentine brokers.",
+      "ctaPrimary": "Get started",
+      "ctaSecondary": "Log in"
+    },
+    "features": {
+      "title": "Why Renly",
+      "items": [
+        {
+          "title": "Fast data entry",
+          "description": "Batch entry, smart defaults, and automatic pricing mean less than 15 minutes a month keeps your portfolio current."
+        },
+        {
+          "title": "Visual clarity",
+          "description": "Actionable metrics, clean charts, and a dashboard that tells you what matters at a glance — better than any spreadsheet."
+        },
+        {
+          "title": "Numbers you can trust",
+          "description": "Time-weighted return (TWR) and internal rate of return (IRR) are implemented properly, not approximated."
+        },
+        {
+          "title": "Real Argentine context",
+          "description": "CEDEARs, ARS rates (oficial, MEP, blue), BYMA prices, and government bonds like AL30 and GD30 — none of this exists in US apps."
+        },
+        {
+          "title": "Built to grow",
+          "description": "From investments to income, expenses, subscriptions, and planning — each feature builds on the last without breaking anything."
+        }
+      ]
+    },
+    "howItWorks": {
+      "title": "How it works",
+      "steps": [
+        {
+          "title": "Add your investments",
+          "description": "Create entries for stocks, CEDEARs, term deposits, crypto, mutual funds, bonds, dollar positions, real estate, or anything else."
+        },
+        {
+          "title": "Prices update automatically",
+          "description": "Renly fetches prices for stocks, CEDEARs, crypto, and government bonds, so you never have to look them up yourself."
+        },
+        {
+          "title": "Capture monthly snapshots",
+          "description": "Each month the app records the value of every holding — automatically for ticker-linked investments, manually for the rest."
+        },
+        {
+          "title": "See your dashboard",
+          "description": "A unified view of total value, returns over time, and allocation. Switch between ARS, USD, BRL, EUR, and GBP with one click."
+        }
+      ]
+    },
+    "cta": {
+      "title": "Ready to ditch the spreadsheet?",
+      "subtitle": "Create your free account and see your whole financial picture in minutes.",
+      "button": "Create your account"
+    }
+  },
+  "privacy": {
+    "metadata": {
+      "title": "Privacy Policy",
+      "description": "How Renly collects, uses, and protects your personal and financial data."
+    },
+    "title": "Privacy Policy",
+    "lastUpdated": "Last updated: June 2026",
+    "intro": "This Privacy Policy explains how Renly (\"we\", \"us\") collects, uses, and protects your information when you use the Renly application. By using Renly, you agree to the practices described here.",
+    "sections": [
+      {
+        "heading": "Information we collect",
+        "paragraphs": [
+          "We collect the information you provide directly and the data needed to operate the service:"
+        ],
+        "items": [
+          "Account information: your name, email address, and a securely hashed password.",
+          "Financial data you enter: investments, snapshots, transactions, income, expenses, and related notes.",
+          "Preferences: currency, language, timezone, and display settings.",
+          "Technical data: basic logs and error reports needed to keep the service reliable and secure."
+        ]
+      },
+      {
+        "heading": "How we use your information",
+        "paragraphs": ["We use your information solely to provide and improve Renly:"],
+        "items": [
+          "To operate your account and display your portfolio and finances.",
+          "To calculate metrics such as returns and allocations.",
+          "To fetch market prices and exchange rates relevant to your holdings.",
+          "To maintain security, prevent abuse, and diagnose errors."
+        ]
+      },
+      {
+        "heading": "Data storage and security",
+        "paragraphs": [
+          "Your data is stored in a managed PostgreSQL database with per-user isolation enforced at the database level. Passwords are hashed, connections are encrypted in transit, and access is restricted. No method of transmission or storage is completely secure, but we take reasonable measures to protect your information."
+        ]
+      },
+      {
+        "heading": "Third-party services",
+        "paragraphs": [
+          "Renly relies on a small number of third-party providers to operate, including hosting and database infrastructure, market-data and exchange-rate providers, and error monitoring. These providers process only the data necessary for their function. We do not sell your personal data."
+        ]
+      },
+      {
+        "heading": "Your rights",
+        "paragraphs": [
+          "You can access and update your data from within the app at any time. You may request a copy of your data or the deletion of your account by contacting us. Deleting your account removes your personal and financial data from the active database."
+        ]
+      },
+      {
+        "heading": "Changes to this policy",
+        "paragraphs": [
+          "We may update this Privacy Policy as the product evolves. Material changes will be reflected by the date above. Continued use of Renly after an update constitutes acceptance of the revised policy."
+        ]
+      },
+      {
+        "heading": "Contact",
+        "paragraphs": [
+          "For privacy questions or requests, you can reach us through the contact channel associated with your Renly account."
+        ]
+      }
+    ]
+  },
+  "terms": {
+    "metadata": {
+      "title": "Terms of Service",
+      "description": "The terms governing your use of the Renly application."
+    },
+    "title": "Terms of Service",
+    "lastUpdated": "Last updated: June 2026",
+    "intro": "These Terms of Service (\"Terms\") govern your access to and use of Renly. By creating an account or using the app, you agree to these Terms.",
+    "sections": [
+      {
+        "heading": "Acceptance of terms",
+        "paragraphs": [
+          "By accessing or using Renly you confirm that you can form a binding contract and agree to be bound by these Terms and our Privacy Policy. If you do not agree, do not use the service."
+        ]
+      },
+      {
+        "heading": "The service",
+        "paragraphs": [
+          "Renly is a personal finance and investment-tracking tool. It helps you record and visualize your holdings, income, and expenses. Renly is provided on an \"as is\" and \"as available\" basis and may change over time, especially during its current beta period."
+        ]
+      },
+      {
+        "heading": "Your account",
+        "paragraphs": [
+          "You are responsible for keeping your login credentials confidential and for all activity under your account. You agree to provide accurate information and to notify us of any unauthorized use."
+        ]
+      },
+      {
+        "heading": "Acceptable use",
+        "paragraphs": [
+          "You agree not to misuse the service, including by attempting to access other users' data, disrupting the service, reverse-engineering it, or using it for unlawful purposes."
+        ]
+      },
+      {
+        "heading": "Not financial advice",
+        "paragraphs": [
+          "Renly is an informational tool only. It does not provide investment, financial, tax, or legal advice, and nothing in the app should be interpreted as a recommendation to buy or sell any asset. Prices and metrics may be delayed, incomplete, or inaccurate. You are solely responsible for your financial decisions. See our full disclaimer for details."
+        ]
+      },
+      {
+        "heading": "Limitation of liability",
+        "paragraphs": [
+          "To the maximum extent permitted by law, Renly and its operators are not liable for any indirect, incidental, or consequential damages, or for any losses arising from your use of — or inability to use — the service, including decisions made based on data shown in the app."
+        ]
+      },
+      {
+        "heading": "Termination",
+        "paragraphs": [
+          "You may stop using Renly and delete your account at any time. We may suspend or terminate access if these Terms are violated or if necessary to protect the service or its users."
+        ]
+      },
+      {
+        "heading": "Changes to these terms",
+        "paragraphs": [
+          "We may update these Terms as the product evolves. Material changes will be reflected by the date above. Continued use after an update constitutes acceptance of the revised Terms."
+        ]
+      }
+    ]
+  },
+  "disclaimer": {
+    "metadata": {
+      "title": "Disclaimer",
+      "description": "Renly is an informational tool and does not provide financial advice."
+    },
+    "title": "Not Financial Advice",
+    "lastUpdated": "Last updated: June 2026",
+    "intro": "Renly is a tool for tracking and visualizing your personal finances. It is not a financial advisor, broker, or investment service.",
+    "sections": [
+      {
+        "heading": "Informational purposes only",
+        "paragraphs": [
+          "All content, metrics, charts, and figures in Renly are provided for informational and organizational purposes only. They do not constitute investment, financial, tax, accounting, or legal advice, and must not be relied upon as such."
+        ]
+      },
+      {
+        "heading": "No recommendations",
+        "paragraphs": [
+          "Renly does not recommend any security, asset, strategy, or transaction. Any decision to buy, sell, or hold an asset is yours alone. Consider seeking advice from a qualified professional before making financial decisions."
+        ]
+      },
+      {
+        "heading": "Accuracy of data",
+        "paragraphs": [
+          "Prices, exchange rates, and calculated metrics are sourced from third parties and computed automatically. They may be delayed, incomplete, or incorrect. Renly does not guarantee the accuracy, completeness, or timeliness of any data and is not responsible for losses resulting from reliance on it."
+        ]
+      },
+      {
+        "heading": "Your responsibility",
+        "paragraphs": [
+          "You are solely responsible for verifying any information before acting on it and for all financial decisions you make. Past performance shown in the app is not indicative of future results."
+        ]
+      }
+    ]
   }
 }

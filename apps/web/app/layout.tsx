@@ -7,6 +7,7 @@ import { getLocale, getMessages } from 'next-intl/server';
 import { Toaster } from 'sonner';
 
 import { cn } from '@repo/ui/lib';
+import { CookieConsent } from '@/components/cookie-consent';
 import { siteConfig } from '@/config/site';
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default async function RootLayout({
       >
         <NextIntlClientProvider messages={messages}>
           {children}
+          <CookieConsent />
           <Toaster richColors />
         </NextIntlClientProvider>
       </body>
