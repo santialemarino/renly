@@ -8,6 +8,7 @@ from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
 from app.rate_limit import client_ip, limiter
+from app.services import auth_service
 
 # Perimeter-hardening coverage for the M1 bundle: rate limiting + 429 (SEC-1), docs lockdown
 # (SEC-7), catch-all 500 handler (SEC-8), env-driven CORS (SEC-9), request body-size limit
@@ -75,6 +76,16 @@ class TestRateLimiting:
         client = _client()
         # The global default is 100/min; /health must stay reachable well past it for uptime checks.
         assert all(client.get("/health").status_code == 200 for _ in range(110))
+
+    def test_successful_login_returns_token_with_ratelimit_headers(self):
+        # Regression: with headers_enabled the limiter injects X-RateLimit-* into the response, so a
+        # rate-limited route must expose a Response param — otherwise a *successful* login 500s.
+        user = User(id=1, name="Santi", email="me@example.com", session_epoch=0, password_hash=auth_service.hash_password(_PASSWORD))
+        client = _client(existing_user=user)
+        response = client.post("/auth/login", json={"email": "me@example.com", "password": _PASSWORD})
+        assert response.status_code == 200
+        assert response.json()["access_token"]
+        assert response.headers.get("x-ratelimit-limit") is not None
 
 
 # --- SEC-7: docs lockdown in production ---
