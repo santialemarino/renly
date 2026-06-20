@@ -44,7 +44,7 @@ export function PillToggleGroup({
           key={item.value}
           value={item.value}
           className={cn(
-            'border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-[pulse-scale_0.3s_ease-in-out]',
+            'border-0 data-[state=on]:bg-blue-800 data-[state=on]:text-white transition-all duration-200 focus-visible:outline-none focus-visible:bg-accent focus-visible:animate-pulse-scale',
             itemClassName,
           )}
         >

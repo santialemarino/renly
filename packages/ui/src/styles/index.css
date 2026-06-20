@@ -90,6 +90,8 @@
   }
 }
 
+/* Animations below are shared design-system animations: reusable affordances (focus-bump family, pulse-scale) + shared primitives like the Collapsible. App/dependency-specific one-offs live in apps/web/app/globals.css. */
+
 /* Focus bump animation */
 @keyframes focus-bump {
   0%,
@@ -134,6 +136,23 @@
 
 @utility animate-focus-bump-subtle {
   animation: focus-bump-subtle 0.3s ease-in-out;
+}
+
+/* Pulse-scale focus-visible feedback for toggle/segmented items (scales down, then back). */
+@keyframes pulse-scale {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@utility animate-pulse-scale {
+  animation: pulse-scale 0.3s ease-in-out;
 }
 
 /* Collapsible expand/collapse animations (used by Radix Collapsible) */

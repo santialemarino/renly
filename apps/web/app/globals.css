@@ -1,28 +1,8 @@
-/* App global styles: Tailwind + shared UI design system + app-only overrides */
-@import 'tailwindcss';
-@import 'tw-animate-css';
-
+/* App global styles: app/dependency-specific one-offs (e.g. the Recharts focus treatment). Reusable design-system animations live in packages/ui/src/styles/index.css. */
+/* Tailwind, tw-animate-css, theme tokens, and the shared @utility animations are all built into @repo/ui/styles (the single Tailwind entry); do not re-import them here or they double-emit. */
 @import '@repo/ui/styles';
-@import '@repo/ui/theme';
 
-@custom-variant dark (&:is(.dark *));
-
-@plugin "@tailwindcss/typography";
-
-/* Pulse-scale animation for focus-visible feedback on toggle items */
-@keyframes pulse-scale {
-  0% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(0.95);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-/* Subtle pulse-scale for chart focus (less visible than the toggle pulse-scale). */
+/* Subtle pulse-scale for chart focus (less visible than the toggle pulse-scale in @repo/ui). */
 @keyframes pulse-scale-subtle {
   0% {
     transform: scale(1);
@@ -35,7 +15,8 @@
   }
 }
 
-/* Replace browser focus outline on Recharts elements with a subtle scale animation. */
+/* Replace the browser focus outline on Recharts elements with a subtle scale animation. */
+/* Recharts renders its own DOM (no React node to attach a className to), so a raw selector is the right tool here rather than a Tailwind @utility. */
 .recharts-wrapper:focus,
 .recharts-wrapper:focus-visible,
 .recharts-wrapper *:focus,
