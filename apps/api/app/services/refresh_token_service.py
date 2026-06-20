@@ -47,8 +47,12 @@ def _ttl_for(remember_me: bool) -> timedelta:
 
 
 # Mints one token in a family and persists it (flushes; caller commits). Shared by login (a new
-# family) and rotation (the presented token's family). Returns the raw token for the client.
+# family) and rotation (the presented token's family). Purges the user's already-expired rows first,
+# so the table stays bounded across both flows — even a long-lived "remember me" session that rotates
+# for weeks without ever logging in again sheds its expired rows on each rotation. Returns the raw
+# token for the client.
 async def _mint(session: AsyncSession, user: User, family_id: str, remember_me: bool, now: datetime) -> IssuedRefreshToken:
+    await refresh_token_repository.delete_expired_by_user(session, user.id, now)
     ttl = _ttl_for(remember_me)
     raw_token = secrets.token_urlsafe(32)
     token = RefreshToken(
@@ -63,11 +67,10 @@ async def _mint(session: AsyncSession, user: User, family_id: str, remember_me: 
     return IssuedRefreshToken(raw_token=raw_token, expires_in=int(ttl.total_seconds()))
 
 
-# Starts a brand-new refresh-token family for a fresh login. Purges the user's expired tokens first
-# (hygiene across logins) and commits. Returns the raw token and its lifetime in seconds.
+# Starts a brand-new refresh-token family for a fresh login and commits. Returns the raw token and
+# its lifetime in seconds. (_mint purges the user's already-expired rows.)
 async def issue_refresh_token(session: AsyncSession, user: User, remember_me: bool) -> IssuedRefreshToken:
     now = utcnow()
-    await refresh_token_repository.delete_expired_by_user(session, user.id, now)
     issued = await _mint(session, user, uuid.uuid4().hex, remember_me, now)
     await session.commit()
     return issued

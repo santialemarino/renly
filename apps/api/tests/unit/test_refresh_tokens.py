@@ -122,6 +122,28 @@ class TestRotation:
         _u2, third = await refresh_token_service.rotate_refresh_token(FakeSession(), second.raw_token)
         assert third.raw_token not in (first.raw_token, second.raw_token)
 
+    @pytest.mark.asyncio
+    async def test_rotation_purges_the_users_expired_rows(self, wired):
+        user, tokens = wired
+        first = await refresh_token_service.issue_refresh_token(FakeSession(), user, remember_me=True)
+        # A stale, already-expired row for the same user (e.g. a long-running session that never
+        # logged in again): minting on rotation should shed it, keeping the table bounded.
+        tokens.tokens.append(
+            RefreshToken(
+                user_id=user.id,
+                token_hash="stale",
+                family_id="old",
+                session_epoch=user.session_epoch,
+                remember_me=True,
+                expires_at=utcnow() - timedelta(days=1),
+            )
+        )
+
+        await refresh_token_service.rotate_refresh_token(FakeSession(), first.raw_token)
+
+        assert all(t.token_hash != "stale" for t in tokens.tokens)  # the expired row is purged
+        assert any(t.consumed_at is None and t.revoked_at is None for t in tokens.tokens)  # live successor remains
+
 
 class TestReuseDetection:
     @pytest.mark.asyncio
