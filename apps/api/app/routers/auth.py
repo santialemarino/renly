@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.config import settings
 from app.deps.auth import CurrentUser
@@ -16,9 +16,11 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # The full always-uniform response + "you already have an account" email lands in M2 (SHELL-3).
 # Uses the privileged session: there is no user context yet, and the new row's id can't satisfy
 # the users RLS policy, so the insert + email lookup run as the owner (bypasses RLS) (SEC-15).
+# The unused `response` param is required by the rate limiter: with headers_enabled it injects
+# X-RateLimit-* into a Response, and without one a successful (model-returning) request 500s.
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit(REGISTER_LIMIT)
-async def register(request: Request, body: RegisterRequest, session: AdminSessionDep) -> TokenResponse:
+async def register(request: Request, response: Response, body: RegisterRequest, session: AdminSessionDep) -> TokenResponse:
     existing = await auth_service.get_user_by_email(session, body.email)
     if existing:
         raise HTTPException(
@@ -39,7 +41,7 @@ async def register(request: Request, body: RegisterRequest, session: AdminSessio
 # the users RLS policy (SEC-15).
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_LIMIT)
-async def login(request: Request, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
+async def login(request: Request, response: Response, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
     user = await auth_service.get_user_by_email(session, body.email)
     if not user or not auth_service.verify_password(body.password, user.password_hash):
         raise HTTPException(
