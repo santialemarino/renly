@@ -6,7 +6,7 @@ import { signIn } from 'next-auth/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
-import { Button, Input } from '@repo/ui/components';
+import { Button, Checkbox, Input } from '@repo/ui/components';
 import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
@@ -20,6 +20,7 @@ export function LoginForm() {
     defaultValues: {
       email: '',
       password: '',
+      rememberMe: false,
     },
     resolver: zodResolver(loginFormSchema(tCommon)),
   });
@@ -29,6 +30,7 @@ export function LoginForm() {
       const res = await signIn('credentials', {
         email: data.email,
         password: data.password,
+        rememberMe: data.rememberMe,
         redirect: false,
       });
 
@@ -94,7 +96,21 @@ export function LoginForm() {
             )}
           />
 
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <FormField
+              control={form.control}
+              name="rememberMe"
+              render={({ field }) => (
+                <FormItem className="flex-row items-center gap-x-2">
+                  <FormControl>
+                    <Checkbox blue checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="cursor-pointer text-paragraph-sm text-muted-foreground">
+                    {t('form.rememberMe')}
+                  </FormLabel>
+                </FormItem>
+              )}
+            />
             <AuthLink href={ROUTES.auth.forgotPassword}>{t('form.forgotPassword')}</AuthLink>
           </div>
         </div>
