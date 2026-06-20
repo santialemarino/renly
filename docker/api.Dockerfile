@@ -11,8 +11,14 @@ ENV PYTHONUNBUFFERED=1
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Dependencies
-COPY apps/api/pyproject.toml ./
+# Build the venv against the image's own Python (3.13). Without this, uv may download a managed
+# interpreter that lives outside /api/.venv and is therefore not copied into the runner stage,
+# leaving the venv's python symlink dangling so uvicorn can't start.
+ENV UV_PYTHON_DOWNLOADS=never \
+    UV_PYTHON_PREFERENCE=only-system
+
+# Dependencies (README is required because pyproject's `readme` field is read when building the project)
+COPY apps/api/pyproject.toml apps/api/README.md ./
 RUN uv sync --no-dev --no-editable
 
 # App
