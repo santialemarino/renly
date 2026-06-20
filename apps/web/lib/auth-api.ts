@@ -25,6 +25,8 @@ export interface TokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
+  refresh_token: string;
+  refresh_expires_in: number;
 }
 
 // Reads the API's `detail` message from an error response, falling back to a generic label.
@@ -53,11 +55,29 @@ export async function registerRequest(data: RegisterPayload): Promise<void> {
   if (!res.ok) throw new Error(await errorDetail(res, 'register_failed'));
 }
 
-export async function loginRequest(email: string, password: string): Promise<TokenResponse | null> {
+// Logs in (AUTH-7). `rememberMe` controls the refresh token's lifetime — a longer, persistent
+// session when checked. Returns the access + refresh tokens, or null for any non-OK status.
+export async function loginRequest(
+  email: string,
+  password: string,
+  rememberMe: boolean,
+): Promise<TokenResponse | null> {
   const res = await fetch(`${apiUrl}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, remember_me: rememberMe }),
+  });
+  if (!res.ok) return null;
+  return res.json() as Promise<TokenResponse>;
+}
+
+// Exchanges a refresh token for a fresh access token and a rotated refresh token (AUTH-7). Returns
+// null when the refresh token is rejected (expired, revoked, reused) so the caller forces re-login.
+export async function refreshRequest(refreshToken: string): Promise<TokenResponse | null> {
+  const res = await fetch(`${apiUrl}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: refreshToken }),
   });
   if (!res.ok) return null;
   return res.json() as Promise<TokenResponse>;

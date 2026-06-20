@@ -3,7 +3,45 @@ import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 
 import { AUTH_ROUTES, LOGIN_ROUTE } from '@/config/routes';
-import { loginRequest, meRequest } from '@/lib/auth-api';
+import { loginRequest, meRequest, refreshRequest } from '@/lib/auth-api';
+
+// Renew the access token slightly before it expires so a request never races a just-expired token.
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
+
+// Silently renews the access token using the refresh token (AUTH-7). Returns the token with fresh
+// access + rotated refresh values, or marks it errored (SessionExpired) so the user is sent to login
+// when there is no usable refresh token or the backend rejects it.
+async function refreshAccessToken(token: JWT): Promise<JWT> {
+  // Terminal failure: drop the (now useless) refresh token so later jwt() calls short-circuit here
+  // instead of firing another doomed /auth/refresh, and flag the session for the login redirect.
+  const expired: JWT = {
+    ...token,
+    refreshToken: undefined,
+    refreshTokenExpires: undefined,
+    error: 'SessionExpired',
+  };
+
+  if (
+    !token.refreshToken ||
+    (typeof token.refreshTokenExpires === 'number' && Date.now() >= token.refreshTokenExpires)
+  ) {
+    return expired;
+  }
+
+  const refreshed = await refreshRequest(token.refreshToken);
+  if (!refreshed) {
+    return expired;
+  }
+
+  return {
+    ...token,
+    accessToken: refreshed.access_token,
+    accessTokenExpires: Date.now() + refreshed.expires_in * 1000,
+    refreshToken: refreshed.refresh_token,
+    refreshTokenExpires: Date.now() + refreshed.refresh_expires_in * 1000,
+    error: undefined,
+  };
+}
 
 export const authConfig: NextAuthConfig = {
   pages: {
@@ -15,13 +53,16 @@ export const authConfig: NextAuthConfig = {
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
+        rememberMe: { label: 'Remember me', type: 'checkbox' },
       },
       authorize: async (credentials) => {
         const email = credentials?.email as string;
         const password = credentials?.password as string;
         if (!email || !password) return null;
+        // signIn serializes credentials, so the boolean arrives as the string 'true'.
+        const rememberMe = credentials?.rememberMe === 'true' || credentials?.rememberMe === true;
 
-        const tokens = await loginRequest(email, password);
+        const tokens = await loginRequest(email, password, rememberMe);
         if (!tokens) return null;
 
         const me = await meRequest(tokens.access_token);
@@ -33,6 +74,8 @@ export const authConfig: NextAuthConfig = {
           name: me.name,
           accessToken: tokens.access_token,
           expiresIn: tokens.expires_in,
+          refreshToken: tokens.refresh_token,
+          refreshExpiresIn: tokens.refresh_expires_in,
         };
       },
     }),
@@ -63,20 +106,22 @@ export const authConfig: NextAuthConfig = {
         token.name = user.name as string;
         token.accessToken = user.accessToken;
         token.accessTokenExpires = Date.now() + (user.expiresIn as number) * 1000;
+        token.refreshToken = user.refreshToken;
+        token.refreshTokenExpires = Date.now() + (user.refreshExpiresIn as number) * 1000;
         return token;
       }
 
-      // Token still valid
+      // Access token still valid — nothing to do.
       if (
         token.accessToken &&
         typeof token.accessTokenExpires === 'number' &&
-        Date.now() < token.accessTokenExpires
+        Date.now() < token.accessTokenExpires - ACCESS_TOKEN_REFRESH_SKEW_MS
       ) {
         return token;
       }
 
-      // Expired, force re-login
-      return { ...token, error: 'SessionExpired' as const };
+      // Access token expired (or about to) — silently renew it with the refresh token (AUTH-7).
+      return refreshAccessToken(token);
     },
     async session({ session, token }: { session: Session; token: JWT }) {
       const expiresInSeconds = Math.max(

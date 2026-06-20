@@ -68,8 +68,8 @@
     monospace;
 
   /* Widths */
-  --width-auth-form: 20rem; /* 320px */
-  --max-width-auth-form: 20rem; /* 320px */
+  --width-auth-form: 24rem; /* 384px */
+  --max-width-auth-form: 24rem; /* 384px */
 
   /* Spacing */
   --spacing-safe-bottom: env(safe-area-inset-bottom, 44px);

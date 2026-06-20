@@ -15,6 +15,7 @@ export const loginFormSchema = (t: ReturnType<typeof useTranslations>) =>
       .max(PASSWORD_MAX_LENGTH, {
         message: t('form.errors.passwordMaxLength', { length: PASSWORD_MAX_LENGTH }),
       }),
+    rememberMe: z.boolean(),
   });
 
 export type LoginFormData = z.infer<ReturnType<typeof loginFormSchema>>;

@@ -50,6 +50,12 @@ def _client(*, settings: Settings | None = None, existing_user: User | None = No
         async def execute(self, *args, **kwargs):
             return _Result()
 
+        def add(self, _obj):
+            return None  # login now persists a refresh token (AUTH-7); no real DB here
+
+        async def flush(self):
+            return None
+
         async def commit(self):
             return None
 

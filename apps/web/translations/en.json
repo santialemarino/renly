@@ -133,6 +133,7 @@
         "title": "Don't have an account?",
         "cta": "Sign up"
       },
+      "rememberMe": "Remember me",
       "forgotPassword": "Forgot your password?"
     }
   },
