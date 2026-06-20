@@ -8,14 +8,16 @@ interface AuthLinkProps {
   children: React.ReactNode;
 }
 
-// Shared auth link with an underline that animates in/out on hover (text-decoration-color
-// transitions via transition-colors), keeping every auth-surface link visually consistent.
+// Shared auth link, consistent across the whole auth surface. Hover reveals an animated underline
+// (text-decoration-color transitions in/out). Keyboard focus replaces the default browser outline
+// with the small scale "bump" used elsewhere in the app (search-input / currency-combobox), so
+// focus reads distinct from hover. inline-block lets the transform apply without layout shift.
 export function AuthLink({ href, className, children }: AuthLinkProps) {
   return (
     <Link
       href={href}
       className={cn(
-        'text-paragraph-sm-medium text-blue-700 underline decoration-transparent underline-offset-2 transition-colors duration-200 ease-out hover:decoration-blue-700',
+        'inline-block text-paragraph-sm-medium text-blue-700 underline decoration-transparent underline-offset-2 outline-none transition-all duration-200 ease-out hover:decoration-blue-700 focus-visible:scale-105',
         className,
       )}
     >

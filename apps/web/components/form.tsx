@@ -72,7 +72,7 @@ function FormItem({ className, ...props }: React.ComponentProps<'div'>) {
   const id = React.useId();
   return (
     <FormItemContext.Provider value={{ id }}>
-      <div data-slot="form-item" className={cn('grid gap-y-2', className)} {...props} />
+      <div data-slot="form-item" className={cn('flex flex-col gap-y-2', className)} {...props} />
     </FormItemContext.Provider>
   );
 }
@@ -132,25 +132,60 @@ function FormDescription({ className, ...props }: React.ComponentProps<'p'>) {
 function FormMessage({ className, children }: { className?: string; children?: React.ReactNode }) {
   const { error, formMessageId } = useFormField();
   const body = error ? String(error?.message ?? '') : children;
-  // Key by content so different error messages animate as separate elements;
-  // height transitions on enter/exit handle one-line vs multi-line sizing
-  // without needing a `layout` prop, which interrupted badly under rapid toggles.
+  // Key by content so a changed message animates as a separate element. `mode="wait"` keeps the
+  // exiting message in normal flow while its height collapses to 0, so clearing an error smoothly
+  // pushes the fields below up instead of snapping (which popLayout caused by popping it out of
+  // flow); message-to-message swaps play sequentially (old collapses, then new expands).
   const key = typeof body === 'string' ? body : 'message';
   return (
-    <AnimatePresence mode="popLayout" initial={false}>
+    <AnimatePresence mode="wait" initial={false}>
       {body && (
-        <motion.p
+        <motion.div
           key={key}
-          data-slot="form-message"
-          id={formMessageId}
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: 'auto' }}
           exit={{ opacity: 0, height: 0 }}
           transition={{ duration: ANIMATION_DEFAULT }}
-          className={cn('overflow-hidden text-destructive text-paragraph-xs', className)}
+          // marginTop: -8 cancels the FormItem's flex gap-y-2 (8px); the inner pt-2 restores that gap
+          // as padding *inside* the height-animated, overflow-hidden box — so clearing the error
+          // collapses with no residual gap or first-frame snap (matches the snapshot/payment dialogs).
+          style={{ overflow: 'hidden', marginTop: -8 }}
         >
-          {body}
-        </motion.p>
+          <p
+            data-slot="form-message"
+            id={formMessageId}
+            className={cn('pt-2 text-destructive text-paragraph-xs', className)}
+          >
+            {body}
+          </p>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Form-level (root) error, animated identically to FormMessage so submit/server errors enter and
+// clear with the same smooth height collapse — no layout snap. For errors not tied to one field.
+// Expects a `flex flex-col gap-y-5` (20px) parent — the marginTop/pt cancel that gap (see FormMessage).
+function FormError({ message, className }: { message?: string; className?: string }) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {message && (
+        <motion.div
+          key={message}
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: ANIMATION_DEFAULT }}
+          style={{ overflow: 'hidden', marginTop: -20 }}
+        >
+          <p
+            data-slot="form-error"
+            className={cn('pt-5 text-destructive text-paragraph-sm text-center', className)}
+          >
+            {message}
+          </p>
+        </motion.div>
       )}
     </AnimatePresence>
   );
@@ -163,6 +198,7 @@ export {
   FormLabel,
   FormControl,
   FormDescription,
+  FormError,
   FormMessage,
   FormField,
 };

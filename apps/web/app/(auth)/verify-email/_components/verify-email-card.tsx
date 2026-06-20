@@ -47,8 +47,8 @@ export function VerifyEmailCard({ token }: VerifyEmailCardProps) {
     <motion.div className="w-full max-w-auth-form" {...FADE_PROPS}>
       <Card>
         {status === 'loading' ? (
-          <div className="flex flex-col items-center px-6 gap-y-6 text-center">
-            <div className="size-12 rounded-full border-4 border-muted border-t-blue-600 animate-spin" />
+          <div className="flex flex-col items-center px-6 gap-y-5 text-center">
+            <div className="size-10 rounded-full border-4 border-muted border-t-blue-600 animate-spin" />
             <p className="text-paragraph-sm text-muted-foreground">{t('loading')}</p>
           </div>
         ) : (

@@ -83,11 +83,12 @@
     "nextCycleHint": "· next {date}",
     "checkEmail": {
       "title": "Check your email",
-      "description": "We sent a verification link to {email}. Click it to activate your account.",
+      "description": "If {email} can be used, we've sent it a message with what to do next. Open it to continue, and check your spam folder if it's not in your inbox.",
       "resend": "Resend email",
       "resending": "Sending…",
       "resent": "Sent — check your inbox.",
-      "backToLogin": "Back to log in"
+      "backToLogin": "Back to log in",
+      "resendIn": "Resend in {seconds}s"
     }
   },
   "login": {
@@ -1617,7 +1618,7 @@
     },
     "title": "Reset your password",
     "description": "Enter your email and we'll send you a link to reset your password.",
-    "sent": "If an account exists for that email, we've sent a password reset link. Check your inbox.",
+    "sent": "If {email} has an account, we've sent it a password reset link. Open it to choose a new password, and check your spam folder if it's not in your inbox.",
     "backToLogin": "Back to log in",
     "form": {
       "email": {

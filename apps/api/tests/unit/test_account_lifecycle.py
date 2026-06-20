@@ -233,6 +233,25 @@ class TestPasswordReset:
         with pytest.raises(InvalidTokenError):
             await auth_service.reset_password(FakeSession(), verification_raw, _NEW_PASSWORD)
 
+    @pytest.mark.asyncio
+    async def test_reissuing_a_reset_link_invalidates_the_previous_one(self, wired):
+        # Requesting a second reset link must invalidate the first (only the latest works); merely
+        # loading the reset page does not consume the token (no API call on page load).
+        users, _tokens, email = wired
+        await users.create(None, User(name="S", email="r@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
+        await auth_service.request_password_reset(FakeSession(), "r@example.com")
+        first_raw = _token_from(email.sent[0])
+        await auth_service.request_password_reset(FakeSession(), "r@example.com")
+        second_raw = _token_from(email.sent[1])
+
+        # The first (superseded) link no longer works...
+        with pytest.raises(InvalidTokenError):
+            await auth_service.reset_password(FakeSession(), first_raw, _NEW_PASSWORD)
+        # ...the latest one does, and is then single-use.
+        await auth_service.reset_password(FakeSession(), second_raw, _NEW_PASSWORD)
+        with pytest.raises(InvalidTokenError):
+            await auth_service.reset_password(FakeSession(), second_raw, _NEW_PASSWORD)
+
 
 # --- Change email (AUTH-8) ---
 

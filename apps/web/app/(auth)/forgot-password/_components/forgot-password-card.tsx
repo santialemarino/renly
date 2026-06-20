@@ -22,7 +22,15 @@ import {
   forgotPasswordFormSchema,
   type ForgotPasswordFormData,
 } from '@/app/(auth)/forgot-password/form-schema';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import {
+  Form,
+  FormControl,
+  FormError,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/form';
 import { ROUTES } from '@/config/routes';
 import { forgotPasswordRequest } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -37,7 +45,7 @@ const FADE_PROPS = {
 export function ForgotPasswordCard() {
   const t = useTranslations('forgotPassword');
   const tCommon = useTranslations('common');
-  const [submitted, setSubmitted] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
   const form = useForm<ForgotPasswordFormData>({
     defaultValues: { email: '' },
@@ -48,7 +56,7 @@ export function ForgotPasswordCard() {
     try {
       await forgotPasswordRequest(data.email);
       // Uniform: always show the "sent" state so account existence isn't revealed.
-      setSubmitted(true);
+      setSubmittedEmail(data.email);
     } catch {
       form.setError('root', { message: tCommon('form.errors.serverError') });
     }
@@ -56,7 +64,7 @@ export function ForgotPasswordCard() {
 
   return (
     <AnimatePresence mode="wait">
-      {!submitted ? (
+      {!submittedEmail ? (
         <motion.div key="form" {...FADE_PROPS} className="w-full max-w-auth-form">
           <Card>
             <CardHeader>
@@ -91,11 +99,7 @@ export function ForgotPasswordCard() {
                         </FormItem>
                       )}
                     />
-                    {form.formState.errors.root && (
-                      <p className="text-paragraph-sm text-destructive text-center">
-                        {form.formState.errors.root.message}
-                      </p>
-                    )}
+                    <FormError message={form.formState.errors.root?.message} />
                   </div>
 
                   <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
@@ -116,7 +120,7 @@ export function ForgotPasswordCard() {
               icon={MailCheck}
               tone="info"
               title={t('sentTitle')}
-              description={t('sent')}
+              description={t('sent', { email: submittedEmail })}
             >
               <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
             </AuthStatusScreen>

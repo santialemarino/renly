@@ -96,11 +96,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
             className={cn(
-              'absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all hover:scale-105',
+              // Bump (scale-110) on both hover and focus-visible — matches the icon-button idiom in
+              // search-input / currency-combobox and replaces the default browser focus outline.
+              // The color shift is hover-only (animated via transition-all) so hover reads distinct
+              // from keyboard focus; the blue eye darkens blue-800→blue-900 like the blue button.
+              'absolute right-2.5 top-1/2 -translate-y-1/2 cursor-pointer transition-all outline-none hover:scale-110 focus-visible:scale-110',
               hasError
                 ? 'text-destructive'
                 : blue || blueEye
-                  ? 'text-blue-800'
+                  ? 'text-blue-800 hover:text-blue-900'
                   : 'text-muted-foreground hover:text-foreground',
             )}
           >

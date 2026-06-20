@@ -11,7 +11,9 @@ _SECRET = "x" * 32
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(database_url=_DB_URL, jwt_secret=_SECRET, **overrides)
+    # _env_file=None keeps these hermetic — independent of the developer's local apps/api/.env
+    # (which may set EMAIL_PROVIDER=resend), so the provider-selector tests assert the code defaults.
+    return Settings(_env_file=None, database_url=_DB_URL, jwt_secret=_SECRET, **overrides)
 
 
 # --- Provider selector ---
