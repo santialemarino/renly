@@ -23,6 +23,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@repo/ui": "workspace:*",
+    "@sentry/nextjs": "^10.59.0",
     "class-variance-authority": "0.7.1",
     "currency-codes": "^2.2.0",
     "date-fns": "^4.1.0",

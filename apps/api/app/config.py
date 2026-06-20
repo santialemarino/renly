@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # is spoof-resistant; set it to the real proxy/LB hop count in production or per-IP limits collapse
     # onto the proxy address. Must match the deployment — too high lets clients spoof their rate-limit key.
     trusted_proxy_count: int = 0
+    # Sentry error-tracking DSN (INFRA-5). When unset (default), Sentry is not initialized and the
+    # app sends nothing — so local dev, tests, and CI are unaffected. Set it (even on localhost) to
+    # start capturing errors; the environment tag is taken from the environment setting above.
+    sentry_dsn: str | None = None
 
     # Rejects a missing or weak JWT secret at startup; a short/guessable secret makes every token forgeable.
     @field_validator("jwt_secret")
