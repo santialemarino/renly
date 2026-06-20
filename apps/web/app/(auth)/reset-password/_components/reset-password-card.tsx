@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CircleCheck } from 'lucide-react';
-import { motion } from 'motion/react';
+import { CircleCheck, CircleX } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -16,6 +16,8 @@ import {
   CardTitle,
   Input,
 } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
+import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import { PasswordMeter } from '@/app/(auth)/_components/password-meter';
 import {
   resetPasswordFormSchema,
@@ -36,8 +38,11 @@ import {
 const FADE_PROPS = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
+  exit: { opacity: 0 },
   transition: { duration: ANIMATION_DEFAULT },
 };
+
+type Stage = 'form' | 'done' | 'error';
 
 interface ResetPasswordCardProps {
   token: string | null;
@@ -46,7 +51,8 @@ interface ResetPasswordCardProps {
 export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
   const t = useTranslations('resetPassword');
   const tCommon = useTranslations('common');
-  const [done, setDone] = useState(false);
+  // No token in the link → straight to the error screen; otherwise show the form.
+  const [stage, setStage] = useState<Stage>(token ? 'form' : 'error');
 
   const form = useForm<ResetPasswordFormData>({
     defaultValues: { password: '', confirmPassword: '' },
@@ -72,108 +78,119 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
     if (!token) return;
     try {
       await resetPasswordRequest(token, data.password);
-      setDone(true);
+      setStage('done');
     } catch (err) {
       if (err instanceof PasswordRejectedError) {
         form.setError('password', { message: t('form.errors.passwordRejected') });
       } else {
-        form.setError('root', { message: t('form.errors.invalidToken') });
+        // Invalid/expired token (or server error) — show the error screen with a way back.
+        setStage('error');
       }
     }
   };
 
   return (
-    <motion.div className="w-full max-w-auth-form" {...FADE_PROPS}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
-        </CardHeader>
+    <AnimatePresence mode="wait">
+      {stage === 'done' ? (
+        <motion.div key="done" {...FADE_PROPS} className="w-full max-w-auth-form">
+          <Card>
+            <AuthStatusScreen
+              icon={CircleCheck}
+              tone="success"
+              title={t('successTitle')}
+              description={t('success')}
+            >
+              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+            </AuthStatusScreen>
+          </Card>
+        </motion.div>
+      ) : stage === 'error' ? (
+        <motion.div key="error" {...FADE_PROPS} className="w-full max-w-auth-form">
+          <Card>
+            <AuthStatusScreen
+              icon={CircleX}
+              tone="error"
+              title={t('errorTitle')}
+              description={t('form.errors.invalidToken')}
+            >
+              <AuthLink href={ROUTES.auth.forgotPassword}>{t('requestNewLink')}</AuthLink>
+            </AuthStatusScreen>
+          </Card>
+        </motion.div>
+      ) : (
+        <motion.div key="form" {...FADE_PROPS} className="w-full max-w-auth-form">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-heading-4 text-center text-blue-800">
+                {t('title')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  className="flex flex-col px-6 gap-y-8"
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  noValidate
+                >
+                  <div className="flex flex-col gap-y-5">
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.password.label')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder={t('form.password.placeholder')}
+                              blueEye
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-        {done || !token ? (
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-2 gap-y-4 text-center">
-              {done && <CircleCheck className="size-12 text-green-500" />}
-              <p className="text-paragraph-sm text-muted-foreground">
-                {done ? t('success') : t('form.errors.missingToken')}
-              </p>
-            </div>
-          </CardContent>
-        ) : (
-          <CardContent>
-            <Form {...form}>
-              <form
-                className="flex flex-col gap-y-6"
-                onSubmit={form.handleSubmit(onSubmit)}
-                noValidate
-              >
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('form.password.label')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder={t('form.password.placeholder')}
-                          blueEye
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <PasswordMeter
+                      passingChecks={passingChecks}
+                      showErrors={form.formState.submitCount > 0}
+                    />
 
-                <PasswordMeter
-                  passingChecks={passingChecks}
-                  showErrors={form.formState.submitCount > 0}
-                />
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.confirmPassword.label')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder={t('form.confirmPassword.placeholder')}
+                              blueEye
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-                <FormField
-                  control={form.control}
-                  name="confirmPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('form.confirmPassword.label')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder={t('form.confirmPassword.placeholder')}
-                          blueEye
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {form.formState.errors.root && (
-                  <p className="text-paragraph-sm text-destructive text-center">
-                    {form.formState.errors.root.message}
-                  </p>
-                )}
-
-                <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        )}
-
-        <CardFooter className="justify-center text-paragraph-sm text-muted-foreground">
-          <a
-            href={ROUTES.auth.login}
-            className="hover:underline text-paragraph-sm-medium text-blue-700"
-          >
-            {t('backToLogin')}
-          </a>
-        </CardFooter>
-      </Card>
-    </motion.div>
+                  <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+            <CardFooter className="justify-center px-6 text-paragraph-sm text-muted-foreground">
+              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+            </CardFooter>
+          </Card>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

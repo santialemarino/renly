@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { ROUTES } from '@/config/routes';
@@ -61,7 +62,12 @@ export function LoginForm() {
               <FormItem>
                 <FormLabel>{t('form.email.label')}</FormLabel>
                 <FormControl>
-                  <Input {...field} type="email" placeholder={t('form.email.placeholder')} />
+                  <Input
+                    {...field}
+                    type="email"
+                    autoComplete="email"
+                    placeholder={t('form.email.placeholder')}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -78,6 +84,7 @@ export function LoginForm() {
                   <Input
                     {...field}
                     type="password"
+                    autoComplete="current-password"
                     placeholder={t('form.password.placeholder')}
                     blueEye
                   />
@@ -86,6 +93,10 @@ export function LoginForm() {
               </FormItem>
             )}
           />
+
+          <div className="flex justify-end">
+            <AuthLink href={ROUTES.auth.forgotPassword}>{t('form.forgotPassword')}</AuthLink>
+          </div>
         </div>
 
         <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>

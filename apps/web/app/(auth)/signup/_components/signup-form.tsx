@@ -66,7 +66,7 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
   return (
     <Form {...form}>
       <form
-        className="flex flex-col px-6 gap-y-6"
+        className="flex flex-col px-6 gap-y-8"
         onSubmit={form.handleSubmit(onSubmit)}
         noValidate
       >

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { LoginForm } from '@/app/(auth)/login/_components/login-form';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -23,23 +24,12 @@ export function LoginCard() {
         <CardHeader>
           <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-y-4">
+        <CardContent>
           <LoginForm />
-          <a
-            href={ROUTES.auth.forgotPassword}
-            className="self-center hover:underline text-paragraph-sm-medium text-blue-700"
-          >
-            {t('form.forgotPassword')}
-          </a>
         </CardContent>
-        <CardFooter className="justify-center gap-x-1 text-paragraph-sm text-muted-foreground">
+        <CardFooter className="justify-center gap-x-1 px-6 text-paragraph-sm text-muted-foreground">
           <span>{t('form.signup.title')}</span>
-          <a
-            href={ROUTES.auth.signup}
-            className="hover:underline text-paragraph-sm-medium text-blue-700"
-          >
-            {t('form.signup.cta')}
-          </a>
+          <AuthLink href={ROUTES.auth.signup}>{t('form.signup.cta')}</AuthLink>
         </CardFooter>
       </Card>
     </motion.div>

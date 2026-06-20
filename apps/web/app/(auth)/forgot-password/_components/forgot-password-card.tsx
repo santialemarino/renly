@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { MailCheck } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
@@ -16,6 +16,8 @@ import {
   CardTitle,
   Input,
 } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
+import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import {
   forgotPasswordFormSchema,
   type ForgotPasswordFormData,
@@ -28,6 +30,7 @@ import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 const FADE_PROPS = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
+  exit: { opacity: 0 },
   transition: { duration: ANIMATION_DEFAULT },
 };
 
@@ -52,65 +55,74 @@ export function ForgotPasswordCard() {
   };
 
   return (
-    <motion.div className="w-full max-w-auth-form" {...FADE_PROPS}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
-        </CardHeader>
+    <AnimatePresence mode="wait">
+      {!submitted ? (
+        <motion.div key="form" {...FADE_PROPS} className="w-full max-w-auth-form">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-heading-4 text-center text-blue-800">
+                {t('title')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  className="flex flex-col px-6 gap-y-8"
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  noValidate
+                >
+                  <div className="flex flex-col gap-y-5">
+                    <p className="text-paragraph-sm text-muted-foreground">{t('description')}</p>
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('form.email.label')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="email"
+                              autoComplete="email"
+                              placeholder={t('form.email.placeholder')}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    {form.formState.errors.root && (
+                      <p className="text-paragraph-sm text-destructive text-center">
+                        {form.formState.errors.root.message}
+                      </p>
+                    )}
+                  </div>
 
-        {submitted ? (
-          <CardContent>
-            <div className="flex flex-col items-center justify-center py-2 gap-y-4 text-center">
-              <MailCheck className="size-12 text-blue-600" />
-              <p className="text-paragraph-sm text-muted-foreground">{t('sent')}</p>
-            </div>
-          </CardContent>
-        ) : (
-          <CardContent>
-            <Form {...form}>
-              <form
-                className="flex flex-col gap-y-6"
-                onSubmit={form.handleSubmit(onSubmit)}
-                noValidate
-              >
-                <p className="text-paragraph-sm text-muted-foreground">{t('description')}</p>
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('form.email.label')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} type="email" placeholder={t('form.email.placeholder')} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {form.formState.errors.root && (
-                  <p className="text-paragraph-sm text-destructive text-center">
-                    {form.formState.errors.root.message}
-                  </p>
-                )}
-
-                <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
-                </Button>
-              </form>
-            </Form>
-          </CardContent>
-        )}
-
-        <CardFooter className="justify-center text-paragraph-sm text-muted-foreground">
-          <a
-            href={ROUTES.auth.login}
-            className="hover:underline text-paragraph-sm-medium text-blue-700"
-          >
-            {t('backToLogin')}
-          </a>
-        </CardFooter>
-      </Card>
-    </motion.div>
+                  <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
+                    {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
+                  </Button>
+                </form>
+              </Form>
+            </CardContent>
+            <CardFooter className="justify-center px-6 text-paragraph-sm text-muted-foreground">
+              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+            </CardFooter>
+          </Card>
+        </motion.div>
+      ) : (
+        <motion.div key="sent" {...FADE_PROPS} className="w-full max-w-auth-form">
+          <Card>
+            <AuthStatusScreen
+              icon={MailCheck}
+              tone="info"
+              title={t('sentTitle')}
+              description={t('sent')}
+            >
+              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+            </AuthStatusScreen>
+          </Card>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

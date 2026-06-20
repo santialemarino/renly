@@ -1628,7 +1628,8 @@
         "label": "Send reset link",
         "loading": "Sending…"
       }
-    }
+    },
+    "sentTitle": "Check your email"
   },
   "resetPassword": {
     "metadata": {
@@ -1653,23 +1654,33 @@
       },
       "errors": {
         "passwordRejected": "This password can't be used. Please choose a different one.",
-        "invalidToken": "This reset link is invalid or has expired. Please request a new one.",
-        "missingToken": "This reset link is invalid or has expired. Please request a new one."
+        "invalidToken": "This reset link is invalid or has expired. Please request a new one."
       }
-    }
+    },
+    "successTitle": "Password reset",
+    "errorTitle": "Invalid or expired link",
+    "requestNewLink": "Request a new link"
   },
   "verifyEmail": {
     "metadata": {
       "title": "Verify Email",
       "description": "Confirm your email address"
     },
-    "title": "Email verification",
     "loading": "Confirming your email…",
     "goToLogin": "Go to log in",
     "status": {
-      "verified": "Your email is verified. You can now log in.",
-      "changed": "Your new email address is confirmed. Please log in again.",
-      "error": "This link is invalid or has expired. Please request a new one."
+      "verified": {
+        "title": "Email verified",
+        "description": "Your email is verified. You can now log in."
+      },
+      "changed": {
+        "title": "Email updated",
+        "description": "Your new email address is confirmed. Please log in again."
+      },
+      "error": {
+        "title": "Invalid or expired link",
+        "description": "This link is invalid or has expired. Please request a new one."
+      }
     }
   },
   "account": {

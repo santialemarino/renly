@@ -5,6 +5,8 @@ import { MailCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
+import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import { ROUTES } from '@/config/routes';
 import { requestVerificationEmail } from '@/lib/auth-api';
 
@@ -32,20 +34,13 @@ export function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-6 gap-y-6">
-      <div className="relative flex items-center justify-center">
-        <div className="absolute size-24 rounded-full bg-blue-50" />
-        <MailCheck className="relative size-16 text-blue-600 animate-in zoom-in-50 duration-500" />
-      </div>
-
-      <div className="flex flex-col items-center gap-y-2 text-center">
-        <p className="text-paragraph-semibold text-foreground">{t('checkEmail.title')}</p>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('checkEmail.description', { email })}
-        </p>
-      </div>
-
-      <div className="flex flex-col w-full items-center gap-y-3">
+    <AuthStatusScreen
+      icon={MailCheck}
+      tone="info"
+      title={t('checkEmail.title')}
+      description={t('checkEmail.description', { email })}
+    >
+      <div className="flex flex-col items-center gap-y-3">
         {resent ? (
           <p className="text-paragraph-sm-medium text-green-600">{t('checkEmail.resent')}</p>
         ) : (
@@ -53,13 +48,8 @@ export function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
             {resending ? t('checkEmail.resending') : t('checkEmail.resend')}
           </Button>
         )}
-        <a
-          href={ROUTES.auth.login}
-          className="hover:underline text-paragraph-sm-medium text-blue-700"
-        >
-          {t('checkEmail.backToLogin')}
-        </a>
+        <AuthLink href={ROUTES.auth.login}>{t('checkEmail.backToLogin')}</AuthLink>
       </div>
-    </div>
+    </AuthStatusScreen>
   );
 }

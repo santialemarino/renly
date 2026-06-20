@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { CheckEmailNotice } from '@/app/(auth)/_components/check-email-notice';
 import { SignupForm } from '@/app/(auth)/signup/_components/signup-form';
 import { ROUTES } from '@/config/routes';
@@ -37,14 +38,9 @@ export function SignupCard() {
                 onError={() => setSubmittedEmail(null)}
               />
             </CardContent>
-            <CardFooter className="justify-center gap-x-1 text-paragraph-sm text-muted-foreground">
+            <CardFooter className="justify-center gap-x-1 px-6 text-paragraph-sm text-muted-foreground">
               <span>{t('form.login.title')}</span>
-              <a
-                href={ROUTES.auth.login}
-                className="hover:underline text-paragraph-sm-medium text-blue-700"
-              >
-                {t('form.login.cta')}
-              </a>
+              <AuthLink href={ROUTES.auth.login}>{t('form.login.cta')}</AuthLink>
             </CardFooter>
           </Card>
         </motion.div>

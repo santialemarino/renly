@@ -1628,7 +1628,8 @@
         "label": "Enviar enlace",
         "loading": "Enviando…"
       }
-    }
+    },
+    "sentTitle": "Revisá tu correo"
   },
   "resetPassword": {
     "metadata": {
@@ -1653,23 +1654,33 @@
       },
       "errors": {
         "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente.",
-        "invalidToken": "Este enlace no es válido o expiró. Solicitá uno nuevo.",
-        "missingToken": "Este enlace no es válido o expiró. Solicitá uno nuevo."
+        "invalidToken": "Este enlace no es válido o expiró. Solicitá uno nuevo."
       }
-    }
+    },
+    "successTitle": "Contraseña restablecida",
+    "errorTitle": "Enlace no válido o expirado",
+    "requestNewLink": "Solicitar un nuevo enlace"
   },
   "verifyEmail": {
     "metadata": {
       "title": "Verificar correo",
       "description": "Confirmá tu dirección de correo"
     },
-    "title": "Verificación de correo",
     "loading": "Confirmando tu correo…",
     "goToLogin": "Ir al inicio de sesión",
     "status": {
-      "verified": "Tu correo fue verificado. Ya podés iniciar sesión.",
-      "changed": "Tu nueva dirección de correo fue confirmada. Iniciá sesión nuevamente.",
-      "error": "Este enlace no es válido o expiró. Solicitá uno nuevo."
+      "verified": {
+        "title": "Correo verificado",
+        "description": "Tu correo fue verificado. Ya podés iniciar sesión."
+      },
+      "changed": {
+        "title": "Correo actualizado",
+        "description": "Tu nueva dirección de correo fue confirmada. Iniciá sesión nuevamente."
+      },
+      "error": {
+        "title": "Enlace no válido o expirado",
+        "description": "Este enlace no es válido o expiró. Solicitá uno nuevo."
+      }
     }
   },
   "account": {

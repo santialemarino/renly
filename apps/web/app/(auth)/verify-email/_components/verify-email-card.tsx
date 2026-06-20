@@ -5,7 +5,9 @@ import { CircleCheck, CircleX } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
+import { Card } from '@repo/ui/components';
+import { AuthLink } from '@/app/(auth)/_components/auth-link';
+import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import { ROUTES } from '@/config/routes';
 import { confirmEmailToken, type ConfirmEmailKind } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -41,39 +43,23 @@ export function VerifyEmailCard({ token }: VerifyEmailCardProps) {
       .catch(() => setStatus('error'));
   }, [token]);
 
-  const isError = status === 'error';
-  const isLoading = status === 'loading';
-
   return (
     <motion.div className="w-full max-w-auth-form" {...FADE_PROPS}>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-2 gap-y-4 text-center">
-            {isLoading && (
-              <>
-                <div className="size-10 rounded-full border-4 border-muted border-t-blue-600 animate-spin" />
-                <p className="text-paragraph-sm text-muted-foreground">{t('loading')}</p>
-              </>
-            )}
-            {!isLoading && !isError && <CircleCheck className="size-12 text-green-500" />}
-            {isError && <CircleX className="size-12 text-destructive" />}
-            {!isLoading && (
-              <p className="text-paragraph-sm text-muted-foreground">{t(`status.${status}`)}</p>
-            )}
+        {status === 'loading' ? (
+          <div className="flex flex-col items-center px-6 gap-y-6 text-center">
+            <div className="size-12 rounded-full border-4 border-muted border-t-blue-600 animate-spin" />
+            <p className="text-paragraph-sm text-muted-foreground">{t('loading')}</p>
           </div>
-        </CardContent>
-        {!isLoading && (
-          <CardFooter className="justify-center text-paragraph-sm text-muted-foreground">
-            <a
-              href={ROUTES.auth.login}
-              className="hover:underline text-paragraph-sm-medium text-blue-700"
-            >
-              {t('goToLogin')}
-            </a>
-          </CardFooter>
+        ) : (
+          <AuthStatusScreen
+            icon={status === 'error' ? CircleX : CircleCheck}
+            tone={status === 'error' ? 'error' : 'success'}
+            title={t(`status.${status}.title`)}
+            description={t(`status.${status}.description`)}
+          >
+            <AuthLink href={ROUTES.auth.login}>{t('goToLogin')}</AuthLink>
+          </AuthStatusScreen>
         )}
       </Card>
     </motion.div>
