@@ -88,13 +88,18 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
     if await is_password_breached(password):
         raise PasswordBreachedError()
 
+    # Hash up front so both branches below pay the same bcrypt cost. Skipping it on the existing-email
+    # path would make that path measurably faster — a response-time oracle revealing which addresses
+    # have accounts, which would defeat the uniform-202 anti-enumeration goal (AUTH-5).
+    password_hash = hash_password(password)
+
     existing = await user_repository.get_by_email(session, email)
     if existing is not None:
         await session.commit()
         await _safe_send(email_templates.account_exists_email(existing.email, _login_link()))
         return
 
-    user = User(name=name, email=email, password_hash=hash_password(password))
+    user = User(name=name, email=email, password_hash=password_hash)
     user = await user_repository.create(session, user)
     raw_token = await issue_token(session, user.id, AuthTokenType.email_verification, VERIFICATION_TOKEN_TTL)
     await session.commit()
