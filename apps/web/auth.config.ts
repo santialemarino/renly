@@ -12,16 +12,25 @@ const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000;
 // access + rotated refresh values, or marks it errored (SessionExpired) so the user is sent to login
 // when there is no usable refresh token or the backend rejects it.
 async function refreshAccessToken(token: JWT): Promise<JWT> {
+  // Terminal failure: drop the (now useless) refresh token so later jwt() calls short-circuit here
+  // instead of firing another doomed /auth/refresh, and flag the session for the login redirect.
+  const expired: JWT = {
+    ...token,
+    refreshToken: undefined,
+    refreshTokenExpires: undefined,
+    error: 'SessionExpired',
+  };
+
   if (
     !token.refreshToken ||
     (typeof token.refreshTokenExpires === 'number' && Date.now() >= token.refreshTokenExpires)
   ) {
-    return { ...token, error: 'SessionExpired' };
+    return expired;
   }
 
   const refreshed = await refreshRequest(token.refreshToken);
   if (!refreshed) {
-    return { ...token, error: 'SessionExpired' };
+    return expired;
   }
 
   return {
