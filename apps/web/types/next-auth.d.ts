@@ -19,6 +19,8 @@ declare module 'next-auth' {
     name: string;
     accessToken: string;
     expiresIn: number;
+    refreshToken: string;
+    refreshExpiresIn: number;
   }
 }
 
@@ -29,6 +31,10 @@ declare module 'next-auth/jwt' {
     name: string;
     accessToken: string;
     accessTokenExpires: number;
+    // Refresh token (AUTH-7) — kept inside the encrypted NextAuth JWT, never exposed to the session.
+    // Optional: absent on JWTs minted before AUTH-7, and cleared once a refresh fails terminally.
+    refreshToken?: string;
+    refreshTokenExpires?: number;
     error?: string;
   }
 }

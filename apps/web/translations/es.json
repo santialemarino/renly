@@ -152,6 +152,7 @@
         "title": "¿No tenés una cuenta?",
         "cta": "Registrate"
       },
+      "rememberMe": "Recordarme",
       "forgotPassword": "¿Olvidaste tu contraseña?"
     }
   },

@@ -14,6 +14,7 @@ from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
 from app.models.payment_obligation import PaymentObligation
+from app.models.refresh_token import RefreshToken
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction, TransactionType
@@ -43,6 +44,7 @@ __all__ = [
     "InvestmentGroupMember",
     "InvestmentSnapshot",
     "PaymentObligation",
+    "RefreshToken",
     "Subscription",
     "Transaction",
     "TransactionType",

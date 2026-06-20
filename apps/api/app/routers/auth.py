@@ -5,6 +5,7 @@ from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.domain import EmailNotVerifiedError
 from app.models.auth_token import AuthTokenType
+from app.models.user import User
 from app.rate_limit import (
     FORGOT_PASSWORD_LIMIT,
     LOGIN_LIMIT,
@@ -20,11 +21,12 @@ from app.schemas.auth import (
     LoginRequest,
     MeResponse,
     MessageResponse,
+    RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
     TokenResponse,
 )
-from app.services import auth_service
+from app.services import auth_service, refresh_token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,6 +37,16 @@ _UNIFORM_ACK = "If that email address can be used, you'll receive a message with
 # NOTE: every @limiter.limit endpoint must declare a `response: Response` parameter. With
 # headers_enabled, slowapi injects the X-RateLimit-* headers into that Response on the success path;
 # without it slowapi raises (the success path returns a Pydantic model, not a Response).
+
+
+# Builds the login/refresh payload: a fresh access token for the user plus the issued refresh token.
+def _token_response(user: User, issued: refresh_token_service.IssuedRefreshToken) -> TokenResponse:
+    return TokenResponse(
+        access_token=auth_service.create_access_token(user),
+        expires_in=settings.jwt_expire_minutes * 60,
+        refresh_token=issued.raw_token,
+        refresh_expires_in=issued.expires_in,
+    )
 
 
 # Registers an account. Anti-enumeration (AUTH-5): always returns the same uniform 202 — a new
@@ -64,11 +76,18 @@ async def login(request: Request, response: Response, body: LoginRequest, sessio
     if user.email_verified_at is None:
         raise EmailNotVerifiedError()
 
-    token = auth_service.create_access_token(user)
-    return TokenResponse(
-        access_token=token,
-        expires_in=settings.jwt_expire_minutes * 60,
-    )
+    issued = await refresh_token_service.issue_refresh_token(session, user, body.remember_me)
+    return _token_response(user, issued)
+
+
+# Exchanges a valid refresh token for a new access token and rotates the refresh token (AUTH-7).
+# Returns 401 if the refresh token is unknown, expired, revoked, reused, or predates a session_epoch
+# bump (logout / password change). Privileged session: the call is pre-auth (it carries a refresh
+# token, not an access token), so the lookup bypasses RLS (SEC-15).
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh(body: RefreshRequest, session: AdminSessionDep) -> TokenResponse:
+    user, issued = await refresh_token_service.rotate_refresh_token(session, body.refresh_token)
+    return _token_response(user, issued)
 
 
 # (Re)sends an email-verification link (AUTH-1). Uniform 202 regardless of whether the address has

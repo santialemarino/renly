@@ -17,6 +17,7 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     InvalidCredentialsError,
+    InvalidRefreshTokenError,
     InvalidTokenError,
     NotFoundError,
     PasswordBreachedError,
@@ -82,6 +83,10 @@ async def email_not_verified_handler(_request: Request, exc: EmailNotVerifiedErr
 
 
 async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsError):
+    return JSONResponse(status_code=401, content={"detail": exc.message})
+
+
+async def invalid_refresh_token_handler(_request: Request, exc: InvalidRefreshTokenError):
     return JSONResponse(status_code=401, content={"detail": exc.message})
 
 
@@ -175,6 +180,7 @@ _EXCEPTION_HANDLERS = {
     HasLinkedExpensesError: has_linked_expenses_handler,
     InstallmentLockedFieldError: installment_locked_field_handler,
     InvalidCredentialsError: invalid_credentials_handler,
+    InvalidRefreshTokenError: invalid_refresh_token_handler,
     InvalidTokenError: invalid_token_handler,
     NotFoundError: not_found_exception_handler,
     PasswordBreachedError: password_breached_handler,
