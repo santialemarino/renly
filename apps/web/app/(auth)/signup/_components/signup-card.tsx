@@ -9,6 +9,7 @@ import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { CheckEmailNotice } from '@/app/(auth)/_components/check-email-notice';
 import { SignupForm } from '@/app/(auth)/signup/_components/signup-form';
 import { ROUTES } from '@/config/routes';
+import { requestVerificationEmail } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
 const FADE_PROPS = {
@@ -20,6 +21,7 @@ const FADE_PROPS = {
 
 export function SignupCard() {
   const t = useTranslations('signup');
+  const tCommon = useTranslations('common');
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
 
   return (
@@ -47,7 +49,11 @@ export function SignupCard() {
       ) : (
         <motion.div key="check-email" className="w-full max-w-auth-form" {...FADE_PROPS}>
           <Card>
-            <CheckEmailNotice email={submittedEmail} />
+            <CheckEmailNotice
+              title={tCommon('checkEmail.title')}
+              description={tCommon('checkEmail.description', { email: submittedEmail })}
+              onResend={() => requestVerificationEmail(submittedEmail)}
+            />
           </Card>
         </motion.div>
       )}
