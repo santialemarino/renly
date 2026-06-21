@@ -7,6 +7,7 @@ import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSettings } from '@/lib/api/settings';
+import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession } from '@/lib/auth';
 import { FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY } from '@/lib/constants/currency';
 import {
@@ -22,7 +23,11 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     redirect(LOGIN_ROUTE);
   }
 
-  const settings = await getSettings().catch(() => null);
+  // Signup mode gates the admin "Invite people" item in the sidebar (only relevant in invite mode).
+  const [settings, { mode: signupMode }] = await Promise.all([
+    getSettings().catch(() => null),
+    getSignupContext(),
+  ]);
   const cookieStore = await cookies();
 
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
@@ -48,6 +53,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         displayCurrencies={displayCurrencies}
         activeCurrency={activeCurrency}
         currencyCollapsed={currencyCollapsed}
+        isAdmin={session.user.isAdmin}
+        signupMode={signupMode}
       />
       <SidebarInset className="min-w-0">
         <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">

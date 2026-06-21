@@ -221,13 +221,15 @@
       "alerts": "Alertas y límites",
       "localization": "Localización",
       "integrations": "Integraciones",
-      "account": "Cuenta"
+      "account": "Cuenta",
+      "invitePeople": "Invitar personas"
     },
     "navGroups": {
       "finances": "Finanzas",
       "commitments": "Compromisos",
       "portfolio": "Inversor",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "administration": "Administración"
     },
     "currency": {
       "label": "Moneda",

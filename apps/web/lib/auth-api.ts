@@ -38,6 +38,7 @@ export interface MeResponse {
   email: string;
   name: string;
   emailVerified: boolean;
+  isAdmin: boolean;
 }
 
 export interface TokenResponse {
@@ -134,8 +135,15 @@ export async function meRequest(accessToken: string): Promise<MeResponse | null>
     email: string;
     name: string;
     email_verified: boolean;
+    is_admin: boolean;
   };
-  return { uid: raw.uid, email: raw.email, name: raw.name, emailVerified: raw.email_verified };
+  return {
+    uid: raw.uid,
+    email: raw.email,
+    name: raw.name,
+    emailVerified: raw.email_verified,
+    isAdmin: raw.is_admin,
+  };
 }
 
 export async function logoutRequest(accessToken: string): Promise<void> {

@@ -157,4 +157,5 @@ async def me(current_user: CurrentUser) -> MeResponse:
         name=current_user.name,
         plan=current_user.plan,
         email_verified=current_user.email_verified_at is not None,
+        is_admin=current_user.is_admin,
     )

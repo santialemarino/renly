@@ -52,6 +52,7 @@ class MeResponse(BaseModel):
     name: str = Field(description="User display name.")
     plan: UserPlan = Field(description="Plan tier (free or pro).")
     email_verified: bool = Field(description="Whether the email address has been verified.")
+    is_admin: bool = Field(description="Whether the user is an admin (gates the admin invite surface).")
 
 
 # Body for POST /auth/verify-email/request and POST /auth/forgot-password. Identifies the address to
