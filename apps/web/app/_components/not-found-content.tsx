@@ -1,6 +1,6 @@
 'use client';
 
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
@@ -20,6 +20,14 @@ const CONTENT_ANIMATION_PROPS = {
   transition: { duration: ANIMATION_DEFAULT },
 };
 
+// Reduced motion: no entrance. We still render motion elements (not plain tags) so motion clears
+// the opacity:0 it inlines during SSR — a plain element would leave the content hidden.
+const STATIC_ANIMATION_PROPS = {
+  initial: { opacity: 1, y: 0 },
+  animate: { opacity: 1, y: 0 },
+  transition: { duration: 0 },
+};
+
 // Presentational 404 screen (animated blob + copy + CTAs). Logged-in visitors get a primary "Go to
 // Dashboard" plus a secondary "Go to Homepage"; logged-out visitors get only "Go to Homepage" (the
 // dashboard CTA would just bounce them to login). `isAuthenticated` is resolved on the server in
@@ -27,6 +35,9 @@ const CONTENT_ANIMATION_PROPS = {
 export function NotFoundContent({ isAuthenticated }: { isAuthenticated: boolean }) {
   const t = useTranslations('common.notFound');
   const tCommon = useTranslations('common');
+  const reduced = useReducedMotion();
+  const blobProps = reduced ? STATIC_ANIMATION_PROPS : BLOB_ANIMATION_PROPS;
+  const contentProps = reduced ? STATIC_ANIMATION_PROPS : CONTENT_ANIMATION_PROPS;
 
   return (
     <div
@@ -34,10 +45,10 @@ export function NotFoundContent({ isAuthenticated }: { isAuthenticated: boolean 
       data-testid="not-found"
     >
       <div className="flex flex-col items-center gap-y-8">
-        <motion.div {...BLOB_ANIMATION_PROPS}>
+        <motion.div {...blobProps}>
           <NotFoundBlob />
         </motion.div>
-        <motion.div className="flex flex-col items-center gap-y-6" {...CONTENT_ANIMATION_PROPS}>
+        <motion.div className="flex flex-col items-center gap-y-6" {...contentProps}>
           <div className="flex flex-col items-center gap-y-3 text-center">
             <h1 className="text-heading-2 text-foreground">{t('title')}</h1>
             <p className="whitespace-pre-line text-paragraph text-muted-foreground">
