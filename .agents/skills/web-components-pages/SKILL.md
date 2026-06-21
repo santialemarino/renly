@@ -5,6 +5,8 @@ description: How to create a component or a page in the Renly web app (Next.js A
 
 # Web components and pages (Renly frontend)
 
+> **Also load the `ux-motion` skill** whenever creating or restyling UI — it owns interaction states (focus-visible/hover/active/disabled), motion (motion/react + the animation constants), layout-shift avoidance, rounding/tokens, reduced motion, and the App-vs-Public surface split.
+
 ## Creating a page
 
 1. **Choose the route group:** Auth (login, signup) → `app/(auth)/<name>/`. Protected (dashboard, settings) → `app/(protected)/<name>/`.

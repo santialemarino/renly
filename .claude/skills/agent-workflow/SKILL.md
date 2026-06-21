@@ -13,6 +13,7 @@ Before doing substantive work, read and apply the relevant skills so your change
 - **api-methods-entities** — Method order, comments, and entity conventions (schemas, models, domain) in API code.
 - **web-structure** — Where to create pages, components, and config in `apps/web`; directory layout.
 - **web-components-pages** — How to add a page or component; colocation; order and style; comments.
+- **ux-motion** — Interaction states (focus-visible/hover/active/disabled), motion (motion/react + animation constants), layout-shift avoidance, rounding/tokens, reduced motion, and the App-vs-Public surface split. Load with the web skills whenever creating or restyling UI.
 
 Use **api-\*** skills when touching the backend; **web-\*** when touching the frontend. Use both when a change spans API and web.
 
