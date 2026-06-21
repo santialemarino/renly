@@ -27,7 +27,7 @@ Run commands (both honor `$PORT`):
 ```bash
 # API
 docker run -e PORT=8000 -e DATABASE_URL=... -e DATABASE_ADMIN_URL=... -e JWT_SECRET=... renly-api
-#   image CMD: uvicorn app.main:app --host 0.0.0.0 --port 8000   (override --port with $PORT)
+#   image CMD: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}   (binds $PORT, defaults to 8000)
 
 # Web
 docker run -e PORT=3000 renly-web

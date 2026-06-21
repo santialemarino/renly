@@ -41,4 +41,6 @@ COPY --from=builder /api/pyproject.toml /api/
 ENV PATH="/api/.venv/bin:$PATH"
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Shell form so $PORT (injected by many container hosts) is honored, defaulting to 8000; `exec`
+# replaces the shell so uvicorn stays PID 1 and receives SIGTERM for graceful shutdown.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
