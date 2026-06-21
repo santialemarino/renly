@@ -28,7 +28,10 @@ export default function NotFound() {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <div className="flex flex-col min-h-screen items-center justify-center px-6 gap-y-8">
+    <div
+      className="flex flex-col min-h-screen items-center justify-center px-6 gap-y-8"
+      data-testid="not-found"
+    >
       <div className="flex flex-col items-center gap-y-8">
         <motion.div {...BLOB_ANIMATION_PROPS}>
           <NotFoundBlob />
@@ -40,7 +43,12 @@ export default function NotFound() {
               {t('description')}
             </p>
           </div>
-          <Button blue size="lg" onClick={() => startTransition(() => router.replace(ROUTES.home))}>
+          <Button
+            blue
+            size="lg"
+            data-testid="not-found-home-cta"
+            onClick={() => startTransition(() => router.replace(ROUTES.landing))}
+          >
             {isPending ? t('cta.loading') : t('cta.label')}
           </Button>
         </motion.div>

@@ -2,7 +2,7 @@ import type { NextAuthConfig, Session, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 
-import { AUTH_ROUTES, LOGIN_ROUTE, PUBLIC_ROUTES } from '@/config/routes';
+import { AUTH_ROUTES, LOGIN_ROUTE, PROTECTED_ROUTES, PUBLIC_ROUTES } from '@/config/routes';
 import { loginRequest, meRequest, refreshRequest } from '@/lib/auth-api';
 
 // Renew the access token slightly before it expires so a request never races a just-expired token.
@@ -87,9 +87,10 @@ export const authConfig: NextAuthConfig = {
       const hasError = (auth?.user as { error?: string } | undefined)?.error;
       const pathname = nextUrl.pathname;
 
-      const isAuthPage = AUTH_ROUTES.some(
-        (page) => pathname === page || pathname.startsWith(page + '/'),
-      );
+      const matchesRoute = (route: string) =>
+        pathname === route || pathname.startsWith(route + '/');
+
+      const isAuthPage = AUTH_ROUTES.some(matchesRoute);
 
       // Marketing landing + legal pages are reachable without a session; the landing page itself
       // redirects logged-in visitors to the app.
@@ -99,7 +100,12 @@ export const authConfig: NextAuthConfig = {
 
       if (isAuthPage || isPublicPage) return true;
 
-      if (!isLoggedIn || hasError) {
+      // Only known protected routes force a login redirect when logged out — unknown paths fall
+      // through so Next renders not-found (404) instead of bouncing a mistyped URL to /login. This
+      // is the optimistic edge check; the (protected) layout's getSession() is the authoritative
+      // guard, so a protected route missing from PROTECTED_ROUTES still can't leak.
+      const isProtectedPage = PROTECTED_ROUTES.some(matchesRoute);
+      if (isProtectedPage && (!isLoggedIn || hasError)) {
         return Response.redirect(new URL(LOGIN_ROUTE, nextUrl));
       }
 
