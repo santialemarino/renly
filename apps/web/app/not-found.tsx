@@ -1,7 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
@@ -24,8 +23,15 @@ const CONTENT_ANIMATION_PROPS = {
 
 export default function NotFound() {
   const t = useTranslations('common.notFound');
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // Full navigation (not client-side routing) so the server resolves "/" itself: a logged-out
+  // visitor lands on the marketing page, a logged-in visitor gets the landing's redirect to the app
+  // as a 307 — no flash of the public shell that a soft `/` → `/dashboard` hop would paint.
+  const goHome = () => {
+    setIsRedirecting(true);
+    window.location.assign(ROUTES.landing);
+  };
 
   return (
     <div
@@ -43,13 +49,8 @@ export default function NotFound() {
               {t('description')}
             </p>
           </div>
-          <Button
-            blue
-            size="lg"
-            data-testid="not-found-home-cta"
-            onClick={() => startTransition(() => router.replace(ROUTES.landing))}
-          >
-            {isPending ? t('cta.loading') : t('cta.label')}
+          <Button blue size="lg" data-testid="not-found-home-cta" onClick={goHome}>
+            {isRedirecting ? t('cta.loading') : t('cta.label')}
           </Button>
         </motion.div>
       </div>
