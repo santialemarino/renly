@@ -29,6 +29,7 @@ export const ROUTES = {
   localization: '/localization',
   integrations: '/integrations',
   account: '/account',
+  admin: '/admin',
 } as const;
 
 /** All auth routes — accessible without a session */

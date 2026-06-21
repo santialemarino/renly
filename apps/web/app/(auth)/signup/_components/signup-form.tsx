@@ -17,7 +17,7 @@ import {
   FormMessage,
 } from '@/components/form';
 import { PasswordMeter } from '@/components/password-meter';
-import { PasswordRejectedError, registerRequest } from '@/lib/auth-api';
+import { InviteInvalidError, PasswordRejectedError, registerRequest } from '@/lib/auth-api';
 import {
   PASSWORD_CONTAINS_LOWERCASE_REGEX,
   PASSWORD_CONTAINS_NUMBER_REGEX,
@@ -27,16 +27,25 @@ import {
 } from '@/lib/constants/form';
 
 interface SignupFormProps {
+  // Invite-only mode (valid link): the email is locked to the invited address and the token is sent
+  // with the registration. Both null in open mode.
+  lockedEmail?: string | null;
+  inviteToken?: string | null;
   onSuccess: (email: string) => void;
   onError: () => void;
 }
 
-export function SignupForm({ onSuccess, onError }: SignupFormProps) {
+export function SignupForm({
+  lockedEmail = null,
+  inviteToken = null,
+  onSuccess,
+  onError,
+}: SignupFormProps) {
   const t = useTranslations('signup');
   const tCommon = useTranslations('common');
 
   const form = useForm<SignupFormData>({
-    defaultValues: { name: '', email: '', password: '', confirmPassword: '' },
+    defaultValues: { name: '', email: lockedEmail ?? '', password: '', confirmPassword: '' },
     mode: 'onSubmit',
     reValidateMode: 'onChange',
     resolver: zodResolver(signupFormSchema(tCommon)),
@@ -56,15 +65,24 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
   );
 
   const onSubmit = async (data: SignupFormData) => {
+    // In invite mode the email is locked to the invited address; never trust an edited value.
+    const email = lockedEmail ?? data.email;
     try {
       // Anti-enumeration: the API returns the same response whether or not the email is taken, so
       // there is no auto-login — the user verifies via the emailed link, then logs in.
-      await registerRequest({ name: data.name, email: data.email, password: data.password });
-      onSuccess(data.email);
+      await registerRequest({
+        name: data.name,
+        email,
+        password: data.password,
+        inviteToken: inviteToken ?? undefined,
+      });
+      onSuccess(email);
     } catch (err) {
       onError();
       if (err instanceof PasswordRejectedError) {
         form.setError('password', { message: t('form.errors.passwordRejected') });
+      } else if (err instanceof InviteInvalidError) {
+        form.setError('root', { message: t('form.errors.inviteInvalid') });
       } else {
         form.setError('root', { message: tCommon('form.errors.serverError') });
       }
@@ -110,9 +128,18 @@ export function SignupForm({ onSuccess, onError }: SignupFormProps) {
                     type="email"
                     autoComplete="email"
                     placeholder={t('form.email.placeholder')}
+                    readOnly={!!lockedEmail}
+                    surface={!!lockedEmail}
+                    aria-readonly={!!lockedEmail}
                   />
                 </FormControl>
-                <FormMessage />
+                {lockedEmail ? (
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.email.lockedHint')}
+                  </p>
+                ) : (
+                  <FormMessage />
+                )}
               </FormItem>
             )}
           />

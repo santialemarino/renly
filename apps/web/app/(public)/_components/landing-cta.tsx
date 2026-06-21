@@ -6,10 +6,13 @@ import { Button } from '@repo/ui/components';
 import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
 import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
+import type { SignupMode } from '@/lib/auth-api';
 
-// Closing call-to-action that nudges the visitor to create an account; staggers in on scroll.
-export function LandingCta() {
+// Closing call-to-action that nudges the visitor to create an account; staggers in on scroll. In
+// invite-only mode the button reads "Request access" (routes to the invite-only signup screen).
+export function LandingCta({ signupMode }: { signupMode: SignupMode }) {
   const t = useTranslations('landing.cta');
+  const tCommon = useTranslations('common');
 
   return (
     <Section width="narrow" className="pt-16 pb-24">
@@ -22,7 +25,9 @@ export function LandingCta() {
         </RevealItem>
         <RevealItem>
           <Button asChild blue size="lg">
-            <a href={ROUTES.auth.signup}>{t('button')}</a>
+            <a href={ROUTES.auth.signup}>
+              {signupMode === 'invite' ? tCommon('requestAccess') : t('button')}
+            </a>
           </Button>
         </RevealItem>
       </RevealGroup>
