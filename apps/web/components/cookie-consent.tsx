@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
@@ -39,12 +40,9 @@ export function CookieConsent() {
           <div className="flex flex-col w-full max-w-xl items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:items-center sm:gap-x-4">
             <p className="flex-1 text-paragraph-sm text-muted-foreground">
               {t('message')}{' '}
-              <a
-                href={ROUTES.privacy}
-                className="hover:underline text-paragraph-sm-medium text-blue-700"
-              >
+              <InlineLink href={ROUTES.privacy} color="blue">
                 {t('learnMore')}
-              </a>
+              </InlineLink>
             </p>
             <Button blue size="sm" className="shrink-0" onClick={handleDismiss}>
               {t('accept')}

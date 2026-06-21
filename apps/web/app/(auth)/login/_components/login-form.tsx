@@ -7,9 +7,9 @@ import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 
 import { Button, Checkbox, Input } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { loginFormSchema, type LoginFormData } from '@/app/(auth)/login/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 
 export function LoginForm() {
@@ -111,7 +111,7 @@ export function LoginForm() {
                 </FormItem>
               )}
             />
-            <AuthLink href={ROUTES.auth.forgotPassword}>{t('form.forgotPassword')}</AuthLink>
+            <InlineLink href={ROUTES.auth.forgotPassword}>{t('form.forgotPassword')}</InlineLink>
           </div>
         </div>
 

@@ -6,8 +6,8 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { confirmEmailToken, type ConfirmEmailKind } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -58,7 +58,7 @@ export function VerifyEmailCard({ token }: VerifyEmailCardProps) {
             title={t(`status.${status}.title`)}
             description={t(`status.${status}.description`)}
           >
-            <AuthLink href={ROUTES.auth.login}>{t('goToLogin')}</AuthLink>
+            <InlineLink href={ROUTES.auth.login}>{t('goToLogin')}</InlineLink>
           </AuthStatusScreen>
         )}
       </Card>
