@@ -7,10 +7,12 @@ import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
 import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
 
-// Above-the-fold marketing hero: headline, sub-headline, and the primary signup / login CTAs.
+// Above-the-fold marketing hero: headline, sub-headline, and the primary CTAs. Logged-out visitors
+// get signup / login; logged-in visitors get a single "go to the app" CTA instead.
 // Entrance staggers in on mount (the public surface's on-load animation).
-export function LandingHero() {
+export function LandingHero({ isAuthenticated }: { isAuthenticated: boolean }) {
   const t = useTranslations('landing.hero');
+  const tCommon = useTranslations('common');
 
   return (
     <Section width="default" className="pt-20 pb-16">
@@ -22,12 +24,20 @@ export function LandingHero() {
           <p className="max-w-2xl text-paragraph text-muted-foreground">{t('subtitle')}</p>
         </RevealItem>
         <RevealItem className="flex flex-wrap items-center justify-center gap-x-3 gap-y-3">
-          <Button asChild blue size="lg">
-            <a href={ROUTES.auth.signup}>{t('ctaPrimary')}</a>
-          </Button>
-          <Button asChild variant="outline" size="lg">
-            <a href={ROUTES.auth.login}>{t('ctaSecondary')}</a>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild blue size="lg">
+              <a href={ROUTES.home}>{tCommon('goToDashboard')}</a>
+            </Button>
+          ) : (
+            <>
+              <Button asChild blue size="lg">
+                <a href={ROUTES.auth.signup}>{t('ctaPrimary')}</a>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <a href={ROUTES.auth.login}>{t('ctaSecondary')}</a>
+              </Button>
+            </>
+          )}
         </RevealItem>
       </RevealGroup>
     </Section>

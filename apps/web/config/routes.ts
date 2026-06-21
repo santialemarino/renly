@@ -48,4 +48,25 @@ export const PUBLIC_ROUTES = [
   ROUTES.disclaimer,
 ] as const;
 
+// Every leaf path in ROUTES, including the nested `auth` group, deduped.
+const ALL_ROUTE_PATHS = Array.from(
+  new Set(
+    Object.values(ROUTES).flatMap((value) =>
+      typeof value === 'string' ? [value] : Object.values(value),
+    ),
+  ),
+);
+
+/**
+ * Protected routes — the complement ROUTES − AUTH_ROUTES − PUBLIC_ROUTES, computed (not a static
+ * literal) so ROUTES stays the single source of truth: any new route is protected by default
+ * (safe-by-default). Drives the proxy gate's optimistic login redirect; the (protected) layout's
+ * getSession() is the authoritative guard.
+ */
+export const PROTECTED_ROUTES = ALL_ROUTE_PATHS.filter(
+  (path) =>
+    !(AUTH_ROUTES as readonly string[]).includes(path) &&
+    !(PUBLIC_ROUTES as readonly string[]).includes(path),
+);
+
 export const LOGIN_ROUTE = ROUTES.auth.login;

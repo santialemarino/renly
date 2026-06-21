@@ -1,50 +1,11 @@
-'use client';
+import { NotFoundContent } from '@/app/_components/not-found-content';
+import { getSession, isAuthenticatedSession } from '@/lib/auth';
 
-import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { motion } from 'motion/react';
-import { useTranslations } from 'next-intl';
+// Global 404 for unmatched routes. Reads the session on the server so the CTA can adapt — logged-in
+// visitors also get a direct "Go to Dashboard" — while the animated UI lives in the client child.
+export default async function NotFound() {
+  const session = await getSession();
+  const isAuthenticated = isAuthenticatedSession(session);
 
-import { Button } from '@repo/ui/components';
-import { ROUTES } from '@/config/routes';
-import { ANIMATION_DEFAULT, ANIMATION_SLOW } from '@/lib/constants/animations';
-import NotFoundBlob from '@/public/icons/not-found-blob.svg';
-
-const BLOB_ANIMATION_PROPS = {
-  initial: { opacity: 0, y: 16 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: ANIMATION_SLOW, ease: 'easeOut' as const },
-};
-
-const CONTENT_ANIMATION_PROPS = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  transition: { duration: ANIMATION_DEFAULT },
-};
-
-export default function NotFound() {
-  const t = useTranslations('common.notFound');
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-
-  return (
-    <div className="flex flex-col min-h-screen items-center justify-center px-6 gap-y-8">
-      <div className="flex flex-col items-center gap-y-8">
-        <motion.div {...BLOB_ANIMATION_PROPS}>
-          <NotFoundBlob />
-        </motion.div>
-        <motion.div className="flex flex-col items-center gap-y-6" {...CONTENT_ANIMATION_PROPS}>
-          <div className="flex flex-col items-center gap-y-3 text-center">
-            <h1 className="text-heading-2 text-foreground">{t('title')}</h1>
-            <p className="whitespace-pre-line text-paragraph text-muted-foreground">
-              {t('description')}
-            </p>
-          </div>
-          <Button blue size="lg" onClick={() => startTransition(() => router.replace(ROUTES.home))}>
-            {isPending ? t('cta.loading') : t('cta.label')}
-          </Button>
-        </motion.div>
-      </div>
-    </div>
-  );
+  return <NotFoundContent isAuthenticated={isAuthenticated} />;
 }
