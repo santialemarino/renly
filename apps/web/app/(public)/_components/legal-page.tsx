@@ -1,6 +1,8 @@
 import { getTranslations } from 'next-intl/server';
 
-interface LegalSection {
+import { LegalSection } from '@/app/(public)/_components/legal-section';
+
+interface LegalSectionData {
   heading: string;
   paragraphs?: string[];
   items?: string[];
@@ -15,7 +17,7 @@ interface LegalPageProps {
 // namespace: a title, last-updated date, intro, then a list of heading + paragraphs/bullets.
 export async function LegalPage({ namespace }: LegalPageProps) {
   const t = await getTranslations(namespace);
-  const sections = t.raw('sections') as LegalSection[];
+  const sections = t.raw('sections') as LegalSectionData[];
 
   return (
     <article className="flex flex-col w-full max-w-3xl self-center px-6 py-16 gap-y-8">
@@ -25,23 +27,12 @@ export async function LegalPage({ namespace }: LegalPageProps) {
       </header>
       <p className="text-paragraph text-muted-foreground">{t('intro')}</p>
       {sections.map((section) => (
-        <section key={section.heading} className="flex flex-col gap-y-3">
-          <h2 className="text-heading-4 text-neutral-950">{section.heading}</h2>
-          {section.paragraphs?.map((paragraph) => (
-            <p key={paragraph.slice(0, 32)} className="text-paragraph-sm text-muted-foreground">
-              {paragraph}
-            </p>
-          ))}
-          {section.items && (
-            <ul className="flex flex-col pl-5 gap-y-1 list-disc">
-              {section.items.map((item) => (
-                <li key={item.slice(0, 32)} className="text-paragraph-sm text-muted-foreground">
-                  {item}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <LegalSection
+          key={section.heading}
+          heading={section.heading}
+          paragraphs={section.paragraphs}
+          items={section.items}
+        />
       ))}
     </article>
   );
