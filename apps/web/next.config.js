@@ -18,7 +18,8 @@ const contentSecurityPolicyReportOnly = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self'",
-  "connect-src 'self'",
+  // Sentry error ingestion (INFRA-5) when NEXT_PUBLIC_SENTRY_DSN is set; harmless when it isn't.
+  "connect-src 'self' https://*.sentry.io",
 ].join('; ');
 
 // HTTP security headers applied to every route (SEC-10).
