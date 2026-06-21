@@ -212,7 +212,7 @@ session.user = {
 
 ### Authorized callback
 
-Runs on every navigation (middleware). Auth pages are always accessible. For all other routes, if the user is not logged in or has a session error, redirects to the login page.
+Runs on every navigation (the `proxy.ts` middleware) as the **optimistic** edge check — `app/(protected)/layout.tsx`'s `getSession()` is the authoritative guard. Auth pages (`AUTH_ROUTES`) and public pages (`PUBLIC_ROUTES` — the marketing landing + legal pages) are always accessible. A logged-out (or session-errored) visitor is redirected to login **only on a `PROTECTED_ROUTES` match**; any other (unknown) path falls through so Next renders the 404 (`not-found.tsx`) instead of bouncing a mistyped URL to login. `PROTECTED_ROUTES` (`config/routes.ts`) is the computed complement `ROUTES − AUTH_ROUTES − PUBLIC_ROUTES`, so a new route added to `ROUTES` is protected by default. Because the layout guard is authoritative, a protected route missing from `PROTECTED_ROUTES` still can't leak — it just isn't short-circuited at the edge.
 
 ### Logout flow
 
@@ -221,6 +221,8 @@ userSignOut()                    // server action in auth.ts
   → auth() to get current session
   → logoutRequest(accessToken)   // POST /auth/logout (bumps session_epoch)
   → signOut({ redirect: false }) // clears NextAuth session
+  → cookies().delete('NEXT_LOCALE') // drop the locale cookie so the next logged-out visitor gets
+                                    // their own browser language (re-applied on login from settings)
   → client handles redirect
 ```
 
