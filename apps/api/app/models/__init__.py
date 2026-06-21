@@ -13,6 +13,7 @@ from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.models.invite import Invite, InviteStatus
 from app.models.payment_obligation import PaymentObligation
 from app.models.refresh_token import RefreshToken
 from app.models.snapshot import InvestmentSnapshot
@@ -43,6 +44,8 @@ __all__ = [
     "InvestmentGroup",
     "InvestmentGroupMember",
     "InvestmentSnapshot",
+    "Invite",
+    "InviteStatus",
     "PaymentObligation",
     "RefreshToken",
     "Subscription",

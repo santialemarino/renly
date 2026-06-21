@@ -3,6 +3,7 @@ from datetime import timedelta
 
 import pytest
 
+from app.config import SignupMode, settings
 from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreachedError
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
@@ -104,6 +105,9 @@ def wired(monkeypatch):
     monkeypatch.setattr(auth_service, "get_email_service", lambda: email)
     monkeypatch.setattr(auth_service, "is_password_breached", _not_breached)
     monkeypatch.setattr(account_service, "user_repository", users)
+    # These flows cover open registration + the lifecycle; the invite-only gate is orthogonal and
+    # has its own coverage (test_invites.py), so exercise registration in open mode here.
+    monkeypatch.setattr(settings, "signup_mode", SignupMode.open)
     return users, tokens, email
 
 

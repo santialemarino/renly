@@ -17,8 +17,10 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     InvalidCredentialsError,
+    InvalidInviteError,
     InvalidRefreshTokenError,
     InvalidTokenError,
+    InviteEmailTakenError,
     NotFoundError,
     PasswordBreachedError,
     PlanRequiredError,
@@ -28,6 +30,7 @@ from app.middleware import BodySizeLimitMiddleware
 from app.observability import init_sentry
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import (
+    admin,
     api_keys,
     asset_prices,
     auth,
@@ -94,6 +97,14 @@ async def invalid_token_handler(_request: Request, exc: InvalidTokenError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+async def invalid_invite_handler(_request: Request, exc: InvalidInviteError):
+    return JSONResponse(status_code=403, content={"detail": exc.message})
+
+
+async def invite_email_taken_handler(_request: Request, exc: InviteEmailTakenError):
+    return JSONResponse(status_code=409, content={"detail": exc.message})
+
+
 async def not_found_exception_handler(_request: Request, exc: NotFoundError):
     return JSONResponse(status_code=404, content={"detail": exc.message})
 
@@ -153,6 +164,7 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
 
 
 _ROUTERS = (
+    admin.router,
     api_keys.router,
     asset_prices.router,
     auth.router,
@@ -180,8 +192,10 @@ _EXCEPTION_HANDLERS = {
     HasLinkedExpensesError: has_linked_expenses_handler,
     InstallmentLockedFieldError: installment_locked_field_handler,
     InvalidCredentialsError: invalid_credentials_handler,
+    InvalidInviteError: invalid_invite_handler,
     InvalidRefreshTokenError: invalid_refresh_token_handler,
     InvalidTokenError: invalid_token_handler,
+    InviteEmailTakenError: invite_email_taken_handler,
     NotFoundError: not_found_exception_handler,
     PasswordBreachedError: password_breached_handler,
     PlanRequiredError: plan_required_handler,

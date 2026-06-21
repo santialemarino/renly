@@ -8,13 +8,13 @@ import httpx
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
+from app.config import SignupMode, settings
 from app.domain import InvalidTokenError, PasswordBreachedError
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import auth_token_repository, user_repository
-from app.services import email_templates
+from app.services import email_templates, invite_service
 from app.services.email_service import EmailMessage, get_email_service
 
 logger = logging.getLogger(__name__)
@@ -84,7 +84,16 @@ async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
 # one is emailed a "you already have an account" notice. Either way the caller returns the same
 # response, so registration never reveals which emails have accounts. The breach check (AUTH-3)
 # runs first and is email-independent, so rejecting a breached password leaks nothing.
-async def register_account(session: AsyncSession, name: str, email: str, password: str) -> None:
+#
+# In invite mode (SIGNUP_MODE), a valid invite whose email matches the registering address is
+# required and consumed on success; the invite check gates access without leaking account existence
+# (it only inspects the invite token + its bound email, never the users table). In open mode the
+# gate is skipped. The invite token is validated first so an uninvited request is rejected outright.
+async def register_account(session: AsyncSession, name: str, email: str, password: str, invite_token: str | None = None) -> None:
+    invite = None
+    if settings.signup_mode == SignupMode.invite:
+        invite = await invite_service.get_valid_invite(session, invite_token, email)
+
     if await is_password_breached(password):
         raise PasswordBreachedError()
 
@@ -95,6 +104,8 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
 
     existing = await user_repository.get_by_email(session, email)
     if existing is not None:
+        if invite is not None:
+            await invite_service.consume_invite(session, invite)
         await session.commit()
         await _safe_send(email_templates.account_exists_email(existing.email, _login_link()))
         return
@@ -102,6 +113,8 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
     user = User(name=name, email=email, password_hash=password_hash)
     user = await user_repository.create(session, user)
     raw_token = await issue_token(session, user.id, AuthTokenType.email_verification, VERIFICATION_TOKEN_TTL)
+    if invite is not None:
+        await invite_service.consume_invite(session, invite)
     await session.commit()
     await _safe_send(email_templates.verification_email(user.email, _verify_link(raw_token)))
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
-from app.config import settings
+from app.config import SignupMode, settings
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.domain import EmailNotVerifiedError
@@ -24,9 +24,10 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    SignupContextResponse,
     TokenResponse,
 )
-from app.services import auth_service, refresh_token_service
+from app.services import auth_service, invite_service, refresh_token_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,8 +57,20 @@ def _token_response(user: User, issued: refresh_token_service.IssuedRefreshToken
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(REGISTER_LIMIT)
 async def register(request: Request, response: Response, body: RegisterRequest, session: AdminSessionDep) -> MessageResponse:
-    await auth_service.register_account(session, body.name, body.email, body.password)
+    await auth_service.register_account(session, body.name, body.email, body.password, body.invite_token)
     return MessageResponse(detail=_UNIFORM_ACK)
+
+
+# Tells the web whether signup is invite-only and, for a valid invite token, the address to lock the
+# form to (so the signup page shows the invite-only screen vs the form). Privileged session: the
+# invite lookup is pre-auth (no user context), so it bypasses RLS (SEC-15).
+@router.get("/signup-context", response_model=SignupContextResponse)
+async def signup_context(session: AdminSessionDep, invite: str | None = None) -> SignupContextResponse:
+    invited_email = None
+    if settings.signup_mode == SignupMode.invite and invite:
+        found = await invite_service.get_pending_invite_by_token(session, invite)
+        invited_email = found.email if found else None
+    return SignupContextResponse(signup_mode=settings.signup_mode, invited_email=invited_email)
 
 
 # Authenticates by email/password and returns a JWT. Returns 401 if invalid, 403 if the email is

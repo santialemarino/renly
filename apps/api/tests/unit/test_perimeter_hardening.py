@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
-from app.config import Environment, Settings
+from app.config import Environment, Settings, SignupMode
 from app.db import get_admin_session, get_session
 from app.main import create_app
 from app.middleware import MAX_REQUEST_BODY_BYTES
@@ -253,6 +253,9 @@ class TestRegisterAntiEnumeration:
         monkeypatch.setattr("app.services.auth_service.get_email_service", lambda: _FakeEmailService(sent))
 
         existing = User(id=1, name="Santi", email="taken@example.com", password_hash="hash")
+        # Anti-enumeration is an open-registration property; the invite-only gate has its own
+        # coverage (test_invites.py), so run this in open mode (auth_service reads the global settings).
+        monkeypatch.setattr("app.config.settings.signup_mode", SignupMode.open)
         client = _client(existing_user=existing)
         response = client.post(
             "/auth/register",
