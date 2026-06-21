@@ -1,6 +1,6 @@
 ---
 name: ux-motion
-description: UX/UI conventions for the Renly frontend — interaction states (focus-visible, hover, active, disabled), motion/animation (motion/react + the animation constants), layout-shift avoidance, rounding/tokens, reduced motion, and the app-vs-public surface split. Use when creating or restyling any component or page in apps/web or packages/ui.
+description: UX/UI conventions for the Renly frontend — interaction states (focus-visible, hover, active, disabled), motion/animation (motion/react + the animation constants), layout-shift avoidance, reduced motion, and the app-vs-public surface split. Use when creating or restyling any component or page in apps/web or packages/ui.
 ---
 
 # UX & motion conventions (Renly frontend)
@@ -13,13 +13,6 @@ Applies to every component/page in `apps/web` and `packages/ui`. Load alongside 
 - **Public** — the marketing surface reachable without logging in: the `app/(public)/` route group (landing, privacy, terms, disclaimer). Motion is **expressive and vibrant** (on-load entrance, scroll-reveal, hover-float, ambient), built on the same base below.
 
 The **Base conventions** apply to BOTH. **App motion** and **Public motion** layer on top — pick by surface.
-
-## Reuse first
-
-Reuse `@repo/ui` (button, card, badge, input, textarea, checkbox, switch, select, popover, tooltip, dialog, sheet, toggle/toggle-group, separator, skeleton, pill, hint, table, command, calendar) and existing app components before building new — restyle through existing CVA variants, don't fork. A genuinely new shared component goes in `packages/ui/src/components` + its `index.ts` (see `web-components-pages`).
-
-- **Componentize repeated structure.** Structure that repeats — feature cards, list/step items, page sections, a legal "section" block, a page header (title + meta), a header/footer shell — is ONE component rendered by mapping data, never copy-pasted markup. The same element in two places is one shared component (app-only → the app's `components/`; cross-app → `packages/ui`, per `web-components-pages`); sibling sections that share a shape become section components that a thin page composes. **Consistency beats local cleverness:** the same control means the same thing, in the same place and order, across surfaces (e.g. don't flip primary-then-secondary CTA order between a hero and the header).
-- **Button as a link.** Use `<Button asChild>` wrapping an `<a>`/`<Link>` rather than a hand-rolled anchor, so it keeps the variant, ring, and states. Gotcha: the `default` variant carries an `[a]:hover:` rule, so when you also pass `blue`/custom hover on an anchor the anchor-scoped rule can win — confirm a link-button's hover matches the same button rendered as a real `<button>` in the app.
 
 ## Base conventions (all surfaces)
 
@@ -51,11 +44,6 @@ Reuse `@repo/ui` (button, card, badge, input, textarea, checkbox, switch, select
 - Reuse the `@repo/ui` primitives' built-in open/close: dialog/popover/tooltip/sheet use `data-[state=open]:animate-in / data-[state=closed]:animate-out` + `fade` / `zoom-95` / directional `slide-in-from-*` (sheets are asymmetric: 500ms open / 300ms close). Collapsible → `animate-collapsible-down/up`. Don't reinvent these.
 - Crossfade loading/empty/content via `AnimatePresence mode="wait"` + a ~500ms min-loading delay (credit-cards settlements pattern).
 - Never conditionally unmount in a way that kills the exit — use `AnimatePresence` exits so **close looks as good as open**.
-
-### Rounding & tokens
-
-- **Never sharp / fully square.** `--radius` 0.625rem + the scale (`packages/ui/src/styles/theme.css`): buttons/inputs `rounded-lg`, cards `rounded-1.5xl` (or `rounded-xl` compact), badges `rounded-full` (square variant only when intentional). A grouped surface/container (a section panel, a callout) rounds too — audit every box you add.
-- Use the oklch design tokens (`--ring`, `--destructive`, `--accent`, `--ghost`, `border-0..5`, …) — never raw hex. Variants via CVA (Button/Badge): extend variants, don't fork the component.
 
 ### Reduced motion (mandatory)
 
