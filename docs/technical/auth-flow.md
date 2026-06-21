@@ -64,7 +64,7 @@ The access token is short-lived (`JWT_EXPIRE_MINUTES`, default 30 min); a **rota
 
 ### Me
 
-`GET /auth/me` returns `{uid, email, name, plan, email_verified}` for the authenticated user.
+`GET /auth/me` returns `{uid, email, name, plan, email_verified, is_admin}` for the authenticated user. `is_admin` is carried into the NextAuth session (set at login) so the web can render admin-only UI (the sidebar "Invite people" group) without an extra call — a promotion takes effect on next login.
 
 ### Email verification (AUTH-1)
 
@@ -238,7 +238,7 @@ Runs on every navigation (the `proxy.ts` middleware) as the **optimistic** edge 
 
 The public pages render in **any** auth state — only the auth forms (`/login`, `/signup`) redirect logged-in users away. The marketing landing and `PublicHeader` read the session server-side to swap their CTAs to a single "Go to Dashboard" link for logged-in visitors (and hide the signup-conversion block); the global 404 (`not-found.tsx`) does the same, adding a "Go to Dashboard" CTA alongside "Go to Homepage" when authenticated.
 
-**Invite-only mode (frontend):** `/admin` is a protected route, so logged-out users hit `/login` like any protected route; a logged-in **non-admin** who reaches it gets a real `404` — the page calls `notFound()` when `GET /admin/invites` returns `403`, hiding the page's existence rather than showing a `403`. `/signup` reads `getSignupContext()` server-side: with a valid invite token it renders the form with the email **locked** to the invited address; without one (in invite mode) it renders an **invite-only notice with no form** (so an uninvited visitor can't submit an email — preserving anti-enumeration). The landing, `PublicHeader`, and closing CTA read the signup mode and label their signup CTA **"Request access"** in invite mode (it routes to the invite-only screen) instead of implying open registration.
+**Invite-only mode (frontend):** `/admin` is a protected route, so logged-out users hit `/login` like any protected route; a logged-in **non-admin** who reaches it gets a real `404` — the page calls `notFound()` when `GET /admin/invites` returns `403`, hiding the page's existence rather than showing a `403`. Admins reach it from an **Administration → Invite people** group in the sidebar (between Investor and Settings), rendered only when `session.user.isAdmin` is true; the Invite-people item itself shows only in `invite` mode (in `open` mode there's no one to invite, so the group hides). `/signup` reads `getSignupContext()` server-side: with a valid invite token it renders the form with the email **locked** to the invited address; without one (in invite mode) it renders an **invite-only notice with no form** (so an uninvited visitor can't submit an email — preserving anti-enumeration). The landing, `PublicHeader`, and closing CTA read the signup mode and label their signup CTA **"Request access"** in invite mode (it routes to the invite-only screen) instead of implying open registration.
 
 ### Logout flow
 
