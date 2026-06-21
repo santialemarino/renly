@@ -31,7 +31,7 @@ The access token is short-lived (`JWT_EXPIRE_MINUTES`, default 30 min); a **rota
 - **Storage:** refresh tokens live in their own `refresh_tokens` table, mirroring `auth_tokens` — only the **SHA-256 hash** of the high-entropy raw token (`secrets.token_urlsafe(32)`) is stored. Each row carries a `family_id` (one login's rotation lineage), the `session_epoch` it was minted under, `remember_me`, `expires_at`, and `consumed_at`/`revoked_at`.
 - **Rotation + reuse-detection:** refresh is single-use. A valid token is marked `consumed_at` and its successor minted in the same family. Re-presenting an already-consumed token within a short grace window (30 s) is treated as a benign replay and returns a fresh rotation (this absorbs NextAuth's App-Router races, where middleware refreshes for the response while the same request's RSC tree still holds the pre-rotation cookie); **beyond** the grace window it is treated as theft and the **whole family is revoked**.
 - **Revocation tied to `session_epoch`:** a refresh only succeeds when the token's `session_epoch` still matches the user's. Any epoch bump (logout, password reset, password/email change) therefore invalidates every outstanding refresh token, exactly like it invalidates access tokens.
-- **Lifetimes:** `remember_me` selects the (sliding) window — `REFRESH_TOKEN_REMEMBER_DAYS` (30 d) for a remembered login, `REFRESH_TOKEN_DEFAULT_HOURS` (12 h) otherwise. When the refresh token itself expires, the user logs in again.
+- **Lifetimes:** `remember_me` selects the (sliding) window — `REFRESH_TOKEN_REMEMBER_DAYS` (30 d) for a remembered login, `REFRESH_TOKEN_DEFAULT_HOURS` (2 h) otherwise. The default window is kept tight so an unchecked login on a shared computer doesn't linger long after the visit. When the refresh token itself expires, the user logs in again.
 - **Session:** `/auth/refresh` is pre-auth (it carries a refresh token, not an access token), so it runs on the **privileged session** like login. Returns **401** when the token is unknown, expired, revoked, reused, or epoch-stale. A `delete_expired_by_user` purge runs on every login **and on each rotation**, so even a long-lived "remember me" session that never logs in again stays bounded; a global periodic purge that also reaps tokens for users who stop refreshing entirely is a follow-up (INFRA-10).
 
 ### Logout
@@ -90,7 +90,7 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 | `JWT_ALGORITHM`               | `HS256`  | HMAC-SHA256                                         |
 | `JWT_EXPIRE_MINUTES`          | `30`     | Access token lifetime (short; refreshed via AUTH-7) |
 | `REFRESH_TOKEN_REMEMBER_DAYS` | `30`     | Refresh token lifetime for a "remember me" login    |
-| `REFRESH_TOKEN_DEFAULT_HOURS` | `12`     | Refresh token lifetime for an ordinary login        |
+| `REFRESH_TOKEN_DEFAULT_HOURS` | `2`      | Refresh token lifetime for an ordinary login        |
 
 **Signing:** `jose.jwt.encode(payload, secret, algorithm="HS256")`.
 
