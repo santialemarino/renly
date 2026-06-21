@@ -36,10 +36,11 @@ class Settings(BaseSettings):
     # new access token when this expires, so a stolen access token is only useful briefly.
     jwt_expire_minutes: int = 30
     # Refresh token lifetimes (AUTH-7). A "remember me" login gets the long window; an ordinary login
-    # the short one. Both slide on each rotation. When the refresh token itself expires, the user must
+    # the short one — kept tight so an unchecked login on a shared computer doesn't outlive the visit
+    # by much. Both slide on each rotation. When the refresh token itself expires, the user must
     # log in again.
     refresh_token_remember_days: int = 30
-    refresh_token_default_hours: int = 12
+    refresh_token_default_hours: int = 2
     environment: Environment = Environment.development
     # Allowed CORS origins, comma-separated in the env (e.g. "https://app.renly.com,https://renly.com").
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:3000"]

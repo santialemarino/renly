@@ -8,19 +8,21 @@ import { Button } from '@repo/ui/components';
 import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import { ROUTES } from '@/config/routes';
-import { requestVerificationEmail } from '@/lib/auth-api';
 
 // Seconds the user must wait before requesting another email (standard anti-abuse cooldown).
 const RESEND_COOLDOWN_SECONDS = 30;
 
 interface CheckEmailNoticeProps {
-  email: string;
+  title: string;
+  description: string;
+  onResend: () => Promise<void>;
 }
 
-// Post-signup / pre-login screen: tells the user to open the emailed message and lets them resend
-// it on a cooldown (so they can retry if it didn't arrive). The resend response is uniform (never
-// reveals account state), so it always reports sent.
-export function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
+// Post-submit "check your email" screen, shared by signup (verification) and forgot-password (reset):
+// tells the user to open the emailed message and lets them resend it on a cooldown (so they can retry
+// if it didn't arrive). The caller injects the title, description, and resend action; every resend
+// response is uniform (never reveals account state), so it always reports sent.
+export function CheckEmailNotice({ title, description, onResend }: CheckEmailNoticeProps) {
   const t = useTranslations('common');
   const [resending, setResending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -42,7 +44,7 @@ export function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
   async function handleResend() {
     setResending(true);
     try {
-      await requestVerificationEmail(email);
+      await onResend();
     } catch {
       // Uniform behaviour: surface "sent" regardless so account existence isn't revealed.
     } finally {
@@ -53,12 +55,7 @@ export function CheckEmailNotice({ email }: CheckEmailNoticeProps) {
   }
 
   return (
-    <AuthStatusScreen
-      icon={MailCheck}
-      tone="info"
-      title={t('checkEmail.title')}
-      description={t('checkEmail.description', { email })}
-    >
+    <AuthStatusScreen icon={MailCheck} tone="info" title={title} description={description}>
       <div className="flex flex-col items-center gap-y-3">
         {sent && (
           <p className="text-paragraph-sm-medium text-green-600 animate-in fade-in duration-300">

@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MailCheck } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
@@ -17,7 +16,7 @@ import {
   Input,
 } from '@repo/ui/components';
 import { AuthLink } from '@/app/(auth)/_components/auth-link';
-import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
+import { CheckEmailNotice } from '@/app/(auth)/_components/check-email-notice';
 import {
   forgotPasswordFormSchema,
   type ForgotPasswordFormData,
@@ -116,14 +115,11 @@ export function ForgotPasswordCard() {
       ) : (
         <motion.div key="sent" {...FADE_PROPS} className="w-full max-w-auth-form">
           <Card>
-            <AuthStatusScreen
-              icon={MailCheck}
-              tone="info"
+            <CheckEmailNotice
               title={t('sentTitle')}
               description={t('sent', { email: submittedEmail })}
-            >
-              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
-            </AuthStatusScreen>
+              onResend={() => forgotPasswordRequest(submittedEmail)}
+            />
           </Card>
         </motion.div>
       )}
