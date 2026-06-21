@@ -92,8 +92,8 @@ export const authConfig: NextAuthConfig = {
 
       const isAuthPage = AUTH_ROUTES.some(matchesRoute);
 
-      // Marketing landing + legal pages are reachable without a session; the landing page itself
-      // redirects logged-in visitors to the app.
+      // Marketing landing + legal pages are public — reachable in any auth state (the landing
+      // adapts its CTAs to the session rather than redirecting logged-in visitors away).
       const isPublicPage = PUBLIC_ROUTES.some(
         (page) => pathname === page || (page !== '/' && pathname.startsWith(page + '/')),
       );

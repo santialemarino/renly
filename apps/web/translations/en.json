@@ -1,12 +1,12 @@
 {
   "common": {
     "appName": "Renly",
+    "goToDashboard": "Go to Dashboard",
     "notFound": {
       "title": "Page not available",
       "description": "The requested information is not available at this time.\nWe invite you to return to the homepage.",
       "cta": {
-        "label": "Go to Homepage",
-        "loading": "Redirecting to homepage..."
+        "label": "Go to Homepage"
       }
     },
     "form": {

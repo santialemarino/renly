@@ -1,10 +1,7 @@
-import { redirect } from 'next/navigation';
-
 import { LandingCta } from '@/app/(public)/_components/landing-cta';
 import { LandingFeatures } from '@/app/(public)/_components/landing-features';
 import { LandingHero } from '@/app/(public)/_components/landing-hero';
 import { LandingHowItWorks } from '@/app/(public)/_components/landing-how-it-works';
-import { ROUTES } from '@/config/routes';
 import { getSession } from '@/lib/auth';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -13,18 +10,18 @@ export async function generateMetadata() {
 }
 
 export default async function LandingPage() {
-  // Logged-in users skip the marketing page and go straight to the app, mirroring the auth pages.
+  // The marketing page is public — viewable whether logged in or out (unlike the auth forms, which
+  // redirect logged-in users to the app). When authenticated, the hero CTA points to the app and
+  // the closing signup-conversion block is hidden; the public header swaps its CTAs the same way.
   const session = await getSession();
-  if (session?.user && !session.user.error) {
-    redirect(ROUTES.home);
-  }
+  const isAuthenticated = !!session?.user && !session.user.error;
 
   return (
     <>
-      <LandingHero />
+      <LandingHero isAuthenticated={isAuthenticated} />
       <LandingFeatures />
       <LandingHowItWorks />
-      <LandingCta />
+      {!isAuthenticated && <LandingCta />}
     </>
   );
 }
