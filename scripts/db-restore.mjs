@@ -76,11 +76,15 @@ async function main() {
     'ON_ERROR_STOP=1',
   ]);
 
-  fs.createReadStream(file).pipe(createGunzip()).pipe(psql.stdin);
+  const input = fs.createReadStream(file);
+  const gunzip = createGunzip();
+  input.pipe(gunzip).pipe(psql.stdin);
   psql.stdout.pipe(process.stdout);
   psql.stderr.pipe(process.stderr);
 
   await new Promise((resolve, reject) => {
+    input.on('error', reject);
+    gunzip.on('error', reject);
     psql.on('error', reject);
     psql.on('close', (code) => {
       if (code !== 0) return reject(new Error(`psql exited with code ${code}`));

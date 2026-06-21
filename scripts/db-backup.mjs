@@ -127,6 +127,7 @@ async function main() {
         dumpOk = true;
         maybeResolve();
       });
+      gzip.on('error', reject);
       out.on('error', reject);
       out.on('finish', () => {
         fileDone = true;
