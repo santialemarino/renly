@@ -214,6 +214,8 @@ session.user = {
 
 Runs on every navigation (the `proxy.ts` middleware) as the **optimistic** edge check — `app/(protected)/layout.tsx`'s `getSession()` is the authoritative guard. Auth pages (`AUTH_ROUTES`) and public pages (`PUBLIC_ROUTES` — the marketing landing + legal pages) are always accessible. A logged-out (or session-errored) visitor is redirected to login **only on a `PROTECTED_ROUTES` match**; any other (unknown) path falls through so Next renders the 404 (`not-found.tsx`) instead of bouncing a mistyped URL to login. `PROTECTED_ROUTES` (`config/routes.ts`) is the computed complement `ROUTES − AUTH_ROUTES − PUBLIC_ROUTES`, so a new route added to `ROUTES` is protected by default. Because the layout guard is authoritative, a protected route missing from `PROTECTED_ROUTES` still can't leak — it just isn't short-circuited at the edge.
 
+The public pages render in **any** auth state — only the auth forms (`/login`, `/signup`) redirect logged-in users away. The marketing landing and `PublicHeader` read the session server-side to swap their CTAs to a single "Go to Dashboard" link for logged-in visitors (and hide the signup-conversion block); the global 404 (`not-found.tsx`) does the same, adding a "Go to Dashboard" CTA alongside "Go to Homepage" when authenticated.
+
 ### Logout flow
 
 ```
