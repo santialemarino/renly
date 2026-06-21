@@ -4,8 +4,8 @@ import { motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { LoginForm } from '@/app/(auth)/login/_components/login-form';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
@@ -29,7 +29,7 @@ export function LoginCard() {
         </CardContent>
         <CardFooter className="justify-center gap-x-1 px-6 text-paragraph-sm text-muted-foreground">
           <span>{t('form.signup.title')}</span>
-          <AuthLink href={ROUTES.auth.signup}>{t('form.signup.cta')}</AuthLink>
+          <InlineLink href={ROUTES.auth.signup}>{t('form.signup.cta')}</InlineLink>
         </CardFooter>
       </Card>
     </motion.div>

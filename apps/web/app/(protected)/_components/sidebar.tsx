@@ -51,6 +51,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
 import { userSignOut } from '@/auth';
+import { Brand } from '@/components/brand';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 
@@ -131,7 +132,7 @@ export function AppSidebar({
   return (
     <Sidebar className="border-sidebar-border shadow-lg">
       <SidebarHeader className="pl-4 py-5 border-b border-sidebar-border">
-        <span className="text-heading-2 text-blue-800">{t('brand')}</span>
+        <Brand name={t('brand')} size="lg" />
       </SidebarHeader>
 
       <SidebarContent>

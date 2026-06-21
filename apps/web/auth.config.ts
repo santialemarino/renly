@@ -2,7 +2,7 @@ import type { NextAuthConfig, Session, User } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
 import Credentials from 'next-auth/providers/credentials';
 
-import { AUTH_ROUTES, LOGIN_ROUTE } from '@/config/routes';
+import { AUTH_ROUTES, LOGIN_ROUTE, PUBLIC_ROUTES } from '@/config/routes';
 import { loginRequest, meRequest, refreshRequest } from '@/lib/auth-api';
 
 // Renew the access token slightly before it expires so a request never races a just-expired token.
@@ -91,7 +91,13 @@ export const authConfig: NextAuthConfig = {
         (page) => pathname === page || pathname.startsWith(page + '/'),
       );
 
-      if (isAuthPage) return true;
+      // Marketing landing + legal pages are reachable without a session; the landing page itself
+      // redirects logged-in visitors to the app.
+      const isPublicPage = PUBLIC_ROUTES.some(
+        (page) => pathname === page || (page !== '/' && pathname.startsWith(page + '/')),
+      );
+
+      if (isAuthPage || isPublicPage) return true;
 
       if (!isLoggedIn || hasError) {
         return Response.redirect(new URL(LOGIN_ROUTE, nextUrl));

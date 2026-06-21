@@ -66,3 +66,6 @@ apps/web/tests/e2e/.auth/
 
 # Local artifacts
 screenshots/
+
+# Database backups (pg_dump output from scripts/db-backup.mjs)
+backups/

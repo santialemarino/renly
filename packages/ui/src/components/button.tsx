@@ -63,7 +63,10 @@ function Button({
       className={cn(
         buttonVariants({ variant, size }),
         blue &&
-          'bg-blue-800 text-white hover:bg-blue-900 hover:text-white focus-visible:ring-blue-800/50 focus-visible:border-blue-800/40 border-transparent',
+          // [a]:hover:bg-blue-900 mirrors the default variant's [a]:hover: rule so twMerge drops
+          // default's [a]:hover:bg-primary/80 — otherwise that anchor-scoped greyish hover wins on
+          // <Button asChild blue> link-buttons and they hover grey instead of the app's blue.
+          'bg-blue-800 text-white hover:bg-blue-900 [a]:hover:bg-blue-900 hover:text-white focus-visible:ring-blue-800/50 focus-visible:border-blue-800/40 border-transparent',
         className,
       )}
       {...props}

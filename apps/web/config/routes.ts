@@ -1,5 +1,9 @@
 export const ROUTES = {
   home: '/dashboard',
+  landing: '/',
+  privacy: '/privacy',
+  terms: '/terms',
+  disclaimer: '/disclaimer',
   auth: {
     login: '/login',
     signup: '/signup',
@@ -34,6 +38,14 @@ export const AUTH_ROUTES = [
   ROUTES.auth.forgotPassword,
   ROUTES.auth.resetPassword,
   ROUTES.auth.verifyEmail,
+] as const;
+
+/** Public, unauthenticated routes — the marketing landing and legal pages. */
+export const PUBLIC_ROUTES = [
+  ROUTES.landing,
+  ROUTES.privacy,
+  ROUTES.terms,
+  ROUTES.disclaimer,
 ] as const;
 
 export const LOGIN_ROUTE = ROUTES.auth.login;

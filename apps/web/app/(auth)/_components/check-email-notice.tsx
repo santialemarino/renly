@@ -5,8 +5,8 @@ import { MailCheck } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 
 // Seconds the user must wait before requesting another email (standard anti-abuse cooldown).
@@ -70,7 +70,7 @@ export function CheckEmailNotice({ title, description, onResend }: CheckEmailNot
         >
           {resendLabel}
         </Button>
-        <AuthLink href={ROUTES.auth.login}>{t('checkEmail.backToLogin')}</AuthLink>
+        <InlineLink href={ROUTES.auth.login}>{t('checkEmail.backToLogin')}</InlineLink>
       </div>
     </AuthStatusScreen>
   );

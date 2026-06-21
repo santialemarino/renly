@@ -1,3 +1,5 @@
+/* global process */
+import { withSentryConfig } from '@sentry/nextjs';
 import createNextIntlPlugin from 'next-intl/plugin';
 
 // Content-Security-Policy value, served in report-only mode (SEC-10). Report-only collects
@@ -16,7 +18,8 @@ const contentSecurityPolicyReportOnly = [
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
   "script-src 'self'",
-  "connect-src 'self'",
+  // Sentry error ingestion (INFRA-5) when NEXT_PUBLIC_SENTRY_DSN is set; harmless when it isn't.
+  "connect-src 'self' https://*.sentry.io",
 ].join('; ');
 
 // HTTP security headers applied to every route (SEC-10).
@@ -87,4 +90,17 @@ const nextConfig = {
 
 const withNextIntl = createNextIntlPlugin();
 
-export default withNextIntl(nextConfig);
+// Sentry build-time options (INFRA-5). Error capture is gated at runtime on NEXT_PUBLIC_SENTRY_DSN
+// (see the sentry.*.config + instrumentation files), so wrapping here is inert until a DSN is set.
+// Source maps are only uploaded when SENTRY_AUTH_TOKEN is present (set in the deploy environment),
+// so local and CI builds neither upload nor require Sentry credentials.
+const sentryBuildOptions = {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: true,
+  widenClientFileUpload: true,
+  webpack: { treeshake: { removeDebugLogging: true } },
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+};
+
+export default withSentryConfig(withNextIntl(nextConfig), sentryBuildOptions);

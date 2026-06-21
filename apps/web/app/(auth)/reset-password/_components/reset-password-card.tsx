@@ -16,13 +16,13 @@ import {
   CardTitle,
   Input,
 } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { AuthStatusScreen } from '@/app/(auth)/_components/auth-status-screen';
 import {
   resetPasswordFormSchema,
   type ResetPasswordFormData,
 } from '@/app/(auth)/reset-password/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { InlineLink } from '@/components/inline-link';
 import { PasswordMeter } from '@/components/password-meter';
 import { ROUTES } from '@/config/routes';
 import { PasswordRejectedError, resetPasswordRequest } from '@/lib/auth-api';
@@ -100,7 +100,7 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
               title={t('successTitle')}
               description={t('success')}
             >
-              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+              <InlineLink href={ROUTES.auth.login}>{t('backToLogin')}</InlineLink>
             </AuthStatusScreen>
           </Card>
         </motion.div>
@@ -113,7 +113,7 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
               title={t('errorTitle')}
               description={t('form.errors.invalidToken')}
             >
-              <AuthLink href={ROUTES.auth.forgotPassword}>{t('requestNewLink')}</AuthLink>
+              <InlineLink href={ROUTES.auth.forgotPassword}>{t('requestNewLink')}</InlineLink>
             </AuthStatusScreen>
           </Card>
         </motion.div>
@@ -186,7 +186,7 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
               </Form>
             </CardContent>
             <CardFooter className="justify-center px-6 text-paragraph-sm text-muted-foreground">
-              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+              <InlineLink href={ROUTES.auth.login}>{t('backToLogin')}</InlineLink>
             </CardFooter>
           </Card>
         </motion.div>

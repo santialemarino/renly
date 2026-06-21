@@ -44,8 +44,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 
-RUN corepack enable
-
 COPY --from=builder /app/apps/web/.next ./.next
 COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder /app/apps/web/package.json ./
@@ -56,4 +54,6 @@ COPY --from=builder /app/packages/ui /app/packages/ui
 
 EXPOSE 3000
 ENV PORT=3000
-CMD ["pnpm", "start"]
+# Run Next.js directly rather than via `pnpm start`, so the runtime needs neither a corepack
+# download nor pnpm's lockfile-aware deps check (which fail in this minimal, workspace-less image).
+CMD ["node_modules/.bin/next", "start"]

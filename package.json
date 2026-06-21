@@ -31,7 +31,9 @@
     "prepare": "husky",
     "db:init": "node scripts/db-init.mjs",
     "db:fork": "node scripts/db-fork.mjs",
-    "db:migrate": "pnpm --filter api run migrate"
+    "db:migrate": "pnpm --filter api run migrate",
+    "db:backup": "node scripts/db-backup.mjs",
+    "db:restore": "node scripts/db-restore.mjs"
   },
   "lint-staged": {
     "apps/api/**/*.py": [

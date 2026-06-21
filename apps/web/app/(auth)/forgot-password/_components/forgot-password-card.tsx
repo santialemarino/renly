@@ -15,7 +15,6 @@ import {
   CardTitle,
   Input,
 } from '@repo/ui/components';
-import { AuthLink } from '@/app/(auth)/_components/auth-link';
 import { CheckEmailNotice } from '@/app/(auth)/_components/check-email-notice';
 import {
   forgotPasswordFormSchema,
@@ -30,6 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/form';
+import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { forgotPasswordRequest } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -108,7 +108,7 @@ export function ForgotPasswordCard() {
               </Form>
             </CardContent>
             <CardFooter className="justify-center px-6 text-paragraph-sm text-muted-foreground">
-              <AuthLink href={ROUTES.auth.login}>{t('backToLogin')}</AuthLink>
+              <InlineLink href={ROUTES.auth.login}>{t('backToLogin')}</InlineLink>
             </CardFooter>
           </Card>
         </motion.div>
