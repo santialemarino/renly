@@ -41,7 +41,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <div
         className={cn(
           'relative flex h-9 w-full items-center rounded-lg border shadow-xs',
-          props.readOnly ? 'bg-[var(--input-readonly)]' : surface ? 'bg-background' : 'bg-input',
+          props.readOnly ? 'bg-input-readonly' : surface ? 'bg-background' : 'bg-input',
           blue ? 'border-blue-700/50' : 'border-border',
           'transition-[border-color,box-shadow] duration-200 ease-in-out',
           blue
