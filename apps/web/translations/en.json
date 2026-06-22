@@ -124,7 +124,8 @@
         "disclaimer": "Disclaimer"
       },
       "rights": "All rights reserved."
-    }
+    },
+    "requestAccess": "Request access"
   },
   "login": {
     "metadata": {
@@ -169,7 +170,8 @@
       },
       "email": {
         "label": "Email",
-        "placeholder": "Enter your email"
+        "placeholder": "Enter your email",
+        "lockedHint": "This invite is tied to this email address."
       },
       "password": {
         "label": "Password",
@@ -188,8 +190,15 @@
         "cta": "Log in"
       },
       "errors": {
-        "passwordRejected": "This password can't be used. Please choose a different one."
+        "passwordRejected": "This password can't be used. Please choose a different one.",
+        "inviteInvalid": "This invite is invalid or has expired. Ask for a new one."
       }
+    },
+    "inviteOnly": {
+      "title": "Renly is invite-only",
+      "description": "You need an invite to create an account. Open the link from your invite email to sign up.",
+      "haveAccount": "Already have an account?",
+      "login": "Log in"
     }
   },
   "sidebar": {
@@ -212,13 +221,15 @@
       "alerts": "Alerts & limits",
       "localization": "Localization",
       "integrations": "Integrations",
-      "account": "Account"
+      "account": "Account",
+      "invitePeople": "Invite people"
     },
     "navGroups": {
       "finances": "Finances",
       "commitments": "Commitments",
       "portfolio": "Investor",
-      "settings": "Settings"
+      "settings": "Settings",
+      "administration": "Administration"
     },
     "currency": {
       "label": "Currency",
@@ -1986,5 +1997,47 @@
         ]
       }
     ]
+  },
+  "admin": {
+    "metadata": {
+      "title": "Admin",
+      "description": "Manage who can join Renly"
+    },
+    "title": "Invites",
+    "subtitle": "Invite people to Renly and manage pending invites.",
+    "invite": {
+      "emailLabel": "Email",
+      "emailPlaceholder": "Enter the email to invite",
+      "button": "Invite",
+      "sending": "Inviting…",
+      "success": "Invite sent to {email}.",
+      "taken": "An account with this email already exists.",
+      "error": "Couldn't send the invite. Please try again.",
+      "cooldown": "Wait {seconds}s before re-sending to this address."
+    },
+    "table": {
+      "email": "Email",
+      "status": "Status",
+      "sent": "Sent",
+      "accepted": "Accepted",
+      "actions": "Actions",
+      "empty": "No invites yet. Invite someone above to get started.",
+      "never": "—"
+    },
+    "status": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "revoked": "Revoked",
+      "expired": "Expired"
+    },
+    "actions": {
+      "resend": "Resend",
+      "revoke": "Revoke",
+      "resendSuccess": "Invite resent to {email}.",
+      "resendError": "Couldn't resend the invite.",
+      "revokeSuccess": "Invite to {email} revoked.",
+      "revokeError": "Couldn't revoke the invite.",
+      "resendIn": "Resend in {seconds}s"
+    }
   }
 }

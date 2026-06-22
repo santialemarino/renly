@@ -6,14 +6,16 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 
 ### Register (anti-enumeration, AUTH-5)
 
-1. `POST /auth/register` receives `{name, email, password}`.
+1. `POST /auth/register` receives `{name, email, password, invite_token?}`.
 2. The request schema validates `email` as a real address (`EmailStr`) and normalizes it to lowercase, and enforces a 12-character minimum password — invalid input returns 422.
-3. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open. This runs **first** and is email-independent, so rejecting a breached password leaks nothing about the address.
-4. **Always returns a uniform `202`** with a generic acknowledgement — the response never reveals whether the email already has an account (AUTH-5, completed in M2). Behind that uniform response:
+3. **Invite gate (`SIGNUP_MODE`):** in `invite` mode (default), a valid, unconsumed, unexpired invite whose email matches the registering address is **required** — otherwise `403` (`InvalidInviteError`). It is validated first (the access gate), and consumed on success. In `open` mode the gate is skipped. The invite check only inspects the invite token + its bound email, so it never reveals whether the address already has an account — the uniform-`202` property below is preserved. See **Invite-only access gate** below.
+4. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open. This runs **before the existing-email branch** and is email-independent, so rejecting a breached password leaks nothing about the address.
+5. **Always returns a uniform `202`** with a generic acknowledgement — the response never reveals whether the email already has an account (AUTH-5, completed in M2). Behind that uniform response:
    - **New address:** creates an **unverified** user (`bcrypt.gensalt()`, default 12 rounds), issues an `email_verification` token, and emails a verification link.
    - **Existing address:** creates nothing and emails a "you already have an account" notice (with a login link, no token).
-5. Registration does **not** auto-login — the account is unverified and login is gated on verification (see Login). The user clicks the emailed link, then logs in.
-6. Runs on the **privileged session** (`DATABASE_ADMIN_URL`): there is no user context yet and the new row's id can't satisfy the `users` RLS policy, so the insert + email lookup bypass RLS (SEC-15).
+   - (In invite mode, the matched invite is consumed in **both** branches, so the outcome shape is identical regardless of whether the address was already registered.)
+6. Registration does **not** auto-login — the account is unverified and login is gated on verification (see Login). The user clicks the emailed link, then logs in.
+7. Runs on the **privileged session** (`DATABASE_ADMIN_URL`): there is no user context yet and the new row's id can't satisfy the `users` RLS policy, so the insert + email lookup bypass RLS (SEC-15).
 
 ### Login
 
@@ -23,6 +25,26 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 4. Returns 401 if user not found or password mismatch.
 5. Returns **403** (`EmailNotVerifiedError`) if the password is correct but `email_verified_at` is null — the email must be verified first (AUTH-1). Accounts created before email verification existed were grandfathered as verified by the `0004` migration, so they are unaffected.
 6. Generates a short-lived access token (JWT) **and** issues a refresh token (AUTH-7), returning `{access_token, expires_in, refresh_token, refresh_expires_in}`. `remember_me: true` in the body gives the refresh token the long window; otherwise it gets the short one (see Refresh below).
+
+### Invite-only access gate (admin invites)
+
+The access control between "my friends" and the public for the invited beta. `SIGNUP_MODE` (default `invite`) decides whether registration is gated; only `invite` is used at launch (the public-open flip + a CAPTCHA are a later milestone).
+
+- **Admin = `users.is_admin`** — a plain boolean (NOT NULL default false), not a role system. Any number of users can be admins (flag each row). The `AdminUser` dependency (`app/deps/auth.py`) is `CurrentUser` + an `is_admin` check → `403` otherwise.
+- **`invites` table** — one invite per email (`email` unique, lowercased), following the `auth_tokens` pattern: only the **SHA-256 hash** of the raw token (`secrets.token_urlsafe(32)`) is stored, single-use (`consumed_at`), time-limited (`expires_at`, 7 days). `status` is `pending` / `accepted` / `revoked`; an expired link is a pending invite past `expires_at` (derived, shown to admins as "expired", not stored). `invited_by` references the admin. Under RLS keyed on `invited_by` as defense-in-depth — every invite flow runs on the **privileged session** (admin reads span all invites; the register/signup-context lookups are pre-auth), so the real gate is `is_admin` at the endpoint.
+- **Admin endpoints** (`/admin`, all `AdminUser`-gated, privileged session):
+  - `POST /admin/invites` `{email}` — creates (or re-arms an existing invite for that email), stores the token hash, emails the signup link. `409` if the email already has an account.
+  - `GET /admin/invites` — lists every invite with its effective status, sent (created) and accepted (consumed) timestamps.
+  - `POST /admin/invites/{id}/resend` — rotates the token, restarts the window, re-sends the link. `404` unknown, `409` if already accepted.
+  - `POST /admin/invites/{id}/revoke` — sets `revoked` so the link stops working. `404` unknown, `409` if already accepted.
+- **Accept flow** — the emailed link is `{WEB_BASE_URL}/signup?invite=<raw_token>`. `GET /auth/signup-context?invite=<token>` (pre-auth, privileged session) returns `{signup_mode, invited_email}`: in invite mode a valid token resolves the bound email (so the signup form locks to it), an invalid/missing token returns `invited_email: null` (the web shows an invite-only screen — **no open form**, preserving the AUTH-5 anti-enumeration property). `POST /auth/register` then re-validates the token + email match server-side and consumes it.
+- **First-admin bootstrap** — with invite mode on and no admin/invite yet, nobody can self-register, so the **first admin is set directly** in the database (a one-off, run with the privileged/owner role):
+
+  ```sql
+  UPDATE users SET is_admin = true WHERE email = 'you@example.com';
+  ```
+
+  Add more admins by flagging more rows the same way. After that, admins invite everyone else from `/admin`.
 
 ### Refresh / session continuity (AUTH-7)
 
@@ -42,7 +64,7 @@ The access token is short-lived (`JWT_EXPIRE_MINUTES`, default 30 min); a **rota
 
 ### Me
 
-`GET /auth/me` returns `{uid, email, name, plan, email_verified}` for the authenticated user.
+`GET /auth/me` returns `{uid, email, name, plan, email_verified, is_admin}` for the authenticated user. `is_admin` is carried into the NextAuth session (set at login) so the web can render admin-only UI (the sidebar "Invite people" group) without an extra call — a promotion takes effect on next login.
 
 ### Email verification (AUTH-1)
 
@@ -215,6 +237,8 @@ session.user = {
 Runs on every navigation (the `proxy.ts` middleware) as the **optimistic** edge check — `app/(protected)/layout.tsx`'s `getSession()` is the authoritative guard. Auth pages (`AUTH_ROUTES`) and public pages (`PUBLIC_ROUTES` — the marketing landing + legal pages) are always accessible. A logged-out (or session-errored) visitor is redirected to login **only on a `PROTECTED_ROUTES` match**; any other (unknown) path falls through so Next renders the 404 (`not-found.tsx`) instead of bouncing a mistyped URL to login. `PROTECTED_ROUTES` (`config/routes.ts`) is the computed complement `ROUTES − AUTH_ROUTES − PUBLIC_ROUTES`, so a new route added to `ROUTES` is protected by default. Because the layout guard is authoritative, a protected route missing from `PROTECTED_ROUTES` still can't leak — it just isn't short-circuited at the edge.
 
 The public pages render in **any** auth state — only the auth forms (`/login`, `/signup`) redirect logged-in users away. The marketing landing and `PublicHeader` read the session server-side to swap their CTAs to a single "Go to Dashboard" link for logged-in visitors (and hide the signup-conversion block); the global 404 (`not-found.tsx`) does the same, adding a "Go to Dashboard" CTA alongside "Go to Homepage" when authenticated.
+
+**Invite-only mode (frontend):** `/admin` is a protected route, so logged-out users hit `/login` like any protected route; a logged-in **non-admin** who reaches it gets a real `404` — the page calls `notFound()` when `GET /admin/invites` returns `403`, hiding the page's existence rather than showing a `403`. Admins reach it from an **Administration → Invite people** group in the sidebar (between Investor and Settings), rendered only when `session.user.isAdmin` is true. Both the sidebar item **and the `/admin` page itself** are gated to `invite` mode — in `open` mode there's no one to invite, so the item hides and the page is a real `404` for everyone. The page's resend/create also carries a client-side 30s cooldown per invite (mirroring the auth resend cooldown), on top of the server `INVITE_LIMIT`. `/signup` reads `getSignupContext()` server-side: with a valid invite token it renders the form with the email **locked** to the invited address; without one (in invite mode) it renders an **invite-only notice with no form** (so an uninvited visitor can't submit an email — preserving anti-enumeration). The landing, `PublicHeader`, and closing CTA read the signup mode and label their signup CTA **"Request access"** in invite mode (it routes to the invite-only screen) instead of implying open registration.
 
 ### Logout flow
 

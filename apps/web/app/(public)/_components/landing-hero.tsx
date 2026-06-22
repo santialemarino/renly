@@ -6,11 +6,19 @@ import { Button } from '@repo/ui/components';
 import { RevealGroup, RevealItem } from '@/app/(public)/_components/reveal';
 import { Section } from '@/app/(public)/_components/section';
 import { ROUTES } from '@/config/routes';
+import type { SignupMode } from '@/lib/auth-api';
 
 // Above-the-fold marketing hero: headline, sub-headline, and the primary CTAs. Logged-out visitors
-// get signup / login; logged-in visitors get a single "go to the app" CTA instead.
+// get signup / login; logged-in visitors get a single "go to the app" CTA instead. In invite-only
+// mode the primary CTA reads "Request access" (it routes to the invite-only signup screen).
 // Entrance staggers in on mount (the public surface's on-load animation).
-export function LandingHero({ isAuthenticated }: { isAuthenticated: boolean }) {
+export function LandingHero({
+  isAuthenticated,
+  signupMode,
+}: {
+  isAuthenticated: boolean;
+  signupMode: SignupMode;
+}) {
   const t = useTranslations('landing.hero');
   const tCommon = useTranslations('common');
 
@@ -31,7 +39,9 @@ export function LandingHero({ isAuthenticated }: { isAuthenticated: boolean }) {
           ) : (
             <>
               <Button asChild blue size="lg">
-                <a href={ROUTES.auth.signup}>{t('ctaPrimary')}</a>
+                <a href={ROUTES.auth.signup}>
+                  {signupMode === 'invite' ? tCommon('requestAccess') : t('ctaPrimary')}
+                </a>
               </Button>
               <Button asChild variant="outline" size="lg">
                 <a href={ROUTES.auth.login}>{t('ctaSecondary')}</a>

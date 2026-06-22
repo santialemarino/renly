@@ -19,7 +19,14 @@ const FADE_PROPS = {
   transition: { duration: ANIMATION_DEFAULT },
 };
 
-export function SignupCard() {
+interface SignupCardProps {
+  // When set (invite-only mode via a valid link), the email is locked to the invited address and the
+  // token is submitted with the registration. Both null in open mode.
+  lockedEmail?: string | null;
+  inviteToken?: string | null;
+}
+
+export function SignupCard({ lockedEmail = null, inviteToken = null }: SignupCardProps) {
   const t = useTranslations('signup');
   const tCommon = useTranslations('common');
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
@@ -36,6 +43,8 @@ export function SignupCard() {
             </CardHeader>
             <CardContent>
               <SignupForm
+                lockedEmail={lockedEmail}
+                inviteToken={inviteToken}
                 onSuccess={(email) => setSubmittedEmail(email)}
                 onError={() => setSubmittedEmail(null)}
               />

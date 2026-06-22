@@ -20,6 +20,14 @@ class EmailProvider(StrEnum):
     resend = "resend"
 
 
+# Registration access mode. invite (default) gates POST /auth/register behind a valid admin invite —
+# the access control for the invited beta; open skips the gate (the public-open flip + Turnstile are
+# a later launch milestone). Only invite is built/used now.
+class SignupMode(StrEnum):
+    invite = "invite"
+    open = "open"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -60,8 +68,11 @@ class Settings(BaseSettings):
     email_api_key: str | None = None
     email_from: str = "Renly <onboarding@resend.dev>"
     # Public base URL of the web app, used to build the links embedded in account emails
-    # (verification, password reset). No trailing slash.
+    # (verification, password reset, invite). No trailing slash.
     web_base_url: str = "http://localhost:3000"
+    # Registration access mode (default invite): invite requires a valid admin invite to register,
+    # open lets anyone register. Only invite is exercised at launch.
+    signup_mode: SignupMode = SignupMode.invite
 
     # Rejects a missing or weak JWT secret at startup; a short/guessable secret makes every token forgeable.
     @field_validator("jwt_secret")

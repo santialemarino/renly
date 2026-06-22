@@ -88,6 +88,12 @@ CREATE TYPE auth_token_type AS ENUM (
   'email_change'
 );
 
+CREATE TYPE invite_status AS ENUM (
+  'pending',
+  'accepted',
+  'revoked'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -95,12 +101,14 @@ CREATE TYPE auth_token_type AS ENUM (
 -- Users table
 -- Passwords hashed with bcrypt. email_verified_at is NULL until the user confirms their address
 -- via the AUTH-1 verification link (login is gated on it); it is set on verification or email change.
+-- is_admin gates the admin invite endpoints (multi-admin: flag each row, not a role system).
 CREATE TABLE users (
   id                BIGSERIAL PRIMARY KEY,
   name              VARCHAR(255) NOT NULL,
   email             VARCHAR(255) NOT NULL UNIQUE,
   password_hash     VARCHAR(255) NOT NULL,
   email_verified_at TIMESTAMPTZ,
+  is_admin          BOOLEAN NOT NULL DEFAULT FALSE,
   session_epoch     BIGINT NOT NULL DEFAULT 0,
   plan              user_plan NOT NULL DEFAULT 'free',
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -556,6 +564,26 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_family ON refresh_tokens(family_id);
 
+-- Invites (invite-only access gate)
+-- Single-use, time-limited admin invite binding a signup link to one email. An admin creates one
+-- per address; only the SHA-256 hash of the high-entropy raw token is stored — the raw value lives
+-- only in the emailed signup link. status is pending until the address registers (accepted) or an
+-- admin cancels it (revoked); an expired link is a pending invite past expires_at (derived, not
+-- stored). One active invite per email (UNIQUE); resend rotates the token in place. Timestamps are
+-- TIMESTAMP WITHOUT TIME ZONE (naive UTC) to match the service's naive utcnow() comparisons.
+CREATE TABLE invites (
+  id          BIGSERIAL PRIMARY KEY,
+  email       VARCHAR(255) NOT NULL UNIQUE,
+  token_hash  VARCHAR(64) NOT NULL UNIQUE,
+  invited_by  BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status      invite_status NOT NULL DEFAULT 'pending',
+  expires_at  TIMESTAMP NOT NULL,
+  consumed_at TIMESTAMP,
+  created_at  TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX idx_invites_invited_by ON invites(invited_by);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -760,6 +788,14 @@ CREATE POLICY auth_tokens_user_isolation ON auth_tokens
 ALTER TABLE refresh_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+-- invites are owned via invited_by (the admin who created them). Every invite flow runs on the
+-- privileged session and bypasses RLS: admin reads span all invites, and the register / signup-context
+-- lookups are pre-auth. This per-admin policy is therefore defense-in-depth — the real gate is the
+-- is_admin check at the admin endpoints, no request-session path inserts or reads here.
+ALTER TABLE invites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY invites_admin_isolation ON invites
+  USING (invited_by = app_current_user_id()) WITH CHECK (invited_by = app_current_user_id());
 
 -- investment_group_members is a pure junction (composite PK, no surrogate user column).
 -- Isolation is keyed through the parent investment via an EXISTS-join — both parents

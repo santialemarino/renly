@@ -72,6 +72,7 @@ export const authConfig: NextAuthConfig = {
           id: String(me.uid),
           email: me.email,
           name: me.name,
+          isAdmin: me.isAdmin,
           accessToken: tokens.access_token,
           expiresIn: tokens.expires_in,
           refreshToken: tokens.refresh_token,
@@ -116,6 +117,7 @@ export const authConfig: NextAuthConfig = {
         token.uid = user.id as string;
         token.email = user.email as string;
         token.name = user.name as string;
+        token.isAdmin = user.isAdmin;
         token.accessToken = user.accessToken;
         token.accessTokenExpires = Date.now() + (user.expiresIn as number) * 1000;
         token.refreshToken = user.refreshToken;
@@ -144,6 +146,7 @@ export const authConfig: NextAuthConfig = {
         id: token.uid as string,
         email: (token.email as string) ?? session.user?.email,
         name: (token.name as string) ?? session.user?.name ?? '',
+        isAdmin: (token.isAdmin as boolean) ?? false,
         accessToken: token.accessToken as string,
         expiresIn: expiresInSeconds,
         error: token.error as string | undefined,

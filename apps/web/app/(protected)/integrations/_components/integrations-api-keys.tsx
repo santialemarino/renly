@@ -134,7 +134,7 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
               <div className="flex flex-col gap-y-3">
                 <Label>{t('apiKeys.dialog.keyLabel')}</Label>
                 <div className="flex items-center gap-x-2">
-                  <Input value={rawKey} readOnly surface className="font-mono text-paragraph-xs" />
+                  <Input value={rawKey} readOnly className="font-mono text-paragraph-xs" />
                   <CopyButton value={rawKey} />
                 </div>
               </div>

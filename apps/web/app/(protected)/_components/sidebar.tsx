@@ -22,10 +22,12 @@ import {
   RefreshCw,
   Rows3,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Table2,
   TrendingUp,
   UserCog,
+  UserPlus,
   Wallet,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -54,6 +56,7 @@ import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
+import type { SignupMode } from '@/lib/auth-api';
 
 const FINANCES_GROUP = [
   { key: 'financeDashboard', href: ROUTES.financeDashboard, icon: BarChart3 },
@@ -84,6 +87,12 @@ const SETTINGS_GROUP = [
   { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
 ] as const;
 
+// Admin-only group (rendered only when the user is an admin). Items can be gated further:
+// invitePeople is only relevant in invite mode (in open mode anyone signs up, so there's no one to invite).
+const ADMIN_GROUP = [
+  { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
+] as const;
+
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
   'hover:bg-gray-100 active:bg-gray-200 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:text-white data-[active=true]:hover:bg-blue-900 data-[active=true]:active:bg-blue-950 data-[active=true]:focus-visible:bg-blue-900';
@@ -96,12 +105,16 @@ interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
   currencyCollapsed: boolean;
+  isAdmin: boolean;
+  signupMode: SignupMode;
 }
 
 export function AppSidebar({
   displayCurrencies,
   activeCurrency,
   currencyCollapsed,
+  isAdmin,
+  signupMode,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -117,6 +130,12 @@ export function AppSidebar({
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;
   const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
   const isSettingsActive = SETTINGS_GROUP.some(({ href }) => isActive(href));
+
+  // Admin group: only for admins, and only items whose gate matches (invitePeople → invite mode).
+  // When no item qualifies (e.g. open mode), the whole group is hidden.
+  const adminItems = ADMIN_GROUP.filter((item) => !item.inviteOnly || signupMode === 'invite');
+  const showAdminGroup = isAdmin && adminItems.length > 0;
+  const isAdminActive = adminItems.some(({ href }) => isActive(href));
 
   // Suppress collapsible animation on first render so open groups don't animate in.
   const collapsibleContentClass = mounted
@@ -309,6 +328,57 @@ export function AppSidebar({
                   </CollapsibleContent>
                 </SidebarMenuItem>
               </Collapsible>
+
+              {/* Administration collapsible group — admins only (and only items matching the signup mode) */}
+              {showAdminGroup && (
+                <Collapsible asChild defaultOpen={isAdminActive} className="group/collapsible">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        size="lg"
+                        className={cn(
+                          '[&_svg]:size-5 text-paragraph-medium',
+                          NAV_ITEM_STYLES,
+                          !isAdminActive &&
+                            'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                          isAdminActive && 'bg-gray-100',
+                        )}
+                      >
+                        <ShieldCheck />
+                        <span>{t('navGroups.administration')}</span>
+                        <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className={collapsibleContentClass}>
+                      <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                        {adminItems.map(({ key, href, icon: Icon }) => {
+                          const active = isActive(href);
+                          return (
+                            <SidebarMenuSubItem key={key}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={active}
+                                className={cn(
+                                  'h-8 text-paragraph-sm-medium',
+                                  NAV_ITEM_STYLES,
+                                  SUB_BUTTON_EXTRAS,
+                                  !active &&
+                                    'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                                )}
+                              >
+                                <Link href={href}>
+                                  <Icon />
+                                  <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                                </Link>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
 
               {/* Settings collapsible group */}
               <Collapsible asChild defaultOpen={isSettingsActive} className="group/collapsible">

@@ -14,6 +14,7 @@ from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
+from app.repositories.invite_repository import invite_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.refresh_token_repository import refresh_token_repository
@@ -38,6 +39,7 @@ __all__ = [
     "income_repository",
     "installment_repository",
     "investment_repository",
+    "invite_repository",
     "metrics_repository",
     "payment_obligation_repository",
     "refresh_token_repository",

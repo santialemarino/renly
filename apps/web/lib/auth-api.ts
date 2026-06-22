@@ -4,6 +4,8 @@ export interface RegisterPayload {
   name: string;
   email: string;
   password: string;
+  // Raw invite token from the emailed link; required by the API in invite-only mode (SIGNUP_MODE).
+  inviteToken?: string;
 }
 
 // Thrown when the API rejects a password (the only 400 from register/reset): too weak or breached.
@@ -14,11 +16,29 @@ export class PasswordRejectedError extends Error {
   }
 }
 
+// Thrown when the API rejects an invite at registration (invite-only mode, 403): the token is
+// missing, unknown, expired, already used, or doesn't match the email.
+export class InviteInvalidError extends Error {
+  constructor() {
+    super('invite_invalid');
+    this.name = 'InviteInvalidError';
+  }
+}
+
+export type SignupMode = 'invite' | 'open';
+
+export interface SignupContext {
+  mode: SignupMode;
+  // The address the invite is bound to (lock the form to it); null in open mode or for an invalid token.
+  invitedEmail: string | null;
+}
+
 export interface MeResponse {
   uid: number;
   email: string;
   name: string;
   emailVerified: boolean;
+  isAdmin: boolean;
 }
 
 export interface TokenResponse {
@@ -49,10 +69,31 @@ export async function registerRequest(data: RegisterPayload): Promise<void> {
   const res = await fetch(`${apiUrl}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+    body: JSON.stringify({
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      invite_token: data.inviteToken,
+    }),
   });
+  if (res.status === 403) throw new InviteInvalidError();
   if (res.status === 400) throw new PasswordRejectedError();
   if (!res.ok) throw new Error(await errorDetail(res, 'register_failed'));
+}
+
+// Fetches the signup context: whether registration is invite-only and, for a valid invite token, the
+// address to lock the form to. Falls back to the safe default (invite-only, no email) when the API is
+// unreachable, so the public surface never implies open registration on an outage.
+export async function getSignupContext(inviteToken?: string): Promise<SignupContext> {
+  try {
+    const query = inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : '';
+    const res = await fetch(`${apiUrl}/auth/signup-context${query}`, { cache: 'no-store' });
+    if (!res.ok) return { mode: 'invite', invitedEmail: null };
+    const raw = (await res.json()) as { signup_mode: SignupMode; invited_email: string | null };
+    return { mode: raw.signup_mode, invitedEmail: raw.invited_email };
+  } catch {
+    return { mode: 'invite', invitedEmail: null };
+  }
 }
 
 // Logs in (AUTH-7). `rememberMe` controls the refresh token's lifetime — a longer, persistent
@@ -94,8 +135,15 @@ export async function meRequest(accessToken: string): Promise<MeResponse | null>
     email: string;
     name: string;
     email_verified: boolean;
+    is_admin: boolean;
   };
-  return { uid: raw.uid, email: raw.email, name: raw.name, emailVerified: raw.email_verified };
+  return {
+    uid: raw.uid,
+    email: raw.email,
+    name: raw.name,
+    emailVerified: raw.email_verified,
+    isAdmin: raw.is_admin,
+  };
 }
 
 export async function logoutRequest(accessToken: string): Promise<void> {

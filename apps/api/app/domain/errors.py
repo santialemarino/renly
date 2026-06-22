@@ -62,6 +62,21 @@ class InvalidTokenError(Exception):
         super().__init__(message)
 
 
+# Registration was attempted without a valid invite in invite-only mode (unknown/expired/used token,
+# or an email that doesn't match the invite). Mapped to 403 by the API.
+class InvalidInviteError(Exception):
+    def __init__(self, message: str = "This invite is invalid or has expired. Ask an admin for a new one.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
+# An admin tried to invite an email that already belongs to an account. Mapped to 409 by the API.
+class InviteEmailTakenError(Exception):
+    def __init__(self, message: str = "An account with this email already exists.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
 # Resource not found or not owned by the current user. Mapped to 404 by the API.
 class NotFoundError(Exception):
     def __init__(self, message: str = "Not found") -> None:

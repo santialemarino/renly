@@ -124,7 +124,8 @@
         "disclaimer": "Descargo"
       },
       "rights": "Todos los derechos reservados."
-    }
+    },
+    "requestAccess": "Solicitar acceso"
   },
   "login": {
     "metadata": {
@@ -169,7 +170,8 @@
       },
       "email": {
         "label": "Correo electrónico",
-        "placeholder": "Ingresá tu correo electrónico"
+        "placeholder": "Ingresá tu correo electrónico",
+        "lockedHint": "Esta invitación está vinculada a este correo."
       },
       "password": {
         "label": "Contraseña",
@@ -188,8 +190,15 @@
         "cta": "Iniciar sesión"
       },
       "errors": {
-        "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente."
+        "passwordRejected": "No se puede usar esta contraseña. Elegí una diferente.",
+        "inviteInvalid": "Esta invitación no es válida o expiró. Pedí una nueva."
       }
+    },
+    "inviteOnly": {
+      "title": "Renly es solo por invitación",
+      "description": "Necesitás una invitación para crear una cuenta. Abrí el enlace de tu correo de invitación para registrarte.",
+      "haveAccount": "¿Ya tenés una cuenta?",
+      "login": "Iniciar sesión"
     }
   },
   "sidebar": {
@@ -212,13 +221,15 @@
       "alerts": "Alertas y límites",
       "localization": "Localización",
       "integrations": "Integraciones",
-      "account": "Cuenta"
+      "account": "Cuenta",
+      "invitePeople": "Invitar personas"
     },
     "navGroups": {
       "finances": "Finanzas",
       "commitments": "Compromisos",
       "portfolio": "Inversor",
-      "settings": "Configuración"
+      "settings": "Configuración",
+      "administration": "Administración"
     },
     "currency": {
       "label": "Moneda",
@@ -1986,5 +1997,47 @@
         ]
       }
     ]
+  },
+  "admin": {
+    "metadata": {
+      "title": "Administración",
+      "description": "Gestioná quién puede unirse a Renly"
+    },
+    "title": "Invitaciones",
+    "subtitle": "Invitá personas a Renly y gestioná las invitaciones pendientes.",
+    "invite": {
+      "emailLabel": "Correo",
+      "emailPlaceholder": "Ingresá el correo a invitar",
+      "button": "Invitar",
+      "sending": "Invitando…",
+      "success": "Invitación enviada a {email}.",
+      "taken": "Ya existe una cuenta con este correo.",
+      "error": "No se pudo enviar la invitación. Intentá de nuevo.",
+      "cooldown": "Esperá {seconds}s antes de reenviar a este correo."
+    },
+    "table": {
+      "email": "Correo",
+      "status": "Estado",
+      "sent": "Enviada",
+      "accepted": "Aceptada",
+      "actions": "Acciones",
+      "empty": "Todavía no hay invitaciones. Invitá a alguien arriba para empezar.",
+      "never": "—"
+    },
+    "status": {
+      "pending": "Pendiente",
+      "accepted": "Aceptada",
+      "revoked": "Revocada",
+      "expired": "Expirada"
+    },
+    "actions": {
+      "resend": "Reenviar",
+      "revoke": "Revocar",
+      "resendSuccess": "Invitación reenviada a {email}.",
+      "resendError": "No se pudo reenviar la invitación.",
+      "revokeSuccess": "Invitación a {email} revocada.",
+      "revokeError": "No se pudo revocar la invitación.",
+      "resendIn": "Reenviar en {seconds}s"
+    }
   }
 }

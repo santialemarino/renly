@@ -53,6 +53,17 @@ def email_change_email(to: str, link: str) -> EmailMessage:
     return EmailMessage(to=to, subject=f"Confirm your new {_PRODUCT_NAME} email", html=_html(text), text=text)
 
 
+# Invite email sent when an admin invites an address (invite-only access gate). The link opens signup
+# with the email locked to this address; the token is single-use and time-limited.
+def invite_email(to: str, link: str) -> EmailMessage:
+    text = (
+        f"You've been invited to {_PRODUCT_NAME}.\n\n"
+        f"Create your account here:\n{link}\n\n"
+        "This invite is tied to your email address and can be used once. If you weren't expecting it, you can ignore this message."
+    )
+    return EmailMessage(to=to, subject=f"You're invited to {_PRODUCT_NAME}", html=_html(text), text=text)
+
+
 # Sent on a change-email request when the requested address already belongs to another account, so
 # the response stays uniform and never reveals it (AUTH-8, anti-enumeration).
 def email_change_taken_email(to: str, login_link: str) -> EmailMessage:

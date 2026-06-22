@@ -7,6 +7,7 @@ declare module 'next-auth' {
       id: string;
       email: string;
       name: string;
+      isAdmin: boolean;
       accessToken: string;
       expiresIn: number;
       error?: string;
@@ -17,6 +18,7 @@ declare module 'next-auth' {
     id: string;
     email: string;
     name: string;
+    isAdmin: boolean;
     accessToken: string;
     expiresIn: number;
     refreshToken: string;
@@ -29,6 +31,7 @@ declare module 'next-auth/jwt' {
     uid: string;
     email: string;
     name: string;
+    isAdmin: boolean;
     accessToken: string;
     accessTokenExpires: number;
     // Refresh token (AUTH-7) — kept inside the encrypted NextAuth JWT, never exposed to the session.

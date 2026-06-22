@@ -4,6 +4,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 
+from app.config import SignupMode
 from app.models.auth_token import AuthTokenType
 from app.models.user import UserPlan
 from app.schemas.base import RequestBase
@@ -20,6 +21,7 @@ class RegisterRequest(RequestBase):
     name: str = Field(description="Full name of the user.")
     email: NormalizedEmail = Field(description="Email address (unique, normalized to lowercase).")
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); minimum 12 characters.")
+    invite_token: str | None = Field(default=None, description="Raw invite token from the emailed link; required in invite-only mode (SIGNUP_MODE).")
 
 
 # Body for POST /auth/login. Authenticates an existing user.
@@ -50,6 +52,7 @@ class MeResponse(BaseModel):
     name: str = Field(description="User display name.")
     plan: UserPlan = Field(description="Plan tier (free or pro).")
     email_verified: bool = Field(description="Whether the email address has been verified.")
+    is_admin: bool = Field(description="Whether the user is an admin (gates the admin invite surface).")
 
 
 # Body for POST /auth/verify-email/request and POST /auth/forgot-password. Identifies the address to
@@ -80,3 +83,12 @@ class MessageResponse(BaseModel):
 class ConfirmEmailResponse(BaseModel):
     detail: str = Field(description="Human-readable confirmation message.")
     token_type: AuthTokenType = Field(description="Which flow the token completed (email_verification or email_change).")
+
+
+# Response for GET /auth/signup-context. Tells the web whether signup is invite-only and, for a valid
+# invite token, the address to lock the form to (null when open, or the token is missing/invalid).
+class SignupContextResponse(BaseModel):
+    signup_mode: SignupMode = Field(description="Registration access mode (invite or open).")
+    invited_email: str | None = Field(
+        default=None, description="Email the invite is bound to (lock the form to it); null when open or the token is invalid."
+    )
