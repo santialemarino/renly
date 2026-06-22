@@ -41,7 +41,9 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       <div
         className={cn(
           'relative flex h-9 w-full items-center rounded-lg border shadow-xs',
-          surface ? 'bg-background' : 'bg-input',
+          // Read-only fields read as "locked" with a muted fill (takes precedence over surface);
+          // editable fields use the white surface or the default input fill.
+          props.readOnly ? 'bg-muted' : surface ? 'bg-background' : 'bg-input',
           blue ? 'border-blue-700/50' : 'border-border',
           'transition-[border-color,box-shadow] duration-200 ease-in-out',
           blue
