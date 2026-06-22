@@ -129,8 +129,9 @@ export function SignupForm({
                     autoComplete="email"
                     placeholder={t('form.email.placeholder')}
                     readOnly={!!lockedEmail}
-                    surface={!!lockedEmail}
                     aria-readonly={!!lockedEmail}
+                    containerClassName={lockedEmail ? 'bg-muted' : undefined}
+                    className={lockedEmail ? 'cursor-not-allowed text-muted-foreground' : undefined}
                   />
                 </FormControl>
                 {lockedEmail ? (
