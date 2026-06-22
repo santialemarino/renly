@@ -29,6 +29,15 @@ description: How to create a component or a page in the Renly web app (Next.js A
 - **Componentize repeated structure.** Structure that repeats — feature cards, list/step items, page sections, a legal "section" block, a page header (title + meta), a header/footer shell — is ONE component rendered by mapping data, never copy-pasted markup. The same element in two places is one shared component (app-only → the app's `components/`; cross-app → `packages/ui`); sibling sections that share a shape become section components that a thin page composes. **Consistency beats local cleverness:** the same control means the same thing, in the same place and order, across surfaces (e.g. don't flip primary-then-secondary CTA order between a hero and a header).
 - **Button as a link.** Use `<Button asChild>` wrapping an `<a>`/`<Link>` rather than a hand-rolled anchor, so it keeps the variant, ring, and states. Gotcha: the `default` variant carries an `[a]:hover:` rule, so when you also pass `blue`/custom hover on an anchor the anchor-scoped rule can win — confirm a link-button's hover matches the same button rendered as a real `<button>`.
 
+## Forms and inputs
+
+Build inputs with the shared form stack — never a bare `<Input>` wired to ad-hoc `useState`. Consistency, accessibility, and error UX all come from reuse:
+
+- **Use the Form primitives.** A field is `Form` + `FormField` + `FormItem` + `FormLabel` + `FormControl` (wrapping the `@repo/ui` input) + `FormMessage`, driven by `react-hook-form` + a colocated zod schema (`form-schema.ts`). Reuse the shared validators and messages (e.g. `EMAIL_REGEX`, the `common.form.errors.*` keys) rather than re-deriving them per form.
+- **`noValidate` on every `<form>`.** The browser's native validation bubbles are ugly and untranslated — suppress them so the inline `FormMessage` is the single source of validation feedback.
+- **Errors reveal without layout shift.** `FormMessage` (field) and `FormError` (form-level) animate height open/closed and reserve no space when absent — so showing or clearing an error never snaps the layout. Don't hand-roll an error `<p>`, and don't pad fixed space for one.
+- **Surface server-side field errors inline.** Map a field-specific API failure (e.g. a 409 "already taken", a rejected password) onto the field with `form.setError(name, …)` so it reads like a validation error — same place, same animation — instead of only a toast.
+
 ## Icons
 
 - **Prefer Lucide:** Use `lucide-react` when an icon exists there (e.g. `import { Check, Eye, XIcon } from 'lucide-react'`). Same usage pattern as in the repo: import by name, render as `<IconName className="..." />`.
