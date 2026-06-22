@@ -4,7 +4,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
-interface InviteRaw {
+export interface InviteRaw {
   id: number;
   email: string;
   status: InviteStatus;
@@ -39,7 +39,7 @@ export class AdminForbiddenError extends Error {
 
 // --- Mappers ---
 
-function mapInvite(raw: InviteRaw): Invite {
+export function mapInvite(raw: InviteRaw): Invite {
   return {
     id: raw.id,
     email: raw.email,
