@@ -13,7 +13,7 @@ export async function InviteOnlyNotice() {
   const t = await getTranslations('signup.inviteOnly');
 
   return (
-    <div className="w-full max-w-auth-form">
+    <div className="w-full max-w-auth-form" data-testid="invite-only-notice">
       <Card>
         <AuthStatusScreen icon={Lock} tone="info" title={t('title')} description={t('description')}>
           <div className="flex items-center px-6 gap-x-1 text-paragraph-sm text-muted-foreground">
