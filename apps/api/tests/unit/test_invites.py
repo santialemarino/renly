@@ -173,6 +173,19 @@ class TestCreateInvite:
         assert await invite_service.get_pending_invite_by_token(FakeSession(), first_token) is None
         assert await invite_service.get_pending_invite_by_token(FakeSession(), _invite_token_from(email.sent[1])) is not None
 
+    @pytest.mark.asyncio
+    async def test_reinviting_a_revoked_email_rearms_it(self, wired):
+        _users, invites, email = wired
+        created = await invite_service.create_invite(FakeSession(), "f@example.com", invited_by_id=1)
+        await invite_service.revoke_invite(FakeSession(), created.id)
+
+        rearmed = await invite_service.create_invite(FakeSession(), "f@example.com", invited_by_id=1)
+
+        assert rearmed.id == created.id  # same row re-armed in place, not duplicated
+        assert rearmed.status == InviteStatus.pending and len(invites.invites) == 1
+        # The fresh link resolves again (the revoked state no longer blocks it).
+        assert await invite_service.get_valid_invite(FakeSession(), _invite_token_from(email.sent[-1]), "f@example.com") is not None
+
 
 # --- Validation + single-use consume (registration path) ---
 
@@ -249,6 +262,17 @@ class TestResendRevoke:
         assert revoked.status == InviteStatus.revoked
         with pytest.raises(InvalidInviteError):
             await invite_service.get_valid_invite(FakeSession(), raw, "f@example.com")
+
+    @pytest.mark.asyncio
+    async def test_resend_rearms_a_revoked_invite(self, wired):
+        _users, _invites, email = wired
+        created = await invite_service.create_invite(FakeSession(), "f@example.com", invited_by_id=1)
+        await invite_service.revoke_invite(FakeSession(), created.id)
+
+        resent = await invite_service.resend_invite(FakeSession(), created.id)
+
+        assert resent.status == InviteStatus.pending  # revoked → resend re-arms it
+        assert await invite_service.get_valid_invite(FakeSession(), _invite_token_from(email.sent[-1]), "f@example.com") is not None
 
     @pytest.mark.asyncio
     async def test_resend_and_revoke_reject_an_accepted_invite(self, wired):
@@ -372,6 +396,26 @@ class TestRegisterGate:
         user = await users.get_by_email(None, "open@example.com")
         assert user is not None and user.email_verified_at is None
         assert email.sent[-1].to == "open@example.com" and "token=" in email.sent[-1].text
+
+    @pytest.mark.asyncio
+    async def test_consumed_invite_is_independent_of_the_user_row(self, wired):
+        # The invite binds to (email, inviting admin), never the registered user's row: it has no FK
+        # to users.id (only invited_by, the admin). So an account email/password change can't touch
+        # it — after registration consumes it, it stays bound to the original address + admin.
+        users, invites, email = wired
+        await invite_service.create_invite(FakeSession(), "new@example.com", invited_by_id=9)
+        raw = _invite_token_from(email.sent[0])
+        await auth_service.register_account(FakeSession(), "S", "new@example.com", _PASSWORD, invite_token=raw)
+
+        invite = next(iter(invites.invites.values()))
+        user = await users.get_by_email(None, "new@example.com")
+        assert invite.status == InviteStatus.accepted
+        assert not hasattr(invite, "user_id")  # no link back to the registered account
+
+        # Simulate the user later changing their email — the consumed invite is untouched.
+        user.email = "changed@example.com"
+        await users.save(None, user)
+        assert invite.email == "new@example.com" and invite.invited_by == 9
 
 
 # --- Admin authorization guard ---
