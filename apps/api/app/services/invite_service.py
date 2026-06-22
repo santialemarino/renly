@@ -72,16 +72,19 @@ async def create_invite(session: AsyncSession, email: str, invited_by_id: int) -
         raise InviteEmailTakenError()
 
     raw_token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(raw_token)
+    expires_at = utcnow() + INVITE_TOKEN_TTL
     invite = await invite_repository.get_by_email(session, email)
     if invite is None:
-        invite = Invite(email=email, token_hash=_hash_token(raw_token), invited_by=invited_by_id, expires_at=utcnow() + INVITE_TOKEN_TTL)
+        invite = Invite(email=email, token_hash=token_hash, invited_by=invited_by_id, status=InviteStatus.pending, expires_at=expires_at)
+        await invite_repository.create(session, invite)
     else:
-        invite.token_hash = _hash_token(raw_token)
+        invite.token_hash = token_hash
         invite.invited_by = invited_by_id
-        invite.expires_at = utcnow() + INVITE_TOKEN_TTL
-    invite.status = InviteStatus.pending
-    invite.consumed_at = None
-    await invite_repository.create(session, invite)
+        invite.status = InviteStatus.pending
+        invite.consumed_at = None
+        invite.expires_at = expires_at
+        await invite_repository.save(session, invite)
     await session.commit()
     await _safe_send(email_templates.invite_email(email, _invite_link(raw_token)))
     return invite
