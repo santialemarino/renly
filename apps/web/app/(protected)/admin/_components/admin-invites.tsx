@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Ban, Send } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -18,7 +19,12 @@ import {
 } from '@repo/ui/components';
 import { createInvite, resendInvite, revokeInvite } from '@/app/(protected)/admin/admin-actions';
 import type { Invite, InviteStatus } from '@/lib/api/invites';
+import { ANIMATION_FAST } from '@/lib/constants/animations';
 import { getLocaleTag } from '@/lib/utils/locale';
+
+// Seconds before the same invite can be (re)sent again — matches the auth resend cooldown
+// (CheckEmailNotice). Each send/resend starts it; a backstop on top of the server rate limit.
+const RESEND_COOLDOWN_SECONDS = 30;
 
 // Badge tone per status (all on the outline base so they read as quiet status chips, not actions).
 const STATUS_CLASS: Record<InviteStatus, string> = {
@@ -35,15 +41,48 @@ interface AdminInvitesProps {
 export function AdminInvites({ initialInvites }: AdminInvitesProps) {
   const locale = useLocale();
   const t = useTranslations('admin');
+  const reduceMotion = useReducedMotion();
 
   const [invites, setInvites] = useState<Invite[]>(initialInvites);
   const [email, setEmail] = useState('');
   const [creating, setCreating] = useState(false);
   const [actingId, setActingId] = useState<number | null>(null);
+  // Per-invite resend cooldown (invite id → seconds remaining).
+  const [cooldowns, setCooldowns] = useState<Record<number, number>>({});
+
+  // Transition honoring reduced motion (instant when the user prefers reduced motion).
+  const transition = { duration: reduceMotion ? 0 : ANIMATION_FAST };
+
+  // Tick every active cooldown down to zero, re-enabling its resend button.
+  useEffect(() => {
+    if (!Object.values(cooldowns).some((s) => s > 0)) return;
+    const timer = setTimeout(() => {
+      setCooldowns((prev) => {
+        const next: Record<number, number> = {};
+        Object.entries(prev).forEach(([id, seconds]) => {
+          if (seconds > 1) next[Number(id)] = seconds - 1;
+        });
+        return next;
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [cooldowns]);
+
+  // Starts the resend cooldown for an invite (after a send/resend went out).
+  function startCooldown(id: number) {
+    setCooldowns((prev) => ({ ...prev, [id]: RESEND_COOLDOWN_SECONDS }));
+  }
 
   async function handleCreate() {
     const value = email.trim();
     if (!value || creating) return;
+    // Creating for an email that already has a row re-arms + re-sends it, so honor that row's cooldown.
+    const existing = invites.find((i) => i.email.toLowerCase() === value.toLowerCase());
+    const existingCooldown = existing ? (cooldowns[existing.id] ?? 0) : 0;
+    if (existingCooldown > 0) {
+      toast.error(t('invite.cooldown', { seconds: existingCooldown }));
+      return;
+    }
     setCreating(true);
     try {
       const result = await createInvite(value);
@@ -57,6 +96,7 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
       }
       // Re-arm replaces the existing row for that email; a fresh invite is prepended.
       setInvites((prev) => [result.invite, ...prev.filter((i) => i.id !== result.invite.id)]);
+      startCooldown(result.invite.id);
       setEmail('');
       toast.success(t('invite.success', { email: result.invite.email }));
     } catch {
@@ -75,6 +115,7 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
         return;
       }
       setInvites((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+      startCooldown(updated.id);
       toast.success(t('actions.resendSuccess', { email: updated.email }));
     } catch {
       toast.error(t('actions.resendError'));
@@ -155,49 +196,88 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {invites.map((invite) => (
-              <TableRow key={invite.id}>
-                <TableCell className="text-paragraph-sm-medium">{invite.email}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={STATUS_CLASS[invite.status]}>
-                    {t(`status.${invite.status}`)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatDate(invite.createdAt)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {invite.consumedAt ? formatDate(invite.consumedAt) : t('table.never')}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-x-1">
-                    {invite.status !== 'accepted' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleResend(invite)}
-                        disabled={actingId === invite.id}
+            {invites.map((invite) => {
+              const cooldown = cooldowns[invite.id] ?? 0;
+              const showRevoke = invite.status !== 'accepted' && invite.status !== 'revoked';
+              return (
+                <TableRow key={invite.id}>
+                  <TableCell className="text-paragraph-sm-medium">{invite.email}</TableCell>
+                  <TableCell>
+                    {/* Crossfade the badge when the status changes (revoke / resend-after-revoke). */}
+                    <AnimatePresence mode="wait" initial={false}>
+                      <motion.span
+                        key={invite.status}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={transition}
+                        className="inline-block"
                       >
-                        <Send className="size-4" />
-                        {t('actions.resend')}
-                      </Button>
-                    )}
-                    {invite.status !== 'accepted' && invite.status !== 'revoked' && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRevoke(invite)}
-                        disabled={actingId === invite.id}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Ban className="size-4" />
-                        {t('actions.revoke')}
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                        <Badge variant="outline" className={STATUS_CLASS[invite.status]}>
+                          {t(`status.${invite.status}`)}
+                        </Badge>
+                      </motion.span>
+                    </AnimatePresence>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDate(invite.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {invite.consumedAt ? formatDate(invite.consumedAt) : t('table.never')}
+                  </TableCell>
+                  <TableCell>
+                    {/* popLayout so the row's buttons grow/shrink smoothly as the Revoke action appears/disappears. */}
+                    <div className="flex items-center justify-end gap-x-1">
+                      <AnimatePresence mode="popLayout" initial={false}>
+                        {invite.status !== 'accepted' && (
+                          <motion.div
+                            key="resend"
+                            layout
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={transition}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResend(invite)}
+                              disabled={actingId === invite.id || cooldown > 0}
+                            >
+                              <Send className="size-4" />
+                              {cooldown > 0
+                                ? t('actions.resendIn', { seconds: cooldown })
+                                : t('actions.resend')}
+                            </Button>
+                          </motion.div>
+                        )}
+                        {showRevoke && (
+                          <motion.div
+                            key="revoke"
+                            layout
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            transition={transition}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRevoke(invite)}
+                              disabled={actingId === invite.id}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Ban className="size-4" />
+                              {t('actions.revoke')}
+                            </Button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       ) : (

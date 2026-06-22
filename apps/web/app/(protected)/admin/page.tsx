@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AdminInvites } from '@/app/(protected)/admin/_components/admin-invites';
 import { AdminForbiddenError, getInvites } from '@/lib/api/invites';
+import { getSignupContext } from '@/lib/api/signup-context';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -12,6 +13,11 @@ export async function generateMetadata() {
 
 export default async function AdminPage() {
   const t = await getTranslations('admin');
+
+  // Invites only matter in invite-only mode — in open mode anyone can sign up, so the page is gone
+  // for everyone (real 404, matching the hidden sidebar item).
+  const { mode } = await getSignupContext();
+  if (mode !== 'invite') notFound();
 
   // The API gates invite reads on is_admin (403 for non-admins). A logged-in non-admin who reaches
   // this route gets a real 404 — hiding the page's existence — rather than a 403; logged-out users

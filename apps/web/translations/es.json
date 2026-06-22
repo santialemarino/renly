@@ -2012,7 +2012,8 @@
       "sending": "Invitando…",
       "success": "Invitación enviada a {email}.",
       "taken": "Ya existe una cuenta con este correo.",
-      "error": "No se pudo enviar la invitación. Intentá de nuevo."
+      "error": "No se pudo enviar la invitación. Intentá de nuevo.",
+      "cooldown": "Esperá {seconds}s antes de reenviar a este correo."
     },
     "table": {
       "email": "Correo",
@@ -2035,7 +2036,8 @@
       "resendSuccess": "Invitación reenviada a {email}.",
       "resendError": "No se pudo reenviar la invitación.",
       "revokeSuccess": "Invitación a {email} revocada.",
-      "revokeError": "No se pudo revocar la invitación."
+      "revokeError": "No se pudo revocar la invitación.",
+      "resendIn": "Reenviar en {seconds}s"
     }
   }
 }
