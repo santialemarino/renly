@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Ban, Send } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
+import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import {
@@ -18,6 +20,8 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { createInvite, resendInvite, revokeInvite } from '@/app/(protected)/admin/admin-actions';
+import { inviteFormSchema, type InviteFormData } from '@/app/(protected)/admin/form-schema';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Invite, InviteStatus } from '@/lib/api/invites';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
 import { getLocaleTag } from '@/lib/utils/locale';
@@ -28,10 +32,10 @@ const RESEND_COOLDOWN_SECONDS = 30;
 
 // Badge tone per status (all on the outline base so they read as quiet status chips, not actions).
 const STATUS_CLASS: Record<InviteStatus, string> = {
-  pending: 'text-blue-800 border-blue-200',
-  accepted: 'bg-green-50 text-green-700 border-green-200',
+  pending: 'border-blue-200 text-blue-800',
+  accepted: 'bg-green-50 border-green-200 text-green-700',
   revoked: 'text-muted-foreground',
-  expired: 'bg-amber-50 text-amber-700 border-amber-200',
+  expired: 'bg-amber-50 border-amber-200 text-amber-700',
 };
 
 interface AdminInvitesProps {
@@ -41,11 +45,17 @@ interface AdminInvitesProps {
 export function AdminInvites({ initialInvites }: AdminInvitesProps) {
   const locale = useLocale();
   const t = useTranslations('admin');
+  const tCommon = useTranslations('common');
   const reduceMotion = useReducedMotion();
 
+  const form = useForm<InviteFormData>({
+    defaultValues: { email: '' },
+    mode: 'onSubmit',
+    reValidateMode: 'onChange',
+    resolver: zodResolver(inviteFormSchema(tCommon)),
+  });
+
   const [invites, setInvites] = useState<Invite[]>(initialInvites);
-  const [email, setEmail] = useState('');
-  const [creating, setCreating] = useState(false);
   const [actingId, setActingId] = useState<number | null>(null);
   // Per-invite resend cooldown (invite id → seconds remaining).
   const [cooldowns, setCooldowns] = useState<Record<number, number>>({});
@@ -73,21 +83,21 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
     setCooldowns((prev) => ({ ...prev, [id]: RESEND_COOLDOWN_SECONDS }));
   }
 
-  async function handleCreate() {
+  // Creates (or re-arms) an invite for the typed email. Email-specific failures (cooldown, an
+  // address that already has an account) surface inline on the field; transient failures toast.
+  const onSubmit = async ({ email }: InviteFormData) => {
     const value = email.trim();
-    if (!value || creating) return;
     // Creating for an email that already has a row re-arms + re-sends it, so honor that row's cooldown.
     const existing = invites.find((i) => i.email.toLowerCase() === value.toLowerCase());
     const existingCooldown = existing ? (cooldowns[existing.id] ?? 0) : 0;
     if (existingCooldown > 0) {
-      toast.error(t('invite.cooldown', { seconds: existingCooldown }));
+      form.setError('email', { message: t('invite.cooldown', { seconds: existingCooldown }) });
       return;
     }
-    setCreating(true);
     try {
       const result = await createInvite(value);
       if (result.status === 'taken') {
-        toast.error(t('invite.taken'));
+        form.setError('email', { message: t('invite.taken') });
         return;
       }
       if (result.status === 'error') {
@@ -97,14 +107,12 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
       // Re-arm replaces the existing row for that email; a fresh invite is prepended.
       setInvites((prev) => [result.invite, ...prev.filter((i) => i.id !== result.invite.id)]);
       startCooldown(result.invite.id);
-      setEmail('');
+      form.reset({ email: '' });
       toast.success(t('invite.success', { email: result.invite.email }));
     } catch {
       toast.error(t('invite.error'));
-    } finally {
-      setCreating(false);
     }
-  }
+  };
 
   async function handleResend(invite: Invite) {
     setActingId(invite.id);
@@ -152,37 +160,44 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
 
   return (
     <div className="flex flex-col w-full max-w-3xl gap-y-6">
-      <form
-        className="flex items-end gap-x-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void handleCreate();
-        }}
-      >
-        <div className="flex flex-col flex-1 gap-y-1.5">
-          <label className="text-paragraph-sm-medium text-foreground" htmlFor="admin-invite-email">
-            {t('invite.emailLabel')}
-          </label>
-          <Input
-            id="admin-invite-email"
-            data-testid="admin-invite-email"
-            type="email"
-            autoComplete="off"
-            surface
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t('invite.emailPlaceholder')}
+      <Form {...form}>
+        {/* noValidate so the inline FormMessage is the only validation feedback (no native bubbles). */}
+        <form noValidate onSubmit={form.handleSubmit(onSubmit)}>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('invite.emailLabel')}</FormLabel>
+                {/* Input + submit on one row, vertically centered against each other. */}
+                <div className="flex items-center gap-x-2">
+                  <FormControl>
+                    <Input
+                      {...field}
+                      data-testid="admin-invite-email"
+                      type="email"
+                      autoComplete="off"
+                      surface
+                      containerClassName="flex-1"
+                      placeholder={t('invite.emailPlaceholder')}
+                    />
+                  </FormControl>
+                  <Button
+                    blue
+                    type="submit"
+                    size="lg"
+                    data-testid="admin-invite-submit"
+                    disabled={form.formState.isSubmitting}
+                  >
+                    {form.formState.isSubmitting ? t('invite.sending') : t('invite.button')}
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
-        <Button
-          blue
-          type="submit"
-          data-testid="admin-invite-submit"
-          disabled={creating || !email.trim()}
-        >
-          {creating ? t('invite.sending') : t('invite.button')}
-        </Button>
-      </form>
+        </form>
+      </Form>
 
       {invites.length > 0 ? (
         <Table>
