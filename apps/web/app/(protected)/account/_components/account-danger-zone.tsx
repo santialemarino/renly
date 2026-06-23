@@ -18,6 +18,7 @@ import {
   Label,
   Separator,
 } from '@repo/ui/components';
+import { SectionHeader } from '@/app/(protected)/account/_components/section-header';
 import { deleteAccountAction, exportDataAction } from '@/app/(protected)/account/account-actions';
 import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE } from '@/config/routes';
@@ -91,10 +92,11 @@ export function AccountDangerZone({ email }: AccountDangerZoneProps) {
 
   return (
     <section className="flex flex-col gap-y-4">
-      <div className="flex flex-col gap-y-1">
-        <h3 className="text-paragraph-sm-semibold text-destructive">{t('danger.title')}</h3>
-        <p className="text-paragraph-xs text-muted-foreground">{t('danger.description')}</p>
-      </div>
+      <SectionHeader
+        title={t('danger.title')}
+        description={t('danger.description')}
+        variant="destructive"
+      />
 
       <div className="flex flex-col gap-y-4">
         <div className="flex items-center justify-between gap-x-4">

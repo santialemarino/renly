@@ -8,6 +8,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Button, Input } from '@repo/ui/components';
+import { SectionHeader } from '@/app/(protected)/account/_components/section-header';
 import { changePasswordAction } from '@/app/(protected)/account/account-actions';
 import {
   changePasswordSchema,
@@ -73,10 +74,7 @@ export function ChangePasswordSection() {
 
   return (
     <section className="flex flex-col gap-y-4">
-      <div className="flex flex-col gap-y-1">
-        <h3 className="text-paragraph-sm-semibold text-muted-foreground">{t('password.title')}</h3>
-        <p className="text-paragraph-xs text-muted-foreground">{t('password.description')}</p>
-      </div>
+      <SectionHeader title={t('password.title')} description={t('password.description')} />
 
       <Form {...form}>
         <form className="flex flex-col gap-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>

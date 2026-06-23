@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Button, Input } from '@repo/ui/components';
+import { SectionHeader } from '@/app/(protected)/account/_components/section-header';
 import { changeEmailAction } from '@/app/(protected)/account/account-actions';
 import { changeEmailSchema, type ChangeEmailData } from '@/app/(protected)/account/form-schemas';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
@@ -40,12 +41,10 @@ export function ChangeEmailSection({ currentEmail }: ChangeEmailSectionProps) {
 
   return (
     <section className="flex flex-col gap-y-4">
-      <div className="flex flex-col gap-y-1">
-        <h3 className="text-paragraph-sm-semibold text-muted-foreground">{t('email.title')}</h3>
-        <p className="text-paragraph-xs text-muted-foreground">
-          {t('email.current', { email: currentEmail })}
-        </p>
-      </div>
+      <SectionHeader
+        title={t('email.title')}
+        description={t('email.current', { email: currentEmail })}
+      />
 
       <Form {...form}>
         <form className="flex flex-col gap-y-5" onSubmit={form.handleSubmit(onSubmit)} noValidate>
