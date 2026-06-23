@@ -16,7 +16,9 @@ import {
   DialogTitle,
   Input,
   Label,
+  Separator,
 } from '@repo/ui/components';
+import { SectionHeader } from '@/app/(protected)/account/_components/section-header';
 import { deleteAccountAction, exportDataAction } from '@/app/(protected)/account/account-actions';
 import { userSignOut } from '@/auth';
 import { LOGIN_ROUTE } from '@/config/routes';
@@ -89,14 +91,15 @@ export function AccountDangerZone({ email }: AccountDangerZoneProps) {
   }
 
   return (
-    <section className="flex flex-col w-full max-w-2xl p-5 gap-y-4 border border-destructive/30 rounded-lg">
-      <div className="flex flex-col gap-y-1">
-        <h3 className="text-paragraph-sm-semibold text-destructive">{t('danger.title')}</h3>
-        <p className="text-paragraph-xs text-muted-foreground">{t('danger.description')}</p>
-      </div>
+    <section className="flex flex-col gap-y-4">
+      <SectionHeader
+        title={t('danger.title')}
+        description={t('danger.description')}
+        variant="destructive"
+      />
 
-      <div className="flex flex-col gap-y-3">
-        <div className="flex items-center justify-between p-3 gap-x-4 border rounded-lg">
+      <div className="flex flex-col gap-y-4">
+        <div className="flex items-center justify-between gap-x-4">
           <div className="flex flex-col">
             <span className="text-paragraph-sm-medium">{t('danger.export.title')}</span>
             <span className="text-paragraph-xs text-muted-foreground">
@@ -109,7 +112,9 @@ export function AccountDangerZone({ email }: AccountDangerZoneProps) {
           </Button>
         </div>
 
-        <div className="flex items-center justify-between p-3 gap-x-4 border border-destructive/30 rounded-lg">
+        <Separator />
+
+        <div className="flex items-center justify-between gap-x-4">
           <div className="flex flex-col">
             <span className="text-paragraph-sm-medium">{t('danger.delete.title')}</span>
             <span className="text-paragraph-xs text-muted-foreground">

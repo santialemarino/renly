@@ -46,7 +46,8 @@ async def export_data(current_user: CurrentUser, session: SessionDep, response: 
 
 
 # Permanently deletes the current user's account after re-verifying the password and a typed email
-# confirmation (AUTH-6). FK ON DELETE CASCADE removes every owned row.
+# confirmation (AUTH-6). FK ON DELETE CASCADE removes every owned row; the invite that created the
+# account is cleared on the privileged session (RLS hides it from the user's own session).
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_account(body: DeleteAccountRequest, current_user: CurrentUser, session: SessionDep) -> None:
-    await account_service.delete_account(session, current_user, body.password, body.confirmation)
+async def delete_account(body: DeleteAccountRequest, current_user: CurrentUser, session: SessionDep, admin_session: AdminSessionDep) -> None:
+    await account_service.delete_account(session, admin_session, current_user, body.password, body.confirmation)

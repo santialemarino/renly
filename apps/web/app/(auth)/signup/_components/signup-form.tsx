@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Lock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -130,6 +131,11 @@ export function SignupForm({
                     placeholder={t('form.email.placeholder')}
                     readOnly={!!lockedEmail}
                     aria-readonly={!!lockedEmail}
+                    endIcon={
+                      lockedEmail ? (
+                        <Lock className="size-4 text-muted-foreground" aria-hidden />
+                      ) : undefined
+                    }
                   />
                 </FormControl>
                 {lockedEmail ? (

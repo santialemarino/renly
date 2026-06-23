@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import InvalidCredentialsError, PasswordBreachedError
 from app.models.user import User
 from app.models.utils import utcnow
-from app.repositories import export_repository, user_repository
+from app.repositories import export_repository, invite_repository, user_repository
 from app.services import auth_service
 
 
@@ -65,11 +65,20 @@ async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
 
 
 # Permanently deletes the account after re-verifying the password and a typed email confirmation
-# (AUTH-6). FK ON DELETE CASCADE removes every owned row.
-async def delete_account(session: AsyncSession, user: User, password: str, confirmation: str) -> None:
+# (AUTH-6). FK ON DELETE CASCADE removes every owned row. Also clears the invite that created this
+# account (if any) so deletion leaves no orphaned "accepted" invite — the invite belongs to the
+# inviting admin, so it's only reachable on the privileged session (RLS scopes `session` to the user).
+async def delete_account(session: AsyncSession, admin_session: AsyncSession, user: User, password: str, confirmation: str) -> None:
     if not auth_service.verify_password(password, user.password_hash):
         raise InvalidCredentialsError()
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")
+    # Clear the invite first, on its own (privileged) transaction. The two deletes span two
+    # connections so they can't be atomic; ordering invite-first makes the only partial-failure
+    # state benign — an invite with no account self-heals on re-invite, whereas deleting the user
+    # first and then failing the invite delete would leave exactly the orphan this guards against.
+    email = user.email
+    await invite_repository.delete_by_email(admin_session, email)
+    await admin_session.commit()
     await user_repository.delete(session, user)
     await session.commit()

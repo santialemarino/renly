@@ -107,7 +107,7 @@
       }
     },
     "cookieConsent": {
-      "message": "Renly uses essential cookies to keep you signed in and remember your preferences. We don't use them for advertising or third-party tracking.",
+      "message": "Renly uses essential cookies to keep you signed in and remember your preferences.\nWe don't use them for advertising or third-party tracking.",
       "accept": "Got it",
       "learnMore": "Privacy Policy"
     },
