@@ -1,5 +1,6 @@
 # Data access for admin invites (invite-only access gate).
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -41,9 +42,16 @@ async def save(session: AsyncSession, invite: Invite) -> None:
     session.add(invite)
 
 
+# Deletes the invite for an email, if any. Used when an account is deleted so it leaves no orphaned
+# "accepted" invite (invites are keyed by email, never FK'd to the account they created).
+async def delete_by_email(session: AsyncSession, email: str) -> None:
+    await session.execute(sa_delete(Invite).where(Invite.email == email.lower()))
+
+
 # Namespace to call repository functions (e.g. invite_repository.get_by_hash).
 class InviteRepository:
     create = staticmethod(create)
+    delete_by_email = staticmethod(delete_by_email)
     get_by_email = staticmethod(get_by_email)
     get_by_hash = staticmethod(get_by_hash)
     get_by_id = staticmethod(get_by_id)

@@ -75,6 +75,17 @@ class FakeTokenRepo:
         self.tokens = [t for t in self.tokens if not (t.user_id == user_id and t.token_type == token_type and t.consumed_at is None)]
 
 
+class FakeInviteRepo:
+    def __init__(self, emails: list[str] | None = None) -> None:
+        self.emails = {e.lower() for e in (emails or [])}
+        self.deleted: list[str] = []
+
+    async def delete_by_email(self, session, email):
+        email = email.lower()
+        self.deleted.append(email)
+        self.emails.discard(email)
+
+
 class FakeEmailService:
     def __init__(self) -> None:
         self.sent = []
@@ -105,6 +116,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(auth_service, "get_email_service", lambda: email)
     monkeypatch.setattr(auth_service, "is_password_breached", _not_breached)
     monkeypatch.setattr(account_service, "user_repository", users)
+    monkeypatch.setattr(account_service, "invite_repository", FakeInviteRepo())
     # These flows cover open registration + the lifecycle; the invite-only gate is orthogonal and
     # has its own coverage (test_invites.py), so exercise registration in open mode here.
     monkeypatch.setattr(settings, "signup_mode", SignupMode.open)
@@ -347,7 +359,7 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
 
-        await account_service.delete_account(FakeSession(), user, _PASSWORD, "U@Example.com")
+        await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "U@Example.com")
 
         assert user.id in users.deleted
 
@@ -356,7 +368,7 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.delete_account(FakeSession(), user, "wrong", "u@example.com")
+            await account_service.delete_account(FakeSession(), FakeSession(), user, "wrong", "u@example.com")
         assert users.deleted == []
 
     @pytest.mark.asyncio
@@ -364,8 +376,20 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.delete_account(FakeSession(), user, _PASSWORD, "not-the-email")
+            await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "not-the-email")
         assert users.deleted == []
+
+    @pytest.mark.asyncio
+    async def test_delete_clears_the_invite_that_created_the_account(self, wired, monkeypatch):
+        users, _tokens, _email = wired
+        invites = FakeInviteRepo(emails=["u@example.com"])
+        monkeypatch.setattr(account_service, "invite_repository", invites)
+        user = await users.create(None, User(name="S", email="u@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
+
+        await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "u@example.com")
+
+        assert user.id in users.deleted
+        assert invites.deleted == ["u@example.com"]
 
 
 # --- Data export (AUTH-6) ---
