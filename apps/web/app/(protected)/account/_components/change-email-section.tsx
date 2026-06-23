@@ -39,9 +39,9 @@ export function ChangeEmailSection({ currentEmail }: ChangeEmailSectionProps) {
   };
 
   return (
-    <section className="flex flex-col w-full max-w-2xl p-5 gap-y-4 border rounded-lg">
+    <section className="flex flex-col gap-y-4">
       <div className="flex flex-col gap-y-1">
-        <h3 className="text-paragraph-sm-semibold">{t('email.title')}</h3>
+        <h3 className="text-paragraph-sm-semibold text-muted-foreground">{t('email.title')}</h3>
         <p className="text-paragraph-xs text-muted-foreground">
           {t('email.current', { email: currentEmail })}
         </p>
