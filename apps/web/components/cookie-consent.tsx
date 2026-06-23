@@ -37,7 +37,7 @@ export function CookieConsent() {
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: ANIMATION_DEFAULT }}
         >
-          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:w-fit sm:items-center sm:gap-x-4">
+          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:w-fit sm:max-w-full sm:items-center sm:gap-x-4">
             <p className="text-paragraph-sm text-muted-foreground whitespace-pre-line">
               {t('message')}{' '}
               <InlineLink href={ROUTES.privacy} color="blue">
