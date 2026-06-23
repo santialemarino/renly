@@ -37,14 +37,14 @@ export function CookieConsent() {
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: ANIMATION_DEFAULT }}
         >
-          <div className="flex flex-col w-full max-w-xl items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:items-center sm:gap-x-4">
-            <p className="flex-1 text-paragraph-sm text-muted-foreground">
+          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:w-fit sm:items-center sm:gap-x-4">
+            <p className="text-paragraph-sm text-muted-foreground whitespace-pre-line">
               {t('message')}{' '}
               <InlineLink href={ROUTES.privacy} color="blue">
                 {t('learnMore')}
               </InlineLink>
             </p>
-            <Button blue size="sm" className="shrink-0" onClick={handleDismiss}>
+            <Button blue size="sm" className="shrink-0 w-full sm:w-auto" onClick={handleDismiss}>
               {t('accept')}
             </Button>
           </div>
