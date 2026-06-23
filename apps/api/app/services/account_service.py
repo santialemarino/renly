@@ -73,8 +73,12 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
         raise InvalidCredentialsError()
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")
+    # Clear the invite first, on its own (privileged) transaction. The two deletes span two
+    # connections so they can't be atomic; ordering invite-first makes the only partial-failure
+    # state benign — an invite with no account self-heals on re-invite, whereas deleting the user
+    # first and then failing the invite delete would leave exactly the orphan this guards against.
     email = user.email
-    await user_repository.delete(session, user)
-    await session.commit()
     await invite_repository.delete_by_email(admin_session, email)
     await admin_session.commit()
+    await user_repository.delete(session, user)
+    await session.commit()

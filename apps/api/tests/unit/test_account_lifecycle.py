@@ -79,9 +79,11 @@ class FakeInviteRepo:
     def __init__(self, emails: list[str] | None = None) -> None:
         self.emails = {e.lower() for e in (emails or [])}
         self.deleted: list[str] = []
+        self.sessions: list[object] = []
 
     async def delete_by_email(self, session, email):
         email = email.lower()
+        self.sessions.append(session)
         self.deleted.append(email)
         self.emails.discard(email)
 
@@ -385,11 +387,15 @@ class TestDeleteAccount:
         invites = FakeInviteRepo(emails=["u@example.com"])
         monkeypatch.setattr(account_service, "invite_repository", invites)
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=auth_service.hash_password(_PASSWORD)))
+        request_session, admin_session = FakeSession(), FakeSession()
 
-        await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "u@example.com")
+        await account_service.delete_account(request_session, admin_session, user, _PASSWORD, "u@example.com")
 
         assert user.id in users.deleted
         assert invites.deleted == ["u@example.com"]
+        # The invite is keyed to the inviting admin, so it must be cleared on the privileged session
+        # (RLS hides it from the user's own session) — never the request session.
+        assert invites.sessions == [admin_session]
 
 
 # --- Data export (AUTH-6) ---
