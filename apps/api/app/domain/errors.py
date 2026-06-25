@@ -48,6 +48,13 @@ class InvalidCredentialsError(Exception):
         super().__init__(message)
 
 
+# An uploaded import file is unreadable, unsupported, or exceeds limits (ROAD-1). Mapped to 400 by the API.
+class InvalidImportFileError(Exception):
+    def __init__(self, message: str = "The file could not be read. Upload a valid .csv, .tsv, or .xlsx file.") -> None:
+        self.message = message
+        super().__init__(message)
+
+
 # A refresh token is unknown, expired, revoked, or reused (AUTH-7). Mapped to 401 by the API.
 class InvalidRefreshTokenError(Exception):
     def __init__(self, message: str = "Your session has expired. Please log in again.") -> None:

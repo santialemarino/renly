@@ -116,11 +116,26 @@ async def list_with_ticker_by_user(session: AsyncSession, user_id: int) -> list[
     return list(result.scalars().all())
 
 
+# Returns the names of the user's investments (used to flag duplicates on import).
+async def list_names_by_user(session: AsyncSession, user_id: int) -> list[str]:
+    result = await session.execute(select(Investment.name).where(Investment.user_id == user_id))
+    return list(result.scalars().all())
+
+
 # Persists a new investment and flushes to get the id.
 async def create(session: AsyncSession, investment: Investment) -> Investment:
     session.add(investment)
     await session.flush()
     return investment
+
+
+# Bulk-inserts new investments and flushes to assign ids. Returns the inserted investments.
+async def bulk_create(session: AsyncSession, investments: list[Investment]) -> list[Investment]:
+    if not investments:
+        return []
+    session.add_all(investments)
+    await session.flush()
+    return investments
 
 
 # Persists changes to an existing investment.
@@ -130,11 +145,13 @@ async def save(session: AsyncSession, investment: Investment) -> None:
 
 # Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
+    bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
+    list_names_by_user = staticmethod(list_names_by_user)
     list_with_ticker = staticmethod(list_with_ticker)
     list_with_ticker_by_user = staticmethod(list_with_ticker_by_user)
     save = staticmethod(save)

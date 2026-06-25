@@ -27,6 +27,7 @@ dependencies = [
     "pdfplumber>=0.11.0",
     "numpy<2.4",
     "sentry-sdk[fastapi]>=2.63.0",
+    "python-multipart>=0.0.32",
 ]
 
 [project.optional-dependencies]

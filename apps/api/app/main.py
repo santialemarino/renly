@@ -17,6 +17,7 @@ from app.domain import (
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     InvalidCredentialsError,
+    InvalidImportFileError,
     InvalidInviteError,
     InvalidRefreshTokenError,
     InvalidTokenError,
@@ -40,6 +41,7 @@ from app.routers import (
     expenses,
     finance_metrics,
     groups,
+    imports,
     income,
     installments,
     investments,
@@ -87,6 +89,10 @@ async def email_not_verified_handler(_request: Request, exc: EmailNotVerifiedErr
 
 async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsError):
     return JSONResponse(status_code=401, content={"detail": exc.message})
+
+
+async def invalid_import_file_handler(_request: Request, exc: InvalidImportFileError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
 async def invalid_refresh_token_handler(_request: Request, exc: InvalidRefreshTokenError):
@@ -174,6 +180,7 @@ _ROUTERS = (
     expenses.router,
     finance_metrics.router,
     groups.router,
+    imports.router,
     income.router,
     installments.router,
     investments.router,
@@ -192,6 +199,7 @@ _EXCEPTION_HANDLERS = {
     HasLinkedExpensesError: has_linked_expenses_handler,
     InstallmentLockedFieldError: installment_locked_field_handler,
     InvalidCredentialsError: invalid_credentials_handler,
+    InvalidImportFileError: invalid_import_file_handler,
     InvalidInviteError: invalid_invite_handler,
     InvalidRefreshTokenError: invalid_refresh_token_handler,
     InvalidTokenError: invalid_token_handler,
