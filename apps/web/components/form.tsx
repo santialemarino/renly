@@ -83,11 +83,12 @@ function FormLabel({
   required,
   children,
   ...props
-}: React.ComponentProps<typeof Label> & { required?: boolean }) {
+}: React.ComponentProps<typeof Label>) {
   const { error, formItemId } = useFormField();
   return (
     <Label
       blue={blue}
+      required={required}
       data-slot="form-label"
       data-error={!!error}
       className={className}
@@ -95,11 +96,6 @@ function FormLabel({
       {...props}
     >
       {children}
-      {required && (
-        <span aria-hidden="true" className="text-blue-800 -ml-1">
-          *
-        </span>
-      )}
     </Label>
   );
 }
