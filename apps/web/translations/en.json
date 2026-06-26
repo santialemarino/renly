@@ -1793,6 +1793,7 @@
     "import": {
       "title": "Import",
       "description": "Upload a CSV or Excel file, match the columns to Renly fields, and review before importing.",
+      "typeLabel": "Data type to import",
       "comingSoon": "soon",
       "success": "{entity, select, investments {Imported {count, plural, one {# investment} other {# investments}}.} expenses {Imported {count, plural, one {# expense} other {# expenses}}.} income {Imported {count, plural, one {# income entry} other {# income entries}}.} other {Imported {count, plural, one {# record} other {# records}}.}}",
       "upload": {

@@ -1793,6 +1793,7 @@
     "import": {
       "title": "Importar",
       "description": "Subí un archivo CSV o Excel, asociá las columnas a los campos de Renly y revisá antes de importar.",
+      "typeLabel": "Tipo de dato a importar",
       "comingSoon": "pronto",
       "success": "{entity, select, investments {{count, plural, one {Se importó # inversión} other {Se importaron # inversiones}}.} expenses {{count, plural, one {Se importó # gasto} other {Se importaron # gastos}}.} income {{count, plural, one {Se importó # ingreso} other {Se importaron # ingresos}}.} other {{count, plural, one {Se importó # registro} other {Se importaron # registros}}.}}",
       "upload": {

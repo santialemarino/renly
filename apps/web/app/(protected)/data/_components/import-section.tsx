@@ -28,9 +28,18 @@ type DataTypeKey = (typeof DATA_TYPES)[number]['key'];
 
 const DEFAULT_ENTITY: DataTypeKey = 'investments';
 
-export function ImportSection() {
+// Resolves the entity to start on: an enabled type named by the `?type=` deep-link, else the default.
+function resolveInitialEntity(initialType?: string): DataTypeKey {
+  return DATA_TYPES.find((type) => type.enabled && type.key === initialType)?.key ?? DEFAULT_ENTITY;
+}
+
+interface ImportSectionProps {
+  initialType?: string;
+}
+
+export function ImportSection({ initialType }: ImportSectionProps) {
   const t = useTranslations('data');
-  const [entity, setEntity] = useState<DataTypeKey>(DEFAULT_ENTITY);
+  const [entity, setEntity] = useState<DataTypeKey>(() => resolveInitialEntity(initialType));
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -102,7 +111,7 @@ export function ImportSection() {
     <section className="flex flex-col gap-y-4">
       <SectionHeader title={t('import.title')} description={t('import.description')} />
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2" role="group" aria-label={t('import.typeLabel')}>
         {DATA_TYPES.map((type) =>
           type.enabled ? (
             <button
