@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import cc from 'currency-codes';
 import { iso31661 } from 'iso-3166';
-import { ChevronDown, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -20,6 +20,7 @@ import {
   Separator,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ComboboxChevron } from '@/components/combobox-chevron';
 import {
   ENV_PREFERRED_CURRENCIES,
   FALLBACK_PRIMARY_CURRENCY,
@@ -260,7 +261,7 @@ export function CurrencyCombobox({
                 <X className="size-3.5" />
               </span>
             )}
-            <ChevronDown className="shrink-0 size-4 text-muted-foreground opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <ComboboxChevron open={open} className="text-muted-foreground" />
           </span>
         </Button>
       </PopoverTrigger>

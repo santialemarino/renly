@@ -37,11 +37,11 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "text-foreground data-placeholder:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground hover:[&_svg:not([class*='text-'])]:text-foreground aria-invalid:ring-destructive/20 aria-invalid:border-destructive flex w-fit min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-paragraph-sm whitespace-nowrap shadow-xs transition-[color,box-shadow,border-color,background-color] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:truncate [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:transition-[color,transform] [&_svg]:duration-200 [&_svg:not([class*='size-'])]:size-4 data-[state=open]:[&>svg:last-child]:rotate-180",
+        "text-foreground data-placeholder:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground hover:[&_svg:not([class*='text-'])]:text-foreground aria-invalid:ring-destructive/20 aria-invalid:border-destructive flex w-fit min-w-0 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-paragraph-sm whitespace-nowrap shadow-xs transition-[color,box-shadow,border-color,background-color] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:truncate [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:transition-[color,rotate] [&_svg]:duration-200 [&_svg:not([class*='size-'])]:size-4 data-[state=open]:[&>svg:last-child]:rotate-180",
         surface ? 'bg-background' : 'bg-input',
         blue
           ? 'border-blue-800/50 hover:border-blue-800 hover:bg-blue-50 focus-visible:border-blue-800 focus-visible:ring-blue-800/30'
-          : 'border-border hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50',
+          : 'border-border hover:border-ring hover:bg-muted hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50',
         className,
       )}
       {...props}

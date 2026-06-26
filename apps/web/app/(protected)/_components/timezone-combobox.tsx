@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
 
 import {
   Button,
@@ -16,6 +15,7 @@ import {
   Separator,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ComboboxChevron } from '@/components/combobox-chevron';
 import { formatIanaTimezone, IANA_TIMEZONES } from '@/lib/constants/timezones';
 
 interface TimezoneComboboxProps {
@@ -86,7 +86,7 @@ export function TimezoneCombobox({
               {placeholder}
             </span>
           )}
-          <ChevronDown className="shrink-0 size-4 ml-auto text-muted-foreground opacity-50 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          <ComboboxChevron open={open} className="ml-auto text-muted-foreground" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
