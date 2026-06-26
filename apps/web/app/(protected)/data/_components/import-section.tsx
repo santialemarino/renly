@@ -14,20 +14,23 @@ import { SectionHeader } from '@/components/section-header';
 import type { ImportPreview } from '@/lib/api/imports';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-// The data types the engine targets. Investments ships first; the rest are upcoming specs (the
-// chips advertise the general hub). Keep in sync with the backend ImportEntity enum as types land.
+// The data types the engine targets. Enabled types are selectable; the rest are upcoming specs
+// (their chips advertise the general hub). Keep in sync with the backend ImportEntity enum.
 const DATA_TYPES = [
   { key: 'investments', enabled: true },
-  { key: 'expenses', enabled: false },
-  { key: 'income', enabled: false },
+  { key: 'expenses', enabled: true },
+  { key: 'income', enabled: true },
   { key: 'snapshots', enabled: false },
   { key: 'transactions', enabled: false },
 ] as const;
 
-const ENTITY = 'investments';
+type DataTypeKey = (typeof DATA_TYPES)[number]['key'];
+
+const DEFAULT_ENTITY: DataTypeKey = 'investments';
 
 export function ImportSection() {
   const t = useTranslations('data');
+  const [entity, setEntity] = useState<DataTypeKey>(DEFAULT_ENTITY);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -42,12 +45,19 @@ export function ImportSection() {
     setImportDuplicates(false);
   }
 
+  // Switching the active data type restarts the wizard (mapping and preview are entity-specific).
+  function handleSelectType(key: DataTypeKey) {
+    if (key === entity) return;
+    setEntity(key);
+    reset();
+  }
+
   async function runPreview(selected: File, nextMapping?: Record<string, string>) {
     setLoading(true);
     const formData = new FormData();
     formData.append('file', selected);
     if (nextMapping) formData.append('mapping', JSON.stringify(nextMapping));
-    const result = await previewImport(ENTITY, formData);
+    const result = await previewImport(entity, formData);
     setLoading(false);
     if ('error' in result) {
       toast.error(result.error);
@@ -78,13 +88,13 @@ export function ImportSection() {
     formData.append('file', file);
     formData.append('mapping', JSON.stringify(mapping));
     formData.append('import_duplicates', String(importDuplicates));
-    const result = await confirmImport(ENTITY, formData);
+    const result = await confirmImport(entity, formData);
     setConfirming(false);
     if ('error' in result) {
       toast.error(result.error);
       return;
     }
-    toast.success(t('import.success', { count: result.data.created }));
+    toast.success(t('import.success', { count: result.data.created, entity }));
     reset();
   }
 
@@ -93,18 +103,36 @@ export function ImportSection() {
       <SectionHeader title={t('import.title')} description={t('import.description')} />
 
       <div className="flex flex-wrap gap-2">
-        {DATA_TYPES.map((type) => (
-          <span
-            key={type.key}
-            className={cn(
-              'flex items-center px-3 py-1 gap-x-1.5 rounded-full text-paragraph-xs-medium',
-              type.enabled ? 'bg-blue-800 text-white' : 'bg-muted text-muted-foreground',
-            )}
-          >
-            {t(`types.${type.key}`)}
-            {!type.enabled && <span className="text-paragraph-mini">{t('import.comingSoon')}</span>}
-          </span>
-        ))}
+        {DATA_TYPES.map((type) =>
+          type.enabled ? (
+            <button
+              key={type.key}
+              type="button"
+              onClick={() => handleSelectType(type.key)}
+              aria-pressed={entity === type.key}
+              className={cn(
+                'flex items-center px-3 py-1 rounded-full outline-none transition-all duration-200 cursor-pointer',
+                'active:scale-95 focus-visible:ring-3 text-paragraph-xs-medium',
+                // Focus ring tint matches the button variants: blue (active) ring like a blue
+                // button, neutral ring for the muted (inactive) tabs — so the active tab's keyboard
+                // focus reads distinct from the others.
+                entity === type.key
+                  ? 'bg-blue-800 text-white focus-visible:ring-blue-800/50'
+                  : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring/50',
+              )}
+            >
+              {t(`types.${type.key}`)}
+            </button>
+          ) : (
+            <span
+              key={type.key}
+              className="flex items-center px-3 py-1 gap-x-1.5 rounded-full bg-muted text-muted-foreground text-paragraph-xs-medium"
+            >
+              {t(`types.${type.key}`)}
+              <span className="text-paragraph-mini">{t('import.comingSoon')}</span>
+            </span>
+          ),
+        )}
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -120,6 +148,7 @@ export function ImportSection() {
             <ColumnMapStep preview={preview} mapping={mapping} onChange={handleMappingChange} />
             <PreviewStep
               preview={preview}
+              entity={entity}
               importDuplicates={importDuplicates}
               onToggleDuplicates={setImportDuplicates}
               onConfirm={handleConfirm}
@@ -135,7 +164,7 @@ export function ImportSection() {
             exit={{ opacity: 0 }}
             transition={{ duration: ANIMATION_DEFAULT }}
           >
-            <FileStep onSelect={handleFileSelect} loading={loading} />
+            <FileStep entity={entity} onSelect={handleFileSelect} loading={loading} />
           </motion.div>
         )}
       </AnimatePresence>
