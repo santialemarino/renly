@@ -33,7 +33,7 @@ If you've ever tried to track your portfolio across multiple brokers in a spread
 
 ## How it works
 
-1. **Add your investments** -- Create entries for each holding: stocks, CEDEARs, term deposits, crypto, mutual funds, bonds, dollar positions, real estate, or anything else.
+1. **Add your investments** -- Create entries for each holding: stocks, CEDEARs, term deposits, crypto, mutual funds, bonds, dollar positions, real estate, or anything else. Already have them in a spreadsheet? Import a CSV or Excel file from the **Import & Export** page -- Renly maps your columns, previews what it found, and lets you confirm before anything is saved. You can also export a full copy of your data from the same page at any time.
 
 2. **Prices update automatically** -- For stocks, CEDEARs, crypto, and government bonds, Renly fetches prices from market data providers. You don't need to look up prices yourself.
 

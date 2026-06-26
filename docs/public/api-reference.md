@@ -62,6 +62,25 @@ Registration requires a valid email address and a password of at least 12 charac
 
 ---
 
+## Import
+
+Bulk-import data from a spreadsheet (CSV, TSV, or XLSX) instead of entering rows one at a time. The flow is two steps: **preview** (a dry run that maps your columns to Renly fields and validates every row, writing nothing) and **confirm** (re-validates server-side and inserts the importable rows). `{entity}` is the data type to import — currently `investments`.
+
+Both endpoints take a `multipart/form-data` body. A single file is capped at 1,000 rows, and imports are rate-limited per user.
+
+| Method | Path                        | Description                                                                                                                                                                                                                                                          |
+| ------ | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/imports/{entity}/preview` | Dry-run preview. Form fields: `file` (required), `mapping` (optional JSON of field→column). Returns detected columns, the applied mapping, target fields, a per-row validation outcome (`valid` / `duplicate` / `invalid` + reasons), and summary counts. No writes. |
+| `POST` | `/imports/{entity}`         | Re-validate the file and bulk-insert. Form fields: `file` (required), `mapping` (required JSON), `import_duplicates` (optional bool). Returns `{ created, skipped_invalid, skipped_duplicate }`.                                                                     |
+
+**Column mapping:** the server auto-detects a sensible field→column mapping from the header row (English and Spanish header names are recognized). You can override it by passing a `mapping` JSON object (e.g. `{"name": "Investment", "base_currency": "Currency"}`); unmapped optional fields are simply left empty.
+
+**Validation & dedup:** each row is coerced and validated against the entity's field rules (e.g. a recognized category, a supported currency, length limits). Rows that match an existing record — or an earlier row in the same file — by name (case-insensitive) are flagged as `duplicate` and skipped unless `import_duplicates` is `true`. Invalid rows are always skipped; the rest are inserted. An unreadable or unsupported file returns `400`.
+
+**Investments fields:** `name` (required), `category` (required), `base_currency` (required), `ticker`, `broker`, `notes`.
+
+---
+
 ## Snapshots
 
 Snapshots are nested under an investment. Each snapshot records the value of an investment at a point in time (typically end of month). There can only be one snapshot per investment per date.
