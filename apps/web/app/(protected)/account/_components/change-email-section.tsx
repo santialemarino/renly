@@ -6,10 +6,10 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
 import { Button, Input } from '@repo/ui/components';
-import { SectionHeader } from '@/app/(protected)/account/_components/section-header';
 import { changeEmailAction } from '@/app/(protected)/account/account-actions';
 import { changeEmailSchema, type ChangeEmailData } from '@/app/(protected)/account/form-schemas';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { SectionHeader } from '@/components/section-header';
 
 interface ChangeEmailSectionProps {
   currentEmail: string;

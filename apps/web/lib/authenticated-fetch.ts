@@ -20,17 +20,21 @@ export async function authenticatedFetch(
     throw new Error('Not authenticated');
   }
 
+  const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` };
   const requestOptions: RequestInit = {
     method: options.method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers,
     cache: 'no-store',
   };
 
   if (options.body !== undefined) {
-    requestOptions.body = JSON.stringify(options.body);
+    if (options.body instanceof FormData) {
+      // Let the browser set the multipart Content-Type (with its boundary); don't serialize.
+      requestOptions.body = options.body;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      requestOptions.body = JSON.stringify(options.body);
+    }
   }
 
   return fetch(`${apiUrl}${endpoint}`, requestOptions);

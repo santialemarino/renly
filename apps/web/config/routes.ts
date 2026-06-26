@@ -29,6 +29,7 @@ export const ROUTES = {
   localization: '/localization',
   integrations: '/integrations',
   account: '/account',
+  data: '/data',
   admin: '/admin',
 } as const;
 

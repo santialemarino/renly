@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
+  ArrowDownUp,
   BarChart3,
   Bell,
   CalendarClock,
@@ -81,6 +82,7 @@ const PORTFOLIO_GROUP = [
 
 const SETTINGS_GROUP = [
   { key: 'account', href: ROUTES.account, icon: UserCog },
+  { key: 'data', href: ROUTES.data, icon: ArrowDownUp },
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
   { key: 'alerts', href: ROUTES.alerts, icon: Bell },
   { key: 'localization', href: ROUTES.localization, icon: Globe },

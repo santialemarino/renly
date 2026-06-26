@@ -7,7 +7,7 @@ interface SectionHeaderProps {
   variant?: 'default' | 'destructive';
 }
 
-// Title + description block shared by the account page sections (matches the preferences layout).
+// Title + description block shared by the account and data page sections (matches the preferences layout).
 export function SectionHeader({ title, description, variant = 'default' }: SectionHeaderProps) {
   return (
     <div className="flex flex-col gap-y-1">

@@ -222,6 +222,7 @@
       "localization": "Localization",
       "integrations": "Integrations",
       "account": "Account",
+      "data": "Import & Export",
       "invitePeople": "Invite people"
     },
     "navGroups": {
@@ -1186,6 +1187,7 @@
     "toolbar": {
       "searchPlaceholder": "Search investments...",
       "addInvestment": "Add investment",
+      "import": "Import",
       "showArchived": "Show archived"
     },
     "table": {
@@ -1751,13 +1753,9 @@
     },
     "danger": {
       "title": "Danger zone",
-      "description": "Export your data or permanently delete your account.",
-      "export": {
-        "title": "Export your data",
-        "description": "Download all your Renly data as a JSON file.",
-        "label": "Export",
-        "loading": "Preparing…",
-        "success": "Your data export has been downloaded."
+      "description": "Permanently delete your account.",
+      "exportFirst": {
+        "text": "Want a copy of your data first?"
       },
       "delete": {
         "title": "Delete account",
@@ -1776,6 +1774,73 @@
           "deleting": "Deleting…"
         }
       }
+    }
+  },
+  "data": {
+    "metadata": {
+      "title": "Import & Export",
+      "description": "Import your data into Renly or export a copy"
+    },
+    "title": "Import & Export",
+    "subtitle": "Bring your data into Renly, or download a copy of everything.",
+    "types": {
+      "investments": "Investments",
+      "expenses": "Expenses",
+      "income": "Income",
+      "snapshots": "Snapshots",
+      "transactions": "Transactions"
+    },
+    "import": {
+      "title": "Import",
+      "description": "Upload a CSV or Excel file, match the columns to Renly fields, and review before importing.",
+      "comingSoon": "soon",
+      "success": "Imported {count} investments.",
+      "upload": {
+        "cta": "Drop a file here, or click to browse",
+        "loading": "Reading your file…",
+        "formats": "Supported formats: CSV, XLSX, TSV · up to 1,000 rows",
+        "template": "Download a template CSV"
+      },
+      "fields": {
+        "name": "Name",
+        "category": "Category",
+        "base_currency": "Currency",
+        "ticker": "Ticker",
+        "broker": "Broker",
+        "notes": "Notes"
+      },
+      "map": {
+        "title": "Match your columns to Renly fields",
+        "ignore": "Don't import"
+      },
+      "preview": {
+        "summary": "{total} rows",
+        "valid": "{count} to import",
+        "duplicate": "{count} duplicate",
+        "invalid": "{count} with errors",
+        "importDuplicates": "Import duplicates anyway",
+        "row": "Row",
+        "status": "Status",
+        "back": "Choose another file",
+        "importing": "Importing…",
+        "confirm": "Import {count} investments"
+      },
+      "status": {
+        "valid": "Ready",
+        "invalid": "Error",
+        "duplicate": "Duplicate"
+      }
+    },
+    "export": {
+      "title": "Export",
+      "description": "Download a copy of all your Renly data.",
+      "json": {
+        "title": "Export your data",
+        "description": "Download all your Renly data as a JSON file."
+      },
+      "label": "Export",
+      "loading": "Preparing…",
+      "success": "Your data export has been downloaded."
     }
   },
   "landing": {
