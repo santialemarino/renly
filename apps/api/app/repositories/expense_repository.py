@@ -50,11 +50,38 @@ async def get_by_id(session: AsyncSession, expense_id: int, user_id: int) -> Exp
     return result.scalar_one_or_none()
 
 
+# Returns the user's expense dedup tuples (date, amount, currency, category, notes), used to flag
+# duplicates on import. Column order matches EXPENSES_SPEC.dedup_fields.
+async def list_dedup_keys_by_user(
+    session: AsyncSession,
+    user_id: int,
+) -> list[tuple[date_type, Decimal, str, ExpenseCategory | None, str | None]]:
+    result = await session.execute(
+        select(
+            ExpenseEntry.date,
+            ExpenseEntry.amount,
+            ExpenseEntry.currency,
+            ExpenseEntry.category,
+            ExpenseEntry.notes,
+        ).where(ExpenseEntry.user_id == user_id)
+    )
+    return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
+
+
 # Insert a new expense entry.
 async def create(session: AsyncSession, entry: ExpenseEntry) -> ExpenseEntry:
     session.add(entry)
     await session.flush()
     return entry
+
+
+# Bulk-inserts new expense entries and flushes to assign ids. Returns the inserted entries.
+async def bulk_create(session: AsyncSession, entries: list[ExpenseEntry]) -> list[ExpenseEntry]:
+    if not entries:
+        return []
+    session.add_all(entries)
+    await session.flush()
+    return entries
 
 
 # Stage an expense entry for update (caller commits).
@@ -423,6 +450,7 @@ async def is_most_recent_linked_installment_expense(
 
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
+    bulk_create = staticmethod(bulk_create)
     count_by_credit_card = staticmethod(count_by_credit_card)
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
@@ -435,6 +463,7 @@ class ExpenseRepository:
     linked_installment_expenses_by_date = staticmethod(linked_installment_expenses_by_date)
     linked_subscription_expenses_by_date = staticmethod(linked_subscription_expenses_by_date)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
+    list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     list_linked_obligation_expenses = staticmethod(list_linked_obligation_expenses)
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)

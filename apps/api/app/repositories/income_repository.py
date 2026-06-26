@@ -1,4 +1,5 @@
 from datetime import date as date_type
+from decimal import Decimal
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,11 +46,38 @@ async def get_by_id(session: AsyncSession, income_id: int, user_id: int) -> Inco
     return result.scalar_one_or_none()
 
 
+# Returns the user's income dedup tuples (date, amount, currency, category, notes), used to flag
+# duplicates on import. Column order matches INCOME_SPEC.dedup_fields.
+async def list_dedup_keys_by_user(
+    session: AsyncSession,
+    user_id: int,
+) -> list[tuple[date_type, Decimal, str, IncomeCategory | None, str | None]]:
+    result = await session.execute(
+        select(
+            IncomeEntry.date,
+            IncomeEntry.amount,
+            IncomeEntry.currency,
+            IncomeEntry.category,
+            IncomeEntry.notes,
+        ).where(IncomeEntry.user_id == user_id)
+    )
+    return [(row[0], row[1], row[2], row[3], row[4]) for row in result.all()]
+
+
 # Insert a new income entry.
 async def create(session: AsyncSession, entry: IncomeEntry) -> IncomeEntry:
     session.add(entry)
     await session.flush()
     return entry
+
+
+# Bulk-inserts new income entries and flushes to assign ids. Returns the inserted entries.
+async def bulk_create(session: AsyncSession, entries: list[IncomeEntry]) -> list[IncomeEntry]:
+    if not entries:
+        return []
+    session.add_all(entries)
+    await session.flush()
+    return entries
 
 
 # Stage an income entry for update (caller commits).
@@ -154,7 +182,9 @@ async def sum_by_user_grouped_by_category(
 class IncomeRepository:
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     get_by_id = staticmethod(get_by_id)
+    list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     create = staticmethod(create)
+    bulk_create = staticmethod(bulk_create)
     save = staticmethod(save)
     delete = staticmethod(delete)
     get_first_income_date = staticmethod(get_first_income_date)
