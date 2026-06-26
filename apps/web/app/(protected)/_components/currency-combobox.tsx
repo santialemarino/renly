@@ -217,12 +217,14 @@ export function CurrencyCombobox({
             if (match) onChange(match.code);
           }}
           className={cn(
-            'w-full min-w-0 justify-between group has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50 font-normal',
-            surface
-              ? 'bg-background hover:bg-background aria-expanded:bg-background'
-              : 'bg-input hover:bg-input aria-expanded:bg-input dark:bg-input dark:hover:bg-input dark:aria-expanded:bg-input',
+            'w-full min-w-0 justify-between px-3 group shadow-xs hover:border-ring has-focus-visible:border-ring has-focus-visible:ring-3 has-focus-visible:ring-ring/50 text-paragraph-sm font-normal',
+            // Same affordance as every other dropdown trigger (Select, category, etc.): shadow-xs,
+            // px-3, the text-paragraph-sm token, a hover border highlight, and a muted fill on hover
+            // (Button's outline base supplies hover:bg-muted / aria-expanded:bg-muted once the
+            // static-bg override is dropped).
+            surface ? 'bg-background' : 'bg-input dark:bg-input',
             hasError &&
-              'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
+              'border-destructive hover:border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
           )}
         >
           {value ? (
@@ -261,7 +263,7 @@ export function CurrencyCombobox({
                 <X className="size-3.5" />
               </span>
             )}
-            <ComboboxChevron open={open} className="text-muted-foreground" />
+            <ComboboxChevron open={open} />
           </span>
         </Button>
       </PopoverTrigger>
