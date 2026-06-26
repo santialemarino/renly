@@ -68,14 +68,15 @@ def _parse(filename: str, content: bytes) -> tuple[list[str], list[list[str]]]:
     return columns, rows
 
 
-# Auto-detects a target-field → column mapping from the header aliases.
+# Auto-detects a target-field → column mapping from the header aliases. Each field takes the first
+# matching column in file order (not alias order) so the result is deterministic when several of a
+# field's aliases appear as columns.
 def _auto_detect(spec: ImportSpec, columns: list[str]) -> dict[str, str]:
-    by_normalized = {column.strip().lower(): column for column in columns}
     mapping: dict[str, str] = {}
     for field in spec.fields:
-        for alias in field.aliases:
-            if alias in by_normalized:
-                mapping[field.key] = by_normalized[alias]
+        for column in columns:
+            if column.strip().lower() in field.aliases:
+                mapping[field.key] = column
                 break
     return mapping
 

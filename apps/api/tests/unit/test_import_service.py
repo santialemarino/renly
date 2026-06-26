@@ -99,6 +99,12 @@ class TestAutoDetect:
         assert mapping["name"] == "NAME"
         assert mapping["base_currency"] == "CURRENCY"
 
+    def test_first_matching_column_in_file_order_wins(self):
+        # "Investment" and "Name" both alias `name`; the first column in file order is chosen
+        # deterministically (the mapping no longer depends on the alias frozenset's iteration order).
+        mapping = import_service._auto_detect(INVESTMENTS_SPEC, ["Investment", "Name", "Currency"])
+        assert mapping["name"] == "Investment"
+
     def test_resolve_falls_back_to_auto_detect_when_empty(self):
         columns = ["Name", "Category", "Currency"]
         assert import_service._resolve_mapping(INVESTMENTS_SPEC, columns, {}) == import_service._auto_detect(INVESTMENTS_SPEC, columns)

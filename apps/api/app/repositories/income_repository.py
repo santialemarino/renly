@@ -180,14 +180,14 @@ async def sum_by_user_grouped_by_category(
 
 # Namespace to call repository functions (e.g. income_repository.list_by_user_filtered).
 class IncomeRepository:
-    list_by_user_filtered = staticmethod(list_by_user_filtered)
-    get_by_id = staticmethod(get_by_id)
-    list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
-    create = staticmethod(create)
     bulk_create = staticmethod(bulk_create)
-    save = staticmethod(save)
+    create = staticmethod(create)
     delete = staticmethod(delete)
+    get_by_id = staticmethod(get_by_id)
     get_first_income_date = staticmethod(get_first_income_date)
+    list_by_user_filtered = staticmethod(list_by_user_filtered)
+    list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
+    save = staticmethod(save)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

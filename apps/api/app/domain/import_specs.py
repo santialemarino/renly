@@ -276,6 +276,7 @@ def _coerce_date(raw: str) -> date_type:
 _AMOUNT_QUANT = Decimal("0.01")
 # 18 total digits minus 2 decimal places leaves 16 integer digits (matches the DB column).
 _MAX_AMOUNT_INT_DIGITS = 16
+_MAX_AMOUNT = Decimal(10) ** _MAX_AMOUNT_INT_DIGITS
 
 
 # Normalizes a localized number string to a plain Decimal-parseable form. Handles both "1.234,56"
@@ -317,10 +318,10 @@ def _coerce_amount(raw: str) -> Decimal:
         raise ValueError("Amount must be greater than zero.")
     # Bound the magnitude before quantizing — quantizing an astronomically large value raises
     # InvalidOperation (not ValueError), which would escape the per-row try/except in the service.
-    if value >= Decimal(10) ** _MAX_AMOUNT_INT_DIGITS:
+    if value >= _MAX_AMOUNT:
         raise ValueError("Amount is too large.")
     quantized = value.quantize(_AMOUNT_QUANT, rounding=ROUND_HALF_UP)
-    if quantized >= Decimal(10) ** _MAX_AMOUNT_INT_DIGITS:
+    if quantized >= _MAX_AMOUNT:
         raise ValueError("Amount is too large.")
     return quantized
 
