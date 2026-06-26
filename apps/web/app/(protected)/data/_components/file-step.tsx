@@ -5,6 +5,7 @@ import { FileUp, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
+import { InlineLink } from '@/components/inline-link';
 
 const ACCEPT = '.csv,.tsv,.xlsx';
 const TEMPLATE_HREF = '/templates/investments-import-template.csv';
@@ -66,13 +67,9 @@ export function FileStep({ onSelect, loading }: FileStepProps) {
         />
       </button>
 
-      <a
-        href={TEMPLATE_HREF}
-        download
-        className="inline-block text-paragraph-xs-medium text-blue-700 underline decoration-transparent underline-offset-2 outline-none transition-colors duration-200 hover:decoration-blue-700 focus-visible:animate-focus-bump-subtle"
-      >
+      <InlineLink href={TEMPLATE_HREF} color="blue" download className="text-paragraph-xs-medium">
         {t('import.upload.template')}
-      </a>
+      </InlineLink>
     </div>
   );
 }
