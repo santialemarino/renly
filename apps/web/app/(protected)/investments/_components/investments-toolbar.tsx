@@ -122,7 +122,7 @@ export function InvestmentsToolbar({
             {t('toolbar.showArchived')}
           </Pill>
           <Button variant="outline" asChild className="min-w-fit flex-1">
-            <Link href={`${ROUTES.data}?type=investments`}>
+            <Link href={ROUTES.data}>
               <Upload className="size-4" />
               {t('toolbar.import')}
             </Link>

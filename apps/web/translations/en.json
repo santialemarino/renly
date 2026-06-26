@@ -1794,7 +1794,7 @@
       "title": "Import",
       "description": "Upload a CSV or Excel file, match the columns to Renly fields, and review before importing.",
       "comingSoon": "soon",
-      "success": "Imported {count} investments.",
+      "success": "Imported {count, plural, one {# investment} other {# investments}}.",
       "upload": {
         "cta": "Drop a file here, or click to browse",
         "loading": "Reading your file…",
@@ -1814,16 +1814,16 @@
         "ignore": "Don't import"
       },
       "preview": {
-        "summary": "{total} rows",
+        "summary": "{total, plural, one {# row} other {# rows}}",
         "valid": "{count} to import",
-        "duplicate": "{count} duplicate",
+        "duplicate": "{count, plural, one {# duplicate} other {# duplicates}}",
         "invalid": "{count} with errors",
         "importDuplicates": "Import duplicates anyway",
         "row": "Row",
         "status": "Status",
         "back": "Choose another file",
         "importing": "Importing…",
-        "confirm": "Import {count} investments"
+        "confirm": "Import {count, plural, one {# investment} other {# investments}}"
       },
       "status": {
         "valid": "Ready",

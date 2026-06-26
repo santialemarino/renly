@@ -1794,7 +1794,7 @@
       "title": "Importar",
       "description": "Subí un archivo CSV o Excel, asociá las columnas a los campos de Renly y revisá antes de importar.",
       "comingSoon": "pronto",
-      "success": "Se importaron {count} inversiones.",
+      "success": "{count, plural, one {Se importó # inversión} other {Se importaron # inversiones}}.",
       "upload": {
         "cta": "Arrastrá un archivo acá, o hacé clic para buscar",
         "loading": "Leyendo tu archivo…",
@@ -1814,16 +1814,16 @@
         "ignore": "No importar"
       },
       "preview": {
-        "summary": "{total} filas",
+        "summary": "{total, plural, one {# fila} other {# filas}}",
         "valid": "{count} para importar",
-        "duplicate": "{count} duplicadas",
+        "duplicate": "{count, plural, one {# duplicada} other {# duplicadas}}",
         "invalid": "{count} con errores",
         "importDuplicates": "Importar duplicadas igual",
         "row": "Fila",
         "status": "Estado",
         "back": "Elegir otro archivo",
         "importing": "Importando…",
-        "confirm": "Importar {count} inversiones"
+        "confirm": "{count, plural, one {Importar # inversión} other {Importar # inversiones}}"
       },
       "status": {
         "valid": "Lista",
