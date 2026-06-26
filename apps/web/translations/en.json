@@ -1793,8 +1793,9 @@
     "import": {
       "title": "Import",
       "description": "Upload a CSV or Excel file, match the columns to Renly fields, and review before importing.",
+      "typeLabel": "Data type to import",
       "comingSoon": "soon",
-      "success": "Imported {count, plural, one {# investment} other {# investments}}.",
+      "success": "{entity, select, investments {Imported {count, plural, one {# investment} other {# investments}}.} expenses {Imported {count, plural, one {# expense} other {# expenses}}.} income {Imported {count, plural, one {# income entry} other {# income entries}}.} other {Imported {count, plural, one {# record} other {# records}}.}}",
       "upload": {
         "cta": "Drop a file here, or click to browse",
         "loading": "Reading your file…",
@@ -1807,7 +1808,11 @@
         "base_currency": "Currency",
         "ticker": "Ticker",
         "broker": "Broker",
-        "notes": "Notes"
+        "notes": "Notes",
+        "date": "Date",
+        "amount": "Amount",
+        "currency": "Currency",
+        "payment_method": "Payment method"
       },
       "map": {
         "title": "Match your columns to Renly fields",
@@ -1823,7 +1828,7 @@
         "status": "Status",
         "back": "Choose another file",
         "importing": "Importing…",
-        "confirm": "Import {count, plural, one {# investment} other {# investments}}"
+        "confirm": "{entity, select, investments {Import {count, plural, one {# investment} other {# investments}}} expenses {Import {count, plural, one {# expense} other {# expenses}}} income {Import {count, plural, one {# income entry} other {# income entries}}} other {Import {count, plural, one {# record} other {# records}}}}"
       },
       "status": {
         "valid": "Ready",

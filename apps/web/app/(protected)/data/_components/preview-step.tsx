@@ -28,6 +28,7 @@ const STATUS_STYLES: Record<ImportRowStatus, string> = {
 
 interface PreviewStepProps {
   preview: ImportPreview;
+  entity: string;
   importDuplicates: boolean;
   onToggleDuplicates: (value: boolean) => void;
   onConfirm: () => void;
@@ -37,6 +38,7 @@ interface PreviewStepProps {
 
 export function PreviewStep({
   preview,
+  entity,
   importDuplicates,
   onToggleDuplicates,
   onConfirm,
@@ -48,7 +50,7 @@ export function PreviewStep({
   const importable = summary.valid + (importDuplicates ? summary.duplicate : 0);
   const confirmLabel = confirming
     ? t('import.preview.importing')
-    : t('import.preview.confirm', { count: importable });
+    : t('import.preview.confirm', { count: importable, entity });
 
   return (
     <div className="flex flex-col gap-y-4">

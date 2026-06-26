@@ -2,13 +2,18 @@
 # confirm) bulk-insert. The parse/map/validate flow is entity-agnostic; per-entity persistence is a
 # thin dispatch. The server re-validates on confirm — it never trusts client-supplied row data.
 
+from datetime import date as date_type
+from decimal import Decimal
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import InvalidImportFileError
 from app.domain.import_specs import ImportEntity, ImportSpec, get_spec
+from app.models.expense_entry import ExpenseEntry
+from app.models.income_entry import IncomeEntry
 from app.models.investment import Investment
 from app.models.user import User
-from app.repositories import investment_repository
+from app.repositories import expense_repository, income_repository, investment_repository
 from app.schemas.imports import (
     ImportFieldInfo,
     ImportPreviewResponse,
@@ -31,6 +36,27 @@ def _label(key: str) -> str:
     return key.replace("_", " ").capitalize()
 
 
+# Normalizes one dedup-key component to a comparable string (dates ISO, decimals canonical, else lowercased).
+def _key_part(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, date_type):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return str(value)
+    return str(value).strip().lower()
+
+
+# Builds the composite dedup key (a tuple of normalized parts) for a coerced row's field values.
+def _dedup_key(fields: tuple[str, ...], values: dict[str, object]) -> tuple[str, ...]:
+    return tuple(_key_part(values.get(field)) for field in fields)
+
+
+# Builds the dedup key from an existing DB row whose columns are in the spec's dedup_fields order.
+def _row_dedup_key(spec: ImportSpec, row: tuple[object, ...]) -> tuple[str, ...]:
+    return _dedup_key(spec.dedup_fields, dict(zip(spec.dedup_fields, row, strict=True)))
+
+
 # Parses the upload into (columns, rows), translating parse failures and enforcing the row cap.
 def _parse(filename: str, content: bytes) -> tuple[list[str], list[list[str]]]:
     try:
@@ -42,14 +68,15 @@ def _parse(filename: str, content: bytes) -> tuple[list[str], list[list[str]]]:
     return columns, rows
 
 
-# Auto-detects a target-field → column mapping from the header aliases.
+# Auto-detects a target-field → column mapping from the header aliases. Each field takes the first
+# matching column in file order (not alias order) so the result is deterministic when several of a
+# field's aliases appear as columns.
 def _auto_detect(spec: ImportSpec, columns: list[str]) -> dict[str, str]:
-    by_normalized = {column.strip().lower(): column for column in columns}
     mapping: dict[str, str] = {}
     for field in spec.fields:
-        for alias in field.aliases:
-            if alias in by_normalized:
-                mapping[field.key] = by_normalized[alias]
+        for column in columns:
+            if column.strip().lower() in field.aliases:
+                mapping[field.key] = column
                 break
     return mapping
 
@@ -70,12 +97,12 @@ def _validate_rows(
     columns: list[str],
     rows: list[list[str]],
     mapping: dict[str, str],
-    existing_keys: set[str],
+    existing_keys: set[tuple[str, ...]],
 ) -> tuple[list[ImportPreviewRow], dict[int, dict[str, object]]]:
     col_index: dict[str, int] = {}
     for index, column in enumerate(columns):
         col_index.setdefault(column, index)  # first occurrence wins on duplicate headers
-    seen: set[str] = set()
+    seen: set[tuple[str, ...]] = set()
     preview_rows: list[ImportPreviewRow] = []
     coerced_by_index: dict[int, dict[str, object]] = {}
     for index, row in enumerate(rows):
@@ -98,12 +125,12 @@ def _validate_rows(
         if errors:
             status = STATUS_INVALID
         else:
-            key = str(coerced.get(spec.dedup_field, "")).strip().lower()
-            if key and (key in existing_keys or key in seen):
+            key = _dedup_key(spec.dedup_fields, coerced)
+            if any(key) and (key in existing_keys or key in seen):
                 status = STATUS_DUPLICATE
             else:
                 status = STATUS_VALID
-                if key:
+                if any(key):
                     seen.add(key)
             coerced_by_index[index] = coerced
         preview_rows.append(ImportPreviewRow(row_number=index + 1, values=values, status=status, errors=errors))
@@ -120,11 +147,17 @@ def _summarize(rows: list[ImportPreviewRow]) -> ImportSummary:
     )
 
 
-# Returns the existing dedup keys (lowercased) for the entity, used to flag duplicates.
-async def _existing_keys(session: AsyncSession, user: User, entity: ImportEntity) -> set[str]:
-    if entity is ImportEntity.investments:
+# Returns the existing dedup keys for the entity (same normalization as new rows), to flag duplicates.
+async def _existing_keys(session: AsyncSession, user: User, spec: ImportSpec) -> set[tuple[str, ...]]:
+    if spec.entity is ImportEntity.investments:
         names = await investment_repository.list_names_by_user(session, user.id)
-        return {name.strip().lower() for name in names}
+        return {_dedup_key(spec.dedup_fields, {"name": name}) for name in names}
+    if spec.entity is ImportEntity.expenses:
+        rows = await expense_repository.list_dedup_keys_by_user(session, user.id)
+        return {_row_dedup_key(spec, row) for row in rows}
+    if spec.entity is ImportEntity.income:
+        rows = await income_repository.list_dedup_keys_by_user(session, user.id)
+        return {_row_dedup_key(spec, row) for row in rows}
     return set()
 
 
@@ -147,6 +180,37 @@ async def _persist(session: AsyncSession, user: User, entity: ImportEntity, rows
         ]
         created = await investment_repository.bulk_create(session, investments)
         return len(created)
+    if entity is ImportEntity.expenses:
+        expenses = [
+            ExpenseEntry(
+                user_id=user.id,
+                date=row["date"],
+                amount=row["amount"],
+                currency=row["currency"],
+                category=row.get("category"),
+                payment_method=row.get("payment_method"),
+                notes=row.get("notes"),
+                source="manual",
+            )
+            for row in rows
+        ]
+        created = await expense_repository.bulk_create(session, expenses)
+        return len(created)
+    if entity is ImportEntity.income:
+        income_entries = [
+            IncomeEntry(
+                user_id=user.id,
+                date=row["date"],
+                amount=row["amount"],
+                currency=row["currency"],
+                category=row.get("category"),
+                notes=row.get("notes"),
+                source="manual",
+            )
+            for row in rows
+        ]
+        created = await income_repository.bulk_create(session, income_entries)
+        return len(created)
     return 0
 
 
@@ -162,7 +226,7 @@ async def preview_import(
     spec = get_spec(entity)
     columns, rows = _parse(filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
-    existing_keys = await _existing_keys(session, user, entity)
+    existing_keys = await _existing_keys(session, user, spec)
     preview_rows, _ = _validate_rows(spec, columns, rows, applied, existing_keys)
     return ImportPreviewResponse(
         columns=columns,
@@ -186,7 +250,7 @@ async def confirm_import(
     spec = get_spec(entity)
     columns, rows = _parse(filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
-    existing_keys = await _existing_keys(session, user, entity)
+    existing_keys = await _existing_keys(session, user, spec)
     preview_rows, coerced_by_index = _validate_rows(spec, columns, rows, applied, existing_keys)
 
     importable: list[dict[str, object]] = []

@@ -10,14 +10,19 @@ export async function generateMetadata() {
   return await generatePageMetadata('data');
 }
 
-export default async function DataPage() {
+interface DataPageProps {
+  searchParams: Promise<{ type?: string }>;
+}
+
+export default async function DataPage({ searchParams }: DataPageProps) {
   const t = await getTranslations('data');
+  const { type } = await searchParams;
 
   return (
     <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <div className="flex flex-col w-full max-w-5xl gap-y-8">
-        <ImportSection />
+        <ImportSection initialType={type} />
         <Separator />
         <ExportSection />
       </div>

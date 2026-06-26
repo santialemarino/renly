@@ -90,10 +90,14 @@ export function CurrencySwitcher({
   );
 
   const chevron = (
-    <button onClick={handleToggleCollapse} className="shrink-0 cursor-pointer">
+    <button
+      onClick={handleToggleCollapse}
+      className="group/currency-collapse shrink-0 cursor-pointer focus-visible:outline-none"
+    >
       <ChevronRight
         className={cn(
           'size-4 text-blue-400 transition-transform duration-200',
+          'group-focus-visible/currency-collapse:animate-focus-bump',
           !collapsed && 'rotate-90',
         )}
       />
