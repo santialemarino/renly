@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ChevronsUpDown, Tag } from 'lucide-react';
+import { Check, Tag } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ComboboxChevron } from '@/components/combobox-chevron';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
@@ -67,7 +68,7 @@ export function ExpenseCategorySelect({
               <Tag className="size-4 shrink-0" />
               {label}
             </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+            <ComboboxChevron open={open} />
           </Button>
         </PopoverTrigger>
         <PopoverContent

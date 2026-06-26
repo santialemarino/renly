@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, Plus } from 'lucide-react';
+import { Archive, Plus, Upload } from 'lucide-react';
 import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
@@ -120,6 +121,12 @@ export function InvestmentsToolbar({
             <Archive className="size-4" />
             {t('toolbar.showArchived')}
           </Pill>
+          <Button variant="outline" asChild className="min-w-fit flex-1">
+            <Link href={ROUTES.data}>
+              <Upload className="size-4" />
+              {t('toolbar.import')}
+            </Link>
+          </Button>
           <Button blue onClick={() => setCreateOpen(true)} className="min-w-fit flex-1">
             <Plus className="size-4" />
             {t('toolbar.addInvestment')}

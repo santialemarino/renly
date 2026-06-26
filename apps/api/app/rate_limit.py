@@ -23,6 +23,8 @@ RESET_PASSWORD_LIMIT = "10/hour"
 CHANGE_EMAIL_LIMIT = "5/hour"
 # Admin invite create/resend (each sends an email; bounded per admin to cap outbound volume).
 INVITE_LIMIT = "30/hour"
+# Import endpoints (file upload + parse + bulk insert); bounded per user.
+IMPORT_LIMIT = "20/hour"
 
 
 # Resolves the client IP to throttle by. When trusted_proxy_count is 0 the app is reached directly,

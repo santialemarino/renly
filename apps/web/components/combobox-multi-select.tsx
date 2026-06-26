@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ChevronsUpDown, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import {
@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { ComboboxChevron } from '@/components/combobox-chevron';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 
 export interface ComboboxItem {
@@ -110,7 +111,7 @@ export function ComboboxMultiSelect({
               {icon}
               {placeholder}
             </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
+            <ComboboxChevron open={open} />
           </Button>
         </PopoverTrigger>
         <PopoverContent
@@ -128,7 +129,11 @@ export function ComboboxMultiSelect({
                   return (
                     <CommandItem
                       key={item.id}
-                      value={item.label}
+                      // Identify by id (unique), search by label — two items with the same name
+                      // (e.g. two investments both "Google") must not share one cmdk identity, or
+                      // hovering/selecting one highlights both.
+                      value={String(item.id)}
+                      keywords={[item.label]}
                       onSelect={() => onToggle(item.id)}
                     >
                       <Check

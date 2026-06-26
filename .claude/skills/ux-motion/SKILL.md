@@ -44,6 +44,7 @@ The **Base conventions** apply to BOTH. **App motion** and **Public motion** lay
 - Reuse the `@repo/ui` primitives' built-in open/close: dialog/popover/tooltip/sheet use `data-[state=open]:animate-in / data-[state=closed]:animate-out` + `fade` / `zoom-95` / directional `slide-in-from-*` (sheets are asymmetric: 500ms open / 300ms close). Collapsible → `animate-collapsible-down/up`. Don't reinvent these.
 - Crossfade loading/empty/content via `AnimatePresence mode="wait"` + a ~500ms min-loading delay (credit-cards settlements pattern).
 - Never conditionally unmount in a way that kills the exit — use `AnimatePresence` exits so **close looks as good as open**.
+- A control's **open/closed state icon** (a select / combobox / disclosure chevron) rotates on open. Drive it off the open state (a prop, or `group-data-[state=open]`) and animate with **`transition-transform`** — in Tailwind v4 `rotate-*` sets the `rotate` property, so a `transform`-only transition does NOT animate it (the chevron snaps). Put the rotating chevron in one **shared component** so every dropdown's affordance (icon, size, rotation) is identical — don't re-implement it per call site.
 
 ### Reduced motion (mandatory)
 
@@ -52,6 +53,9 @@ Honor `prefers-reduced-motion: reduce`. Non-essential motion (scroll reveals, fl
 ## App motion (`(auth)` + `(protected)`)
 
 Calm and functional: state feedback (focus/hover/active), the primitives' open/close, conditional-field reveals, loading crossfades, and at most a quiet on-mount fade (the auth cards). **No scroll-reveal, no ambient/decorative motion** — keep it quiet.
+
+- **State transitions between distinct steps** (e.g. an upload → review wizard, or any swap between mutually-exclusive panels) crossfade with `AnimatePresence mode="wait"` + opacity — don't snap from one state to the next.
+- **A control's changing label/count animates, including its size.** When a button (or similar) label changes — e.g. a count updating — crossfade the text with a keyed `AnimatePresence`, and animate the control's **resize both ways** (grow and shrink) with the `layout` prop. Wrap a base component to make it animatable (`motion.create(Button)`); the bare CSS `transition-all` does not animate content-driven `width: auto` changes.
 
 ## Public motion (`(public)`)
 

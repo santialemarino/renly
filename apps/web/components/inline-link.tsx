@@ -19,6 +19,8 @@ interface InlineLinkProps {
   href: string;
   color?: keyof typeof INLINE_LINK_COLORS;
   size?: keyof typeof INLINE_LINK_SIZES;
+  // Render as a download link for a static asset (e.g. a template file); skips route prefetch.
+  download?: boolean;
   className?: string;
   children: React.ReactNode;
 }
@@ -35,12 +37,15 @@ export function InlineLink({
   href,
   color = 'blue',
   size = 'sm',
+  download = false,
   className,
   children,
 }: InlineLinkProps) {
   return (
     <Link
       href={href}
+      download={download}
+      prefetch={download ? false : undefined}
       className={cn(
         'inline-block underline decoration-transparent underline-offset-2 outline-none transition-colors duration-200 ease-out focus-visible:animate-focus-bump-subtle',
         INLINE_LINK_SIZES[size],
