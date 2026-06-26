@@ -104,7 +104,10 @@ export function SmartSearch({
                     {group.items.map((item) => (
                       <CommandItem
                         key={item.id}
-                        value={`${group.heading} ${item.label}`}
+                        // Identify by group+id (unique), search by label/heading — two results with
+                        // the same name must not share one cmdk identity (highlighting both on hover).
+                        value={`${groupIndex}-${item.id}`}
+                        keywords={[item.label, group.heading]}
                         onSelect={() => handleSelect(groupIndex, item.id)}
                       >
                         {item.icon}

@@ -73,7 +73,7 @@ function FieldMapCombobox({ value, columns, ignoreLabel, onChange }: FieldMapCom
         <Button
           variant="outline"
           role="combobox"
-          className="h-9 w-full justify-between px-3 gap-x-2 bg-background text-paragraph-sm font-normal hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="h-9 w-full justify-between px-3 gap-x-2 border-border bg-background shadow-xs text-paragraph-sm font-normal hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <span className={cn('truncate', !value && 'text-muted-foreground')}>
             {value ?? ignoreLabel}
@@ -85,7 +85,11 @@ function FieldMapCombobox({ value, columns, ignoreLabel, onChange }: FieldMapCom
         <Command>
           <CommandList>
             <CommandGroup>
-              <CommandItem value={ignoreLabel} onSelect={() => handleSelect(null)}>
+              <CommandItem
+                value="__ignore__"
+                keywords={[ignoreLabel]}
+                onSelect={() => handleSelect(null)}
+              >
                 <Check
                   className={cn(
                     'size-4 shrink-0 transition-all duration-150',
@@ -94,8 +98,15 @@ function FieldMapCombobox({ value, columns, ignoreLabel, onChange }: FieldMapCom
                 />
                 {ignoreLabel}
               </CommandItem>
-              {columns.map((column) => (
-                <CommandItem key={column} value={column} onSelect={() => handleSelect(column)}>
+              {/* Identify by index, not name: a CSV can repeat a header, and duplicate cmdk values
+                  would make hovering one option highlight every option with the same name. */}
+              {columns.map((column, index) => (
+                <CommandItem
+                  key={`${column}-${index}`}
+                  value={`column-${index}`}
+                  keywords={[column]}
+                  onSelect={() => handleSelect(column)}
+                >
                   <Check
                     className={cn(
                       'size-4 shrink-0 transition-all duration-150',

@@ -129,7 +129,11 @@ export function ComboboxMultiSelect({
                   return (
                     <CommandItem
                       key={item.id}
-                      value={item.label}
+                      // Identify by id (unique), search by label — two items with the same name
+                      // (e.g. two investments both "Google") must not share one cmdk identity, or
+                      // hovering/selecting one highlights both.
+                      value={String(item.id)}
+                      keywords={[item.label]}
                       onSelect={() => onToggle(item.id)}
                     >
                       <Check
