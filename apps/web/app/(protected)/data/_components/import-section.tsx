@@ -110,9 +110,12 @@ export function ImportSection() {
               type="button"
               onClick={() => handleSelectType(type.key)}
               aria-pressed={entity === type.key}
+              // Lock the picker while a preview/confirm is in flight: switching entities mid-request
+              // would let a stale result render under the newly selected type.
+              disabled={loading || confirming}
               className={cn(
                 'flex items-center px-3 py-1 rounded-full outline-none transition-all duration-200 cursor-pointer',
-                'active:scale-95 focus-visible:ring-3 text-paragraph-xs-medium',
+                'active:scale-95 focus-visible:ring-3 disabled:opacity-50 disabled:pointer-events-none text-paragraph-xs-medium',
                 // Focus ring tint matches the button variants: blue (active) ring like a blue
                 // button, neutral ring for the muted (inactive) tabs — so the active tab's keyboard
                 // focus reads distinct from the others.
