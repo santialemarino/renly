@@ -49,6 +49,7 @@ from app.routers import (
     metrics,
     payment_obligations,
     payments_calendar,
+    restore,
     snapshot_grid,
     subscriptions,
 )
@@ -188,6 +189,7 @@ _ROUTERS = (
     metrics.router,
     payment_obligations.router,
     payments_calendar.router,
+    restore.router,
     settings_router.router,
     snapshot_grid.router,
     subscriptions.router,

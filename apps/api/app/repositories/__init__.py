@@ -18,6 +18,7 @@ from app.repositories.invite_repository import invite_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.refresh_token_repository import refresh_token_repository
+from app.repositories.restore_repository import restore_repository
 from app.repositories.snapshot_repository import snapshot_repository
 from app.repositories.subscription_repository import subscription_repository
 from app.repositories.transaction_repository import transaction_repository
@@ -43,6 +44,7 @@ __all__ = [
     "metrics_repository",
     "payment_obligation_repository",
     "refresh_token_repository",
+    "restore_repository",
     "snapshot_repository",
     "subscription_repository",
     "transaction_repository",
