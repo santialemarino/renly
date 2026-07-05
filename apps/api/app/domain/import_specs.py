@@ -352,59 +352,39 @@ def _resolve_single_separator(text: str, sep: str) -> str:
     return text.replace(sep, ".")
 
 
-# Parses a positive monetary amount, quantized to 2 decimals. Raises ValueError on a bad/<=0 value.
-def _coerce_amount(raw: str) -> Decimal:
-    try:
-        value = Decimal(_normalize_decimal_string(raw))
-    except InvalidOperation as exc:
-        raise ValueError(f"Invalid amount '{raw.strip()}'.") from exc
-    if not value.is_finite() or value <= 0:
-        raise ValueError("Amount must be greater than zero.")
-    # Bound the magnitude before quantizing — quantizing an astronomically large value raises
-    # InvalidOperation (not ValueError), which would escape the per-row try/except in the service.
-    if value >= _MAX_AMOUNT:
-        raise ValueError("Amount is too large.")
-    quantized = value.quantize(_AMOUNT_QUANT, rounding=ROUND_HALF_UP)
-    if quantized >= _MAX_AMOUNT:
-        raise ValueError("Amount is too large.")
-    return quantized
-
-
-# Parses a non-negative monetary value, quantized to 2 decimals (0 allowed — e.g. a closed position).
-def _coerce_value(raw: str) -> Decimal:
-    try:
-        value = Decimal(_normalize_decimal_string(raw))
-    except InvalidOperation as exc:
-        raise ValueError(f"Invalid value '{raw.strip()}'.") from exc
-    if not value.is_finite() or value < 0:
-        raise ValueError("Value must be zero or greater.")
-    if value >= _MAX_AMOUNT:
-        raise ValueError("Value is too large.")
-    quantized = value.quantize(_AMOUNT_QUANT, rounding=ROUND_HALF_UP)
-    if quantized >= _MAX_AMOUNT:
-        raise ValueError("Value is too large.")
-    return quantized
-
-
 _QUANTITY_QUANT = Decimal("0.000001")
 # 18 total digits minus 6 decimal places leaves 12 integer digits (matches the DB column).
 _MAX_QUANTITY = Decimal(10) ** 12
 
 
-# Parses a non-negative quantity of shares/units, quantized to 6 decimals. Raises ValueError on bad input.
-def _coerce_quantity(raw: str) -> Decimal:
-    try:
-        value = Decimal(_normalize_decimal_string(raw))
-    except InvalidOperation as exc:
-        raise ValueError(f"Invalid quantity '{raw.strip()}'.") from exc
-    if not value.is_finite() or value < 0:
-        raise ValueError("Quantity must be zero or greater.")
-    if value >= _MAX_QUANTITY:
-        raise ValueError("Quantity is too large.")
-    quantized = value.quantize(_QUANTITY_QUANT, rounding=ROUND_HALF_UP)
-    if quantized >= _MAX_QUANTITY:
-        raise ValueError("Quantity is too large.")
-    return quantized
+# Builds a coercer for a decimal field: normalizes AR/US separators, bounds the magnitude before AND
+# after quantizing (quantizing an over-large value raises InvalidOperation, not ValueError, which would
+# escape the per-row try/except in the service), then quantizes half-up. allow_zero permits 0 (e.g. a
+# closed-position snapshot value); otherwise the value must be strictly positive.
+def _decimal_coercer(noun: str, quant: Decimal, max_value: Decimal, *, allow_zero: bool) -> Callable[[str], Decimal]:
+    floor = "zero or greater" if allow_zero else "greater than zero"
+
+    def coerce(raw: str) -> Decimal:
+        try:
+            value = Decimal(_normalize_decimal_string(raw))
+        except InvalidOperation as exc:
+            raise ValueError(f"Invalid {noun} '{raw.strip()}'.") from exc
+        if not value.is_finite() or value < 0 or (value == 0 and not allow_zero):
+            raise ValueError(f"{noun.capitalize()} must be {floor}.")
+        if value >= max_value:
+            raise ValueError(f"{noun.capitalize()} is too large.")
+        quantized = value.quantize(quant, rounding=ROUND_HALF_UP)
+        if quantized >= max_value:
+            raise ValueError(f"{noun.capitalize()} is too large.")
+        return quantized
+
+    return coerce
+
+
+# Amount is strictly positive (an expense/income/transaction); value and quantity allow zero.
+_coerce_amount = _decimal_coercer("amount", _AMOUNT_QUANT, _MAX_AMOUNT, allow_zero=False)
+_coerce_value = _decimal_coercer("value", _AMOUNT_QUANT, _MAX_AMOUNT, allow_zero=True)
+_coerce_quantity = _decimal_coercer("quantity", _QUANTITY_QUANT, _MAX_QUANTITY, allow_zero=True)
 
 
 # Header aliases shared by the date / amount / currency / notes columns across expense and income.
@@ -556,10 +536,10 @@ SNAPSHOTS_SPEC = ImportSpec(
 )
 
 # Import spec for transactions (nested under an investment; no natural key, so soft dedup on a
-# composite of the resolved investment_id plus date, type, amount, quantity).
+# composite of the resolved investment_id plus date, type, amount, currency, quantity).
 TRANSACTIONS_SPEC = ImportSpec(
     entity=ImportEntity.transactions,
-    dedup_fields=("investment_id", "date", "type", "amount", "quantity"),
+    dedup_fields=("investment_id", "date", "type", "amount", "currency", "quantity"),
     fields=(
         FieldSpec("investment", True, _INVESTMENT_IDENTIFIER_ALIASES, _coerce_investment_identifier),
         FieldSpec("date", True, _DATE_ALIASES, _coerce_date),

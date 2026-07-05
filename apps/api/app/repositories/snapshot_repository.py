@@ -65,36 +65,37 @@ async def save(session: AsyncSession, snapshot: InvestmentSnapshot) -> None:
     session.add(snapshot)
 
 
-# Bulk-upserts snapshots on (investment_id, date): inserts new dates, updates existing. Returns the
-# row count. Rows must be pre-deduped on (investment_id, date) — one statement can't update a
-# conflict target twice.
-async def bulk_upsert(session: AsyncSession, user_id: int, rows: list[dict[str, object]]) -> int:
-    if not rows:
+# Bulk-upserts snapshots on (investment_id, date): inserts new dates, updates existing. On conflict,
+# quantity/notes fall back to the existing row (COALESCE) so a re-import that omits those columns
+# doesn't wipe them. Snapshots must be pre-deduped on (investment_id, date) — one statement can't
+# update a conflict target twice. Returns the row count.
+async def bulk_upsert(session: AsyncSession, snapshots: list[InvestmentSnapshot]) -> int:
+    if not snapshots:
         return 0
     now = utcnow()
     values = [
         {
-            "user_id": user_id,
-            "investment_id": row["investment_id"],
-            "date": row["date"],
-            "value": row["value"],
-            "quantity": row.get("quantity"),
-            "currency": row["currency"],
-            "source": "manual",
-            "notes": row.get("notes"),
+            "user_id": snapshot.user_id,
+            "investment_id": snapshot.investment_id,
+            "date": snapshot.date,
+            "value": snapshot.value,
+            "quantity": snapshot.quantity,
+            "currency": snapshot.currency,
+            "source": snapshot.source,
+            "notes": snapshot.notes,
             "created_at": now,
             "updated_at": now,
         }
-        for row in rows
+        for snapshot in snapshots
     ]
     stmt = insert(InvestmentSnapshot).values(values)
     stmt = stmt.on_conflict_do_update(
         index_elements=["investment_id", "date"],
         set_={
             "value": stmt.excluded.value,
-            "quantity": stmt.excluded.quantity,
             "currency": stmt.excluded.currency,
-            "notes": stmt.excluded.notes,
+            "quantity": func.coalesce(stmt.excluded.quantity, InvestmentSnapshot.quantity),
+            "notes": func.coalesce(stmt.excluded.notes, InvestmentSnapshot.notes),
             "updated_at": stmt.excluded.updated_at,
         },
     )

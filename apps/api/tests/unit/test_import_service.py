@@ -692,8 +692,16 @@ class TestTransactionSpec:
         preview, _ = self._validate(rows)
         assert [row.status for row in preview] == ["valid", "valid"]
 
+    def test_differing_currency_is_not_duplicate(self):
+        rows = [
+            ["Apple", "2026-01-05", "100", "USD", "buy", "5", ""],
+            ["Apple", "2026-01-05", "100", "ARS", "buy", "5", ""],  # same but currency differs → distinct
+        ]
+        preview, _ = self._validate(rows)
+        assert [row.status for row in preview] == ["valid", "valid"]
+
     def test_duplicate_against_existing(self):
-        existing = {("1", "2026-01-05", "buy", "100.00", "5.000000")}
+        existing = {("1", "2026-01-05", "buy", "100.00", "usd", "5.000000")}
         preview, _ = self._validate([["Apple", "2026-01-05", "100", "USD", "buy", "5", ""]], existing=existing)
         assert preview[0].status == "duplicate"
 
@@ -702,7 +710,7 @@ class TestSnapshotImport:
     @pytest.mark.asyncio
     async def test_confirm_upserts_and_collapses_within_file(self, monkeypatch):
         monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
-        upsert = AsyncMock(side_effect=lambda session, user_id, rows: len(rows))
+        upsert = AsyncMock(side_effect=lambda session, snapshots: len(snapshots))
         monkeypatch.setattr(import_service.snapshot_repository, "bulk_upsert", upsert)
         session = AsyncMock()
         # Apple + AAPL both resolve to id 1 for the same date → collapse to one upsert (last wins);
@@ -713,9 +721,11 @@ class TestSnapshotImport:
         result = await import_service.confirm_import(session, USER, ImportEntity.snapshots, "x.csv", content, mapping, False)
 
         assert (result.created, result.skipped_invalid) == (1, 1)
-        upserted = upsert.call_args.args[2]
+        upserted = upsert.call_args.args[1]
         assert len(upserted) == 1
-        assert upserted[0]["value"] == Decimal("200.00")  # last row wins
+        assert upserted[0].value == Decimal("200.00")  # last row wins
+        assert upserted[0].source == "manual"  # set by the service, not the repo
+        assert upserted[0].user_id == USER.id
         session.commit.assert_awaited_once()
 
 
@@ -738,3 +748,19 @@ class TestTransactionImport:
         assert inserted[0].investment_id == 1
         assert inserted[0].type == TransactionType.buy
         assert inserted[0].user_id == USER.id
+
+    @pytest.mark.asyncio
+    async def test_confirm_dedups_against_existing_db_row(self, monkeypatch):
+        # Existing keys arrive as DB-shaped tuples (int, date, TransactionType, Decimal, Currency,
+        # Decimal); confirm they normalize to the same key as the coerced import row so it skips.
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        existing = [(1, date(2026, 1, 5), TransactionType.buy, Decimal("100.00"), Currency.USD, Decimal("5.000000"))]
+        monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=existing))
+        bulk = AsyncMock(side_effect=lambda session, txns: txns)
+        monkeypatch.setattr(import_service.transaction_repository, "bulk_create", bulk)
+        content = _csv("Investment,Date,Amount,Currency,Type,Quantity\nApple,2026-01-05,100,USD,buy,5\n")
+        mapping = {"investment": "Investment", "date": "Date", "amount": "Amount", "currency": "Currency", "type": "Type", "quantity": "Quantity"}
+
+        result = await import_service.confirm_import(AsyncMock(), USER, ImportEntity.transactions, "x.csv", content, mapping, False)
+
+        assert (result.created, result.skipped_duplicate) == (0, 1)

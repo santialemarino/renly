@@ -13,6 +13,7 @@ from app.domain.import_specs import ImportEntity, ImportSpec, get_spec
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.investment import Investment
+from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories import (
@@ -255,6 +256,26 @@ async def _persist(session: AsyncSession, user: User, entity: ImportEntity, rows
         ]
         created = await income_repository.bulk_create(session, income_entries)
         return len(created)
+    if entity is ImportEntity.snapshots:
+        # Collapse within-file duplicates on (investment_id, date) — last row wins — so the upsert's
+        # single statement never updates the same conflict target twice.
+        collapsed: dict[tuple[object, object], dict[str, object]] = {}
+        for row in rows:
+            collapsed[(row["investment_id"], row["date"])] = row
+        snapshots = [
+            InvestmentSnapshot(
+                investment_id=row["investment_id"],
+                user_id=user.id,
+                date=row["date"],
+                value=row["value"],
+                quantity=row.get("quantity"),
+                currency=row["currency"],
+                source="manual",
+                notes=row.get("notes"),
+            )
+            for row in collapsed.values()
+        ]
+        return await snapshot_repository.bulk_upsert(session, snapshots)
     if entity is ImportEntity.transactions:
         transactions = [
             Transaction(
@@ -271,13 +292,6 @@ async def _persist(session: AsyncSession, user: User, entity: ImportEntity, rows
         ]
         created = await transaction_repository.bulk_create(session, transactions)
         return len(created)
-    if entity is ImportEntity.snapshots:
-        # Collapse within-file duplicates on (investment_id, date) — last row wins — so the upsert's
-        # single statement never updates the same conflict target twice.
-        collapsed: dict[tuple[object, object], dict[str, object]] = {}
-        for row in rows:
-            collapsed[(row["investment_id"], row["date"])] = row
-        return await snapshot_repository.bulk_upsert(session, user.id, list(collapsed.values()))
     return 0
 
 

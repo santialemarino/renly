@@ -6,6 +6,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.investment import Currency
 from app.models.transaction import Transaction, TransactionType
 
 
@@ -20,15 +21,20 @@ async def list_by_investment(
     return list(result.scalars().all())
 
 
-# Returns dedup-key tuples (investment_id, date, type, amount, quantity) for the user's transactions.
+# Returns dedup-key tuples (investment_id, date, type, amount, currency, quantity) for the user's transactions.
 async def list_dedup_keys_by_user(
     session: AsyncSession,
     user_id: int,
-) -> list[tuple[int, date_type, TransactionType, Decimal, Decimal | None]]:
+) -> list[tuple[int, date_type, TransactionType, Decimal, Currency, Decimal | None]]:
     result = await session.execute(
-        select(Transaction.investment_id, Transaction.date, Transaction.type, Transaction.amount, Transaction.quantity).where(
-            Transaction.user_id == user_id
-        )
+        select(
+            Transaction.investment_id,
+            Transaction.date,
+            Transaction.type,
+            Transaction.amount,
+            Transaction.currency,
+            Transaction.quantity,
+        ).where(Transaction.user_id == user_id)
     )
     return [tuple(row) for row in result.all()]
 
