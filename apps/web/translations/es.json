@@ -1794,7 +1794,6 @@
       "title": "Importar",
       "description": "Subí un archivo CSV o Excel, asociá las columnas a los campos de Renly y revisá antes de importar.",
       "typeLabel": "Tipo de dato a importar",
-      "comingSoon": "pronto",
       "success": "{entity, select, investments {{count, plural, one {Se importó # inversión} other {Se importaron # inversiones}}.} expenses {{count, plural, one {Se importó # gasto} other {Se importaron # gastos}}.} income {{count, plural, one {Se importó # ingreso} other {Se importaron # ingresos}}.} snapshots {{count, plural, one {Se importó # snapshot} other {Se importaron # snapshots}}.} transactions {{count, plural, one {Se importó # transacción} other {Se importaron # transacciones}}.} other {{count, plural, one {Se importó # registro} other {Se importaron # registros}}.}}",
       "upload": {
         "cta": "Arrastrá un archivo acá, o hacé clic para buscar",

@@ -14,23 +14,17 @@ import { SectionHeader } from '@/components/section-header';
 import type { ImportPreview } from '@/lib/api/imports';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-// The data types the engine targets. Enabled types are selectable; the rest are upcoming specs
-// (their chips advertise the general hub). Keep in sync with the backend ImportEntity enum.
-const DATA_TYPES = [
-  { key: 'investments', enabled: true },
-  { key: 'expenses', enabled: true },
-  { key: 'income', enabled: true },
-  { key: 'snapshots', enabled: true },
-  { key: 'transactions', enabled: true },
-] as const;
+// The data types the engine targets; order sets the type-picker chip order. Keep in sync with the
+// backend ImportEntity enum.
+const DATA_TYPES = ['investments', 'expenses', 'income', 'snapshots', 'transactions'] as const;
 
-type DataTypeKey = (typeof DATA_TYPES)[number]['key'];
+type DataTypeKey = (typeof DATA_TYPES)[number];
 
 const DEFAULT_ENTITY: DataTypeKey = 'investments';
 
-// Resolves the entity to start on: an enabled type named by the `?type=` deep-link, else the default.
+// Resolves the entity to start on: the `?type=` deep-link if it names a known type, else the default.
 function resolveInitialEntity(initialType?: string): DataTypeKey {
-  return DATA_TYPES.find((type) => type.enabled && type.key === initialType)?.key ?? DEFAULT_ENTITY;
+  return DATA_TYPES.find((key) => key === initialType) ?? DEFAULT_ENTITY;
 }
 
 interface ImportSectionProps {
@@ -112,39 +106,29 @@ export function ImportSection({ initialType }: ImportSectionProps) {
       <SectionHeader title={t('import.title')} description={t('import.description')} />
 
       <div className="flex flex-wrap gap-2" role="group" aria-label={t('import.typeLabel')}>
-        {DATA_TYPES.map((type) =>
-          type.enabled ? (
-            <button
-              key={type.key}
-              type="button"
-              onClick={() => handleSelectType(type.key)}
-              aria-pressed={entity === type.key}
-              // Lock the picker while a preview/confirm is in flight: switching entities mid-request
-              // would let a stale result render under the newly selected type.
-              disabled={loading || confirming}
-              className={cn(
-                'flex items-center px-3 py-1 rounded-full outline-none transition-all duration-200 cursor-pointer',
-                'active:scale-95 focus-visible:ring-3 disabled:opacity-50 disabled:pointer-events-none text-paragraph-xs-medium',
-                // Focus ring tint matches the button variants: blue (active) ring like a blue
-                // button, neutral ring for the muted (inactive) tabs — so the active tab's keyboard
-                // focus reads distinct from the others.
-                entity === type.key
-                  ? 'bg-blue-800 text-white focus-visible:ring-blue-800/50'
-                  : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring/50',
-              )}
-            >
-              {t(`types.${type.key}`)}
-            </button>
-          ) : (
-            <span
-              key={type.key}
-              className="flex items-center px-3 py-1 gap-x-1.5 rounded-full bg-muted text-muted-foreground text-paragraph-xs-medium"
-            >
-              {t(`types.${type.key}`)}
-              <span className="text-paragraph-mini">{t('import.comingSoon')}</span>
-            </span>
-          ),
-        )}
+        {DATA_TYPES.map((key) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => handleSelectType(key)}
+            aria-pressed={entity === key}
+            // Lock the picker while a preview/confirm is in flight: switching entities mid-request
+            // would let a stale result render under the newly selected type.
+            disabled={loading || confirming}
+            className={cn(
+              'flex items-center px-3 py-1 rounded-full outline-none transition-all duration-200 cursor-pointer',
+              'active:scale-95 focus-visible:ring-3 disabled:opacity-50 disabled:pointer-events-none text-paragraph-xs-medium',
+              // Focus ring tint matches the button variants: blue (active) ring like a blue button,
+              // neutral ring for the muted (inactive) tabs — so the active tab's keyboard focus reads
+              // distinct from the others.
+              entity === key
+                ? 'bg-blue-800 text-white focus-visible:ring-blue-800/50'
+                : 'bg-muted text-foreground hover:bg-muted/70 focus-visible:ring-ring/50',
+            )}
+          >
+            {t(`types.${key}`)}
+          </button>
+        ))}
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
