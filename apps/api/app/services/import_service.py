@@ -2,6 +2,7 @@
 # confirm) bulk-insert. The parse/map/validate flow is entity-agnostic; per-entity persistence is a
 # thin dispatch. The server re-validates on confirm — it never trusts client-supplied row data.
 
+from collections.abc import Callable
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -12,8 +13,15 @@ from app.domain.import_specs import ImportEntity, ImportSpec, get_spec
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.investment import Investment
+from app.models.transaction import Transaction
 from app.models.user import User
-from app.repositories import expense_repository, income_repository, investment_repository
+from app.repositories import (
+    expense_repository,
+    income_repository,
+    investment_repository,
+    snapshot_repository,
+    transaction_repository,
+)
 from app.schemas.imports import (
     ImportFieldInfo,
     ImportPreviewResponse,
@@ -91,13 +99,15 @@ def _resolve_mapping(spec: ImportSpec, columns: list[str], mapping: dict[str, st
 
 
 # Validates every data row against the spec. Returns (preview_rows, coerced_by_index) where coerced
-# holds field→value dicts for the non-invalid rows (valid and duplicate), ready to persist.
+# holds field→value dicts for the non-invalid rows (valid and duplicate), ready to persist. `resolve`
+# (nested entities only) turns a reference field into a foreign key or raises ValueError → invalid.
 def _validate_rows(
     spec: ImportSpec,
     columns: list[str],
     rows: list[list[str]],
     mapping: dict[str, str],
     existing_keys: set[tuple[str, ...]],
+    resolve: Callable[[dict[str, object]], None] | None = None,
 ) -> tuple[list[ImportPreviewRow], dict[int, dict[str, object]]]:
     col_index: dict[str, int] = {}
     for index, column in enumerate(columns):
@@ -120,6 +130,11 @@ def _validate_rows(
                 continue
             try:
                 coerced[field.key] = field.coerce(raw)
+            except ValueError as exc:
+                errors.append(str(exc))
+        if not errors and resolve is not None:
+            try:
+                resolve(coerced)
             except ValueError as exc:
                 errors.append(str(exc))
         if errors:
@@ -158,7 +173,36 @@ async def _existing_keys(session: AsyncSession, user: User, spec: ImportSpec) ->
     if spec.entity is ImportEntity.income:
         rows = await income_repository.list_dedup_keys_by_user(session, user.id)
         return {_row_dedup_key(spec, row) for row in rows}
+    if spec.entity is ImportEntity.transactions:
+        rows = await transaction_repository.list_dedup_keys_by_user(session, user.id)
+        return {_row_dedup_key(spec, row) for row in rows}
     return set()
+
+
+# Builds a resolver mapping a row's `investment` identifier to `investment_id`, for nested entities.
+# Matches ticker first, then name; ambiguous matches resolve to the lowest (oldest) id. Returns None
+# for top-level entities. The resolver raises ValueError for an unmatched identifier (→ invalid row).
+async def _build_resolver(session: AsyncSession, user: User, entity: ImportEntity) -> Callable[[dict[str, object]], None] | None:
+    if entity not in (ImportEntity.snapshots, ImportEntity.transactions):
+        return None
+    identifiers = await investment_repository.list_identifiers_by_user(session, user.id)
+    by_ticker: dict[str, int] = {}
+    by_name: dict[str, int] = {}
+    for investment_id, name, ticker in identifiers:
+        by_name.setdefault(name.strip().lower(), investment_id)
+        if ticker:
+            by_ticker.setdefault(ticker.strip().upper(), investment_id)
+
+    def resolve(values: dict[str, object]) -> None:
+        raw = str(values.get("investment", "")).strip()
+        investment_id = by_ticker.get(raw.upper())
+        if investment_id is None:
+            investment_id = by_name.get(raw.lower())
+        if investment_id is None:
+            raise ValueError(f"Investment '{raw}' not found.")
+        values["investment_id"] = investment_id
+
+    return resolve
 
 
 # Persists the coerced importable rows for the entity. Returns the number created.
@@ -211,6 +255,29 @@ async def _persist(session: AsyncSession, user: User, entity: ImportEntity, rows
         ]
         created = await income_repository.bulk_create(session, income_entries)
         return len(created)
+    if entity is ImportEntity.transactions:
+        transactions = [
+            Transaction(
+                investment_id=row["investment_id"],
+                user_id=user.id,
+                date=row["date"],
+                amount=row["amount"],
+                quantity=row.get("quantity"),
+                currency=row["currency"],
+                type=row["type"],
+                notes=row.get("notes"),
+            )
+            for row in rows
+        ]
+        created = await transaction_repository.bulk_create(session, transactions)
+        return len(created)
+    if entity is ImportEntity.snapshots:
+        # Collapse within-file duplicates on (investment_id, date) — last row wins — so the upsert's
+        # single statement never updates the same conflict target twice.
+        collapsed: dict[tuple[object, object], dict[str, object]] = {}
+        for row in rows:
+            collapsed[(row["investment_id"], row["date"])] = row
+        return await snapshot_repository.bulk_upsert(session, user.id, list(collapsed.values()))
     return 0
 
 
@@ -227,7 +294,8 @@ async def preview_import(
     columns, rows = _parse(filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
-    preview_rows, _ = _validate_rows(spec, columns, rows, applied, existing_keys)
+    resolve = await _build_resolver(session, user, entity)
+    preview_rows, _ = _validate_rows(spec, columns, rows, applied, existing_keys, resolve)
     return ImportPreviewResponse(
         columns=columns,
         fields=[ImportFieldInfo(key=field.key, required=field.required) for field in spec.fields],
@@ -251,7 +319,8 @@ async def confirm_import(
     columns, rows = _parse(filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
-    preview_rows, coerced_by_index = _validate_rows(spec, columns, rows, applied, existing_keys)
+    resolve = await _build_resolver(session, user, entity)
+    preview_rows, coerced_by_index = _validate_rows(spec, columns, rows, applied, existing_keys, resolve)
 
     importable: list[dict[str, object]] = []
     skipped_invalid = 0

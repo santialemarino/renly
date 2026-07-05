@@ -20,8 +20,8 @@ const DATA_TYPES = [
   { key: 'investments', enabled: true },
   { key: 'expenses', enabled: true },
   { key: 'income', enabled: true },
-  { key: 'snapshots', enabled: false },
-  { key: 'transactions', enabled: false },
+  { key: 'snapshots', enabled: true },
+  { key: 'transactions', enabled: true },
 ] as const;
 
 type DataTypeKey = (typeof DATA_TYPES)[number]['key'];

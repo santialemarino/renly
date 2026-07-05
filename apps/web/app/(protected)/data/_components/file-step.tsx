@@ -15,6 +15,8 @@ const TEMPLATE_HREFS: Record<string, string> = {
   investments: DEFAULT_TEMPLATE_HREF,
   expenses: '/templates/expenses-import-template.csv',
   income: '/templates/income-import-template.csv',
+  snapshots: '/templates/snapshots-import-template.csv',
+  transactions: '/templates/transactions-import-template.csv',
 };
 
 interface FileStepProps {

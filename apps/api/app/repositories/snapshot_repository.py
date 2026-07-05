@@ -3,10 +3,12 @@
 from datetime import date
 
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.snapshot import InvestmentSnapshot
+from app.models.utils import utcnow
 
 
 # Returns True if the investment has at least one snapshot.
@@ -63,8 +65,46 @@ async def save(session: AsyncSession, snapshot: InvestmentSnapshot) -> None:
     session.add(snapshot)
 
 
+# Bulk-upserts snapshots on (investment_id, date): inserts new dates, updates existing. Returns the
+# row count. Rows must be pre-deduped on (investment_id, date) — one statement can't update a
+# conflict target twice.
+async def bulk_upsert(session: AsyncSession, user_id: int, rows: list[dict[str, object]]) -> int:
+    if not rows:
+        return 0
+    now = utcnow()
+    values = [
+        {
+            "user_id": user_id,
+            "investment_id": row["investment_id"],
+            "date": row["date"],
+            "value": row["value"],
+            "quantity": row.get("quantity"),
+            "currency": row["currency"],
+            "source": "manual",
+            "notes": row.get("notes"),
+            "created_at": now,
+            "updated_at": now,
+        }
+        for row in rows
+    ]
+    stmt = insert(InvestmentSnapshot).values(values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["investment_id", "date"],
+        set_={
+            "value": stmt.excluded.value,
+            "quantity": stmt.excluded.quantity,
+            "currency": stmt.excluded.currency,
+            "notes": stmt.excluded.notes,
+            "updated_at": stmt.excluded.updated_at,
+        },
+    )
+    await session.execute(stmt)
+    return len(values)
+
+
 # Namespace to call repository functions (e.g. snapshot_repository.list_by_investment).
 class SnapshotRepository:
+    bulk_upsert = staticmethod(bulk_upsert)
     create = staticmethod(create)
     get_by_investment_and_date = staticmethod(get_by_investment_and_date)
     get_ids_with_snapshots = staticmethod(get_ids_with_snapshots)

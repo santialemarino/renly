@@ -11,14 +11,18 @@ from enum import StrEnum
 from app.domain.currency import SUPPORTED_CURRENCIES, is_supported
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
-from app.models.investment import InvestmentCategory
+from app.models.investment import Currency, InvestmentCategory
+from app.models.transaction import TransactionType
 
 
-# Supported import data types. Top-level entities (owned directly by the user) ship first.
+# Supported import data types. Top-level entities (owned directly by the user) ship first; nested
+# entities (snapshots, transactions) reference a parent investment via an identifier column.
 class ImportEntity(StrEnum):
     investments = "investments"
     expenses = "expenses"
     income = "income"
+    snapshots = "snapshots"
+    transactions = "transactions"
 
 
 # A single target field in an import spec. coerce raises ValueError(message) on an invalid value.
@@ -206,21 +210,43 @@ _INCOME_CATEGORY_ALIASES: dict[str, IncomeCategory] = {
 }
 
 
-# Builds a coercer mapping a category label to an enum member. Raises ValueError if unrecognized.
-def _category_coercer[T: StrEnum](enum_cls: type[T], aliases: dict[str, T]) -> Callable[[str], T]:
+# Transaction type labels (EN/ES + each enum value) → TransactionType.
+_TRANSACTION_TYPE_ALIASES: dict[str, TransactionType] = {
+    "buy": TransactionType.buy,
+    "compra": TransactionType.buy,
+    "purchase": TransactionType.buy,
+    "sell": TransactionType.sell,
+    "venta": TransactionType.sell,
+    "sale": TransactionType.sell,
+    "deposit": TransactionType.deposit,
+    "depósito": TransactionType.deposit,
+    "deposito": TransactionType.deposit,
+    "aporte": TransactionType.deposit,
+    "withdrawal": TransactionType.withdrawal,
+    "withdraw": TransactionType.withdrawal,
+    "retiro": TransactionType.withdrawal,
+    "extracción": TransactionType.withdrawal,
+    "extraccion": TransactionType.withdrawal,
+    "rescate": TransactionType.withdrawal,
+}
+
+
+# Builds a coercer mapping a label to an enum member (category, transaction type). Raises on unknown.
+def _enum_coercer[T: StrEnum](enum_cls: type[T], aliases: dict[str, T], noun: str = "category") -> Callable[[str], T]:
     def coerce(raw: str) -> T:
-        category = aliases.get(raw.strip().lower())
-        if category is None:
-            valid = ", ".join(member.value for member in enum_cls)
-            raise ValueError(f"Unknown category '{raw.strip()}'. Use one of: {valid}.")
-        return category
+        member = aliases.get(raw.strip().lower())
+        if member is None:
+            valid = ", ".join(value.value for value in enum_cls)
+            raise ValueError(f"Unknown {noun} '{raw.strip()}'. Use one of: {valid}.")
+        return member
 
     return coerce
 
 
-_coerce_investment_category = _category_coercer(InvestmentCategory, _INVESTMENT_CATEGORY_ALIASES)
-_coerce_expense_category = _category_coercer(ExpenseCategory, _EXPENSE_CATEGORY_ALIASES)
-_coerce_income_category = _category_coercer(IncomeCategory, _INCOME_CATEGORY_ALIASES)
+_coerce_investment_category = _enum_coercer(InvestmentCategory, _INVESTMENT_CATEGORY_ALIASES)
+_coerce_expense_category = _enum_coercer(ExpenseCategory, _EXPENSE_CATEGORY_ALIASES)
+_coerce_income_category = _enum_coercer(IncomeCategory, _INCOME_CATEGORY_ALIASES)
+_coerce_transaction_type = _enum_coercer(TransactionType, _TRANSACTION_TYPE_ALIASES, noun="transaction type")
 
 
 # Normalizes a currency code (uppercased) and checks it is supported. Raises ValueError otherwise.
@@ -230,6 +256,24 @@ def _coerce_currency(raw: str) -> str:
         valid = ", ".join(sorted(SUPPORTED_CURRENCIES))
         raise ValueError(f"Unsupported currency '{raw.strip()}'. Use one of: {valid}.")
     return code
+
+
+# Normalizes a snapshot/transaction currency (ARS or USD only, per the Currency enum). Raises otherwise.
+def _coerce_investment_currency(raw: str) -> Currency:
+    code = raw.strip().upper()
+    try:
+        return Currency(code)
+    except ValueError as exc:
+        valid = ", ".join(member.value for member in Currency)
+        raise ValueError(f"Unsupported currency '{raw.strip()}'. Use one of: {valid}.") from exc
+
+
+# Trims an investment identifier (name or ticker). The resolver matches it to the user's investments.
+def _coerce_investment_identifier(raw: str) -> str:
+    value = raw.strip()
+    if len(value) > 255:
+        raise ValueError("Investment is too long (max 255 characters).")
+    return value
 
 
 # Normalizes a ticker (uppercased, trimmed). Raises ValueError if too long.
@@ -326,6 +370,43 @@ def _coerce_amount(raw: str) -> Decimal:
     return quantized
 
 
+# Parses a non-negative monetary value, quantized to 2 decimals (0 allowed — e.g. a closed position).
+def _coerce_value(raw: str) -> Decimal:
+    try:
+        value = Decimal(_normalize_decimal_string(raw))
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid value '{raw.strip()}'.") from exc
+    if not value.is_finite() or value < 0:
+        raise ValueError("Value must be zero or greater.")
+    if value >= _MAX_AMOUNT:
+        raise ValueError("Value is too large.")
+    quantized = value.quantize(_AMOUNT_QUANT, rounding=ROUND_HALF_UP)
+    if quantized >= _MAX_AMOUNT:
+        raise ValueError("Value is too large.")
+    return quantized
+
+
+_QUANTITY_QUANT = Decimal("0.000001")
+# 18 total digits minus 6 decimal places leaves 12 integer digits (matches the DB column).
+_MAX_QUANTITY = Decimal(10) ** 12
+
+
+# Parses a non-negative quantity of shares/units, quantized to 6 decimals. Raises ValueError on bad input.
+def _coerce_quantity(raw: str) -> Decimal:
+    try:
+        value = Decimal(_normalize_decimal_string(raw))
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid quantity '{raw.strip()}'.") from exc
+    if not value.is_finite() or value < 0:
+        raise ValueError("Quantity must be zero or greater.")
+    if value >= _MAX_QUANTITY:
+        raise ValueError("Quantity is too large.")
+    quantized = value.quantize(_QUANTITY_QUANT, rounding=ROUND_HALF_UP)
+    if quantized >= _MAX_QUANTITY:
+        raise ValueError("Quantity is too large.")
+    return quantized
+
+
 # Header aliases shared by the date / amount / currency / notes columns across expense and income.
 _DATE_ALIASES = frozenset({"date", "fecha", "día", "dia", "transaction date", "fecha de transacción", "fecha de transaccion", "fecha de operación"})
 _AMOUNT_ALIASES = frozenset({"amount", "monto", "importe", "total", "valor", "cantidad", "value"})
@@ -350,6 +431,33 @@ _NOTES_ALIASES = frozenset(
         "merchant",
         "comercio",
         "observaciones",
+    }
+)
+
+# Header aliases for the nested-entity columns. Money and quantity sets are kept disjoint so
+# auto-detect never maps one column to both (notably "cantidad", which means quantity here).
+_MONEY_ALIASES = frozenset({"amount", "value", "valor", "monto", "importe", "total"})
+_QUANTITY_ALIASES = frozenset({"quantity", "cantidad", "qty", "shares", "units", "unidades", "nominales", "acciones"})
+_TX_TYPE_ALIASES = frozenset(
+    {"type", "tipo", "transaction type", "tipo de transacción", "tipo de transaccion", "operación", "operacion", "operation", "movimiento", "kind"}
+)
+_INVESTMENT_IDENTIFIER_ALIASES = frozenset(
+    {
+        "investment",
+        "inversión",
+        "inversion",
+        "investment name",
+        "nombre de inversión",
+        "nombre de inversion",
+        "nombre",
+        "activo",
+        "asset",
+        "instrumento",
+        "ticker",
+        "symbol",
+        "símbolo",
+        "simbolo",
+        "ticker symbol",
     }
 )
 
@@ -432,10 +540,43 @@ INCOME_SPEC = ImportSpec(
     ),
 )
 
+# Import spec for snapshots (nested under an investment; native upsert on (investment, date), no soft
+# dedup — a re-import updates existing dates, so dedup_fields is empty and every valid row is applied).
+SNAPSHOTS_SPEC = ImportSpec(
+    entity=ImportEntity.snapshots,
+    dedup_fields=(),
+    fields=(
+        FieldSpec("investment", True, _INVESTMENT_IDENTIFIER_ALIASES, _coerce_investment_identifier),
+        FieldSpec("date", True, _DATE_ALIASES, _coerce_date),
+        FieldSpec("value", True, _MONEY_ALIASES, _coerce_value),
+        FieldSpec("currency", True, _CURRENCY_ALIASES, _coerce_investment_currency),
+        FieldSpec("quantity", False, _QUANTITY_ALIASES, _coerce_quantity),
+        FieldSpec("notes", False, _NOTES_ALIASES, _text_coercer("Notes", 500)),
+    ),
+)
+
+# Import spec for transactions (nested under an investment; no natural key, so soft dedup on a
+# composite of the resolved investment_id plus date, type, amount, quantity).
+TRANSACTIONS_SPEC = ImportSpec(
+    entity=ImportEntity.transactions,
+    dedup_fields=("investment_id", "date", "type", "amount", "quantity"),
+    fields=(
+        FieldSpec("investment", True, _INVESTMENT_IDENTIFIER_ALIASES, _coerce_investment_identifier),
+        FieldSpec("date", True, _DATE_ALIASES, _coerce_date),
+        FieldSpec("amount", True, _MONEY_ALIASES, _coerce_amount),
+        FieldSpec("currency", True, _CURRENCY_ALIASES, _coerce_investment_currency),
+        FieldSpec("type", True, _TX_TYPE_ALIASES, _coerce_transaction_type),
+        FieldSpec("quantity", False, _QUANTITY_ALIASES, _coerce_quantity),
+        FieldSpec("notes", False, _NOTES_ALIASES, _text_coercer("Notes", 500)),
+    ),
+)
+
 _SPECS: dict[ImportEntity, ImportSpec] = {
     ImportEntity.investments: INVESTMENTS_SPEC,
     ImportEntity.expenses: EXPENSES_SPEC,
     ImportEntity.income: INCOME_SPEC,
+    ImportEntity.snapshots: SNAPSHOTS_SPEC,
+    ImportEntity.transactions: TRANSACTIONS_SPEC,
 }
 
 
