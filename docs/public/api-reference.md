@@ -64,7 +64,7 @@ Registration requires a valid email address and a password of at least 12 charac
 
 ## Import
 
-Bulk-import data from a spreadsheet (CSV, TSV, or XLSX) instead of entering rows one at a time. The flow is two steps: **preview** (a dry run that maps your columns to Renly fields and validates every row, writing nothing) and **confirm** (re-validates server-side and inserts the importable rows). `{entity}` is the data type to import — currently `investments`, `expenses`, or `income`.
+Bulk-import data from a spreadsheet (CSV, TSV, or XLSX) instead of entering rows one at a time. The flow is two steps: **preview** (a dry run that maps your columns to Renly fields and validates every row, writing nothing) and **confirm** (re-validates server-side and inserts the importable rows). `{entity}` is the data type to import — currently `investments`, `expenses`, `income`, `snapshots`, or `transactions`.
 
 Both endpoints take a `multipart/form-data` body. A single file is capped at 1,000 rows, and imports are rate-limited per user.
 
@@ -75,7 +75,9 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 
 **Column mapping:** the server auto-detects a sensible field→column mapping from the header row (English and Spanish header names are recognized). You can override it by passing a `mapping` JSON object (e.g. `{"name": "Investment", "base_currency": "Currency"}`); unmapped optional fields are simply left empty.
 
-**Validation & dedup:** each row is coerced and validated against the entity's field rules (e.g. a recognized category, a supported currency, length limits, a parseable date and a positive amount). Rows that match an existing record — or an earlier row in the same file — are flagged as `duplicate` and skipped unless `import_duplicates` is `true`. The dedup key depends on the entity: investments match by `name` (case-insensitive); expenses and income (which have no natural key) match on the combination of `date`, `amount`, `currency`, `category`, and `notes`. Invalid rows are always skipped; the rest are inserted. An unreadable or unsupported file returns `400`.
+**Validation & dedup:** each row is coerced and validated against the entity's field rules (e.g. a recognized category, a supported currency, length limits, a parseable date and a positive amount). Rows that match an existing record — or an earlier row in the same file — are flagged as `duplicate` and skipped unless `import_duplicates` is `true`. The dedup key depends on the entity: investments match by `name` (case-insensitive); expenses and income (which have no natural key) match on the combination of `date`, `amount`, `currency`, `category`, and `notes`; transactions match on the resolved investment plus `date`, `type`, `amount`, and `quantity`. **Snapshots are the exception — they upsert** (one snapshot per investment per date), so a re-import updates the existing date instead of being flagged as a duplicate. Invalid rows are always skipped; the rest are inserted. An unreadable or unsupported file returns `400`.
+
+**Nested entities (snapshots, transactions):** these belong to an investment, so the file must include an **`investment` column** holding a name or ticker. Each row is matched to one of your investments — ticker first, then name (case-insensitive) — and the lowest (oldest) id wins if more than one matches. A row whose `investment` matches none of your investments is flagged `invalid`; investments are never created by the import. Their `currency` is limited to `ARS` or `USD`.
 
 **Dates & amounts:** dates accept ISO (`YYYY-MM-DD`) plus common locale formats — day-first (`DD/MM/YYYY`) is preferred for ambiguous values, with unambiguous US dates still parsed. Amounts accept both `1.234,56` and `1,234.56` grouping and are stored to 2 decimal places.
 
@@ -84,6 +86,10 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 **Expenses fields:** `date` (required), `amount` (required), `currency` (required), `category`, `payment_method`, `notes`. Imported rows are recorded with source `manual`.
 
 **Income fields:** `date` (required), `amount` (required), `currency` (required), `category`, `notes`. Imported rows are recorded with source `manual`.
+
+**Snapshots fields:** `investment` (required — name or ticker), `date` (required), `value` (required, `0` or greater), `currency` (required, `ARS`/`USD`), `quantity`, `notes`. Upserts on (investment, date). Imported rows are recorded with source `manual`.
+
+**Transactions fields:** `investment` (required — name or ticker), `date` (required), `amount` (required), `currency` (required, `ARS`/`USD`), `type` (required — `buy`/`sell`/`deposit`/`withdrawal`), `quantity`, `notes`.
 
 ---
 
