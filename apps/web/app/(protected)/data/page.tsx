@@ -4,6 +4,7 @@ import { Separator } from '@repo/ui/components';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { ExportSection } from '@/app/(protected)/data/_components/export-section';
 import { ImportSection } from '@/app/(protected)/data/_components/import-section';
+import { RestoreSection } from '@/app/(protected)/data/_components/restore-section';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -23,6 +24,8 @@ export default async function DataPage({ searchParams }: DataPageProps) {
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <div className="flex flex-col w-full max-w-5xl gap-y-8">
         <ImportSection initialType={type} />
+        <Separator />
+        <RestoreSection />
         <Separator />
         <ExportSection />
       </div>

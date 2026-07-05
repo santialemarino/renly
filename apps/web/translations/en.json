@@ -1839,6 +1839,43 @@
         "duplicate": "Duplicate"
       }
     },
+    "restore": {
+      "title": "Restore from a backup",
+      "description": "Re-import a Renly export to rebuild your data. Restore only adds rows — it never deletes or overwrites — so use it on a fresh account.",
+      "upload": {
+        "cta": "Drop your Renly export here, or click to browse",
+        "loading": "Reading your export…",
+        "hint": "A renly-export.json file downloaded from Export below."
+      },
+      "summary": "{count, plural, =0 {Nothing to restore.} one {# row ready to restore.} other {# rows ready to restore.}}",
+      "table": {
+        "entity": "Data",
+        "toRestore": "To restore",
+        "skipped": "Skipped"
+      },
+      "entities": {
+        "investments": "Investments",
+        "investment_groups": "Groups",
+        "investment_group_members": "Group memberships",
+        "investment_snapshots": "Snapshots",
+        "transactions": "Transactions",
+        "credit_cards": "Credit cards",
+        "subscriptions": "Subscriptions",
+        "installments": "Installments",
+        "payment_obligations": "Payment obligations",
+        "expense_entries": "Expenses",
+        "income_entries": "Income",
+        "api_keys": "API keys",
+        "user_settings": "Settings",
+        "card_settlements": "Card settlements",
+        "card_reconciliations": "Card reconciliations"
+      },
+      "notRestored": "Not restored by this tool: {entities}.",
+      "back": "Choose another file",
+      "restoring": "Restoring…",
+      "confirm": "{count, plural, one {Restore # row} other {Restore # rows}}",
+      "success": "{count, plural, =0 {Nothing to restore.} one {Restored # row.} other {Restored # rows.}}"
+    },
     "export": {
       "title": "Export",
       "description": "Download a copy of all your Renly data.",
