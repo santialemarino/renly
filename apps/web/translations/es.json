@@ -1839,6 +1839,43 @@
         "duplicate": "Duplicada"
       }
     },
+    "restore": {
+      "title": "Restaurar desde una copia",
+      "description": "Reimportá una exportación de Renly para reconstruir tus datos. Restaurar solo agrega filas: nunca borra ni sobrescribe, así que usalo en una cuenta vacía.",
+      "upload": {
+        "cta": "Arrastrá tu exportación de Renly acá, o hacé clic para buscar",
+        "loading": "Leyendo tu exportación…",
+        "hint": "Un archivo renly-export.json descargado desde Exportar más abajo."
+      },
+      "summary": "{count, plural, =0 {No hay nada para restaurar.} one {# fila lista para restaurar.} other {# filas listas para restaurar.}}",
+      "table": {
+        "entity": "Dato",
+        "toRestore": "A restaurar",
+        "skipped": "Omitido"
+      },
+      "entities": {
+        "investments": "Inversiones",
+        "investment_groups": "Grupos",
+        "investment_group_members": "Membresías de grupos",
+        "investment_snapshots": "Snapshots",
+        "transactions": "Transacciones",
+        "credit_cards": "Tarjetas de crédito",
+        "subscriptions": "Suscripciones",
+        "installments": "Cuotas",
+        "payment_obligations": "Obligaciones de pago",
+        "expense_entries": "Gastos",
+        "income_entries": "Ingresos",
+        "api_keys": "Claves API",
+        "user_settings": "Configuración",
+        "card_settlements": "Pagos de tarjeta",
+        "card_reconciliations": "Conciliaciones de tarjeta"
+      },
+      "notRestored": "No restaurado por esta herramienta: {entities}.",
+      "back": "Elegir otro archivo",
+      "restoring": "Restaurando…",
+      "confirm": "{count, plural, one {Restaurar # fila} other {Restaurar # filas}}",
+      "success": "{count, plural, =0 {No hay nada para restaurar.} one {Se restauró # fila.} other {Se restauraron # filas.}}"
+    },
     "export": {
       "title": "Exportar",
       "description": "Descargá una copia de todos tus datos de Renly.",

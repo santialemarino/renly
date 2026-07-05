@@ -93,6 +93,21 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 
 ---
 
+## Restore
+
+Rebuild your data from a **Renly export** (the JSON file from `GET /me/export`) — the inverse of that export, for backups and moving between accounts. Like the import flow it is two steps: **preview** (a dry run reporting what would be inserted, writing nothing) and **confirm** (re-validates server-side and inserts). Both take a `multipart/form-data` body with a single `.json` `file` and are rate-limited per user.
+
+- `POST /restore/preview` → `{recognized, exported_at, entities: [{entity, restore, skipped_unresolved}], skipped_entities}`
+- `POST /restore` → `{restored, skipped_unresolved, entities: [...]}`
+
+**Additive and non-destructive.** Restore only inserts — it never deletes or overwrites existing rows. It is **not** deduplicated: it does not try to detect rows you already have, so restoring the same file twice inserts everything twice. **Restore into a fresh account** (its purpose is rebuilding a lost account or migrating to a new one); the preview shows exactly how many rows will be added before you confirm.
+
+**Foreign keys are remapped.** Exported ids won't match the target account, so parents are inserted first and each child's reference is repointed to the newly inserted id. A row whose required parent can't be resolved (or whose data is invalid) is counted under `skipped_unresolved` and skipped; everything else is inserted in one transaction.
+
+**What is restored:** investments, groups (and memberships), snapshots, transactions, credit cards, subscriptions, installments, payment obligations, expenses, and income. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and card settlements/reconciliations. Restored expenses/income keep their amount, date, category, and notes but are recorded as plain entries (their scheduler/reconciliation links are dropped). An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+
+---
+
 ## Snapshots
 
 Snapshots are nested under an investment. Each snapshot records the value of an investment at a point in time (typically end of month). There can only be one snapshot per investment per date.
