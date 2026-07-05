@@ -1794,8 +1794,7 @@
       "title": "Importar",
       "description": "Subí un archivo CSV o Excel, asociá las columnas a los campos de Renly y revisá antes de importar.",
       "typeLabel": "Tipo de dato a importar",
-      "comingSoon": "pronto",
-      "success": "{entity, select, investments {{count, plural, one {Se importó # inversión} other {Se importaron # inversiones}}.} expenses {{count, plural, one {Se importó # gasto} other {Se importaron # gastos}}.} income {{count, plural, one {Se importó # ingreso} other {Se importaron # ingresos}}.} other {{count, plural, one {Se importó # registro} other {Se importaron # registros}}.}}",
+      "success": "{entity, select, investments {{count, plural, one {Se importó # inversión} other {Se importaron # inversiones}}.} expenses {{count, plural, one {Se importó # gasto} other {Se importaron # gastos}}.} income {{count, plural, one {Se importó # ingreso} other {Se importaron # ingresos}}.} snapshots {{count, plural, one {Se importó # snapshot} other {Se importaron # snapshots}}.} transactions {{count, plural, one {Se importó # transacción} other {Se importaron # transacciones}}.} other {{count, plural, one {Se importó # registro} other {Se importaron # registros}}.}}",
       "upload": {
         "cta": "Arrastrá un archivo acá, o hacé clic para buscar",
         "loading": "Leyendo tu archivo…",
@@ -1812,7 +1811,11 @@
         "date": "Fecha",
         "amount": "Monto",
         "currency": "Moneda",
-        "payment_method": "Medio de pago"
+        "payment_method": "Medio de pago",
+        "investment": "Inversión",
+        "value": "Valor",
+        "quantity": "Cantidad",
+        "type": "Tipo"
       },
       "map": {
         "title": "Asociá tus columnas a los campos de Renly",
@@ -1828,7 +1831,7 @@
         "status": "Estado",
         "back": "Elegir otro archivo",
         "importing": "Importando…",
-        "confirm": "{entity, select, investments {{count, plural, one {Importar # inversión} other {Importar # inversiones}}} expenses {{count, plural, one {Importar # gasto} other {Importar # gastos}}} income {{count, plural, one {Importar # ingreso} other {Importar # ingresos}}} other {{count, plural, one {Importar # registro} other {Importar # registros}}}}"
+        "confirm": "{entity, select, investments {{count, plural, one {Importar # inversión} other {Importar # inversiones}}} expenses {{count, plural, one {Importar # gasto} other {Importar # gastos}}} income {{count, plural, one {Importar # ingreso} other {Importar # ingresos}}} snapshots {{count, plural, one {Importar # snapshot} other {Importar # snapshots}}} transactions {{count, plural, one {Importar # transacción} other {Importar # transacciones}}} other {{count, plural, one {Importar # registro} other {Importar # registros}}}}"
       },
       "status": {
         "valid": "Lista",

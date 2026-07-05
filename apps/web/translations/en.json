@@ -1794,8 +1794,7 @@
       "title": "Import",
       "description": "Upload a CSV or Excel file, match the columns to Renly fields, and review before importing.",
       "typeLabel": "Data type to import",
-      "comingSoon": "soon",
-      "success": "{entity, select, investments {Imported {count, plural, one {# investment} other {# investments}}.} expenses {Imported {count, plural, one {# expense} other {# expenses}}.} income {Imported {count, plural, one {# income entry} other {# income entries}}.} other {Imported {count, plural, one {# record} other {# records}}.}}",
+      "success": "{entity, select, investments {Imported {count, plural, one {# investment} other {# investments}}.} expenses {Imported {count, plural, one {# expense} other {# expenses}}.} income {Imported {count, plural, one {# income entry} other {# income entries}}.} snapshots {Imported {count, plural, one {# snapshot} other {# snapshots}}.} transactions {Imported {count, plural, one {# transaction} other {# transactions}}.} other {Imported {count, plural, one {# record} other {# records}}.}}",
       "upload": {
         "cta": "Drop a file here, or click to browse",
         "loading": "Reading your file…",
@@ -1812,7 +1811,11 @@
         "date": "Date",
         "amount": "Amount",
         "currency": "Currency",
-        "payment_method": "Payment method"
+        "payment_method": "Payment method",
+        "investment": "Investment",
+        "value": "Value",
+        "quantity": "Quantity",
+        "type": "Type"
       },
       "map": {
         "title": "Match your columns to Renly fields",
@@ -1828,7 +1831,7 @@
         "status": "Status",
         "back": "Choose another file",
         "importing": "Importing…",
-        "confirm": "{entity, select, investments {Import {count, plural, one {# investment} other {# investments}}} expenses {Import {count, plural, one {# expense} other {# expenses}}} income {Import {count, plural, one {# income entry} other {# income entries}}} other {Import {count, plural, one {# record} other {# records}}}}"
+        "confirm": "{entity, select, investments {Import {count, plural, one {# investment} other {# investments}}} expenses {Import {count, plural, one {# expense} other {# expenses}}} income {Import {count, plural, one {# income entry} other {# income entries}}} snapshots {Import {count, plural, one {# snapshot} other {# snapshots}}} transactions {Import {count, plural, one {# transaction} other {# transactions}}} other {Import {count, plural, one {# record} other {# records}}}}"
       },
       "status": {
         "valid": "Ready",

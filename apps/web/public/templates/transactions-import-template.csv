@@ -1,0 +1,4 @@
+Investment,Date,Amount,Currency,Type,Quantity,Notes
+Apple Inc.,2026-01-05,2600.00,USD,buy,10,Initial position
+Apple Inc.,2026-02-10,1300.00,USD,sell,5,Trimmed position
+Bitcoin,2026-01-20,500.00,USD,buy,0.008,

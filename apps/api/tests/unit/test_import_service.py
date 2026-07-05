@@ -11,11 +11,19 @@ from app.config import Settings
 from app.db import get_admin_session, get_session
 from app.deps.auth import get_current_user
 from app.domain import InvalidImportFileError, import_specs
-from app.domain.import_specs import EXPENSES_SPEC, INCOME_SPEC, INVESTMENTS_SPEC, ImportEntity
+from app.domain.import_specs import (
+    EXPENSES_SPEC,
+    INCOME_SPEC,
+    INVESTMENTS_SPEC,
+    SNAPSHOTS_SPEC,
+    TRANSACTIONS_SPEC,
+    ImportEntity,
+)
 from app.main import create_app
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
-from app.models.investment import InvestmentCategory
+from app.models.investment import Currency, InvestmentCategory
+from app.models.transaction import TransactionType
 from app.models.user import User
 from app.rate_limit import limiter
 from app.schemas.imports import ImportPreviewResponse, ImportSummary
@@ -478,3 +486,281 @@ class TestImportEndpoints:
         body = response.json()
         assert body["mapping"]["amount"] == "Amount"
         assert body["summary"]["valid"] == 1
+
+    @pytest.mark.parametrize("entity", ["snapshots", "transactions"])
+    def test_nested_entity_preview_endpoint_returns_200(self, entity, monkeypatch):
+        # Exercises route → service → spec + investment resolution for the nested entities.
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
+        content = {
+            "snapshots": b"Investment,Date,Value,Currency\nApple,2026-01-31,100,USD\n",
+            "transactions": b"Investment,Date,Amount,Currency,Type\nApple,2026-01-05,100,USD,buy\n",
+        }[entity]
+        response = _import_client().post(f"/imports/{entity}/preview", files={"file": ("x.csv", content, "text/csv")})
+        assert response.status_code == 200
+        assert response.json()["summary"]["valid"] == 1
+
+
+class TestValueCoercer:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("0", Decimal("0.00")),  # a closed position is a valid data point
+            ("1000", Decimal("1000.00")),
+            ("1.234,56", Decimal("1234.56")),
+            ("1,234.56", Decimal("1234.56")),
+        ],
+    )
+    def test_parses_value(self, raw, expected):
+        assert import_specs._coerce_value(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["-1", "abc", ""])
+    def test_rejects_bad_value(self, raw):
+        with pytest.raises(ValueError):
+            import_specs._coerce_value(raw)
+
+
+class TestQuantityCoercer:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("0", Decimal("0.000000")),
+            ("1.5", Decimal("1.5")),
+            ("0.00012345", Decimal("0.000123")),  # 6-decimal precision
+        ],
+    )
+    def test_parses_quantity(self, raw, expected):
+        assert import_specs._coerce_quantity(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["-1", "abc"])
+    def test_rejects_bad_quantity(self, raw):
+        with pytest.raises(ValueError):
+            import_specs._coerce_quantity(raw)
+
+
+class TestTransactionTypeCoercer:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("buy", TransactionType.buy),
+            ("Compra", TransactionType.buy),
+            ("sell", TransactionType.sell),
+            ("venta", TransactionType.sell),
+            ("deposit", TransactionType.deposit),
+            ("aporte", TransactionType.deposit),
+            ("withdrawal", TransactionType.withdrawal),
+            ("retiro", TransactionType.withdrawal),
+        ],
+    )
+    def test_parses_type(self, raw, expected):
+        assert import_specs._coerce_transaction_type(raw) == expected
+
+    def test_rejects_unknown_type(self):
+        with pytest.raises(ValueError, match="transaction type"):
+            import_specs._coerce_transaction_type("teleport")
+
+
+class TestInvestmentCurrencyCoercer:
+    @pytest.mark.parametrize(("raw", "expected"), [("usd", Currency.USD), ("ARS", Currency.ARS)])
+    def test_parses_currency(self, raw, expected):
+        assert import_specs._coerce_investment_currency(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["BRL", "EUR", "JPY"])
+    def test_rejects_non_ars_usd(self, raw):
+        with pytest.raises(ValueError, match="Unsupported currency"):
+            import_specs._coerce_investment_currency(raw)
+
+
+class TestInvestmentResolver:
+    @pytest.mark.asyncio
+    async def test_resolves_ticker_first_then_name_lowest_id(self, monkeypatch):
+        # Two investments named "Apple" (ids 3, 7); a third with ticker "AAPL" (id 5).
+        identifiers = [(3, "Apple", None), (5, "Apple Inc", "AAPL"), (7, "Apple", None)]
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=identifiers))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
+
+        ticker_row: dict[str, object] = {"investment": "aapl"}
+        resolve(ticker_row)
+        assert ticker_row["investment_id"] == 5  # ticker match wins
+
+        name_row: dict[str, object] = {"investment": "apple"}
+        resolve(name_row)
+        assert name_row["investment_id"] == 3  # ambiguous name → lowest (oldest) id
+
+    @pytest.mark.asyncio
+    async def test_unmatched_identifier_raises(self, monkeypatch):
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", None)]))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.snapshots)
+        with pytest.raises(ValueError, match="not found"):
+            resolve({"investment": "Tesla"})
+
+    @pytest.mark.asyncio
+    async def test_top_level_entity_has_no_resolver(self):
+        assert await import_service._build_resolver(AsyncMock(), USER, ImportEntity.investments) is None
+
+
+# Minimal investment resolver for the spec-level validation tests (the real one is covered above).
+def _make_resolver(by_name: dict[str, int], by_ticker: dict[str, int] | None = None):
+    by_ticker = by_ticker or {}
+
+    def resolve(values: dict[str, object]) -> None:
+        raw = str(values.get("investment", "")).strip()
+        investment_id = by_ticker.get(raw.upper()) or by_name.get(raw.lower())
+        if investment_id is None:
+            raise ValueError(f"Investment '{raw}' not found.")
+        values["investment_id"] = investment_id
+
+    return resolve
+
+
+class TestSnapshotSpec:
+    def _validate(self, rows, *, resolver=None):
+        columns = [field.key for field in SNAPSHOTS_SPEC.fields]
+        mapping = {field.key: field.key for field in SNAPSHOTS_SPEC.fields}
+        return import_service._validate_rows(SNAPSHOTS_SPEC, columns, rows, mapping, set(), resolver or _make_resolver({"apple": 1}))
+
+    def test_valid_row_coerces_fields(self):
+        preview, coerced = self._validate([["Apple", "2026-01-31", "1.000,50", "usd", "10", "note"]])
+        assert preview[0].status == "valid"
+        assert coerced[0]["investment_id"] == 1
+        assert coerced[0]["value"] == Decimal("1000.50")
+        assert coerced[0]["currency"] == Currency.USD
+        assert coerced[0]["quantity"] == Decimal("10")
+
+    def test_zero_value_is_valid(self):
+        preview, coerced = self._validate([["Apple", "2026-01-31", "0", "USD", "", ""]])
+        assert preview[0].status == "valid"
+        assert coerced[0]["value"] == Decimal("0.00")
+
+    def test_unmatched_investment_is_invalid(self):
+        preview, _ = self._validate([["Tesla", "2026-01-31", "100", "USD", "", ""]])
+        assert preview[0].status == "invalid"
+        assert any("not found" in error for error in preview[0].errors)
+
+    def test_missing_investment_is_invalid(self):
+        preview, _ = self._validate([["", "2026-01-31", "100", "USD", "", ""]])
+        assert preview[0].status == "invalid"
+        assert any("Investment is required" in error for error in preview[0].errors)
+
+    def test_non_ars_usd_currency_is_invalid(self):
+        preview, _ = self._validate([["Apple", "2026-01-31", "100", "BRL", "", ""]])
+        assert preview[0].status == "invalid"
+
+    def test_no_soft_dedup_repeated_dates_stay_valid(self):
+        # Snapshots upsert natively, so two rows for the same (investment, date) are both valid in
+        # preview; the confirm path collapses them before the upsert.
+        rows = [["Apple", "2026-01-31", "100", "USD", "", ""], ["Apple", "2026-01-31", "200", "USD", "", ""]]
+        preview, _ = self._validate(rows)
+        assert [row.status for row in preview] == ["valid", "valid"]
+
+
+class TestTransactionSpec:
+    def _validate(self, rows, *, existing=None):
+        columns = [field.key for field in TRANSACTIONS_SPEC.fields]
+        mapping = {field.key: field.key for field in TRANSACTIONS_SPEC.fields}
+        return import_service._validate_rows(TRANSACTIONS_SPEC, columns, rows, mapping, existing or set(), _make_resolver({"apple": 1}))
+
+    def test_valid_row_coerces_fields(self):
+        preview, coerced = self._validate([["Apple", "2026-01-05", "100", "USD", "compra", "5", ""]])
+        assert preview[0].status == "valid"
+        assert coerced[0]["investment_id"] == 1
+        assert coerced[0]["type"] == TransactionType.buy
+        assert coerced[0]["amount"] == Decimal("100.00")
+
+    def test_unknown_type_is_invalid(self):
+        preview, _ = self._validate([["Apple", "2026-01-05", "100", "USD", "teleport", "", ""]])
+        assert preview[0].status == "invalid"
+
+    def test_missing_type_is_invalid(self):
+        preview, _ = self._validate([["Apple", "2026-01-05", "100", "USD", "", "", ""]])
+        assert preview[0].status == "invalid"
+        assert any("Type is required" in error for error in preview[0].errors)
+
+    def test_composite_dedup_within_file(self):
+        rows = [
+            ["Apple", "2026-01-05", "100", "USD", "buy", "5", ""],
+            ["Apple", "2026-01-05", "100", "USD", "buy", "5", ""],  # identical → duplicate
+        ]
+        preview, _ = self._validate(rows)
+        assert [row.status for row in preview] == ["valid", "duplicate"]
+
+    def test_differing_type_is_not_duplicate(self):
+        rows = [
+            ["Apple", "2026-01-05", "100", "USD", "buy", "5", ""],
+            ["Apple", "2026-01-05", "100", "USD", "sell", "5", ""],
+        ]
+        preview, _ = self._validate(rows)
+        assert [row.status for row in preview] == ["valid", "valid"]
+
+    def test_differing_currency_is_not_duplicate(self):
+        rows = [
+            ["Apple", "2026-01-05", "100", "USD", "buy", "5", ""],
+            ["Apple", "2026-01-05", "100", "ARS", "buy", "5", ""],  # same but currency differs → distinct
+        ]
+        preview, _ = self._validate(rows)
+        assert [row.status for row in preview] == ["valid", "valid"]
+
+    def test_duplicate_against_existing(self):
+        existing = {("1", "2026-01-05", "buy", "100.00", "usd", "5.000000")}
+        preview, _ = self._validate([["Apple", "2026-01-05", "100", "USD", "buy", "5", ""]], existing=existing)
+        assert preview[0].status == "duplicate"
+
+
+class TestSnapshotImport:
+    @pytest.mark.asyncio
+    async def test_confirm_upserts_and_collapses_within_file(self, monkeypatch):
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        upsert = AsyncMock(side_effect=lambda session, snapshots: len(snapshots))
+        monkeypatch.setattr(import_service.snapshot_repository, "bulk_upsert", upsert)
+        session = AsyncMock()
+        # Apple + AAPL both resolve to id 1 for the same date → collapse to one upsert (last wins);
+        # Tesla is unmatched → invalid.
+        content = _csv("Investment,Date,Value,Currency\nApple,2026-01-31,100,USD\nAAPL,2026-01-31,200,USD\nTesla,2026-01-31,50,USD\n")
+        mapping = {"investment": "Investment", "date": "Date", "value": "Value", "currency": "Currency"}
+
+        result = await import_service.confirm_import(session, USER, ImportEntity.snapshots, "x.csv", content, mapping, False)
+
+        assert (result.created, result.skipped_invalid) == (1, 1)
+        upserted = upsert.call_args.args[1]
+        assert len(upserted) == 1
+        assert upserted[0].value == Decimal("200.00")  # last row wins
+        assert upserted[0].source == "manual"  # set by the service, not the repo
+        assert upserted[0].user_id == USER.id
+        session.commit.assert_awaited_once()
+
+
+class TestTransactionImport:
+    @pytest.mark.asyncio
+    async def test_confirm_inserts_matched_skips_unmatched(self, monkeypatch):
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
+        bulk = AsyncMock(side_effect=lambda session, txns: txns)
+        monkeypatch.setattr(import_service.transaction_repository, "bulk_create", bulk)
+        session = AsyncMock()
+        content = _csv("Investment,Date,Amount,Currency,Type\nApple,2026-01-05,100,USD,buy\nTesla,2026-01-06,50,USD,sell\n")
+        mapping = {"investment": "Investment", "date": "Date", "amount": "Amount", "currency": "Currency", "type": "Type"}
+
+        result = await import_service.confirm_import(session, USER, ImportEntity.transactions, "x.csv", content, mapping, False)
+
+        assert (result.created, result.skipped_invalid) == (1, 1)
+        inserted = bulk.call_args.args[1]
+        assert len(inserted) == 1
+        assert inserted[0].investment_id == 1
+        assert inserted[0].type == TransactionType.buy
+        assert inserted[0].user_id == USER.id
+
+    @pytest.mark.asyncio
+    async def test_confirm_dedups_against_existing_db_row(self, monkeypatch):
+        # Existing keys arrive as DB-shaped tuples (int, date, TransactionType, Decimal, Currency,
+        # Decimal); confirm they normalize to the same key as the coerced import row so it skips.
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        existing = [(1, date(2026, 1, 5), TransactionType.buy, Decimal("100.00"), Currency.USD, Decimal("5.000000"))]
+        monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=existing))
+        bulk = AsyncMock(side_effect=lambda session, txns: txns)
+        monkeypatch.setattr(import_service.transaction_repository, "bulk_create", bulk)
+        content = _csv("Investment,Date,Amount,Currency,Type,Quantity\nApple,2026-01-05,100,USD,buy,5\n")
+        mapping = {"investment": "Investment", "date": "Date", "amount": "Amount", "currency": "Currency", "type": "Type", "quantity": "Quantity"}
+
+        result = await import_service.confirm_import(AsyncMock(), USER, ImportEntity.transactions, "x.csv", content, mapping, False)
+
+        assert (result.created, result.skipped_duplicate) == (0, 1)

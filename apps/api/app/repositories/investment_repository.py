@@ -122,6 +122,14 @@ async def list_names_by_user(session: AsyncSession, user_id: int) -> list[str]:
     return list(result.scalars().all())
 
 
+# Returns (id, name, ticker) for the user's investments, oldest first (to resolve import references).
+async def list_identifiers_by_user(session: AsyncSession, user_id: int) -> list[tuple[int, str, str | None]]:
+    result = await session.execute(
+        select(Investment.id, Investment.name, Investment.ticker).where(Investment.user_id == user_id).order_by(Investment.id)
+    )
+    return [(row[0], row[1], row[2]) for row in result.all()]
+
+
 # Persists a new investment and flushes to get the id.
 async def create(session: AsyncSession, investment: Investment) -> Investment:
     session.add(investment)
@@ -151,6 +159,7 @@ class InvestmentRepository:
     get_by_ids = staticmethod(get_by_ids)
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
+    list_identifiers_by_user = staticmethod(list_identifiers_by_user)
     list_names_by_user = staticmethod(list_names_by_user)
     list_with_ticker = staticmethod(list_with_ticker)
     list_with_ticker_by_user = staticmethod(list_with_ticker_by_user)
