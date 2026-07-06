@@ -82,10 +82,10 @@ const PORTFOLIO_GROUP = [
 
 const SETTINGS_GROUP = [
   { key: 'account', href: ROUTES.account, icon: UserCog },
-  { key: 'data', href: ROUTES.data, icon: ArrowDownUp },
   { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
   { key: 'alerts', href: ROUTES.alerts, icon: Bell },
   { key: 'localization', href: ROUTES.localization, icon: Globe },
+  { key: 'data', href: ROUTES.data, icon: ArrowDownUp },
   { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
 ] as const;
 
@@ -331,6 +331,55 @@ export function AppSidebar({
                 </SidebarMenuItem>
               </Collapsible>
 
+              {/* Settings collapsible group */}
+              <Collapsible asChild defaultOpen={isSettingsActive} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        '[&_svg]:size-5 text-paragraph-medium',
+                        NAV_ITEM_STYLES,
+                        !isSettingsActive &&
+                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                        isSettingsActive && 'bg-gray-100',
+                      )}
+                    >
+                      <Settings />
+                      <span>{t('navGroups.settings')}</span>
+                      <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className={collapsibleContentClass}>
+                    <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                      {SETTINGS_GROUP.map(({ key, href, icon: Icon }) => {
+                        const active = isActive(href);
+                        return (
+                          <SidebarMenuSubItem key={key}>
+                            <SidebarMenuSubButton
+                              asChild
+                              isActive={active}
+                              className={cn(
+                                'h-8 text-paragraph-sm-medium',
+                                NAV_ITEM_STYLES,
+                                SUB_BUTTON_EXTRAS,
+                                !active &&
+                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                              )}
+                            >
+                              <Link href={href}>
+                                <Icon />
+                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
               {/* Administration collapsible group — admins only (and only items matching the signup mode) */}
               {showAdminGroup && (
                 <Collapsible asChild defaultOpen={isAdminActive} className="group/collapsible">
@@ -381,55 +430,6 @@ export function AppSidebar({
                   </SidebarMenuItem>
                 </Collapsible>
               )}
-
-              {/* Settings collapsible group */}
-              <Collapsible asChild defaultOpen={isSettingsActive} className="group/collapsible">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      size="lg"
-                      className={cn(
-                        '[&_svg]:size-5 text-paragraph-medium',
-                        NAV_ITEM_STYLES,
-                        !isSettingsActive &&
-                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                        isSettingsActive && 'bg-gray-100',
-                      )}
-                    >
-                      <Settings />
-                      <span>{t('navGroups.settings')}</span>
-                      <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className={collapsibleContentClass}>
-                    <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {SETTINGS_GROUP.map(({ key, href, icon: Icon }) => {
-                        const active = isActive(href);
-                        return (
-                          <SidebarMenuSubItem key={key}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={active}
-                              className={cn(
-                                'h-8 text-paragraph-sm-medium',
-                                NAV_ITEM_STYLES,
-                                SUB_BUTTON_EXTRAS,
-                                !active &&
-                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                              )}
-                            >
-                              <Link href={href}>
-                                <Icon />
-                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

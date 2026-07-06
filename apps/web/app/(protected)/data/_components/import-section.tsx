@@ -14,9 +14,10 @@ import { SectionHeader } from '@/components/section-header';
 import type { ImportPreview } from '@/lib/api/imports';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-// The data types the engine targets; order sets the type-picker chip order. Keep in sync with the
-// backend ImportEntity enum.
-const DATA_TYPES = ['investments', 'expenses', 'income', 'snapshots', 'transactions'] as const;
+// The data types the engine targets; order sets the type-picker chip order — finances (expenses,
+// income) first, then everything investment-related grouped (investments, snapshots, transactions).
+// The set must stay in sync with the backend ImportEntity enum (order is independent).
+const DATA_TYPES = ['expenses', 'income', 'investments', 'snapshots', 'transactions'] as const;
 
 type DataTypeKey = (typeof DATA_TYPES)[number];
 
