@@ -520,6 +520,7 @@ User preferences stored as key-value pairs. All fields are optional on update --
 | `savings_rate_healthy_pct`     | int      | Savings rate at or above this percent renders the Savings Rate dashboard card green. Default 20 when null.                                                                                                                          |
 | `savings_rate_moderate_pct`    | int      | Savings rate below healthy but at or above this renders amber. Below this renders red. Default 10 when null.                                                                                                                        |
 | `income_expense_ratio_healthy` | Decimal  | Income/expense ratio at or above this renders the Income/Expense dashboard card green. Break-even (1.0) is the amber pivot. Default 1.5 when null. Range `[0.1, 10.0]`. Stored as string in JSONB to preserve precision.            |
+| `onboarding_completed`         | bool     | Whether the user has finished or dismissed first-run onboarding. `null` for a fresh user; set `true` to stop the dashboard welcome from showing.                                                                                    |
 
 ---
 
