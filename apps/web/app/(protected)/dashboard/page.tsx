@@ -7,6 +7,7 @@ import { DashboardComposition } from '@/app/(protected)/dashboard/_components/da
 import { DashboardEvolutionChart } from '@/app/(protected)/dashboard/_components/dashboard-evolution';
 import { DashboardFooter } from '@/app/(protected)/dashboard/_components/dashboard-footer';
 import { DashboardMetricCards } from '@/app/(protected)/dashboard/_components/dashboard-metric-cards';
+import { OnboardingWelcome } from '@/app/(protected)/dashboard/_components/onboarding-welcome';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
@@ -111,6 +112,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           className="sm:max-w-md"
         />
       </div>
+
+      {settings && !settings.onboardingCompleted && <OnboardingWelcome />}
 
       <DismissableCurrencyHint show={!isOriginalSelected} />
       <WarningHint show={isOriginalSelected}>

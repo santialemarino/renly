@@ -249,6 +249,24 @@
     },
     "title": "Dashboard",
     "subtitle": "Your finances and investments at a glance.",
+    "onboarding": {
+      "title": "Welcome to Renly",
+      "subtitle": "Let's get you set up — here's where to start.",
+      "dismiss": "Dismiss",
+      "dismissError": "Couldn't save. Please try again.",
+      "addInvestment": {
+        "label": "Add your first investment",
+        "hint": "Track a stock, fund, crypto, or any holding."
+      },
+      "import": {
+        "label": "Import your data",
+        "hint": "Bring in investments, expenses, or income from a file."
+      },
+      "currencies": {
+        "label": "Set your currencies",
+        "hint": "Choose the currencies you track and display in."
+      }
+    },
     "cards": {
       "netWorth": "Net Worth",
       "investmentValue": "Investment Value",
