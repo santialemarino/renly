@@ -56,5 +56,6 @@ export async function saveSettings(params: SaveSettingsParams): Promise<Settings
     savingsRateModeratePct: raw.savings_rate_moderate_pct ?? null,
     incomeExpenseRatioHealthy:
       raw.income_expense_ratio_healthy != null ? Number(raw.income_expense_ratio_healthy) : null,
+    onboardingCompleted: raw.onboarding_completed ?? null,
   };
 }

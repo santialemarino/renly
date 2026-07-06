@@ -78,6 +78,10 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Income/expense ratio at or above this value renders green. Null = backend default (1.5).",
     )
+    onboarding_completed: bool | None = Field(
+        default=None,
+        description="Whether the user has finished (or dismissed) first-run onboarding. Null when never set (a fresh user).",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -145,6 +149,10 @@ class SettingsUpdate(RequestBase):
     income_expense_ratio_healthy: Decimal | None = Field(
         default=None,
         description="Income/expense ratio healthy threshold. Must be in [0.1, 10.0].",
+    )
+    onboarding_completed: bool | None = Field(
+        default=None,
+        description="Set true when the user finishes or dismisses first-run onboarding.",
     )
 
     @field_validator("timezone")
