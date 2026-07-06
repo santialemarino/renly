@@ -21,6 +21,7 @@ interface SettingsRaw {
   savings_rate_healthy_pct: number | null;
   savings_rate_moderate_pct: number | null;
   income_expense_ratio_healthy: string | null;
+  onboarding_completed: boolean | null;
 }
 
 // --- Frontend types (camelCase) ---
@@ -42,11 +43,12 @@ export interface SettingsData {
   savingsRateHealthyPct: number | null;
   savingsRateModeratePct: number | null;
   incomeExpenseRatioHealthy: number | null;
+  onboardingCompleted: boolean | null;
 }
 
 // --- Mappers ---
 
-function mapSettings(raw: SettingsRaw): SettingsData {
+export function mapSettings(raw: SettingsRaw): SettingsData {
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,
@@ -65,6 +67,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     savingsRateModeratePct: raw.savings_rate_moderate_pct,
     incomeExpenseRatioHealthy:
       raw.income_expense_ratio_healthy !== null ? Number(raw.income_expense_ratio_healthy) : null,
+    onboardingCompleted: raw.onboarding_completed ?? null,
   };
 }
 

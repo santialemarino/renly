@@ -23,6 +23,7 @@ SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT = "liquidity_threshold_pct"
 SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT = "savings_rate_healthy_pct"
 SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT = "savings_rate_moderate_pct"
 SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY = "income_expense_ratio_healthy"
+SETTINGS_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -87,6 +88,8 @@ def _settings_to_response(settings: dict) -> dict:
                 income_expense_ratio_healthy = candidate
         except (ArithmeticError, ValueError):
             income_expense_ratio_healthy = None
+    raw_onboarding = settings.get(SETTINGS_KEY_ONBOARDING_COMPLETED)
+    onboarding_completed = raw_onboarding if isinstance(raw_onboarding, bool) else None
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -104,6 +107,7 @@ def _settings_to_response(settings: dict) -> dict:
         "savings_rate_healthy_pct": savings_rate_healthy_pct,
         "savings_rate_moderate_pct": savings_rate_moderate_pct,
         "income_expense_ratio_healthy": income_expense_ratio_healthy,
+        "onboarding_completed": onboarding_completed,
     }
 
 
@@ -138,6 +142,7 @@ async def update_settings(
     savings_rate_healthy_pct: int | None = _NOT_SET,
     savings_rate_moderate_pct: int | None = _NOT_SET,
     income_expense_ratio_healthy: Decimal | None = _NOT_SET,
+    onboarding_completed: bool | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -177,6 +182,8 @@ async def update_settings(
     if income_expense_ratio_healthy is not _NOT_SET:
         # JSONB doesn't natively encode Decimal; store as string so the round-trip survives.
         settings[SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY] = str(income_expense_ratio_healthy) if income_expense_ratio_healthy is not None else None
+    if onboarding_completed is not _NOT_SET:
+        settings[SETTINGS_KEY_ONBOARDING_COMPLETED] = onboarding_completed
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()

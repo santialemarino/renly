@@ -60,5 +60,7 @@ async def update_settings(
         kwargs["savings_rate_moderate_pct"] = payload["savings_rate_moderate_pct"]
     if "income_expense_ratio_healthy" in payload:
         kwargs["income_expense_ratio_healthy"] = payload["income_expense_ratio_healthy"]
+    if "onboarding_completed" in payload:
+        kwargs["onboarding_completed"] = payload["onboarding_completed"]
     data = await settings_service.update_settings(session, current_user, **kwargs)
     return SettingsResponse(**data)

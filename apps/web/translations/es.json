@@ -249,6 +249,24 @@
     },
     "title": "Dashboard",
     "subtitle": "Tus finanzas e inversiones de un vistazo.",
+    "onboarding": {
+      "title": "Bienvenido a Renly",
+      "subtitle": "Empecemos a configurar tu cuenta — por acá podés arrancar.",
+      "dismiss": "Descartar",
+      "dismissError": "No se pudo guardar. Probá de nuevo.",
+      "addInvestment": {
+        "label": "Agregá tu primera inversión",
+        "hint": "Seguí una acción, fondo, cripto o cualquier tenencia."
+      },
+      "import": {
+        "label": "Importá tus datos",
+        "hint": "Traé inversiones, gastos o ingresos desde un archivo."
+      },
+      "currencies": {
+        "label": "Configurá tus monedas",
+        "hint": "Elegí las monedas que seguís y en las que ves los montos."
+      }
+    },
     "cards": {
       "netWorth": "Patrimonio Neto",
       "investmentValue": "Valor de Inversiones",
