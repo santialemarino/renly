@@ -48,7 +48,7 @@ export interface SettingsData {
 
 // --- Mappers ---
 
-function mapSettings(raw: SettingsRaw): SettingsData {
+export function mapSettings(raw: SettingsRaw): SettingsData {
   return {
     primaryCurrency: raw.primary_currency,
     secondaryCurrency: raw.secondary_currency,
@@ -67,7 +67,7 @@ function mapSettings(raw: SettingsRaw): SettingsData {
     savingsRateModeratePct: raw.savings_rate_moderate_pct,
     incomeExpenseRatioHealthy:
       raw.income_expense_ratio_healthy !== null ? Number(raw.income_expense_ratio_healthy) : null,
-    onboardingCompleted: raw.onboarding_completed,
+    onboardingCompleted: raw.onboarding_completed ?? null,
   };
 }
 

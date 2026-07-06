@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { CircleDollarSign, Sparkles, TrendingUp, Upload, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -17,18 +17,16 @@ import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 export function OnboardingWelcome() {
   const t = useTranslations('dashboard.onboarding');
   const [dismissed, setDismissed] = useState(false);
-  const [, startDismiss] = useTransition();
 
-  function handleDismiss() {
+  async function handleDismiss() {
+    if (dismissed) return; // guard against a double-click during the exit animation
     setDismissed(true); // optimistic — hide immediately; the server flag keeps it hidden on reload
-    startDismiss(async () => {
-      try {
-        await completeOnboarding();
-      } catch {
-        setDismissed(false); // restore on failure so the user can retry
-        toast.error(t('dismissError'));
-      }
-    });
+    try {
+      await completeOnboarding();
+    } catch {
+      setDismissed(false); // restore on failure so the user can retry
+      toast.error(t('dismissError'));
+    }
   }
 
   return (
@@ -40,17 +38,18 @@ export function OnboardingWelcome() {
           exit={{ opacity: 0 }}
           transition={{ duration: ANIMATION_DEFAULT }}
         >
-          <Card compact className="relative gap-y-4 p-6">
+          <Card compact className="p-6 gap-y-4 relative">
             <button
               type="button"
               onClick={handleDismiss}
+              disabled={dismissed}
               aria-label={t('dismiss')}
-              className="group/dismiss flex absolute top-3 right-3 p-1 rounded-md text-muted-foreground outline-none transition-colors duration-200 cursor-pointer hover:text-foreground focus-visible:text-foreground"
+              className="group/dismiss flex p-1 rounded-md outline-none hover:text-foreground focus-visible:text-foreground absolute top-3 right-3 text-muted-foreground transition-colors duration-200 cursor-pointer"
             >
-              <X className="size-4 group-focus-visible/dismiss:animate-focus-bump-soft" />
+              <X className="size-4 group-focus-visible/dismiss:animate-focus-bump" />
             </button>
 
-            <div className="flex flex-col gap-y-1 pr-8">
+            <div className="flex flex-col pr-8 gap-y-1">
               <span className="flex items-center gap-x-2 text-heading-5">
                 <Sparkles className="size-5 text-blue-800" />
                 {t('title')}
