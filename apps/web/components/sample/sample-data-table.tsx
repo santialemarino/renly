@@ -17,7 +17,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { dismissSamples } from '@/components/sample/sample-actions';
+import { dismissSample, type SampleEntity } from '@/components/sample/sample-actions';
 import { SampleDetailDialog, type SampleDetail } from '@/components/sample/sample-detail-dialog';
 
 export interface SampleColumn<T> {
@@ -27,15 +27,17 @@ export interface SampleColumn<T> {
 }
 
 interface SampleDataTableProps<T extends { id: number }> {
+  entity: SampleEntity;
   columns: SampleColumn<T>[];
   rows: T[];
   getDetail: (row: T) => SampleDetail;
 }
 
-// Renders first-run sample rows in place of an empty section: a banner marking them as examples
-// (with a Clear that dismisses samples account-wide) plus a table mirroring the real one's columns.
-// The rows are the client fixture — "View" opens a read-only detail, and nothing ever hits the API.
+// Renders one section's first-run sample rows in place of its empty state: a banner marking them as
+// examples (with a Clear that retires just this section's sample) plus a table mirroring the real
+// one's columns. The rows are the client fixture — "View" opens a read-only detail, nothing hits the API.
 export function SampleDataTable<T extends { id: number }>({
+  entity,
   columns,
   rows,
   getDetail,
@@ -48,7 +50,7 @@ export function SampleDataTable<T extends { id: number }>({
     if (clearing) return; // guard against a double-click while the dismiss is in flight
     setClearing(true);
     try {
-      await dismissSamples();
+      await dismissSample(entity);
     } catch {
       setClearing(false); // restore so the user can retry; the revalidate unmounts this on success
       toast.error(t('clearError'));

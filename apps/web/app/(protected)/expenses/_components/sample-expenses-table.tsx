@@ -45,5 +45,12 @@ export function SampleExpensesTable() {
     ],
   });
 
-  return <SampleDataTable columns={columns} rows={sampleExpenses} getDetail={getDetail} />;
+  return (
+    <SampleDataTable
+      entity="expenses"
+      columns={columns}
+      rows={sampleExpenses}
+      getDetail={getDetail}
+    />
+  );
 }

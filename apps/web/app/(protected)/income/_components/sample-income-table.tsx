@@ -37,5 +37,7 @@ export function SampleIncomeTable() {
     ],
   });
 
-  return <SampleDataTable columns={columns} rows={sampleIncome} getDetail={getDetail} />;
+  return (
+    <SampleDataTable entity="income" columns={columns} rows={sampleIncome} getDetail={getDetail} />
+  );
 }

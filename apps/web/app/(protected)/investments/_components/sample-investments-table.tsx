@@ -29,5 +29,12 @@ export function SampleInvestmentsTable() {
     ],
   });
 
-  return <SampleDataTable columns={columns} rows={sampleInvestments} getDetail={getDetail} />;
+  return (
+    <SampleDataTable
+      entity="investments"
+      columns={columns}
+      rows={sampleInvestments}
+      getDetail={getDetail}
+    />
+  );
 }

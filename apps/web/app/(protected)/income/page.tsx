@@ -52,18 +52,18 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });
 
-  // Only a pristine account (no data anywhere) is in sample mode; check it just when this section
-  // is empty so populated accounts never pay for the extra read.
-  const sampleMode =
+  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
+  // populated section never pays for the extra read.
+  const showSample =
     data.items.length === 0
-      ? ((await getOnboardingStatus().catch(() => null))?.sampleMode ?? false)
+      ? ((await getOnboardingStatus().catch(() => null))?.sampleIncome ?? false)
       : false;
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <IncomeToolbar preferredCurrencies={preferredCurrencies} />
-      {sampleMode ? (
+      {showSample ? (
         <SampleIncomeTable />
       ) : (
         <IncomeDataTable

@@ -61,11 +61,11 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });
 
-  // Only a pristine account (no data anywhere) is in sample mode; check it just when this section
-  // is empty so populated accounts never pay for the extra read.
-  const sampleMode =
+  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
+  // populated section never pays for the extra read.
+  const showSample =
     data.items.length === 0
-      ? ((await getOnboardingStatus().catch(() => null))?.sampleMode ?? false)
+      ? ((await getOnboardingStatus().catch(() => null))?.sampleExpenses ?? false)
       : false;
 
   // Collect linked-plan ids from the loaded page so the edit dropdowns can still render
@@ -98,7 +98,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
       />
-      {sampleMode ? (
+      {showSample ? (
         <SampleExpensesTable />
       ) : (
         <ExpensesDataTable
