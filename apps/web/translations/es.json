@@ -1,6 +1,14 @@
 {
   "common": {
     "appName": "Renly",
+    "sampleData": {
+      "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",
+      "clear": "Limpiar",
+      "clearError": "No se pudieron limpiar los datos de ejemplo. Probá de nuevo.",
+      "actions": "Acciones",
+      "view": "Ver",
+      "detailNotice": "Datos de ejemplo — agregá los tuyos para reemplazarlos."
+    },
     "goToDashboard": "Ir al Dashboard",
     "notFound": {
       "title": "Página no disponible",

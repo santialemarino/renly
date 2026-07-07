@@ -1,6 +1,14 @@
 {
   "common": {
     "appName": "Renly",
+    "sampleData": {
+      "banner": "This is sample data to show you around. Add your own to replace it.",
+      "clear": "Clear",
+      "clearError": "Couldn't clear the sample data. Please try again.",
+      "actions": "Actions",
+      "view": "View",
+      "detailNotice": "Sample data — add your own to replace it."
+    },
     "goToDashboard": "Go to Dashboard",
     "notFound": {
       "title": "Page not available",
