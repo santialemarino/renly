@@ -18,6 +18,7 @@ import {
   getDashboardOverview,
   type DashboardFilterParams,
 } from '@/lib/api/dashboard';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import {
@@ -50,6 +51,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   // Always fetch settings — needed for currency fallback and period presets.
   const settings = await getSettings().catch(() => null);
+
+  // The first-run welcome only shows until onboarding is dismissed/completed; fetch its checklist
+  // status only in that window so returning users don't pay for the extra read.
+  const showWelcome = Boolean(settings) && !settings?.onboardingCompleted;
+  const onboardingStatus = showWelcome ? await getOnboardingStatus().catch(() => null) : null;
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const secondary = settings?.secondaryCurrency ?? null;
   const displayCurrencies = secondary
@@ -113,7 +119,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         />
       </div>
 
-      {settings && !settings.onboardingCompleted && <OnboardingWelcome />}
+      {showWelcome && <OnboardingWelcome status={onboardingStatus} />}
 
       <DismissableCurrencyHint show={!isOriginalSelected} />
       <WarningHint show={isOriginalSelected}>

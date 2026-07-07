@@ -251,20 +251,33 @@
     "subtitle": "Your finances and investments at a glance.",
     "onboarding": {
       "title": "Welcome to Renly",
-      "subtitle": "Let's get you set up — here's where to start.",
+      "subtitle": "A few steps to get your dashboard working for you.",
       "dismiss": "Dismiss",
       "dismissError": "Couldn't save. Please try again.",
-      "addInvestment": {
-        "label": "Add your first investment",
-        "hint": "Track a stock, fund, crypto, or any holding."
+      "optional": "Optional",
+      "steps": {
+        "investment": {
+          "label": "Add your first investment",
+          "hint": "Track a stock, fund, crypto, or any holding.",
+          "action": "Add investment",
+          "import": "or import your portfolio"
+        },
+        "finances": {
+          "label": "Add income & expenses",
+          "hint": "Record what comes in and goes out for the full picture.",
+          "action": "Add expenses",
+          "income": "or add income"
+        },
+        "currencies": {
+          "label": "Set your display currencies",
+          "hint": "Choose the currencies your dashboard converts to.",
+          "action": "Set currencies"
+        }
       },
-      "import": {
-        "label": "Import your data",
-        "hint": "Bring in investments, expenses, or income from a file."
-      },
-      "currencies": {
-        "label": "Set your currencies",
-        "hint": "Choose the currencies you track and display in."
+      "allSet": {
+        "title": "You're all set!",
+        "subtitle": "The essentials are in place — explore your dashboard.",
+        "action": "Got it"
       }
     },
     "cards": {

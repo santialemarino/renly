@@ -524,6 +524,24 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 ---
 
+## Onboarding
+
+First-run onboarding state for the authenticated user. The dashboard welcome uses this to drive a reactive checklist -- each step's done-state is derived from the account's real data, so acting on a step (adding an investment, an income/expense, or choosing a display currency) checks it off on the next read, with no per-step flag to keep in sync. The `onboarding_completed` field under [Settings](#settings) remains the "hide forever" flag once the user dismisses the welcome.
+
+| Method | Path                 | Description                                     |
+| ------ | -------------------- | ----------------------------------------------- |
+| `GET`  | `/onboarding/status` | Checklist step completion for the current user. |
+
+**Response fields:**
+
+| Field                  | Type | Description                                                 |
+| ---------------------- | ---- | ----------------------------------------------------------- |
+| `has_investments`      | bool | The user has created at least one investment.               |
+| `has_finances`         | bool | The user has recorded at least one income or expense entry. |
+| `primary_currency_set` | bool | The user has explicitly chosen a primary display currency.  |
+
+---
+
 ## Metrics
 
 All metric endpoints support currency conversion via the `currency` query parameter. Pass `currency=ARS` to see values in Argentine pesos, `currency=USD` for US dollars, etc. Omit it to see values in each investment's original currency.
