@@ -46,6 +46,12 @@ async def get_by_id(session: AsyncSession, income_id: int, user_id: int) -> Inco
     return result.scalar_one_or_none()
 
 
+# Returns whether the user has any income entry (cheap existence check for onboarding).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(IncomeEntry.id).where(IncomeEntry.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Returns the user's income dedup tuples (date, amount, currency, category, notes), used to flag
 # duplicates on import. Column order matches INCOME_SPEC.dedup_fields.
 async def list_dedup_keys_by_user(
@@ -183,6 +189,7 @@ class IncomeRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
     get_first_income_date = staticmethod(get_first_income_date)
     list_by_user_filtered = staticmethod(list_by_user_filtered)

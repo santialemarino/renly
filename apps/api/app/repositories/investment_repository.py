@@ -130,6 +130,13 @@ async def list_identifiers_by_user(session: AsyncSession, user_id: int) -> list[
     return [(row[0], row[1], row[2]) for row in result.all()]
 
 
+# Returns whether the user has any investment (cheap existence check for onboarding; counts
+# archived investments too, so archiving a lone holding doesn't un-complete the onboarding step).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(Investment.id).where(Investment.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Persists a new investment and flushes to get the id.
 async def create(session: AsyncSession, investment: Investment) -> Investment:
     session.add(investment)
@@ -155,6 +162,7 @@ async def save(session: AsyncSession, investment: Investment) -> None:
 class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
+    exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
