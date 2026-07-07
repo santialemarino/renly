@@ -493,7 +493,7 @@ API keys provide long-lived authentication for external tools (e.g., iOS Shortcu
 
 ## Settings
 
-User preferences stored as key-value pairs. All fields are optional on update -- only send what you want to change.
+User preferences stored as key-value pairs. All fields are optional on update -- only send what you want to change (`has_ever_had_data` is server-managed and ignored if sent).
 
 | Method | Path        | Description                                                          |
 | ------ | ----------- | -------------------------------------------------------------------- |
