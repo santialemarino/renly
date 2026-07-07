@@ -263,6 +263,7 @@
       "dismiss": "Dismiss",
       "dismissError": "Couldn't save. Please try again.",
       "optional": "Optional",
+      "stepDone": "Done",
       "steps": {
         "investment": {
           "label": "Add your first investment",

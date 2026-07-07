@@ -263,6 +263,7 @@
       "dismiss": "Descartar",
       "dismissError": "No se pudo guardar. Probá de nuevo.",
       "optional": "Opcional",
+      "stepDone": "Listo",
       "steps": {
         "investment": {
           "label": "Agregá tu primera inversión",

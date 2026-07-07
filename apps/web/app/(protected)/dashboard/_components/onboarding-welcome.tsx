@@ -51,6 +51,7 @@ function OnboardingStep({
   altLabel,
   altHref,
 }: OnboardingStepProps) {
+  const t = useTranslations('dashboard.onboarding');
   return (
     <li className="flex items-center gap-x-3">
       <span
@@ -70,6 +71,7 @@ function OnboardingStep({
           )}
         >
           {label}
+          {done && <span className="sr-only">{t('stepDone')}</span>}
           {optionalLabel && (
             <span className="text-paragraph-xs text-muted-foreground">{optionalLabel}</span>
           )}
