@@ -197,8 +197,8 @@ async def create_expense(
         advance_result = await subscription_service.advance_for_manual_entry(session, subscription_id, user, date)
     elif installment_id is not None:
         advance_result = await installment_service.advance_for_manual_entry(session, installment_id, user, date)
-    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
-    await settings_service.mark_has_ever_had_data(session, user.id)
+    # Retire the expenses first-run sample once the user has their first expense.
+    await settings_service.retire_sample(session, user.id, "expenses")
     await session.commit()
     return entry, advance_result
 

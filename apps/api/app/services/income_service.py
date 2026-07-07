@@ -64,8 +64,8 @@ async def create_income(
         source=source,
     )
     entry = await income_repository.create(session, entry)
-    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
-    await settings_service.mark_has_ever_had_data(session, user.id)
+    # Retire the income first-run sample once the user has their first income entry.
+    await settings_service.retire_sample(session, user.id, "income")
     await session.commit()
     return entry
 

@@ -111,8 +111,8 @@ async def create_investment(
         notes=notes,
     )
     investment = await investment_repository.create(session, investment)
-    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
-    await settings_service.mark_has_ever_had_data(session, user.id)
+    # Retire the investments first-run sample once the user has their first investment.
+    await settings_service.retire_sample(session, user.id, "investments")
     await session.commit()
     return investment
 

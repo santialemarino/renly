@@ -27,8 +27,18 @@ SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT = "savings_rate_healthy_pct"
 SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT = "savings_rate_moderate_pct"
 SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY = "income_expense_ratio_healthy"
 SETTINGS_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
-SETTINGS_KEY_HAS_EVER_HAD_DATA = "has_ever_had_data"
-SETTINGS_KEY_SAMPLES_DISMISSED = "samples_dismissed"
+SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS = "samples_retired_investments"
+SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES = "samples_retired_expenses"
+SETTINGS_KEY_SAMPLES_RETIRED_INCOME = "samples_retired_income"
+
+# Per-entity "first-run sample retired" flags. Each is latched (server-side) when the user first
+# creates that entity or clears that section's sample, so the section's sample shows only until the
+# user has done it once. Keyed by the entity name used across the onboarding surface.
+SAMPLE_RETIRED_KEYS = {
+    "investments": SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS,
+    "expenses": SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES,
+    "income": SETTINGS_KEY_SAMPLES_RETIRED_INCOME,
+}
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -95,10 +105,9 @@ def _settings_to_response(settings: dict) -> dict:
             income_expense_ratio_healthy = None
     raw_onboarding = settings.get(SETTINGS_KEY_ONBOARDING_COMPLETED)
     onboarding_completed = raw_onboarding if isinstance(raw_onboarding, bool) else None
-    raw_has_ever = settings.get(SETTINGS_KEY_HAS_EVER_HAD_DATA)
-    has_ever_had_data = raw_has_ever if isinstance(raw_has_ever, bool) else None
-    raw_samples_dismissed = settings.get(SETTINGS_KEY_SAMPLES_DISMISSED)
-    samples_dismissed = raw_samples_dismissed if isinstance(raw_samples_dismissed, bool) else None
+    # Onboarding-internal, not exposed on SettingsResponse — read by onboarding_service to gate the
+    # per-section first-run samples. A missing/malformed key reads as False (sample still eligible).
+    samples_retired = {entity: settings.get(key) is True for entity, key in SAMPLE_RETIRED_KEYS.items()}
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -117,8 +126,7 @@ def _settings_to_response(settings: dict) -> dict:
         "savings_rate_moderate_pct": savings_rate_moderate_pct,
         "income_expense_ratio_healthy": income_expense_ratio_healthy,
         "onboarding_completed": onboarding_completed,
-        "has_ever_had_data": has_ever_had_data,
-        "samples_dismissed": samples_dismissed,
+        "samples_retired": samples_retired,
     }
 
 
@@ -154,8 +162,6 @@ async def update_settings(
     savings_rate_moderate_pct: int | None = _NOT_SET,
     income_expense_ratio_healthy: Decimal | None = _NOT_SET,
     onboarding_completed: bool | None = _NOT_SET,
-    has_ever_had_data: bool | None = _NOT_SET,
-    samples_dismissed: bool | None = _NOT_SET,
 ) -> dict:
     row = await user_settings_repository.get_by_user_id(session, user.id)
     if row is None:
@@ -197,10 +203,6 @@ async def update_settings(
         settings[SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY] = str(income_expense_ratio_healthy) if income_expense_ratio_healthy is not None else None
     if onboarding_completed is not _NOT_SET:
         settings[SETTINGS_KEY_ONBOARDING_COMPLETED] = onboarding_completed
-    if has_ever_had_data is not _NOT_SET:
-        settings[SETTINGS_KEY_HAS_EVER_HAD_DATA] = has_ever_had_data
-    if samples_dismissed is not _NOT_SET:
-        settings[SETTINGS_KEY_SAMPLES_DISMISSED] = samples_dismissed
     row.settings = settings
     await user_settings_repository.save(session, row)
     await session.commit()
@@ -208,12 +210,13 @@ async def update_settings(
     return _settings_to_response(row.settings)
 
 
-# Latches the "user has ever created real data" marker that gates first-run sample mode. Uses a
-# targeted JSONB merge via upsert (never a read-modify-write of the whole blob) so it can't clobber
-# a concurrent settings write, and works whether or not a settings row exists yet. Idempotent; does
-# NOT commit — the caller's transaction persists it atomically alongside the data being created.
-async def mark_has_ever_had_data(session: AsyncSession, user_id: int) -> None:
-    marker = {SETTINGS_KEY_HAS_EVER_HAD_DATA: True}
+# Retires a section's first-run sample by latching its per-entity flag. Uses a targeted JSONB merge
+# via upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
+# write, and works whether or not a settings row exists yet. Idempotent; does NOT commit — the
+# caller's transaction persists it (alongside the entity being created, or on dismiss). `entity`
+# must be a key of SAMPLE_RETIRED_KEYS.
+async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
+    marker = {SAMPLE_RETIRED_KEYS[entity]: True}
     stmt = (
         pg_insert(UserSettings)
         .values(user_id=user_id, settings=marker)

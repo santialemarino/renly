@@ -5,28 +5,31 @@ import pytest
 from app.models.user import User
 from app.services import onboarding_service
 
-# Unit coverage for onboarding_service.get_status: each checklist step is derived from real data
-# (an existence probe per entity + the stored primary-currency preference), OR-ing income/expense
-# into a single "finances" step; plus first-run sample_mode (pristine account, never had data,
-# samples not dismissed) and the lazy persist of the has_ever_had_data marker.
+# Unit coverage for onboarding_service: the checklist derived from real data (an existence probe per
+# entity + the stored primary-currency preference, OR-ing income/expense into one "finances" step),
+# the PER-SECTION first-run sample flags (a section samples only until the user creates that entity
+# or clears it), the backstop that retires samples for data created outside the create paths, and
+# the explicit dismiss.
 
 USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 
+_NONE_RETIRED = {"investments": False, "expenses": False, "income": False}
 
-def _patch(monkeypatch, *, investments, expenses, income, primary, has_ever=None, samples_dismissed=None):
+
+def _patch(monkeypatch, *, investments, expenses, income, primary, retired=None):
     monkeypatch.setattr(onboarding_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
     monkeypatch.setattr(onboarding_service.expense_repository, "exists_by_user", AsyncMock(return_value=expenses))
     monkeypatch.setattr(onboarding_service.income_repository, "exists_by_user", AsyncMock(return_value=income))
-    settings = {"primary_currency": primary, "has_ever_had_data": has_ever, "samples_dismissed": samples_dismissed}
+    settings = {"primary_currency": primary, "samples_retired": retired or dict(_NONE_RETIRED)}
     monkeypatch.setattr(onboarding_service.settings_service, "get_settings", AsyncMock(return_value=settings))
-    mark_mock = AsyncMock()
-    monkeypatch.setattr(onboarding_service.settings_service, "mark_has_ever_had_data", mark_mock)
-    return mark_mock
+    retire_mock = AsyncMock()
+    monkeypatch.setattr(onboarding_service.settings_service, "retire_sample", retire_mock)
+    return retire_mock
 
 
-class TestOnboardingChecklist:
+class TestChecklist:
     @pytest.mark.asyncio
-    async def test_fresh_user_has_nothing_done(self, monkeypatch):
+    async def test_fresh_user(self, monkeypatch):
         _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None)
 
         result = await onboarding_service.get_status(AsyncMock(), USER)
@@ -35,7 +38,9 @@ class TestOnboardingChecklist:
             "has_investments": False,
             "has_finances": False,
             "primary_currency_set": False,
-            "sample_mode": True,
+            "sample_investments": True,
+            "sample_expenses": True,
+            "sample_income": True,
         }
 
     @pytest.mark.asyncio
@@ -87,50 +92,105 @@ class TestOnboardingChecklist:
         assert result["primary_currency_set"] is False
 
 
-class TestSampleMode:
+class TestPerSectionSamples:
     @pytest.mark.asyncio
-    async def test_pristine_account_is_in_sample_mode(self, monkeypatch):
+    async def test_pristine_account_samples_every_section(self, monkeypatch):
         _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None)
 
         result = await onboarding_service.get_status(AsyncMock(), USER)
 
-        assert result["sample_mode"] is True
+        assert result["sample_investments"] is True
+        assert result["sample_expenses"] is True
+        assert result["sample_income"] is True
 
     @pytest.mark.asyncio
-    async def test_account_with_data_is_not_in_sample_mode_and_marks_ever_had_data(self, monkeypatch):
-        mark_mock = _patch(monkeypatch, investments=True, expenses=False, income=False, primary=None)
+    async def test_creating_one_entity_retires_only_that_section(self, monkeypatch):
+        # An investment (only) retires the investments sample — but income & expenses still sample.
+        # That independence is the whole point of per-section.
+        retire_mock = _patch(monkeypatch, investments=True, expenses=False, income=False, primary=None)
         session = AsyncMock()
 
         result = await onboarding_service.get_status(session, USER)
 
-        assert result["sample_mode"] is False
-        # The backstop latches the marker (atomically, for the user) and commits when data is first
-        # observed without the marker set.
-        mark_mock.assert_awaited_once()
-        assert mark_mock.await_args.args[1] == USER.id
+        assert result["sample_investments"] is False
+        assert result["sample_expenses"] is True
+        assert result["sample_income"] is True
+        retire_mock.assert_awaited_once()
+        assert retire_mock.await_args.args[1:] == (USER.id, "investments")
         session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_marker_not_rewritten_when_already_set(self, monkeypatch):
-        mark_mock = _patch(monkeypatch, investments=True, expenses=False, income=False, primary=None, has_ever=True)
+    async def test_retired_section_does_not_resample_after_delete(self, monkeypatch):
+        # No investments now, but that section was retired (created once, then emptied) → no sample;
+        # expenses were never touched → still samples.
+        _patch(
+            monkeypatch,
+            investments=False,
+            expenses=False,
+            income=False,
+            primary=None,
+            retired={"investments": True, "expenses": False, "income": False},
+        )
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["sample_investments"] is False
+        assert result["sample_expenses"] is True
+
+    @pytest.mark.asyncio
+    async def test_dismissed_section_has_no_sample(self, monkeypatch):
+        _patch(
+            monkeypatch,
+            investments=False,
+            expenses=False,
+            income=False,
+            primary=None,
+            retired={"investments": False, "expenses": True, "income": False},
+        )
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["sample_expenses"] is False
+        assert result["sample_investments"] is True
+
+
+class TestBackstop:
+    @pytest.mark.asyncio
+    async def test_retires_each_entity_that_has_data(self, monkeypatch):
+        retire_mock = _patch(monkeypatch, investments=True, expenses=True, income=False, primary=None)
+        session = AsyncMock()
+
+        await onboarding_service.get_status(session, USER)
+
+        retired_entities = {call.args[2] for call in retire_mock.await_args_list}
+        assert retired_entities == {"investments", "expenses"}
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_entities_already_retired(self, monkeypatch):
+        retire_mock = _patch(
+            monkeypatch,
+            investments=True,
+            expenses=False,
+            income=False,
+            primary=None,
+            retired={"investments": True, "expenses": False, "income": False},
+        )
 
         await onboarding_service.get_status(AsyncMock(), USER)
 
-        mark_mock.assert_not_awaited()
+        retire_mock.assert_not_awaited()
 
+
+class TestDismiss:
     @pytest.mark.asyncio
-    async def test_emptied_account_stays_out_of_sample_mode(self, monkeypatch):
-        # No data now, but has_ever_had_data is set → the user emptied the account, not a newbie.
-        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, has_ever=True)
+    async def test_dismiss_retires_the_section_and_commits(self, monkeypatch):
+        retire_mock = AsyncMock()
+        monkeypatch.setattr(onboarding_service.settings_service, "retire_sample", retire_mock)
+        session = AsyncMock()
 
-        result = await onboarding_service.get_status(AsyncMock(), USER)
+        await onboarding_service.dismiss_sample(session, USER, "expenses")
 
-        assert result["sample_mode"] is False
-
-    @pytest.mark.asyncio
-    async def test_dismissed_samples_disable_sample_mode(self, monkeypatch):
-        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, samples_dismissed=True)
-
-        result = await onboarding_service.get_status(AsyncMock(), USER)
-
-        assert result["sample_mode"] is False
+        retire_mock.assert_awaited_once()
+        assert retire_mock.await_args.args[1:] == (USER.id, "expenses")
+        session.commit.assert_awaited_once()
