@@ -273,7 +273,8 @@
         "finances": {
           "label": "Add income & expenses",
           "hint": "Record what comes in and goes out for the full picture.",
-          "action": "Add expenses"
+          "action": "Add expenses",
+          "income": "or add income"
         },
         "currencies": {
           "label": "Set your display currencies",

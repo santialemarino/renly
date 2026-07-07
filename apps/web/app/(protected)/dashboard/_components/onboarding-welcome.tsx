@@ -32,13 +32,14 @@ interface OnboardingStepProps {
   actionLabel: string;
   href: string;
   optionalLabel?: string;
-  importLabel?: string;
-  importHref?: string;
+  altLabel?: string;
+  altHref?: string;
 }
 
 // A single checklist row: the step's own icon becomes a check once done (the row derives its
 // done-state from real data upstream, so it stays truthful and self-heals). Done rows drop their
-// action and dim; open rows surface the primary action, plus an "or import" link on the first step.
+// action and dim; open rows surface the primary action, plus an optional secondary link (import a
+// portfolio, add income) where the step has a natural second entry point.
 function OnboardingStep({
   icon: Icon,
   label,
@@ -47,8 +48,8 @@ function OnboardingStep({
   actionLabel,
   href,
   optionalLabel,
-  importLabel,
-  importHref,
+  altLabel,
+  altHref,
 }: OnboardingStepProps) {
   return (
     <li className="flex items-center gap-x-3">
@@ -81,9 +82,9 @@ function OnboardingStep({
           <Button asChild size="sm" variant="outline">
             <Link href={href}>{actionLabel}</Link>
           </Button>
-          {importLabel && importHref && (
-            <InlineLink href={importHref} color="muted" className="text-paragraph-xs">
-              {importLabel}
+          {altLabel && altHref && (
+            <InlineLink href={altHref} color="muted" className="text-paragraph-xs">
+              {altLabel}
             </InlineLink>
           )}
         </div>
@@ -117,17 +118,6 @@ export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
 
   const steps: Array<OnboardingStepProps & { key: string }> = [
     {
-      key: 'investment',
-      icon: TrendingUp,
-      done: hasInvestments,
-      label: t('steps.investment.label'),
-      hint: t('steps.investment.hint'),
-      actionLabel: t('steps.investment.action'),
-      href: ROUTES.investments,
-      importLabel: t('steps.investment.import'),
-      importHref: `${ROUTES.data}?type=investments`,
-    },
-    {
       key: 'finances',
       icon: Wallet,
       done: hasFinances,
@@ -135,6 +125,19 @@ export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
       hint: t('steps.finances.hint'),
       actionLabel: t('steps.finances.action'),
       href: ROUTES.expenses,
+      altLabel: t('steps.finances.income'),
+      altHref: ROUTES.income,
+    },
+    {
+      key: 'investment',
+      icon: TrendingUp,
+      done: hasInvestments,
+      label: t('steps.investment.label'),
+      hint: t('steps.investment.hint'),
+      actionLabel: t('steps.investment.action'),
+      href: ROUTES.investments,
+      altLabel: t('steps.investment.import'),
+      altHref: `${ROUTES.data}?type=investments`,
     },
     {
       key: 'currencies',
@@ -198,8 +201,8 @@ export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
                   actionLabel={step.actionLabel}
                   href={step.href}
                   optionalLabel={step.optionalLabel}
-                  importLabel={step.importLabel}
-                  importHref={step.importHref}
+                  altLabel={step.altLabel}
+                  altHref={step.altHref}
                 />
               ))}
             </ul>
