@@ -82,6 +82,14 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Whether the user has finished (or dismissed) first-run onboarding. Null when never set (a fresh user).",
     )
+    has_ever_had_data: bool | None = Field(
+        default=None,
+        description="Whether the user has ever created real data. Set server-side; drives sample mode and stays true after the account is emptied.",
+    )
+    samples_dismissed: bool | None = Field(
+        default=None,
+        description="Whether the user has dismissed the first-run sample data. Null until they clear a sample.",
+    )
 
 
 # Body for PUT /settings. Partial update; only provided fields are updated.
@@ -153,6 +161,10 @@ class SettingsUpdate(RequestBase):
     onboarding_completed: bool | None = Field(
         default=None,
         description="Set true when the user finishes or dismisses first-run onboarding.",
+    )
+    samples_dismissed: bool | None = Field(
+        default=None,
+        description="Set true when the user clears/dismisses the first-run sample data.",
     )
 
     @field_validator("timezone")

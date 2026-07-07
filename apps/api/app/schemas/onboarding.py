@@ -15,3 +15,6 @@ class OnboardingStatusResponse(BaseModel):
     primary_currency_set: bool = Field(
         description="Whether the user has explicitly chosen a primary display currency.",
     )
+    sample_mode: bool = Field(
+        description="Whether first-run sample data should be shown (pristine account: never held real data, samples not dismissed).",
+    )
