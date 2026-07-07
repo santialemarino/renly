@@ -251,20 +251,32 @@
     "subtitle": "Tus finanzas e inversiones de un vistazo.",
     "onboarding": {
       "title": "Bienvenido a Renly",
-      "subtitle": "Empecemos a configurar tu cuenta — por acá podés arrancar.",
+      "subtitle": "Unos pasos para que tu panel empiece a trabajar para vos.",
       "dismiss": "Descartar",
       "dismissError": "No se pudo guardar. Probá de nuevo.",
-      "addInvestment": {
-        "label": "Agregá tu primera inversión",
-        "hint": "Seguí una acción, fondo, cripto o cualquier tenencia."
+      "optional": "Opcional",
+      "steps": {
+        "investment": {
+          "label": "Agregá tu primera inversión",
+          "hint": "Seguí una acción, fondo, cripto o cualquier tenencia.",
+          "action": "Agregar inversión",
+          "import": "o importá tu portafolio"
+        },
+        "finances": {
+          "label": "Agregá ingresos y gastos",
+          "hint": "Registrá lo que entra y lo que sale para ver el panorama completo.",
+          "action": "Agregar gastos"
+        },
+        "currencies": {
+          "label": "Configurá tus monedas",
+          "hint": "Elegí las monedas a las que tu panel convierte los montos.",
+          "action": "Configurar monedas"
+        }
       },
-      "import": {
-        "label": "Importá tus datos",
-        "hint": "Traé inversiones, gastos o ingresos desde un archivo."
-      },
-      "currencies": {
-        "label": "Configurá tus monedas",
-        "hint": "Elegí las monedas que seguís y en las que ves los montos."
+      "allSet": {
+        "title": "¡Listo, ya está todo!",
+        "subtitle": "Lo esencial está configurado — explorá tu panel.",
+        "action": "Entendido"
       }
     },
     "cards": {
