@@ -43,7 +43,10 @@ export function SampleDataTable<T extends { id: number }>({
   getDetail,
 }: SampleDataTableProps<T>) {
   const t = useTranslations('common.sampleData');
+  // `detail` is kept populated while the dialog animates closed (only `detailOpen` toggles), so the
+  // content doesn't blank out mid-exit — the same stable-prop pattern the real row dialogs use.
   const [detail, setDetail] = useState<SampleDetail | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
 
   async function handleClear() {
@@ -65,7 +68,7 @@ export function SampleDataTable<T extends { id: number }>({
           {t('banner')}
         </span>
         <Button
-          variant="ghost"
+          variant="outline"
           size="sm"
           onClick={handleClear}
           disabled={clearing}
@@ -101,7 +104,10 @@ export function SampleDataTable<T extends { id: number }>({
                       variant="ghost"
                       size="icon"
                       className="size-8"
-                      onClick={() => setDetail(getDetail(row))}
+                      onClick={() => {
+                        setDetail(getDetail(row));
+                        setDetailOpen(true);
+                      }}
                       aria-label={t('view')}
                     >
                       <Eye className="size-4" />
@@ -115,12 +121,7 @@ export function SampleDataTable<T extends { id: number }>({
         </TableBody>
       </Table>
 
-      <SampleDetailDialog
-        detail={detail}
-        onOpenChange={(open) => {
-          if (!open) setDetail(null);
-        }}
-      />
+      <SampleDetailDialog open={detailOpen} detail={detail} onOpenChange={setDetailOpen} />
     </div>
   );
 }

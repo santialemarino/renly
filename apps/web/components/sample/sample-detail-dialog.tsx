@@ -16,16 +16,18 @@ export interface SampleDetail {
 }
 
 interface SampleDetailDialogProps {
+  open: boolean;
   detail: SampleDetail | null;
   onOpenChange: (open: boolean) => void;
 }
 
 // Read-only detail for a first-run sample row. Mirrors the "click a row to see it" affordance of the
-// real tables, but the data is the client fixture — there's no fetch and nothing to persist.
-export function SampleDetailDialog({ detail, onOpenChange }: SampleDetailDialogProps) {
+// real tables, but the data is the client fixture — there's no fetch and nothing to persist. `open`
+// is separate from `detail` so the content stays rendered while the dialog animates closed.
+export function SampleDetailDialog({ open, detail, onOpenChange }: SampleDetailDialogProps) {
   const t = useTranslations('common.sampleData');
   return (
-    <Dialog open={detail !== null} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{detail?.title}</DialogTitle>
