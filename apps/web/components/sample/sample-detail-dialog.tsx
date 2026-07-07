@@ -15,15 +15,14 @@ export interface SampleDetail {
   fields: { label: string; value: React.ReactNode }[];
 }
 
-// Read-only detail for a first-run sample row. Mirrors the "click a row to see it" affordance of the
-// real tables, but the data is the client fixture — there's no fetch and nothing to persist.
-export function SampleDetailDialog({
-  detail,
-  onOpenChange,
-}: {
+interface SampleDetailDialogProps {
   detail: SampleDetail | null;
   onOpenChange: (open: boolean) => void;
-}) {
+}
+
+// Read-only detail for a first-run sample row. Mirrors the "click a row to see it" affordance of the
+// real tables, but the data is the client fixture — there's no fetch and nothing to persist.
+export function SampleDetailDialog({ detail, onOpenChange }: SampleDetailDialogProps) {
   const t = useTranslations('common.sampleData');
   return (
     <Dialog open={detail !== null} onOpenChange={onOpenChange}>
