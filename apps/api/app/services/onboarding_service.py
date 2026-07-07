@@ -33,7 +33,6 @@ async def get_status(session: AsyncSession, user: User) -> dict:
             for entity in to_retire:
                 await settings_service.retire_sample(session, user.id, entity)
             await session.commit()
-            retired = {**retired, **{entity: True for entity in to_retire}}
         except Exception:
             logger.warning("Could not retire samples %s for user %s", to_retire, user.id, exc_info=True)
             await session.rollback()

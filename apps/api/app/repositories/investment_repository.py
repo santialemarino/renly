@@ -93,6 +93,13 @@ async def get_by_ids(session: AsyncSession, ids: list[int], user_id: int) -> lis
     return list(result.scalars().all())
 
 
+# Returns whether the user has any investment (cheap existence check for onboarding; counts
+# archived investments too, so archiving a lone holding doesn't un-complete the onboarding step).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(Investment.id).where(Investment.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Returns all active investments that have a ticker set.
 async def list_with_ticker(session: AsyncSession) -> list[Investment]:
     result = await session.execute(
@@ -128,13 +135,6 @@ async def list_identifiers_by_user(session: AsyncSession, user_id: int) -> list[
         select(Investment.id, Investment.name, Investment.ticker).where(Investment.user_id == user_id).order_by(Investment.id)
     )
     return [(row[0], row[1], row[2]) for row in result.all()]
-
-
-# Returns whether the user has any investment (cheap existence check for onboarding; counts
-# archived investments too, so archiving a lone holding doesn't un-complete the onboarding step).
-async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
-    result = await session.execute(select(Investment.id).where(Investment.user_id == user_id).limit(1))
-    return result.first() is not None
 
 
 # Persists a new investment and flushes to get the id.
