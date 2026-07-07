@@ -176,10 +176,26 @@ class TestBackstop:
             primary=None,
             retired={"investments": True, "expenses": False, "income": False},
         )
+        session = AsyncMock()
 
-        await onboarding_service.get_status(AsyncMock(), USER)
+        await onboarding_service.get_status(session, USER)
 
         retire_mock.assert_not_awaited()
+        session.commit.assert_not_awaited()  # nothing to retire → no write, no commit
+
+    @pytest.mark.asyncio
+    async def test_backstop_write_failure_degrades_to_a_correct_read(self, monkeypatch):
+        # A backstop write hiccup must never fail the read: the section is still correctly hidden (it
+        # has data), the transaction is rolled back, and the retire re-attempts on the next request.
+        retire_mock = _patch(monkeypatch, investments=True, expenses=False, income=False, primary=None)
+        retire_mock.side_effect = RuntimeError("db unavailable")
+        session = AsyncMock()
+
+        result = await onboarding_service.get_status(session, USER)
+
+        assert result["sample_investments"] is False  # has data → hidden regardless of the write
+        session.commit.assert_not_awaited()
+        session.rollback.assert_awaited_once()
 
 
 class TestDismiss:
