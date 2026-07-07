@@ -265,7 +265,8 @@
         "finances": {
           "label": "Agregá ingresos y gastos",
           "hint": "Registrá lo que entra y lo que sale para ver el panorama completo.",
-          "action": "Agregar gastos"
+          "action": "Agregar gastos",
+          "income": "o agregá ingresos"
         },
         "currencies": {
           "label": "Configurá tus monedas",
