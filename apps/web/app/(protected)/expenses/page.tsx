@@ -4,9 +4,11 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expenses-data-table';
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
+import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
 import { getInstallments } from '@/lib/api/installments';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
@@ -59,6 +61,13 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });
 
+  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
+  // populated section never pays for the extra read.
+  const showSample =
+    data.items.length === 0
+      ? ((await getOnboardingStatus().catch(() => null))?.sampleExpenses ?? false)
+      : false;
+
   // Collect linked-plan ids from the loaded page so the edit dropdowns can still render
   // the plan name when an expense links to a since-archived plan (Phase 3 audit-round-3
   // follow-up). Backend's `include_ids` widens the active-only listing with these specific
@@ -89,15 +98,19 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
       />
-      <ExpensesDataTable
-        data={data}
-        preferredCurrencies={preferredCurrencies}
-        creditCards={creditCards}
-        activeObligations={activeObligations}
-        activeSubscriptions={activeSubscriptions}
-        activeInstallments={activeInstallments}
-        activeCurrency={currency}
-      />
+      {showSample ? (
+        <SampleExpensesTable />
+      ) : (
+        <ExpensesDataTable
+          data={data}
+          preferredCurrencies={preferredCurrencies}
+          creditCards={creditCards}
+          activeObligations={activeObligations}
+          activeSubscriptions={activeSubscriptions}
+          activeInstallments={activeInstallments}
+          activeCurrency={currency}
+        />
+      )}
     </div>
   );
 }

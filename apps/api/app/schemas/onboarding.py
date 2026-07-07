@@ -1,10 +1,19 @@
-# Response schema for the onboarding status endpoint (HTTP contract).
+# Request/response schemas for the onboarding endpoints (HTTP contract).
+
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-# Response for GET /onboarding/status. First-run checklist completion, each step derived from the
-# user's real data (not per-card "clicked" flags) so the checklist reflects the account's true state.
+# The sections that render a first-run sample; the value is the entity key used in settings + routing.
+class SampleEntity(StrEnum):
+    INVESTMENTS = "investments"
+    EXPENSES = "expenses"
+    INCOME = "income"
+
+
+# Response for GET /onboarding/status. First-run checklist completion plus per-section sample flags,
+# each derived from the user's real data (not per-card "clicked" flags).
 class OnboardingStatusResponse(BaseModel):
     has_investments: bool = Field(
         description="Whether the user has created at least one investment.",
@@ -14,4 +23,13 @@ class OnboardingStatusResponse(BaseModel):
     )
     primary_currency_set: bool = Field(
         description="Whether the user has explicitly chosen a primary display currency.",
+    )
+    sample_investments: bool = Field(
+        description="Whether the investments section should show its first-run sample data.",
+    )
+    sample_expenses: bool = Field(
+        description="Whether the expenses section should show its first-run sample data.",
+    )
+    sample_income: bool = Field(
+        description="Whether the income section should show its first-run sample data.",
     )

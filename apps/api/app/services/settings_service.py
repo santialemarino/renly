@@ -1,5 +1,8 @@
 from decimal import Decimal
 
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -24,6 +27,18 @@ SETTINGS_KEY_SAVINGS_RATE_HEALTHY_PCT = "savings_rate_healthy_pct"
 SETTINGS_KEY_SAVINGS_RATE_MODERATE_PCT = "savings_rate_moderate_pct"
 SETTINGS_KEY_INCOME_EXPENSE_RATIO_HEALTHY = "income_expense_ratio_healthy"
 SETTINGS_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS = "samples_retired_investments"
+SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES = "samples_retired_expenses"
+SETTINGS_KEY_SAMPLES_RETIRED_INCOME = "samples_retired_income"
+
+# Per-entity "first-run sample retired" flags. Each is latched (server-side) when the user first
+# creates that entity or clears that section's sample, so the section's sample shows only until the
+# user has done it once. Keyed by the entity name used across the onboarding surface.
+SAMPLE_RETIRED_KEYS = {
+    "investments": SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS,
+    "expenses": SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES,
+    "income": SETTINGS_KEY_SAMPLES_RETIRED_INCOME,
+}
 
 # Valid values for dollar rate preference.
 DOLLAR_RATE_DEFAULT = "mep"
@@ -90,6 +105,9 @@ def _settings_to_response(settings: dict) -> dict:
             income_expense_ratio_healthy = None
     raw_onboarding = settings.get(SETTINGS_KEY_ONBOARDING_COMPLETED)
     onboarding_completed = raw_onboarding if isinstance(raw_onboarding, bool) else None
+    # Onboarding-internal, not exposed on SettingsResponse — read by onboarding_service to gate the
+    # per-section first-run samples. A missing/malformed key reads as False (sample still eligible).
+    samples_retired = {entity: settings.get(key) is True for entity, key in SAMPLE_RETIRED_KEYS.items()}
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -108,6 +126,7 @@ def _settings_to_response(settings: dict) -> dict:
         "savings_rate_moderate_pct": savings_rate_moderate_pct,
         "income_expense_ratio_healthy": income_expense_ratio_healthy,
         "onboarding_completed": onboarding_completed,
+        "samples_retired": samples_retired,
     }
 
 
@@ -189,3 +208,21 @@ async def update_settings(
     await session.commit()
     await session.refresh(row)
     return _settings_to_response(row.settings)
+
+
+# Retires a section's first-run sample by latching its per-entity flag. Uses a targeted JSONB merge
+# via upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
+# write, and works whether or not a settings row exists yet. Idempotent; does NOT commit — the
+# caller's transaction persists it (alongside the entity being created, or on dismiss). `entity`
+# must be a key of SAMPLE_RETIRED_KEYS.
+async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
+    marker = {SAMPLE_RETIRED_KEYS[entity]: True}
+    stmt = (
+        pg_insert(UserSettings)
+        .values(user_id=user_id, settings=marker)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={"settings": UserSettings.__table__.c.settings.op("||")(cast(marker, JSONB))},
+        )
+    )
+    await session.execute(stmt)

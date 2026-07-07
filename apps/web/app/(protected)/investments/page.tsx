@@ -3,7 +3,9 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InvestmentsDataTable } from '@/app/(protected)/investments/_components/investments-data-table';
 import { InvestmentsToolbar } from '@/app/(protected)/investments/_components/investments-toolbar';
+import { SampleInvestmentsTable } from '@/app/(protected)/investments/_components/sample-investments-table';
 import { getGroups, getInvestments } from '@/lib/api/investments';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -48,11 +50,26 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
+  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
+  // populated section never pays for the extra read.
+  const showSample =
+    data.items.length === 0
+      ? ((await getOnboardingStatus().catch(() => null))?.sampleInvestments ?? false)
+      : false;
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <InvestmentsToolbar groups={groups} preferredCurrencies={preferredCurrencies} />
-      <InvestmentsDataTable data={data} groups={groups} preferredCurrencies={preferredCurrencies} />
+      {showSample ? (
+        <SampleInvestmentsTable />
+      ) : (
+        <InvestmentsDataTable
+          data={data}
+          groups={groups}
+          preferredCurrencies={preferredCurrencies}
+        />
+      )}
     </div>
   );
 }

@@ -76,12 +76,15 @@ function DialogContent({
         {...props}
       >
         {children}
+        {/* Close affordance follows the repo's icon-button focus convention (see ux-motion): no
+            browser/rectangular ring — outline-none + a muted→foreground hover/focus color transition
+            + the focus-bump on the icon via a focusable group. */}
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
-            className="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+            className="group/dialog-close absolute top-4 right-4 flex p-0.5 rounded-md text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
-            <XIcon />
+            <XIcon className="group-focus-visible/dialog-close:animate-focus-bump" />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
         )}

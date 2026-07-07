@@ -15,6 +15,7 @@ from app.repositories import (
     transaction_repository,
 )
 from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, InvestmentResponse
+from app.services import settings_service
 
 
 def _build_response(
@@ -110,6 +111,8 @@ async def create_investment(
         notes=notes,
     )
     investment = await investment_repository.create(session, investment)
+    # Retire the investments first-run sample once the user has their first investment.
+    await settings_service.retire_sample(session, user.id, "investments")
     await session.commit()
     return investment
 

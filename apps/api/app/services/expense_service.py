@@ -18,6 +18,7 @@ from app.services import (
     card_reconciliation_service,
     installment_service,
     payment_obligation_service,
+    settings_service,
     subscription_service,
 )
 from app.utils.dates import OBLIGATION_MONTH_STEP
@@ -196,6 +197,8 @@ async def create_expense(
         advance_result = await subscription_service.advance_for_manual_entry(session, subscription_id, user, date)
     elif installment_id is not None:
         advance_result = await installment_service.advance_for_manual_entry(session, installment_id, user, date)
+    # Retire the expenses first-run sample once the user has their first expense.
+    await settings_service.retire_sample(session, user.id, "expenses")
     await session.commit()
     return entry, advance_result
 
@@ -283,6 +286,8 @@ async def create_expenses_for_obligation_cycles(
     # because cycles >= 1 and the loop body raises rather than yielding None.
     assert last_entry is not None and last_advance is not None and first_previous_cursor is not None
     coalesced = replace(last_advance, previous_cursor=first_previous_cursor)
+    # Retire the expenses first-run sample once the user has their first expense.
+    await settings_service.retire_sample(session, user.id, "expenses")
     await session.commit()
     return last_entry, coalesced
 

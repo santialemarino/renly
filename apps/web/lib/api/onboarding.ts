@@ -8,6 +8,9 @@ interface OnboardingStatusRaw {
   has_investments: boolean;
   has_finances: boolean;
   primary_currency_set: boolean;
+  sample_investments: boolean;
+  sample_expenses: boolean;
+  sample_income: boolean;
 }
 
 // --- Frontend types (camelCase) ---
@@ -16,6 +19,9 @@ export interface OnboardingStatus {
   hasInvestments: boolean;
   hasFinances: boolean;
   primaryCurrencySet: boolean;
+  sampleInvestments: boolean;
+  sampleExpenses: boolean;
+  sampleIncome: boolean;
 }
 
 // --- Mappers ---
@@ -25,6 +31,9 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
     hasInvestments: raw.has_investments,
     hasFinances: raw.has_finances,
     primaryCurrencySet: raw.primary_currency_set,
+    sampleInvestments: raw.sample_investments,
+    sampleExpenses: raw.sample_expenses,
+    sampleIncome: raw.sample_income,
   };
 }
 

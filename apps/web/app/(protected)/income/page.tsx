@@ -4,7 +4,9 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { IncomeDataTable } from '@/app/(protected)/income/_components/income-data-table';
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
+import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
 import { getIncome } from '@/lib/api/income';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
@@ -50,15 +52,26 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });
 
+  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
+  // populated section never pays for the extra read.
+  const showSample =
+    data.items.length === 0
+      ? ((await getOnboardingStatus().catch(() => null))?.sampleIncome ?? false)
+      : false;
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <IncomeToolbar preferredCurrencies={preferredCurrencies} />
-      <IncomeDataTable
-        data={data}
-        preferredCurrencies={preferredCurrencies}
-        activeCurrency={currency}
-      />
+      {showSample ? (
+        <SampleIncomeTable />
+      ) : (
+        <IncomeDataTable
+          data={data}
+          preferredCurrencies={preferredCurrencies}
+          activeCurrency={currency}
+        />
+      )}
     </div>
   );
 }
