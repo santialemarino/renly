@@ -18,6 +18,7 @@ from app.services import (
     card_reconciliation_service,
     installment_service,
     payment_obligation_service,
+    settings_service,
     subscription_service,
 )
 from app.utils.dates import OBLIGATION_MONTH_STEP
@@ -196,6 +197,8 @@ async def create_expense(
         advance_result = await subscription_service.advance_for_manual_entry(session, subscription_id, user, date)
     elif installment_id is not None:
         advance_result = await installment_service.advance_for_manual_entry(session, installment_id, user, date)
+    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
+    await settings_service.mark_has_ever_had_data(session, user.id)
     await session.commit()
     return entry, advance_result
 

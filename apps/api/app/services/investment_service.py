@@ -15,6 +15,7 @@ from app.repositories import (
     transaction_repository,
 )
 from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, InvestmentResponse
+from app.services import settings_service
 
 
 def _build_response(
@@ -110,6 +111,8 @@ async def create_investment(
         notes=notes,
     )
     investment = await investment_repository.create(session, investment)
+    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
+    await settings_service.mark_has_ever_had_data(session, user.id)
     await session.commit()
     return investment
 

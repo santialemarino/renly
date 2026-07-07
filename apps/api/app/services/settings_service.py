@@ -1,5 +1,8 @@
 from decimal import Decimal
 
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -203,3 +206,20 @@ async def update_settings(
     await session.commit()
     await session.refresh(row)
     return _settings_to_response(row.settings)
+
+
+# Latches the "user has ever created real data" marker that gates first-run sample mode. Uses a
+# targeted JSONB merge via upsert (never a read-modify-write of the whole blob) so it can't clobber
+# a concurrent settings write, and works whether or not a settings row exists yet. Idempotent; does
+# NOT commit — the caller's transaction persists it atomically alongside the data being created.
+async def mark_has_ever_had_data(session: AsyncSession, user_id: int) -> None:
+    marker = {SETTINGS_KEY_HAS_EVER_HAD_DATA: True}
+    stmt = (
+        pg_insert(UserSettings)
+        .values(user_id=user_id, settings=marker)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={"settings": UserSettings.__table__.c.settings.op("||")(cast(marker, JSONB))},
+        )
+    )
+    await session.execute(stmt)

@@ -1,10 +1,14 @@
 # Business logic for first-run onboarding.
 
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories import expense_repository, income_repository, investment_repository
 from app.services import settings_service
+
+logger = logging.getLogger(__name__)
 
 
 # Returns the first-run onboarding status. Each checklist step's done-state is derived from the
@@ -21,11 +25,18 @@ async def get_status(session: AsyncSession, user: User) -> dict:
 
     has_any_data = has_investments or has_expenses or has_income
     has_ever_had_data = bool(current_settings["has_ever_had_data"])
-    # Persist the "ever had data" marker the first time we observe real data, so first-run sample
-    # mode never returns once the user has engaged — even after they later empty the account.
+    # The marker is latched primarily at data-creation time (see the create services). This is a
+    # best-effort backstop for data that entered outside those paths (import / restore / scheduler):
+    # if we observe data but the marker is unset, latch it atomically so it survives a later empty
+    # account. Swallow failures so a write hiccup degrades to a correct read, never a failed GET.
     if has_any_data and not has_ever_had_data:
-        await settings_service.update_settings(session, user, has_ever_had_data=True)
-        has_ever_had_data = True
+        try:
+            await settings_service.mark_has_ever_had_data(session, user.id)
+            await session.commit()
+            has_ever_had_data = True
+        except Exception:
+            logger.warning("Could not latch has_ever_had_data for user %s", user.id, exc_info=True)
+            await session.rollback()
     samples_dismissed = bool(current_settings["samples_dismissed"])
     sample_mode = not has_any_data and not has_ever_had_data and not samples_dismissed
 

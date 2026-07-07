@@ -7,6 +7,7 @@ from app.domain import NotFoundError
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import income_repository
+from app.services import settings_service
 
 
 # List income entries for a user with optional filters and pagination.
@@ -63,6 +64,8 @@ async def create_income(
         source=source,
     )
     entry = await income_repository.create(session, entry)
+    # Latch the first-run sample-data marker on the user's first real data (see settings_service).
+    await settings_service.mark_has_ever_had_data(session, user.id)
     await session.commit()
     return entry
 
