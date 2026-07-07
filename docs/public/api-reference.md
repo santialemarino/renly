@@ -493,7 +493,7 @@ API keys provide long-lived authentication for external tools (e.g., iOS Shortcu
 
 ## Settings
 
-User preferences stored as key-value pairs. All fields are optional on update -- only send what you want to change (`has_ever_had_data` is server-managed and ignored if sent).
+User preferences stored as key-value pairs. All fields are optional on update -- only send what you want to change.
 
 | Method | Path        | Description                                                          |
 | ------ | ----------- | -------------------------------------------------------------------- |
@@ -521,27 +521,28 @@ User preferences stored as key-value pairs. All fields are optional on update --
 | `savings_rate_moderate_pct`    | int      | Savings rate below healthy but at or above this renders amber. Below this renders red. Default 10 when null.                                                                                                                        |
 | `income_expense_ratio_healthy` | Decimal  | Income/expense ratio at or above this renders the Income/Expense dashboard card green. Break-even (1.0) is the amber pivot. Default 1.5 when null. Range `[0.1, 10.0]`. Stored as string in JSONB to preserve precision.            |
 | `onboarding_completed`         | bool     | Whether the user has finished or dismissed first-run onboarding. `null` for a fresh user; set `true` to stop the dashboard welcome from showing.                                                                                    |
-| `has_ever_had_data`            | bool     | Whether the user has ever created real data. Set server-side (read-only for clients); keeps first-run sample data from returning after the account is emptied.                                                                      |
-| `samples_dismissed`            | bool     | Whether the user has cleared the first-run sample data. Set `true` to stop sample rows from showing in empty sections.                                                                                                              |
 
 ---
 
 ## Onboarding
 
-First-run onboarding state for the authenticated user. The dashboard welcome uses this to drive a reactive checklist -- each step's done-state is derived from the account's real data, so acting on a step (adding an investment, an income/expense, or choosing a display currency) checks it off on the next read, with no per-step flag to keep in sync. The `onboarding_completed` field under [Settings](#settings) remains the "hide forever" flag once the user dismisses the welcome.
+First-run onboarding state for the authenticated user, all derived from the account's real data (no per-step flags to keep in sync): the dashboard welcome's reactive checklist, and the per-section first-run sample data. Each `sample_*` flag is true only while that section is empty **and** the user hasn't yet created that entity or cleared its sample — so each section teaches once, independently. The `onboarding_completed` field under [Settings](#settings) remains the welcome's "hide forever" flag.
 
-| Method | Path                 | Description                                     |
-| ------ | -------------------- | ----------------------------------------------- |
-| `GET`  | `/onboarding/status` | Checklist step completion for the current user. |
+| Method | Path                                   | Description                                                                                                       |
+| ------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/onboarding/status`                   | Checklist completion + per-section sample flags for the current user.                                             |
+| `POST` | `/onboarding/samples/{entity}/dismiss` | Retire (hide) one section's first-run sample. `{entity}` = `investments`, `expenses`, or `income`. Returns `204`. |
 
-**Response fields:**
+**Response fields (`GET /onboarding/status`):**
 
-| Field                  | Type | Description                                                                                                                                                        |
-| ---------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `has_investments`      | bool | The user has created at least one investment.                                                                                                                      |
-| `has_finances`         | bool | The user has recorded at least one income or expense entry.                                                                                                        |
-| `primary_currency_set` | bool | The user has explicitly chosen a primary display currency.                                                                                                         |
-| `sample_mode`          | bool | Whether first-run sample data should be shown in empty sections (true only for a pristine account that has never held real data and hasn't dismissed the samples). |
+| Field                  | Type | Description                                                       |
+| ---------------------- | ---- | ----------------------------------------------------------------- |
+| `has_investments`      | bool | The user has created at least one investment.                     |
+| `has_finances`         | bool | The user has recorded at least one income or expense entry.       |
+| `primary_currency_set` | bool | The user has explicitly chosen a primary display currency.        |
+| `sample_investments`   | bool | Whether the investments section should show its first-run sample. |
+| `sample_expenses`      | bool | Whether the expenses section should show its first-run sample.    |
+| `sample_income`        | bool | Whether the income section should show its first-run sample.      |
 
 ---
 
