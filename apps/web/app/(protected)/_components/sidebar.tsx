@@ -8,6 +8,7 @@ import {
   BarChart3,
   Bell,
   CalendarClock,
+  ChevronDown,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
@@ -56,6 +57,7 @@ import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switche
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
+import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
 
@@ -95,6 +97,13 @@ const ADMIN_GROUP = [
   { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
 ] as const;
 
+// Progressive disclosure (UX-7): advanced nav items hidden from a first-run newcomer until they
+// have data OR reveal them via "Show more". Keyed by nav `key`; the Commitments subgroup is gated
+// as a whole (see `showAdvanced` below). The layout decides `showAdvanced`; here we only filter.
+const ADVANCED_NAV_KEYS = new Set<string>(['creditCards', 'groups']);
+
+const COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365;
+
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
   'hover:bg-gray-100 active:bg-gray-200 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:text-white data-[active=true]:hover:bg-blue-900 data-[active=true]:active:bg-blue-950 data-[active=true]:focus-visible:bg-blue-900';
@@ -109,6 +118,9 @@ interface AppSidebarProps {
   currencyCollapsed: boolean;
   isAdmin: boolean;
   signupMode: SignupMode;
+  showAdvanced: boolean;
+  showDisclosureToggle: boolean;
+  expanded: boolean;
 }
 
 export function AppSidebar({
@@ -117,6 +129,9 @@ export function AppSidebar({
   currencyCollapsed,
   isAdmin,
   signupMode,
+  showAdvanced,
+  showDisclosureToggle,
+  expanded,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -148,6 +163,13 @@ export function AppSidebar({
     setLoggingOut(true);
     await userSignOut();
     router.push(LOGIN_ROUTE);
+  }
+
+  // Toggle a newcomer's "Show more"/"Show fewer" choice; persisted in a cookie the layout reads to
+  // recompute `showAdvanced` on the server, so the nav re-renders with the advanced items revealed.
+  function handleToggleDisclosure() {
+    document.cookie = `${SIDEBAR_EXPANDED_COOKIE}=${!expanded}; path=/; max-age=${COOKIE_MAX_AGE_1_YEAR}`;
+    router.refresh();
   }
 
   return (
@@ -201,7 +223,10 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
+                      {FINANCES_GROUP.filter(
+                        ({ key, href }) =>
+                          showAdvanced || !ADVANCED_NAV_KEYS.has(key) || isActive(href),
+                      ).map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
                         return (
                           <SidebarMenuSubItem key={key}>
@@ -225,58 +250,60 @@ export function AppSidebar({
                         );
                       })}
 
-                      {/* Nested Commitments subgroup — subscriptions, installments, obligations, calendar. */}
-                      <Collapsible
-                        asChild
-                        defaultOpen={isCommitmentsActive}
-                        className="group/inner-collapsible"
-                      >
-                        <SidebarMenuSubItem>
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton
-                              className={cn(
-                                'h-8 text-paragraph-sm-medium cursor-pointer',
-                                NAV_ITEM_STYLES,
-                                SUB_BUTTON_EXTRAS,
-                                isCommitmentsActive && 'bg-gray-100',
-                                !isCommitmentsActive &&
-                                  'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                              )}
-                            >
-                              <ClipboardList />
-                              <span>{t('navGroups.commitments')}</span>
-                              <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
-                            </SidebarMenuSubButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className={collapsibleContentClass}>
-                            <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                              {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
-                                const active = isActive(href);
-                                return (
-                                  <SidebarMenuSubItem key={key}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={active}
-                                      className={cn(
-                                        'h-8 text-paragraph-sm-medium',
-                                        NAV_ITEM_STYLES,
-                                        SUB_BUTTON_EXTRAS,
-                                        !active &&
-                                          'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                                      )}
-                                    >
-                                      <Link href={href}>
-                                        <Icon />
-                                        <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuSubItem>
-                      </Collapsible>
+                      {/* Nested Commitments subgroup — hidden from a first-run newcomer (progressive disclosure) unless active. */}
+                      {(showAdvanced || isCommitmentsActive) && (
+                        <Collapsible
+                          asChild
+                          defaultOpen={isCommitmentsActive}
+                          className="group/inner-collapsible"
+                        >
+                          <SidebarMenuSubItem>
+                            <CollapsibleTrigger asChild>
+                              <SidebarMenuSubButton
+                                className={cn(
+                                  'h-8 text-paragraph-sm-medium cursor-pointer',
+                                  NAV_ITEM_STYLES,
+                                  SUB_BUTTON_EXTRAS,
+                                  isCommitmentsActive && 'bg-gray-100',
+                                  !isCommitmentsActive &&
+                                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                                )}
+                              >
+                                <ClipboardList />
+                                <span>{t('navGroups.commitments')}</span>
+                                <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
+                              </SidebarMenuSubButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className={collapsibleContentClass}>
+                              <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                                {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
+                                  const active = isActive(href);
+                                  return (
+                                    <SidebarMenuSubItem key={key}>
+                                      <SidebarMenuSubButton
+                                        asChild
+                                        isActive={active}
+                                        className={cn(
+                                          'h-8 text-paragraph-sm-medium',
+                                          NAV_ITEM_STYLES,
+                                          SUB_BUTTON_EXTRAS,
+                                          !active &&
+                                            'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                                        )}
+                                      >
+                                        <Link href={href}>
+                                          <Icon />
+                                          <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                                        </Link>
+                                      </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                  );
+                                })}
+                              </SidebarMenuSub>
+                            </CollapsibleContent>
+                          </SidebarMenuSubItem>
+                        </Collapsible>
+                      )}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -303,7 +330,10 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
+                      {PORTFOLIO_GROUP.filter(
+                        ({ key, href }) =>
+                          showAdvanced || !ADVANCED_NAV_KEYS.has(key) || isActive(href),
+                      ).map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
                         return (
                           <SidebarMenuSubItem key={key}>
@@ -429,6 +459,25 @@ export function AppSidebar({
                     </CollapsibleContent>
                   </SidebarMenuItem>
                 </Collapsible>
+              )}
+
+              {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules. */}
+              {showDisclosureToggle && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={handleToggleDisclosure}
+                    size="lg"
+                    className={cn(
+                      '[&_svg]:size-5 text-paragraph-medium text-muted-foreground',
+                      NAV_ITEM_STYLES,
+                    )}
+                  >
+                    <ChevronDown
+                      className={cn('transition-transform duration-200', expanded && 'rotate-180')}
+                    />
+                    <span>{expanded ? t('showLess') : t('showMore')}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               )}
             </SidebarMenu>
           </SidebarGroupContent>
