@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 
 import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
+import { COOKIE_MAX_AGE_1_YEAR } from '@/config/constants';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import {
   CURRENCY_COLLAPSED_COOKIE,
@@ -16,8 +17,6 @@ import {
   useCurrencyStore,
 } from '@/lib/stores/currency-store';
 import { isCurrencySupported } from '@/lib/utils/currency';
-
-const COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365;
 
 interface CurrencySwitcherProps {
   displayCurrencies: string[];

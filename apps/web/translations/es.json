@@ -211,6 +211,8 @@
   },
   "sidebar": {
     "brand": "Renly",
+    "showMore": "Mostrar más funciones",
+    "showLess": "Mostrar menos funciones",
     "nav": {
       "dashboard": "Dashboard",
       "financeDashboard": "Dashboard",

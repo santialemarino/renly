@@ -5,7 +5,9 @@ import { SidebarInset, SidebarProvider } from '@repo/ui/components';
 import { LanguageAutoSync } from '@/app/(protected)/_components/language-auto-sync';
 import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
+import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE } from '@/config/routes';
+import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession } from '@/lib/auth';
@@ -41,6 +43,25 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
   const currencyCollapsed = cookieStore.get(CURRENCY_COLLAPSED_COOKIE)?.value === 'true';
 
+  /*
+   * Progressive disclosure (UX-7): a confirmed first-run newcomer (settings loaded, onboarding not
+   * done, no data yet) gets a reduced sidebar + a "Show more" toggle; anyone with data or who
+   * finished onboarding sees every module. Fail closed on a settings-load error (full sidebar) so an
+   * established user is never flashed the newcomer nav. The status probe runs only for that case.
+   */
+  const onboarded = settings?.onboardingCompleted === true;
+  const sidebarExpanded = cookieStore.get(SIDEBAR_EXPANDED_COOKIE)?.value === 'true';
+  let initialExpanded = true;
+  let showDisclosureToggle = false;
+  if (settings && !onboarded) {
+    const status = await getOnboardingStatus().catch(() => null);
+    const hasCore = !!status && (status.hasInvestments || status.hasFinances);
+    if (!hasCore) {
+      showDisclosureToggle = true;
+      initialExpanded = sidebarExpanded;
+    }
+  }
+
   return (
     <SidebarProvider>
       {settings && (
@@ -55,6 +76,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         currencyCollapsed={currencyCollapsed}
         isAdmin={session.user.isAdmin}
         signupMode={signupMode}
+        initialExpanded={initialExpanded}
+        showDisclosureToggle={showDisclosureToggle}
       />
       <SidebarInset className="min-w-0">
         <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">

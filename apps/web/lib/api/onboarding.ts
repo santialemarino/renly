@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -39,8 +41,10 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
 
 // --- API functions ---
 
-export async function getOnboardingStatus(): Promise<OnboardingStatus> {
+// Server-side, request-memoized onboarding status so the protected layout and the first-run pages
+// (dashboard, sample-data list pages) that read it in the same render share a single API call.
+export const getOnboardingStatus = cache(async (): Promise<OnboardingStatus> => {
   const res = await authenticatedFetch('/onboarding/status', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch onboarding status');
   return mapOnboardingStatus(await res.json());
-}
+});
