@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expenses-data-table';
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
 import { getInstallments } from '@/lib/api/installments';
@@ -102,6 +103,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <DismissableCurrencyHint show={!!currency} />
       <ExpensesToolbar
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}

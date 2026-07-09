@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { IncomeDataTable } from '@/app/(protected)/income/_components/income-data-table';
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
 import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
@@ -69,6 +70,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <DismissableCurrencyHint show={!!currency} />
       <IncomeToolbar preferredCurrencies={preferredCurrencies} />
       {showSample ? (
         <SampleIncomeTable />
