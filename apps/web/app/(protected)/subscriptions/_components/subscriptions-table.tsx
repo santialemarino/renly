@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ChevronsUpDown,
   Pencil,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -33,6 +34,7 @@ import {
   archiveSubscription,
   unarchiveSubscription,
 } from '@/app/(protected)/subscriptions/subscription-actions';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { SortOrder, Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
@@ -80,6 +82,7 @@ interface SubscriptionsTableProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
+  firstRun?: boolean;
 }
 
 export function SubscriptionsTable({
@@ -87,6 +90,7 @@ export function SubscriptionsTable({
   preferredCurrencies,
   creditCards,
   activeCurrency,
+  firstRun,
 }: SubscriptionsTableProps) {
   const locale = useLocale();
   const t = useTranslations('subscriptions');
@@ -199,14 +203,14 @@ export function SubscriptionsTable({
           </TableHeader>
           <TableBody>
             {subscriptions.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              <TableEmptyRow
+                colSpan={6}
+                firstRun={firstRun}
+                icon={RefreshCw}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               subscriptions.map((sub) => {
                 const displayAmount = sub.convertedAmount ?? sub.amount;

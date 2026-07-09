@@ -5,10 +5,12 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { IncomeDataTable } from '@/app/(protected)/income/_components/income-data-table';
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
 import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -59,9 +61,16 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
       ? ((await getOnboardingStatus().catch(() => null))?.sampleIncome ?? false)
       : false;
 
+  // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
+  // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
+  const hasActiveFilters =
+    !!params.search || !!params.category || !!params.date_from || !!params.date_to;
+  const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <DismissableCurrencyHint show={!!currency} />
       <IncomeToolbar preferredCurrencies={preferredCurrencies} />
       {showSample ? (
         <SampleIncomeTable />
@@ -70,6 +79,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
           data={data}
           preferredCurrencies={preferredCurrencies}
           activeCurrency={currency}
+          firstRun={firstRun}
         />
       )}
     </div>

@@ -8,6 +8,7 @@ import {
   ArrowDown,
   ArrowUp,
   ChevronsUpDown,
+  ListChecks,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
@@ -81,6 +83,7 @@ interface InstallmentsTableProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
+  firstRun?: boolean;
 }
 
 export function InstallmentsTable({
@@ -88,6 +91,7 @@ export function InstallmentsTable({
   preferredCurrencies,
   creditCards,
   activeCurrency,
+  firstRun,
 }: InstallmentsTableProps) {
   const locale = useLocale();
   const t = useTranslations('installments');
@@ -210,14 +214,14 @@ export function InstallmentsTable({
           </TableHeader>
           <TableBody>
             {installments.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              <TableEmptyRow
+                colSpan={7}
+                firstRun={firstRun}
+                icon={ListChecks}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               installments.map((inst) => {
                 const installmentDisplay =

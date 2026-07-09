@@ -15,6 +15,7 @@ import { InvestorDashboardSearch } from '@/app/(protected)/investor-dashboard/_c
 import { InvestorDashboardSummaryTable } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-summary-table';
 import { InvestorDashboardToolbar } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-toolbar';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { DismissableHint } from '@/components/dismissable-hint';
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
 import { getGroups, getInvestments } from '@/lib/api/investments';
@@ -223,6 +224,10 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
         }
       />
 
+      {/* Concept nudge explaining the return metrics; shown once the user has investments to measure. */}
+      <DismissableHint storageKey="metrics-intro-dismissed" show={searchableInvestments.length > 0}>
+        {t('metricsIntro')}
+      </DismissableHint>
       <InvestorDashboardMetricCards metrics={metrics} />
       <InvestorDashboardEvolution evolution={evolution} />
 

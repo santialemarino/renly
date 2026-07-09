@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, ArchiveRestore, ArrowDown, ArrowUp, ChevronsUpDown, Pencil } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  Pencil,
+  Rows3,
+} from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -29,6 +37,7 @@ import { cn } from '@repo/ui/lib';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type {
   Investment,
@@ -189,10 +198,12 @@ export function InvestmentsDataTable({
   data,
   groups,
   preferredCurrencies,
+  firstRun,
 }: {
   data: InvestmentListResponse;
   groups: InvestmentGroup[];
   preferredCurrencies?: string[];
+  firstRun?: boolean;
 }) {
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
@@ -289,14 +300,14 @@ export function InvestmentsDataTable({
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={8}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              <TableEmptyRow
+                colSpan={8}
+                firstRun={firstRun}
+                icon={Rows3}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               items.map((investment) => (
                 <TableRow

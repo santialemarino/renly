@@ -8,6 +8,7 @@ import { getCreditCards } from '@/lib/api/credit-cards';
 import { getInstallments, type InstallmentSortField, type SortOrder } from '@/lib/api/installments';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -48,6 +49,11 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
     currency,
   });
 
+  // Teach the empty state only during first-run (before onboarding is completed) and only when no
+  // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
+  const hasActiveFilters = !!params.search || params.show_archived === 'true';
+  const firstRun = isFirstRunEmptyState(installments.length === 0, hasActiveFilters, settings);
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
@@ -57,6 +63,7 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
         activeCurrency={currency}
+        firstRun={firstRun}
       />
     </div>
   );

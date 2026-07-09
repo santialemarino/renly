@@ -5,10 +5,12 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SnapshotsGrid } from '@/app/(protected)/snapshots/_components/snapshots-grid';
 import { SnapshotsToolbar } from '@/app/(protected)/snapshots/_components/snapshots-toolbar';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { DismissableHint } from '@/components/dismissable-hint';
 import { getGroups } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -61,12 +63,21 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
     getGroups(),
   ]);
 
+  // Teach the empty state only during first-run (before onboarding is completed) and only when no
+  // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
+  const hasActiveFilters = !!params.search || !!groupIds || !!params.category;
+  const firstRun = isFirstRunEmptyState(grid.rows.length === 0, hasActiveFilters, settings);
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <DismissableCurrencyHint show={!!currency} />
       <SnapshotsToolbar groups={groups} />
-      <SnapshotsGrid grid={grid} />
+      {/* Concept nudge (shown once there are investments to snapshot; the empty state teaches the rest). */}
+      <DismissableHint storageKey="snapshots-intro-dismissed" show={grid.rows.length > 0}>
+        {t('intro')}
+      </DismissableHint>
+      <SnapshotsGrid grid={grid} firstRun={firstRun} />
     </div>
   );
 }

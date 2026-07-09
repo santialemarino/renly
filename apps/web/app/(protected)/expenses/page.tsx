@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expenses-data-table';
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
+import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getExpenses } from '@/lib/api/expenses';
 import { getInstallments } from '@/lib/api/installments';
@@ -13,6 +14,7 @@ import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -68,6 +70,16 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
       ? ((await getOnboardingStatus().catch(() => null))?.sampleExpenses ?? false)
       : false;
 
+  // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
+  // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
+  const hasActiveFilters =
+    !!params.search ||
+    !!params.category ||
+    !!params.payment_method ||
+    !!params.date_from ||
+    !!params.date_to;
+  const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
+
   // Collect linked-plan ids from the loaded page so the edit dropdowns can still render
   // the plan name when an expense links to a since-archived plan (Phase 3 audit-round-3
   // follow-up). Backend's `include_ids` widens the active-only listing with these specific
@@ -91,6 +103,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      <DismissableCurrencyHint show={!!currency} />
       <ExpensesToolbar
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
@@ -109,6 +122,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
           activeSubscriptions={activeSubscriptions}
           activeInstallments={activeInstallments}
           activeCurrency={currency}
+          firstRun={firstRun}
         />
       )}
     </div>

@@ -389,6 +389,8 @@
       "notes": "Notes",
       "actions": "Actions",
       "empty": "No income entries found.",
+      "emptyTitle": "Record your income",
+      "emptyDescription": "Add your income sources to see your cash flow and savings rate.",
       "total": "{total, plural, one {# entry} other {# entries}}"
     },
     "actions": {
@@ -476,6 +478,8 @@
       "notes": "Notes",
       "actions": "Actions",
       "empty": "No expenses found.",
+      "emptyTitle": "Track your spending",
+      "emptyDescription": "Log each expense to see where your money goes and how it trends over time.",
       "total": "{total, plural, one {# expense} other {# expenses}}"
     },
     "actions": {
@@ -638,7 +642,9 @@
       "currency": "Currency",
       "balance": "Balance",
       "actions": "Actions",
-      "empty": "No credit cards found."
+      "empty": "No credit cards found.",
+      "emptyTitle": "Track your credit cards",
+      "emptyDescription": "Add a card to log its expenses, watch its balance, and reconcile statements over time."
     },
     "actions": {
       "edit": "Edit",
@@ -811,7 +817,9 @@
       "nextBillingDate": "Next billing",
       "paymentMethod": "Payment method",
       "actions": "Actions",
-      "empty": "No subscriptions found."
+      "empty": "No subscriptions found.",
+      "emptyTitle": "Keep tabs on your subscriptions",
+      "emptyDescription": "Add your recurring subscriptions to see what's coming up on your payments calendar."
     },
     "billingCycles": {
       "weekly": "Weekly",
@@ -908,6 +916,8 @@
       "paymentMethod": "Payment method",
       "actions": "Actions",
       "empty": "No payment obligations found.",
+      "emptyTitle": "Plan your upcoming payments",
+      "emptyDescription": "Record one-off or recurring obligations to see everything you owe on your payments calendar.",
       "paidOn": "Paid on {date}"
     },
     "recurrences": {
@@ -1054,7 +1064,9 @@
       "nextCuotaDate": "Next installment",
       "paymentMethod": "Payment method",
       "actions": "Actions",
-      "empty": "No installment plans found."
+      "empty": "No installment plans found.",
+      "emptyTitle": "Manage your installment plans",
+      "emptyDescription": "Add a plan to track each payment and its upcoming due dates."
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1152,6 +1164,7 @@
     },
     "title": "Dashboard",
     "subtitle": "Your investment portfolio at a glance.",
+    "metricsIntro": "New to these metrics? TWR measures performance independent of your deposits and withdrawals; IRR is your money-weighted return, accounting for when and how much you invested.",
     "cards": {
       "totalValue": "Total Value",
       "twr": "TWR",
@@ -1240,6 +1253,8 @@
       "broker": "Broker",
       "actions": "Actions",
       "empty": "No investments found.",
+      "emptyTitle": "Start building your portfolio",
+      "emptyDescription": "Add an investment — stocks, crypto, funds, real estate — to track its value, returns, and allocation over time.",
       "total": "{total, plural, one {# investment} other {# investments}}"
     },
     "actions": {
@@ -1338,7 +1353,9 @@
       "noTarget": "—",
       "actions": "Actions",
       "noInvestments": "—",
-      "empty": "No groups found."
+      "empty": "No groups found.",
+      "emptyTitle": "Organize your investments into groups",
+      "emptyDescription": "Group investments by strategy, account, or goal to track allocation targets and see breakdowns on your dashboard."
     },
     "form": {
       "createTitle": "New group",
@@ -1392,6 +1409,7 @@
     },
     "title": "Snapshots",
     "subtitle": "Investment values by month.",
+    "intro": "Record a snapshot for each investment periodically — that history is what powers your returns and evolution charts.",
     "toolbar": {
       "searchPlaceholder": "Search investments...",
       "refresh": "Refresh prices",
@@ -1402,6 +1420,8 @@
     "grid": {
       "investment": "Investment",
       "empty": "No snapshots found.",
+      "emptyTitle": "Track your portfolio's value over time",
+      "emptyDescription": "Snapshots are point-in-time values of your investments. Add an investment first, then record snapshots to chart how it evolves.",
       "addSnapshot": "Add snapshot",
       "actions": "Actions"
     },

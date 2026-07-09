@@ -7,7 +7,7 @@ import { Hint, Separator } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 
-type HintVariant = 'warning' | 'info' | 'error';
+export type HintVariant = 'warning' | 'info' | 'error';
 
 const VARIANT_CONFIG = {
   warning: {

@@ -389,6 +389,8 @@
       "notes": "Notas",
       "actions": "Acciones",
       "empty": "No se encontraron ingresos.",
+      "emptyTitle": "Registrá tus ingresos",
+      "emptyDescription": "Agregá tus fuentes de ingreso para ver tu flujo de dinero y tu tasa de ahorro.",
       "total": "{total, plural, one {# ingreso} other {# ingresos}}"
     },
     "actions": {
@@ -476,6 +478,8 @@
       "notes": "Notas",
       "actions": "Acciones",
       "empty": "No se encontraron gastos.",
+      "emptyTitle": "Seguí tus gastos",
+      "emptyDescription": "Registrá cada gasto para ver en qué se va tu dinero y cómo evoluciona en el tiempo.",
       "total": "{total, plural, one {# gasto} other {# gastos}}"
     },
     "actions": {
@@ -638,7 +642,9 @@
       "currency": "Moneda",
       "balance": "Saldo",
       "actions": "Acciones",
-      "empty": "No se encontraron tarjetas de crédito."
+      "empty": "No se encontraron tarjetas de crédito.",
+      "emptyTitle": "Seguí tus tarjetas de crédito",
+      "emptyDescription": "Agregá una tarjeta para registrar sus gastos, ver su saldo y conciliar resúmenes con el tiempo."
     },
     "actions": {
       "edit": "Editar",
@@ -811,7 +817,9 @@
       "nextBillingDate": "Próximo cobro",
       "paymentMethod": "Forma de pago",
       "actions": "Acciones",
-      "empty": "No se encontraron suscripciones."
+      "empty": "No se encontraron suscripciones.",
+      "emptyTitle": "Controlá tus suscripciones",
+      "emptyDescription": "Agregá tus suscripciones recurrentes para ver qué se viene en tu calendario de pagos."
     },
     "billingCycles": {
       "weekly": "Semanal",
@@ -908,6 +916,8 @@
       "paymentMethod": "Método de pago",
       "actions": "Acciones",
       "empty": "No se encontraron obligaciones de pago.",
+      "emptyTitle": "Planificá tus próximos pagos",
+      "emptyDescription": "Registrá obligaciones únicas o recurrentes para ver todo lo que debés en tu calendario de pagos.",
       "paidOn": "Pagada el {date}"
     },
     "recurrences": {
@@ -1054,7 +1064,9 @@
       "nextCuotaDate": "Próxima cuota",
       "paymentMethod": "Forma de pago",
       "actions": "Acciones",
-      "empty": "No se encontraron planes de cuotas."
+      "empty": "No se encontraron planes de cuotas.",
+      "emptyTitle": "Gestioná tus planes de cuotas",
+      "emptyDescription": "Agregá un plan para seguir cada pago y sus próximos vencimientos."
     },
     "paymentMethods": {
       "cash": "Efectivo",
@@ -1152,6 +1164,7 @@
     },
     "title": "Dashboard",
     "subtitle": "Tu cartera de inversiones de un vistazo.",
+    "metricsIntro": "¿No conocés estas métricas? TWR mide el rendimiento sin importar tus aportes y retiros; IRR es tu rendimiento ponderado por dinero, según cuándo y cuánto invertiste.",
     "cards": {
       "totalValue": "Valor Total",
       "twr": "TWR",
@@ -1240,6 +1253,8 @@
       "broker": "Broker",
       "actions": "Acciones",
       "empty": "No se encontraron inversiones.",
+      "emptyTitle": "Empezá a armar tu cartera de inversiones",
+      "emptyDescription": "Agregá una inversión — acciones, cripto, fondos, inmuebles — para seguir su valor, rendimiento y asignación en el tiempo.",
       "total": "{total, plural, one {# inversión} other {# inversiones}}"
     },
     "actions": {
@@ -1338,7 +1353,9 @@
       "noTarget": "—",
       "actions": "Acciones",
       "noInvestments": "—",
-      "empty": "No se encontraron grupos."
+      "empty": "No se encontraron grupos.",
+      "emptyTitle": "Organizá tus inversiones en grupos",
+      "emptyDescription": "Agrupá inversiones por estrategia, cuenta o meta para seguir objetivos de asignación y ver desgloses en tu panel."
     },
     "form": {
       "createTitle": "Nuevo grupo",
@@ -1392,6 +1409,7 @@
     },
     "title": "Snapshots",
     "subtitle": "Valores de inversiones por mes.",
+    "intro": "Registrá un snapshot de cada inversión periódicamente: ese historial es lo que alimenta tus gráficos de rendimiento y evolución.",
     "toolbar": {
       "searchPlaceholder": "Buscar inversiones...",
       "refresh": "Actualizar precios",
@@ -1402,6 +1420,8 @@
     "grid": {
       "investment": "Inversión",
       "empty": "No se encontraron snapshots.",
+      "emptyTitle": "Seguí el valor de tu cartera en el tiempo",
+      "emptyDescription": "Los snapshots son valores de tus inversiones en un momento dado. Agregá una inversión primero y después registrá snapshots para ver su evolución.",
       "addSnapshot": "Agregar snapshot",
       "actions": "Acciones"
     },

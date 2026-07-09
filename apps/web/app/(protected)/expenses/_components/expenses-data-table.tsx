@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -31,6 +31,7 @@ import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
 } from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
@@ -178,6 +179,7 @@ export function ExpensesDataTable({
   activeSubscriptions,
   activeInstallments,
   activeCurrency,
+  firstRun,
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
@@ -186,6 +188,7 @@ export function ExpensesDataTable({
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
   activeCurrency?: string;
+  firstRun?: boolean;
 }) {
   const locale = useLocale();
   const t = useTranslations('expenses');
@@ -280,14 +283,14 @@ export function ExpensesDataTable({
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              <TableEmptyRow
+                colSpan={6}
+                firstRun={firstRun}
+                icon={Receipt}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               items.map((expense) => (
                 <TableRow key={expense.id}>
