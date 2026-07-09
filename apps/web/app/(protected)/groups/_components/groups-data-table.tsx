@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -20,6 +20,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { GroupDeleteFormDialog } from '@/app/(protected)/groups/_components/group-delete-form-dialog';
 import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
+import { EmptyState } from '@/components/empty-state';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/groups';
 
@@ -67,9 +68,16 @@ interface GroupsDataTableProps {
   investments: { id: number; name: string }[];
   sortBy?: string;
   sortOrder?: SortOrder;
+  firstRun?: boolean;
 }
 
-export function GroupsDataTable({ groups, investments, sortBy, sortOrder }: GroupsDataTableProps) {
+export function GroupsDataTable({
+  groups,
+  investments,
+  sortBy,
+  sortOrder,
+  firstRun,
+}: GroupsDataTableProps) {
   const t = useTranslations('groups');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -118,11 +126,23 @@ export function GroupsDataTable({ groups, investments, sortBy, sortOrder }: Grou
       </TableHeader>
       <TableBody>
         {groups.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={5} className="py-10 rounded-sm text-center text-muted-foreground">
-              {t('table.empty')}
-            </TableCell>
-          </TableRow>
+          firstRun ? (
+            <TableRow>
+              <TableCell colSpan={5} className="p-0">
+                <EmptyState
+                  icon={FolderOpen}
+                  title={t('table.emptyTitle')}
+                  description={t('table.emptyDescription')}
+                />
+              </TableCell>
+            </TableRow>
+          ) : (
+            <TableRow>
+              <TableCell colSpan={5} className="py-10 rounded-sm text-center text-muted-foreground">
+                {t('table.empty')}
+              </TableCell>
+            </TableRow>
+          )
         ) : (
           groups.map((group) => (
             <GroupRow

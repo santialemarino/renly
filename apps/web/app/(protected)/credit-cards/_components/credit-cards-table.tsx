@@ -9,6 +9,7 @@ import {
   ArrowUp,
   ChevronRight,
   ChevronsUpDown,
+  CreditCard as CreditCardIcon,
   Pencil,
   Plus,
   Trash2,
@@ -41,6 +42,7 @@ import {
   unarchiveCreditCard,
   type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { EmptyState } from '@/components/empty-state';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField, SortOrder } from '@/lib/api/credit-cards';
 import { formatAmount } from '@/lib/utils/currency';
@@ -269,9 +271,11 @@ function SettlementsSection({
 export function CreditCardsTable({
   cards,
   preferredCurrencies,
+  firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
+  firstRun?: boolean;
 }) {
   const locale = useLocale();
   const t = useTranslations('creditCards');
@@ -374,14 +378,26 @@ export function CreditCardsTable({
           </TableHeader>
           <TableBody>
             {cards.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              firstRun ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-0">
+                    <EmptyState
+                      icon={CreditCardIcon}
+                      title={t('table.emptyTitle')}
+                      description={t('table.emptyDescription')}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 rounded-sm text-center text-muted-foreground"
+                  >
+                    {t('table.empty')}
+                  </TableCell>
+                </TableRow>
+              )
             ) : (
               cards.map((card) => {
                 const isExpanded = expandedId === card.id;

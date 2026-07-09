@@ -9,6 +9,7 @@ import {
   ArrowUp,
   BadgeDollarSign,
   ChevronsUpDown,
+  FileText,
   Pencil,
   Trash2,
 } from 'lucide-react';
@@ -43,6 +44,7 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
+import { EmptyState } from '@/components/empty-state';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type {
@@ -94,6 +96,7 @@ interface PaymentObligationsTableProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
+  firstRun?: boolean;
 }
 
 export function PaymentObligationsTable({
@@ -101,6 +104,7 @@ export function PaymentObligationsTable({
   preferredCurrencies,
   creditCards,
   activeCurrency,
+  firstRun,
 }: PaymentObligationsTableProps) {
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
@@ -261,14 +265,26 @@ export function PaymentObligationsTable({
           </TableHeader>
           <TableBody>
             {obligations.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={7}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              firstRun ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="p-0">
+                    <EmptyState
+                      icon={FileText}
+                      title={t('table.emptyTitle')}
+                      description={t('table.emptyDescription')}
+                    />
+                  </TableCell>
+                </TableRow>
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={7}
+                    className="py-10 rounded-sm text-center text-muted-foreground"
+                  >
+                    {t('table.empty')}
+                  </TableCell>
+                </TableRow>
+              )
             ) : (
               obligations.map((o) => {
                 const displayAmount = o.convertedAmount ?? o.amount;

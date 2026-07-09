@@ -2,7 +2,15 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Minus, Plus } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronsUpDown,
+  CircleDollarSign,
+  Minus,
+  Plus,
+  Table2,
+} from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -20,6 +28,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
+import { EmptyState } from '@/components/empty-state';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 import { formatMonth, formatSignedPct, formatValue } from '@/lib/utils/format';
@@ -146,9 +155,10 @@ function CellContent({ cell }: CellContentProps) {
 
 interface SnapshotsGridProps {
   grid: SnapshotGridResponse;
+  firstRun?: boolean;
 }
 
-export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
+export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   const locale = useLocale();
   const t = useTranslations('snapshots');
   const router = useRouter();
@@ -207,6 +217,15 @@ export function SnapshotsGrid({ grid }: SnapshotsGridProps) {
   }
 
   if (grid.rows.length === 0) {
+    if (firstRun) {
+      return (
+        <EmptyState
+          icon={Table2}
+          title={t('grid.emptyTitle')}
+          description={t('grid.emptyDescription')}
+        />
+      );
+    }
     return <p className="text-paragraph-sm text-muted-foreground">{t('grid.empty')}</p>;
   }
 

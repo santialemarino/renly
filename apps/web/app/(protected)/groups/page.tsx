@@ -41,6 +41,10 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   const maxGroups = settings?.maxGroups ?? ENV_MAX_GROUPS;
   const groupWarningPct = settings?.groupWarningPct ?? ENV_GROUP_WARNING_PCT;
 
+  // Teach the empty state only during first-run (before onboarding is completed) and only when the
+  // user has no groups at all — a returning user or a filtered-empty search gets the plain message.
+  const firstRun = allGroups.length === 0 && settings?.onboardingCompleted !== true;
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
@@ -55,6 +59,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
         investments={investments}
         sortBy={params.sort_by}
         sortOrder={params.sort_order as 'asc' | 'desc' | undefined}
+        firstRun={firstRun}
       />
     </div>
   );
