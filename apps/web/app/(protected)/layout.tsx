@@ -43,19 +43,22 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     savedCurrency && displayCurrencies.includes(savedCurrency) ? savedCurrency : primary;
   const currencyCollapsed = cookieStore.get(CURRENCY_COLLAPSED_COOKIE)?.value === 'true';
 
-  // Progressive disclosure (UX-7): a first-run newcomer (not onboarded, no data yet) gets a reduced
-  // sidebar + a "Show more" toggle; anyone with data or who finished onboarding sees every module.
-  // The onboarding-status probe only runs for the not-onboarded case (cheap `exists` lookups).
+  /*
+   * Progressive disclosure (UX-7): a confirmed first-run newcomer (settings loaded, onboarding not
+   * done, no data yet) gets a reduced sidebar + a "Show more" toggle; anyone with data or who
+   * finished onboarding sees every module. Fail closed on a settings-load error (full sidebar) so an
+   * established user is never flashed the newcomer nav. The status probe runs only for that case.
+   */
   const onboarded = settings?.onboardingCompleted === true;
   const sidebarExpanded = cookieStore.get(SIDEBAR_EXPANDED_COOKIE)?.value === 'true';
-  let showAdvanced = true;
+  let initialExpanded = true;
   let showDisclosureToggle = false;
-  if (!onboarded) {
+  if (settings && !onboarded) {
     const status = await getOnboardingStatus().catch(() => null);
     const hasCore = !!status && (status.hasInvestments || status.hasFinances);
     if (!hasCore) {
       showDisclosureToggle = true;
-      showAdvanced = sidebarExpanded;
+      initialExpanded = sidebarExpanded;
     }
   }
 
@@ -73,7 +76,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         currencyCollapsed={currencyCollapsed}
         isAdmin={session.user.isAdmin}
         signupMode={signupMode}
-        showAdvanced={showAdvanced}
+        initialExpanded={initialExpanded}
         showDisclosureToggle={showDisclosureToggle}
       />
       <SidebarInset className="min-w-0">
