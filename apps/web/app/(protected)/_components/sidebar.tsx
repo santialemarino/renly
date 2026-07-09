@@ -32,6 +32,7 @@ import {
   UserPlus,
   Wallet,
 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -60,6 +61,7 @@ import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
+import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 
 const FINANCES_GROUP = [
   { key: 'financeDashboard', href: ROUTES.financeDashboard, icon: BarChart3 },
@@ -112,6 +114,41 @@ const NAV_ITEM_STYLES =
 const SUB_BUTTON_EXTRAS =
   'hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground transition-[background-color,color] duration-200 ease-out [&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-out';
 
+/*
+ * Animates an advanced sub-item's reveal/collapse (height + opacity, both directions) when a
+ * newcomer toggles "Show more". It IS the `<li>` (matching SidebarMenuSubItem's markup) so the
+ * `<ul>` stays valid. `AnimatePresence initial={false}` suppresses the enter animation on first
+ * paint; reduced motion collapses it to an instant show/hide.
+ */
+function RevealSubItem({
+  show,
+  reduce,
+  children,
+}: {
+  show: boolean;
+  reduce: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <AnimatePresence initial={false}>
+      {show && (
+        <motion.li
+          data-slot="sidebar-menu-sub-item"
+          data-sidebar="menu-sub-item"
+          className="group/menu-sub-item relative"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={{ duration: reduce ? 0 : ANIMATION_DEFAULT }}
+          style={{ overflow: 'hidden' }}
+        >
+          {children}
+        </motion.li>
+      )}
+    </AnimatePresence>
+  );
+}
+
 interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
@@ -120,7 +157,6 @@ interface AppSidebarProps {
   signupMode: SignupMode;
   showAdvanced: boolean;
   showDisclosureToggle: boolean;
-  expanded: boolean;
 }
 
 export function AppSidebar({
@@ -131,13 +167,16 @@ export function AppSidebar({
   signupMode,
   showAdvanced,
   showDisclosureToggle,
-  expanded,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const t = useTranslations('sidebar');
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
+  // A newcomer's client-side "Show more" state (seeded from the server's cookie-derived value) so
+  // revealing/collapsing the advanced items animates without a server round-trip.
+  const [expandedByUser, setExpandedByUser] = useState(showAdvanced);
+  const reduce = useReducedMotion() ?? false;
 
   useEffect(() => setMounted(true), []);
 
@@ -147,6 +186,9 @@ export function AppSidebar({
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;
   const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
   const isSettingsActive = SETTINGS_GROUP.some(({ href }) => isActive(href));
+
+  // A newcomer's advanced items follow their toggle; everyone else always sees them.
+  const advancedVisible = showDisclosureToggle ? expandedByUser : true;
 
   // Admin group: only for admins, and only items whose gate matches (invitePeople → invite mode).
   // When no item qualifies (e.g. open mode), the whole group is hidden.
@@ -165,11 +207,12 @@ export function AppSidebar({
     router.push(LOGIN_ROUTE);
   }
 
-  // Toggle a newcomer's "Show more"/"Show fewer" choice; persisted in a cookie the layout reads to
-  // recompute `showAdvanced` on the server, so the nav re-renders with the advanced items revealed.
+  // Toggle a newcomer's "Show more"/"Show fewer" choice. Client state drives the reveal animation;
+  // the cookie persists it so a full reload (server layout) restores the same state.
   function handleToggleDisclosure() {
-    document.cookie = `${SIDEBAR_EXPANDED_COOKIE}=${!expanded}; path=/; max-age=${COOKIE_MAX_AGE_1_YEAR}`;
-    router.refresh();
+    const next = !expandedByUser;
+    setExpandedByUser(next);
+    document.cookie = `${SIDEBAR_EXPANDED_COOKIE}=${next}; path=/; max-age=${COOKIE_MAX_AGE_1_YEAR}`;
   }
 
   return (
@@ -223,87 +266,90 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {FINANCES_GROUP.filter(
-                        ({ key, href }) =>
-                          showAdvanced || !ADVANCED_NAV_KEYS.has(key) || isActive(href),
-                      ).map(({ key, href, icon: Icon }) => {
+                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
-                        return (
-                          <SidebarMenuSubItem key={key}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={active}
-                              className={cn(
-                                'h-8 text-paragraph-sm-medium',
-                                NAV_ITEM_STYLES,
-                                SUB_BUTTON_EXTRAS,
-                                !active &&
-                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                              )}
-                            >
-                              <Link href={href}>
-                                <Icon />
-                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                        const button = (
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={active}
+                            className={cn(
+                              'h-8 text-paragraph-sm-medium',
+                              NAV_ITEM_STYLES,
+                              SUB_BUTTON_EXTRAS,
+                              !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                            )}
+                          >
+                            <Link href={href}>
+                              <Icon />
+                              <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                            </Link>
+                          </SidebarMenuSubButton>
                         );
+                        if (ADVANCED_NAV_KEYS.has(key)) {
+                          return (
+                            <RevealSubItem
+                              key={key}
+                              show={advancedVisible || active}
+                              reduce={reduce}
+                            >
+                              {button}
+                            </RevealSubItem>
+                          );
+                        }
+                        return <SidebarMenuSubItem key={key}>{button}</SidebarMenuSubItem>;
                       })}
 
                       {/* Nested Commitments subgroup — hidden from a first-run newcomer (progressive disclosure) unless active. */}
-                      {(showAdvanced || isCommitmentsActive) && (
+                      <RevealSubItem show={advancedVisible || isCommitmentsActive} reduce={reduce}>
                         <Collapsible
-                          asChild
                           defaultOpen={isCommitmentsActive}
                           className="group/inner-collapsible"
                         >
-                          <SidebarMenuSubItem>
-                            <CollapsibleTrigger asChild>
-                              <SidebarMenuSubButton
-                                className={cn(
-                                  'h-8 text-paragraph-sm-medium cursor-pointer',
-                                  NAV_ITEM_STYLES,
-                                  SUB_BUTTON_EXTRAS,
-                                  isCommitmentsActive && 'bg-gray-100',
-                                  !isCommitmentsActive &&
-                                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                                )}
-                              >
-                                <ClipboardList />
-                                <span>{t('navGroups.commitments')}</span>
-                                <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
-                              </SidebarMenuSubButton>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent className={collapsibleContentClass}>
-                              <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                                {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
-                                  const active = isActive(href);
-                                  return (
-                                    <SidebarMenuSubItem key={key}>
-                                      <SidebarMenuSubButton
-                                        asChild
-                                        isActive={active}
-                                        className={cn(
-                                          'h-8 text-paragraph-sm-medium',
-                                          NAV_ITEM_STYLES,
-                                          SUB_BUTTON_EXTRAS,
-                                          !active &&
-                                            'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                                        )}
-                                      >
-                                        <Link href={href}>
-                                          <Icon />
-                                          <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                                        </Link>
-                                      </SidebarMenuSubButton>
-                                    </SidebarMenuSubItem>
-                                  );
-                                })}
-                              </SidebarMenuSub>
-                            </CollapsibleContent>
-                          </SidebarMenuSubItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuSubButton
+                              className={cn(
+                                'h-8 text-paragraph-sm-medium cursor-pointer',
+                                NAV_ITEM_STYLES,
+                                SUB_BUTTON_EXTRAS,
+                                isCommitmentsActive && 'bg-gray-100',
+                                !isCommitmentsActive &&
+                                  'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                              )}
+                            >
+                              <ClipboardList />
+                              <span>{t('navGroups.commitments')}</span>
+                              <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
+                            </SidebarMenuSubButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className={collapsibleContentClass}>
+                            <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                              {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
+                                const active = isActive(href);
+                                return (
+                                  <SidebarMenuSubItem key={key}>
+                                    <SidebarMenuSubButton
+                                      asChild
+                                      isActive={active}
+                                      className={cn(
+                                        'h-8 text-paragraph-sm-medium',
+                                        NAV_ITEM_STYLES,
+                                        SUB_BUTTON_EXTRAS,
+                                        !active &&
+                                          'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                                      )}
+                                    >
+                                      <Link href={href}>
+                                        <Icon />
+                                        <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
                         </Collapsible>
-                      )}
+                      </RevealSubItem>
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -330,31 +376,37 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {PORTFOLIO_GROUP.filter(
-                        ({ key, href }) =>
-                          showAdvanced || !ADVANCED_NAV_KEYS.has(key) || isActive(href),
-                      ).map(({ key, href, icon: Icon }) => {
+                      {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
                         const active = isActive(href);
-                        return (
-                          <SidebarMenuSubItem key={key}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={active}
-                              className={cn(
-                                'h-8 text-paragraph-sm-medium',
-                                NAV_ITEM_STYLES,
-                                SUB_BUTTON_EXTRAS,
-                                !active &&
-                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                              )}
-                            >
-                              <Link href={href}>
-                                <Icon />
-                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
+                        const button = (
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={active}
+                            className={cn(
+                              'h-8 text-paragraph-sm-medium',
+                              NAV_ITEM_STYLES,
+                              SUB_BUTTON_EXTRAS,
+                              !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+                            )}
+                          >
+                            <Link href={href}>
+                              <Icon />
+                              <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
+                            </Link>
+                          </SidebarMenuSubButton>
                         );
+                        if (ADVANCED_NAV_KEYS.has(key)) {
+                          return (
+                            <RevealSubItem
+                              key={key}
+                              show={advancedVisible || active}
+                              reduce={reduce}
+                            >
+                              {button}
+                            </RevealSubItem>
+                          );
+                        }
+                        return <SidebarMenuSubItem key={key}>{button}</SidebarMenuSubItem>;
                       })}
                     </SidebarMenuSub>
                   </CollapsibleContent>
@@ -461,24 +513,49 @@ export function AppSidebar({
                 </Collapsible>
               )}
 
-              {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules. */}
-              {showDisclosureToggle && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={handleToggleDisclosure}
-                    size="lg"
-                    className={cn(
-                      '[&_svg]:size-5 text-paragraph-medium text-muted-foreground',
-                      NAV_ITEM_STYLES,
-                    )}
+              {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules.
+                  Animates in/out as the newcomer status changes; the label crossfades on toggle. */}
+              <AnimatePresence initial={false}>
+                {showDisclosureToggle && (
+                  <motion.li
+                    data-slot="sidebar-menu-item"
+                    data-sidebar="menu-item"
+                    className="group/menu-item relative"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: reduce ? 0 : ANIMATION_DEFAULT }}
+                    style={{ overflow: 'hidden' }}
                   >
-                    <ChevronDown
-                      className={cn('transition-transform duration-200', expanded && 'rotate-180')}
-                    />
-                    <span>{expanded ? t('showLess') : t('showMore')}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
+                    <SidebarMenuButton
+                      onClick={handleToggleDisclosure}
+                      size="lg"
+                      className={cn(
+                        '[&_svg]:size-5 text-paragraph-medium text-muted-foreground',
+                        NAV_ITEM_STYLES,
+                      )}
+                    >
+                      <ChevronDown
+                        className={cn(
+                          'transition-transform duration-200',
+                          expandedByUser && 'rotate-180',
+                        )}
+                      />
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.span
+                          key={expandedByUser ? 'less' : 'more'}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={{ duration: reduce ? 0 : ANIMATION_FAST }}
+                        >
+                          {expandedByUser ? t('showLess') : t('showMore')}
+                        </motion.span>
+                      </AnimatePresence>
+                    </SidebarMenuButton>
+                  </motion.li>
+                )}
+              </AnimatePresence>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

@@ -75,7 +75,6 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         signupMode={signupMode}
         showAdvanced={showAdvanced}
         showDisclosureToggle={showDisclosureToggle}
-        expanded={sidebarExpanded}
       />
       <SidebarInset className="min-w-0">
         <main className="flex-1 flex flex-col min-w-0 overflow-x-hidden overflow-y-auto">
