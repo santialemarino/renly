@@ -31,6 +31,7 @@ import {
   UserCog,
   UserPlus,
   Wallet,
+  type LucideIcon,
 } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useTranslations } from 'next-intl';
@@ -58,7 +59,7 @@ import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switche
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
 import { TruncatingTooltip } from '@/components/truncating-tooltip';
-import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
+import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
@@ -99,12 +100,12 @@ const ADMIN_GROUP = [
   { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
 ] as const;
 
-// Progressive disclosure (UX-7): advanced nav items hidden from a first-run newcomer until they
-// have data OR reveal them via "Show more". Keyed by nav `key`; the Commitments subgroup is gated
-// as a whole (see `showAdvanced` below). The layout decides `showAdvanced`; here we only filter.
+/*
+ * Progressive disclosure (UX-7): advanced nav items hidden from a first-run newcomer until they
+ * have data OR reveal them via "Show more". Keyed by nav `key`; the Commitments subgroup is gated
+ * as a whole via `advancedVisible`. The layout decides the initial state; the sidebar animates it.
+ */
 const ADVANCED_NAV_KEYS = new Set<string>(['creditCards', 'groups']);
-
-const COOKIE_MAX_AGE_1_YEAR = 60 * 60 * 24 * 365;
 
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
@@ -149,13 +150,62 @@ function RevealSubItem({
   );
 }
 
+/*
+ * A leaf nav sub-item (icon + label linking to a route). Advanced items animate their reveal via
+ * RevealSubItem; the rest render as a plain sub-item. Shared by every uniform leaf nav list.
+ */
+function NavSubItem({
+  href,
+  icon: Icon,
+  label,
+  active,
+  advanced = false,
+  advancedVisible = true,
+  reduce = false,
+}: {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  advanced?: boolean;
+  advancedVisible?: boolean;
+  reduce?: boolean;
+}) {
+  const button = (
+    <SidebarMenuSubButton
+      asChild
+      isActive={active}
+      className={cn(
+        'h-8 text-paragraph-sm-medium',
+        NAV_ITEM_STYLES,
+        SUB_BUTTON_EXTRAS,
+        !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+      )}
+    >
+      <Link href={href}>
+        <Icon />
+        <TruncatingTooltip text={label} side="right" />
+      </Link>
+    </SidebarMenuSubButton>
+  );
+
+  if (advanced) {
+    return (
+      <RevealSubItem show={advancedVisible || active} reduce={reduce}>
+        {button}
+      </RevealSubItem>
+    );
+  }
+  return <SidebarMenuSubItem>{button}</SidebarMenuSubItem>;
+}
+
 interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
   currencyCollapsed: boolean;
   isAdmin: boolean;
   signupMode: SignupMode;
-  showAdvanced: boolean;
+  initialExpanded: boolean;
   showDisclosureToggle: boolean;
 }
 
@@ -165,7 +215,7 @@ export function AppSidebar({
   currencyCollapsed,
   isAdmin,
   signupMode,
-  showAdvanced,
+  initialExpanded,
   showDisclosureToggle,
 }: AppSidebarProps) {
   const pathname = usePathname();
@@ -173,9 +223,11 @@ export function AppSidebar({
   const t = useTranslations('sidebar');
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
-  // A newcomer's client-side "Show more" state (seeded from the server's cookie-derived value) so
-  // revealing/collapsing the advanced items animates without a server round-trip.
-  const [expandedByUser, setExpandedByUser] = useState(showAdvanced);
+  /*
+   * A newcomer's client-side "Show more" state (seeded from the server's cookie-derived value) so
+   * revealing/collapsing the advanced items animates without a server round-trip.
+   */
+  const [expandedByUser, setExpandedByUser] = useState(initialExpanded);
   const reduce = useReducedMotion() ?? false;
 
   useEffect(() => setMounted(true), []);
@@ -266,38 +318,18 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {FINANCES_GROUP.map(({ key, href, icon: Icon }) => {
-                        const active = isActive(href);
-                        const button = (
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={active}
-                            className={cn(
-                              'h-8 text-paragraph-sm-medium',
-                              NAV_ITEM_STYLES,
-                              SUB_BUTTON_EXTRAS,
-                              !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                            )}
-                          >
-                            <Link href={href}>
-                              <Icon />
-                              <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                            </Link>
-                          </SidebarMenuSubButton>
-                        );
-                        if (ADVANCED_NAV_KEYS.has(key)) {
-                          return (
-                            <RevealSubItem
-                              key={key}
-                              show={advancedVisible || active}
-                              reduce={reduce}
-                            >
-                              {button}
-                            </RevealSubItem>
-                          );
-                        }
-                        return <SidebarMenuSubItem key={key}>{button}</SidebarMenuSubItem>;
-                      })}
+                      {FINANCES_GROUP.map(({ key, href, icon }) => (
+                        <NavSubItem
+                          key={key}
+                          href={href}
+                          icon={icon}
+                          label={t(`nav.${key}`)}
+                          active={isActive(href)}
+                          advanced={ADVANCED_NAV_KEYS.has(key)}
+                          advancedVisible={advancedVisible}
+                          reduce={reduce}
+                        />
+                      ))}
 
                       {/* Nested Commitments subgroup — hidden from a first-run newcomer (progressive disclosure) unless active. */}
                       <RevealSubItem show={advancedVisible || isCommitmentsActive} reduce={reduce}>
@@ -323,29 +355,15 @@ export function AppSidebar({
                           </CollapsibleTrigger>
                           <CollapsibleContent className={collapsibleContentClass}>
                             <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                              {COMMITMENTS_GROUP.map(({ key, href, icon: Icon }) => {
-                                const active = isActive(href);
-                                return (
-                                  <SidebarMenuSubItem key={key}>
-                                    <SidebarMenuSubButton
-                                      asChild
-                                      isActive={active}
-                                      className={cn(
-                                        'h-8 text-paragraph-sm-medium',
-                                        NAV_ITEM_STYLES,
-                                        SUB_BUTTON_EXTRAS,
-                                        !active &&
-                                          'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                                      )}
-                                    >
-                                      <Link href={href}>
-                                        <Icon />
-                                        <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
+                              {COMMITMENTS_GROUP.map(({ key, href, icon }) => (
+                                <NavSubItem
+                                  key={key}
+                                  href={href}
+                                  icon={icon}
+                                  label={t(`nav.${key}`)}
+                                  active={isActive(href)}
+                                />
+                              ))}
                             </SidebarMenuSub>
                           </CollapsibleContent>
                         </Collapsible>
@@ -376,38 +394,18 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {PORTFOLIO_GROUP.map(({ key, href, icon: Icon }) => {
-                        const active = isActive(href);
-                        const button = (
-                          <SidebarMenuSubButton
-                            asChild
-                            isActive={active}
-                            className={cn(
-                              'h-8 text-paragraph-sm-medium',
-                              NAV_ITEM_STYLES,
-                              SUB_BUTTON_EXTRAS,
-                              !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                            )}
-                          >
-                            <Link href={href}>
-                              <Icon />
-                              <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                            </Link>
-                          </SidebarMenuSubButton>
-                        );
-                        if (ADVANCED_NAV_KEYS.has(key)) {
-                          return (
-                            <RevealSubItem
-                              key={key}
-                              show={advancedVisible || active}
-                              reduce={reduce}
-                            >
-                              {button}
-                            </RevealSubItem>
-                          );
-                        }
-                        return <SidebarMenuSubItem key={key}>{button}</SidebarMenuSubItem>;
-                      })}
+                      {PORTFOLIO_GROUP.map(({ key, href, icon }) => (
+                        <NavSubItem
+                          key={key}
+                          href={href}
+                          icon={icon}
+                          label={t(`nav.${key}`)}
+                          active={isActive(href)}
+                          advanced={ADVANCED_NAV_KEYS.has(key)}
+                          advancedVisible={advancedVisible}
+                          reduce={reduce}
+                        />
+                      ))}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -434,29 +432,15 @@ export function AppSidebar({
                   </CollapsibleTrigger>
                   <CollapsibleContent className={collapsibleContentClass}>
                     <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                      {SETTINGS_GROUP.map(({ key, href, icon: Icon }) => {
-                        const active = isActive(href);
-                        return (
-                          <SidebarMenuSubItem key={key}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={active}
-                              className={cn(
-                                'h-8 text-paragraph-sm-medium',
-                                NAV_ITEM_STYLES,
-                                SUB_BUTTON_EXTRAS,
-                                !active &&
-                                  'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                              )}
-                            >
-                              <Link href={href}>
-                                <Icon />
-                                <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        );
-                      })}
+                      {SETTINGS_GROUP.map(({ key, href, icon }) => (
+                        <NavSubItem
+                          key={key}
+                          href={href}
+                          icon={icon}
+                          label={t(`nav.${key}`)}
+                          active={isActive(href)}
+                        />
+                      ))}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 </SidebarMenuItem>
@@ -484,29 +468,15 @@ export function AppSidebar({
                     </CollapsibleTrigger>
                     <CollapsibleContent className={collapsibleContentClass}>
                       <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
-                        {adminItems.map(({ key, href, icon: Icon }) => {
-                          const active = isActive(href);
-                          return (
-                            <SidebarMenuSubItem key={key}>
-                              <SidebarMenuSubButton
-                                asChild
-                                isActive={active}
-                                className={cn(
-                                  'h-8 text-paragraph-sm-medium',
-                                  NAV_ITEM_STYLES,
-                                  SUB_BUTTON_EXTRAS,
-                                  !active &&
-                                    'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-                                )}
-                              >
-                                <Link href={href}>
-                                  <Icon />
-                                  <TruncatingTooltip text={t(`nav.${key}`)} side="right" />
-                                </Link>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          );
-                        })}
+                        {adminItems.map(({ key, href, icon }) => (
+                          <NavSubItem
+                            key={key}
+                            href={href}
+                            icon={icon}
+                            label={t(`nav.${key}`)}
+                            active={isActive(href)}
+                          />
+                        ))}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -529,6 +499,7 @@ export function AppSidebar({
                   >
                     <SidebarMenuButton
                       onClick={handleToggleDisclosure}
+                      aria-expanded={expandedByUser}
                       size="lg"
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium text-muted-foreground',
@@ -541,12 +512,12 @@ export function AppSidebar({
                           expandedByUser && 'rotate-180',
                         )}
                       />
-                      <AnimatePresence mode="wait" initial={false}>
+                      <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
                           key={expandedByUser ? 'less' : 'more'}
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          exit={{ opacity: 0 }}
+                          initial={{ opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
                           transition={{ duration: reduce ? 0 : ANIMATION_FAST }}
                         >
                           {expandedByUser ? t('showLess') : t('showMore')}
