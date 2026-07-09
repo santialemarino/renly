@@ -20,7 +20,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { GroupDeleteFormDialog } from '@/app/(protected)/groups/_components/group-delete-form-dialog';
 import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
-import { EmptyState } from '@/components/empty-state';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/groups';
 
@@ -126,23 +126,14 @@ export function GroupsDataTable({
       </TableHeader>
       <TableBody>
         {groups.length === 0 ? (
-          firstRun ? (
-            <TableRow>
-              <TableCell colSpan={5} className="p-0">
-                <EmptyState
-                  icon={FolderOpen}
-                  title={t('table.emptyTitle')}
-                  description={t('table.emptyDescription')}
-                />
-              </TableCell>
-            </TableRow>
-          ) : (
-            <TableRow>
-              <TableCell colSpan={5} className="py-10 rounded-sm text-center text-muted-foreground">
-                {t('table.empty')}
-              </TableCell>
-            </TableRow>
-          )
+          <TableEmptyRow
+            colSpan={5}
+            firstRun={firstRun}
+            icon={FolderOpen}
+            title={t('table.emptyTitle')}
+            description={t('table.emptyDescription')}
+            plain={t('table.empty')}
+          />
         ) : (
           groups.map((group) => (
             <GroupRow

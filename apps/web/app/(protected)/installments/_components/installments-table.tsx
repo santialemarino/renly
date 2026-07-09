@@ -34,7 +34,7 @@ import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
-import { EmptyState } from '@/components/empty-state';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
@@ -214,26 +214,14 @@ export function InstallmentsTable({
           </TableHeader>
           <TableBody>
             {installments.length === 0 ? (
-              firstRun ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="p-0">
-                    <EmptyState
-                      icon={ListChecks}
-                      title={t('table.emptyTitle')}
-                      description={t('table.emptyDescription')}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="py-10 rounded-sm text-center text-muted-foreground"
-                  >
-                    {t('table.empty')}
-                  </TableCell>
-                </TableRow>
-              )
+              <TableEmptyRow
+                colSpan={7}
+                firstRun={firstRun}
+                icon={ListChecks}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               installments.map((inst) => {
                 const installmentDisplay =

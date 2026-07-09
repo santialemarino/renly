@@ -44,7 +44,7 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
-import { EmptyState } from '@/components/empty-state';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type {
@@ -265,26 +265,14 @@ export function PaymentObligationsTable({
           </TableHeader>
           <TableBody>
             {obligations.length === 0 ? (
-              firstRun ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="p-0">
-                    <EmptyState
-                      icon={FileText}
-                      title={t('table.emptyTitle')}
-                      description={t('table.emptyDescription')}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={7}
-                    className="py-10 rounded-sm text-center text-muted-foreground"
-                  >
-                    {t('table.empty')}
-                  </TableCell>
-                </TableRow>
-              )
+              <TableEmptyRow
+                colSpan={7}
+                firstRun={firstRun}
+                icon={FileText}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               obligations.map((o) => {
                 const displayAmount = o.convertedAmount ?? o.amount;

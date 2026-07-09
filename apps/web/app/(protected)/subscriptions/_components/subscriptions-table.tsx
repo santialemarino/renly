@@ -34,7 +34,7 @@ import {
   archiveSubscription,
   unarchiveSubscription,
 } from '@/app/(protected)/subscriptions/subscription-actions';
-import { EmptyState } from '@/components/empty-state';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { SortOrder, Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
@@ -203,26 +203,14 @@ export function SubscriptionsTable({
           </TableHeader>
           <TableBody>
             {subscriptions.length === 0 ? (
-              firstRun ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="p-0">
-                    <EmptyState
-                      icon={RefreshCw}
-                      title={t('table.emptyTitle')}
-                      description={t('table.emptyDescription')}
-                    />
-                  </TableCell>
-                </TableRow>
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="py-10 rounded-sm text-center text-muted-foreground"
-                  >
-                    {t('table.empty')}
-                  </TableCell>
-                </TableRow>
-              )
+              <TableEmptyRow
+                colSpan={6}
+                firstRun={firstRun}
+                icon={RefreshCw}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               subscriptions.map((sub) => {
                 const displayAmount = sub.convertedAmount ?? sub.amount;

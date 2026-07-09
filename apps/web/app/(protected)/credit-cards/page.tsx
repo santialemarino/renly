@@ -5,6 +5,7 @@ import { CreditCardsTable } from '@/app/(protected)/credit-cards/_components/cre
 import { CreditCardsToolbar } from '@/app/(protected)/credit-cards/_components/credit-cards-toolbar';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getSettings } from '@/lib/api/settings';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -39,8 +40,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
   const hasActiveFilters = !!params.search || params.show_archived === 'true';
-  const firstRun =
-    cards.length === 0 && !hasActiveFilters && settings?.onboardingCompleted !== true;
+  const firstRun = isFirstRunEmptyState(cards.length === 0, hasActiveFilters, settings);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

@@ -2,20 +2,24 @@
 
 import { useEffect, useState } from 'react';
 
-import { StyledHint } from '@/components/styled-hint';
+import { StyledHint, type HintVariant } from '@/components/styled-hint';
 
 interface DismissableHintProps {
   storageKey: string;
   children: React.ReactNode;
-  variant?: 'warning' | 'info' | 'error';
+  variant?: HintVariant;
   show?: boolean;
   surface?: boolean;
   parentGap?: number;
   className?: string;
 }
 
-// A hint the user can dismiss permanently, keyed by `storageKey` in localStorage. Generalizes the
-// dismissible-currency-hint pattern so any contextual nudge reuses one dismissal mechanism.
+/*
+ * A hint the user can dismiss permanently, keyed by `storageKey` in localStorage. Generalizes the
+ * dismissible-currency-hint pattern so any contextual nudge reuses one dismissal mechanism. Defaults
+ * (info + surface + parentGap=16) match the standard `gap-y-4` protected-page column, the only place
+ * these nudges render today; override per call site if the surrounding layout differs.
+ */
 export function DismissableHint({
   storageKey,
   children,
