@@ -6,18 +6,21 @@ interface EmptyStateProps {
   icon: LucideIcon;
   title: string;
   description: string;
-  action?: React.ReactNode;
   className?: string;
 }
 
-// A calm, teaching empty state for first-run users: an icon, a title, and a short description of
-// what the section is for. Shown in place of the plain "no rows" text until the user has completed
-// onboarding, so a returning user who cleared their data isn't treated as a newbie.
-export function EmptyState({ icon: Icon, title, description, action, className }: EmptyStateProps) {
+/*
+ * A calm, teaching empty state for first-run users: an icon, a title, and a short description of
+ * what the section is for. Shown in place of the plain "no rows" text until the user has completed
+ * onboarding, so a returning user who cleared their data isn't treated as a newbie. `whitespace-normal`
+ * is explicit because a table cell (@repo/ui TableCell) inherits `whitespace-nowrap`, which would
+ * otherwise stop the description from wrapping.
+ */
+export function EmptyState({ icon: Icon, title, description, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center px-6 py-12 gap-y-3 text-center',
+        'flex flex-col items-center justify-center px-6 py-12 gap-y-3 whitespace-normal text-center',
         className,
       )}
     >
@@ -28,7 +31,6 @@ export function EmptyState({ icon: Icon, title, description, action, className }
         <span className="text-paragraph-sm-medium">{title}</span>
         <span className="max-w-sm text-paragraph-xs text-muted-foreground">{description}</span>
       </div>
-      {action}
     </div>
   );
 }
