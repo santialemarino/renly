@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -27,6 +27,7 @@ import {
 import { cn } from '@repo/ui/lib';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
+import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField, SortOrder } from '@/lib/api/income';
 import { formatAmount } from '@/lib/utils/currency';
@@ -142,10 +143,12 @@ export function IncomeDataTable({
   data,
   preferredCurrencies,
   activeCurrency,
+  firstRun,
 }: {
   data: IncomeListResponse;
   preferredCurrencies?: string[];
   activeCurrency?: string;
+  firstRun?: boolean;
 }) {
   const locale = useLocale();
   const t = useTranslations('income');
@@ -226,14 +229,14 @@ export function IncomeDataTable({
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="py-10 rounded-sm text-center text-muted-foreground"
-                >
-                  {t('table.empty')}
-                </TableCell>
-              </TableRow>
+              <TableEmptyRow
+                colSpan={5}
+                firstRun={firstRun}
+                icon={CircleDollarSign}
+                title={t('table.emptyTitle')}
+                description={t('table.emptyDescription')}
+                plain={t('table.empty')}
+              />
             ) : (
               items.map((entry) => (
                 <TableRow key={entry.id}>

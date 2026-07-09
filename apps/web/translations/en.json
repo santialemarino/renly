@@ -389,6 +389,8 @@
       "notes": "Notes",
       "actions": "Actions",
       "empty": "No income entries found.",
+      "emptyTitle": "Record your income",
+      "emptyDescription": "Add your income sources to see your cash flow and savings rate.",
       "total": "{total, plural, one {# entry} other {# entries}}"
     },
     "actions": {
@@ -476,6 +478,8 @@
       "notes": "Notes",
       "actions": "Actions",
       "empty": "No expenses found.",
+      "emptyTitle": "Track your spending",
+      "emptyDescription": "Log each expense to see where your money goes and how it trends over time.",
       "total": "{total, plural, one {# expense} other {# expenses}}"
     },
     "actions": {
@@ -1061,8 +1065,8 @@
       "paymentMethod": "Payment method",
       "actions": "Actions",
       "empty": "No installment plans found.",
-      "emptyTitle": "Track your installment plans",
-      "emptyDescription": "Add a plan to follow each payment, its remaining balance, and upcoming due dates."
+      "emptyTitle": "Manage your installment plans",
+      "emptyDescription": "Add a plan to track each payment and its upcoming due dates."
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1249,6 +1253,8 @@
       "broker": "Broker",
       "actions": "Actions",
       "empty": "No investments found.",
+      "emptyTitle": "Start building your portfolio",
+      "emptyDescription": "Add an investment — stocks, crypto, funds, real estate — to track its value, returns, and allocation over time.",
       "total": "{total, plural, one {# investment} other {# investments}}"
     },
     "actions": {

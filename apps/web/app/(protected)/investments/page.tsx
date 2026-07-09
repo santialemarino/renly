@@ -7,6 +7,7 @@ import { SampleInvestmentsTable } from '@/app/(protected)/investments/_component
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -57,6 +58,12 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
       ? ((await getOnboardingStatus().catch(() => null))?.sampleInvestments ?? false)
       : false;
 
+  // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
+  // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
+  const hasActiveFilters =
+    !!params.search || !!groupIds || !!params.category || params.show_archived === 'true';
+  const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
@@ -68,6 +75,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
           data={data}
           groups={groups}
           preferredCurrencies={preferredCurrencies}
+          firstRun={firstRun}
         />
       )}
     </div>
