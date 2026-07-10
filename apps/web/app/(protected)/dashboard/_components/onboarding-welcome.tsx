@@ -200,15 +200,9 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
                 {t('title')}
               </span>
               <span className="text-paragraph-sm text-muted-foreground">{t('subtitle')}</span>
-              <Button
-                variant="link"
-                size="sm"
-                onClick={startTour}
-                className="h-auto self-start px-0 gap-x-1.5 text-blue-700"
-              >
-                <Compass className="size-4" />
+              <InlineLink onClick={startTour} icon={Compass} className="self-start">
                 {tTour('replay')}
-              </Button>
+              </InlineLink>
             </div>
 
             <ul className="flex flex-col gap-y-4">

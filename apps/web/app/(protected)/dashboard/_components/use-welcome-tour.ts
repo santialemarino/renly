@@ -11,6 +11,34 @@ import { toast } from 'sonner';
 // there so the base rules always precede the overrides — a client-component import would load after
 // the root stylesheet and lose the cascade). Nothing to import here.
 
+// Highlight-cutout rounding (px, ≈ Renly's --radius 0.625rem) and padding around the target.
+const MODAL_OPENING_RADIUS = 10;
+const MODAL_OPENING_PADDING = 6;
+
+// Gap (px) between the highlighted region and the dialog. The tour drops Shepherd's arrow (which made
+// the dialog read as stuck to the cutout) and instead floats the dialog off the target by this much.
+const TOUR_DIALOG_GAP = 14;
+
+// A floating-ui offset middleware pushing the dialog away from the target along the placement axis.
+// Hand-written (Shepherd bundles floating-ui but doesn't re-export `offset`); the `{name, fn}` shape
+// is the stable middleware contract. Centered (unattached) steps have no placement — left untouched.
+const dialogGapMiddleware = {
+  name: 'renlyDialogGap',
+  fn(state: { placement?: string; x: number; y: number }) {
+    const side = state.placement?.split('-')[0];
+    if (side === 'top') return { y: state.y - TOUR_DIALOG_GAP };
+    if (side === 'bottom') return { y: state.y + TOUR_DIALOG_GAP };
+    if (side === 'left') return { x: state.x - TOUR_DIALOG_GAP };
+    if (side === 'right') return { x: state.x + TOUR_DIALOG_GAP };
+    return {};
+  },
+};
+
+// Exit-animation duration (ms) — matches the `.renly-tour-leaving` transition in globals.css. On any
+// transition we play this on the current dialog, then let Shepherd advance/close (it hides the
+// tooltip instantly otherwise), and the incoming step fades+zooms in via `.shepherd-content`.
+const TOUR_EXIT_MS = 200;
+
 /*
  * Ordered step blueprint. `element` is the anchor's data-testid selector (shared with the E2E
  * convention); the welcome step is unattached (centered). A step whose anchor isn't in the DOM when
@@ -37,14 +65,18 @@ interface UseWelcomeTourOptions {
  * Owns the Shepherd welcome-tour lifecycle: builds the themed tour (up to 5 steps; steps whose anchor
  * isn't rendered — e.g. the sidebar on mobile — are dropped), auto-starts it once for a first-run
  * newcomer, and exposes `start` for the manual replay link. Finishing OR skipping/closing (the ✕,
- * Skip, or Esc) persists completion via `onEnd` so it never auto-shows again; a teardown (unmount, or
- * the rebuild on replay) does NOT persist. Reduced motion collapses Shepherd's transitions (handled
- * in globals.css) and makes its scroll instant.
+ * Skip, or Esc-disabled) persists completion via `onEnd` so it never auto-shows again; a teardown
+ * (unmount, or the rebuild on replay) does NOT persist. Reduced motion collapses Shepherd's
+ * transitions (handled in globals.css) and makes its scroll instant.
  */
 export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
   const translate = useTranslations('dashboard.tour');
   const reduce = useReducedMotion() ?? false;
   const tourRef = useRef<Tour | null>(null);
+  // The current tour's un-wrapped `cancel`, used to tear it down instantly (no exit animation) on a
+  // replay rebuild or unmount — the public `cancel` is wrapped to animate, which we don't want there.
+  const rawCancelRef = useRef<(() => void) | null>(null);
+  const exitTimerRef = useRef<number | undefined>(undefined);
   // Suppresses the persist that Shepherd's `cancel` event fires when WE tear a tour down (on unmount,
   // or when a replay rebuilds a lingering one) — as opposed to a genuine user finish/skip.
   const suppressPersistRef = useRef(false);
@@ -63,10 +95,11 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
     const t = tRef.current;
     const reduce = reduceRef.current;
     // A completed Shepherd tour can't be replayed in place, so build a fresh one each start; tear
-    // down any lingering instance first, suppressing its cancel-triggered persist.
+    // down any lingering instance instantly (raw cancel, no animation), suppressing its persist.
+    if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     if (tourRef.current) {
       suppressPersistRef.current = true;
-      tourRef.current.cancel();
+      rawCancelRef.current?.();
       suppressPersistRef.current = false;
       tourRef.current = null;
     }
@@ -118,16 +151,64 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
 
     const tour = new Shepherd.Tour({
       useModalOverlay: true,
-      exitOnEsc: true,
+      // Only the ✕ (or Skip/Finish) ends the tour — not Esc, and the modal blocks outside-clicks.
+      exitOnEsc: false,
       keyboardNavigation: true,
       defaultStepOptions: {
         classes: 'renly-tour',
         cancelIcon: { enabled: true, label: t('buttons.close') },
         canClickTarget: false,
+        // No arrow — the dialog floats off the target (via the offset middleware below) with a clean
+        // gap instead of a pointer stuck to the cutout.
+        arrow: false,
+        // Round + pad the highlight cutout so it echoes Renly's --radius and doesn't hug the target.
+        modalOverlayOpeningRadius: MODAL_OPENING_RADIUS,
+        modalOverlayOpeningPadding: MODAL_OPENING_PADDING,
         scrollTo: { behavior: reduce ? 'auto' : 'smooth', block: 'center' },
+        floatingUIOptions: { middleware: [dialogGapMiddleware] },
       },
       steps,
     });
+
+    /*
+     * Shepherd hides/destroys a step's tooltip instantly (`el.hidden = true`), so there's no native
+     * exit animation. Wrap the tour's own navigation so every transition — next/back and the closes
+     * (cancel via ✕/Skip, complete via Finish) — first plays the leaving animation on the current
+     * dialog, then performs the action; the incoming step then fades+zooms in via `.shepherd-content`.
+     */
+    const raw = {
+      next: tour.next.bind(tour),
+      back: tour.back.bind(tour),
+      cancel: tour.cancel.bind(tour),
+      complete: tour.complete.bind(tour),
+    };
+    rawCancelRef.current = raw.cancel;
+    const withExit = (perform: () => void, closing = false) => {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      const el = document.querySelector<HTMLElement>('.shepherd-element:not([hidden])');
+      if (reduce || !el) {
+        perform();
+        return;
+      }
+      el.classList.add('renly-tour-leaving');
+      // On a close (not a step change), fade the dim overlay out alongside the dialog — Shepherd
+      // tears it down instantly otherwise.
+      const overlay = closing ? document.querySelector('.shepherd-modal-overlay-container') : null;
+      overlay?.classList.add('renly-tour-overlay-leaving');
+      exitTimerRef.current = window.setTimeout(() => {
+        exitTimerRef.current = undefined;
+        perform();
+        el.classList.remove('renly-tour-leaving'); // reset for a re-show (Shepherd reuses step els)
+        overlay?.classList.remove('renly-tour-overlay-leaving');
+      }, TOUR_EXIT_MS);
+    };
+    tour.next = () => withExit(raw.next);
+    tour.back = () => withExit(raw.back);
+    tour.cancel = () => {
+      withExit(raw.cancel, true);
+      return Promise.resolve();
+    };
+    tour.complete = () => withExit(raw.complete, true);
 
     // Both a finish and a skip/close end the tour for good; the suppress guard skips our own teardown
     // cancels. A failed persist is surfaced (and the tour will re-offer next load), mirroring the
@@ -153,14 +234,15 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
     return () => cancelAnimationFrame(raf);
   }, [autoStart, start]);
 
-  // Tear down Shepherd's DOM if the page unmounts mid-tour, without persisting completion. Reset the
-  // suppress flag on (re)mount so React's dev Strict-Mode mount→cleanup→mount cycle doesn't leave it
-  // stuck true — which would make every real finish/skip bail out of persisting.
+  // Tear down Shepherd's DOM if the page unmounts mid-tour, instantly and without persisting. Reset
+  // the suppress flag on (re)mount so React's dev Strict-Mode mount→cleanup→mount cycle doesn't leave
+  // it stuck true — which would make every real finish/skip bail out of persisting.
   useEffect(() => {
     suppressPersistRef.current = false;
     return () => {
       suppressPersistRef.current = true;
-      tourRef.current?.cancel();
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      rawCancelRef.current?.();
     };
   }, []);
 

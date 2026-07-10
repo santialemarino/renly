@@ -48,10 +48,37 @@
     0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent),
     0 10px 24px -6px rgb(0 0 0 / 0.18);
   color: var(--foreground);
+  /* Fade only — the element carries floating-ui's inline transform, so the zoom lives on the content. */
+  transition:
+    opacity 0.2s ease-out,
+    visibility 0.2s ease-out;
 }
 
+/*
+ * Enter like the app Dialog (fade + zoom-in-95): the fade is the element's opacity above; the scale
+ * lives here on the inner content so it doesn't fight floating-ui's transform on .shepherd-element.
+ */
 .shepherd-content {
   border-radius: var(--radius);
+  transform: scale(0.95);
+  transition: transform 0.2s ease-out;
+}
+
+.shepherd-element.shepherd-enabled .shepherd-content {
+  transform: scale(1);
+}
+
+/*
+ * Leaving animation — the hook adds `.renly-tour-leaving` to the active dialog before every
+ * transition/close (Shepherd hides it instantly otherwise), then performs the step change once this
+ * plays. Reverse of the enter (fade + zoom-out). Placed after the enter rule so it wins the cascade.
+ */
+.shepherd-element.renly-tour-leaving {
+  opacity: 0;
+}
+
+.shepherd-element.renly-tour-leaving .shepherd-content {
+  transform: scale(0.95);
 }
 
 /* Renly headers are clean (no filled title bar); drop Shepherd's grey has-title background. */
@@ -123,9 +150,15 @@
   box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
 }
 
+/* Flex-center the ✕ glyph in its box (font glyphs sit high in the line box) so it — and its focus
+   bump — scale from the true center rather than drifting downward. */
 .shepherd-cancel-icon,
 .shepherd-has-title .shepherd-content .shepherd-cancel-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1.5em;
+  line-height: 1;
   color: var(--muted-foreground);
   transition: color 0.2s ease;
 }
@@ -139,21 +172,30 @@
 
 /* Icon-trigger focus convention: the close ✕ scale-bumps on keyboard focus (like the Dialog ✕). */
 .shepherd-cancel-icon:focus-visible {
+  transform-origin: center;
   animation: focus-bump 0.3s ease-in-out;
 }
 
-/* Arrow (incl. the has-title bottom case Shepherd tints grey) matches the popover surface. */
-.shepherd-arrow::before,
-.shepherd-element.shepherd-has-title[data-popper-placement^='bottom'] > .shepherd-arrow::before {
-  background: var(--popover);
-  border: 1px solid var(--border);
+/* Fade the dim overlay out on close (the hook adds this alongside the dialog's leaving animation);
+   Shepherd would otherwise tear the overlay down instantly. */
+.shepherd-modal-overlay-container.shepherd-modal-is-visible.renly-tour-overlay-leaving {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Smoothly morph the highlight cutout as it moves between steps (Chromium transitions the `d` path;
+   other engines degrade to an instant move). */
+.shepherd-modal-overlay-container path {
+  transition: d 0.3s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shepherd-element,
+  .shepherd-content,
   .shepherd-button,
   .shepherd-cancel-icon,
-  .shepherd-modal-overlay-container {
+  .shepherd-modal-overlay-container,
+  .shepherd-modal-overlay-container path {
     transition: none;
     animation: none;
   }
