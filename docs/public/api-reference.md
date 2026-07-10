@@ -526,12 +526,13 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 ## Onboarding
 
-First-run onboarding state for the authenticated user, all derived from the account's real data (no per-step flags to keep in sync): the dashboard welcome's reactive checklist, and the per-section first-run sample data. Each `sample_*` flag is true only while that section is empty **and** the user hasn't yet created that entity or cleared its sample — so each section teaches once, independently. The `onboarding_completed` field under [Settings](#settings) remains the welcome's "hide forever" flag.
+First-run onboarding state for the authenticated user, all derived from the account's real data (no per-step flags to keep in sync): the dashboard welcome's reactive checklist, the per-section first-run sample data, and the welcome tour's seen-state. Each `sample_*` flag is true only while that section is empty **and** the user hasn't yet created that entity or cleared its sample — so each section teaches once, independently. `tour_completed` is a dedicated flag (separate from `onboarding_completed`) so the guided tour and the checklist don't suppress each other. The `onboarding_completed` field under [Settings](#settings) remains the welcome's "hide forever" flag.
 
 | Method | Path                                   | Description                                                                                                       |
 | ------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/onboarding/status`                   | Checklist completion + per-section sample flags for the current user.                                             |
+| `GET`  | `/onboarding/status`                   | Checklist completion + per-section sample flags + tour state for the current user.                                |
 | `POST` | `/onboarding/samples/{entity}/dismiss` | Retire (hide) one section's first-run sample. `{entity}` = `investments`, `expenses`, or `income`. Returns `204`. |
+| `POST` | `/onboarding/tour/complete`            | Mark the first-run welcome tour finished/dismissed so it never auto-shows again. Returns `204`.                   |
 
 **Response fields (`GET /onboarding/status`):**
 
@@ -543,6 +544,7 @@ First-run onboarding state for the authenticated user, all derived from the acco
 | `sample_investments`   | bool | Whether the investments section should show its first-run sample. |
 | `sample_expenses`      | bool | Whether the expenses section should show its first-run sample.    |
 | `sample_income`        | bool | Whether the income section should show its first-run sample.      |
+| `tour_completed`       | bool | Whether the user has finished or dismissed the welcome tour.      |
 
 ---
 

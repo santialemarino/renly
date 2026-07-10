@@ -32,6 +32,21 @@ class TestRetireHelper:
         assert "ON CONFLICT" in sql.upper()
 
 
+class TestCompleteTourHelper:
+    @pytest.mark.asyncio
+    async def test_upsert_merges_the_flag_and_does_not_commit(self):
+        session = AsyncMock()
+
+        await settings_service.complete_tour(session, USER.id)
+
+        session.execute.assert_awaited_once()  # a single atomic upsert
+        session.commit.assert_not_called()  # the caller's transaction persists it
+        # Shares the sample-retire latch: ON CONFLICT must MERGE (settings || marker), not replace.
+        sql = str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect()))
+        assert "||" in sql
+        assert "ON CONFLICT" in sql.upper()
+
+
 class TestCreateRetiresSample:
     @pytest.mark.asyncio
     async def test_create_investment_retires_investments_sample(self, monkeypatch):

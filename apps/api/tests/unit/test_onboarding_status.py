@@ -16,11 +16,15 @@ USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 _NONE_RETIRED = {"investments": False, "expenses": False, "income": False}
 
 
-def _patch(monkeypatch, *, investments, expenses, income, primary, retired=None):
+def _patch(monkeypatch, *, investments, expenses, income, primary, retired=None, tour=False):
     monkeypatch.setattr(onboarding_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
     monkeypatch.setattr(onboarding_service.expense_repository, "exists_by_user", AsyncMock(return_value=expenses))
     monkeypatch.setattr(onboarding_service.income_repository, "exists_by_user", AsyncMock(return_value=income))
-    settings = {"primary_currency": primary, "samples_retired": retired or dict(_NONE_RETIRED)}
+    settings = {
+        "primary_currency": primary,
+        "samples_retired": retired or dict(_NONE_RETIRED),
+        "tour_completed": tour,
+    }
     monkeypatch.setattr(onboarding_service.settings_service, "get_settings", AsyncMock(return_value=settings))
     retire_mock = AsyncMock()
     monkeypatch.setattr(onboarding_service.settings_service, "retire_sample", retire_mock)
@@ -41,6 +45,7 @@ class TestChecklist:
             "sample_investments": True,
             "sample_expenses": True,
             "sample_income": True,
+            "tour_completed": False,
         }
 
     @pytest.mark.asyncio
@@ -209,4 +214,34 @@ class TestDismiss:
 
         retire_mock.assert_awaited_once()
         assert retire_mock.await_args.args[1:] == (USER.id, "expenses")
+        session.commit.assert_awaited_once()
+
+
+class TestTour:
+    @pytest.mark.asyncio
+    async def test_tour_completed_defaults_false(self, monkeypatch):
+        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["tour_completed"] is False
+
+    @pytest.mark.asyncio
+    async def test_tour_completed_reflects_stored_flag(self, monkeypatch):
+        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, tour=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["tour_completed"] is True
+
+    @pytest.mark.asyncio
+    async def test_complete_tour_latches_the_flag_and_commits(self, monkeypatch):
+        complete_mock = AsyncMock()
+        monkeypatch.setattr(onboarding_service.settings_service, "complete_tour", complete_mock)
+        session = AsyncMock()
+
+        await onboarding_service.complete_tour(session, USER)
+
+        complete_mock.assert_awaited_once()
+        assert complete_mock.await_args.args[1:] == (USER.id,)
         session.commit.assert_awaited_once()

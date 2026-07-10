@@ -30,6 +30,7 @@ SETTINGS_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS = "samples_retired_investments"
 SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES = "samples_retired_expenses"
 SETTINGS_KEY_SAMPLES_RETIRED_INCOME = "samples_retired_income"
+SETTINGS_KEY_TOUR_COMPLETED = "tour_completed"
 
 # Per-entity "first-run sample retired" flags. Each is latched (server-side) when the user first
 # creates that entity or clears that section's sample, so the section's sample shows only until the
@@ -108,6 +109,8 @@ def _settings_to_response(settings: dict) -> dict:
     # Onboarding-internal, not exposed on SettingsResponse — read by onboarding_service to gate the
     # per-section first-run samples. A missing/malformed key reads as False (sample still eligible).
     samples_retired = {entity: settings.get(key) is True for entity, key in SAMPLE_RETIRED_KEYS.items()}
+    # Onboarding-internal too — gates the first-run welcome tour. A missing key reads as False.
+    tour_completed = settings.get(SETTINGS_KEY_TOUR_COMPLETED) is True
     return {
         "primary_currency": primary_currency,
         "secondary_currency": secondary_currency,
@@ -127,6 +130,7 @@ def _settings_to_response(settings: dict) -> dict:
         "income_expense_ratio_healthy": income_expense_ratio_healthy,
         "onboarding_completed": onboarding_completed,
         "samples_retired": samples_retired,
+        "tour_completed": tour_completed,
     }
 
 
@@ -210,13 +214,12 @@ async def update_settings(
     return _settings_to_response(row.settings)
 
 
-# Retires a section's first-run sample by latching its per-entity flag. Uses a targeted JSONB merge
-# via upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
+# Latches a single boolean onboarding-internal settings flag to True via a targeted JSONB merge
+# upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
 # write, and works whether or not a settings row exists yet. Idempotent; does NOT commit — the
-# caller's transaction persists it (alongside the entity being created, or on dismiss). `entity`
-# must be a key of SAMPLE_RETIRED_KEYS.
-async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
-    marker = {SAMPLE_RETIRED_KEYS[entity]: True}
+# caller's transaction persists it.
+async def _latch_flag(session: AsyncSession, user_id: int, key: str) -> None:
+    marker = {key: True}
     stmt = (
         pg_insert(UserSettings)
         .values(user_id=user_id, settings=marker)
@@ -226,3 +229,14 @@ async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> Non
         )
     )
     await session.execute(stmt)
+
+
+# Retires a section's first-run sample by latching its per-entity flag (alongside the entity being
+# created, or on dismiss). Idempotent; does NOT commit. `entity` must be a key of SAMPLE_RETIRED_KEYS.
+async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
+    await _latch_flag(session, user_id, SAMPLE_RETIRED_KEYS[entity])
+
+
+# Latches the first-run welcome tour as completed so it never auto-shows again. Idempotent; does NOT commit.
+async def complete_tour(session: AsyncSession, user_id: int) -> None:
+    await _latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)
