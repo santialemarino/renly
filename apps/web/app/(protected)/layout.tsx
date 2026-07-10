@@ -12,6 +12,7 @@ import { getSettings } from '@/lib/api/settings';
 import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession } from '@/lib/auth';
 import { FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY } from '@/lib/constants/currency';
+import { hasNoCoreData } from '@/lib/onboarding';
 import {
   ACTIVE_CURRENCY_COOKIE,
   CURRENCY_COLLAPSED_COOKIE,
@@ -55,8 +56,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   let showDisclosureToggle = false;
   if (settings && !onboarded) {
     const status = await getOnboardingStatus().catch(() => null);
-    const hasCore = !!status && (status.hasInvestments || status.hasFinances);
-    if (!hasCore) {
+    if (hasNoCoreData(status)) {
       showDisclosureToggle = true;
       initialExpanded = sidebarExpanded;
     }

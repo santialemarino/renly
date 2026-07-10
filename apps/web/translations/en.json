@@ -293,15 +293,17 @@
     },
     "tour": {
       "replay": "Take a quick tour",
+      "saveError": "Couldn't save. The tour may show again.",
       "buttons": {
         "back": "Back",
         "next": "Next",
         "skip": "Skip",
-        "finish": "Done"
+        "finish": "Done",
+        "close": "Close"
       },
       "steps": {
         "welcome": {
-          "title": "Welcome to Renly",
+          "title": "A quick tour of Renly",
           "text": "Here's a quick 30-second tour of the essentials."
         },
         "metrics": {
@@ -314,7 +316,7 @@
         },
         "navigation": {
           "title": "Find your way around",
-          "text": "Move between Finances and Investments here. As your account grows, reveal more tools — credit cards, commitments, groups — with Show more."
+          "text": "Move between Finances and Investments here. More tools — credit cards, commitments, groups — appear as your account grows."
         },
         "currency": {
           "title": "Switch currencies anytime",

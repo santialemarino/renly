@@ -43,7 +43,10 @@
   background: var(--popover);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: 0 10px 24px -6px rgb(0 0 0 / 0.18);
+  /* Hairline ring + drop shadow, mirroring the app's floating Popover (ring-1 ring-foreground/10 + shadow). */
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 10px 24px -6px rgb(0 0 0 / 0.18);
   color: var(--foreground);
 }
 
@@ -58,13 +61,15 @@
   background: transparent;
 }
 
+/* Mirrors the text-heading-5 scale (18px / 600 / 1.2). */
 .shepherd-title {
   font-size: 1.125rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.2;
   color: var(--foreground);
 }
 
+/* Mirrors the text-paragraph-sm scale (14px / 400 / 1.5). */
 .shepherd-text {
   padding: 0.5rem 1rem 0;
   font-size: 0.875rem;
@@ -82,7 +87,7 @@
   padding: 0.5rem 1rem;
   border-radius: var(--radius);
   background: var(--color-blue-800);
-  color: #fff;
+  color: var(--color-white);
   font-size: 0.875rem;
   font-weight: 500;
   transition:
@@ -93,7 +98,7 @@
 
 .shepherd-button:not(:disabled):hover {
   background: var(--color-blue-900);
-  color: #fff;
+  color: var(--color-white);
 }
 
 /* Secondary (Back / Skip) mirrors the app's outline Button so tour CTAs match the checklist CTAs. */
@@ -104,7 +109,7 @@
 }
 
 .shepherd-button.shepherd-button-secondary:not(:disabled):hover {
-  background: color-mix(in oklch, var(--foreground) 6%, transparent);
+  background: var(--muted);
   color: var(--foreground);
 }
 
@@ -132,6 +137,11 @@
   color: var(--foreground);
 }
 
+/* Icon-trigger focus convention: the close ✕ scale-bumps on keyboard focus (like the Dialog ✕). */
+.shepherd-cancel-icon:focus-visible {
+  animation: focus-bump 0.3s ease-in-out;
+}
+
 /* Arrow (incl. the has-title bottom case Shepherd tints grey) matches the popover surface. */
 .shepherd-arrow::before,
 .shepherd-element.shepherd-has-title[data-popper-placement^='bottom'] > .shepherd-arrow::before {
@@ -145,6 +155,7 @@
   .shepherd-cancel-icon,
   .shepherd-modal-overlay-container {
     transition: none;
+    animation: none;
   }
 }
 

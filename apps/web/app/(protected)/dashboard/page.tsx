@@ -26,6 +26,7 @@ import {
   ENV_SAVINGS_RATE_HEALTHY_PCT,
   ENV_SAVINGS_RATE_MODERATE_PCT,
 } from '@/lib/constants/health-thresholds';
+import { hasNoCoreData } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
@@ -57,14 +58,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const showWelcome = Boolean(settings) && !settings?.onboardingCompleted;
   const onboardingStatus = showWelcome ? await getOnboardingStatus().catch(() => null) : null;
 
-  // Auto-launch the welcome tour once for a first-run newcomer who hasn't seen it — the same signal
-  // UX-7 uses for the reduced sidebar (no core data yet), plus the dedicated tour flag. Rides the
+  // Auto-launch the welcome tour once for a first-run newcomer who hasn't seen it — the shared
+  // no-core-data signal UX-7 uses for the reduced sidebar, plus the dedicated tour flag. Rides the
   // status already fetched for the checklist, so it costs no extra request.
-  const autoStartTour =
-    !!onboardingStatus &&
-    !onboardingStatus.hasInvestments &&
-    !onboardingStatus.hasFinances &&
-    !onboardingStatus.tourCompleted;
+  const autoStartTour = hasNoCoreData(onboardingStatus) && !onboardingStatus?.tourCompleted;
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const secondary = settings?.secondaryCurrency ?? null;
   const displayCurrencies = secondary

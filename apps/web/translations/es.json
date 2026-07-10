@@ -293,15 +293,17 @@
     },
     "tour": {
       "replay": "Ver un tour rápido",
+      "saveError": "No se pudo guardar. El tour puede volver a aparecer.",
       "buttons": {
         "back": "Atrás",
         "next": "Siguiente",
         "skip": "Omitir",
-        "finish": "Listo"
+        "finish": "Listo",
+        "close": "Cerrar"
       },
       "steps": {
         "welcome": {
-          "title": "Bienvenido a Renly",
+          "title": "Un tour rápido por Renly",
           "text": "Un tour rápido de 30 segundos por lo esencial."
         },
         "metrics": {
@@ -314,7 +316,7 @@
         },
         "navigation": {
           "title": "Orientate en la app",
-          "text": "Cambiá entre Finanzas e Inversiones desde acá. A medida que tu cuenta crece, mostrá más herramientas — tarjetas, compromisos, grupos — con Ver más."
+          "text": "Cambiá entre Finanzas e Inversiones desde acá. Más herramientas — tarjetas, compromisos, grupos — aparecen a medida que tu cuenta crece."
         },
         "currency": {
           "title": "Cambiá de moneda cuando quieras",
