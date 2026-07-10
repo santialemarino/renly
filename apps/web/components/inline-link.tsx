@@ -10,9 +10,16 @@ const INLINE_LINK_TEXT = {
   muted: 'text-muted-foreground hover:text-foreground',
 } as const;
 
-// Matching hover underline color (applied to the underlined element; the group is the root so it
-// reacts to hovering the whole link, icon included). decoration starts transparent and transitions in.
-const INLINE_LINK_UNDERLINE = {
+// Hover underline color. decoration starts transparent and transitions in. Two forms because the
+// no-icon layout underlines the root itself (self `hover:`) while the icon layout underlines a
+// descendant span, which must react to hovering the whole link — i.e. the root `group` (`group-hover`,
+// a descendant selector that would never match on the root itself).
+const INLINE_LINK_UNDERLINE_SELF = {
+  blue: 'hover:decoration-blue-700',
+  brand: 'hover:decoration-blue-800',
+  muted: 'hover:decoration-foreground',
+} as const;
+const INLINE_LINK_UNDERLINE_GROUP = {
   blue: 'group-hover/inline-link:decoration-blue-700',
   brand: 'group-hover/inline-link:decoration-blue-800',
   muted: 'group-hover/inline-link:decoration-foreground',
@@ -61,7 +68,7 @@ export function InlineLink(props: InlineLinkProps) {
     // the inline underlined text itself so it flows in running copy.
     Icon
       ? 'inline-flex items-center gap-x-1.5'
-      : cn('inline-block', UNDERLINE, INLINE_LINK_UNDERLINE[color]),
+      : cn('inline-block', UNDERLINE, INLINE_LINK_UNDERLINE_SELF[color]),
     INLINE_LINK_SIZES[size],
     INLINE_LINK_TEXT[color],
     className,
@@ -70,7 +77,7 @@ export function InlineLink(props: InlineLinkProps) {
   const content = Icon ? (
     <>
       <Icon className="size-4 shrink-0 transition-transform duration-200 ease-out group-hover/inline-link:rotate-12 group-focus-visible/inline-link:rotate-12" />
-      <span className={cn(UNDERLINE, INLINE_LINK_UNDERLINE[color])}>{children}</span>
+      <span className={cn(UNDERLINE, INLINE_LINK_UNDERLINE_GROUP[color])}>{children}</span>
     </>
   ) : (
     children

@@ -194,6 +194,8 @@
   .shepherd-content,
   .shepherd-button,
   .shepherd-cancel-icon,
+  /* Match the focus-bump rule's specificity so this reset actually wins and the ✕ doesn't bump. */
+  .shepherd-cancel-icon:focus-visible,
   .shepherd-modal-overlay-container,
   .shepherd-modal-overlay-container path {
     transition: none;

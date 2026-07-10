@@ -73,13 +73,10 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
   const translate = useTranslations('dashboard.tour');
   const reduce = useReducedMotion() ?? false;
   const tourRef = useRef<Tour | null>(null);
-  // The current tour's un-wrapped `cancel`, used to tear it down instantly (no exit animation) on a
-  // replay rebuild or unmount — the public `cancel` is wrapped to animate, which we don't want there.
+  // The current tour's un-wrapped `cancel`, used to tear it down instantly (no exit animation, no
+  // persist) on a replay rebuild or unmount — the public `cancel` is wrapped to animate + persist.
   const rawCancelRef = useRef<(() => void) | null>(null);
   const exitTimerRef = useRef<number | undefined>(undefined);
-  // Suppresses the persist that Shepherd's `cancel` event fires when WE tear a tour down (on unmount,
-  // or when a replay rebuilds a lingering one) — as opposed to a genuine user finish/skip.
-  const suppressPersistRef = useRef(false);
 
   // Latest values held in refs so `start` stays referentially stable (deps []). That keeps the
   // auto-start effect from re-running — and re-launching the tour — when a render changes the
@@ -95,12 +92,10 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
     const t = tRef.current;
     const reduce = reduceRef.current;
     // A completed Shepherd tour can't be replayed in place, so build a fresh one each start; tear
-    // down any lingering instance instantly (raw cancel, no animation), suppressing its persist.
+    // down any lingering instance instantly (raw cancel — no animation, no persist).
     if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
     if (tourRef.current) {
-      suppressPersistRef.current = true;
       rawCancelRef.current?.();
-      suppressPersistRef.current = false;
       tourRef.current = null;
     }
 
@@ -202,23 +197,29 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
         overlay?.classList.remove('renly-tour-overlay-leaving');
       }, TOUR_EXIT_MS);
     };
+    /*
+     * Persist "tour seen" the moment the user finishes or skips/closes — eagerly, not behind the exit
+     * animation — so navigating away within the exit window can't drop it. Idempotent per tour. The
+     * raw-cancel teardown paths (replay rebuild, unmount) never call this, so they don't persist. A
+     * failed persist is surfaced (the tour will re-offer next load), mirroring the welcome dismiss.
+     */
+    let persisted = false;
+    const persist = () => {
+      if (persisted) return;
+      persisted = true;
+      void Promise.resolve(onEndRef.current()).catch(() => toast.error(t('saveError')));
+    };
     tour.next = () => withExit(raw.next);
     tour.back = () => withExit(raw.back);
     tour.cancel = () => {
+      persist();
       withExit(raw.cancel, true);
       return Promise.resolve();
     };
-    tour.complete = () => withExit(raw.complete, true);
-
-    // Both a finish and a skip/close end the tour for good; the suppress guard skips our own teardown
-    // cancels. A failed persist is surfaced (and the tour will re-offer next load), mirroring the
-    // welcome card's dismiss.
-    const handleEnd = () => {
-      if (suppressPersistRef.current) return;
-      void Promise.resolve(onEndRef.current()).catch(() => toast.error(t('saveError')));
+    tour.complete = () => {
+      persist();
+      withExit(raw.complete, true);
     };
-    tour.on('complete', handleEnd);
-    tour.on('cancel', handleEnd);
 
     tourRef.current = tour;
     void tour.start();
@@ -234,13 +235,10 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
     return () => cancelAnimationFrame(raf);
   }, [autoStart, start]);
 
-  // Tear down Shepherd's DOM if the page unmounts mid-tour, instantly and without persisting. Reset
-  // the suppress flag on (re)mount so React's dev Strict-Mode mount→cleanup→mount cycle doesn't leave
-  // it stuck true — which would make every real finish/skip bail out of persisting.
+  // Tear down Shepherd's DOM if the page unmounts mid-tour, instantly and without persisting (raw
+  // cancel), and cancel any pending exit timer so no deferred step change fires on a dead tour.
   useEffect(() => {
-    suppressPersistRef.current = false;
     return () => {
-      suppressPersistRef.current = true;
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       rawCancelRef.current?.();
     };
