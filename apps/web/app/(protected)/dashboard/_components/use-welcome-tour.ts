@@ -18,18 +18,31 @@ const MODAL_OPENING_PADDING = 6;
 // Gap (px) between the highlighted region and the dialog. The tour drops Shepherd's arrow (which made
 // the dialog read as stuck to the cutout) and instead floats the dialog off the target by this much.
 const TOUR_DIALOG_GAP = 14;
+// Min viewport margin (px) the dialog keeps when the gap is clamped near an edge.
+const TOUR_VIEWPORT_MARGIN = 8;
 
 // A floating-ui offset middleware pushing the dialog away from the target along the placement axis.
 // Hand-written (Shepherd bundles floating-ui but doesn't re-export `offset`); the `{name, fn}` shape
-// is the stable middleware contract. Centered (unattached) steps have no placement — left untouched.
+// is the stable middleware contract. It runs after Shepherd's flip/shift (which can't re-contain a
+// main-axis push), so the pushed coordinate is clamped to keep the dialog on-screen. Centered
+// (unattached) steps have no placement — left untouched.
 const dialogGapMiddleware = {
   name: 'renlyDialogGap',
-  fn(state: { placement?: string; x: number; y: number }) {
+  fn(state: {
+    placement?: string;
+    x: number;
+    y: number;
+    rects: { floating: { width: number; height: number } };
+  }) {
     const side = state.placement?.split('-')[0];
-    if (side === 'top') return { y: state.y - TOUR_DIALOG_GAP };
-    if (side === 'bottom') return { y: state.y + TOUR_DIALOG_GAP };
-    if (side === 'left') return { x: state.x - TOUR_DIALOG_GAP };
-    if (side === 'right') return { x: state.x + TOUR_DIALOG_GAP };
+    const m = TOUR_VIEWPORT_MARGIN;
+    const { width, height } = state.rects.floating;
+    if (side === 'top') return { y: Math.max(m, state.y - TOUR_DIALOG_GAP) };
+    if (side === 'bottom')
+      return { y: Math.min(window.innerHeight - height - m, state.y + TOUR_DIALOG_GAP) };
+    if (side === 'left') return { x: Math.max(m, state.x - TOUR_DIALOG_GAP) };
+    if (side === 'right')
+      return { x: Math.min(window.innerWidth - width - m, state.x + TOUR_DIALOG_GAP) };
     return {};
   },
 };
@@ -178,11 +191,18 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
       complete: tour.complete.bind(tour),
     };
     rawCancelRef.current = raw.cancel;
+    // After a close tears the tour down, drop the refs so the unmount cleanup doesn't re-cancel an
+    // already-finished tour.
+    const forget = () => {
+      tourRef.current = null;
+      rawCancelRef.current = null;
+    };
     const withExit = (perform: () => void, closing = false) => {
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       const el = document.querySelector<HTMLElement>('.shepherd-element:not([hidden])');
       if (reduce || !el) {
         perform();
+        if (closing) forget();
         return;
       }
       el.classList.add('renly-tour-leaving');
@@ -195,6 +215,7 @@ export function useWelcomeTour({ autoStart, onEnd }: UseWelcomeTourOptions) {
         perform();
         el.classList.remove('renly-tour-leaving'); // reset for a re-show (Shepherd reuses step els)
         overlay?.classList.remove('renly-tour-overlay-leaving');
+        if (closing) forget();
       }, TOUR_EXIT_MS);
     };
     /*

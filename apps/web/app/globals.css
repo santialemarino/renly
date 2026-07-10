@@ -75,6 +75,8 @@
  */
 .shepherd-element.renly-tour-leaving {
   opacity: 0;
+  /* The fading dialog is inert, so a rapid second Next/Back/close click can't land on it mid-exit. */
+  pointer-events: none;
 }
 
 .shepherd-element.renly-tour-leaving .shepherd-content {
@@ -194,9 +196,11 @@
   .shepherd-content,
   .shepherd-button,
   .shepherd-cancel-icon,
-  /* Match the focus-bump rule's specificity so this reset actually wins and the ✕ doesn't bump. */
+  /* Match each animated rule's specificity so these resets actually win (the ✕ bump and the overlay
+     fade both use higher-specificity selectors than the plain class). */
   .shepherd-cancel-icon:focus-visible,
   .shepherd-modal-overlay-container,
+  .shepherd-modal-overlay-container.shepherd-modal-is-visible.renly-tour-overlay-leaving,
   .shepherd-modal-overlay-container path {
     transition: none;
     animation: none;
