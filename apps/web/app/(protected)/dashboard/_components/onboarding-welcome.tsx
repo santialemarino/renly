@@ -6,6 +6,7 @@ import {
   Check,
   CheckCircle2,
   CircleDollarSign,
+  Compass,
   Sparkles,
   TrendingUp,
   Wallet,
@@ -18,7 +19,11 @@ import { toast } from 'sonner';
 
 import { Button, Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { completeOnboarding } from '@/app/(protected)/dashboard/_components/onboarding-welcome-actions';
+import {
+  completeOnboarding,
+  completeTour,
+} from '@/app/(protected)/dashboard/_components/onboarding-welcome-actions';
+import { useWelcomeTour } from '@/app/(protected)/dashboard/_components/use-welcome-tour';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import type { OnboardingStatus } from '@/lib/api/onboarding';
@@ -99,6 +104,9 @@ interface OnboardingWelcomeProps {
   // Checklist step completion derived from real data (null when the status read failed — the
   // checklist then degrades to plain shortcuts with nothing pre-checked).
   status: OnboardingStatus | null;
+  // Auto-launch the guided welcome tour once (a first-run newcomer who hasn't seen it). The replay
+  // link is always available regardless.
+  autoStartTour: boolean;
 }
 
 // First-run welcome shown on the dashboard until onboarding is completed. It's a reactive
@@ -106,9 +114,11 @@ interface OnboardingWelcomeProps {
 // investment, an expense, choosing currencies) checks it off on the next dashboard load with no
 // per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps are
 // done — persists the completion flag server-side so the welcome never returns.
-export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
+export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomeProps) {
   const t = useTranslations('dashboard.onboarding');
+  const tTour = useTranslations('dashboard.tour');
   const [dismissed, setDismissed] = useState(false);
+  const { start: startTour } = useWelcomeTour({ autoStart: autoStartTour, onEnd: completeTour });
 
   const hasInvestments = status?.hasInvestments ?? false;
   const hasFinances = status?.hasFinances ?? false;
@@ -173,7 +183,7 @@ export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
           exit={{ opacity: 0 }}
           transition={{ duration: ANIMATION_DEFAULT }}
         >
-          <Card compact className="p-6 gap-y-5 relative">
+          <Card compact className="p-6 gap-y-5 relative" data-testid="onboarding-welcome">
             <button
               type="button"
               onClick={handleDismiss}
@@ -190,6 +200,15 @@ export function OnboardingWelcome({ status }: OnboardingWelcomeProps) {
                 {t('title')}
               </span>
               <span className="text-paragraph-sm text-muted-foreground">{t('subtitle')}</span>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={startTour}
+                className="h-auto self-start px-0 gap-x-1.5 text-blue-700"
+              >
+                <Compass className="size-4" />
+                {tTour('replay')}
+              </Button>
             </div>
 
             <ul className="flex flex-col gap-y-4">

@@ -291,6 +291,37 @@
         "action": "Entendido"
       }
     },
+    "tour": {
+      "replay": "Ver un tour rápido",
+      "buttons": {
+        "back": "Atrás",
+        "next": "Siguiente",
+        "skip": "Omitir",
+        "finish": "Listo"
+      },
+      "steps": {
+        "welcome": {
+          "title": "Bienvenido a Renly",
+          "text": "Un tour rápido de 30 segundos por lo esencial."
+        },
+        "metrics": {
+          "title": "Tu panorama financiero",
+          "text": "Patrimonio, inversiones y flujo de caja — todo de un vistazo, en la moneda que elijas."
+        },
+        "checklist": {
+          "title": "Empezá acá",
+          "text": "Esta lista sigue tu configuración. Cada paso se marca solo a medida que agregás datos reales."
+        },
+        "navigation": {
+          "title": "Orientate en la app",
+          "text": "Cambiá entre Finanzas e Inversiones desde acá. A medida que tu cuenta crece, mostrá más herramientas — tarjetas, compromisos, grupos — con Ver más."
+        },
+        "currency": {
+          "title": "Cambiá de moneda cuando quieras",
+          "text": "Alterná toda la app entre tus monedas desde acá. ¡Eso es todo, disfrutá Renly!"
+        }
+      }
+    },
     "cards": {
       "netWorth": "Patrimonio Neto",
       "investmentValue": "Valor de Inversiones",

@@ -105,6 +105,7 @@ export function CurrencySwitcher({
 
   return (
     <div
+      data-testid="currency-switcher"
       className="overflow-hidden bg-blue-50 rounded-lg transition-[height] duration-200 ease-in-out"
       style={{ height: contentHeight }}
     >

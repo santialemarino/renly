@@ -276,7 +276,7 @@ export function AppSidebar({
       <SidebarContent>
         <SidebarGroup className="p-4">
           <SidebarGroupContent>
-            <SidebarMenu className="gap-y-2">
+            <SidebarMenu className="gap-y-2" data-testid="sidebar-nav">
               {/* General Dashboard — top-level, not inside any group */}
               <SidebarMenuItem>
                 <SidebarMenuButton

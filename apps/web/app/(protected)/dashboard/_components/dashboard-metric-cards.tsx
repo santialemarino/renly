@@ -17,7 +17,10 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
   const t = useTranslations('dashboard');
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      data-testid="dashboard-metrics"
+    >
       {/* Net Worth */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.netWorth')}</span>

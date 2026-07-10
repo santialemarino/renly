@@ -13,6 +13,7 @@ interface OnboardingStatusRaw {
   sample_investments: boolean;
   sample_expenses: boolean;
   sample_income: boolean;
+  tour_completed: boolean;
 }
 
 // --- Frontend types (camelCase) ---
@@ -24,6 +25,7 @@ export interface OnboardingStatus {
   sampleInvestments: boolean;
   sampleExpenses: boolean;
   sampleIncome: boolean;
+  tourCompleted: boolean;
 }
 
 // --- Mappers ---
@@ -36,6 +38,7 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
     sampleInvestments: raw.sample_investments,
     sampleExpenses: raw.sample_expenses,
     sampleIncome: raw.sample_income,
+    tourCompleted: raw.tour_completed,
   };
 }
 
