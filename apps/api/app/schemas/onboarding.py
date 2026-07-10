@@ -33,3 +33,6 @@ class OnboardingStatusResponse(BaseModel):
     sample_income: bool = Field(
         description="Whether the income section should show its first-run sample data.",
     )
+    tour_completed: bool = Field(
+        description="Whether the user has finished or dismissed the first-run welcome tour.",
+    )

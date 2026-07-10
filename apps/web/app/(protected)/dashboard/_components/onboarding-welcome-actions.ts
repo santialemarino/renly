@@ -17,3 +17,12 @@ export async function completeOnboarding(): Promise<void> {
   if (!res.ok) throw new Error('Failed to complete onboarding');
   revalidatePath(ROUTES.dashboard);
 }
+
+// Marks the first-run welcome tour finished/dismissed so it never auto-starts again. A dedicated
+// onboarding flag, kept separate from onboarding_completed so the tour and the checklist don't
+// suppress each other. Revalidates only the dashboard — the flag affects nothing else.
+export async function completeTour(): Promise<void> {
+  const res = await authenticatedFetch('/onboarding/tour/complete', { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to complete tour');
+  revalidatePath(ROUTES.dashboard);
+}

@@ -44,10 +44,17 @@ async def get_status(session: AsyncSession, user: User) -> dict:
         "sample_investments": not has_investments and not retired["investments"],
         "sample_expenses": not has_expenses and not retired["expenses"],
         "sample_income": not has_income and not retired["income"],
+        "tour_completed": current_settings["tour_completed"],
     }
 
 
 # Retires a section's first-run sample for a user on explicit dismiss (the section's "Clear"). Idempotent.
 async def dismiss_sample(session: AsyncSession, user: User, entity: str) -> None:
     await settings_service.retire_sample(session, user.id, entity)
+    await session.commit()
+
+
+# Marks the first-run welcome tour completed when the user finishes or skips it. Idempotent.
+async def complete_tour(session: AsyncSession, user: User) -> None:
+    await settings_service.complete_tour(session, user.id)
     await session.commit()

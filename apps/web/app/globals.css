@@ -1,6 +1,8 @@
 /* App global styles: app/dependency-specific one-offs (e.g. the Recharts focus treatment). Reusable design-system animations live in packages/ui/src/styles/index.css. */
 /* Tailwind, tw-animate-css, theme tokens, and the shared @utility animations are all built into @repo/ui/styles (the single Tailwind entry); do not re-import them here or they double-emit. */
 @import '@repo/ui/styles';
+/* Shepherd.js base structure/positioning for the first-run welcome tour (UX-8). Imported here — before the Renly theme overrides below — so the overrides win the cascade; a client-component import would load after this stylesheet and lose. */
+@import 'shepherd.js/dist/css/shepherd.css';
 
 /* Subtle pulse-scale for chart focus (less visible than the toggle pulse-scale in @repo/ui). */
 @keyframes pulse-scale-subtle {
@@ -27,6 +29,182 @@
 .recharts-surface *:focus-visible {
   outline: none;
   animation: pulse-scale-subtle 0.3s ease-in-out;
+}
+
+/*
+ * Shepherd.js welcome-tour theme (UX-8). Shepherd renders its own DOM outside React, so — like the
+ * Recharts treatment above — these are raw selectors mapping its structural classes onto Renly's
+ * design tokens (popover surface, border, --radius, type scale, the blue Button look). There is
+ * exactly one tour in the app, so styling the base classes directly is unambiguous; the `.renly-tour`
+ * class Shepherd adds is kept as a DOM/E2E marker. Motion collapses under reduced-motion at the end.
+ */
+.shepherd-element {
+  max-width: 22rem;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* Hairline ring + drop shadow, mirroring the app's floating Popover (ring-1 ring-foreground/10 + shadow). */
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--foreground) 10%, transparent),
+    0 10px 24px -6px rgb(0 0 0 / 0.18);
+  color: var(--foreground);
+  /* Fade only — the element carries floating-ui's inline transform, so the zoom lives on the content. */
+  transition:
+    opacity 0.2s ease-out,
+    visibility 0.2s ease-out;
+}
+
+/*
+ * Enter like the app Dialog (fade + zoom-in-95): the fade is the element's opacity above; the scale
+ * lives here on the inner content so it doesn't fight floating-ui's transform on .shepherd-element.
+ */
+.shepherd-content {
+  border-radius: var(--radius);
+  transform: scale(0.95);
+  transition: transform 0.2s ease-out;
+}
+
+.shepherd-element.shepherd-enabled .shepherd-content {
+  transform: scale(1);
+}
+
+/*
+ * Leaving animation — the hook adds `.renly-tour-leaving` to the active dialog before every
+ * transition/close (Shepherd hides it instantly otherwise), then performs the step change once this
+ * plays. Reverse of the enter (fade + zoom-out). Placed after the enter rule so it wins the cascade.
+ */
+.shepherd-element.renly-tour-leaving {
+  opacity: 0;
+  /* The fading dialog is inert, so a rapid second Next/Back/close click can't land on it mid-exit. */
+  pointer-events: none;
+}
+
+.shepherd-element.renly-tour-leaving .shepherd-content {
+  transform: scale(0.95);
+}
+
+/* Renly headers are clean (no filled title bar); drop Shepherd's grey has-title background. */
+.shepherd-header,
+.shepherd-has-title .shepherd-content .shepherd-header {
+  padding: 1rem 1rem 0;
+  background: transparent;
+}
+
+/* Mirrors the text-heading-5 scale (18px / 600 / 1.2). */
+.shepherd-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--foreground);
+}
+
+/* Mirrors the text-paragraph-sm scale (14px / 400 / 1.5). */
+.shepherd-text {
+  padding: 0.5rem 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.shepherd-footer {
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.shepherd-button {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius);
+  background: var(--color-blue-800);
+  color: var(--color-white);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.shepherd-button:not(:disabled):hover {
+  background: var(--color-blue-900);
+  color: var(--color-white);
+}
+
+/* Secondary (Back / Skip) mirrors the app's outline Button so tour CTAs match the checklist CTAs. */
+.shepherd-button.shepherd-button-secondary {
+  background: var(--popover);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+.shepherd-button.shepherd-button-secondary:not(:disabled):hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+/* Keyboard focus parity (ux-motion): every tour button gets a visible ring, none native. */
+.shepherd-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--color-blue-800) 50%, transparent);
+}
+
+.shepherd-button.shepherd-button-secondary:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+/* Flex-center the ✕ glyph in its box (font glyphs sit high in the line box) so it — and its focus
+   bump — scale from the true center rather than drifting downward. */
+.shepherd-cancel-icon,
+.shepherd-has-title .shepherd-content .shepherd-cancel-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5em;
+  line-height: 1;
+  color: var(--muted-foreground);
+  transition: color 0.2s ease;
+}
+
+.shepherd-cancel-icon:hover,
+.shepherd-cancel-icon:focus-visible,
+.shepherd-has-title .shepherd-content .shepherd-cancel-icon:hover {
+  outline: none;
+  color: var(--foreground);
+}
+
+/* Icon-trigger focus convention: the close ✕ scale-bumps on keyboard focus (like the Dialog ✕). */
+.shepherd-cancel-icon:focus-visible {
+  transform-origin: center;
+  animation: focus-bump 0.3s ease-in-out;
+}
+
+/* Fade the dim overlay out on close (the hook adds this alongside the dialog's leaving animation);
+   Shepherd would otherwise tear the overlay down instantly. */
+.shepherd-modal-overlay-container.shepherd-modal-is-visible.renly-tour-overlay-leaving {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* Smoothly morph the highlight cutout as it moves between steps (Chromium transitions the `d` path;
+   other engines degrade to an instant move). */
+.shepherd-modal-overlay-container path {
+  transition: d 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shepherd-element,
+  .shepherd-content,
+  .shepherd-button,
+  .shepherd-cancel-icon,
+  /* Match each animated rule's specificity so these resets actually win (the ✕ bump and the overlay
+     fade both use higher-specificity selectors than the plain class). */
+  .shepherd-cancel-icon:focus-visible,
+  .shepherd-modal-overlay-container,
+  .shepherd-modal-overlay-container.shepherd-modal-is-visible.renly-tour-overlay-leaving,
+  .shepherd-modal-overlay-container path {
+    transition: none;
+    animation: none;
+  }
 }
 
 /* Theme-aware image visibility (light/dark) */

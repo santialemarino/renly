@@ -291,6 +291,39 @@
         "action": "Got it"
       }
     },
+    "tour": {
+      "replay": "Take a quick tour",
+      "saveError": "Couldn't save. The tour may show again.",
+      "buttons": {
+        "back": "Back",
+        "next": "Next",
+        "skip": "Skip",
+        "finish": "Done",
+        "close": "Close"
+      },
+      "steps": {
+        "welcome": {
+          "title": "A quick tour of Renly",
+          "text": "Here's a quick 30-second tour of the essentials."
+        },
+        "metrics": {
+          "title": "Your financial snapshot",
+          "text": "Net worth, investments, and cash flow — all at a glance, in the currency you choose."
+        },
+        "checklist": {
+          "title": "Start here",
+          "text": "This checklist tracks your setup. Each step checks off on its own as you add real data."
+        },
+        "navigation": {
+          "title": "Find your way around",
+          "text": "Move between Finances and Investments here. More tools — credit cards, commitments, groups — appear as your account grows."
+        },
+        "currency": {
+          "title": "Switch currencies anytime",
+          "text": "Flip the whole app between your display currencies from here. That's it — enjoy Renly!"
+        }
+      }
+    },
     "cards": {
       "netWorth": "Net Worth",
       "investmentValue": "Investment Value",
