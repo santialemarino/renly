@@ -18,8 +18,12 @@ Both build from the repo root (the build context must be the root so the API ima
 # API (FastAPI) — listens on $PORT
 docker build -f docker/api.Dockerfile -t renly-api .
 
-# Web (Next.js) — NEXT_PUBLIC_API_URL is inlined at build time, so it must be the real API URL
-docker build -f docker/web.Dockerfile --build-arg NEXT_PUBLIC_API_URL=https://api.example.com -t renly-web .
+# Web (Next.js) — NEXT_PUBLIC_* values are inlined at build time, so both must be set at image
+# build (a runtime-only value has no effect). The Sentry DSN is optional (empty = Sentry off).
+docker build -f docker/web.Dockerfile \
+  --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
+  --build-arg NEXT_PUBLIC_SENTRY_DSN=https://examplekey@o0.ingest.sentry.io/0 \
+  -t renly-web .
 ```
 
 Run commands (both honor `$PORT`):
@@ -56,13 +60,13 @@ Set these in the host's secret store (not in the repo). Full reference: [`env-va
 
 **Web:**
 
-| Variable                                              | Notes                                                                                                         |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                            |
-| `NEXTAUTH_URL`                                        | The production web URL.                                                                                       |
-| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                            |
-| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking.                                                                         |
-| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Optional, build-only — set to upload source maps; without the token the build neither uploads nor needs them. |
+| Variable                                              | Notes                                                                                                                            |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXTAUTH_SECRET`                                     | Must equal the API's `JWT_SECRET`.                                                                                               |
+| `NEXTAUTH_URL`                                        | The production web URL.                                                                                                          |
+| `NEXT_PUBLIC_API_URL`                                 | The API URL — **build arg** (inlined), so set it at image build, not just runtime.                                               |
+| `NEXT_PUBLIC_SENTRY_DSN`                              | Optional; enables web error tracking. **Build arg** (inlined) like `NEXT_PUBLIC_API_URL` — set at image build, not just runtime. |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | Optional, build-only — set to upload source maps; without the token the build neither uploads nor needs them.                    |
 
 ---
 
