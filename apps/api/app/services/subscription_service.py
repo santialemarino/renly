@@ -3,13 +3,19 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, ReverseResult
+from app.domain import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    NotFoundError,
+    ReverseResult,
+    closest_subscription_cycle,
+    subscription_link_advanced_cursor,
+)
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import subscription_repository
 from app.schemas.subscription import SubscriptionResponse
 from app.services import exchange_rate_service
-from app.services.auto_expense_service import closest_subscription_cycle
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
 from app.utils.metrics import RateLookup, convert_optional
 
@@ -191,14 +197,24 @@ async def advance_for_manual_entry(session: AsyncSession, subscription_id: int, 
     )
 
 
-# Walks `next_billing_date` back by one billing cycle (Phase 3, follow-up Item 10).
-# Caller commits. Used by expense_service when the most-recent linked expense for a
-# subscription is deleted or unlinked. Returns a ReverseResult with the cursor delta
-# for Item 7's toast. No-op when the subscription can't be found or doesn't belong to
-# the user.
-async def reverse_for_unlink(session: AsyncSession, subscription_id: int, user: User) -> ReverseResult | None:
+# Walks `next_billing_date` back by one billing cycle when the deleted / unlinked expense
+# is the one whose advance moved the cursor there — recomputed from the expense's date via
+# the same closest-cycle match the create path uses (Phase 3, follow-up Item 10, hardened
+# by the audit's reverse-only-if-advanced fix). Historical back-links and multi-jump
+# pre-pays never advanced the cursor, so deleting them is a no-op: no scheduler re-emit of
+# an already-paid cycle, no wrong unpaid badge. Caller commits. Returns a ReverseResult
+# with the cursor delta for Item 7's toast; None when nothing was reversed or the
+# subscription can't be found / doesn't belong to the user.
+async def reverse_for_unlink(session: AsyncSession, subscription_id: int, user: User, entry_date: date_type) -> ReverseResult | None:
     subscription = await subscription_repository.get_by_id(session, subscription_id, user.id)
     if subscription is None:
+        return None
+    if not subscription_link_advanced_cursor(
+        subscription.next_billing_date,
+        subscription.billing_cycle,
+        entry_date,
+        anchor_day=subscription.anchor_day,
+    ):
         return None
     previous = subscription.next_billing_date
     subscription.next_billing_date = step_back_by_cycle(

@@ -74,7 +74,7 @@ class TestSubscriptionReverseForUnlink:
             AsyncMock(return_value=sub),
         )
         monkeypatch.setattr(subscription_service.subscription_repository, "save", AsyncMock())
-        result = await subscription_service.reverse_for_unlink(session, 1, USER)
+        result = await subscription_service.reverse_for_unlink(session, 1, USER, date(2026, 6, 15))
         assert result is not None
         assert result.plan_type == "subscription"
         assert result.previous_cursor == "2026-07-15"
@@ -94,7 +94,7 @@ class TestSubscriptionReverseForUnlink:
             AsyncMock(return_value=sub),
         )
         monkeypatch.setattr(subscription_service.subscription_repository, "save", AsyncMock())
-        result = await subscription_service.reverse_for_unlink(session, 1, USER)
+        result = await subscription_service.reverse_for_unlink(session, 1, USER, date(2026, 2, 28))
         assert result is not None
         assert result.new_cursor == "2026-02-28"
         assert sub.next_billing_date == date(2026, 2, 28)
@@ -107,8 +107,37 @@ class TestSubscriptionReverseForUnlink:
             "get_by_id",
             AsyncMock(return_value=None),
         )
-        result = await subscription_service.reverse_for_unlink(session, 999, USER)
+        result = await subscription_service.reverse_for_unlink(session, 999, USER, date(2026, 6, 15))
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_historical_link_delete_leaves_cursor(self, monkeypatch):
+        # THE audit P1 scenario: the deleted link is a historical back-link (dated Mar 18,
+        # binds to the Mar 15 cycle) that never advanced the cursor (Jul 15). Reverse must
+        # be a no-op — no scheduler re-emit of an already-paid cycle.
+        sub = _sub(next_billing_date=date(2026, 7, 15))
+        session = AsyncMock()
+        monkeypatch.setattr(subscription_service.subscription_repository, "get_by_id", AsyncMock(return_value=sub))
+        save_mock = AsyncMock()
+        monkeypatch.setattr(subscription_service.subscription_repository, "save", save_mock)
+        result = await subscription_service.reverse_for_unlink(session, 1, USER, date(2026, 3, 18))
+        assert result is None
+        assert sub.next_billing_date == date(2026, 7, 15)
+        save_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pre_pay_link_delete_leaves_cursor(self, monkeypatch):
+        # Multi-jump pre-pay (binds AT the cursor Jun 15, never advanced it) — deleting it
+        # must not walk the cursor back to May 15.
+        sub = _sub(next_billing_date=date(2026, 6, 15))
+        session = AsyncMock()
+        monkeypatch.setattr(subscription_service.subscription_repository, "get_by_id", AsyncMock(return_value=sub))
+        save_mock = AsyncMock()
+        monkeypatch.setattr(subscription_service.subscription_repository, "save", save_mock)
+        result = await subscription_service.reverse_for_unlink(session, 1, USER, date(2026, 6, 13))
+        assert result is None
+        assert sub.next_billing_date == date(2026, 6, 15)
+        save_mock.assert_not_called()
 
 
 # --- installment_service.reverse_for_unlink ---
@@ -121,7 +150,7 @@ class TestInstallmentReverseForUnlink:
         session = AsyncMock()
         monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
         monkeypatch.setattr(installment_service.installment_repository, "save", AsyncMock())
-        result = await installment_service.reverse_for_unlink(session, 1, USER)
+        result = await installment_service.reverse_for_unlink(session, 1, USER, date(2026, 4, 1))
         assert result is not None
         assert result.plan_type == "installment"
         assert result.previous_cursor == "5"
@@ -139,7 +168,7 @@ class TestInstallmentReverseForUnlink:
         session = AsyncMock()
         monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
         monkeypatch.setattr(installment_service.installment_repository, "save", AsyncMock())
-        result = await installment_service.reverse_for_unlink(session, 1, USER)
+        result = await installment_service.reverse_for_unlink(session, 1, USER, date(2026, 12, 1))
         assert result is not None
         assert result.previous_cursor == ""
         assert result.new_cursor == "12"
@@ -154,14 +183,14 @@ class TestInstallmentReverseForUnlink:
         inst = _inst(start_date=date(2026, 1, 1), current_installment=1, installments_count=12)
         session = AsyncMock()
         monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
-        result = await installment_service.reverse_for_unlink(session, 1, USER)
+        result = await installment_service.reverse_for_unlink(session, 1, USER, date(2026, 1, 1))
         assert result is None
 
     @pytest.mark.asyncio
     async def test_missing_installment_returns_none(self, monkeypatch):
         session = AsyncMock()
         monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=None))
-        result = await installment_service.reverse_for_unlink(session, 999, USER)
+        result = await installment_service.reverse_for_unlink(session, 999, USER, date(2026, 1, 1))
         assert result is None
 
     @pytest.mark.asyncio
@@ -175,12 +204,26 @@ class TestInstallmentReverseForUnlink:
         session = AsyncMock()
         monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
         monkeypatch.setattr(installment_service.installment_repository, "save", AsyncMock())
-        result = await installment_service.reverse_for_unlink(session, 1, USER)
+        result = await installment_service.reverse_for_unlink(session, 1, USER, date(2026, 4, 1))
         assert result is not None
         assert result.previous_cursor == "5"
         assert result.new_cursor == "4"
         assert inst.current_installment == 4
         assert inst.is_active is False
+
+    @pytest.mark.asyncio
+    async def test_historical_cuota_delete_leaves_cursor(self, monkeypatch):
+        # Deleted link dated Feb 1 binds to cuota 2, but the cursor is at 5 — the link
+        # never advanced it, so no decrement.
+        inst = _inst(start_date=date(2026, 1, 1), current_installment=5, installments_count=12)
+        session = AsyncMock()
+        monkeypatch.setattr(installment_service.installment_repository, "get_by_id", AsyncMock(return_value=inst))
+        save_mock = AsyncMock()
+        monkeypatch.setattr(installment_service.installment_repository, "save", save_mock)
+        result = await installment_service.reverse_for_unlink(session, 1, USER, date(2026, 2, 1))
+        assert result is None
+        assert inst.current_installment == 5
+        save_mock.assert_not_called()
 
 
 # --- payment_obligation_service.reverse_for_unlink ---

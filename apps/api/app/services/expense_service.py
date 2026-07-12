@@ -422,9 +422,11 @@ async def update_expense(
         if plan_type == "obligation":
             reverse_result = await payment_obligation_service.reverse_for_unlink(session, plan_id, user)
         elif plan_type == "subscription":
-            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user)
+            # Pass the row's pre-edit date: the reverse fires only if that link's advance
+            # decision (recomputed) actually moved the cursor.
+            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user, old_date)
         elif plan_type == "installment":
-            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user, old_date)
 
     advance_result: AdvanceResult | None = None
     if advance_target is not None:
@@ -477,9 +479,9 @@ async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> 
         if plan_type == "obligation":
             reverse_result = await payment_obligation_service.reverse_for_unlink(session, plan_id, user)
         elif plan_type == "subscription":
-            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user, old_date)
         elif plan_type == "installment":
-            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user, old_date)
 
     await session.commit()
     return reverse_result

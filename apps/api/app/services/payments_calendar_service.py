@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CalendarItem
+from app.domain import CalendarItem, closest_installment_cuota, closest_subscription_cycle
 from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
@@ -112,10 +112,11 @@ def _month_range(year: int, month: int) -> tuple[date_type, date_type]:
 # CURRENT amount + currency.
 #
 # Backward projection: walks from `next_billing_date` backward and emits every PAST cycle
-# inside the window whose scheduler-emitted expense row exists (matched via the partial
-# UNIQUE INDEX on `(subscription_id, date)`). Each past cycle uses the LINKED EXPENSE's
-# historical amount + currency so editing the subscription later doesn't rewrite the
-# calendar's history. is_paid=True so the UI swaps the badge for a green Paid one.
+# inside the window that has a linked expense BOUND to it — each linked expense is matched
+# to its closest cycle (same half-cycle rule as the manual-entry advance), so a cycle paid
+# a few days off its date still shows its Paid badge. Each past cycle uses the LINKED
+# EXPENSE's historical amount + currency so editing the subscription later doesn't rewrite
+# the calendar's history. is_paid=True so the UI swaps the badge for a green Paid one.
 async def _subscription_items(
     session: AsyncSession,
     user: User,
@@ -126,19 +127,18 @@ async def _subscription_items(
     if not subscriptions:
         return []
 
-    # Batch-load auto-emitted expense rows for these subscriptions across the window in
-    # one query — backward walker reads from the resulting dict, no N+1.
-    paid_by_sub = await expense_repository.linked_subscription_expenses_by_date(
+    # Batch-load ALL linked expense rows for these subscriptions in one query — the
+    # backward walker binds each expense to its closest cycle, so it needs the full
+    # history, not a window slice. No N+1.
+    linked_by_sub = await expense_repository.list_linked_subscription_expenses(
         session,
         user.id,
         [s.id for s in subscriptions],
-        period_start,
-        period_end,
     )
 
     items: list[CalendarItem] = []
     for sub in subscriptions:
-        paid_expenses = paid_by_sub.get(sub.id, {})
+        linked_expenses = linked_by_sub.get(sub.id, [])
         # Forward: unpaid future cycles.
         for d in subscription_dates_in_window(sub, period_start, period_end):
             items.append(
@@ -155,7 +155,7 @@ async def _subscription_items(
                 )
             )
         # Backward: past paid cycles inside the window.
-        for cycle_date, expense in subscription_past_paid_cycles_in_window(sub, period_start, period_end, paid_expenses):
+        for cycle_date, expense in subscription_past_paid_cycles_in_window(sub, period_start, period_end, linked_expenses):
             items.append(
                 CalendarItem(
                     type="subscription",
@@ -181,8 +181,9 @@ async def _subscription_items(
 # current `installment_amount` + currency (the field lock guarantees these don't drift
 # after the first installment fires).
 #
-# Backward projection: emits each PAST installment (`1..current_installment - 1`) whose
-# date lands inside the window AND whose scheduler-emitted expense row exists. is_paid=True.
+# Backward projection: emits each PAST installment (`1..current_installment - 1`) whose date
+# lands inside the window and has a linked expense BOUND to its cuota (each linked expense
+# matched to its closest cuota, same half-cycle rule as the manual-entry advance). is_paid=True.
 async def _installment_items(
     session: AsyncSession,
     user: User,
@@ -193,17 +194,15 @@ async def _installment_items(
     if not installments:
         return []
 
-    paid_by_inst = await expense_repository.linked_installment_expenses_by_date(
+    linked_by_inst = await expense_repository.list_linked_installment_expenses(
         session,
         user.id,
         [i.id for i in installments],
-        period_start,
-        period_end,
     )
 
     items: list[CalendarItem] = []
     for inst in installments:
-        paid_expenses = paid_by_inst.get(inst.id, {})
+        linked_expenses = linked_by_inst.get(inst.id, [])
         # Forward: unpaid future installments.
         for idx in range(inst.current_installment, inst.installments_count + 1):
             cuota_date = add_months(inst.start_date, idx - 1)
@@ -227,7 +226,7 @@ async def _installment_items(
                 )
             )
         # Backward: past paid installments inside the window.
-        for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, paid_expenses):
+        for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, linked_expenses):
             items.append(
                 CalendarItem(
                     type="installment",
@@ -435,21 +434,35 @@ def subscription_dates_in_window(
     return dates
 
 
-# Returns (cycle_date, linked_expense) pairs for every PAST cycle of a subscription
-# inside the window whose scheduler-emitted expense row exists. Walks backward from
-# next_billing_date one cycle at a time, matching each cursor against the supplied
-# dict of paid expenses by date (the partial UNIQUE INDEX on (subscription_id, date)
-# guarantees at most one expense per cycle, so the dict lookup is unambiguous).
-# Stops as soon as the cursor walks past period_start (further past cycles can't
-# intersect the window).
+# Returns (cycle_date, linked_expense) pairs for every PAST PAID cycle of a subscription
+# inside the window. Mirrors the obligations' positional backward walk, with the pairing
+# made robust for plans whose links don't all advance the cursor: each linked expense is
+# BOUND to the cycle its date matches under the same closest-cycle rule the manual-entry
+# advance uses (half-cycle tolerance), then the walk backward from next_billing_date emits
+# every in-window cycle that owns a bound expense. Off-date payments (Mar 31 cycle paid
+# Mar 29) badge their cycle; multi-jump pre-pays bind AT the cursor and stay with the
+# forward (unpaid) walker until the scheduler advances past them; historical back-links
+# badge their own old cycle instead of the newest one. When two expenses bind to the same
+# cycle the newest wins (`linked_expenses` must be sorted DESC by expense date).
+# Stops as soon as the walk passes period_start.
 def subscription_past_paid_cycles_in_window(
     sub: Subscription,
     period_start: date_type,
     period_end: date_type,
-    paid_expenses_by_date: dict[date_type, object],
+    linked_expenses: list,
 ) -> list[tuple]:
-    if not paid_expenses_by_date:
+    if not linked_expenses:
         return []
+
+    expense_by_cycle: dict[date_type, object] = {}
+    for expense in linked_expenses:
+        bound = closest_subscription_cycle(
+            sub.next_billing_date,
+            sub.billing_cycle,
+            expense.date,
+            anchor_day=sub.anchor_day,
+        )
+        expense_by_cycle.setdefault(bound, expense)
 
     pairs: list[tuple] = []
     cursor = sub.next_billing_date
@@ -462,31 +475,41 @@ def subscription_past_paid_cycles_in_window(
         if cursor < period_start:
             break
         if cursor <= period_end:
-            expense = paid_expenses_by_date.get(cursor)
+            expense = expense_by_cycle.get(cursor)
             if expense is not None:
                 pairs.append((cursor, expense))
         iterations += 1
     return pairs
 
 
-# Returns (index, date, linked_expense) tuples for every PAST installment of an
-# installment plan inside the window whose scheduler-emitted expense row exists.
-# Installment dates are deterministic (start_date + (idx-1) months), iteration bounded
-# by [1, current_installment). `paid_expenses_by_date` is the pre-loaded window-restricted
-# dict; lookup is unambiguous because the partial UNIQUE INDEX on (installment_id, date)
-# allows at most one row per installment.
+# Returns (index, date, linked_expense) tuples for every PAST PAID cuota of an installment
+# plan inside the window. Each linked expense is BOUND to the cuota index its date matches
+# under the same closest-cuota rule the manual-entry advance uses, so an off-date payment
+# still badges its cuota. Iteration stays bounded by [1, current_installment): indices at
+# or past the cursor (multi-jump pre-pays) remain with the forward (unpaid) walker until
+# the scheduler advances the counter. Newest expense wins a contested index
+# (`linked_expenses` must be sorted DESC by expense date).
 def installment_past_paid_cuotas_in_window(
     inst: Installment,
     period_start: date_type,
     period_end: date_type,
-    paid_expenses_by_date: dict[date_type, object],
+    linked_expenses: list,
 ) -> list[tuple]:
+    if not linked_expenses:
+        return []
+
+    expense_by_idx: dict[int, object] = {}
+    for expense in linked_expenses:
+        match = closest_installment_cuota(inst.start_date, 1, inst.installments_count, expense.date)
+        if match is not None:
+            expense_by_idx.setdefault(match[0], expense)
+
     pairs: list[tuple] = []
     for idx in range(1, inst.current_installment):
         cuota_date = add_months(inst.start_date, idx - 1)
         if cuota_date < period_start or cuota_date > period_end:
             continue
-        expense = paid_expenses_by_date.get(cuota_date)
+        expense = expense_by_idx.get(idx)
         if expense is None:
             continue
         pairs.append((idx, cuota_date, expense))

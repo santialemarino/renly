@@ -6,7 +6,17 @@ from app.domain.currency import (
     get_ars_pair,
     is_supported,
 )
-from app.domain.cycle_advance import AdvanceResult, CycleAdvanceDecision, ReverseResult
+from app.domain.cycle_advance import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    ReverseResult,
+    claimed_installment_cuotas,
+    claimed_subscription_cycles,
+    closest_installment_cuota,
+    closest_subscription_cycle,
+    installment_link_advanced_cursor,
+    subscription_link_advanced_cursor,
+)
 from app.domain.errors import (
     CurrencyChangeBlockedError,
     EmailNotVerifiedError,
@@ -50,6 +60,12 @@ __all__ = [
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
     "SUPPORTED_CURRENCIES",
+    "claimed_installment_cuotas",
+    "claimed_subscription_cycles",
+    "closest_installment_cuota",
+    "closest_subscription_cycle",
     "get_ars_pair",
+    "installment_link_advanced_cursor",
     "is_supported",
+    "subscription_link_advanced_cursor",
 ]

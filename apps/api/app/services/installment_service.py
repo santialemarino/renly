@@ -3,13 +3,20 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, InstallmentLockedFieldError, NotFoundError, ReverseResult
+from app.domain import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    InstallmentLockedFieldError,
+    NotFoundError,
+    ReverseResult,
+    closest_installment_cuota,
+    installment_link_advanced_cursor,
+)
 from app.models.installment import Installment
 from app.models.user import User
 from app.repositories import installment_repository
 from app.schemas.installment import InstallmentResponse
 from app.services import exchange_rate_service
-from app.services.auto_expense_service import closest_installment_cuota
 from app.utils.metrics import RateLookup, convert_optional
 
 # Contractual fields locked once any installment has been charged (current_installment > 1).
@@ -230,11 +237,21 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
 # installment can't be found, doesn't belong to the user, or the cursor is already at
 # installment 1 (no installment 0 to step back to). `previous_cursor` reads empty (the
 # archive sentinel) only when the reverse re-activates a fully-paid plan.
-async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User) -> ReverseResult | None:
+# The reverse fires only when the deleted expense binds to the cuota immediately before the
+# cursor (recomputed via the create path's matcher) — deleting a historical or pre-pay link
+# is a no-op.
+async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User, entry_date: date_type) -> ReverseResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
     if installment is None:
         return None
     if installment.current_installment <= 1:
+        return None
+    if not installment_link_advanced_cursor(
+        installment.start_date,
+        installment.current_installment,
+        installment.installments_count,
+        entry_date,
+    ):
         return None
     previous_cursor = installment.current_installment
     reactivated = previous_cursor == installment.installments_count + 1
