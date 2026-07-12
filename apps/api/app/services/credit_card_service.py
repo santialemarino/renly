@@ -143,9 +143,9 @@ async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
     references = (
         ("expenses", await expense_repository.count_by_credit_card(session, card_id, user.id)),
-        ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id)),
-        ("installment plans", await installment_repository.count_by_credit_card(session, card_id)),
-        ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id)),
+        ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id, user.id)),
+        ("installment plans", await installment_repository.count_by_credit_card(session, card_id, user.id)),
+        ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id, user.id)),
     )
     linked = [noun for noun, count in references if count > 0]
     if linked:

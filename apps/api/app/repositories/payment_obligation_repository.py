@@ -70,24 +70,14 @@ async def delete(session: AsyncSession, obligation: PaymentObligation) -> None:
 
 
 # Count payment obligations linked to a specific credit card.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
-    result = await session.execute(select(func.count()).where(PaymentObligation.credit_card_id == credit_card_id))
-    return int(result.scalar_one())
-
-
-# Count payment obligations grouped by credit card id. Returns {card_id: count}.
-async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
-    if not credit_card_ids:
-        return {}
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
     result = await session.execute(
-        select(
-            PaymentObligation.credit_card_id,
-            func.count(),
+        select(func.count()).where(
+            PaymentObligation.credit_card_id == credit_card_id,
+            PaymentObligation.user_id == user_id,
         )
-        .where(PaymentObligation.credit_card_id.in_(credit_card_ids))
-        .group_by(PaymentObligation.credit_card_id)
     )
-    return {row[0]: int(row[1]) for row in result.all()}
+    return int(result.scalar_one())
 
 
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
@@ -98,7 +88,6 @@ class PaymentObligationRepository:
     save = staticmethod(save)
     delete = staticmethod(delete)
     count_by_credit_card = staticmethod(count_by_credit_card)
-    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
 
 
 # Singleton used by services to access payment obligation persistence.
