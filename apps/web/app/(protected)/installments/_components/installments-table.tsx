@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, ListChecks, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -29,8 +29,8 @@ import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField } from '@/lib/api/installments';
-import type { SortOrder } from '@/lib/api/types';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -52,35 +52,12 @@ export function InstallmentsTable({
   const locale = useLocale();
   const t = useTranslations('installments');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<InstallmentSortField>(
+    ROUTES.installments,
+  );
   const [editInstallment, setEditInstallment] = useState<Installment | null>(null);
   const [deleteState, setDeleteState] = useState<Installment | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as InstallmentSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.installments}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: InstallmentSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
 
   async function handleArchive(inst: Installment) {
     setArchivingId(inst.id);

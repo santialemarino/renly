@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, Rows3 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -37,7 +37,7 @@ import type {
   InvestmentListResponse,
   InvestmentSortField,
 } from '@/lib/api/investments';
-import type { SortOrder } from '@/lib/api/types';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 
 function RowActions({
   investment,
@@ -163,32 +163,8 @@ export function InvestmentsDataTable({
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-
-  const sortBy = (searchParams.get('sort_by') as InvestmentSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: InvestmentSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc', page: null });
-      } else {
-        navigate({ sort_by: null, sort_order: null, page: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc', page: null });
-    }
-  }
+  const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
+    useTableSort<InvestmentSortField>(ROUTES.investments, { resetPage: true });
 
   function handlePageChange(page: number) {
     navigate({ page: page > 1 ? String(page) : null });

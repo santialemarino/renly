@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
@@ -38,7 +38,7 @@ import type { Expense, ExpenseListResponse, ExpenseSortField } from '@/lib/api/e
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
-import type { SortOrder } from '@/lib/api/types';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -163,36 +163,12 @@ export function ExpensesDataTable({
   const locale = useLocale();
   const t = useTranslations('expenses');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
+    useTableSort<ExpenseSortField>(ROUTES.expenses, { resetPage: true });
   // Amount-mismatch follow-up prompt fired from the edit dialog (Phase 3, follow-up
   // Item 6). Lives at the table level rather than per row so the prompt survives the
   // edit dialog's close animation and works the same on any row.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as ExpenseSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.expenses}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: ExpenseSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc', page: null });
-      } else {
-        navigate({ sort_by: null, sort_order: null, page: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc', page: null });
-    }
-  }
 
   function handlePageChange(page: number) {
     navigate({ page: page > 1 ? String(page) : null });

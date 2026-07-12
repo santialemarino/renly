@@ -1,7 +1,7 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Archive,
   ArchiveRestore,
@@ -43,7 +43,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
-import type { SortOrder } from '@/lib/api/types';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -243,8 +243,9 @@ export function CreditCardsTable({
   const locale = useLocale();
   const t = useTranslations('creditCards');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<CreditCardSortField>(
+    ROUTES.creditCards,
+  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editCard, setEditCard] = useState<CreditCard | null>(null);
   const [archiveCard, setArchiveCard] = useState<CreditCard | null>(null);
@@ -261,30 +262,6 @@ export function CreditCardsTable({
       toast.error(t('actions.unarchiveError'));
     } finally {
       setUnarchiving(null);
-    }
-  }
-
-  const sortBy = (searchParams.get('sort_by') as CreditCardSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.creditCards}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: CreditCardSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
     }
   }
 

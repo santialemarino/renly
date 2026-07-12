@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -29,7 +29,7 @@ import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
-import type { SortOrder } from '@/lib/api/types';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -53,35 +53,12 @@ export function SubscriptionsTable({
   const locale = useLocale();
   const t = useTranslations('subscriptions');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<SubscriptionSortField>(
+    ROUTES.subscriptions,
+  );
   const [editSubscription, setEditSubscription] = useState<Subscription | null>(null);
   const [deleteState, setDeleteState] = useState<Subscription | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as SubscriptionSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.subscriptions}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: SubscriptionSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
 
   async function handleArchive(sub: Subscription) {
     setArchivingId(sub.id);

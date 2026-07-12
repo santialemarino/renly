@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, CircleDollarSign, Minus, Plus, Table2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -23,6 +23,7 @@ import { EmptyState } from '@/components/empty-state';
 import { SortIcon } from '@/components/sort-icon';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { formatMonth, formatSignedPct, formatValue } from '@/lib/utils/format';
 
 // Extracts "YYYY-MM" from a date string like "2025-01-31".
@@ -128,7 +129,7 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   const t = useTranslations('snapshots');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [, startTransition] = useTransition();
+  const { navigate } = useSearchParamsNavigation(ROUTES.snapshots);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedRow, setSelectedRow] = useState<SnapshotGridRow | null>(null);
@@ -138,15 +139,6 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   const sortOrder = (searchParams.get('sort_order') as 'asc' | 'desc' | null) ?? 'asc';
   const sortBy = searchParams.get('sort_by');
   const isSortActive = sortBy === 'name';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.snapshots}?${params.toString()}`));
-  }
 
   function handleSortChange() {
     if (!isSortActive) {

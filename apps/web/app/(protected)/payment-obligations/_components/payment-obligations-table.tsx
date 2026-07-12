@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, BadgeDollarSign, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -38,7 +38,7 @@ import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/payment-obligations';
-import type { SortOrder } from '@/lib/api/types';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -62,8 +62,8 @@ export function PaymentObligationsTable({
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } =
+    useTableSort<PaymentObligationSortField>(ROUTES.paymentObligations);
   const [editObligation, setEditObligation] = useState<PaymentObligation | null>(null);
   const [deleteState, setDeleteState] = useState<PaymentObligation | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
@@ -72,30 +72,6 @@ export function PaymentObligationsTable({
   // than the obligation's expected one (Phase 3, follow-up Item 6). Now uses the shared
   // LinkedPlanAmountMismatchDialog — the inline dialog was deduplicated.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as PaymentObligationSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.paymentObligations}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: PaymentObligationSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
 
   // Fires after the expense form saves successfully under Mark Paid (Phase 3, follow-up
   // Item 6). The form already computed the amount mismatch; we just stash the plan ref so
