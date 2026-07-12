@@ -33,21 +33,31 @@ class InvestmentMetricsResponse(BaseModel):
     absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
     simple_return: Decimal | None = Field(default=None, description="(current_value / invested_capital) - 1.")
     twr: Decimal | None = Field(default=None, description="Time-weighted return since inception.")
-    irr: Decimal | None = Field(default=None, description="Money-weighted return (annualised XIRR).")
+    irr: Decimal | None = Field(default=None, description="Money-weighted return (annualised XIRR). Null when the cashflow span is under 30 days.")
     period_returns: list[PeriodReturnItem] = Field(default_factory=list, description="Return per snapshot period.")
     currency: str = Field(description="Currency of the monetary values.")
 
 
-# Summary metrics for the entire portfolio.
+# Summary metrics for the entire portfolio. With a start_date/end_date window, the
+# value/invested/gain/return fields describe the period instead of all-time.
 class PortfolioMetricsResponse(BaseModel):
-    total_value: Decimal = Field(description="Sum of latest snapshot values.")
-    total_invested: Decimal = Field(description="Sum of net invested capital across all investments.")
-    absolute_gain: Decimal = Field(description="Total value minus total invested.")
-    total_return_pct: Decimal | None = Field(default=None, description="Simple return: (total_value / total_invested) - 1.")
+    total_value: Decimal = Field(description="Sum of latest snapshot values; with a date window, the portfolio value at the window end.")
+    total_invested: Decimal = Field(
+        description=(
+            "Net invested capital all-time; with a date window, net cash flow inside the window "
+            "(a new investment's first snapshot counts as an inflow)."
+        )
+    )
+    absolute_gain: Decimal = Field(description="Total value minus total invested; with a date window, end value - start value - net window flows.")
+    total_return_pct: Decimal | None = Field(
+        default=None, description="Simple return: (total_value / total_invested) - 1; with a date window, gain over (start value + net window flows)."
+    )
     twr: Decimal | None = Field(default=None, description="Portfolio time-weighted return.")
-    irr: Decimal | None = Field(default=None, description="Portfolio money-weighted return (annualised XIRR).")
-    month_change: Decimal | None = Field(default=None, description="Absolute change vs previous month.")
-    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
+    irr: Decimal | None = Field(
+        default=None, description="Portfolio money-weighted return (annualised XIRR). Null when the cashflow span is under 30 days."
+    )
+    month_change: Decimal | None = Field(default=None, description="Absolute change vs the previous month-end of the portfolio value series.")
+    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs the previous month-end of the portfolio value series.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested and currencies are mixed).")
     skipped_investments: list[SkippedInvestment] = Field(
         default_factory=list, description="Investments excluded because their currency can't be converted."
@@ -111,7 +121,7 @@ class InvestmentSummaryItem(BaseModel):
     current_value: Decimal | None = Field(default=None, description="Latest snapshot value.")
     invested_capital: Decimal = Field(description="Net capital invested.")
     absolute_gain: Decimal | None = Field(default=None, description="Current value minus invested capital.")
-    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs previous month.")
+    month_change_pct: Decimal | None = Field(default=None, description="Percentage change vs the previous month-end value.")
     has_snapshots_in_period: bool = Field(default=True, description="Whether this investment has snapshots within the selected date range.")
     currency: str = Field(description="Currency of the monetary values.")
 

@@ -23,11 +23,12 @@ INVESTMENT_IDS_DESC = "Filter to specific investment IDs."
 GROUP_IDS_DESC = "Filter to investments in these groups (union)."
 CATEGORY_DESC = "Filter to investments of this category."
 SEARCH_DESC = "Filter by investment name (case-insensitive)."
-START_DATE_DESC = "Start of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
-END_DATE_DESC = "End of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
+START_DATE_DESC = "Start of date range (YYYY-MM-DD). Windows TWR/IRR and turns value/invested/gain into period metrics."
+END_DATE_DESC = "End of date range (YYYY-MM-DD). Windows TWR/IRR and turns value/invested/gain into period metrics."
 
 
-# Returns portfolio-level metrics (total value, invested, gain, month change).
+# Returns portfolio-level metrics (total value, invested, gain, month change). With
+# start_date/end_date the value/invested/gain fields become period metrics over that window.
 # Supports filtering by investment IDs, group IDs, or category.
 @router.get("/portfolio", response_model=PortfolioMetricsResponse)
 async def get_portfolio_metrics(

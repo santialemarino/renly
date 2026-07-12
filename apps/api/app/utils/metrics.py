@@ -15,6 +15,9 @@ from app.models.transaction import Transaction, TransactionType
 ZERO = Decimal("0")
 ONE = Decimal("1")
 
+# Minimum cashflow span for an annualised IRR; annualising a shorter span produces absurd rates.
+MIN_IRR_SPAN_DAYS = 30
+
 
 # Computes period return between two snapshots, adjusting for net cash flow.
 # Formula: (S_curr - NetCF) / S_prev - 1. Returns None if S_prev is zero.
@@ -63,39 +66,67 @@ def net_cash_flow(
     return total
 
 
-# Computes XIRR (annualised money-weighted return) via Newton-Raphson.
-# cashflows: list of (date, amount) where outflows are negative, inflows positive.
-# Returns None if it cannot converge or there are insufficient data points.
+# Computes XIRR (annualised money-weighted return) via bisection on the NPV sign change.
+# cashflows: list of (date, amount) where outflows are negative, inflows positive; any order.
+# Returns None when there are insufficient data points, the span is under MIN_IRR_SPAN_DAYS,
+# all amounts share one sign, or no bracketing interval with an NPV sign change exists.
 def xirr(
     cashflows: list[tuple[date_type, float]],
-    guess: float = 0.1,
     max_iter: int = 200,
     tol: float = 1e-7,
 ) -> Decimal | None:
     if len(cashflows) < 2:
         return None
 
-    d0 = cashflows[0][0]
-    day_fracs = [(cf[0] - d0).days / 365.0 for cf in cashflows]
-    amounts = [cf[1] for cf in cashflows]
+    ordered = sorted(cashflows, key=lambda cf: cf[0])
+    d0 = ordered[0][0]
+    day_fracs = [(cf[0] - d0).days / 365.0 for cf in ordered]
+    amounts = [cf[1] for cf in ordered]
 
-    rate = guess
-    for _ in range(max_iter):
-        npv = sum(a / (1 + rate) ** t if t != 0 else a for a, t in zip(amounts, day_fracs))
-        dnpv = sum(-t * a / (1 + rate) ** (t + 1) for a, t in zip(amounts, day_fracs) if t != 0)
-        if abs(dnpv) < 1e-12:
+    # Annualising over a very short span produces absurd rates; suppress below the minimum.
+    if (ordered[-1][0] - d0).days < MIN_IRR_SPAN_DAYS:
+        return None
+
+    # An IRR only exists when the series has both inflows and outflows.
+    if all(a >= 0 for a in amounts) or all(a <= 0 for a in amounts):
+        return None
+
+    # NPV of the series at a given rate; rate > -1 keeps every power real.
+    def npv(rate: float) -> float:
+        return sum(a / (1.0 + rate) ** t for a, t in zip(amounts, day_fracs))
+
+    try:
+        lo, hi = -0.9999, 10.0
+        npv_lo = npv(lo)
+        npv_hi = npv(hi)
+        # Expand the upper bracket for extreme positive rates before giving up. NPV tends to the
+        # earliest cashflow as rate grows and to a huge value of the latest cashflow's sign as
+        # rate approaches -1, so a realistic series changes sign somewhere in between.
+        while npv_lo * npv_hi > 0 and hi < 1e6:
+            hi *= 10.0
+            npv_hi = npv(hi)
+        if npv_lo * npv_hi > 0:
             return None
-        new_rate = rate - npv / dnpv
-        if abs(new_rate - rate) < tol:
-            return Decimal(str(round(new_rate, 6)))
-        rate = new_rate
-
-    return None
+        for _ in range(max_iter):
+            mid = (lo + hi) / 2.0
+            npv_mid = npv(mid)
+            if abs(npv_mid) < tol or (hi - lo) / 2.0 < tol:
+                return Decimal(str(round(mid, 6)))
+            if npv_lo * npv_mid < 0:
+                hi = mid
+            else:
+                lo = mid
+                npv_lo = npv_mid
+        return Decimal(str(round((lo + hi) / 2.0, 6)))
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return None
 
 
 # Builds XIRR cashflows for an investment.
-# First snapshot as outflow (negative), deposits as outflows, withdrawals as inflows,
-# final snapshot as inflow (positive).
+# First snapshot as outflow (negative), deposits as outflows, withdrawals as inflows, and the
+# terminal snapshot value as an inflow dated max(last snapshot date, last transaction date) so
+# trailing transactions never dangle past the terminal value. A series whose terminal date
+# equals the first date (one snapshot, no later transactions) carries no rate information → [].
 def build_irr_cashflows(
     snapshots: list[InvestmentSnapshot],
     transactions: list[Transaction],
@@ -108,6 +139,7 @@ def build_irr_cashflows(
         (first.date, -float(first.value)),
     ]
 
+    last_event_date = first.date
     for tx in transactions:
         if tx.date <= first.date:
             continue
@@ -115,10 +147,14 @@ def build_irr_cashflows(
             cashflows.append((tx.date, -float(tx.amount)))
         else:
             cashflows.append((tx.date, float(tx.amount)))
+        if tx.date > last_event_date:
+            last_event_date = tx.date
 
     last = snapshots[-1]
-    if last.date != first.date:
-        cashflows.append((last.date, float(last.value)))
+    terminal_date = max(last.date, last_event_date)
+    if terminal_date == first.date:
+        return []
+    cashflows.append((terminal_date, float(last.value)))
 
     return cashflows
 
@@ -144,6 +180,140 @@ def compute_period_returns(
         results.append((curr.date, curr.value, r))
 
     return results
+
+
+# Forward-fills per-investment snapshot values into portfolio totals per date and chains
+# period returns. A new investment's first snapshot value counts as a cash inflow in the
+# period where it appears (contributed capital, not return); flows dated on or before an
+# investment's first snapshot are ignored as already embodied in that first value.
+# inv_date_value: {investment_id: {date: value}} (values already in display currency).
+# flows_by_inv: {investment_id: [(date, signed amount)]} — positive = money in, negative = out.
+# Returns (totals, returns): [(date, portfolio total)] and [(date, period return or None)].
+def portfolio_totals_and_returns(
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+) -> tuple[list[tuple[date_type, Decimal]], list[tuple[date_type, Decimal | None]]]:
+    all_dates = sorted({d for dv in inv_date_value.values() for d in dv})
+    if not all_dates:
+        return [], []
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
+
+    last_known: dict[int, Decimal] = {}
+    totals: list[tuple[date_type, Decimal]] = []
+    for d in all_dates:
+        total = ZERO
+        for inv_id, dv in inv_date_value.items():
+            if d in dv:
+                last_known[inv_id] = dv[d]
+            total += last_known.get(inv_id, ZERO)
+        totals.append((d, total))
+
+    returns: list[tuple[date_type, Decimal | None]] = []
+    for i in range(1, len(totals)):
+        prev_date, prev_val = totals[i - 1]
+        curr_date, curr_val = totals[i]
+        period_ncf = ZERO
+        for inv_id, flows in flows_by_inv.items():
+            first_date = first_snap_date.get(inv_id)
+            for flow_date, amount in flows:
+                if first_date is not None and flow_date <= first_date:
+                    continue
+                if prev_date < flow_date <= curr_date:
+                    period_ncf += amount
+        for inv_id, first_date in first_snap_date.items():
+            if prev_date < first_date <= curr_date:
+                period_ncf += inv_date_value[inv_id][first_date]
+        returns.append((curr_date, period_return(prev_val, curr_val, period_ncf)))
+    return totals, returns
+
+
+# Forward-filled portfolio value at as_of_date: the last total dated on or before it.
+# Returns ZERO when the series has no entry that early.
+def portfolio_value_at(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    as_of_date: date_type,
+) -> Decimal:
+    value = ZERO
+    for d, total in portfolio_totals:
+        if d > as_of_date:
+            break
+        value = total
+    return value
+
+
+# Selects the latest value and the last value dated before the latest entry's month from a
+# chronological (date, value) series. Returns (previous, current), or None when the series
+# has no entry before the latest month (nothing to compare against).
+def month_over_month(
+    series: list[tuple[date_type, Decimal]],
+) -> tuple[Decimal, Decimal] | None:
+    if not series:
+        return None
+    curr_date, curr_value = series[-1]
+    month_start = date_type(curr_date.year, curr_date.month, 1)
+    prev_values = [v for d, v in series if d < month_start]
+    if not prev_values:
+        return None
+    return prev_values[-1], curr_value
+
+
+# Builds the money-weighted cashflow series for a date-windowed portfolio IRR: an outflow of
+# the forward-filled portfolio value at the window start, real flows and first-snapshot
+# outflows inside the window, and an inflow of the forward-filled value at the window end
+# (dated at the latest data or flow date inside the window). Zero boundary values are omitted.
+# Same argument shapes as portfolio_totals_and_returns.
+def build_windowed_portfolio_cashflows(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+    start_date: date_type | None,
+    end_date: date_type | None,
+) -> list[tuple[date_type, float]]:
+    if not portfolio_totals:
+        return []
+
+    start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
+    end_value = ZERO
+    end_value_date: date_type | None = None
+    for d, total in portfolio_totals:
+        if end_date is not None and d > end_date:
+            break
+        end_value = total
+        end_value_date = d
+    if end_value_date is None:
+        return []
+
+    # True when d falls inside the (start, end] window.
+    def _in_window(d: date_type) -> bool:
+        if start_date and d <= start_date:
+            return False
+        if end_date and d > end_date:
+            return False
+        return True
+
+    cashflows: list[tuple[date_type, float]] = []
+    if start_date and start_value > ZERO:
+        cashflows.append((start_date, -float(start_value)))
+
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
+    last_flow_date = end_value_date
+    for inv_id, first_date in first_snap_date.items():
+        if _in_window(first_date):
+            cashflows.append((first_date, -float(inv_date_value[inv_id][first_date])))
+            last_flow_date = max(last_flow_date, first_date)
+    for inv_id, flows in flows_by_inv.items():
+        first_date = first_snap_date.get(inv_id)
+        for flow_date, amount in flows:
+            if first_date is not None and flow_date <= first_date:
+                continue
+            if _in_window(flow_date):
+                cashflows.append((flow_date, -float(amount)))
+                last_flow_date = max(last_flow_date, flow_date)
+
+    if end_value > ZERO:
+        cashflows.append((max(end_value_date, last_flow_date), float(end_value)))
+
+    return sorted(cashflows, key=lambda cf: cf[0])
 
 
 # Groups snapshots by investment_id. Returns {investment_id: [snapshots sorted by date]}.

@@ -13,7 +13,9 @@ from app.schemas.base import RequestBase
 # Body for POST /investments/{id}/snapshots. Creates or updates snapshot for that date.
 class SnapshotCreate(RequestBase):
     date: date_type = Field(description="Snapshot date (e.g. month-end).")
-    value: Decimal = Field(description="Total value on this date.", max_digits=18, decimal_places=2)
+    value: Decimal = Field(
+        description="Total value on this date (zero allowed for a fully-withdrawn investment).", ge=0, max_digits=18, decimal_places=2
+    )
     quantity: Decimal | None = Field(default=None, description="Shares/units.", max_digits=18, decimal_places=6)
     currency: Currency = Field(description="Currency of the value.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)

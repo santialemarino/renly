@@ -228,7 +228,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
       <DismissableHint storageKey="metrics-intro-dismissed" show={searchableInvestments.length > 0}>
         {t('metricsIntro')}
       </DismissableHint>
-      <InvestorDashboardMetricCards metrics={metrics} />
+      <InvestorDashboardMetricCards metrics={metrics} hasPeriod={Boolean(startDate || endDate)} />
       <InvestorDashboardEvolution evolution={evolution} />
 
       {isSingleInvestment && investmentDetail ? (

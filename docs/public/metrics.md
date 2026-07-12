@@ -82,6 +82,10 @@ IRR finds the annual interest rate that would make all your cash flows (deposits
 
 IRR is annualized, meaning it's expressed as a yearly rate even if your investment has only been open for a few months.
 
+Because IRR is annualized, Renly only shows it once your cashflow history spans at least 30
+days. Annualizing just a few days of data would produce absurd numbers (a good week extrapolated
+to a year looks like millions of percent), so shorter histories show "—" instead.
+
 ## When to use TWR vs. IRR
 
 | Question                                 | Use                                                       |
@@ -90,6 +94,28 @@ IRR is annualized, meaning it's expressed as a yearly rate even if your investme
 | "How did **my money** actually do?"      | IRR                                                       |
 | "Should I compare two investments?"      | TWR (fair comparison, ignoring deposit timing)            |
 | "Did my deposit timing help or hurt me?" | Compare TWR and IRR -- if IRR > TWR, your timing was good |
+
+## Metrics with a date filter
+
+When you pick a period on the investor dashboard (a preset like "This year" or a custom range),
+the headline cards switch from all-time to period metrics:
+
+- **Value at period end** — what the portfolio was worth at the end of the selected period.
+- **Invested** — the net money you moved in during the period. A new investment's starting
+  value counts as money in (it entered the portfolio during the period).
+- **Period gain** — end value − start value − net money moved in during the period. This
+  isolates what the period itself earned you, regardless of how much was already there.
+- **TWR and IRR** are measured inside the period only.
+
+Without a date filter, the cards show all-time values: current value, total net invested, and
+current value minus invested.
+
+## "vs last month"
+
+The small change indicator under the gain card compares the latest portfolio value against the
+portfolio value at the end of the previous month, both taken from the same monthly series as the
+evolution chart (in your display currency). If all your data is within a single month, there is
+no previous month to compare against and the indicator is hidden.
 
 ## Distribution and allocation
 

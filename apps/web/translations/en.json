@@ -1205,6 +1205,8 @@
       "twr": "TWR",
       "irr": "IRR",
       "gain": "Gain",
+      "periodEndValue": "Value at Period End",
+      "periodGain": "Period Gain",
       "vsLastMonth": "vs last month"
     },
     "period": {
