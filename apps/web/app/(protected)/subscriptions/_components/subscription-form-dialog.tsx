@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -33,10 +32,9 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
-import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
 
 interface SubscriptionFormDialogProps {
@@ -80,10 +78,7 @@ export function SubscriptionFormDialog({
   });
 
   const isEdit = !!subscription;
-  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
-  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
   // Reset form when dialog opens or subscription changes.
   useEffect(() => {
@@ -101,13 +96,6 @@ export function SubscriptionFormDialog({
       });
     }
   }, [open, subscription, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
 
   async function onSubmit(values: SubscriptionFormValues) {
     try {
@@ -242,74 +230,12 @@ export function SubscriptionFormDialog({
               />
             </div>
 
-            <FormField
+            <PaymentMethodFields
               control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {t(`paymentMethods.${method}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+              setValue={form.setValue}
+              creditCards={creditCards}
+              preferredCurrencies={preferredCurrencies}
             />
-
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  layout
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Select
-                            value={field.value?.toString() ?? ''}
-                            onValueChange={(v) => field.onChange(Number(v))}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {activeCards.map((card) => (
-                                <SelectItem key={card.id} value={card.id.toString()}>
-                                  {card.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </form>
         </Form>
 

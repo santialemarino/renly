@@ -1,4 +1,4 @@
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -67,6 +67,27 @@ async def delete(session: AsyncSession, subscription: Subscription) -> None:
     await session.delete(subscription)
 
 
+# Count subscriptions linked to a specific credit card.
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
+    result = await session.execute(select(func.count()).where(Subscription.credit_card_id == credit_card_id))
+    return int(result.scalar_one())
+
+
+# Count subscriptions grouped by credit card id. Returns {card_id: count}.
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+    if not credit_card_ids:
+        return {}
+    result = await session.execute(
+        select(
+            Subscription.credit_card_id,
+            func.count(),
+        )
+        .where(Subscription.credit_card_id.in_(credit_card_ids))
+        .group_by(Subscription.credit_card_id)
+    )
+    return {row[0]: int(row[1]) for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. subscription_repository.list_by_user).
 class SubscriptionRepository:
     list_by_user = staticmethod(list_by_user)
@@ -74,6 +95,8 @@ class SubscriptionRepository:
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
+    count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
 
 
 # Singleton used by services to access subscription persistence.

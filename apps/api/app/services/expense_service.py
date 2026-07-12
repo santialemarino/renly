@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, ReverseResult
+from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, PaymentMethod, PaymentPairingError, ReverseResult
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import (
@@ -369,6 +369,12 @@ async def update_expense(
     new_subscription_id = fields["subscription_id"] if "subscription_id" in fields else old_subscription_id
     new_installment_id = fields["installment_id"] if "installment_id" in fields else old_installment_id
     new_card_id = fields["credit_card_id"] if "credit_card_id" in fields else old_card_id
+
+    # Effective payment pairing after the merge: a kept-or-set card id requires the
+    # effective method to be credit_card (the schema validator only sees same-request pairs).
+    new_payment_method = fields["payment_method"] if "payment_method" in fields else entry.payment_method
+    if new_card_id is not None and new_payment_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
 
     # Reverse target: OLD plan that loses this expense. At most one fires (mutual exclusivity
     # on the row guarantees at most one old FK is set). Resolve most-recent BEFORE mutation

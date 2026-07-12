@@ -60,6 +60,24 @@
       "stocks": "Stocks",
       "term_deposit": "Term Deposit"
     },
+    "paymentMethod": {
+      "label": "Payment method",
+      "placeholder": "Select a method",
+      "methods": {
+        "cash": "Cash",
+        "debit": "Debit",
+        "transfer": "Transfer",
+        "credit_card": "Credit Card"
+      },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a card"
+      },
+      "noCards": {
+        "message": "You don't have any credit cards yet.",
+        "addCard": "Add a card"
+      }
+    },
     "allCategories": "All categories",
     "groupFilter": {
       "all": "All groups",
@@ -577,14 +595,6 @@
         "label": "Category",
         "placeholder": "Select a category"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a card"
-      },
       "cyclesToAdvance": {
         "label": "Cycles to pre-pay",
         "errors": {
@@ -906,14 +916,6 @@
         "label": "Next billing date",
         "placeholder": "Select a date"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
-      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -1013,14 +1015,6 @@
       "expenseCategory": {
         "label": "Expense category",
         "placeholder": "Select an expense category"
-      },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
       },
       "notes": {
         "label": "Notes",
@@ -1159,14 +1153,6 @@
       "startDate": {
         "label": "Start date",
         "placeholder": "Select a date"
-      },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
       },
       "derived": {
         "total": "Total: {amount}",

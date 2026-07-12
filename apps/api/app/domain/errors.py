@@ -18,8 +18,8 @@ class ExchangeRateUnavailableError(Exception):
 
 # Operation conflicts with current state (e.g. deleting a card with linked expenses). Mapped to 409 by the API.
 class HasLinkedExpensesError(Exception):
-    def __init__(self) -> None:
-        self.message = "Cannot delete a credit card that has linked expenses. Archive it instead."
+    def __init__(self, message: str = "Cannot delete a credit card that has linked expenses. Archive it instead.") -> None:
+        self.message = message
         super().__init__(self.message)
 
 
@@ -102,6 +102,14 @@ class NotFoundError(Exception):
 class PasswordBreachedError(Exception):
     def __init__(self) -> None:
         self.message = "This password has appeared in a known data breach. Please choose a different password."
+        super().__init__(self.message)
+
+
+# Payment method / credit card pairing is inconsistent after applying an update (a card id
+# kept or set while the effective payment_method is not credit_card). Mapped to 400 by the API.
+class PaymentPairingError(Exception):
+    def __init__(self) -> None:
+        self.message = "credit_card_id requires payment_method to be 'credit_card'."
         super().__init__(self.message)
 
 

@@ -25,6 +25,7 @@ from app.domain import (
     InviteEmailTakenError,
     NotFoundError,
     PasswordBreachedError,
+    PaymentPairingError,
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
@@ -126,6 +127,10 @@ async def password_breached_handler(_request: Request, exc: PasswordBreachedErro
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+async def payment_pairing_handler(_request: Request, exc: PaymentPairingError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
+
+
 async def plan_required_handler(_request: Request, exc: PlanRequiredError):
     return JSONResponse(status_code=402, content={"detail": exc.message})
 
@@ -216,6 +221,7 @@ _EXCEPTION_HANDLERS = {
     InviteEmailTakenError: invite_email_taken_handler,
     NotFoundError: not_found_exception_handler,
     PasswordBreachedError: password_breached_handler,
+    PaymentPairingError: payment_pairing_handler,
     PlanRequiredError: plan_required_handler,
     ExchangeRateUnavailableError: exchange_rate_unavailable_handler,
     ReconciliationPeriodMismatchError: reconciliation_period_mismatch_handler,

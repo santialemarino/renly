@@ -50,6 +50,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import { StyledHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
@@ -57,7 +58,6 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -215,7 +215,6 @@ export function ExpenseFormDialog({
   const watchedSubscriptionId = useWatch({ control: form.control, name: 'subscriptionId' });
   const watchedInstallmentId = useWatch({ control: form.control, name: 'installmentId' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
   // Multi-cycle Mark Paid input is visible only for recurring obligations on the prefill
   // path (Phase 3, follow-up Item 2). One-off obligations / regular create flows hide it.
   // State-latched at open-time rather than derived live: when the dialog is closing,
@@ -331,13 +330,6 @@ export function ExpenseFormDialog({
       }
     }
   }, [open, expense, prefillFromObligation, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
 
   // Soft confirmation when a credit-card expense uses a currency the card
   // hasn't seen before. Catches typos that would otherwise create a phantom
@@ -665,85 +657,12 @@ export function ExpenseFormDialog({
                 </div>
               </LayoutGroup>
 
-              {/* Credit Card slides in horizontally next to Payment Method when */}
-              {/* payment_method = credit_card (replaces the prior standalone vertical-reveal */}
-              {/* row). Same pattern as the Cycles + Category row above. */}
-              <LayoutGroup>
-                <div className="flex min-w-0 items-start gap-x-3">
-                  <motion.div
-                    layout
-                    transition={{ duration: ANIMATION_DEFAULT }}
-                    className="flex-1 min-w-0"
-                  >
-                    <FormField
-                      control={form.control}
-                      name="paymentMethod"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {PAYMENT_METHODS.map((method) => (
-                                <SelectItem key={method} value={method}>
-                                  {t(`paymentMethods.${method}`)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </motion.div>
-
-                  <AnimatePresence initial={false} mode="popLayout">
-                    {showCreditCard && (
-                      <motion.div
-                        key="credit-card"
-                        layout
-                        initial={{ opacity: 0, width: 0, marginLeft: -12, overflow: 'hidden' }}
-                        animate={{ opacity: 1, width: 'auto', marginLeft: 0, overflow: 'visible' }}
-                        exit={{ opacity: 0, width: 0, marginLeft: -12, overflow: 'hidden' }}
-                        transition={{ duration: ANIMATION_DEFAULT }}
-                        className="flex-1 min-w-0"
-                      >
-                        <FormField
-                          control={form.control}
-                          name="creditCardId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                              <Select
-                                value={field.value?.toString() ?? ''}
-                                onValueChange={(v) => field.onChange(Number(v))}
-                              >
-                                <FormControl>
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {activeCards.map((card) => (
-                                    <SelectItem key={card.id} value={card.id.toString()}>
-                                      {card.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </LayoutGroup>
+              <PaymentMethodFields
+                control={form.control}
+                setValue={form.setValue}
+                creditCards={creditCards}
+                preferredCurrencies={preferredCurrencies}
+              />
 
               {showLinkedObligation && activeObligations && (
                 <FormField

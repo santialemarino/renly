@@ -33,7 +33,11 @@ export function CreditCardDeleteDialog({
     if (!card) return;
     setDeleting(true);
     try {
-      await deleteCreditCard(card.id);
+      const result = await deleteCreditCard(card.id);
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
       toast.success(t('delete.success'));
       onSuccess();
       onOpenChange(false);

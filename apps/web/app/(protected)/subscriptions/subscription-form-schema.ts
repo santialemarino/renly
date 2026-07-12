@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
 
 export function buildSubscriptionFormSchema(requiredMsg: string) {
@@ -9,7 +10,7 @@ export function buildSubscriptionFormSchema(requiredMsg: string) {
     currency: z.string().min(1, { message: requiredMsg }),
     billingCycle: z.enum(BILLING_CYCLES, { message: requiredMsg }),
     nextBillingDate: z.string().min(1, { message: requiredMsg }),
-    paymentMethod: z.enum(['cash', 'debit', 'transfer', 'credit_card']).optional(),
+    paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     creditCardId: z.number().optional(),
   });
 }

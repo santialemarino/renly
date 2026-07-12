@@ -3,11 +3,11 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, NotFoundError, ReverseResult
+from app.domain import AdvanceResult, NotFoundError, PaymentMethod, PaymentPairingError, ReverseResult
 from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
-from app.repositories import expense_repository, payment_obligation_repository
+from app.repositories import credit_card_repository, expense_repository, payment_obligation_repository
 from app.schemas.payment_obligation import PaymentObligationResponse
 from app.services import exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
@@ -105,6 +105,9 @@ async def create_obligation(
     credit_card_id: int | None = None,
     notes: str | None = None,
 ) -> PaymentObligation:
+    # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
     obligation = PaymentObligation(
         user_id=user.id,
         name=name,
@@ -135,6 +138,14 @@ async def update_obligation(
     **fields: object,
 ) -> PaymentObligation:
     obligation = await get_obligation(session, obligation_id, user)
+    # Effective payment pairing after the merge + SEC-4 ownership on a newly-set card.
+    new_card_id = fields.get("credit_card_id", obligation.credit_card_id)
+    new_method = fields.get("payment_method", obligation.payment_method)
+    if new_card_id is not None and new_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
+    if new_card_id is not None and new_card_id != obligation.credit_card_id:
+        if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
+            raise NotFoundError("Credit card not found")
     for key, value in fields.items():
         setattr(obligation, key, value)
     if "next_due_date" in fields and fields["next_due_date"] is not None:

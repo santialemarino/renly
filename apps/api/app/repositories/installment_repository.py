@@ -83,6 +83,27 @@ async def delete(session: AsyncSession, installment: Installment) -> None:
     await session.delete(installment)
 
 
+# Count installment plans linked to a specific credit card.
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
+    result = await session.execute(select(func.count()).where(Installment.credit_card_id == credit_card_id))
+    return int(result.scalar_one())
+
+
+# Count installment plans grouped by credit card id. Returns {card_id: count}.
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+    if not credit_card_ids:
+        return {}
+    result = await session.execute(
+        select(
+            Installment.credit_card_id,
+            func.count(),
+        )
+        .where(Installment.credit_card_id.in_(credit_card_ids))
+        .group_by(Installment.credit_card_id)
+    )
+    return {row[0]: int(row[1]) for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. installment_repository.list_by_user).
 class InstallmentRepository:
     list_by_user = staticmethod(list_by_user)
@@ -90,6 +111,8 @@ class InstallmentRepository:
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
+    count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
 
 
 # Singleton used by services to access installment persistence.

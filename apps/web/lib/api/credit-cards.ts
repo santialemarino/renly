@@ -68,7 +68,7 @@ export interface CardSettlement {
 
 // --- Mappers ---
 
-function mapCreditCard(raw: CreditCardRaw): CreditCard {
+export function mapCreditCard(raw: CreditCardRaw): CreditCard {
   return {
     id: raw.id,
     name: raw.name,

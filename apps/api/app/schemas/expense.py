@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase, validate_supported_currency
 
@@ -17,7 +18,7 @@ class ExpenseCreate(RequestBase):
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
-    payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     source: str = Field(default="manual", description="Entry origin (manual, shortcut, auto, email_parsed).", max_length=20)
     payment_obligation_id: int | None = Field(
@@ -66,6 +67,13 @@ class ExpenseCreate(RequestBase):
             raise ValueError("cycles_to_advance > 1 requires payment_obligation_id to be set.")
         return self
 
+    # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
+    # a card-less credit_card entry is allowed (zero-card users, imports).
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "ExpenseCreate":
+        ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        return self
+
 
 # Body for PUT /expenses/{id}. Partial update.
 # Commitment FKs (payment_obligation_id / subscription_id / installment_id) follow the
@@ -79,7 +87,7 @@ class ExpenseUpdate(RequestBase):
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: ExpenseCategory | None = Field(default=None, description="Expense category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
-    payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     payment_obligation_id: int | None = Field(
         default=None,
@@ -113,6 +121,15 @@ class ExpenseUpdate(RequestBase):
         )
         if link_count > 1:
             raise ValueError("At most one of payment_obligation_id, subscription_id, installment_id may be set.")
+        return self
+
+    # Same-request pairing guard: only fires when BOTH keys were provided. The merged
+    # effective check (request fields over the stored row) lives in the service.
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "ExpenseUpdate":
+        provided = self.model_fields_set
+        if "payment_method" in provided and "credit_card_id" in provided:
+            ensure_payment_pairing(self.payment_method, self.credit_card_id)
         return self
 
 

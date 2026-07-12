@@ -4,8 +4,9 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase
 
@@ -26,9 +27,16 @@ class PaymentObligationCreate(RequestBase):
         default=None,
         description="Structured expense category used to pre-fill Mark Paid and feed finance breakdowns.",
     )
-    payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
+    # a card-less credit_card entry is allowed (zero-card users, imports).
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "PaymentObligationCreate":
+        ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        return self
 
 
 # Body for PUT /payment-obligations/{id}. Partial update.
@@ -40,10 +48,19 @@ class PaymentObligationUpdate(RequestBase):
     recurrence: str | None = Field(default=None, description="Recurrence pattern.", max_length=20)
     category: str | None = Field(default=None, description="Free-form obligation label.", max_length=100)
     expense_category: ExpenseCategory | None = Field(default=None, description="Structured expense category.")
-    payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the obligation is active.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    # Same-request pairing guard: only fires when BOTH keys were provided. The merged
+    # effective check (request fields over the stored row) lives in the service.
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "PaymentObligationUpdate":
+        provided = self.model_fields_set
+        if "payment_method" in provided and "credit_card_id" in provided:
+            ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        return self
 
 
 # Response for a single payment obligation.

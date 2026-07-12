@@ -15,11 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -37,12 +32,12 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { InfoHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 
@@ -103,7 +98,6 @@ export function InstallmentFormDialog({
     },
   });
 
-  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const watchedHasInterest = useWatch({ control: form.control, name: 'hasInterest' });
   const watchedInstallmentAmount = useWatch({ control: form.control, name: 'installmentAmount' });
   const watchedInstallmentsCount = useWatch({ control: form.control, name: 'installmentsCount' });
@@ -112,8 +106,6 @@ export function InstallmentFormDialog({
 
   const isEdit = !!installment;
   const isLocked = isEdit && Number(installment.currentInstallment) > 1;
-  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
   // Derived totals shown below the per-installment row.
   const installmentNum = Number(watchedInstallmentAmount);
@@ -160,13 +152,6 @@ export function InstallmentFormDialog({
       });
     }
   }, [open, installment, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
 
   // Clear originalPrice when toggling to No interest so it doesn't linger as form state.
   useEffect(() => {
@@ -565,93 +550,14 @@ export function InstallmentFormDialog({
             )}
 
             {/* Payment method full-width. */}
-            <FormField
+            <PaymentMethodFields
               control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <Select
-                          value={field.value ?? ''}
-                          onValueChange={field.onChange}
-                          disabled={isLocked}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PAYMENT_METHODS.map((method) => (
-                              <SelectItem key={method} value={method}>
-                                {t(`paymentMethods.${method}`)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </TooltipTrigger>
-                    {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                  </Tooltip>
-                  <FormMessage />
-                </FormItem>
-              )}
+              setValue={form.setValue}
+              creditCards={creditCards}
+              preferredCurrencies={preferredCurrencies}
+              disabled={isLocked}
+              disabledTooltip={t('form.locked')}
             />
-
-            {/* Conditional credit card. */}
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div>
-                                <Select
-                                  value={field.value?.toString() ?? ''}
-                                  onValueChange={(v) => field.onChange(Number(v))}
-                                  disabled={isLocked}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {activeCards.map((card) => (
-                                      <SelectItem key={card.id} value={card.id.toString()}>
-                                        {card.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </TooltipTrigger>
-                            {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                          </Tooltip>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </form>
         </Form>
 

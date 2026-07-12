@@ -9,6 +9,7 @@ import {
   type CardReconciliation,
   type StatementPeriod,
 } from '@/lib/api/card-reconciliations';
+import { mapCreditCard, type CreditCard } from '@/lib/api/credit-cards';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
@@ -21,12 +22,13 @@ function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
   };
 }
 
-export async function createCreditCard(values: CreditCardFormValues): Promise<void> {
+export async function createCreditCard(values: CreditCardFormValues): Promise<CreditCard> {
   const res = await authenticatedFetch('/credit-cards', {
     method: 'POST',
     body: buildCardBody(values),
   });
   if (!res.ok) throw new Error('Failed to create credit card');
+  return mapCreditCard(await res.json());
 }
 
 export async function updateCreditCard(id: number, values: CreditCardFormValues): Promise<void> {
@@ -37,9 +39,25 @@ export async function updateCreditCard(id: number, values: CreditCardFormValues)
   if (!res.ok) throw new Error('Failed to update credit card');
 }
 
-export async function deleteCreditCard(id: number): Promise<void> {
+// Discriminated result so the delete dialog can surface the backend's 409 detail (which
+// names the entity kinds still referencing the card) — a thrown error's message does not
+// survive the Server Action boundary.
+export type DeleteCreditCardResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function deleteCreditCard(id: number): Promise<DeleteCreditCardResult> {
   const res = await authenticatedFetch(`/credit-cards/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete credit card');
+  if (!res.ok) {
+    if (res.status === 409) {
+      try {
+        const body: { detail?: unknown } = await res.json();
+        if (typeof body.detail === 'string') return { ok: false, conflictDetail: body.detail };
+      } catch {
+        // Not JSON; fall through to the generic error.
+      }
+    }
+    throw new Error('Failed to delete credit card');
+  }
+  return { ok: true };
 }
 
 export async function archiveCreditCard(id: number): Promise<void> {

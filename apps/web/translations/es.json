@@ -60,6 +60,24 @@
       "stocks": "Acciones",
       "term_deposit": "Plazo Fijo"
     },
+    "paymentMethod": {
+      "label": "Método de pago",
+      "placeholder": "Seleccioná un método",
+      "methods": {
+        "cash": "Efectivo",
+        "debit": "Débito",
+        "transfer": "Transferencia",
+        "credit_card": "Tarjeta de Crédito"
+      },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Seleccioná una tarjeta"
+      },
+      "noCards": {
+        "message": "Todavía no tenés ninguna tarjeta de crédito.",
+        "addCard": "Agregar tarjeta"
+      }
+    },
     "allCategories": "Todas las categorías",
     "groupFilter": {
       "all": "Todos los grupos",
@@ -577,14 +595,6 @@
         "label": "Categoría",
         "placeholder": "Seleccioná una categoría"
       },
-      "paymentMethod": {
-        "label": "Método de pago",
-        "placeholder": "Seleccioná un método"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
-      },
       "cyclesToAdvance": {
         "label": "Ciclos a pre-pagar",
         "errors": {
@@ -906,14 +916,6 @@
         "label": "Próximo cobro",
         "placeholder": "Seleccioná una fecha"
       },
-      "paymentMethod": {
-        "label": "Forma de pago",
-        "placeholder": "Seleccioná una forma de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
-      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -1013,14 +1015,6 @@
       "expenseCategory": {
         "label": "Categoría de gasto",
         "placeholder": "Elegí una categoría de gasto"
-      },
-      "paymentMethod": {
-        "label": "Método de pago",
-        "placeholder": "Elegí un método de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Elegí una tarjeta"
       },
       "notes": {
         "label": "Notas",
@@ -1159,14 +1153,6 @@
       "startDate": {
         "label": "Fecha de inicio",
         "placeholder": "Seleccioná una fecha"
-      },
-      "paymentMethod": {
-        "label": "Forma de pago",
-        "placeholder": "Seleccioná una forma de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
       },
       "derived": {
         "total": "Total: {amount}",

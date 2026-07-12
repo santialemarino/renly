@@ -7,7 +7,7 @@ import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Button, Pill, SearchInput } from '@repo/ui/components';
-import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
+import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 

@@ -8,13 +8,15 @@ from app.domain import (
     CycleAdvanceDecision,
     InstallmentLockedFieldError,
     NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
     ReverseResult,
     closest_installment_cuota,
     installment_link_advanced_cursor,
 )
 from app.models.installment import Installment
 from app.models.user import User
-from app.repositories import installment_repository
+from app.repositories import credit_card_repository, installment_repository
 from app.schemas.installment import InstallmentResponse
 from app.services import exchange_rate_service
 from app.utils.metrics import RateLookup, convert_optional
@@ -121,6 +123,9 @@ async def create_installment(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> Installment:
+    # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
     installment = Installment(
         user_id=user.id,
         name=name,
@@ -152,6 +157,14 @@ async def update_installment(
         violated = diff_locked_fields(installment, fields)
         if violated:
             raise InstallmentLockedFieldError(violated)
+    # Effective payment pairing after the merge + SEC-4 ownership on a newly-set card.
+    new_card_id = fields.get("credit_card_id", installment.credit_card_id)
+    new_method = fields.get("payment_method", installment.payment_method)
+    if new_card_id is not None and new_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
+    if new_card_id is not None and new_card_id != installment.credit_card_id:
+        if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
+            raise NotFoundError("Credit card not found")
     for key, value in fields.items():
         setattr(installment, key, value)
     await installment_repository.save(session, installment)

@@ -83,7 +83,9 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 
 **Investments fields:** `name` (required), `category` (required), `base_currency` (required), `ticker`, `broker`, `notes`.
 
-**Expenses fields:** `date` (required), `amount` (required), `currency` (required), `category`, `payment_method`, `notes`. Imported rows are recorded with source `manual`.
+**Expenses fields:** `date` (required), `amount` (required), `currency` (required), `category`, `payment_method`, `credit_card_id`, `notes`. Imported rows are recorded with source `manual`.
+
+**Payment method values (all four commitment entities).** `payment_method` accepts only the canonical values `cash`, `debit`, `transfer`, `credit_card` — any other string is rejected with `422`. **Pairing rule:** `credit_card_id` may only be set when `payment_method` is `credit_card`; a `credit_card_id` paired with any other method returns `422` (create / same-request update) or `400` (an update whose merged effective method is not `credit_card`). A `credit_card` entry with **no** `credit_card_id` is allowed (zero-card users and imports). This applies identically to expenses, subscriptions, installments, and payment obligations.
 
 **Income fields:** `date` (required), `amount` (required), `currency` (required), `category`, `notes`. Imported rows are recorded with source `manual`.
 

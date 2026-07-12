@@ -30,7 +30,9 @@ def _entry(*, credit_card_id: int | None = None) -> ExpenseEntry:
         amount=Decimal("100"),
         currency="USD",
         notes=None,
-        payment_method=None,
+        # A card-linked entry carries the credit_card method (the pairing invariant); a
+        # card-less one has no method.
+        payment_method="credit_card" if credit_card_id is not None else None,
         credit_card_id=credit_card_id,
         source="manual",
     )
@@ -144,7 +146,7 @@ class TestUpdateExpenseOwnership:
         session = AsyncMock()
 
         with pytest.raises(NotFoundError, match="Credit card not found"):
-            await expense_service.update_expense(session, 1, USER, credit_card_id=99)
+            await expense_service.update_expense(session, 1, USER, payment_method="credit_card", credit_card_id=99)
 
         save_mock.assert_not_called()
         session.commit.assert_not_called()

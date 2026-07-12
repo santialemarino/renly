@@ -7,13 +7,15 @@ from app.domain import (
     AdvanceResult,
     CycleAdvanceDecision,
     NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
     ReverseResult,
     closest_subscription_cycle,
     subscription_link_advanced_cursor,
 )
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.repositories import subscription_repository
+from app.repositories import credit_card_repository, subscription_repository
 from app.schemas.subscription import SubscriptionResponse
 from app.services import exchange_rate_service
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
@@ -98,6 +100,9 @@ async def create_subscription(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> Subscription:
+    # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
     subscription = Subscription(
         user_id=user.id,
         name=name,
@@ -124,6 +129,14 @@ async def update_subscription(
     **fields: object,
 ) -> Subscription:
     subscription = await get_subscription(session, subscription_id, user)
+    # Effective payment pairing after the merge + SEC-4 ownership on a newly-set card.
+    new_card_id = fields.get("credit_card_id", subscription.credit_card_id)
+    new_method = fields.get("payment_method", subscription.payment_method)
+    if new_card_id is not None and new_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
+    if new_card_id is not None and new_card_id != subscription.credit_card_id:
+        if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
+            raise NotFoundError("Credit card not found")
     if "next_billing_date" in fields and fields["next_billing_date"] is not None:
         nbd = fields["next_billing_date"]
         if isinstance(nbd, date_type):
