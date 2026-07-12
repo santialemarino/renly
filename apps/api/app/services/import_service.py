@@ -183,16 +183,20 @@ async def _existing_keys(session: AsyncSession, user: User, spec: ImportSpec) ->
 # Builds a resolver mapping a row's `investment` identifier to `investment_id`, for nested entities.
 # Matches ticker first, then name; ambiguous matches resolve to the lowest (oldest) id. Returns None
 # for top-level entities. The resolver raises ValueError for an unmatched identifier (→ invalid row).
+# Also validates the row's currency against the resolved investment's base currency — a mismatched
+# row is invalid, mirroring the API's 400.
 async def _build_resolver(session: AsyncSession, user: User, entity: ImportEntity) -> Callable[[dict[str, object]], None] | None:
     if entity not in (ImportEntity.snapshots, ImportEntity.transactions):
         return None
     identifiers = await investment_repository.list_identifiers_by_user(session, user.id)
     by_ticker: dict[str, int] = {}
     by_name: dict[str, int] = {}
-    for investment_id, name, ticker in identifiers:
+    base_by_id: dict[int, str] = {}
+    for investment_id, name, ticker, base_currency in identifiers:
         by_name.setdefault(name.strip().lower(), investment_id)
         if ticker:
             by_ticker.setdefault(ticker.strip().upper(), investment_id)
+        base_by_id[investment_id] = base_currency
 
     def resolve(values: dict[str, object]) -> None:
         raw = str(values.get("investment", "")).strip()
@@ -201,6 +205,10 @@ async def _build_resolver(session: AsyncSession, user: User, entity: ImportEntit
             investment_id = by_name.get(raw.lower())
         if investment_id is None:
             raise ValueError(f"Investment '{raw}' not found.")
+        row_currency = str(values["currency"])
+        base_currency = base_by_id[investment_id]
+        if row_currency != base_currency:
+            raise ValueError(f"Currency {row_currency} does not match the investment's base currency ({base_currency}).")
         values["investment_id"] = investment_id
 
     return resolve

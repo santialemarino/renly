@@ -53,17 +53,21 @@ function getCurrencyName(code: string): string {
   return cc.code(code)?.currency ?? code;
 }
 
-// Splits currencies into pinned, preferred, and other groups.
-function splitGroups(pinnedCodes: string[], preferredCodes: string[]) {
+// Splits currencies into pinned, preferred, and other groups within the given universe.
+function splitGroups(
+  all: { code: string; name: string }[],
+  pinnedCodes: string[],
+  preferredCodes: string[],
+) {
   const pinnedSet = new Set(pinnedCodes);
   const preferredSet = new Set(preferredCodes);
-  const pinned = pinnedCodes.map((code) => ALL_ISO.find((c) => c.code === code)!).filter(Boolean);
-  const preferred = ALL_ISO.filter((c) => !pinnedSet.has(c.code) && preferredSet.has(c.code)).sort(
-    (a, b) => a.code.localeCompare(b.code),
-  );
-  const other = ALL_ISO.filter((c) => !pinnedSet.has(c.code) && !preferredSet.has(c.code)).sort(
-    (a, b) => a.code.localeCompare(b.code),
-  );
+  const pinned = pinnedCodes.map((code) => all.find((c) => c.code === code)!).filter(Boolean);
+  const preferred = all
+    .filter((c) => !pinnedSet.has(c.code) && preferredSet.has(c.code))
+    .sort((a, b) => a.code.localeCompare(b.code));
+  const other = all
+    .filter((c) => !pinnedSet.has(c.code) && !preferredSet.has(c.code))
+    .sort((a, b) => a.code.localeCompare(b.code));
   return { pinned, preferred, other };
 }
 
@@ -89,6 +93,7 @@ interface CurrencyComboboxProps {
   compact?: boolean;
   pinnedCurrencies?: string[];
   preferredCurrencies?: string[];
+  codes?: string[];
   disabled?: boolean;
   onChange: (code: string) => void;
   onClear?: () => void;
@@ -104,6 +109,7 @@ export function CurrencyCombobox({
   compact = false,
   pinnedCurrencies,
   preferredCurrencies,
+  codes,
   disabled = false,
   onChange,
   onClear,
@@ -119,12 +125,17 @@ export function CurrencyCombobox({
   const typeaheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const q = search.toLowerCase();
 
+  // Restrict the selectable universe when an allowlist is provided (entry forms pass the API's
+  // supported set); display and preference pickers keep the full ISO list.
+  const allCurrencies = codes ? ALL_ISO.filter((c) => codes.includes(c.code)) : ALL_ISO;
+
   // Split currencies into pinned, preferred, and other groups. Props override env defaults.
   const {
     pinned: pinnedGroup,
     preferred: preferredGroup,
     other: otherGroup,
   } = splitGroups(
+    allCurrencies,
     pinnedCurrencies ?? DEFAULT_PINNED_CODES,
     preferredCurrencies ?? ENV_PREFERRED_CURRENCIES,
   );
@@ -211,7 +222,7 @@ export function CurrencyCombobox({
               typeaheadBuffer.current = '';
             }, 500);
             const prefix = typeaheadBuffer.current;
-            const match = ALL_ISO.find(
+            const match = allCurrencies.find(
               (c) => !exclude.includes(c.code) && c.code.startsWith(prefix),
             );
             if (match) onChange(match.code);

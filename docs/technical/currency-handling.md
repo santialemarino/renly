@@ -12,7 +12,9 @@ The global currency switcher in the sidebar offers three options (configured in 
 
 ### Supported currencies
 
-Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). Other ISO 4217 currencies can be stored as an investment's `base_currency` but will display a warning icon and toast when selected in the currency combobox. Values fall back to original currency when conversion is not available.
+Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). The set is served by `GET /exchange-rates/currencies` (derived from `app/domain/currency.py`, the single source of truth) and drives the entry-form pickers.
+
+**Entry forms** (expense / income / subscription) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported entry currency with **422**. The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
 
 ### Dollar rate preference
 
@@ -74,6 +76,14 @@ Per row / per snapshot / per cashflow:
 
 The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 
+**Fail-loud conversion.** `convert_value` returns `Decimal | None` — `None` when either currency's rate is missing from the map. A value is **never** summed unconverted. Callers handle `None` by skipping and reporting:
+
+- **Aggregates** (finance overview / monthly / breakdowns, dashboard overview / evolution / composition, expense & income lists, payments calendar) exclude the row and list its code in an additive `skipped_currencies: string[]` response field.
+- **Liquidity** reuses `skipped_entities` (a new `income` entry type carries the currency code as its name).
+- **Metrics & snapshot grid** extend the data-presence-aware `skipped_investments` — an investment whose base or the display currency has no stored rates is excluded and surfaced.
+- **Per-row `converted_*` fields** (expense/income/plan/calendar rows, asset-price lookup) stay **null** on a missing rate, never the unconverted number.
+- **Single-investment metrics** raise `ExchangeRateUnavailableError` (503) rather than silently drop conversion.
+
 **Which date a value converts at, by use case:**
 
 | Use case                                               | Conversion date                               | Why                                                                                                                                                |
@@ -113,6 +123,10 @@ The snapshot form always uses `original_value` / `original_amount` to populate f
 ### 4.1 Investment currency lock
 
 An investment's `base_currency` cannot be changed once snapshots exist — changing it would silently corrupt all stored values (e.g., 50 USD becomes 50 ARS). The backend rejects currency changes with 409 Conflict when snapshots exist. The frontend disables the currency combobox on the edit form (with a tooltip explaining why). Investments with zero snapshots can freely change currency.
+
+### 4.2 Snapshot / transaction row currency must equal the investment base
+
+A snapshot or transaction valued in a currency other than its investment's `base_currency` would misvalue every downstream metric (~1000× for ARS↔USD). The snapshot-upsert and transaction create/update paths reject a mismatch with **400** (`InvestmentCurrencyMismatchError`, message `Currency <X> does not match the investment's base currency (<Y>).`); there is no auto-convert. The snapshot/transaction **importers** apply the same rule per row — a mismatched row is flagged invalid with the same message (the resolver knows each investment's base currency).
 
 ### 5. Exchange rate fetching
 

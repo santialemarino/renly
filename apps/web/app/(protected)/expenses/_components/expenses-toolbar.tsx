@@ -24,12 +24,14 @@ import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
 export function ExpensesToolbar({
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
 }: {
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -127,6 +129,7 @@ export function ExpensesToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           creditCards={creditCards}
           activeObligations={activeObligations}
           activeSubscriptions={activeSubscriptions}

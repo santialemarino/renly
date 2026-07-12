@@ -45,12 +45,21 @@ async def list_income(
         page_size=page_size,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    items: list[IncomeResponse] = []
+    skipped: set[str] = set()
+    for e in entries:
+        resp = _to_response(e, currency, lookup)
+        # A requested conversion that yielded null means the rate was missing — flag the row's currency.
+        if currency and e.currency != currency and resp.converted_amount is None:
+            skipped.add(e.currency)
+        items.append(resp)
     return IncomeListResponse(
-        items=[_to_response(e, currency, lookup) for e in entries],
+        items=items,
         total=total,
         page=page,
         page_size=page_size,
         display_currency=currency,
+        skipped_currencies=sorted(skipped),
     )
 
 

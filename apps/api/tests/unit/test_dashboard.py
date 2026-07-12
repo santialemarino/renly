@@ -36,7 +36,7 @@ class TestComputeMonthlyCardBalances:
         settlements = [
             (1, 2026, 2, "USD", 80.0),
         ]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -46,6 +46,7 @@ class TestComputeMonthlyCardBalances:
         # Jan: 100 - 0 = 100. Feb: 100 + 50 - 80 = 70.
         assert result[(2026, 1)] == Decimal("100")
         assert result[(2026, 2)] == Decimal("70")
+        assert skipped == []
 
     def test_multi_card_multi_currency_converts_each_bucket(self):
         expenses = [
@@ -53,7 +54,7 @@ class TestComputeMonthlyCardBalances:
             (2, 2026, 1, "ARS", 1200.0),  # 1200 ARS = 1 USD.
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD", 2: "ARS"},
@@ -62,6 +63,7 @@ class TestComputeMonthlyCardBalances:
         )
         # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
         assert result[(2026, 1)] == Decimal("101")
+        assert skipped == []
 
     def test_cumulative_across_months(self):
         expenses = [
@@ -69,7 +71,7 @@ class TestComputeMonthlyCardBalances:
             (1, 2026, 3, "USD", 50.0),
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -80,11 +82,12 @@ class TestComputeMonthlyCardBalances:
         assert result[(2026, 1)] == Decimal("100")
         assert (2026, 2) not in result
         assert result[(2026, 3)] == Decimal("150")
+        assert skipped == []
 
     def test_settlement_exceeds_expenses(self):
         expenses = [(1, 2026, 1, "USD", 50.0)]
         settlements = [(1, 2026, 1, "USD", 100.0)]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -93,9 +96,10 @@ class TestComputeMonthlyCardBalances:
         )
         # Overpayment: 50 - 100 = -50.
         assert result[(2026, 1)] == Decimal("-50")
+        assert skipped == []
 
     def test_empty_inputs(self):
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             [],
             [],
             card_currencies={},
@@ -103,6 +107,7 @@ class TestComputeMonthlyCardBalances:
             lookup=FIXED_LOOKUP,
         )
         assert result == {}
+        assert skipped == []
 
     def test_no_target_currency_passes_values_through(self):
         # When no target currency is set, every bucket's value is summed raw.
@@ -111,7 +116,7 @@ class TestComputeMonthlyCardBalances:
             (1, 2026, 1, "ARS", 500.0),
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -120,13 +125,14 @@ class TestComputeMonthlyCardBalances:
         )
         # No conversion: 100 + 500 = 600.
         assert result[(2026, 1)] == Decimal("600")
+        assert skipped == []
 
     def test_foreign_bucket_settled_in_its_own_currency(self):
         # ARS card with USD bucket activity — both expense and settlement live in USD,
         # so the USD bucket cancels cleanly without going through card currency.
         expenses = [(1, 2026, 1, "USD", 50.0)]
         settlements = [(1, 2026, 1, "USD", 50.0)]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "ARS"},
@@ -134,12 +140,13 @@ class TestComputeMonthlyCardBalances:
             lookup=FIXED_LOOKUP,
         )
         assert result[(2026, 1)] == Decimal("0")
+        assert skipped == []
 
     def test_each_bucket_converts_from_its_own_currency(self):
         # ARS-currency settlement on a USD card converts directly from ARS, not via card currency.
         expenses = [(1, 2026, 1, "USD", 100.0)]
         settlements = [(1, 2026, 1, "ARS", 1200.0)]  # 1200 ARS = 1 USD.
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -148,3 +155,17 @@ class TestComputeMonthlyCardBalances:
         )
         # 100 USD expense - 1 USD settlement (from 1200 ARS) = 99 USD.
         assert result[(2026, 1)] == Decimal("99")
+        assert skipped == []
+
+    def test_missing_rate_row_is_skipped_and_reported(self):
+        # FIXED_LOOKUP maps only USD/ARS — the EUR expense row must be excluded, not passed through.
+        result, skipped = compute_monthly_card_balances(
+            [(1, 2026, 1, "ARS", 1200.0), (1, 2026, 1, "EUR", 50.0)],
+            [],
+            card_currencies={1: "ARS"},
+            target_currency="USD",
+            lookup=FIXED_LOOKUP,
+        )
+        assert skipped == ["EUR"]
+        # 1200 ARS -> 1 USD at the fake rate; EUR contributes nothing.
+        assert result[(2026, 1)] == Decimal("1")

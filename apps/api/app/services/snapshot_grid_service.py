@@ -8,6 +8,7 @@ from app.domain import ExchangeRateUnavailableError
 from app.models.investment import InvestmentCategory
 from app.repositories.cedear_ratio_repository import cedear_ratio_repository
 from app.repositories.metrics_repository import metrics_repository
+from app.schemas.metrics import SkippedInvestment
 from app.schemas.snapshot_grid import (
     SnapshotGridCell,
     SnapshotGridResponse,
@@ -52,15 +53,26 @@ async def get_snapshot_grid(
         investments = sorted(investments, key=lambda i: i.name.lower(), reverse=sort_order == "desc")
 
     if not investments:
-        return SnapshotGridResponse(rows=[], months=[])
+        return SnapshotGridResponse(rows=[], months=[], skipped_investments=[])
 
     lookup: mh.RateLookup | None = None
+    skipped: list[SkippedInvestment] = []
     if currency:
         needs_conversion = any(inv.base_currency != currency for inv in investments)
         if needs_conversion:
             lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
-            if lookup.get_rate_map_at(date_type.today()) is None:
+            rate_map_today = lookup.get_rate_map_at(date_type.today())
+            if rate_map_today is None:
                 raise ExchangeRateUnavailableError(currency)
+            # Fail-loud: an investment whose pair has no stored rates is excluded and reported,
+            # never rendered with unconverted cell values.
+            convertible = []
+            for inv in investments:
+                if inv.base_currency == currency or (inv.base_currency in rate_map_today and currency in rate_map_today):
+                    convertible.append(inv)
+                else:
+                    skipped.append(SkippedInvestment(investment_id=inv.id, name=inv.name, base_currency=inv.base_currency))
+            investments = convertible
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -95,14 +107,18 @@ async def get_snapshot_grid(
             # cell stays deterministic across time — re-opening tomorrow shows the same number.
             snap_rate_map = lookup.get_rate_map_at(snap.date) if currency and lookup else None
             if snap_rate_map:
-                value = mh.convert_value(value, inv.base_currency, currency, snap_rate_map)
+                converted = mh.convert_value(value, inv.base_currency, currency, snap_rate_map)
+                # Defensive: unreachable — inconvertible investments were filtered above.
+                value = converted if converted is not None else value
             # Transactions get converted at their own date, not the snapshot's, since a transaction
             # may occur on any day within the snapshot period.
             tx_amount = tx.amount if tx else None
             if tx is not None and currency and lookup:
                 tx_rate_map = lookup.get_rate_map_at(tx.date)
                 if tx_rate_map:
-                    tx_amount = mh.convert_value(tx.amount, inv.base_currency, currency, tx_rate_map)
+                    converted_tx = mh.convert_value(tx.amount, inv.base_currency, currency, tx_rate_map)
+                    # Defensive: unreachable — inconvertible investments were filtered above.
+                    tx_amount = converted_tx if converted_tx is not None else tx.amount
             cells.append(
                 SnapshotGridCell(
                     date=snap.date,
@@ -136,7 +152,7 @@ async def get_snapshot_grid(
             )
         )
 
-    return SnapshotGridResponse(rows=rows, months=all_dates)
+    return SnapshotGridResponse(rows=rows, months=all_dates, skipped_investments=skipped)
 
 
 # Returns {snapshot_date: latest_transaction} for periods that had transactions.

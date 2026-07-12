@@ -72,10 +72,12 @@ function SortIcon({
 function RowActions({
   income,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: {
   income: IncomeEntry;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }) {
   const t = useTranslations('income');
@@ -126,6 +128,7 @@ function RowActions({
         onOpenChange={setEditOpen}
         income={income}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={onSuccess}
       />
 
@@ -142,11 +145,13 @@ function RowActions({
 export function IncomeDataTable({
   data,
   preferredCurrencies,
+  supportedCurrencies,
   activeCurrency,
   firstRun,
 }: {
   data: IncomeListResponse;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   activeCurrency?: string;
   firstRun?: boolean;
 }) {
@@ -256,6 +261,7 @@ export function IncomeDataTable({
                     <RowActions
                       income={entry}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>

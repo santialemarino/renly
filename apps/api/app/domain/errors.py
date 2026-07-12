@@ -77,6 +77,13 @@ class InvalidInviteError(Exception):
         super().__init__(message)
 
 
+# Snapshot/transaction row currency differs from the investment's base currency. Mapped to 400 by the API.
+class InvestmentCurrencyMismatchError(Exception):
+    def __init__(self, row_currency: str, base_currency: str) -> None:
+        self.message = f"Currency {row_currency} does not match the investment's base currency ({base_currency})."
+        super().__init__(self.message)
+
+
 # An admin tried to invite an email that already belongs to an account. Mapped to 409 by the API.
 class InviteEmailTakenError(Exception):
     def __init__(self, message: str = "An account with this email already exists.") -> None:

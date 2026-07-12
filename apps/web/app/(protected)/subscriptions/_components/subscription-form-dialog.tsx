@@ -44,6 +44,7 @@ interface SubscriptionFormDialogProps {
   onOpenChange: (open: boolean) => void;
   subscription?: Subscription;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   onSuccess: () => void;
 }
@@ -53,6 +54,7 @@ export function SubscriptionFormDialog({
   onOpenChange,
   subscription,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   onSuccess,
 }: SubscriptionFormDialogProps) {
@@ -182,6 +184,7 @@ export function SubscriptionFormDialog({
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}

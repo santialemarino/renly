@@ -31,20 +31,26 @@ ZERO = Decimal("0")
 # coarser than the per-row conversion used everywhere else. If finer historical accuracy is
 # needed later, the repository can switch to per-month grouping (already done for the monthly
 # evolution chart).
+# Returns (total, skipped currency codes).
 def _sum_converted(
     totals_by_currency: dict[str, float],
     target_currency: str | None,
     lookup: RateLookup | None,
     anchor_date: date_type,
-) -> Decimal:
+) -> tuple[Decimal, set[str]]:
     total = ZERO
+    skipped: set[str] = set()
     rate_map = lookup.get_rate_map_at(anchor_date) if (target_currency and lookup) else None
     for currency, amount in totals_by_currency.items():
         val = Decimal(str(amount))
-        if target_currency and rate_map and currency != target_currency:
-            val = convert_value(val, currency, target_currency, rate_map)
+        if target_currency and currency != target_currency:
+            converted = convert_value(val, currency, target_currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(currency)
+                continue
+            val = converted
         total += val
-    return total
+    return total, skipped
 
 
 # Returns the last day of the month containing month_start, used to convert monthly aggregates
@@ -81,8 +87,9 @@ async def get_overview(
         date_to=date_to,
     )
 
-    total_income = _sum_converted(income_by_currency, currency, lookup, anchor)
-    total_expenses = _sum_converted(expense_by_currency, currency, lookup, anchor)
+    total_income, skipped_income = _sum_converted(income_by_currency, currency, lookup, anchor)
+    total_expenses, skipped_expenses = _sum_converted(expense_by_currency, currency, lookup, anchor)
+    skipped = skipped_income | skipped_expenses
 
     # Period-over-period change (compare with same-length previous period).
     income_change_pct = None
@@ -107,8 +114,9 @@ async def get_overview(
 
         # Prior period is anchored to ITS own end so the comparison reflects what each period
         # was worth at the time, not at today's rate.
-        prev_income = _sum_converted(prev_income_by_currency, currency, lookup, prev_to)
-        prev_expenses = _sum_converted(prev_expense_by_currency, currency, lookup, prev_to)
+        prev_income, prev_skipped_i = _sum_converted(prev_income_by_currency, currency, lookup, prev_to)
+        prev_expenses, prev_skipped_e = _sum_converted(prev_expense_by_currency, currency, lookup, prev_to)
+        skipped |= prev_skipped_i | prev_skipped_e
 
         if prev_income != ZERO:
             income_change_pct = (total_income - prev_income) / prev_income
@@ -126,8 +134,12 @@ async def get_overview(
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
-                if val and currency and today_rate_map and bucket.currency != currency:
-                    val = convert_value(val, bucket.currency, currency, today_rate_map)
+                if val and currency and bucket.currency != currency:
+                    converted = convert_value(val, bucket.currency, currency, today_rate_map) if today_rate_map else None
+                    if converted is None:
+                        skipped.add(bucket.currency)
+                        continue
+                    val = converted
                 card_balance += val
 
     return FinanceOverviewResponse(
@@ -138,6 +150,7 @@ async def get_overview(
         expense_change_pct=expense_change_pct,
         credit_card_balance=card_balance,
         currency=currency,
+        skipped_currencies=sorted(skipped),
     )
 
 
@@ -167,22 +180,29 @@ async def get_monthly(
 
     # Aggregate multi-currency monthly totals into a single converted value per month, converting
     # at the month's last day so each historical month uses its own period-end FX rate.
+    skipped: set[str] = set()
     income_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in income_rows:
         val = Decimal(str(amount))
-        if currency and lookup and cur != currency:
-            rate_map = lookup.get_rate_map_at(_month_end(year, month))
-            if rate_map:
-                val = convert_value(val, cur, currency, rate_map)
+        if currency and cur != currency:
+            rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
+            converted = convert_value(val, cur, currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(cur)
+                continue
+            val = converted
         income_by_month[(year, month)] += val
 
     expense_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in expense_rows:
         val = Decimal(str(amount))
-        if currency and lookup and cur != currency:
-            rate_map = lookup.get_rate_map_at(_month_end(year, month))
-            if rate_map:
-                val = convert_value(val, cur, currency, rate_map)
+        if currency and cur != currency:
+            rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
+            converted = convert_value(val, cur, currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(cur)
+                continue
+            val = converted
         expense_by_month[(year, month)] += val
 
     # Merge into a single timeline.
@@ -196,7 +216,7 @@ async def get_monthly(
         for year, month in all_months
     ]
 
-    return FinanceMonthlyResponse(points=points, currency=currency)
+    return FinanceMonthlyResponse(points=points, currency=currency, skipped_currencies=sorted(skipped))
 
 
 # Computes expense breakdown by category for the donut chart.
@@ -221,11 +241,16 @@ async def get_expense_breakdown(
 
     # Aggregate multi-currency per-category totals — anchor conversion to the period end. The
     # category breakdown loses per-row dates at the DB layer; see _sum_converted comment above.
+    skipped: set[str] = set()
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
         val = Decimal(str(amount))
-        if currency and rate_map and cur != currency:
-            val = convert_value(val, cur, currency, rate_map)
+        if currency and cur != currency:
+            converted = convert_value(val, cur, currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(cur)
+                continue
+            val = converted
         cat_values[category] += val
 
     total_expenses = sum(cat_values.values(), ZERO)
@@ -239,6 +264,7 @@ async def get_expense_breakdown(
         items=items,
         total_expenses=total_expenses,
         currency=currency,
+        skipped_currencies=sorted(skipped),
     )
 
 
@@ -263,11 +289,16 @@ async def get_income_breakdown(
     )
 
     # Aggregate multi-currency per-category totals — anchor conversion to the period end.
+    skipped: set[str] = set()
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
         val = Decimal(str(amount))
-        if currency and rate_map and cur != currency:
-            val = convert_value(val, cur, currency, rate_map)
+        if currency and cur != currency:
+            converted = convert_value(val, cur, currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(cur)
+                continue
+            val = converted
         cat_values[category] += val
 
     total_income = sum(cat_values.values(), ZERO)
@@ -281,6 +312,7 @@ async def get_income_breakdown(
         items=items,
         total_income=total_income,
         currency=currency,
+        skipped_currencies=sorted(skipped),
     )
 
 

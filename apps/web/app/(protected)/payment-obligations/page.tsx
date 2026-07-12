@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PaymentObligationsTable } from '@/app/(protected)/payment-obligations/_components/payment-obligations-table';
 import { PaymentObligationsToolbar } from '@/app/(protected)/payment-obligations/_components/payment-obligations-toolbar';
 import { getCreditCards } from '@/lib/api/credit-cards';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import {
   getPaymentObligations,
   type PaymentObligationSortField,
@@ -36,9 +37,12 @@ export default async function PaymentObligationsPage({
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards] = await Promise.all([
+  const [settings, creditCards, supportedCurrencies] = await Promise.all([
     getSettings().catch(() => null),
     getCreditCards().catch(() => []),
+    // The Mark-Paid expense dialog restricts its currency picker to the convertible set; on a
+    // fetch error the picker degrades to the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -70,6 +74,7 @@ export default async function PaymentObligationsPage({
       <PaymentObligationsTable
         obligations={obligations}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeCurrency={currency}
         firstRun={firstRun}

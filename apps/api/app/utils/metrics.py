@@ -176,7 +176,9 @@ def can_convert(from_currency: str, to_currency: str) -> bool:
 
 # Converts a value between any two supported currencies via USD as pivot.
 # rate_map: {currency: Decimal} where each value is "1 USD = X <currency>".
-# USD itself has an implicit rate of 1. Returns value unchanged if same or unsupported.
+# USD itself has an implicit rate of 1. Returns the value unchanged when currencies match;
+# returns None when either rate is missing from the map — callers must SKIP the row and surface
+# it in a skipped list, never sum the unconverted value (fail-loud).
 # The result is quantized to 2 decimal places: every response schema field that holds a
 # converted amount declares `decimal_places=2, max_digits=18`, and the raw `value /
 # from_rate * to_rate` runs under Python's default 28-digit Decimal precision — which
@@ -187,20 +189,21 @@ def convert_value(
     from_currency: str,
     to_currency: str,
     rate_map: dict[str, Decimal],
-) -> Decimal:
+) -> Decimal | None:
     if from_currency == to_currency:
         return value
     from_rate = rate_map.get(from_currency)
     to_rate = rate_map.get(to_currency)
     if from_rate is None or to_rate is None:
-        return value
+        return None
     return (value / from_rate * to_rate).quantize(Decimal("0.01"))
 
 
 # Converts a value into the requested display currency at the rate in effect on as_of_date.
 # The shared per-row conversion used by every service that fills a converted_* response field.
-# Returns None when no display currency was requested or when no rates are stored at all (the
-# caller leaves the converted field null); returns value unchanged when currencies match.
+# Returns None when no display currency was requested, when no rates are stored, or when the
+# needed rate is missing (the caller leaves the converted field null and flags the row's currency
+# in the response's skipped list); returns value unchanged when currencies match.
 def convert_optional(
     value: Decimal,
     from_currency: str,

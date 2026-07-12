@@ -4,10 +4,10 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /expenses.
@@ -46,6 +46,9 @@ class ExpenseCreate(RequestBase):
             "All N expenses share the same insert date (the request's `date`)."
         ),
     )
+
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # An expense pays at most one commitment-type. Three nullable FKs (payment_obligation_id /
     # subscription_id / installment_id) coexist on the row, but only one may be set on the
@@ -96,6 +99,9 @@ class ExpenseUpdate(RequestBase):
             "Mutually exclusive with the other two FKs (Phase 3, follow-up Item 10)."
         ),
     )
+
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # Mirrors ExpenseCreate's validator: an expense pays at most one commitment-type.
     # Only validates the fields the client actually set (omitted FKs don't count).
@@ -219,3 +225,7 @@ class ExpenseListResponse(BaseModel):
     page: int = Field(description="Current page (1-based).")
     page_size: int = Field(description="Items per page.")
     display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes on this page whose converted_amount is null because no exchange rate was stored.",
+    )

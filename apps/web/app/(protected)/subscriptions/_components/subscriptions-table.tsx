@@ -80,6 +80,7 @@ function SortIcon({
 interface SubscriptionsTableProps {
   subscriptions: Subscription[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
   firstRun?: boolean;
@@ -88,6 +89,7 @@ interface SubscriptionsTableProps {
 export function SubscriptionsTable({
   subscriptions,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeCurrency,
   firstRun,
@@ -326,6 +328,7 @@ export function SubscriptionsTable({
         }}
         subscription={editSubscription ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         onSuccess={() => router.refresh()}
       />

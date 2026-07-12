@@ -490,7 +490,7 @@ class TestImportEndpoints:
     @pytest.mark.parametrize("entity", ["snapshots", "transactions"])
     def test_nested_entity_preview_endpoint_returns_200(self, entity, monkeypatch):
         # Exercises route → service → spec + investment resolution for the nested entities.
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
         content = {
             "snapshots": b"Investment,Date,Value,Currency\nApple,2026-01-31,100,USD\n",
@@ -575,24 +575,40 @@ class TestInvestmentResolver:
     @pytest.mark.asyncio
     async def test_resolves_ticker_first_then_name_lowest_id(self, monkeypatch):
         # Two investments named "Apple" (ids 3, 7); a third with ticker "AAPL" (id 5).
-        identifiers = [(3, "Apple", None), (5, "Apple Inc", "AAPL"), (7, "Apple", None)]
+        identifiers = [(3, "Apple", None, "USD"), (5, "Apple Inc", "AAPL", "USD"), (7, "Apple", None, "USD")]
         monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=identifiers))
         resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
 
-        ticker_row: dict[str, object] = {"investment": "aapl"}
+        ticker_row: dict[str, object] = {"investment": "aapl", "currency": "USD"}
         resolve(ticker_row)
         assert ticker_row["investment_id"] == 5  # ticker match wins
 
-        name_row: dict[str, object] = {"investment": "apple"}
+        name_row: dict[str, object] = {"investment": "apple", "currency": "USD"}
         resolve(name_row)
         assert name_row["investment_id"] == 3  # ambiguous name → lowest (oldest) id
 
     @pytest.mark.asyncio
     async def test_unmatched_identifier_raises(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", None)]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", None, "USD")]))
         resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.snapshots)
         with pytest.raises(ValueError, match="not found"):
-            resolve({"investment": "Tesla"})
+            resolve({"investment": "Tesla", "currency": "USD"})
+
+    @pytest.mark.asyncio
+    async def test_row_currency_must_match_base(self, monkeypatch):
+        # ARS row for a USD-based investment is invalid — mirrors the API's 400.
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
+        with pytest.raises(ValueError, match="does not match the investment's base currency"):
+            resolve({"investment": "AAPL", "currency": "ARS"})
+
+    @pytest.mark.asyncio
+    async def test_matching_currency_resolves(self, monkeypatch):
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
+        row: dict[str, object] = {"investment": "AAPL", "currency": "USD"}
+        resolve(row)
+        assert row["investment_id"] == 1
 
     @pytest.mark.asyncio
     async def test_top_level_entity_has_no_resolver(self):
@@ -709,7 +725,7 @@ class TestTransactionSpec:
 class TestSnapshotImport:
     @pytest.mark.asyncio
     async def test_confirm_upserts_and_collapses_within_file(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         upsert = AsyncMock(side_effect=lambda session, snapshots: len(snapshots))
         monkeypatch.setattr(import_service.snapshot_repository, "bulk_upsert", upsert)
         session = AsyncMock()
@@ -732,7 +748,7 @@ class TestSnapshotImport:
 class TestTransactionImport:
     @pytest.mark.asyncio
     async def test_confirm_inserts_matched_skips_unmatched(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
         bulk = AsyncMock(side_effect=lambda session, txns: txns)
         monkeypatch.setattr(import_service.transaction_repository, "bulk_create", bulk)
@@ -753,7 +769,7 @@ class TestTransactionImport:
     async def test_confirm_dedups_against_existing_db_row(self, monkeypatch):
         # Existing keys arrive as DB-shaped tuples (int, date, TransactionType, Decimal, Currency,
         # Decimal); confirm they normalize to the same key as the coerced import row so it skips.
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         existing = [(1, date(2026, 1, 5), TransactionType.buy, Decimal("100.00"), Currency.USD, Decimal("5.000000"))]
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=existing))
         bulk = AsyncMock(side_effect=lambda session, txns: txns)

@@ -14,11 +14,13 @@ import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 
 interface SubscriptionsToolbarProps {
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
 }
 
 export function SubscriptionsToolbar({
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
 }: SubscriptionsToolbarProps) {
   const t = useTranslations('subscriptions');
@@ -89,6 +91,7 @@ export function SubscriptionsToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           creditCards={creditCards}
           onSuccess={() => router.refresh()}
         />

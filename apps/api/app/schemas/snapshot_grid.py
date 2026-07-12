@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.models.investment import InvestmentCategory
+from app.schemas.metrics import SkippedInvestment
 
 
 # Transaction details embedded in a grid cell (latest transaction in the period, if any).
@@ -44,3 +45,7 @@ class SnapshotGridRow(BaseModel):
 class SnapshotGridResponse(BaseModel):
     rows: list[SnapshotGridRow] = Field(description="One row per investment.")
     months: list[date_type] = Field(description="All unique snapshot dates across investments, sorted ascending.")
+    skipped_investments: list[SkippedInvestment] = Field(
+        default_factory=list,
+        description="Investments excluded because their base currency can't be converted to the requested display currency.",
+    )

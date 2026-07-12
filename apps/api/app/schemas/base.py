@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, model_validator
 
+from app.domain.currency import SUPPORTED_CURRENCIES, is_supported
+
 
 # Base class for all request bodies. Strips whitespace from all strings.
 # Optional string fields are converted to None when empty after stripping.
@@ -24,3 +26,16 @@ class RequestBase(BaseModel):
             else:
                 values[key] = stripped
         return values
+
+
+# Reusable field validator for finance-entry currencies: normalizes the code and rejects
+# anything outside the supported registry (app/domain/currency.py — the single source of
+# truth). Attach with `field_validator("currency")(validate_supported_currency)`.
+def validate_supported_currency(value: str | None) -> str | None:
+    if value is None:
+        return None
+    code = value.upper()
+    if not is_supported(code):
+        valid = ", ".join(sorted(SUPPORTED_CURRENCIES))
+        raise ValueError(f"Unsupported currency '{value}'. Use one of: {valid}.")
+    return code

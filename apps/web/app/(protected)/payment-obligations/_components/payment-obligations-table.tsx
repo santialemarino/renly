@@ -94,6 +94,7 @@ function SortIcon({
 interface PaymentObligationsTableProps {
   obligations: PaymentObligation[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
   firstRun?: boolean;
@@ -102,6 +103,7 @@ interface PaymentObligationsTableProps {
 export function PaymentObligationsTable({
   obligations,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeCurrency,
   firstRun,
@@ -441,6 +443,7 @@ export function PaymentObligationsTable({
         }}
         prefillFromObligation={markPaidPrefill ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={obligations.filter((o) => o.isActive)}
         onLinkedPlanSave={handleLinkedPlanSave}

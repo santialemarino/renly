@@ -83,6 +83,7 @@ interface ExpenseFormDialogProps {
   expense?: Expense;
   prefillFromObligation?: PrefillFromObligation;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -165,6 +166,7 @@ export function ExpenseFormDialog({
   expense,
   prefillFromObligation,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -559,6 +561,7 @@ export function ExpenseFormDialog({
                           value={field.value || null}
                           exclude={[]}
                           preferredCurrencies={preferredCurrencies}
+                          codes={supportedCurrencies}
                           placeholder={t('form.currency.placeholder')}
                           searchPlaceholder={t('form.currency.searchPlaceholder')}
                           noResults={t('form.currency.noResults')}

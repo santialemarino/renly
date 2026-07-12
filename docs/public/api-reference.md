@@ -577,12 +577,15 @@ Most endpoints also accept these common filters:
 
 ## Exchange Rates
 
-| Method | Path                     | Description                                                              |
-| ------ | ------------------------ | ------------------------------------------------------------------------ |
-| `GET`  | `/exchange-rates/latest` | Latest available rate for each currency pair.                            |
-| `GET`  | `/exchange-rates`        | Rates for a specific date. Requires `date` query parameter (YYYY-MM-DD). |
+| Method | Path                         | Description                                                                                                   |
+| ------ | ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/exchange-rates/latest`     | Latest available rate for each currency pair.                                                                 |
+| `GET`  | `/exchange-rates`            | Rates for a specific date. Requires `date` query parameter (YYYY-MM-DD).                                      |
+| `GET`  | `/exchange-rates/currencies` | Currency codes with exchange-rate support (`{ "currencies": [...] }`), sorted. Drives the entry-form pickers. |
 
 **Available pairs:** USD/ARS (oficial), USD/ARS (MEP), USD/ARS (blue), USD/BRL, USD/EUR, USD/GBP.
+
+**Supported currencies & fail-loud conversion:** Only `ARS`, `BRL`, `EUR`, `GBP`, `USD` have exchange-rate support. `POST`/`PUT` on expenses, income, and subscriptions reject any other `currency` with **422**. When a conversion to the requested display currency has no stored rate, the value is **skipped, never converted at par**: aggregate responses (dashboards, finance metrics, expense/income lists, payments calendar) carry an additive `skipped_currencies` list of the excluded codes; per-row `converted_*` fields stay `null`. A snapshot or transaction whose `currency` differs from its investment's `base_currency` is rejected with **400** (`Currency <X> does not match the investment's base currency (<Y>).`).
 
 ---
 
@@ -603,8 +606,9 @@ Most endpoints also accept these common filters:
 
 | Code  | Meaning                                                                                                                                                                                                                                                                  |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `400` | Bad request -- e.g., a snapshot/transaction `currency` that doesn't match its investment's `base_currency`.                                                                                                                                                              |
 | `401` | Unauthorized -- missing or invalid token.                                                                                                                                                                                                                                |
 | `404` | Not found -- the resource doesn't exist or doesn't belong to you.                                                                                                                                                                                                        |
 | `409` | Conflict -- e.g., trying to change an investment's currency when it already has snapshots, or a partial UNIQUE INDEX rejection on the expense entries table (manual entry duplicating a scheduler-emitted row for the same subscription / installment on the same date). |
-| `422` | Validation error -- the request body is malformed or missing required fields.                                                                                                                                                                                            |
+| `422` | Validation error -- the request body is malformed or missing required fields, or an expense/income/subscription `currency` outside the supported set (`ARS`, `BRL`, `EUR`, `GBP`, `USD`).                                                                                |
 | `503` | Service unavailable -- an external service (exchange rates, price provider) is temporarily unreachable.                                                                                                                                                                  |

@@ -16,6 +16,7 @@ interface PaymentsCalendarListProps {
   year: number;
   month: number;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -39,6 +40,7 @@ export async function PaymentsCalendarList({
   year,
   month,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -158,6 +160,7 @@ export async function PaymentsCalendarList({
                       key={`${item.type}-${item.sourceId}-${idx}`}
                       linkedExpenseId={item.linkedExpenseId}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}

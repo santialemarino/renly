@@ -21,6 +21,7 @@ from app.domain import (
     InvalidInviteError,
     InvalidRefreshTokenError,
     InvalidTokenError,
+    InvestmentCurrencyMismatchError,
     InviteEmailTakenError,
     NotFoundError,
     PasswordBreachedError,
@@ -107,6 +108,10 @@ async def invalid_token_handler(_request: Request, exc: InvalidTokenError):
 
 async def invalid_invite_handler(_request: Request, exc: InvalidInviteError):
     return JSONResponse(status_code=403, content={"detail": exc.message})
+
+
+async def investment_currency_mismatch_handler(_request: Request, exc: InvestmentCurrencyMismatchError):
+    return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
 async def invite_email_taken_handler(_request: Request, exc: InviteEmailTakenError):
@@ -207,6 +212,7 @@ _EXCEPTION_HANDLERS = {
     InvalidInviteError: invalid_invite_handler,
     InvalidRefreshTokenError: invalid_refresh_token_handler,
     InvalidTokenError: invalid_token_handler,
+    InvestmentCurrencyMismatchError: investment_currency_mismatch_handler,
     InviteEmailTakenError: invite_email_taken_handler,
     NotFoundError: not_found_exception_handler,
     PasswordBreachedError: password_breached_handler,

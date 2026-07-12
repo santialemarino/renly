@@ -7,9 +7,10 @@ from datetime import date as date_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.currency import SUPPORTED_CURRENCIES
 from app.models.exchange_rate import ExchangeRate
 from app.repositories.exchange_rate_repository import exchange_rate_repository
-from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse
+from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse, SupportedCurrenciesResponse
 from app.services import settings_service
 from app.services.exchange_rate_providers import EXCHANGE_RATE_PROVIDERS
 from app.utils.metrics import RateLookup
@@ -32,6 +33,12 @@ async def get_rates_by_date(
 ) -> list[ExchangeRateResponse]:
     rates = await exchange_rate_repository.get_by_date(session, rate_date)
     return [ExchangeRateResponse.model_validate(r) for r in rates]
+
+
+# Returns the currency codes with exchange-rate support, from the domain registry (the single
+# source of truth). No DB access — entry forms build their currency picker from this.
+def get_supported_currencies() -> SupportedCurrenciesResponse:
+    return SupportedCurrenciesResponse(currencies=sorted(SUPPORTED_CURRENCIES))
 
 
 # Builds a RateLookup pre-loaded with every stored exchange rate. One DB round-trip;

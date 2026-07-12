@@ -79,11 +79,19 @@ async def get_calendar(
     items = subscription_items + installment_items + obligation_items + card_due_items
     items.sort(key=lambda i: (i.date, _TYPE_ORDER.get(i.type, 99)))
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    responses: list[PaymentsCalendarItemResponse] = []
+    skipped: set[str] = set()
+    for item in items:
+        resp = _to_response(item, currency, lookup)
+        if currency and item.currency != currency and resp.converted_amount is None:
+            skipped.add(item.currency)
+        responses.append(resp)
     return PaymentsCalendarResponse(
         year=year,
         month=month,
         currency=currency,
-        items=[_to_response(item, currency, lookup) for item in items],
+        items=responses,
+        skipped_currencies=sorted(skipped),
     )
 
 

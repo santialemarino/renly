@@ -113,7 +113,8 @@ async def lookup_price(
         rate_map = lookup.get_rate_map_at(price.date)
         if rate_map and mh.can_convert(price.currency, convert_to):
             converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
-            converted_currency = convert_to
+    if converted_price is not None:
+        converted_currency = convert_to
 
     return PriceLookupResponse(
         ticker=price.ticker,

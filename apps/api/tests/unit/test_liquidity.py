@@ -232,91 +232,111 @@ ANCHOR = date_type(2026, 5, 15)
 
 class TestComputeMonthlyIncome:
     def test_empty_dict_returns_zero(self):
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {},
             days=30,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("0")
+        assert total == Decimal("0")
+        assert skipped == set()
 
     def test_zero_days_returns_zero_defensively(self):
         # Guard against pathological inputs — division by zero protection.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 300.0},
             days=0,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("0")
+        assert total == Decimal("0")
+        assert skipped == set()
 
     def test_thirty_day_window_is_identity(self):
         # 30 days of $300 income, 30-day window: monthly equivalent = $300.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 300.0},
             days=30,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("300")
+        assert total == Decimal("300")
+        assert skipped == set()
 
     def test_sixty_day_window_halves(self):
         # 60 days of $600 income, normalised to 30 days = $300/month.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 600.0},
             days=60,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("300")
+        assert total == Decimal("300")
+        assert skipped == set()
 
     def test_seventeen_day_window_scales_up(self):
         # Early app life: 17 days of $170 income, normalised to 30 days = $300/month.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 170.0},
             days=17,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("170") * Decimal("30") / Decimal("17")
+        assert total == Decimal("170") * Decimal("30") / Decimal("17")
+        assert skipped == set()
 
     def test_ninety_day_window_thirds(self):
         # 90-day window of $900 -> $300/month (normalised).
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 900.0},
             days=90,
             target_currency=None,
             lookup=None,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("300")
+        assert total == Decimal("300")
+        assert skipped == set()
 
     def test_multi_currency_converted_to_target(self):
         # 1 USD = 1200 ARS. $100 USD + 120000 ARS over 30 days = $100 + $100 = $200/month.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 100.0, "ARS": 120000.0},
             days=30,
             target_currency="USD",
             lookup=FIXED_LOOKUP,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("200")
+        assert total == Decimal("200")
+        assert skipped == set()
 
     def test_no_target_currency_skips_conversion(self):
         # target_currency=None means no conversion — totals sum raw across currencies.
-        result = compute_monthly_income(
+        total, skipped = compute_monthly_income(
             {"USD": 100.0, "ARS": 200.0},
             days=30,
             target_currency=None,
             lookup=FIXED_LOOKUP,
             anchor_date=ANCHOR,
         )
-        assert result == Decimal("300")
+        assert total == Decimal("300")
+        assert skipped == set()
+
+    def test_missing_rate_bucket_is_skipped_and_reported(self):
+        # FIXED_LOOKUP only maps USD/ARS — the CLP bucket has no rate, so it's excluded and reported.
+        total, skipped = compute_monthly_income(
+            {"USD": 300.0, "CLP": 900000.0},
+            days=30,
+            target_currency="USD",
+            lookup=FIXED_LOOKUP,
+            anchor_date=ANCHOR,
+        )
+        assert total == Decimal("300")
+        assert skipped == {"CLP"}
 
 
 # --- classify_liquidity ---

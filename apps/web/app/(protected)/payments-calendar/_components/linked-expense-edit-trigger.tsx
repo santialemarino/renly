@@ -16,6 +16,7 @@ import type { Subscription } from '@/lib/api/subscriptions';
 interface LinkedExpenseEditTriggerProps {
   linkedExpenseId: number;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -34,6 +35,7 @@ interface LinkedExpenseEditTriggerProps {
 export function LinkedExpenseEditTrigger({
   linkedExpenseId,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -79,6 +81,7 @@ export function LinkedExpenseEditTrigger({
         }}
         expense={expense ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}

@@ -17,6 +17,10 @@ class FinanceOverviewResponse(BaseModel):
     expense_change_pct: Decimal | None = Field(default=None, description="Expense change vs previous period (ratio).")
     credit_card_balance: Decimal = Field(description="Total outstanding credit card balance.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # Single data point for the income vs expenses monthly chart.
@@ -30,6 +34,10 @@ class MonthlyPoint(BaseModel):
 class FinanceMonthlyResponse(BaseModel):
     points: list[MonthlyPoint] = Field(description="Monthly income and expense totals, chronological.")
     currency: str | None = Field(default=None, description="Display currency.")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # One slice of the expense category breakdown.
@@ -44,6 +52,10 @@ class ExpenseBreakdownResponse(BaseModel):
     items: list[ExpenseCategoryItem] = Field(description="Expense breakdown per category.")
     total_expenses: Decimal = Field(description="Total expenses in the period.")
     currency: str | None = Field(default=None, description="Display currency.")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # One slice of the income category breakdown.
@@ -58,3 +70,7 @@ class IncomeBreakdownResponse(BaseModel):
     items: list[IncomeCategoryItem] = Field(description="Income breakdown per category.")
     total_income: Decimal = Field(description="Total income in the period.")
     currency: str | None = Field(default=None, description="Display currency.")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )

@@ -45,3 +45,7 @@ class PaymentsCalendarResponse(BaseModel):
         default_factory=list,
         description="Calendar events sorted by date ascending, stable within the same date.",
     )
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes of items this month whose converted_amount is null because no exchange rate was stored.",
+    )

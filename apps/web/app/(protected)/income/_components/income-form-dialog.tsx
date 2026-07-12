@@ -37,6 +37,7 @@ interface IncomeFormDialogProps {
   onOpenChange: (open: boolean) => void;
   income?: IncomeEntry;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -45,6 +46,7 @@ export function IncomeFormDialog({
   onOpenChange,
   income,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: IncomeFormDialogProps) {
   const locale = useLocale();
@@ -143,6 +145,7 @@ export function IncomeFormDialog({
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}

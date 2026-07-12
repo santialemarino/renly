@@ -273,10 +273,12 @@ class TestConvertValue:
         result = convert_value(Decimal("100"), "USD", "USD", self.RATE_MAP)
         assert result == Decimal("100")
 
-    def test_unsupported_pair_returns_unchanged(self):
-        # CHF is not in the rate map, so no conversion possible.
-        result = convert_value(Decimal("100"), "CHF", "ARS", self.RATE_MAP)
-        assert result == Decimal("100")
+    def test_missing_source_rate_returns_none(self):
+        # CHF is not in the rate map — fail loud, never pass the value through.
+        assert convert_value(Decimal("100"), "CHF", "ARS", self.RATE_MAP) is None
+
+    def test_missing_target_rate_returns_none(self):
+        assert convert_value(Decimal("100"), "USD", "CHF", self.RATE_MAP) is None
 
     def test_eur_to_ars_via_pivot(self):
         # 100 EUR → USD: 100 / 0.92 = 108.6956... . USD → ARS: * 1400 = 152173.9130... .
@@ -324,3 +326,7 @@ class TestConvertOptional:
     def test_converts_at_the_given_date(self):
         result = convert_optional(Decimal("100"), "USD", "ARS", _lookup_with_mep("1000"), date(2026, 1, 15))
         assert result == Decimal("100000.00")
+
+    def test_missing_rate_returns_none(self):
+        # Lookup only stores the MEP pair — EUR has no rate, so conversion must yield null.
+        assert convert_optional(Decimal("100"), "EUR", "ARS", _lookup_with_mep("1000"), date(2026, 1, 15)) is None

@@ -4,9 +4,9 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /subscriptions.
@@ -19,6 +19,9 @@ class SubscriptionCreate(RequestBase):
     payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
 
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
 
 # Body for PUT /subscriptions/{id}. Partial update.
 class SubscriptionUpdate(RequestBase):
@@ -30,6 +33,9 @@ class SubscriptionUpdate(RequestBase):
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the subscription is active.")
     next_billing_date: date_type | None = Field(default=None, description="Date of next billing event.")
+
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
 # Response for a single subscription.

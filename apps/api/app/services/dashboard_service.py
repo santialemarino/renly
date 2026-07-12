@@ -50,26 +50,31 @@ def _month_end(year: int, month: int) -> date_type:
 # (Phase 3 Step C — historical exchange rate conversion). `card_currencies` is no
 # longer load-bearing here (each row knows its own currency) but stays in the
 # signature so callers don't need to rewire — defensive fallback only.
-# Returns {(year, month): cumulative_balance} in the target currency.
+# Returns ({(year, month): cumulative_balance} in the target currency, skipped currency codes).
 def compute_monthly_card_balances(
     expense_monthly: list[tuple[int, int, int, str, float]],
     settlement_monthly: list[tuple[int, int, int, str, float]],
     card_currencies: dict[int, str],
     target_currency: str | None,
     lookup: RateLookup | None,
-) -> dict[tuple[int, int], Decimal]:
-    def _convert_at_month(val: Decimal, currency: str, year: int, month: int) -> Decimal:
+) -> tuple[dict[tuple[int, int], Decimal], list[str]]:
+    def _convert_at_month(val: Decimal, currency: str, year: int, month: int) -> Decimal | None:
         if not (target_currency and lookup) or currency == target_currency:
             return val
         rate_map = lookup.get_rate_map_at(_month_end(year, month))
         if rate_map is None:
-            return val
+            return None
         return convert_value(val, currency, target_currency, rate_map)
+
+    skipped: set[str] = set()
 
     # Aggregate expenses per (year, month), converting each row at its OWN month-end rate.
     month_expenses: dict[tuple[int, int], Decimal] = {}
     for _card_id, year, month, currency, total in expense_monthly:
         val = _convert_at_month(Decimal(str(total)), currency, year, month)
+        if val is None:
+            skipped.add(currency)
+            continue
         key = (year, month)
         month_expenses[key] = month_expenses.get(key, ZERO) + val
 
@@ -77,6 +82,9 @@ def compute_monthly_card_balances(
     month_settlements: dict[tuple[int, int], Decimal] = {}
     for _card_id, year, month, currency, total in settlement_monthly:
         val = _convert_at_month(Decimal(str(total)), currency, year, month)
+        if val is None:
+            skipped.add(currency)
+            continue
         key = (year, month)
         month_settlements[key] = month_settlements.get(key, ZERO) + val
 
@@ -87,7 +95,7 @@ def compute_monthly_card_balances(
     for ym in all_months:
         running += month_expenses.get(ym, ZERO) - month_settlements.get(ym, ZERO)
         result[ym] = running
-    return result
+    return result, sorted(skipped)
 
 
 # Aggregates investment portfolio metrics and finance overview into a single dashboard response.
@@ -150,6 +158,7 @@ async def get_overview(
         savings_rate=savings_rate,
         income_expense_ratio=income_expense_ratio,
         currency=currency,
+        skipped_currencies=finance.skipped_currencies,
     )
 
 
@@ -174,7 +183,7 @@ async def get_evolution(
     )
 
     if not portfolio_evo.points:
-        return DashboardEvolutionResponse(points=[], currency=currency)
+        return DashboardEvolutionResponse(points=[], currency=currency, skipped_currencies=[])
 
     # Build monthly card balance series.
     cards = await credit_card_repository.list_by_user(session, user_id)
@@ -182,10 +191,11 @@ async def get_evolution(
     card_currencies = {c.id: c.currency for c in cards if c.id is not None}
 
     card_balance_by_month: dict[tuple[int, int], Decimal] = {}
+    skipped_currencies: list[str] = []
     if card_ids:
         expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
         settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
-        card_balance_by_month = compute_monthly_card_balances(
+        card_balance_by_month, skipped_currencies = compute_monthly_card_balances(
             expense_monthly,
             settlement_monthly,
             card_currencies,
@@ -209,7 +219,7 @@ async def get_evolution(
             )
         )
 
-    return DashboardEvolutionResponse(points=points, currency=currency)
+    return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=skipped_currencies)
 
 
 # Computes investment allocation by category plus a liabilities segment.
@@ -233,6 +243,7 @@ async def get_composition(
     cards = await credit_card_repository.list_by_user(session, user_id)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
+    skipped: set[str] = set()
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
@@ -240,8 +251,12 @@ async def get_composition(
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
-                if currency and bucket.currency != currency and rate_map:
-                    val = convert_value(val, bucket.currency, currency, rate_map)
+                if currency and bucket.currency != currency:
+                    converted = convert_value(val, bucket.currency, currency, rate_map) if rate_map else None
+                    if converted is None:
+                        skipped.add(bucket.currency)
+                        continue
+                    val = converted
                 card_balance += val
 
     total_assets = allocation.total_value
@@ -261,6 +276,7 @@ async def get_composition(
         total_assets=total_assets,
         total_liabilities=card_balance,
         currency=currency,
+        skipped_currencies=sorted(skipped),
     )
 
 
@@ -290,13 +306,14 @@ async def get_liquidity(
     commitments_total = ZERO
     unsupported_currencies: set[str] = set()
     for cur, val in commitments_by_currency.items():
-        if currency and rate_map_today and cur != currency:
-            if cur not in rate_map_today:
-                # Conversion would no-op silently; flag the currency so the diagnostic can list
-                # affected entities and exclude their amount from the displayed ratio.
+        if currency and cur != currency:
+            converted = convert_value(val, cur, currency, rate_map_today) if rate_map_today else None
+            if converted is None:
+                # Fail-loud: flag the currency so the diagnostic lists affected entities and
+                # the ratio excludes what it can't convert.
                 unsupported_currencies.add(cur)
                 continue
-            val = convert_value(val, cur, currency, rate_map_today)
+            val = converted
         commitments_total += val
 
     skipped_entities: list[SkippedLiquidityEntity] = []
@@ -353,13 +370,16 @@ async def get_liquidity(
         date_from=window_start,
         date_to=today,
     )
-    monthly_income = compute_monthly_income(
+    monthly_income, skipped_income_currencies = compute_monthly_income(
         income_by_currency,
         days=actual_window_days,
         target_currency=currency,
         lookup=lookup,
         anchor_date=today,
     )
+    # Income buckets are per-currency aggregates (no entity name) — report the code itself.
+    for cur in sorted(skipped_income_currencies):
+        skipped_entities.append(SkippedLiquidityEntity(type="income", name=cur, currency=cur))
 
     if monthly_income == ZERO:
         return DashboardLiquidityResponse(

@@ -5,6 +5,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SubscriptionsTable } from '@/app/(protected)/subscriptions/_components/subscriptions-table';
 import { SubscriptionsToolbar } from '@/app/(protected)/subscriptions/_components/subscriptions-toolbar';
 import { getCreditCards } from '@/lib/api/credit-cards';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getSettings } from '@/lib/api/settings';
 import {
   getSubscriptions,
@@ -34,9 +35,12 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards] = await Promise.all([
+  const [settings, creditCards, supportedCurrencies] = await Promise.all([
     getSettings().catch(() => null),
     getCreditCards().catch(() => []),
+    // Entry forms restrict their currency picker to the convertible set; on a fetch error the
+    // picker degrades to the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -61,10 +65,15 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <SubscriptionsToolbar preferredCurrencies={preferredCurrencies} creditCards={creditCards} />
+      <SubscriptionsToolbar
+        preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
+        creditCards={creditCards}
+      />
       <SubscriptionsTable
         subscriptions={subscriptions}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeCurrency={currency}
         firstRun={firstRun}

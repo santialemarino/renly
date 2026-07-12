@@ -13,7 +13,13 @@ import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 
-export function IncomeToolbar({ preferredCurrencies }: { preferredCurrencies?: string[] }) {
+export function IncomeToolbar({
+  preferredCurrencies,
+  supportedCurrencies,
+}: {
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+}) {
   const t = useTranslations('income');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -91,6 +97,7 @@ export function IncomeToolbar({ preferredCurrencies }: { preferredCurrencies?: s
           open={createOpen}
           onOpenChange={setCreateOpen}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           onSuccess={() => router.refresh()}
         />
       </div>

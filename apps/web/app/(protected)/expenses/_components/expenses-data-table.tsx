@@ -80,6 +80,7 @@ function SortIcon({
 function RowActions({
   expense,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -89,6 +90,7 @@ function RowActions({
 }: {
   expense: Expense;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -144,6 +146,7 @@ function RowActions({
         onOpenChange={setEditOpen}
         expense={expense}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
@@ -174,6 +177,7 @@ function RowActions({
 export function ExpensesDataTable({
   data,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -183,6 +187,7 @@ export function ExpensesDataTable({
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -315,6 +320,7 @@ export function ExpensesDataTable({
                     <RowActions
                       expense={expense}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}

@@ -7,6 +7,7 @@ import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses
 import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getCreditCards } from '@/lib/api/credit-cards';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getExpenses } from '@/lib/api/expenses';
 import { getInstallments } from '@/lib/api/installments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
@@ -40,9 +41,12 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards] = await Promise.all([
+  const [settings, creditCards, supportedCurrencies] = await Promise.all([
     getSettings().catch(() => null),
     getCreditCards().catch(() => []),
+    // Entry forms restrict their currency picker to the convertible set; on a fetch error the
+    // picker degrades to the full list and the API's 422 still guards.
+    getSupportedCurrencies().catch(() => undefined),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -106,6 +110,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
       <DismissableCurrencyHint show={!!currency} />
       <ExpensesToolbar
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
@@ -117,6 +122,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         <ExpensesDataTable
           data={data}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           creditCards={creditCards}
           activeObligations={activeObligations}
           activeSubscriptions={activeSubscriptions}
