@@ -170,7 +170,11 @@ def claimed_installment_cuotas(
 # subscription's cursor to next_billing_date: re-running the create path's closest-cycle
 # match must bind the expense to the cycle immediately BEFORE the current cursor (the
 # pre-advance position). Historical back-links and multi-jump pre-pays bind elsewhere,
-# so deleting them must not walk the cursor back.
+# so deleting them must not walk the cursor back. The match is recomputed against
+# prev_cycle (the pre-advance cursor), exactly as the create path saw it — anchoring on
+# the post-advance cursor instead would flip the closest_subscription_cycle tie-break for
+# an entry dated on an exact cycle midpoint (forward-walk ties resolve to the earlier
+# cycle, backward-walk ties to the later), leaving the advanced cycle un-reversed.
 def subscription_link_advanced_cursor(
     next_billing_date: date_type,
     billing_cycle: str,
@@ -181,7 +185,7 @@ def subscription_link_advanced_cursor(
     prev_cycle = step_back_by_cycle(next_billing_date, billing_cycle, anchor_day=anchor_day)
     if prev_cycle >= next_billing_date:
         return False
-    closest = closest_subscription_cycle(next_billing_date, billing_cycle, entry_date, anchor_day=anchor_day)
+    closest = closest_subscription_cycle(prev_cycle, billing_cycle, entry_date, anchor_day=anchor_day)
     return closest == prev_cycle
 
 

@@ -152,6 +152,14 @@ class TestSubscriptionLinkAdvancedCursor:
         # Cursor Jun 22 weekly; link Jun 14 binds to Jun 15 = step-back cycle -> True.
         assert subscription_link_advanced_cursor(date(2026, 6, 22), BILLING_CYCLE_WEEKLY, date(2026, 6, 14)) is True
 
+    def test_exact_cycle_midpoint_reverses(self):
+        # Regression: an entry dated on the exact midpoint between two cycles (Apr 30 is
+        # 15 days from both Apr 15 and May 15) advanced the cursor Apr 15 -> May 15 at
+        # create time (forward-walk tie -> earlier cycle == cursor). The reverse must
+        # recompute against the pre-advance cursor (Apr 15), not the post-advance cursor
+        # (May 15) whose backward-walk tie would resolve to May 15 and wrongly return False.
+        assert subscription_link_advanced_cursor(date(2026, 5, 15), BILLING_CYCLE_MONTHLY, date(2026, 4, 30), anchor_day=15) is True
+
 
 # --- installment_link_advanced_cursor ---
 
