@@ -1,20 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Archive, Plus, Upload } from 'lucide-react';
-import { LayoutGroup, motion } from 'motion/react';
+import { Upload } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Button, Pill, SearchInput } from '@repo/ui/components';
+import { Button } from '@repo/ui/components';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { CategorySelect } from '@/components/category-select';
+import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { GroupMultiSelect } from '@/components/group-multi-select';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/investments';
-import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 export function InvestmentsToolbar({
   groups,
@@ -26,39 +26,11 @@ export function InvestmentsToolbar({
   const t = useTranslations('investments');
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Ref keeps searchParams current inside the debounced navigate callback without adding it to the effect dependency array.
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
-
-  const [, startTransition] = useTransition();
+  const { navigate } = useSearchParamsNavigation(ROUTES.investments, { resetPage: true });
   const [createOpen, setCreateOpen] = useState(false);
-  const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
   const selectedGroupIds = searchParams.getAll('group_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
-  const showArchived = searchParams.get('show_archived') === 'true';
-
-  function navigate(overrides: Record<string, string | string[] | null>) {
-    const params = new URLSearchParams(searchParamsRef.current.toString());
-    params.delete('page');
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null || val === '' || (Array.isArray(val) && val.length === 0)) {
-        params.delete(key);
-      } else if (Array.isArray(val)) {
-        params.delete(key);
-        val.forEach((v) => params.append(key, v));
-      } else {
-        params.set(key, val);
-      }
-    });
-    startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
-  }
-
-  useEffect(() => {
-    const timer = setTimeout(() => navigate({ search }), DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search]);
 
   function handleGroupToggle(groupId: number) {
     const next = selectedGroupIds.includes(groupId)
@@ -72,24 +44,16 @@ export function InvestmentsToolbar({
   }
 
   return (
-    <LayoutGroup>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
-          <SearchInput
-            aria-label="Search investments"
-            placeholder={t('toolbar.searchPlaceholder')}
-            value={search}
-            surface
-            onChange={(e) => setSearch(e.target.value)}
-            onClear={() => setSearch('')}
-          />
-        </motion.div>
-
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DEFAULT }}
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
-        >
+    <EntityListToolbar
+      route={ROUTES.investments}
+      resetPage
+      searchAriaLabel="Search investments"
+      searchPlaceholder={t('toolbar.searchPlaceholder')}
+      showArchivedLabel={t('toolbar.showArchived')}
+      addLabel={t('toolbar.addInvestment')}
+      onAdd={() => setCreateOpen(true)}
+      filters={
+        <>
           {groups.length > 0 && (
             <GroupMultiSelect
               groups={groups}
@@ -105,42 +69,24 @@ export function InvestmentsToolbar({
             surface
             className="min-w-fit flex-1"
           />
-        </motion.div>
-
-        <motion.div
-          layout
-          transition={{ duration: ANIMATION_DEFAULT }}
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full md:basis-auto"
-        >
-          <Pill
-            active={showArchived}
-            aria-pressed={showArchived}
-            onClick={() => navigate({ show_archived: showArchived ? null : 'true' })}
-            className="min-w-fit flex-1"
-          >
-            <Archive className="size-4" />
-            {t('toolbar.showArchived')}
-          </Pill>
-          <Button variant="outline" asChild className="min-w-fit flex-1">
-            <Link href={ROUTES.data}>
-              <Upload className="size-4" />
-              {t('toolbar.import')}
-            </Link>
-          </Button>
-          <Button blue onClick={() => setCreateOpen(true)} className="min-w-fit flex-1">
-            <Plus className="size-4" />
-            {t('toolbar.addInvestment')}
-          </Button>
-        </motion.div>
-
-        <InvestmentFormDialog
-          open={createOpen}
-          onOpenChange={setCreateOpen}
-          groups={groups}
-          preferredCurrencies={preferredCurrencies}
-          onSuccess={() => router.refresh()}
-        />
-      </div>
-    </LayoutGroup>
+        </>
+      }
+      trailing={
+        <Button variant="outline" asChild className="min-w-fit flex-1">
+          <Link href={ROUTES.data}>
+            <Upload className="size-4" />
+            {t('toolbar.import')}
+          </Link>
+        </Button>
+      }
+    >
+      <InvestmentFormDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        groups={groups}
+        preferredCurrencies={preferredCurrencies}
+        onSuccess={() => router.refresh()}
+      />
+    </EntityListToolbar>
   );
 }
