@@ -101,7 +101,10 @@ def today_in_timezone(now_utc: datetime, tz_name: str | None) -> date_type:
     name = tz_name or DEFAULT_TIMEZONE
     try:
         return now_utc.astimezone(ZoneInfo(name)).date()
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
+        # ZoneInfoNotFoundError = unknown zone; ValueError = a syntactically invalid key
+        # (absolute path or '..'). Either way fall back to UTC rather than 500 a per-request
+        # date read — this runs on every dashboard/finance/calendar/statements request.
         logger.warning("Unknown timezone %r — falling back to UTC.", name)
         return now_utc.astimezone(UTC).date()
 
@@ -113,7 +116,9 @@ def local_hour_for_user(now_utc: datetime, tz_name: str | None) -> int:
     name = tz_name or DEFAULT_TIMEZONE
     try:
         return now_utc.astimezone(ZoneInfo(name)).hour
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
+        # ValueError guards a syntactically invalid key (absolute path or '..'); the scheduler
+        # must never crash on stale settings data — degrade to UTC like an unknown zone.
         logger.warning("Unknown timezone %r — falling back to UTC.", name)
         return now_utc.astimezone(UTC).hour
 

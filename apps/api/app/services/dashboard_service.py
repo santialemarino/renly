@@ -273,7 +273,10 @@ async def get_composition(
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
-                if currency and bucket.currency != currency:
+                # `val and` mirrors get_overview: a zero-balance bucket (always emitted for a
+                # card's primary currency) contributes nothing, so never flag its currency as
+                # skipped just because no rate exists — that would disagree with the overview.
+                if val and currency and bucket.currency != currency:
                     converted = convert_value(val, bucket.currency, currency, rate_map) if rate_map else None
                     if converted is None:
                         skipped.add(bucket.currency)

@@ -163,7 +163,9 @@ class SettingsUpdate(RequestBase):
             return None
         try:
             ZoneInfo(value)
-        except ZoneInfoNotFoundError as exc:
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            # ValueError covers a syntactically invalid key (absolute path or '..'); surface the
+            # same clean 422 instead of leaking the raw ValueError through Pydantic.
             raise ValueError(f"Unknown IANA timezone: {value!r}.") from exc
         return value
 
