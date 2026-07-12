@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { cache } from 'react';
+
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -73,8 +75,10 @@ export function mapSettings(raw: SettingsRaw): SettingsData {
 
 // --- API functions ---
 
-export async function getSettings(): Promise<SettingsData> {
+// Server-side, request-memoized settings so the protected layout and every page that reads
+// settings in the same render share a single /settings call (mirrors getOnboardingStatus).
+export const getSettings = cache(async (): Promise<SettingsData> => {
   const res = await authenticatedFetch('/settings', { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch settings');
   return mapSettings(await res.json());
-}
+});

@@ -50,32 +50,37 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const year = parseYearMonth(params.year) ?? now.getFullYear();
   const month = parseYearMonth(params.month) ?? now.getMonth() + 1;
 
-  const calendar = await getPaymentsCalendar({ year, month, currency });
-
-  // Collect linked-plan source ids from paid calendar items so the inline-edit dialog
-  // can render plan names for since-archived links (Phase 3 audit-round-3 follow-up).
-  // Only paid items are clickable → only their linked plans need to be in scope.
-  const linkedObligationIds = Array.from(
-    new Set(
-      calendar.items.filter((i) => i.type === 'obligation' && i.isPaid).map((i) => i.sourceId),
-    ),
-  );
-  const linkedSubscriptionIds = Array.from(
-    new Set(
-      calendar.items.filter((i) => i.type === 'subscription' && i.isPaid).map((i) => i.sourceId),
-    ),
-  );
-  const linkedInstallmentIds = Array.from(
-    new Set(
-      calendar.items.filter((i) => i.type === 'installment' && i.isPaid).map((i) => i.sourceId),
-    ),
-  );
-
-  const [activeObligations, activeSubscriptions, activeInstallments] = await Promise.all([
-    getPaymentObligations({ showArchived: false, includeIds: linkedObligationIds }).catch(() => []),
-    getSubscriptions({ showArchived: false, includeIds: linkedSubscriptionIds }).catch(() => []),
-    getInstallments({ showArchived: false, includeIds: linkedInstallmentIds }).catch(() => []),
+  // Round 2: the calendar plus the full plan lists (filtered below), one parallel round instead of
+  // the previous calendar → plan-lists waterfall.
+  const [calendar, allObligations, allSubscriptions, allInstallments] = await Promise.all([
+    getPaymentsCalendar({ year, month, currency }),
+    getPaymentObligations({ showArchived: true }).catch(() => []),
+    getSubscriptions({ showArchived: true }).catch(() => []),
+    getInstallments({ showArchived: true }).catch(() => []),
   ]);
+
+  // Collect linked-plan source ids from paid calendar items so the inline-edit dialog can render
+  // plan names for since-archived links. Only paid items are clickable → only their linked plans
+  // need to be in scope; the filter reproduces the include_ids subset exactly.
+  const linkedObligationIds = new Set(
+    calendar.items.filter((i) => i.type === 'obligation' && i.isPaid).map((i) => i.sourceId),
+  );
+  const linkedSubscriptionIds = new Set(
+    calendar.items.filter((i) => i.type === 'subscription' && i.isPaid).map((i) => i.sourceId),
+  );
+  const linkedInstallmentIds = new Set(
+    calendar.items.filter((i) => i.type === 'installment' && i.isPaid).map((i) => i.sourceId),
+  );
+
+  const activeObligations = allObligations.filter(
+    (o) => o.isActive || linkedObligationIds.has(o.id),
+  );
+  const activeSubscriptions = allSubscriptions.filter(
+    (s) => s.isActive || linkedSubscriptionIds.has(s.id),
+  );
+  const activeInstallments = allInstallments.filter(
+    (i) => i.isActive || linkedInstallmentIds.has(i.id),
+  );
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

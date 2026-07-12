@@ -64,7 +64,7 @@ CEDEAR ratios define how many CEDEARs equal one underlying share (e.g. 10 AAPL.B
 | Auto-snapshots | Last day of month at 23:00 UTC (after price fetch) | `cron`     | Latest quantity × price → `investment_snapshots` with `source: 'auto'`  |
 | CEDEAR ratios  | Monthly (1st 00:00 UTC) + startup                  | `cron`     | Comafi Excel (primary) or BYMA PDF (fallback) → `cedear_ratios`         |
 
-All schedule constants are defined at the top of `scheduler.py`. The asset prices job iterates all active investments with a ticker set, calls the appropriate provider for each, and stores results. If a provider fails for one ticker, that investment is skipped (not the entire job).
+All schedule constants are defined at the top of `scheduler.py`. Both the scheduled job and the on-demand `/asset-prices/refresh` endpoint call `_refresh_prices_for_investments`, which **deduplicates to unique `(ticker, category)` pairs** before fetching — N investments holding the same ticker cost one provider fetch, not N (prices are stored per ticker in `asset_prices`, so one upsert covers every holder). Fetches run in bounded parallel behind an `asyncio.Semaphore(MAX_CONCURRENT_PRICE_FETCHES)` (= 8) so a large investment count can't trip provider rate limits. If a provider fails for one ticker, that pair is skipped (not the entire job).
 
 ### 5. API endpoints
 

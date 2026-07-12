@@ -2,6 +2,7 @@
 # confirm) bulk-insert. The parse/map/validate flow is entity-agnostic; per-entity persistence is a
 # thin dispatch. The server re-validates on confirm — it never trusts client-supplied row data.
 
+import asyncio
 from collections.abc import Callable
 from datetime import date as date_type
 from decimal import Decimal
@@ -318,7 +319,7 @@ async def preview_import(
     mapping: dict[str, str],
 ) -> ImportPreviewResponse:
     spec = get_spec(entity)
-    columns, rows = _parse(filename, content)
+    columns, rows = await asyncio.to_thread(_parse, filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
     resolve = await _build_resolver(session, user, entity)
@@ -343,7 +344,7 @@ async def confirm_import(
     import_duplicates: bool,
 ) -> ImportResultResponse:
     spec = get_spec(entity)
-    columns, rows = _parse(filename, content)
+    columns, rows = await asyncio.to_thread(_parse, filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
     resolve = await _build_resolver(session, user, entity)

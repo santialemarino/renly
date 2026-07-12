@@ -28,10 +28,16 @@ async function refreshAccessToken(token: JWT): Promise<JWT> {
     return expired;
   }
 
-  const refreshed = await refreshRequest(token.refreshToken);
-  if (!refreshed) {
+  const result = await refreshRequest(token.refreshToken);
+  if (result.kind === 'expired') {
     return expired;
   }
+  if (result.kind === 'transient') {
+    // API blip at renewal time: keep the refresh token untouched so the next jwt() pass retries.
+    // The stale access token may 401 against the API until then, but the session survives.
+    return token;
+  }
+  const refreshed = result.tokens;
 
   return {
     ...token,

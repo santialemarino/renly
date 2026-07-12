@@ -15,11 +15,11 @@ from app.services import auth_service
 # Changes the password after re-verifying the current one (AUTH-8). Rejects breached passwords
 # (AUTH-3) and bumps session_epoch so every other existing session is logged out.
 async def change_password(session: AsyncSession, user: User, current_password: str, new_password: str) -> None:
-    if not auth_service.verify_password(current_password, user.password_hash):
+    if not await auth_service.verify_password(current_password, user.password_hash):
         raise InvalidCredentialsError()
     if await auth_service.is_password_breached(new_password):
         raise PasswordBreachedError()
-    user.password_hash = auth_service.hash_password(new_password)
+    user.password_hash = await auth_service.hash_password(new_password)
     user.session_epoch += 1
     await user_repository.save(session, user)
     await session.commit()
@@ -29,7 +29,7 @@ async def change_password(session: AsyncSession, user: User, current_password: s
 # once the new one is confirmed via the emailed link. Runs the change request on the privileged
 # session so the target-address availability check can see every account (bypasses RLS).
 async def change_email(session: AsyncSession, user: User, current_password: str, new_email: str) -> None:
-    if not auth_service.verify_password(current_password, user.password_hash):
+    if not await auth_service.verify_password(current_password, user.password_hash):
         raise InvalidCredentialsError()
     await auth_service.request_email_change(session, user, new_email)
 
@@ -69,7 +69,7 @@ async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
 # account (if any) so deletion leaves no orphaned "accepted" invite — the invite belongs to the
 # inviting admin, so it's only reachable on the privileged session (RLS scopes `session` to the user).
 async def delete_account(session: AsyncSession, admin_session: AsyncSession, user: User, password: str, confirmation: str) -> None:
-    if not auth_service.verify_password(password, user.password_hash):
+    if not await auth_service.verify_password(password, user.password_hash):
         raise InvalidCredentialsError()
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")

@@ -26,6 +26,12 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 5. Returns **403** (`EmailNotVerifiedError`) if the password is correct but `email_verified_at` is null — the email must be verified first (AUTH-1). Accounts created before email verification existed were grandfathered as verified by the `0004` migration, so they are unaffected.
 6. Generates a short-lived access token (JWT) **and** issues a refresh token (AUTH-7), returning `{access_token, expires_in, refresh_token, refresh_expires_in}`. `remember_me: true` in the body gives the refresh token the long window; otherwise it gets the short one (see Refresh below).
 
+### Password hashing & timing
+
+- **bcrypt off the event loop.** `verify_password` / `hash_password` (and the API-key `verify_api_key` / `create_key` hashes) run their ~250 ms cost-12 bcrypt work via `asyncio.to_thread`, so a login burst never serializes the single-worker event loop.
+- **Login timing equalization (AUTH-5).** When the email has no account, login still runs one dummy `verify_password` against a fixed `DUMMY_PASSWORD_HASH`, so "unknown email" costs the same bcrypt time as "wrong password" — no response-time enumeration oracle. Registration is equalized the complementary way (hash before the duplicate-email check).
+- **Fire-and-forget sends.** `request_verification_email` and `request_password_reset` schedule the provider send as a background task rather than awaiting it, so the uniform `202` answers in constant time whether or not an email is actually sent. (Register and email-change both send on every branch, so their awaited sends are already uniform.)
+
 ### Invite-only access gate (admin invites)
 
 The access control between "my friends" and the public for the invited beta. `SIGNUP_MODE` (default `invite`) decides whether registration is gated; only `invite` is used at launch (the public-open flip + a CAPTCHA are a later milestone).

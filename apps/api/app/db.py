@@ -9,12 +9,37 @@ from app.config import settings
 # Key under which the request's user id is stashed on the session so the RLS listener can read it.
 RLS_USER_INFO_KEY = "rls_user_id"
 
+# Pool sizing (deliberate constants, not env — see docs/internal decision log): a page view fans
+# out 4-7 parallel API calls, each borrowing a connection, so the request pool must absorb a few
+# concurrent navigations; pre_ping revalidates pooled connections dropped by DB restarts/failovers
+# (otherwise they surface as 500s) and recycle retires connections before typical idle timeouts.
+REQUEST_POOL_SIZE = 10
+REQUEST_MAX_OVERFLOW = 10
+ADMIN_POOL_SIZE = 2
+ADMIN_MAX_OVERFLOW = 3
+POOL_RECYCLE_SECONDS = 1800
+
 # Request engine: connects as the restricted, RLS-subject role (SEC-15).
-engine = create_async_engine(settings.database_url, echo=False)
+engine = create_async_engine(
+    settings.database_url,
+    echo=False,
+    pool_size=REQUEST_POOL_SIZE,
+    max_overflow=REQUEST_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=POOL_RECYCLE_SECONDS,
+)
 
 # Privileged engine for context-less work (scheduler, auth bootstrap). Connects as the table
 # owner, which bypasses RLS. Same URL as the request engine when no admin URL is configured.
-admin_engine = create_async_engine(settings.admin_database_url, echo=False)
+# Small pool: only the scheduler and pre-auth lookups borrow from it.
+admin_engine = create_async_engine(
+    settings.admin_database_url,
+    echo=False,
+    pool_size=ADMIN_POOL_SIZE,
+    max_overflow=ADMIN_MAX_OVERFLOW,
+    pool_pre_ping=True,
+    pool_recycle=POOL_RECYCLE_SECONDS,
+)
 
 AsyncSessionLocal = sessionmaker(
     engine,

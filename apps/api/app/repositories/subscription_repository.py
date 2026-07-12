@@ -1,3 +1,5 @@
+from datetime import date as date_type
+
 from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -41,6 +43,19 @@ async def list_by_user(
     order_clause = order_fn(sort_col) if sort_col is not None else Subscription.next_billing_date
     stmt = stmt.order_by(order_clause)
     result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+# List every active subscription (cluster-wide) whose next_billing_date is at or before `cutoff`
+# (inclusive). Powers the hourly auto-expense scan: the date bound prunes in SQL instead of loading
+# every active subscription into Python each tick.
+async def list_active_due(session: AsyncSession, cutoff: date_type) -> list[Subscription]:
+    result = await session.execute(
+        select(Subscription).where(
+            Subscription.is_active.is_(True),
+            Subscription.next_billing_date <= cutoff,
+        )
+    )
     return list(result.scalars().all())
 
 
@@ -91,6 +106,7 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 # Namespace to call repository functions (e.g. subscription_repository.list_by_user).
 class SubscriptionRepository:
     list_by_user = staticmethod(list_by_user)
+    list_active_due = staticmethod(list_active_due)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

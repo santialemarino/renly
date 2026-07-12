@@ -46,6 +46,10 @@ _CATEGORY_PROVIDERS: dict[InvestmentCategory, PriceProviderInfo] = {
     ),
 }
 
+# Maximum concurrent provider fetches during a refresh. Bounds the parallel fan-out so a large
+# investment count can't trip provider rate limits (rate-limit failures silently drop prices).
+MAX_CONCURRENT_PRICE_FETCHES = 8
+
 
 # Returns the latest stored price for a ticker. Returns None if not found.
 async def get_latest_price(
@@ -172,38 +176,42 @@ async def refresh_user_prices(session: AsyncSession, user_id: int) -> int:
     return await _refresh_prices_for_investments(session, investments)
 
 
-# Fetches prices for the given ticker-linked investments in parallel and stores them. Returns total prices stored.
+# Fetches prices for the given ticker-linked investments and stores them. Returns total prices stored.
+# Deduplicates to unique (ticker, category) pairs first — N holders of the same ticker cost one
+# provider fetch, not N — and bounds fetch concurrency with a semaphore. Prices are stored per
+# ticker (asset_prices is keyed by ticker, not investment), so one upsert per unique pair covers
+# every investment sharing that ticker.
 async def _refresh_prices_for_investments(session: AsyncSession, investments: list[Investment]) -> int:
     # Clear per-cycle caches so providers re-download fresh data.
     price_providers.clear_fci_cache()
 
-    # Fetch prices from external APIs in parallel (no DB access in fetch functions).
-    async def _fetch_one(inv: Investment) -> tuple[Investment, PriceResult]:
-        provider = _CATEGORY_PROVIDERS.get(inv.category)
-        if not provider:
-            return inv, []
-        try:
-            results = await provider.fetch(inv.ticker, None, None)
-            return inv, results
-        except Exception:
-            logger.exception("Failed to fetch prices for %s (%s).", inv.ticker, inv.name)
-            return inv, []
+    unique_pairs = {(inv.ticker, inv.category) for inv in investments if inv.ticker}
+    pairs = sorted((ticker, category) for ticker, category in unique_pairs if category in _CATEGORY_PROVIDERS)
 
-    fetch_results = await asyncio.gather(*[_fetch_one(inv) for inv in investments])
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_PRICE_FETCHES)
+
+    # Fetch prices from external APIs in bounded parallel (no DB access in fetch functions).
+    async def _fetch_one(ticker: str, category: InvestmentCategory) -> PriceResult:
+        provider = _CATEGORY_PROVIDERS[category]
+        try:
+            async with semaphore:
+                return await provider.fetch(ticker, None, None)
+        except Exception:
+            logger.exception("Failed to fetch prices for %s (%s).", ticker, category)
+            return []
+
+    fetch_results = await asyncio.gather(*[_fetch_one(ticker, category) for ticker, category in pairs])
 
     # Store results sequentially (DB writes share one session).
     total = 0
-    for inv, results in fetch_results:
+    for (ticker, category), results in zip(pairs, fetch_results):
         if not results:
             continue
-        provider = _CATEGORY_PROVIDERS.get(inv.category)
-        if not provider:
-            continue
-        prices = [AssetPrice(ticker=inv.ticker, date=d, price=p, currency=c, source=provider.source) for d, p, c in results]
-        count = await asset_price_repository.bulk_upsert(session, prices)
-        total += count
+        provider = _CATEGORY_PROVIDERS[category]
+        prices = [AssetPrice(ticker=ticker, date=d, price=p, currency=c, source=provider.source) for d, p, c in results]
+        total += await asset_price_repository.bulk_upsert(session, prices)
 
     if total:
         await session.commit()
-        logger.info("Refreshed prices: %d total across %d investments.", total, len(investments))
+        logger.info("Refreshed prices: %d prices across %d unique tickers (%d investments).", total, len(pairs), len(investments))
     return total

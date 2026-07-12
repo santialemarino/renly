@@ -112,16 +112,30 @@ export async function loginRequest(
   return res.json() as Promise<TokenResponse>;
 }
 
-// Exchanges a refresh token for a fresh access token and a rotated refresh token (AUTH-7). Returns
-// null when the refresh token is rejected (expired, revoked, reused) so the caller forces re-login.
-export async function refreshRequest(refreshToken: string): Promise<TokenResponse | null> {
-  const res = await fetch(`${apiUrl}/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: refreshToken }),
-  });
-  if (!res.ok) return null;
-  return res.json() as Promise<TokenResponse>;
+// Discriminates refresh outcomes so only a definitive rejection kills the session: 'expired' means
+// the API said 401 (token dead — re-login); 'transient' means the API was unreachable or errored
+// (network blip, 5xx) — keep the refresh token and retry on the next jwt() pass.
+export type RefreshResult =
+  | { kind: 'ok'; tokens: TokenResponse }
+  | { kind: 'expired' }
+  | { kind: 'transient' };
+
+// Exchanges a refresh token for a fresh access token and a rotated refresh token (AUTH-7). Only an
+// HTTP 401 is terminal; anything else is a transient failure that must not log the user out.
+export async function refreshRequest(refreshToken: string): Promise<RefreshResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${apiUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  } catch {
+    return { kind: 'transient' };
+  }
+  if (res.status === 401) return { kind: 'expired' };
+  if (!res.ok) return { kind: 'transient' };
+  return { kind: 'ok', tokens: (await res.json()) as TokenResponse };
 }
 
 export async function meRequest(accessToken: string): Promise<MeResponse | null> {

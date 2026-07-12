@@ -337,14 +337,16 @@ async def _obligation_items(
     return items
 
 
-# Credit-card due-date events for the requested month. One event per active card per
-# bucket with non-zero balance, dated on the card's resolved due_day in the month.
-# The amount is the bucket's running-balance snapshot at the matching statement closing
-# date (Phase 3, Step 5 — running-balance model). When closing_day <= due_day, the
-# bill due in month M is for the statement closed in M; otherwise it's the previous
-# month's statement. Carryover from older unpaid statements is implicit in the snapshot,
-# matching how a real bank resumen reads.
-# Issues one balance lookup per (card, currency) — small N in practice (1–3 cards per user).
+# Credit-card due-date events for the requested month. One event per card per bucket with
+# non-zero balance, dated on the card's resolved due_day in the month. The amount is the
+# bucket's running-balance snapshot at the matching statement closing date (Phase 3, Step 5 —
+# running-balance model). When closing_day <= due_day, the bill due in month M is for the
+# statement closed in M; otherwise it's the previous month's statement. Carryover from older
+# unpaid statements is implicit in the snapshot, matching how a real bank resumen reads.
+# Archived cards are included (an archived card with outstanding balance still has real due
+# dates — archive is a UI filter, P04). Balances are batched: one grouped expenses + one grouped
+# settlements query per DISTINCT closing date (typically 1-2 for 1-3 cards) instead of two
+# queries per card×bucket.
 async def _card_due_items(
     session: AsyncSession,
     user: User,
@@ -353,8 +355,6 @@ async def _card_due_items(
     year: int,
     month: int,
 ) -> list[CalendarItem]:
-    # Includes archived cards — an archived card with outstanding balance still has real
-    # statement due dates (archive is a UI filter, not an accounting event).
     cards = await credit_card_repository.list_by_user(session, user.id, active_only=False)
     if not cards:
         return []
@@ -366,18 +366,37 @@ async def _card_due_items(
     buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
 
     last_day = calendar.monthrange(year, month)[1]
-    items: list[CalendarItem] = []
+
+    # Resolve each card's due/closing date, then group cards by distinct closing date so the
+    # running-balance snapshots batch into one grouped query per closing (not per card×bucket).
+    due_by_card: dict[int, date_type] = {}
+    closing_by_card: dict[int, date_type] = {}
+    cards_by_closing: dict[date_type, list[int]] = {}
     for card in cards:
         due_day = min(card.due_day, last_day)
         due_date = date_type(year, month, due_day)
         if due_date < period_start or due_date > period_end:
             continue
+        due_by_card[card.id] = due_date
         closing_date = _statement_closing_for_due(card.closing_day, due_date)
+        closing_by_card[card.id] = closing_date
+        cards_by_closing.setdefault(closing_date, []).append(card.id)
+
+    snapshots: dict[tuple[int, str], Decimal] = {}
+    for closing_date, ids in cards_by_closing.items():
+        snapshots.update(await card_reconciliation_service.compute_bucket_balances_at(session, ids, closing_date))
+
+    items: list[CalendarItem] = []
+    for card in cards:
+        due_date = due_by_card.get(card.id)
+        if due_date is None:
+            continue
+        closing_date = closing_by_card[card.id]
         for bucket in buckets_by_card.get(card.id, []):
-            snapshot = await card_reconciliation_service.compute_bucket_balance_at(session, card.id, bucket.currency, closing_date)
+            snapshot = snapshots.get((card.id, bucket.currency), Decimal(0))
             if snapshot == Decimal(0):
                 continue
-            # Paid-marking: the frozen statement amount stays, but settlements dated inside
+            # Paid-marking (P04): the frozen statement amount stays, but settlements dated inside
             # (closing_date, due_date] covering it flip the badge to Paid. Negative snapshots
             # (credit balance) are not a bill — never marked paid.
             is_paid = False

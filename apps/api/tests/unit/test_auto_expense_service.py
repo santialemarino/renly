@@ -9,6 +9,7 @@ from app.models.subscription import Subscription
 from app.services.auto_expense_service import (
     AUTO_EXPENSES_HOUR_LOCAL,
     _generate_subscription_expenses,
+    _scan_cutoff,
     installment_cuotas_to_emit,
     subscription_dates_to_emit,
 )
@@ -299,3 +300,9 @@ class TestSchedulerCycleDedup:
         assert created == 0
         assert advanced == 1
         assert sub.next_billing_date == date(2026, 7, 30)
+
+
+class Test_ScanCutoff:
+    # The SQL due-scan cutoff leads the UTC date by one day so it covers every user's local today.
+    def test_cutoff_is_utc_date_plus_one(self):
+        assert _scan_cutoff(datetime(2026, 7, 12, 3, 0, tzinfo=UTC)) == date(2026, 7, 13)

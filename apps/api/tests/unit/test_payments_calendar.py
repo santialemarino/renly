@@ -481,8 +481,8 @@ class TestCardDuePaidMarking:
         )
         monkeypatch.setattr(
             payments_calendar_service.card_reconciliation_service,
-            "compute_bucket_balance_at",
-            AsyncMock(return_value=snapshot),
+            "compute_bucket_balances_at",
+            AsyncMock(return_value={(1, "ARS"): snapshot}),
         )
         self.settled_mock = AsyncMock(return_value=settled)
         monkeypatch.setattr(payments_calendar_service.card_reconciliation_repository, "sum_settlements_between", self.settled_mock)

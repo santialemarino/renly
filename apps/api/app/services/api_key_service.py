@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 
 from bcrypt import checkpw, gensalt, hashpw
@@ -25,7 +26,7 @@ async def create_key(
     name: str | None = None,
 ) -> tuple[ApiKey, str]:
     raw_key = secrets.token_urlsafe(32)
-    key_hash = hashpw(raw_key.encode(), gensalt()).decode()
+    key_hash = (await asyncio.to_thread(hashpw, raw_key.encode(), gensalt())).decode()
     key = ApiKey(
         user_id=user.id,
         key_hash=key_hash,
@@ -47,12 +48,13 @@ async def revoke_key(session: AsyncSession, key_id: int, user: User) -> None:
     await session.commit()
 
 
-# Verify a raw API key. Uses prefix index to narrow candidates, then bcrypt.
+# Verify a raw API key. Uses prefix index to narrow candidates, then bcrypt (run in a worker
+# thread — each checkpw is ~250ms of CPU that must not block the event loop).
 async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
     prefix = raw_key[:KEY_PREFIX_LENGTH]
     candidates = await api_key_repository.list_active_by_prefix(session, prefix)
     for key in candidates:
-        if checkpw(raw_key.encode(), key.key_hash.encode()):
+        if await asyncio.to_thread(checkpw, raw_key.encode(), key.key_hash.encode()):
             key.last_used_at = utcnow()
             await api_key_repository.save(session, key)
             await session.commit()

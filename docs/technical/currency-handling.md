@@ -76,6 +76,8 @@ Per row / per snapshot / per cashflow:
 
 The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
 
+**Grouped-rates cache.** The full grouped-by-pair load that backs every `RateLookup` is served from a process-level TTL cache (`RATES_CACHE_TTL_SECONDS = 600`) in `exchange_rate_service.get_rates_grouped_by_pair_cached`. Rates are global (not per-user) and only change when the 6-hourly scheduler stores fresh quotes, so this stops every converting endpoint from re-reading the whole `exchange_rates` table per request. `exchange_rate_service.invalidate_rates_cache()` is called right after the scheduler upserts fresh rates so they serve immediately instead of waiting out the TTL. The composite index `idx_exchange_rates_pair_date (pair, date)` serves the per-pair, date-ordered scan (the pre-existing `idx_exchange_rates_date` on `date DESC` alone cannot).
+
 **Fail-loud conversion.** `convert_value` returns `Decimal | None` — `None` when either currency's rate is missing from the map. A value is **never** summed unconverted. Callers handle `None` by skipping and reporting:
 
 - **Aggregates** (finance overview / monthly / breakdowns, dashboard overview / evolution / composition, expense & income lists, payments calendar) exclude the row and list its code in an additive `skipped_currencies: string[]` response field.

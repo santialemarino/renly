@@ -6,7 +6,7 @@
 # Idempotent across re-runs (dedup-keyed on (source plan, date)).
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from app.domain import claimed_installment_cuotas, claimed_subscription_cycles
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
-from app.repositories import user_settings_repository
+from app.repositories import installment_repository, subscription_repository, user_settings_repository
 from app.utils.dates import (
     add_months,
     advance_by_cycle,
@@ -82,6 +82,13 @@ def installment_cuotas_to_emit(
     return cuotas
 
 
+# Inclusive SQL cutoff for the due-scan: a user's local "today" can lead the UTC date by up to
+# 14 hours (UTC+14), so scanning to utc_date + 1 day covers every user's local today. The exact
+# per-user local-date comparison below still decides what actually emits.
+def _scan_cutoff(now_utc: datetime) -> date_type:
+    return now_utc.date() + timedelta(days=1)
+
+
 # Auto-generates expense entries for active subscriptions and installments
 # belonging to users whose local-time-now hour equals AUTO_EXPENSES_HOUR_LOCAL.
 # Users with no stored timezone fall back to UTC. Idempotent on re-runs.
@@ -111,8 +118,7 @@ async def _generate_subscription_expenses(
     now_utc: datetime,
     user_timezones: dict[int, str],
 ) -> tuple[int, int]:
-    result = await session.execute(select(Subscription).where(Subscription.is_active.is_(True)))
-    subscriptions = list(result.scalars().all())
+    subscriptions = await subscription_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not subscriptions:
         return 0, 0
 
@@ -195,8 +201,7 @@ async def _generate_installment_expenses(
     now_utc: datetime,
     user_timezones: dict[int, str],
 ) -> tuple[int, int]:
-    result = await session.execute(select(Installment).where(Installment.is_active.is_(True)))
-    installments = list(result.scalars().all())
+    installments = await installment_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not installments:
         return 0, 0
 

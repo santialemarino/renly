@@ -1,3 +1,5 @@
+from datetime import date as date_type
+
 from sqlalchemy import Date, asc, cast, desc, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -60,6 +62,21 @@ async def list_by_user(
     return list(result.scalars().all())
 
 
+# List every active installment plan (cluster-wide) whose next cuota date — the derived
+# start_date + (current_installment - 1) months expression, month-end clamped exactly like the
+# Python add_months — is at or before `cutoff` (inclusive). The unfinished-plan bound mirrors the
+# service's own current_installment <= installments_count filter. Powers the hourly auto-expense scan.
+async def list_active_due(session: AsyncSession, cutoff: date_type) -> list[Installment]:
+    result = await session.execute(
+        select(Installment).where(
+            Installment.is_active.is_(True),
+            Installment.current_installment <= Installment.installments_count,
+            _next_cuota_date_expr <= cutoff,
+        )
+    )
+    return list(result.scalars().all())
+
+
 # Get a single installment by id and user_id.
 async def get_by_id(session: AsyncSession, installment_id: int, user_id: int) -> Installment | None:
     result = await session.execute(select(Installment).where(Installment.id == installment_id, Installment.user_id == user_id))
@@ -107,6 +124,7 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 # Namespace to call repository functions (e.g. installment_repository.list_by_user).
 class InstallmentRepository:
     list_by_user = staticmethod(list_by_user)
+    list_active_due = staticmethod(list_active_due)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -32,15 +33,24 @@ _VERIFY_EMAIL_PATH = "/verify-email"
 _RESET_PASSWORD_PATH = "/reset-password"
 _LOGIN_PATH = "/login"
 
+# Fixed bcrypt hash used to equalize login timing when the email has no account: the router runs a
+# dummy verify against it so "unknown email" costs the same bcrypt work as "wrong password"
+# (anti-enumeration, AUTH-5). Cost-12 hash of an arbitrary string; never matches a real password.
+DUMMY_PASSWORD_HASH = "$2b$12$f3nFiR8hT0ItHcrWRg2IC.76Od6o2K4kInYnsBxcoew5GD0uP9Klu"
 
-# Checks plain password against bcrypt hash.
-def verify_password(plain: str, hashed: str) -> bool:
-    return _bcrypt.checkpw(plain.encode(), hashed.encode())
+
+# Checks plain password against bcrypt hash. The ~250ms cost-12 bcrypt work runs in a worker
+# thread so a login burst never serializes the event loop (single-worker uvicorn).
+async def verify_password(plain: str, hashed: str) -> bool:
+    return await asyncio.to_thread(_bcrypt.checkpw, plain.encode(), hashed.encode())
 
 
-# Hashes plain password with bcrypt (gensalt defaults to cost 12).
-def hash_password(plain: str) -> str:
-    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
+# Hashes plain password with bcrypt (gensalt defaults to cost 12). Threaded like verify_password.
+async def hash_password(plain: str) -> str:
+    def _hash() -> str:
+        return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
+
+    return await asyncio.to_thread(_hash)
 
 
 # Checks a password against the HIBP Pwned Passwords range API using k-anonymity:
@@ -100,7 +110,7 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
     # Hash up front so both branches below pay the same bcrypt cost. Skipping it on the existing-email
     # path would make that path measurably faster — a response-time oracle revealing which addresses
     # have accounts, which would defeat the uniform-202 anti-enumeration goal (AUTH-5).
-    password_hash = hash_password(password)
+    password_hash = await hash_password(password)
 
     existing = await user_repository.get_by_email(session, email)
     if existing is not None:
@@ -162,6 +172,20 @@ async def _safe_send(message: EmailMessage) -> None:
         logger.warning("Failed to send '%s' email to %s.", message.subject, message.to, exc_info=True)
 
 
+# Strong references to in-flight background email tasks (the loop holds tasks weakly; without this
+# set a fire-and-forget task could be garbage-collected mid-send).
+_background_send_tasks: set[asyncio.Task] = set()
+
+
+# Schedules an email send as a fire-and-forget background task so the caller's response timing
+# never depends on the provider round-trip (AUTH-5: forgot/verify must answer in uniform time
+# whether or not an email is actually sent). Failures are swallowed+logged inside _safe_send.
+def _send_in_background(message: EmailMessage) -> None:
+    task = asyncio.create_task(_safe_send(message))
+    _background_send_tasks.add(task)
+    task.add_done_callback(_background_send_tasks.discard)
+
+
 # Issues a fresh single-use token for the user, invalidating any prior unconsumed token of the same
 # type. Stores only the hash and flushes; the caller commits. Returns the raw token for the link.
 async def issue_token(
@@ -206,7 +230,7 @@ async def request_verification_email(session: AsyncSession, email: str) -> None:
         return
     raw_token = await issue_token(session, user.id, AuthTokenType.email_verification, VERIFICATION_TOKEN_TTL)
     await session.commit()
-    await _safe_send(email_templates.verification_email(user.email, _verify_link(raw_token)))
+    _send_in_background(email_templates.verification_email(user.email, _verify_link(raw_token)))
 
 
 # Confirms a verification or email-change token (one endpoint serves both, dispatching on the token
@@ -273,7 +297,7 @@ async def request_password_reset(session: AsyncSession, email: str) -> None:
         return
     raw_token = await issue_token(session, user.id, AuthTokenType.password_reset, RESET_TOKEN_TTL)
     await session.commit()
-    await _safe_send(email_templates.password_reset_email(user.email, _reset_link(raw_token)))
+    _send_in_background(email_templates.password_reset_email(user.email, _reset_link(raw_token)))
 
 
 # Resets the password from a valid reset token: rejects breached passwords (AUTH-3), updates the
@@ -285,7 +309,7 @@ async def reset_password(session: AsyncSession, raw_token: str, new_password: st
     user = await user_repository.get_by_id(session, token.user_id)
     if user is None:
         raise InvalidTokenError()
-    user.password_hash = hash_password(new_password)
+    user.password_hash = await hash_password(new_password)
     user.session_epoch += 1
     await user_repository.save(session, user)
     await session.commit()

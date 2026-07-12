@@ -55,24 +55,30 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const activeCurrency = savedCurrency || primary;
   const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
 
-  const data = await getExpenses({
-    search: params.search,
-    category: params.category,
-    paymentMethod: params.payment_method,
-    dateFrom: params.date_from,
-    dateTo: params.date_to,
-    currency,
-    page: params.page ? Number(params.page) : 1,
-    sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
-    sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
-  });
+  // Round 2: the table data plus everything that doesn't depend on it — the full plan lists
+  // (filtered in-memory below to the same active ∪ linked-archived subset includeIds used to
+  // return) and the onboarding probe (request-memoized; shared with the layout when it probes).
+  const [data, allObligations, allSubscriptions, allInstallments, onboardingStatus] =
+    await Promise.all([
+      getExpenses({
+        search: params.search,
+        category: params.category,
+        paymentMethod: params.payment_method,
+        dateFrom: params.date_from,
+        dateTo: params.date_to,
+        currency,
+        page: params.page ? Number(params.page) : 1,
+        sortBy: params.sort_by as 'date' | 'amount' | 'category' | 'payment_method' | undefined,
+        sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
+      }),
+      getPaymentObligations({ showArchived: true }).catch(() => []),
+      getSubscriptions({ showArchived: true }).catch(() => []),
+      getInstallments({ showArchived: true }).catch(() => []),
+      getOnboardingStatus().catch(() => null),
+    ]);
 
-  // Show this section's first-run sample only while it's empty; fetch the flag just then so a
-  // populated section never pays for the extra read.
-  const showSample =
-    data.items.length === 0
-      ? ((await getOnboardingStatus().catch(() => null))?.sampleExpenses ?? false)
-      : false;
+  // Show this section's first-run sample only while it's empty.
+  const showSample = data.items.length === 0 ? (onboardingStatus?.sampleExpenses ?? false) : false;
 
   // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
   // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
@@ -84,25 +90,28 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     !!params.date_to;
   const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
 
-  // Collect linked-plan ids from the loaded page so the edit dropdowns can still render
-  // the plan name when an expense links to a since-archived plan (Phase 3 audit-round-3
-  // follow-up). Backend's `include_ids` widens the active-only listing with these specific
-  // archived rows; active plans not in include_ids are unaffected.
-  const linkedObligationIds = Array.from(
-    new Set(data.items.map((e) => e.paymentObligationId).filter((x): x is number => x !== null)),
+  // Collect linked-plan ids from the loaded page so the edit dropdowns can still render the plan
+  // name when an expense links to a since-archived plan (Phase 3 audit-round-3 follow-up). The
+  // full lists were fetched above; filtering here reproduces the include_ids subset exactly.
+  const linkedObligationIds = new Set(
+    data.items.map((e) => e.paymentObligationId).filter((x): x is number => x !== null),
   );
-  const linkedSubscriptionIds = Array.from(
-    new Set(data.items.map((e) => e.subscriptionId).filter((x): x is number => x !== null)),
+  const linkedSubscriptionIds = new Set(
+    data.items.map((e) => e.subscriptionId).filter((x): x is number => x !== null),
   );
-  const linkedInstallmentIds = Array.from(
-    new Set(data.items.map((e) => e.installmentId).filter((x): x is number => x !== null)),
+  const linkedInstallmentIds = new Set(
+    data.items.map((e) => e.installmentId).filter((x): x is number => x !== null),
   );
 
-  const [activeObligations, activeSubscriptions, activeInstallments] = await Promise.all([
-    getPaymentObligations({ showArchived: false, includeIds: linkedObligationIds }).catch(() => []),
-    getSubscriptions({ showArchived: false, includeIds: linkedSubscriptionIds }).catch(() => []),
-    getInstallments({ showArchived: false, includeIds: linkedInstallmentIds }).catch(() => []),
-  ]);
+  const activeObligations = allObligations.filter(
+    (o) => o.isActive || linkedObligationIds.has(o.id),
+  );
+  const activeSubscriptions = allSubscriptions.filter(
+    (s) => s.isActive || linkedSubscriptionIds.has(s.id),
+  );
+  const activeInstallments = allInstallments.filter(
+    (i) => i.isActive || linkedInstallmentIds.has(i.id),
+  );
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">

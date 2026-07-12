@@ -39,6 +39,29 @@ def compute_reconciliation_difference(statement_balance: Decimal, computed_balan
     return statement_balance - computed_balance
 
 
+# Running balance (expenses − settlements) at each closing date, from per-day sums. `closings`
+# must be ascending; the daily lists are date-ascending. Two-pointer cumulative walk — the
+# arithmetic matches compute_bucket_balance_at exactly (sum of ALL rows dated <= closing, from the
+# beginning of the bucket's history).
+def cumulative_balances_at(
+    closings: list[date_type],
+    expense_daily: list[tuple[date_type, Decimal]],
+    settlement_daily: list[tuple[date_type, Decimal]],
+) -> dict[date_type, Decimal]:
+    balances: dict[date_type, Decimal] = {}
+    running = Decimal(0)
+    ei = si = 0
+    for closing in closings:
+        while ei < len(expense_daily) and expense_daily[ei][0] <= closing:
+            running += expense_daily[ei][1]
+            ei += 1
+        while si < len(settlement_daily) and settlement_daily[si][0] <= closing:
+            running -= settlement_daily[si][1]
+            si += 1
+        balances[closing] = running
+    return balances
+
+
 # Running-balance snapshot of a card+currency bucket at as_of_date.
 # = sum(expenses dated <= as_of_date) - sum(settlements dated <= as_of_date) for that bucket.
 # Used both by reconciliation (computed_balance for the period) and the Payments Calendar card_due event.
@@ -51,6 +74,20 @@ async def compute_bucket_balance_at(
     expenses = await card_reconciliation_repository.sum_expenses_at(session, card_id, currency, as_of_date)
     settlements = await card_reconciliation_repository.sum_settlements_at(session, card_id, currency, as_of_date)
     return expenses - settlements
+
+
+# Batched variant of compute_bucket_balance_at: running-balance snapshots for every (card, currency)
+# bucket with activity across `card_ids`, all evaluated at the same as_of_date — two grouped queries
+# total. Returns {(card_id, currency): balance}; buckets absent from both maps have balance 0 and
+# are omitted.
+async def compute_bucket_balances_at(
+    session: AsyncSession,
+    card_ids: list[int],
+    as_of_date: date_type,
+) -> dict[tuple[int, str], Decimal]:
+    expenses = await card_reconciliation_repository.sum_expenses_by_bucket_at(session, card_ids, as_of_date)
+    settlements = await card_reconciliation_repository.sum_settlements_by_bucket_at(session, card_ids, as_of_date)
+    return {key: expenses.get(key, Decimal(0)) - settlements.get(key, Decimal(0)) for key in expenses.keys() | settlements.keys()}
 
 
 # Builds the last RECENT_STATEMENTS_LIMIT statement periods for a card+currency, newest first.
@@ -87,6 +124,14 @@ async def list_recent_statements(
     rec_by_period: dict[tuple[date_type, date_type], CardReconciliation] = {(r.period_start, r.period_end): r for r in existing}
     first_activity = await card_reconciliation_repository.get_first_activity_date(session, card.id, currency)
 
+    # Batch the running balances: two grouped queries (per-day expense/settlement sums up to the
+    # newest closing), then a cumulative walk in Python — replaces up to 2 SUM round-trips per
+    # statement. Daily grouping (not monthly) because statement periods close mid-month on the
+    # card's closing_day, so calendar-month buckets would not align with period_end.
+    expense_daily = await card_reconciliation_repository.list_expense_daily_sums(session, card.id, currency, latest_close)
+    settlement_daily = await card_reconciliation_repository.list_settlement_daily_sums(session, card.id, currency, latest_close)
+    balance_at_closing = cumulative_balances_at(sorted(closings), expense_daily, settlement_daily)
+
     statements: list[dict] = []
     for closing in closings:
         period_start, period_end = compute_statement_period(card.closing_day, closing)
@@ -99,7 +144,7 @@ async def list_recent_statements(
         post_first_activity = first_activity is not None and period_end >= first_activity
         if rec is None and not is_latest and not post_first_activity:
             continue
-        computed = await compute_bucket_balance_at(session, card.id, currency, period_end)
+        computed = balance_at_closing[closing]
         statements.append(
             {
                 "currency": currency,

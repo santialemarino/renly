@@ -4,7 +4,9 @@
 # quantity, or whose latest price is quoted in a different currency than their base, are
 # skipped (never guessed).
 
+import calendar
 import logging
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -87,6 +89,37 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
     return len(snapshots)
 
 
+# Runs generate_auto_snapshots once if the most recent month-end tick was missed: now is within
+# `catchup_days` after the last month-end fire time (month-end date at snapshots_hour_utc) AND no
+# source='auto' snapshot exists dated on or after that month-end (the cron run or a previous
+# catch-up would have left one). Snapshots created here are dated today — a few days late beats a
+# missing month. Returns True when the catch-up actually ran. `now_utc` is injectable for tests.
+async def run_startup_catchup(
+    session: AsyncSession,
+    *,
+    catchup_days: int,
+    snapshots_hour_utc: int,
+    now_utc: datetime | None = None,
+) -> bool:
+    now_utc = now_utc or datetime.now(UTC)
+    month_end = most_recent_month_end(now_utc.date())
+    fire_at = datetime(month_end.year, month_end.month, month_end.day, snapshots_hour_utc, tzinfo=UTC)
+    if now_utc < fire_at or now_utc - fire_at > timedelta(days=catchup_days):
+        return False
+    if await _has_auto_snapshots_since(session, month_end):
+        return False
+    await generate_auto_snapshots(session)
+    return True
+
+
+# Most recent month-end date at or before `today` (today itself when it IS a month's last day).
+def most_recent_month_end(today: date_type) -> date_type:
+    last_day = calendar.monthrange(today.year, today.month)[1]
+    if today.day == last_day:
+        return today
+    return today.replace(day=1) - timedelta(days=1)
+
+
 # Returns the set of investment IDs that already have a snapshot for the given date.
 async def _get_existing_snapshot_dates(session: AsyncSession, inv_ids: list[int], snapshot_date: date_type) -> set[int]:
     result = await session.execute(
@@ -139,3 +172,11 @@ async def _get_latest_snapshots_by_investment(session: AsyncSession, inv_ids: li
         )
     )
     return {s.investment_id: s for s in result.scalars().all()}
+
+
+# True when any auto-generated snapshot exists dated on or after `since` (LIMIT 1 probe).
+async def _has_auto_snapshots_since(session: AsyncSession, since: date_type) -> bool:
+    result = await session.execute(
+        select(InvestmentSnapshot.id).where(InvestmentSnapshot.source == SOURCE_AUTO, InvestmentSnapshot.date >= since).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
