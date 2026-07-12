@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -24,11 +24,6 @@ export function PaymentObligationDeleteDialog({
   const t = useTranslations('paymentObligations');
   const [deleting, setDeleting] = useState(false);
 
-  // Preserve obligation data during close animation so the name doesn't disappear.
-  const lastObligation = useRef(obligation);
-  if (obligation) lastObligation.current = obligation;
-  const display = obligation ?? lastObligation.current;
-
   async function handleDelete() {
     if (!obligation) return;
     setDeleting(true);
@@ -48,9 +43,10 @@ export function PaymentObligationDeleteDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
+      entity={obligation}
       title={t('delete.title')}
-      description={t('delete.confirm', { name: display?.name ?? '' })}
-      confirmName={display?.name ?? ''}
+      description={(o) => t('delete.confirm', { name: o.name })}
+      confirmName={(o) => o.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}

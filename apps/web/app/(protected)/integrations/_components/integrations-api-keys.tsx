@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -38,11 +38,6 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
   const [rawKey, setRawKey] = useState<string | null>(null);
   const [revokeKey, setRevokeKey] = useState<ApiKey | null>(null);
   const [revoking, setRevoking] = useState(false);
-
-  // Preserve revoke key data during close animation.
-  const lastRevokeKey = useRef(revokeKey);
-  if (revokeKey) lastRevokeKey.current = revokeKey;
-  const displayRevokeKey = revokeKey ?? lastRevokeKey.current;
 
   async function handleCreate() {
     setCreating(true);
@@ -208,11 +203,12 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
         onOpenChange={(open) => {
           if (!open) setRevokeKey(null);
         }}
+        entity={revokeKey}
         title={t('apiKeys.revoke.title')}
-        description={t('apiKeys.revoke.description', {
-          name: displayRevokeKey?.name || t('apiKeys.unnamed'),
-        })}
-        confirmName={displayRevokeKey?.name || t('apiKeys.unnamed')}
+        description={(k) =>
+          t('apiKeys.revoke.description', { name: k.name || t('apiKeys.unnamed') })
+        }
+        confirmName={(k) => k.name || t('apiKeys.unnamed')}
         onConfirm={handleRevoke}
         loading={revoking}
         loadingLabel={t('apiKeys.revoke.revoking')}

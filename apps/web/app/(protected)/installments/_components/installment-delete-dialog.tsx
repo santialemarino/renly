@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -24,11 +24,6 @@ export function InstallmentDeleteDialog({
   const t = useTranslations('installments');
   const [deleting, setDeleting] = useState(false);
 
-  // Preserve installment data during close animation so the name doesn't disappear.
-  const lastInstallment = useRef(installment);
-  if (installment) lastInstallment.current = installment;
-  const display = installment ?? lastInstallment.current;
-
   async function handleDelete() {
     if (!installment) return;
     setDeleting(true);
@@ -48,9 +43,10 @@ export function InstallmentDeleteDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
+      entity={installment}
       title={t('delete.title')}
-      description={t('delete.confirm', { name: display?.name ?? '' })}
-      confirmName={display?.name ?? ''}
+      description={(i) => t('delete.confirm', { name: i.name })}
+      confirmName={(i) => i.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}
