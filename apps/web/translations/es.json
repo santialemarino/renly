@@ -447,7 +447,8 @@
       "refunds": "Reembolsos",
       "rental_income": "Alquiler",
       "salary": "Sueldo",
-      "sales": "Ventas"
+      "sales": "Ventas",
+      "uncategorized": "Sin categoría"
     },
     "form": {
       "titleCreate": "Agregar ingreso",
@@ -546,6 +547,7 @@
       "taxes": "Impuestos",
       "transport": "Transporte",
       "travel": "Viajes",
+      "uncategorized": "Sin categoría",
       "utilities": "Servicios"
     },
     "paymentMethods": {

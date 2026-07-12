@@ -1,6 +1,8 @@
 # Business logic for auto-generating snapshots from asset prices.
-# For each ticker-linked investment, takes the last known quantity
-# and multiplies by the current price to create a snapshot with source='auto'.
+# For each ticker-linked investment, takes the last known quantity and multiplies by the
+# current price to create a snapshot with source='auto'. Investments without a usable
+# quantity, or whose latest price is quoted in a different currency than their base, are
+# skipped (never guessed).
 
 import logging
 from datetime import date as date_type
@@ -48,7 +50,23 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
 
         last_snap = latest_snapshots.get(inv.id)
         quantity = last_snap.quantity if last_snap else None
-        value = quantity * price.price if quantity is not None and quantity > 0 else price.price
+        if quantity is None or quantity <= 0:
+            # Without a usable quantity the snapshot would record the price of ONE share as the
+            # whole position's value — skip and leave the user's manual value authoritative.
+            logger.debug("No usable quantity for investment %s (%s) — skipping auto-snapshot.", inv.id, inv.ticker)
+            continue
+        if price.currency != inv.base_currency:
+            # A price quoted in another currency would be stored unconverted under the base
+            # label — skip rather than misvalue; no conversion attempt by design.
+            logger.warning(
+                "Price currency %s != base currency %s for investment %s (%s) — skipping auto-snapshot.",
+                price.currency,
+                inv.base_currency,
+                inv.id,
+                inv.ticker,
+            )
+            continue
+        value = quantity * price.price
 
         snapshots.append(
             InvestmentSnapshot(

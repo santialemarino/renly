@@ -129,6 +129,14 @@ If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDE
 
 You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **group** (Retirement, Trading, Kids, etc.).
 
+## Dashboard composition and finance comparisons
+
+**Net worth composition (assets vs. liabilities).** The composition donut on the main dashboard sizes each slice by its value, and the percentages are shares of the values actually shown — your asset categories plus a "liabilities" slice when you carry a card balance. When you have a net card credit (the card owes you), there is no liabilities slice and your asset percentages add up to exactly 100%.
+
+**Uncategorized entries.** The expense and income breakdown donuts on the finance dashboard now include an "Uncategorized" slice for entries you left without a category, so the donut always adds up to the same total as the summary card above it.
+
+**"vs previous period."** The change indicators on the finance dashboard compare your selected period against the period of the same length immediately before it — ending the day before your window starts, with no shared day. A June 1–30 view compares against May 2–31.
+
 ## Liquidity
 
 **What it answers:** "What share of my income is already committed to fixed monthly costs?"

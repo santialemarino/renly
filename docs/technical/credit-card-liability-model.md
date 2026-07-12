@@ -100,6 +100,8 @@ Settlements **only** surface in:
 
 Cards can be **archived** (set `is_active = false`) to hide them from the expense form's card selector while preserving all linked expenses, settlements, and balance history. Archived cards appear dimmed in the credit cards table and can be unarchived at any time.
 
+**Archive is a UI filter, not an accounting event.** An archived card's outstanding balance stays a liability in every aggregation — net worth, the finance overview `credit_card_balance`, dashboard composition, the net-worth evolution series, and Payments Calendar `card_due` events all include archived cards. Archiving only hides the card from pickers and list pages. (The single exception is the liquidity indicator, which measures forward-looking monthly commitments from _active_ entities — an archived card's `monthly_payment` is no longer a commitment.)
+
 Cards can only be **deleted** when they have no linked expenses. Attempting to delete a card with expenses returns 409 Conflict (`HasLinkedExpensesError`). Settlements cascade on delete. The `has_expenses` field on the response tells the frontend whether the delete button should be available.
 
 ## Statement-period scoping (running-balance snapshots)
@@ -115,6 +117,8 @@ statement_balance(card, currency, closing_date) =
 This is a running-balance **snapshot** at `closing_date` per bucket. Carryover from earlier unpaid statements is implicit (it's already in the running total). This matches how a real bank resumen prints "Saldo total" each month — every settlement up to the closing date counts; everything else is next month's problem.
 
 Pure helper: `compute_bucket_balance_at(card_id, currency, as_of_date)` — used by both the Payments Calendar's `_card_due_items` and the reconciliation service.
+
+**Paid-marking for `card_due` events.** The statement amount stays frozen at its closing-date snapshot, but the calendar flips a `card_due` event's `is_paid` to true when settlements dated inside `(closing_date, due_date]` for that card+currency sum to **at least** the snapshot. A partially-settled statement stays unpaid. A negative snapshot (net credit balance) is never a bill — it keeps `is_paid = false` and skips the settlements query entirely (`card_reconciliation_repository.sum_settlements_between`).
 
 ### Statement periods
 

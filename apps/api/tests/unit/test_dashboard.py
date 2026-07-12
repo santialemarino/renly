@@ -1,7 +1,15 @@
 from datetime import date as date_type
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
-from app.services.dashboard_service import compute_monthly_card_balances
+import pytest
+
+from app.domain import CardBucketBalance
+from app.models.credit_card import CreditCard
+from app.models.investment import InvestmentCategory
+from app.schemas.metrics import AllocationItem, AllocationResponse
+from app.services import dashboard_service
+from app.services.dashboard_service import compute_monthly_card_balances, forward_fill_card_balances
 
 # Rate map: 1 USD = 1200 ARS.
 RATE_MAP = {
@@ -169,3 +177,83 @@ class TestComputeMonthlyCardBalances:
         assert skipped == ["EUR"]
         # 1200 ARS -> 1 USD at the fake rate; EUR contributes nothing.
         assert result[(2026, 1)] == Decimal("1")
+
+
+# --- forward_fill_card_balances ---
+
+
+class TestForwardFillCardBalances:
+    def test_months_after_activity_keep_prior_balance(self):
+        # Card ran up 500 in Oct 2025; portfolio window starts Jan 2026 with no card
+        # activity. Old merge read 0 for Jan/Feb — the outstanding 500 must persist.
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2)],
+            {(2025, 10): Decimal("500")},
+        )
+        assert balances == [Decimal("500"), Decimal("500")]
+
+    def test_gap_months_between_activity_forward_fill(self):
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2), (2026, 3), (2026, 4)],
+            {(2026, 1): Decimal("100"), (2026, 3): Decimal("150")},
+        )
+        assert balances == [Decimal("100"), Decimal("100"), Decimal("150"), Decimal("150")]
+
+    def test_months_before_first_activity_read_zero(self):
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2), (2026, 3)],
+            {(2026, 3): Decimal("100")},
+        )
+        assert balances == [Decimal("0"), Decimal("0"), Decimal("100")]
+
+    def test_empty_activity_reads_zero(self):
+        assert forward_fill_card_balances([(2026, 1)], {}) == [Decimal("0")]
+
+
+# --- get_composition percentage base ---
+
+
+CAT_A, CAT_B = list(InvestmentCategory)[:2]
+
+
+def _allocation() -> AllocationResponse:
+    return AllocationResponse(
+        items=[
+            AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("60")),
+            AllocationItem(category=CAT_B, value=Decimal("400"), percentage=Decimal("40")),
+        ],
+        total_value=Decimal("1000"),
+    )
+
+
+class TestCompositionPercentages:
+    def _patch(self, monkeypatch, *, balance: Decimal) -> None:
+        card = CreditCard(id=1, user_id=1, name="Visa", closing_day=20, due_day=5, currency="ARS", is_active=True)
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=_allocation()))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[card]))
+        monkeypatch.setattr(
+            dashboard_service.credit_card_service,
+            "get_card_balances",
+            AsyncMock(return_value={1: [CardBucketBalance(currency="ARS", balance=balance)]}),
+        )
+
+    @pytest.mark.asyncio
+    async def test_negative_card_balance_excluded_from_base(self, monkeypatch):
+        # Net credit of 100: old code divided by 900 (60/40 became 66.67/44.44, sum 111%).
+        # New base is the displayed items alone (1000) -> exactly 60 / 40.
+        self._patch(monkeypatch, balance=Decimal("-100"))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [i.percentage for i in result.items] == [Decimal("60"), Decimal("40")]
+        assert [i.label for i in result.items] == [CAT_A, CAT_B]
+        assert result.total_liabilities == Decimal("-100")
+
+    @pytest.mark.asyncio
+    async def test_positive_card_balance_unchanged_base(self, monkeypatch):
+        # 600 + 400 assets + 250 liability -> base 1250: 48 / 32 / 20 (identical to old).
+        self._patch(monkeypatch, balance=Decimal("250"))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [(i.label, i.percentage) for i in result.items] == [
+            (CAT_A, Decimal("48")),
+            (CAT_B, Decimal("32")),
+            ("liabilities", Decimal("20")),
+        ]

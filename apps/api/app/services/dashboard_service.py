@@ -98,6 +98,28 @@ def compute_monthly_card_balances(
     return result, sorted(skipped)
 
 
+# Pure computation: forward-fills the cumulative card balance onto each requested month.
+# `card_balance_by_month` holds cumulative balances only at months WITH card activity; each
+# requested month takes the latest cumulative entry at-or-before it, so gap months (and
+# months after the last activity) keep the prior balance instead of reading zero. Months
+# before any activity read zero. `months` must be ascending. Returns one balance per
+# requested month, same order.
+def forward_fill_card_balances(
+    months: list[tuple[int, int]],
+    card_balance_by_month: dict[tuple[int, int], Decimal],
+) -> list[Decimal]:
+    balance_months = sorted(card_balance_by_month)
+    result: list[Decimal] = []
+    last_balance = ZERO
+    next_idx = 0
+    for ym in months:
+        while next_idx < len(balance_months) and balance_months[next_idx] <= ym:
+            last_balance = card_balance_by_month[balance_months[next_idx]]
+            next_idx += 1
+        result.append(last_balance)
+    return result
+
+
 # Aggregates investment portfolio metrics and finance overview into a single dashboard response.
 async def get_overview(
     session: AsyncSession,
@@ -185,8 +207,9 @@ async def get_evolution(
     if not portfolio_evo.points:
         return DashboardEvolutionResponse(points=[], currency=currency, skipped_currencies=[])
 
-    # Build monthly card balance series.
-    cards = await credit_card_repository.list_by_user(session, user_id)
+    # Build monthly card balance series. Includes archived cards — their history and any
+    # outstanding balance remain part of net worth (archive is a UI filter).
+    cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
     card_currencies = {c.id: c.currency for c in cards if c.id is not None}
 
@@ -203,21 +226,19 @@ async def get_evolution(
             lookup,
         )
 
-    # Merge: for each portfolio evolution point, look up cumulative card balance.
-    points: list[NetWorthEvolutionPoint] = []
-    last_balance = ZERO
-    for p in portfolio_evo.points:
-        ym = (p.date.year, p.date.month)
-        if ym in card_balance_by_month:
-            last_balance = card_balance_by_month[ym]
-        points.append(
-            NetWorthEvolutionPoint(
-                date=p.date,
-                investment_value=p.total_value,
-                card_balance=last_balance,
-                net_worth=p.total_value - last_balance,
-            )
+    # Merge: each portfolio point carries the cumulative card balance at-or-before its month
+    # (proper forward-fill — includes balance built up before the portfolio window starts).
+    point_months = [(p.date.year, p.date.month) for p in portfolio_evo.points]
+    balances = forward_fill_card_balances(point_months, card_balance_by_month)
+    points = [
+        NetWorthEvolutionPoint(
+            date=p.date,
+            investment_value=p.total_value,
+            card_balance=balance,
+            net_worth=p.total_value - balance,
         )
+        for p, balance in zip(portfolio_evo.points, balances)
+    ]
 
     return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=skipped_currencies)
 
@@ -240,7 +261,8 @@ async def get_composition(
 
     # Compute total card liability, converting each bucket's balance to display currency at TODAY's
     # rate (the composition view is a snapshot of the current state, not a historical one).
-    cards = await credit_card_repository.list_by_user(session, user_id)
+    # Includes archived cards — their outstanding balance stays a liability (UI filter only).
+    cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     skipped: set[str] = set()
@@ -260,15 +282,19 @@ async def get_composition(
                 card_balance += val
 
     total_assets = allocation.total_value
-    total_gross = total_assets + card_balance
+    # Percentage base = sum of the item values actually returned (asset categories plus the
+    # liabilities item when shown). Keeps legend percentages consistent with the donut's
+    # value-proportional slices; a negative aggregate card balance (net credit) is excluded
+    # from both the items and the base, so asset percentages always sum to 100.
+    items_total = total_assets + (card_balance if card_balance > ZERO else ZERO)
 
     items: list[CompositionItem] = []
     for item in allocation.items:
-        pct = (item.value / total_gross * 100) if total_gross != ZERO else ZERO
+        pct = (item.value / items_total * 100) if items_total != ZERO else ZERO
         items.append(CompositionItem(label=item.category, value=item.value, percentage=pct))
 
     if card_balance > ZERO:
-        pct = (card_balance / total_gross * 100) if total_gross != ZERO else ZERO
+        pct = (card_balance / items_total * 100) if items_total != ZERO else ZERO
         items.append(CompositionItem(label="liabilities", value=card_balance, percentage=pct))
 
     return DashboardCompositionResponse(

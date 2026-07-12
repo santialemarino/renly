@@ -1,11 +1,17 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
-from app.domain import CalendarItem
+import pytest
+
+from app.domain import CalendarItem, CardBucketBalance
+from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
+from app.models.user import User
+from app.services import payments_calendar_service
 from app.services.payments_calendar_service import (
     _to_response,
     installment_past_paid_cuotas_in_window,
@@ -495,3 +501,55 @@ class TestInstallmentPastPaidCuotas:
             {date(2026, 1, 31): e_jan, date(2026, 2, 28): e_feb, date(2026, 3, 31): e_mar},
         )
         assert result == [(1, date(2026, 1, 31), e_jan), (2, date(2026, 2, 28), e_feb), (3, date(2026, 3, 31), e_mar)]
+
+
+# --- card_due paid-marking ---
+
+
+USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
+
+
+class TestCardDuePaidMarking:
+    def _patch(self, monkeypatch, *, snapshot: Decimal, settled: Decimal) -> None:
+        card = CreditCard(id=1, user_id=1, name="Visa", closing_day=20, due_day=5, currency="ARS", is_active=True)
+        monkeypatch.setattr(payments_calendar_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[card]))
+        monkeypatch.setattr(
+            payments_calendar_service.credit_card_service,
+            "get_card_balances",
+            AsyncMock(return_value={1: [CardBucketBalance(currency="ARS", balance=snapshot)]}),
+        )
+        monkeypatch.setattr(
+            payments_calendar_service.card_reconciliation_service,
+            "compute_bucket_balance_at",
+            AsyncMock(return_value=snapshot),
+        )
+        self.settled_mock = AsyncMock(return_value=settled)
+        monkeypatch.setattr(payments_calendar_service.card_reconciliation_repository, "sum_settlements_between", self.settled_mock)
+
+    @pytest.mark.asyncio
+    async def test_fully_settled_statement_is_paid(self, monkeypatch):
+        # closing_day=20 > due_day=5, so June 5's bill is the May 20 statement. A 100,000
+        # settlement dated inside (May 20, Jun 5] covers the 100,000 snapshot -> Paid.
+        self._patch(monkeypatch, snapshot=Decimal("100000"), settled=Decimal("100000"))
+        items = await payments_calendar_service._card_due_items(AsyncMock(), USER, date(2026, 6, 1), date(2026, 6, 30), 2026, 6)
+        assert len(items) == 1
+        assert items[0].type == "card_due"
+        assert items[0].date == date(2026, 6, 5)
+        assert items[0].amount == Decimal("100000")  # Frozen statement amount, not reduced.
+        assert items[0].is_paid is True
+        # Settlement window is exactly (closing, due].
+        assert self.settled_mock.call_args.args[2:] == ("ARS", date(2026, 5, 20), date(2026, 6, 5))
+
+    @pytest.mark.asyncio
+    async def test_partial_settlement_stays_unpaid(self, monkeypatch):
+        self._patch(monkeypatch, snapshot=Decimal("100000"), settled=Decimal("99999.99"))
+        items = await payments_calendar_service._card_due_items(AsyncMock(), USER, date(2026, 6, 1), date(2026, 6, 30), 2026, 6)
+        assert items[0].is_paid is False
+
+    @pytest.mark.asyncio
+    async def test_negative_snapshot_never_paid_and_skips_query(self, monkeypatch):
+        # A credit balance is not a bill: no Paid badge, no settlements query.
+        self._patch(monkeypatch, snapshot=Decimal("-50"), settled=Decimal("0"))
+        items = await payments_calendar_service._card_due_items(AsyncMock(), USER, date(2026, 6, 1), date(2026, 6, 30), 2026, 6)
+        assert items[0].is_paid is False
+        self.settled_mock.assert_not_called()

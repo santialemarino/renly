@@ -158,7 +158,9 @@ async def sum_by_user_monthly(
     return [(int(row[0]), int(row[1]), row[2], float(row[3])) for row in result.all()]
 
 
-# Income totals grouped by category for a user within a date range.
+# Income totals grouped by category for a user within a date range. NULL categories are
+# coalesced into the synthetic key 'uncategorized' so the breakdown covers every row
+# (the column is a native PG enum, so the coalesce happens in the row mapper, not SQL).
 # Returns a list of (category, currency, total) tuples.
 async def sum_by_user_grouped_by_category(
     session: AsyncSession,
@@ -173,7 +175,7 @@ async def sum_by_user_grouped_by_category(
             IncomeEntry.currency,
             func.coalesce(func.sum(IncomeEntry.amount), 0),
         )
-        .where(IncomeEntry.user_id == user_id, IncomeEntry.category.isnot(None))
+        .where(IncomeEntry.user_id == user_id)
         .group_by(IncomeEntry.category, IncomeEntry.currency)
     )
     if date_from is not None:
@@ -181,7 +183,7 @@ async def sum_by_user_grouped_by_category(
     if date_to is not None:
         stmt = stmt.where(IncomeEntry.date <= date_to)
     result = await session.execute(stmt)
-    return [(str(row[0]), row[1], float(row[2])) for row in result.all()]
+    return [("uncategorized" if row[0] is None else str(row[0]), row[1], float(row[2])) for row in result.all()]
 
 
 # Namespace to call repository functions (e.g. income_repository.list_by_user_filtered).

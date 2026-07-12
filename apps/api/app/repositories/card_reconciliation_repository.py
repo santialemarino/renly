@@ -135,6 +135,27 @@ async def sum_settlements_at(
     return Decimal(str(result.scalar_one()))
 
 
+# Sum of settlements for a card+currency bucket dated inside (after_date, to_date].
+# Used by the Payments Calendar card_due event to decide whether the statement due on
+# to_date has been settled (paid-marking; the frozen statement amount is unchanged).
+async def sum_settlements_between(
+    session: AsyncSession,
+    card_id: int,
+    currency: str,
+    after_date: date_type,
+    to_date: date_type,
+) -> Decimal:
+    result = await session.execute(
+        select(func.coalesce(func.sum(CardSettlement.amount), 0)).where(
+            CardSettlement.credit_card_id == card_id,
+            CardSettlement.currency == currency,
+            CardSettlement.date > after_date,
+            CardSettlement.date <= to_date,
+        )
+    )
+    return Decimal(str(result.scalar_one()))
+
+
 # Earliest date of any activity (expense or settlement) on a card+currency bucket. Returns None
 # when the bucket has no activity yet. Drives the visibility rule for the statements list — we
 # hide pre-history zeros (statements whose period_end is before the bucket existed).
@@ -172,6 +193,7 @@ class CardReconciliationRepository:
     save = staticmethod(save)
     sum_expenses_at = staticmethod(sum_expenses_at)
     sum_settlements_at = staticmethod(sum_settlements_at)
+    sum_settlements_between = staticmethod(sum_settlements_between)
 
 
 # Singleton used by services to access card reconciliation persistence.

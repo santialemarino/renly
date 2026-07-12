@@ -15,6 +15,7 @@ from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import (
+    card_reconciliation_repository,
     credit_card_repository,
     expense_repository,
     installment_repository,
@@ -353,7 +354,9 @@ async def _card_due_items(
     year: int,
     month: int,
 ) -> list[CalendarItem]:
-    cards = await credit_card_repository.list_by_user(session, user.id, active_only=True)
+    # Includes archived cards — an archived card with outstanding balance still has real
+    # statement due dates (archive is a UI filter, not an accounting event).
+    cards = await credit_card_repository.list_by_user(session, user.id, active_only=False)
     if not cards:
         return []
 
@@ -375,6 +378,13 @@ async def _card_due_items(
             snapshot = await card_reconciliation_service.compute_bucket_balance_at(session, card.id, bucket.currency, closing_date)
             if snapshot == Decimal(0):
                 continue
+            # Paid-marking: the frozen statement amount stays, but settlements dated inside
+            # (closing_date, due_date] covering it flip the badge to Paid. Negative snapshots
+            # (credit balance) are not a bill — never marked paid.
+            is_paid = False
+            if snapshot > Decimal(0):
+                settled = await card_reconciliation_repository.sum_settlements_between(session, card.id, bucket.currency, closing_date, due_date)
+                is_paid = settled >= snapshot
             items.append(
                 CalendarItem(
                     type="card_due",
@@ -383,6 +393,7 @@ async def _card_due_items(
                     amount=snapshot,
                     currency=bucket.currency,
                     source_id=card.id,
+                    is_paid=is_paid,
                 )
             )
     return items

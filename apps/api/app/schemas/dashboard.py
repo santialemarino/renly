@@ -50,14 +50,14 @@ class DashboardEvolutionResponse(BaseModel):
 class CompositionItem(BaseModel):
     label: str = Field(description="Segment label (investment category name or 'liabilities').")
     value: Decimal = Field(description="Absolute value for this segment.")
-    percentage: Decimal = Field(description="Percentage of total gross value.")
+    percentage: Decimal = Field(description="Percentage of the summed item values (asset categories plus the liabilities item when present).")
 
 
 # Investment allocation by category plus a liabilities segment.
 class DashboardCompositionResponse(BaseModel):
     items: list[CompositionItem] = Field(description="Composition segments (investment categories + liabilities).")
     total_assets: Decimal = Field(description="Total investment portfolio value.")
-    total_liabilities: Decimal = Field(description="Total credit card balance.")
+    total_liabilities: Decimal = Field(description="Total credit card balance, including archived cards.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
     skipped_currencies: list[str] = Field(
         default_factory=list,

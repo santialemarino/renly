@@ -5,8 +5,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.models.expense_entry import ExpenseCategory
-
 
 # Summary metrics for the finance overview (cards: income, expenses, net, card balance).
 class FinanceOverviewResponse(BaseModel):
@@ -15,7 +13,7 @@ class FinanceOverviewResponse(BaseModel):
     net: Decimal = Field(description="Income minus expenses.")
     income_change_pct: Decimal | None = Field(default=None, description="Income change vs previous period (ratio).")
     expense_change_pct: Decimal | None = Field(default=None, description="Expense change vs previous period (ratio).")
-    credit_card_balance: Decimal = Field(description="Total outstanding credit card balance.")
+    credit_card_balance: Decimal = Field(description="Total outstanding credit card balance, including archived cards.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
     skipped_currencies: list[str] = Field(
         default_factory=list,
@@ -42,7 +40,7 @@ class FinanceMonthlyResponse(BaseModel):
 
 # One slice of the expense category breakdown.
 class ExpenseCategoryItem(BaseModel):
-    category: ExpenseCategory = Field(description="Expense category.")
+    category: str = Field(description="Expense category key, or 'uncategorized' for entries without a category.")
     value: Decimal = Field(description="Total value for this category.")
     percentage: Decimal = Field(description="Percentage of total expenses.")
 
@@ -60,7 +58,7 @@ class ExpenseBreakdownResponse(BaseModel):
 
 # One slice of the income category breakdown.
 class IncomeCategoryItem(BaseModel):
-    category: str = Field(description="Income category.")
+    category: str = Field(description="Income category key, or 'uncategorized' for entries without a category.")
     value: Decimal = Field(description="Total value for this category.")
     percentage: Decimal = Field(description="Percentage of total income.")
 

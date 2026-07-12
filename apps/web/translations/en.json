@@ -447,7 +447,8 @@
       "refunds": "Refunds",
       "rental_income": "Rental Income",
       "salary": "Salary",
-      "sales": "Sales"
+      "sales": "Sales",
+      "uncategorized": "Uncategorized"
     },
     "form": {
       "titleCreate": "Add income",
@@ -546,6 +547,7 @@
       "taxes": "Taxes",
       "transport": "Transport",
       "travel": "Travel",
+      "uncategorized": "Uncategorized",
       "utilities": "Utilities"
     },
     "paymentMethods": {

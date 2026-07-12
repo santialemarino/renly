@@ -3,6 +3,7 @@
 import calendar as _calendar
 from collections import defaultdict
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,9 +96,10 @@ async def get_overview(
     income_change_pct = None
     expense_change_pct = None
     if date_from and date_to:
-        period_days = (date_to - date_from).days
-        prev_to = date_from
-        prev_from = date_type.fromordinal(prev_to.toordinal() - period_days)
+        # Same-length previous window with inclusive bounds: prev_to ends the day before the
+        # current window starts (no shared day), and prev spans the same number of days.
+        prev_to = date_from - timedelta(days=1)
+        prev_from = prev_to - (date_to - date_from)
 
         prev_income_by_currency = await income_repository.sum_by_user(
             session,
@@ -124,7 +126,9 @@ async def get_overview(
             expense_change_pct = (total_expenses - prev_expenses) / prev_expenses
 
     # Credit card liability — current outstanding, so convert at today's rate per bucket.
-    cards = await credit_card_repository.list_by_user(session, user_id)
+    # Includes archived cards: archive is a UI filter, not an accounting event, so an
+    # archived card's outstanding balance stays a liability.
+    cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
     if card_ids:
