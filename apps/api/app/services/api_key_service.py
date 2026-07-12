@@ -8,7 +8,7 @@ from app.domain import NotFoundError
 from app.models.api_key import ApiKey
 from app.models.user import User
 from app.models.utils import utcnow
-from app.repositories import api_key_repository
+from app.repositories import api_key_repository, user_repository
 
 KEY_PREFIX_LENGTH = 8
 
@@ -58,6 +58,6 @@ async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
             key.last_used_at = utcnow()
             await api_key_repository.save(session, key)
             await session.commit()
-            user = await session.get(User, key.user_id)
+            user = await user_repository.get_by_id(session, key.user_id)
             return user
     return None

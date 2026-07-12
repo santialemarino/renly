@@ -151,14 +151,17 @@ def _link(path: str, raw_token: str) -> str:
     return f"{settings.web_base_url}{path}?token={raw_token}"
 
 
+# Builds the email-verification web link.
 def _verify_link(raw_token: str) -> str:
     return _link(_VERIFY_EMAIL_PATH, raw_token)
 
 
+# Builds the password-reset web link.
 def _reset_link(raw_token: str) -> str:
     return _link(_RESET_PASSWORD_PATH, raw_token)
 
 
+# Builds the plain login-page web link (no token).
 def _login_link() -> str:
     return f"{settings.web_base_url}{_LOGIN_PATH}"
 

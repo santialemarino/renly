@@ -38,10 +38,10 @@ class TestAutoSnapshotSkips:
             _inv(inv_id=3, ticker="GOOG", base_currency="ARS"),
         ]
         monkeypatch.setattr(auto_snapshot_service.investment_repository, "list_with_ticker", AsyncMock(return_value=investments))
-        monkeypatch.setattr(auto_snapshot_service, "_get_existing_snapshot_dates", AsyncMock(return_value=set()))
+        monkeypatch.setattr(auto_snapshot_service.snapshot_repository, "get_ids_with_snapshot_on_date", AsyncMock(return_value=set()))
         monkeypatch.setattr(
-            auto_snapshot_service,
-            "_get_latest_prices_by_ticker",
+            auto_snapshot_service.asset_price_repository,
+            "get_latest_by_tickers",
             AsyncMock(
                 return_value={
                     "AAPL": _price(ticker="AAPL", price=Decimal("200"), currency="USD"),
@@ -51,8 +51,8 @@ class TestAutoSnapshotSkips:
             ),
         )
         monkeypatch.setattr(
-            auto_snapshot_service,
-            "_get_latest_snapshots_by_investment",
+            auto_snapshot_service.snapshot_repository,
+            "get_latest_by_investments",
             AsyncMock(
                 return_value={
                     1: _snap(inv_id=1, quantity=Decimal("10")),
@@ -76,15 +76,15 @@ class TestAutoSnapshotSkips:
     async def test_zero_quantity_skipped(self, monkeypatch):
         investments = [_inv(inv_id=1, ticker="AAPL", base_currency="USD")]
         monkeypatch.setattr(auto_snapshot_service.investment_repository, "list_with_ticker", AsyncMock(return_value=investments))
-        monkeypatch.setattr(auto_snapshot_service, "_get_existing_snapshot_dates", AsyncMock(return_value=set()))
+        monkeypatch.setattr(auto_snapshot_service.snapshot_repository, "get_ids_with_snapshot_on_date", AsyncMock(return_value=set()))
         monkeypatch.setattr(
-            auto_snapshot_service,
-            "_get_latest_prices_by_ticker",
+            auto_snapshot_service.asset_price_repository,
+            "get_latest_by_tickers",
             AsyncMock(return_value={"AAPL": _price(ticker="AAPL", price=Decimal("200"), currency="USD")}),
         )
         monkeypatch.setattr(
-            auto_snapshot_service,
-            "_get_latest_snapshots_by_investment",
+            auto_snapshot_service.snapshot_repository,
+            "get_latest_by_investments",
             AsyncMock(return_value={1: _snap(inv_id=1, quantity=Decimal("0"))}),
         )
         session = AsyncMock()

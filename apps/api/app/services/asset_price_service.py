@@ -59,15 +59,6 @@ async def get_latest_price(
     return await asset_price_repository.get_latest(session, ticker)
 
 
-# Returns the price for a ticker on a specific date. Returns None if not found.
-async def get_price_by_date(
-    session: AsyncSession,
-    ticker: str,
-    price_date: date_type,
-) -> AssetPrice | None:
-    return await asset_price_repository.get_by_ticker_and_date(session, ticker, price_date)
-
-
 # Returns price history for a ticker, optionally filtered by date range.
 async def get_price_history(
     session: AsyncSession,

@@ -11,6 +11,7 @@ from app.domain.currency import SUPPORTED_CURRENCIES, is_supported
 # Base class for all request bodies. Strips whitespace from all strings.
 # Optional string fields are converted to None when empty after stripping.
 class RequestBase(BaseModel):
+    # Strips every string value; empty optional strings become None.
     @model_validator(mode="before")
     @classmethod
     def clean_strings(cls, values: Any) -> Any:

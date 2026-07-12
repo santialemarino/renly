@@ -102,6 +102,7 @@ async def _auto_snapshots_startup_catchup() -> None:
         logger.exception("Auto-snapshot startup catch-up failed.")
 
 
+# Registers all background jobs and starts the scheduler. Called from the app lifespan on startup.
 def start_scheduler() -> None:
     # Exchange rates: run immediately on startup, then every 6 hours.
     scheduler.add_job(
@@ -190,6 +191,7 @@ def start_scheduler() -> None:
     )
 
 
+# Stops the scheduler without waiting for running jobs. Called from the app lifespan on shutdown.
 def stop_scheduler() -> None:
     scheduler.shutdown(wait=False)
     logger.info("Scheduler stopped.")

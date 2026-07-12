@@ -6,7 +6,6 @@ from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.domain import CardBucketBalance
-from app.repositories import expense_repository
 from app.schemas.card_reconciliation import (
     CardReconciliationCreate,
     CardReconciliationResponse,
@@ -57,8 +56,8 @@ async def list_cards(
     card_ids = [c.id for c in cards if c.id is not None]
     card_currencies = {c.id: c.currency for c in cards if c.id is not None}
     balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, current_user.id)
-    expense_counts = await expense_repository.count_by_credit_card_ids(session, card_ids, current_user.id)
-    return [_to_response(card, balances.get(card.id, []), expense_counts.get(card.id, 0) > 0) for card in cards]
+    has_expenses = await credit_card_service.cards_have_expenses(session, card_ids, current_user.id)
+    return [_to_response(card, balances.get(card.id, []), has_expenses.get(card.id, False)) for card in cards]
 
 
 # Get a single credit card with its current balance.
@@ -70,8 +69,8 @@ async def get_card(
 ) -> CreditCardResponse:
     card = await credit_card_service.get_card(session, card_id, current_user)
     balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, current_user.id)
-    count = await expense_repository.count_by_credit_card(session, card.id, current_user.id)
-    return _to_response(card, balances.get(card.id, []), count > 0)
+    has_expenses = await credit_card_service.cards_have_expenses(session, [card.id], current_user.id)
+    return _to_response(card, balances.get(card.id, []), has_expenses.get(card.id, False))
 
 
 # Create a new credit card.
@@ -104,8 +103,8 @@ async def update_card(
     payload = body.model_dump(exclude_unset=True)
     card = await credit_card_service.update_card(session, card_id, current_user, **payload)
     balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, current_user.id)
-    count = await expense_repository.count_by_credit_card(session, card.id, current_user.id)
-    return _to_response(card, balances.get(card.id, []), count > 0)
+    has_expenses = await credit_card_service.cards_have_expenses(session, [card.id], current_user.id)
+    return _to_response(card, balances.get(card.id, []), has_expenses.get(card.id, False))
 
 
 # Delete a credit card. Rejects with 409 if the card has linked expenses.
@@ -127,8 +126,8 @@ async def archive_card(
 ) -> CreditCardResponse:
     card = await credit_card_service.archive_card(session, card_id, current_user)
     balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, current_user.id)
-    count = await expense_repository.count_by_credit_card(session, card.id, current_user.id)
-    return _to_response(card, balances.get(card.id, []), count > 0)
+    has_expenses = await credit_card_service.cards_have_expenses(session, [card.id], current_user.id)
+    return _to_response(card, balances.get(card.id, []), has_expenses.get(card.id, False))
 
 
 # Unarchive a credit card (set is_active = true). Returns the updated card.
@@ -140,8 +139,8 @@ async def unarchive_card(
 ) -> CreditCardResponse:
     card = await credit_card_service.unarchive_card(session, card_id, current_user)
     balances = await credit_card_service.get_card_balances(session, [card.id], {card.id: card.currency}, current_user.id)
-    count = await expense_repository.count_by_credit_card(session, card.id, current_user.id)
-    return _to_response(card, balances.get(card.id, []), count > 0)
+    has_expenses = await credit_card_service.cards_have_expenses(session, [card.id], current_user.id)
+    return _to_response(card, balances.get(card.id, []), has_expenses.get(card.id, False))
 
 
 # --- Settlements ---

@@ -13,9 +13,10 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.models.asset_price import AssetPrice
 from app.models.snapshot import InvestmentSnapshot
+from app.repositories.asset_price_repository import asset_price_repository
 from app.repositories.investment_repository import investment_repository
+from app.repositories.snapshot_repository import snapshot_repository
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,9 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
     tickers = [inv.ticker for inv in investments if inv.ticker]
 
     # Batch-load: existing snapshots for today, latest prices, latest snapshots.
-    existing_today = await _get_existing_snapshot_dates(session, inv_ids, today)
-    latest_prices = await _get_latest_prices_by_ticker(session, tickers)
-    latest_snapshots = await _get_latest_snapshots_by_investment(session, inv_ids)
+    existing_today = await snapshot_repository.get_ids_with_snapshot_on_date(session, inv_ids, today)
+    latest_prices = await asset_price_repository.get_latest_by_tickers(session, tickers)
+    latest_snapshots = await snapshot_repository.get_latest_by_investments(session, inv_ids)
 
     # Build all snapshots in memory, then bulk-add in one flush.
     snapshots: list[InvestmentSnapshot] = []
@@ -121,60 +122,6 @@ def most_recent_month_end(today: date_type) -> date_type:
     if today.day == last_day:
         return today
     return today.replace(day=1) - timedelta(days=1)
-
-
-# Returns the set of investment IDs that already have a snapshot for the given date.
-async def _get_existing_snapshot_dates(session: AsyncSession, inv_ids: list[int], snapshot_date: date_type) -> set[int]:
-    result = await session.execute(
-        select(InvestmentSnapshot.investment_id).where(
-            InvestmentSnapshot.investment_id.in_(inv_ids),
-            InvestmentSnapshot.date == snapshot_date,
-        )
-    )
-    return {row[0] for row in result.all()}
-
-
-# Returns {ticker: AssetPrice} for the latest price of each ticker.
-async def _get_latest_prices_by_ticker(session: AsyncSession, tickers: list[str]) -> dict[str, AssetPrice]:
-    if not tickers:
-        return {}
-    # Get the max date per ticker, then join to get the full row.
-    from sqlalchemy import func
-
-    subq = (
-        select(AssetPrice.ticker, func.max(AssetPrice.date).label("max_date"))
-        .where(AssetPrice.ticker.in_(tickers))
-        .group_by(AssetPrice.ticker)
-        .subquery()
-    )
-    result = await session.execute(
-        select(AssetPrice).join(
-            subq,
-            (AssetPrice.ticker == subq.c.ticker) & (AssetPrice.date == subq.c.max_date),
-        )
-    )
-    return {p.ticker: p for p in result.scalars().all()}
-
-
-# Returns {investment_id: latest InvestmentSnapshot} for each investment.
-async def _get_latest_snapshots_by_investment(session: AsyncSession, inv_ids: list[int]) -> dict[int, InvestmentSnapshot]:
-    if not inv_ids:
-        return {}
-    from sqlalchemy import func
-
-    subq = (
-        select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date"))
-        .where(InvestmentSnapshot.investment_id.in_(inv_ids))
-        .group_by(InvestmentSnapshot.investment_id)
-        .subquery()
-    )
-    result = await session.execute(
-        select(InvestmentSnapshot).join(
-            subq,
-            (InvestmentSnapshot.investment_id == subq.c.investment_id) & (InvestmentSnapshot.date == subq.c.max_date),
-        )
-    )
-    return {s.investment_id: s for s in result.scalars().all()}
 
 
 # True when any auto-generated snapshot exists dated on or after `since` (LIMIT 1 probe).

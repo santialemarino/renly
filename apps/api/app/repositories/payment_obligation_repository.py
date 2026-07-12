@@ -1,5 +1,3 @@
-from datetime import date as date_type
-
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -43,23 +41,6 @@ async def list_by_user(
         include_ids=include_ids,
         sort_columns=_SORT_COLUMNS,
         default_order=PaymentObligation.next_due_date,
-    )
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
-
-
-# Active obligations whose next_due_date is at or before the given upper bound.
-# Used by the Payments Calendar to project recurrences forward inside a window —
-# anchors after the window can't reach back, so we filter them out at the DB.
-async def list_active_anchored_to_or_before(
-    session: AsyncSession,
-    user_id: int,
-    upper_bound: date_type,
-) -> list[PaymentObligation]:
-    stmt = select(PaymentObligation).where(
-        PaymentObligation.user_id == user_id,
-        PaymentObligation.is_active.is_(True),
-        PaymentObligation.next_due_date <= upper_bound,
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -112,7 +93,6 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
 class PaymentObligationRepository:
     list_by_user = staticmethod(list_by_user)
-    list_active_anchored_to_or_before = staticmethod(list_active_anchored_to_or_before)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

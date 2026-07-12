@@ -3,7 +3,6 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.models.investment import InvestmentCategory
-from app.repositories.snapshot_repository import snapshot_repository
 from app.schemas.investment import (
     InvestmentCreate,
     InvestmentListResponse,
@@ -27,7 +26,7 @@ MAX_PAGE_SIZE = 100
 
 # Builds InvestmentResponse from model, including has_snapshots check.
 async def _to_response(session: SessionDep, investment) -> InvestmentResponse:
-    has = await snapshot_repository.has_snapshots(session, investment.id)
+    has = await investment_service.has_snapshots(session, investment.id)
     data = {c.name: getattr(investment, c.name) for c in investment.__table__.columns}
     data["has_snapshots"] = has
     data["groups"] = []

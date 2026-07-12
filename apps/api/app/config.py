@@ -28,6 +28,7 @@ class SignupMode(StrEnum):
     open = "open"
 
 
+# App configuration loaded from the environment (.env); imported app-wide via the settings singleton.
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

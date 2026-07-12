@@ -91,6 +91,12 @@ async def get_card_balances(
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
 
 
+# Returns {card_id: has-at-least-one-linked-expense} for the given cards in one batch query.
+async def cards_have_expenses(session: AsyncSession, card_ids: list[int], user_id: int) -> dict[int, bool]:
+    counts = await expense_repository.count_by_credit_card_ids(session, card_ids, user_id)
+    return {card_id: counts.get(card_id, 0) > 0 for card_id in card_ids}
+
+
 # Create a new credit card.
 async def create_card(
     session: AsyncSession,

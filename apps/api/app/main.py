@@ -62,6 +62,7 @@ from app.scheduler import start_scheduler, stop_scheduler
 logger = logging.getLogger(__name__)
 
 
+# Starts the background scheduler on app startup and shuts it down on exit.
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     start_scheduler()
@@ -72,14 +73,17 @@ async def lifespan(_app: FastAPI):
 # --- Exception handlers ---
 
 
+# Maps CurrencyChangeBlockedError to 409.
 async def currency_change_blocked_handler(_request: Request, exc: CurrencyChangeBlockedError):
     return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
+# Maps HasLinkedExpensesError to 409.
 async def has_linked_expenses_handler(_request: Request, exc: HasLinkedExpensesError):
     return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
+# Maps InstallmentLockedFieldError to 400 with the offending fields.
 async def installment_locked_field_handler(_request: Request, exc: InstallmentLockedFieldError):
     return JSONResponse(
         status_code=400,
@@ -87,58 +91,72 @@ async def installment_locked_field_handler(_request: Request, exc: InstallmentLo
     )
 
 
+# Maps EmailNotVerifiedError to 403.
 async def email_not_verified_handler(_request: Request, exc: EmailNotVerifiedError):
     return JSONResponse(status_code=403, content={"detail": exc.message})
 
 
+# Maps InvalidCredentialsError to 401.
 async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsError):
     return JSONResponse(status_code=401, content={"detail": exc.message})
 
 
+# Maps InvalidImportFileError to 400.
 async def invalid_import_file_handler(_request: Request, exc: InvalidImportFileError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+# Maps InvalidRefreshTokenError to 401.
 async def invalid_refresh_token_handler(_request: Request, exc: InvalidRefreshTokenError):
     return JSONResponse(status_code=401, content={"detail": exc.message})
 
 
+# Maps InvalidTokenError to 400.
 async def invalid_token_handler(_request: Request, exc: InvalidTokenError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+# Maps InvalidInviteError to 403.
 async def invalid_invite_handler(_request: Request, exc: InvalidInviteError):
     return JSONResponse(status_code=403, content={"detail": exc.message})
 
 
+# Maps InvestmentCurrencyMismatchError to 400.
 async def investment_currency_mismatch_handler(_request: Request, exc: InvestmentCurrencyMismatchError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+# Maps InviteEmailTakenError to 409.
 async def invite_email_taken_handler(_request: Request, exc: InviteEmailTakenError):
     return JSONResponse(status_code=409, content={"detail": exc.message})
 
 
+# Maps NotFoundError to 404.
 async def not_found_exception_handler(_request: Request, exc: NotFoundError):
     return JSONResponse(status_code=404, content={"detail": exc.message})
 
 
+# Maps PasswordBreachedError to 400.
 async def password_breached_handler(_request: Request, exc: PasswordBreachedError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+# Maps PaymentPairingError to 400.
 async def payment_pairing_handler(_request: Request, exc: PaymentPairingError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 
 
+# Maps PlanRequiredError to 402.
 async def plan_required_handler(_request: Request, exc: PlanRequiredError):
     return JSONResponse(status_code=402, content={"detail": exc.message})
 
 
+# Maps ExchangeRateUnavailableError to 503.
 async def exchange_rate_unavailable_handler(_request: Request, exc: ExchangeRateUnavailableError):
     return JSONResponse(status_code=503, content={"detail": exc.message})
 
 
+# Maps ReconciliationPeriodMismatchError to 400.
 async def reconciliation_period_mismatch_handler(_request: Request, exc: ReconciliationPeriodMismatchError):
     return JSONResponse(status_code=400, content={"detail": exc.message})
 

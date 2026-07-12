@@ -55,45 +55,6 @@ async def get_all_grouped_by_pair(
     return grouped
 
 
-# Returns a rate by date and pair. Returns None if not found.
-async def get_by_date_and_pair(
-    session: AsyncSession,
-    rate_date: date_type,
-    pair: ExchangeRatePair,
-) -> ExchangeRate | None:
-    result = await session.execute(
-        select(ExchangeRate).where(
-            ExchangeRate.date == rate_date,
-            ExchangeRate.pair == pair,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-# Creates or updates a single rate by (date, pair) using ON CONFLICT.
-async def upsert(session: AsyncSession, rate: ExchangeRate) -> None:
-    now = utcnow()
-    stmt = (
-        insert(ExchangeRate)
-        .values(
-            date=rate.date,
-            pair=rate.pair,
-            rate=rate.rate,
-            source=rate.source,
-            updated_at=now,
-        )
-        .on_conflict_do_update(
-            index_elements=["date", "pair"],
-            set_={
-                "rate": rate.rate,
-                "source": rate.source,
-                "updated_at": now,
-            },
-        )
-    )
-    await session.execute(stmt)
-
-
 # Bulk upserts multiple rates in a single statement. Returns the number of rows affected.
 async def bulk_upsert(
     session: AsyncSession,
@@ -125,9 +86,7 @@ class ExchangeRateRepository:
     bulk_upsert = staticmethod(bulk_upsert)
     get_all_grouped_by_pair = staticmethod(get_all_grouped_by_pair)
     get_by_date = staticmethod(get_by_date)
-    get_by_date_and_pair = staticmethod(get_by_date_and_pair)
     get_latest_all = staticmethod(get_latest_all)
-    upsert = staticmethod(upsert)
 
 
 # Singleton used by services to access exchange rate persistence.

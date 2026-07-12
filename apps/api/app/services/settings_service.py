@@ -2,9 +2,6 @@ from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import cast
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -59,6 +56,7 @@ LANGUAGE_MODE_MANUAL = "manual"
 _NOT_SET = object()
 
 
+# Normalizes the raw settings blob into the response dict: type-checks every key and applies fallbacks.
 def _settings_to_response(settings: dict) -> dict:
     raw_primary = settings.get(SETTINGS_KEY_PRIMARY)
     primary_currency = raw_primary if isinstance(raw_primary, str) and raw_primary else None
@@ -257,29 +255,12 @@ async def get_user_today(session: AsyncSession, user_id: int, now_utc: datetime 
     return today_in_timezone(now_utc or datetime.now(UTC), tz)
 
 
-# Latches a single boolean onboarding-internal settings flag to True via a targeted JSONB merge
-# upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
-# write, and works whether or not a settings row exists yet. Idempotent; does NOT commit — the
-# caller's transaction persists it.
-async def _latch_flag(session: AsyncSession, user_id: int, key: str) -> None:
-    marker = {key: True}
-    stmt = (
-        pg_insert(UserSettings)
-        .values(user_id=user_id, settings=marker)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"settings": UserSettings.__table__.c.settings.op("||")(cast(marker, JSONB))},
-        )
-    )
-    await session.execute(stmt)
-
-
 # Retires a section's first-run sample by latching its per-entity flag (alongside the entity being
 # created, or on dismiss). Idempotent; does NOT commit. `entity` must be a key of SAMPLE_RETIRED_KEYS.
 async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
-    await _latch_flag(session, user_id, SAMPLE_RETIRED_KEYS[entity])
+    await user_settings_repository.latch_flag(session, user_id, SAMPLE_RETIRED_KEYS[entity])
 
 
 # Latches the first-run welcome tour as completed so it never auto-shows again. Idempotent; does NOT commit.
 async def complete_tour(session: AsyncSession, user_id: int) -> None:
-    await _latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)
+    await user_settings_repository.latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)

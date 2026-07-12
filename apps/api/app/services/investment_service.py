@@ -18,12 +18,12 @@ from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, 
 from app.services import settings_service
 
 
+# Assembles InvestmentResponse, enriching it with group info and snapshot presence.
 def _build_response(
     inv: Investment,
     groups_map: dict[int, list[tuple[int, str]]],
     snapshots_set: set[int],
 ) -> InvestmentResponse:
-    # Assembles InvestmentResponse, enriching it with group info and snapshot presence.
     groups = [InvestmentGroupInfo(id=gid, name=gname) for gid, gname in groups_map.get(inv.id or 0, [])]
     return InvestmentResponse(
         id=inv.id or 0,
@@ -190,6 +190,11 @@ async def set_investment_groups(
             raise NotFoundError(f"Groups not found: {sorted(invalid)}")
     await group_repository.set_groups_for_investment(session, investment_id, group_ids)
     await session.commit()
+
+
+# Returns True if the investment has at least one snapshot.
+async def has_snapshots(session: AsyncSession, investment_id: int) -> bool:
+    return await snapshot_repository.has_snapshots(session, investment_id)
 
 
 # Lists snapshots for an investment. Raises 404 if investment not found or not owned.

@@ -13,6 +13,7 @@ from app.services import group_service
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
+# Builds a GroupResponse from the model plus its member investment ids.
 def _to_response(group, investment_ids: list[int]) -> GroupResponse:
     return GroupResponse(
         id=group.id,

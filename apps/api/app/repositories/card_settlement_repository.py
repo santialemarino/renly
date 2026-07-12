@@ -31,20 +31,9 @@ async def create(session: AsyncSession, settlement: CardSettlement) -> CardSettl
     return settlement
 
 
-# Stage a settlement for update (caller commits).
-async def save(session: AsyncSession, settlement: CardSettlement) -> None:
-    session.add(settlement)
-
-
 # Delete a settlement.
 async def delete(session: AsyncSession, settlement: CardSettlement) -> None:
     await session.delete(settlement)
-
-
-# Sum of settlements for a specific credit card.
-async def sum_by_card(session: AsyncSession, credit_card_id: int) -> float:
-    result = await session.execute(select(func.coalesce(func.sum(CardSettlement.amount), 0)).where(CardSettlement.credit_card_id == credit_card_id))
-    return float(result.scalar_one())
 
 
 # Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
@@ -100,9 +89,7 @@ class CardSettlementRepository:
     list_by_card = staticmethod(list_by_card)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
-    save = staticmethod(save)
     delete = staticmethod(delete)
-    sum_by_card = staticmethod(sum_by_card)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)
     sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)
 

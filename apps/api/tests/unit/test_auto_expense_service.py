@@ -183,14 +183,11 @@ class TestInstallmentCuotasToEmit:
 # --- Timezone-aware eligibility (Step G) ---
 
 
+# The hourly cron processes a user iff their local-hour-now equals AUTO_EXPENSES_HOUR_LOCAL.
+# Combined with the existing back-fill loop and today_in_timezone, this gives the user-local
+# day-boundary semantics. These tests exercise the primitives composed by
+# _generate_subscription_expenses (filter + today_in_user_tz + back-fill).
 class TestTimezoneAwareEligibility:
-    """
-    The hourly cron processes a user iff their local-hour-now equals AUTO_EXPENSES_HOUR_LOCAL.
-    Combined with the existing back-fill loop and today_in_timezone, this gives the
-    user-local day-boundary semantics. These tests exercise the primitives composed
-    by _generate_subscription_expenses (filter + today_in_user_tz + back-fill).
-    """
-
     def test_argentina_user_at_04_utc_is_eligible(self):
         # 04:00 UTC = 01:00 ART -> matches AUTO_EXPENSES_HOUR_LOCAL.
         now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
