@@ -17,7 +17,9 @@ description: Frontend app structure and where to create files (pages, components
 - **Page-specific components:** In `_components/` next to the page, e.g. `app/(auth)/login/_components/login-card.tsx`. Only that page (and its children) should import these.
 - **Shared across all protected pages:** In `app/(protected)/_components/`, e.g. `page-header.tsx`. For components used by more than one protected route but not outside it.
 - **Shared logic (auth, API, utils):** `lib/` — e.g. `lib/auth.ts`, `lib/auth-api.ts`, `lib/utils/page.tsx`. Use for anything used by more than one route or shared between server and client.
+- **Client hooks:** `lib/hooks/<name>.ts` — reusable `'use client'` hooks used by 2+ components (e.g. `use-search-params-navigation.ts`, `use-table-sort.ts`, `use-entity-form-dialog.ts`). One hook per file, kebab-case file named after the hook.
 - **Server-side data fetching (reads):** `lib/api/<feature>.ts` with `import 'server-only'`. Used directly in server components (`page.tsx`). Can be imported by multiple pages.
+- **Cross-entity API contract types:** `lib/api/types.ts` (e.g. `SortOrder`) — shared by multiple `lib/api/<feature>.ts` modules; entity-specific types stay in their feature module.
 - **Server mutations:** `actions.ts` colocated with the page (`'use server'`). Called from client components. Feature-specific; do not put in `lib/`.
 - **Used on multiple pages (this app only):** Put in the app's `components/` folder.
 - **Reusable across apps (design system):** Put in `packages/ui/src/components`, add to the package's `index.ts`, and import from `@repo/ui/components` in the web app.
