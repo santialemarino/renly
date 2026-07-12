@@ -7,7 +7,7 @@ description: Where tests live, how to run them, and what to test in the Renly re
 
 ## Current state
 
-- **API tests:** `apps/api/tests/unit/` — pytest. 28 unit tests for metrics helpers (period return, TWR, XIRR, invested capital, currency conversion).
+- **API tests:** `apps/api/tests/unit/` — pytest, ~850 tests across ~50 files covering metrics/date/liquidity helpers, service flows (mocked sessions/repos), schema validation, and in-process endpoint behavior.
 - **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. See the `e2e-testing` skill for full conventions, configuration, and the playwright-cli workflow.
 - **Web component/unit tests:** None planned. E2E is the only web test layer for now.
 - **Pre-commit:** `pnpm test:api` runs on every commit. Also runs in CI (`ci.api.yml`).
@@ -32,15 +32,18 @@ pnpm test:e2e
 
 ## What to test (API)
 
-**Unit test** (no DB, no HTTP):
+**Unit test** (`tests/unit/` — no real database):
 
-- `services/metrics_service.py` — period return formula, TWR chain, IRR/XIRR, portfolio aggregates
-- Any pure calculation or transformation function in `services/` or `utils/`
+- Pure calculation/transformation functions in `services/` or `utils/` (formulas, parsers, date math).
+- Service flows with mocked sessions/repositories (`unittest.mock.AsyncMock`, `monkeypatch`).
+- Endpoint behavior driven **in-process** (FastAPI TestClient / ASGI transport with overridden
+  dependencies — auth, session). These still count as unit tests: no network, no Postgres.
 
-**Integration test** (real DB or mock session):
+**Integration test** (`tests/integration/` — a live database):
 
-- Router + service + repository flows — only for critical paths (e.g. snapshot upsert, transaction side effects)
-- Use a test DB (separate `DATABASE_URL`), not mocks — mocks have caused divergence issues before
+- Tests that need a real Postgres (schema, roles, RLS). Today: `test_rls_isolation.py`, gated on
+  `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL` and skipped when unset, so the default
+  `pnpm test:api` run stays green without a DB.
 
 **Don't test:**
 
@@ -51,16 +54,15 @@ pnpm test:e2e
 
 ```
 apps/api/tests/
-├── conftest.py          # pytest fixtures (DB session, test client, factory helpers)
-├── unit/
-└── integration/
+├── unit/           # no real DB: pure functions, mocked-session services, in-process TestClient
+└── integration/    # live-DB only (env-gated; skipped by default)
 ```
+
+There is no shared `conftest.py` — tests build their own fixtures/mocks per file.
 
 ## Fixtures
 
-- Define a `test_db` session fixture in `conftest.py` that creates a fresh schema per test run
-- Define factory helpers (e.g. `make_investment`, `make_snapshot`) to keep test setup readable
-- Use `pytest-asyncio` for async routes/services
+- Use `pytest-asyncio` for async services/routes.
 
 ## Assertions
 

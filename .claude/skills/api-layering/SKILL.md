@@ -29,9 +29,15 @@ Repositories call `session.add()` and optionally `session.flush()` (to get gener
 
 If a service function does multiple writes (e.g., create group + set members), they must all succeed or all fail. With repository-level commits removed, a single `session.commit()` at the end of the service function achieves this. If an error occurs, the session rolls back on exit.
 
-### Explicit rollback on write errors
+### Rollback is handled by the session teardown
 
-Wrap write operations in try/except and call `session.rollback()` before re-raising. This prevents the session from being left in a broken state.
+Services do NOT need try/except + `session.rollback()` around writes. The session dependency
+(`app/db.py get_session`) yields from `async with AsyncSessionLocal() as session:` — when the
+request scope exits (normally or via an exception), the `async with` closes the session, which
+rolls back any transaction that was never committed. So an error raised before the service's
+`session.commit()` persists nothing, and the connection returns to the pool clean. An explicit
+`session.rollback()` is only warranted when a service wants to recover mid-request and continue
+issuing queries on the same session after a failed write.
 
 ## Currency conversion (services own it)
 
