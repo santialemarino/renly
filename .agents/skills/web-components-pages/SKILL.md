@@ -124,7 +124,8 @@ Use the custom type scale — never raw Tailwind size tokens (`text-sm`, `text-x
 - Never add `font-bold`, `font-semibold`, or `font-medium` next to any type-scale token — the token already encodes the weight.
 - Never add `font-bold` or `font-semibold` next to a `text-heading-*` class — headings already include weight 600.
 - `shrink-0` and other flex/sizing utilities come before typography tokens in the class order.
-- **Don't repeat defaults:** `text-base` is Tailwind's default 16px class — never use it; use the type scale instead. Similarly, never write `font-normal` (weight 400 is the browser default). If an element naturally inherits the correct size from its parent, you don't need to add a type-scale token just to be explicit.
+- **Don't repeat defaults:** `text-base` is Tailwind's default 16px class — never use it; use the type scale instead. Similarly, never write `font-normal` on plain text (weight 400 is the browser default). If an element naturally inherits the correct size from its parent, you don't need to add a type-scale token just to be explicit.
+- **Exception — `font-normal` on Button-based triggers:** the base `Button` carries `font-medium`, so a select/combobox-style trigger built on `Button` (date pickers, filter comboboxes, column mappers) adds `text-paragraph-sm font-normal` to override it — the trigger's value should read like input text (weight 400), not button text. This is the one place `font-normal` is load-bearing; don't "clean it up".
 
 ## Rounding and design tokens
 
