@@ -4,16 +4,9 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components';
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import { deleteExpense } from '@/app/(protected)/expenses/expenses-actions';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { Expense } from '@/lib/api/expenses';
 import { formatAmount } from '@/lib/utils/currency';
 
@@ -59,35 +52,22 @@ export function ExpenseDeleteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', {
-            amount: formatAmount(expense.amount, locale, expense.currency),
-            currency: expense.currency,
-          })}
-        </p>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="whitespace-nowrap"
-            onClick={() => onOpenChange(false)}
-          >
-            {t('form.cancel')}
-          </Button>
-          <Button
-            onClick={handleDelete}
-            disabled={deleting}
-            variant="destructive"
-            className="whitespace-nowrap"
-          >
-            {deleting ? t('delete.deleting') : t('delete.confirmButton')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      entity={expense}
+      title={t('delete.title')}
+      description={(e) =>
+        t('delete.confirm', {
+          amount: formatAmount(e.amount, locale, e.currency),
+          currency: e.currency,
+        })
+      }
+      onConfirm={handleDelete}
+      loading={deleting}
+      loadingLabel={t('delete.deleting')}
+      confirmLabel={t('delete.confirmButton')}
+      cancelLabel={t('form.cancel')}
+    />
   );
 }
