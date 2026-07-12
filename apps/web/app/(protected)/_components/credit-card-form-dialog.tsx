@@ -115,7 +115,12 @@ export function CreditCardFormDialog({
           <form
             id="credit-card-form"
             className="flex flex-col min-w-0 gap-y-4"
-            onSubmit={form.handleSubmit(onSubmit)}
+            // Stop propagation so the submit doesn't bubble up the React tree to a host form
+            // when this dialog is stacked inside one (PaymentMethodFields' inline card creation).
+            onSubmit={(e) => {
+              e.stopPropagation();
+              void form.handleSubmit(onSubmit)(e);
+            }}
             noValidate
           >
             <FormField
