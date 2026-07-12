@@ -271,10 +271,14 @@ export function SnapshotFormDialog({
         quantity: values.quantity || undefined,
         currency: baseCurrency,
       });
+    } catch {
+      toast.error(t('form.saveError'));
+      return;
+    }
 
-      const wantsTx =
-        values.includeTransaction && values.transactionAmount && values.transactionType;
+    const wantsTx = values.includeTransaction && values.transactionAmount && values.transactionType;
 
+    try {
       if (wantsTx && existingTx) {
         await updateTransaction(investmentId, existingTx.id, {
           amount: values.transactionAmount!,
@@ -292,13 +296,21 @@ export function SnapshotFormDialog({
       } else if (!wantsTx && existingTx) {
         await deleteTransaction(investmentId, existingTx.id);
       }
-
-      toast.success(isEdit ? t('form.updateSuccess') : t('form.createSuccess'));
+    } catch {
+      /*
+       * Partial failure: the snapshot is already persisted (no combined endpoint by
+       * design), so a generic "failed to save" would lie. Surface the specific state,
+       * close, and refresh via onSuccess so the saved snapshot is visible in the grid.
+       */
+      toast.error(t('form.transactionSaveError'));
       onSuccess();
       onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
+      return;
     }
+
+    toast.success(isEdit ? t('form.updateSuccess') : t('form.createSuccess'));
+    onSuccess();
+    onOpenChange(false);
   }
 
   const hasTicker = !!ticker;

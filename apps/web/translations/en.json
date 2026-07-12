@@ -1497,7 +1497,8 @@
       },
       "createSuccess": "Snapshot created.",
       "updateSuccess": "Snapshot updated.",
-      "saveError": "Failed to save snapshot."
+      "saveError": "Failed to save snapshot.",
+      "transactionSaveError": "The snapshot was saved, but the transaction could not be saved. Open the snapshot again to retry the transaction."
     }
   },
   "preferences": {

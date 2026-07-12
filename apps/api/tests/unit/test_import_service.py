@@ -19,6 +19,7 @@ from app.domain.import_specs import (
     TRANSACTIONS_SPEC,
     ImportEntity,
 )
+from app.domain.payment_method import PaymentMethod
 from app.main import create_app
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
@@ -323,9 +324,23 @@ class TestExpenseSpec:
         preview, _ = self._validate([["2026-01-05", "100", "USD", "wat", "", ""]])
         assert preview[0].status == "invalid"
 
-    def test_overlong_payment_method_is_invalid(self):
-        preview, _ = self._validate([["2026-01-05", "100", "USD", "food", "x" * 21, ""]])
-        assert preview[0].status == "invalid"
+    def test_mapped_payment_method_coerces(self):
+        preview, coerced = self._validate([["2026-01-05", "100", "USD", "food", "Visa", ""]])
+        assert preview[0].status == "valid"
+        assert preview[0].warnings == []
+        assert coerced[0]["payment_method"] == PaymentMethod.credit_card
+
+    def test_unmapped_payment_method_warns_but_row_imports(self):
+        preview, coerced = self._validate([["2026-01-05", "100", "USD", "food", "Cheque", ""]])
+        assert preview[0].status == "valid"
+        assert len(preview[0].warnings) == 1
+        assert "Unknown payment method" in preview[0].warnings[0]
+        assert "payment_method" not in coerced[0]
+
+    def test_warning_does_not_change_summary_counts(self):
+        preview, _ = self._validate([["2026-01-05", "100", "USD", "food", "Cheque", ""]])
+        summary = import_service._summarize(preview)
+        assert (summary.valid, summary.invalid, summary.duplicate) == (1, 0, 0)
 
     def test_composite_dedup_within_file(self):
         rows = [
@@ -415,6 +430,31 @@ class TestExpenseImport:
         assert inserted[0].amount == Decimal("100.00")
         assert inserted[0].source == "manual"
         session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_confirm_persists_mapped_and_dropped_payment_method(self, monkeypatch):
+        monkeypatch.setattr(import_service.expense_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
+        bulk = AsyncMock(side_effect=lambda session, entries: entries)
+        monkeypatch.setattr(import_service.expense_repository, "bulk_create", bulk)
+        content = _csv("Date,Amount,Currency,Category,Payment method,Notes\n2026-01-05,100,USD,food,Visa,a\n2026-01-06,200,USD,food,Cheque,b\n")
+        mapping = {
+            "date": "Date",
+            "amount": "Amount",
+            "currency": "Currency",
+            "category": "Category",
+            "payment_method": "Payment method",
+            "notes": "Notes",
+        }
+
+        result = await import_service.confirm_import(AsyncMock(), USER, ImportEntity.expenses, "x.csv", content, mapping, False)
+
+        assert result.created == 2
+        inserted = bulk.call_args.args[1]
+        # Imports never attach a card — P06's validator allows a card-less credit_card row.
+        assert inserted[0].payment_method == PaymentMethod.credit_card
+        assert inserted[0].credit_card_id is None
+        # The unmapped "Cheque" dropped to a warning → persisted as None.
+        assert inserted[1].payment_method is None
 
 
 class TestIncomeImport:
@@ -527,6 +567,12 @@ class TestQuantityCoercer:
             ("0", Decimal("0.000000")),
             ("1.5", Decimal("1.5")),
             ("0.00012345", Decimal("0.000123")),  # 6-decimal precision
+            ("0.125", Decimal("0.125")),  # lone dot + 3-digit fraction stays DECIMAL for quantity (was 125)
+            ("1.500", Decimal("1.5")),  # "1.500" shares means 1.5, not 1500
+            ("1,500", Decimal("1.5")),  # same rule for the comma
+            ("0,5", Decimal("0.5")),
+            ("1.500,25", Decimal("1500.25")),  # both separators present → unaffected by the quantity rule
+            ("1.500.000", Decimal("1500000")),  # multiple same separators remain grouping
         ],
     )
     def test_parses_quantity(self, raw, expected):
@@ -558,6 +604,29 @@ class TestTransactionTypeCoercer:
     def test_rejects_unknown_type(self):
         with pytest.raises(ValueError, match="transaction type"):
             import_specs._coerce_transaction_type("teleport")
+
+
+class TestPaymentMethodCoercer:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("cash", PaymentMethod.cash),
+            ("Efectivo", PaymentMethod.cash),
+            ("débito", PaymentMethod.debit),
+            ("TRANSFERENCIA", PaymentMethod.transfer),
+            ("credit card", PaymentMethod.credit_card),
+            ("tarjeta de crédito", PaymentMethod.credit_card),
+            ("VISA", PaymentMethod.credit_card),
+            ("mastercard", PaymentMethod.credit_card),
+        ],
+    )
+    def test_maps_aliases(self, raw, expected):
+        assert import_specs._coerce_payment_method(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["cheque", "gift card", "bitcoin"])
+    def test_rejects_unknown(self, raw):
+        with pytest.raises(ValueError, match="Unknown payment method"):
+            import_specs._coerce_payment_method(raw)
 
 
 class TestInvestmentCurrencyCoercer:

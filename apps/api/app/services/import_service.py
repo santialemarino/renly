@@ -119,6 +119,7 @@ def _validate_rows(
     for index, row in enumerate(rows):
         values: dict[str, str] = {}
         errors: list[str] = []
+        warnings: list[str] = []
         coerced: dict[str, object] = {}
         for field in spec.fields:
             column = mapping.get(field.key)
@@ -132,7 +133,11 @@ def _validate_rows(
             try:
                 coerced[field.key] = field.coerce(raw)
             except ValueError as exc:
-                errors.append(str(exc))
+                # Soft fields degrade to a warning: the value is dropped, the row still imports.
+                if field.soft:
+                    warnings.append(str(exc))
+                else:
+                    errors.append(str(exc))
         if not errors and resolve is not None:
             try:
                 resolve(coerced)
@@ -149,7 +154,7 @@ def _validate_rows(
                 if any(key):
                     seen.add(key)
             coerced_by_index[index] = coerced
-        preview_rows.append(ImportPreviewRow(row_number=index + 1, values=values, status=status, errors=errors))
+        preview_rows.append(ImportPreviewRow(row_number=index + 1, values=values, status=status, errors=errors, warnings=warnings))
     return preview_rows, coerced_by_index
 
 

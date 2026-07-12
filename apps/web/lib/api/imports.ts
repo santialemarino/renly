@@ -14,6 +14,7 @@ interface ImportPreviewRowRaw {
   values: Record<string, string>;
   status: string;
   errors: string[];
+  warnings: string[];
 }
 
 interface ImportSummaryRaw {
@@ -51,6 +52,7 @@ export interface ImportPreviewRow {
   values: Record<string, string>;
   status: ImportRowStatus;
   errors: string[];
+  warnings: string[];
 }
 
 export interface ImportSummary {
@@ -82,6 +84,7 @@ function mapPreviewRow(raw: ImportPreviewRowRaw): ImportPreviewRow {
     values: raw.values,
     status: raw.status as ImportRowStatus,
     errors: raw.errors,
+    warnings: raw.warnings,
   };
 }
 

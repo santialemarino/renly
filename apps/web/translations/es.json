@@ -1497,7 +1497,8 @@
       },
       "createSuccess": "Snapshot creado.",
       "updateSuccess": "Snapshot actualizado.",
-      "saveError": "Error al guardar el snapshot."
+      "saveError": "Error al guardar el snapshot.",
+      "transactionSaveError": "Se guardó el snapshot, pero no se pudo guardar la transacción. Volvé a abrir el snapshot para reintentarla."
     }
   },
   "preferences": {

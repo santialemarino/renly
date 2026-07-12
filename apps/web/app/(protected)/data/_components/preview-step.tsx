@@ -105,6 +105,11 @@ export function PreviewStep({
                       {row.errors.join(' ')}
                     </span>
                   )}
+                  {row.warnings.length > 0 && (
+                    <span className="block text-paragraph-xs text-amber-600">
+                      {row.warnings.join(' ')}
+                    </span>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
