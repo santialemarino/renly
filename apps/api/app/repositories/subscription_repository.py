@@ -1,10 +1,11 @@
 from datetime import date as date_type
 
-from sqlalchemy import asc, desc, func, or_
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.subscription import Subscription
+from app.repositories.utils import apply_listing_filters
 
 _SORT_COLUMNS = {
     "name": Subscription.name,
@@ -30,18 +31,18 @@ async def list_by_user(
     active_only: bool = True,
     include_ids: list[int] | None = None,
 ) -> list[Subscription]:
-    stmt = select(Subscription).where(Subscription.user_id == user_id)
-    if active_only:
-        if include_ids:
-            stmt = stmt.where(or_(Subscription.is_active.is_(True), Subscription.id.in_(include_ids)))
-        else:
-            stmt = stmt.where(Subscription.is_active.is_(True))
-    if search:
-        stmt = stmt.where(Subscription.name.ilike(f"%{search}%"))
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else Subscription.next_billing_date
-    stmt = stmt.order_by(order_clause)
+    stmt = apply_listing_filters(
+        select(Subscription),
+        Subscription,
+        user_id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+        include_ids=include_ids,
+        sort_columns=_SORT_COLUMNS,
+        default_order=Subscription.next_billing_date,
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

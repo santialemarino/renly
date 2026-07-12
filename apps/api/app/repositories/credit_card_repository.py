@@ -1,8 +1,8 @@
-from sqlalchemy import asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.credit_card import CreditCard
+from app.repositories.utils import apply_listing_filters
 
 _SORT_COLUMNS = {
     "name": CreditCard.name,
@@ -22,15 +22,18 @@ async def list_by_user(
     sort_order: str = "asc",
     active_only: bool = True,
 ) -> list[CreditCard]:
-    stmt = select(CreditCard).where(CreditCard.user_id == user_id)
-    if active_only:
-        stmt = stmt.where(CreditCard.is_active.is_(True))
-    if search:
-        stmt = stmt.where(CreditCard.name.ilike(f"%{search}%"))
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else CreditCard.name
-    stmt = stmt.order_by(order_clause)
+    stmt = apply_listing_filters(
+        select(CreditCard),
+        CreditCard,
+        user_id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+        include_ids=None,
+        sort_columns=_SORT_COLUMNS,
+        default_order=CreditCard.name,
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

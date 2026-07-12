@@ -1,10 +1,11 @@
 from datetime import date as date_type
 
-from sqlalchemy import Date, asc, cast, desc, func, or_
+from sqlalchemy import Date, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.installment import Installment
+from app.repositories.utils import apply_listing_filters
 
 # Derived expression matching the `InstallmentResponse.next_cuota_date` computed field.
 # Lets the table sort by next-installment order without an O(n) post-query Python re-sort —
@@ -44,20 +45,20 @@ async def list_by_user(
     active_only: bool = True,
     include_ids: list[int] | None = None,
 ) -> list[Installment]:
-    stmt = select(Installment).where(Installment.user_id == user_id)
-    if active_only:
-        if include_ids:
-            stmt = stmt.where(or_(Installment.is_active.is_(True), Installment.id.in_(include_ids)))
-        else:
-            stmt = stmt.where(Installment.is_active.is_(True))
-    if search:
-        stmt = stmt.where(Installment.name.ilike(f"%{search}%"))
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    # Default order: most-recent first by the derived next-installment date — keeps the
-    # default view aligned with what the table now leads with.
-    order_clause = order_fn(sort_col) if sort_col is not None else _next_cuota_date_expr.desc()
-    stmt = stmt.order_by(order_clause)
+    stmt = apply_listing_filters(
+        select(Installment),
+        Installment,
+        user_id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+        include_ids=include_ids,
+        sort_columns=_SORT_COLUMNS,
+        # Default order: most-recent first by the derived next-installment date — keeps the
+        # default view aligned with what the table now leads with.
+        default_order=_next_cuota_date_expr.desc(),
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
