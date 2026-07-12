@@ -2,7 +2,7 @@ from datetime import date
 from decimal import Decimal
 
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
-from app.services.finance_metrics_service import _sum_converted
+from app.services.finance_metrics_service import _sum_monthly_converted
 from app.utils.metrics import RateLookup
 
 
@@ -16,13 +16,14 @@ def _lookup() -> RateLookup:
     return RateLookup(dollar_preference="mep", rates_by_pair=rates)
 
 
-class TestSumConvertedSkips:
+class TestSumMonthlyConvertedSkips:
     def test_missing_rate_bucket_excluded_and_reported(self):
-        total, skipped = _sum_converted({"USD": 100.0, "CLP": 5000.0}, "USD", _lookup(), date(2026, 1, 15))
+        rows = [(2026, 1, "USD", Decimal("100")), (2026, 1, "CLP", Decimal("5000"))]
+        total, skipped = _sum_monthly_converted(rows, "USD", _lookup())
         assert total == Decimal("100")
         assert skipped == {"CLP"}
 
     def test_no_target_currency_sums_raw(self):
-        total, skipped = _sum_converted({"USD": 100.0}, None, None, date(2026, 1, 15))
+        total, skipped = _sum_monthly_converted([(2026, 1, "USD", Decimal("100"))], None, None)
         assert total == Decimal("100")
         assert skipped == set()

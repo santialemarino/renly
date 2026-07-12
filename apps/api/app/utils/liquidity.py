@@ -83,6 +83,10 @@ def compute_fixed_monthly_commitments(
         # Only revolving-debt users (those who fill monthly_payment) contribute here.
         # Pay-in-full users leave monthly_payment NULL — their card-funded subs/installments
         # are already in the count via their own rows.
+        # Residual overlap (by design): a revolving user whose card ALSO funds subscriptions or
+        # installments double-counts those plans — once via their own rows above and once inside
+        # monthly_payment. The card form's helper copy documents this: set monthly_payment only for
+        # revolving debt BEYOND the plans Renly already tracks, so the user can avoid the overlap.
         if card.monthly_payment is None:
             continue
         totals[card.currency] += card.monthly_payment

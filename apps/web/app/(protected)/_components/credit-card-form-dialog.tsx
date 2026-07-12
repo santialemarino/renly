@@ -206,6 +206,9 @@ export function CreditCardFormDialog({
                   <p className="text-paragraph-xs text-muted-foreground">
                     {t('form.monthlyPayment.hint')}
                   </p>
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.monthlyPayment.overlapHint')}
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

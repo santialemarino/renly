@@ -581,7 +581,8 @@
       },
       "amount": {
         "label": "Monto",
-        "placeholder": "0,00"
+        "placeholder": "0,00",
+        "perCycleLabel": "Monto por ciclo"
       },
       "currency": {
         "label": "Moneda",
@@ -597,7 +598,8 @@
         "label": "Ciclos a pre-pagar",
         "errors": {
           "invalid": "Ingresá un número entre 1 y {max}."
-        }
+        },
+        "totalPreview": "Total: {total}"
       },
       "notes": {
         "label": "Notas",
@@ -735,7 +737,8 @@
         "label": "Pago mensual",
         "placeholder": "0",
         "hint": "Opcional. Si arrastrás saldo en esta tarjeta y pagás un monto típico cada mes, ponelo acá — cuenta como compromiso fijo en la tarjeta de Liquidez. Dejá vacío si la pagás en su totalidad.",
-        "invalid": "Debe ser un número no negativo."
+        "invalid": "Debe ser un número no negativo.",
+        "overlapHint": "Renly ya cuenta las suscripciones y cuotas pagadas con esta tarjeta. Definilo solo para pagos de deuda revolvente además de esos."
       },
       "cancel": "Cancelar",
       "cta": {

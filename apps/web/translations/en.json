@@ -581,7 +581,8 @@
       },
       "amount": {
         "label": "Amount",
-        "placeholder": "0.00"
+        "placeholder": "0.00",
+        "perCycleLabel": "Amount per cycle"
       },
       "currency": {
         "label": "Currency",
@@ -597,7 +598,8 @@
         "label": "Cycles to pre-pay",
         "errors": {
           "invalid": "Enter a number between 1 and {max}."
-        }
+        },
+        "totalPreview": "Total: {total}"
       },
       "notes": {
         "label": "Notes",
@@ -735,7 +737,8 @@
         "label": "Monthly payment",
         "placeholder": "0",
         "hint": "Optional. If you carry a balance on this card and pay a typical amount each month, set it here — it counts as a fixed commitment on the Liquidity card. Leave empty when you pay in full.",
-        "invalid": "Must be a non-negative number."
+        "invalid": "Must be a non-negative number.",
+        "overlapHint": "Renly already counts subscriptions and installments paid with this card. Set this only for revolving debt payments beyond those."
       },
       "cancel": "Cancel",
       "cta": {

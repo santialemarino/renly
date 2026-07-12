@@ -26,25 +26,22 @@ from app.utils.metrics import RateLookup, convert_value
 ZERO = Decimal("0")
 
 
-# Period-summary totals are aggregated at the DB layer (`SUM(amount) GROUP BY currency`) and lose
-# the per-row date dimension, so the conversion can't truly be per-row here. We anchor the
-# conversion to the period-end (date_to) — better than always-today's rate, but acknowledged as
-# coarser than the per-row conversion used everywhere else. If finer historical accuracy is
-# needed later, the repository can switch to per-month grouping (already done for the monthly
-# evolution chart).
+# Sums per-month (year, month, currency, amount) buckets into one converted total, converting each
+# month's bucket at that month's last day — the same per-month conversion the monthly evolution chart
+# uses (get_monthly). Anchoring per-month rather than at a single period-end makes a window's overview
+# totals equal the sum of the chart's converted points for that window (same skip semantics).
 # Returns (total, skipped currency codes).
-def _sum_converted(
-    totals_by_currency: dict[str, float],
+def _sum_monthly_converted(
+    rows: list[tuple[int, int, str, Decimal]],
     target_currency: str | None,
     lookup: RateLookup | None,
-    anchor_date: date_type,
 ) -> tuple[Decimal, set[str]]:
     total = ZERO
     skipped: set[str] = set()
-    rate_map = lookup.get_rate_map_at(anchor_date) if (target_currency and lookup) else None
-    for currency, amount in totals_by_currency.items():
-        val = Decimal(str(amount))
+    for year, month, currency, amount in rows:
+        val = amount
         if target_currency and currency != target_currency:
+            rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
             converted = convert_value(val, currency, target_currency, rate_map) if rate_map else None
             if converted is None:
                 skipped.add(currency)
@@ -72,24 +69,25 @@ async def get_overview(
 ) -> FinanceOverviewResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency, lookup)
     today = await settings_service.get_user_today(session, user_id)
-    anchor = date_to or today
 
-    # Current period totals.
-    income_by_currency = await income_repository.sum_by_user(
+    # Current period totals — summed from per-month buckets converted at each month's end, so a
+    # window's total_income/total_expenses equal the sum of the monthly chart's converted points
+    # for the same window (same skip semantics).
+    income_rows = await income_repository.sum_by_user_monthly(
         session,
         user_id,
         date_from=date_from,
         date_to=date_to,
     )
-    expense_by_currency = await expense_repository.sum_by_user(
+    expense_rows = await expense_repository.sum_by_user_monthly(
         session,
         user_id,
         date_from=date_from,
         date_to=date_to,
     )
 
-    total_income, skipped_income = _sum_converted(income_by_currency, currency, lookup, anchor)
-    total_expenses, skipped_expenses = _sum_converted(expense_by_currency, currency, lookup, anchor)
+    total_income, skipped_income = _sum_monthly_converted(income_rows, currency, lookup)
+    total_expenses, skipped_expenses = _sum_monthly_converted(expense_rows, currency, lookup)
     skipped = skipped_income | skipped_expenses
 
     # Period-over-period change (compare with same-length previous period).
@@ -101,23 +99,23 @@ async def get_overview(
         prev_to = date_from - timedelta(days=1)
         prev_from = prev_to - (date_to - date_from)
 
-        prev_income_by_currency = await income_repository.sum_by_user(
+        prev_income_rows = await income_repository.sum_by_user_monthly(
             session,
             user_id,
             date_from=prev_from,
             date_to=prev_to,
         )
-        prev_expense_by_currency = await expense_repository.sum_by_user(
+        prev_expense_rows = await expense_repository.sum_by_user_monthly(
             session,
             user_id,
             date_from=prev_from,
             date_to=prev_to,
         )
 
-        # Prior period is anchored to ITS own end so the comparison reflects what each period
-        # was worth at the time, not at today's rate.
-        prev_income, prev_skipped_i = _sum_converted(prev_income_by_currency, currency, lookup, prev_to)
-        prev_expenses, prev_skipped_e = _sum_converted(prev_expense_by_currency, currency, lookup, prev_to)
+        # Prior period converts each of its months at that month's end (same per-month basis as the
+        # current period), so the comparison reflects what each period was worth at the time.
+        prev_income, prev_skipped_i = _sum_monthly_converted(prev_income_rows, currency, lookup)
+        prev_expenses, prev_skipped_e = _sum_monthly_converted(prev_expense_rows, currency, lookup)
         skipped |= prev_skipped_i | prev_skipped_e
 
         if prev_income != ZERO:
@@ -187,7 +185,7 @@ async def get_monthly(
     skipped: set[str] = set()
     income_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in income_rows:
-        val = Decimal(str(amount))
+        val = amount
         if currency and cur != currency:
             rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
             converted = convert_value(val, cur, currency, rate_map) if rate_map else None
@@ -199,7 +197,7 @@ async def get_monthly(
 
     expense_by_month: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
     for year, month, cur, amount in expense_rows:
-        val = Decimal(str(amount))
+        val = amount
         if currency and cur != currency:
             rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
             converted = convert_value(val, cur, currency, rate_map) if rate_map else None
@@ -244,11 +242,13 @@ async def get_expense_breakdown(
     )
 
     # Aggregate multi-currency per-category totals — anchor conversion to the period end. The
-    # category breakdown loses per-row dates at the DB layer; see _sum_converted comment above.
+    # category breakdown loses per-row dates at the DB layer (grouped by category, not month), so
+    # unlike the overview it can't converge on per-month rates; the period-end anchor is the
+    # closest available.
     skipped: set[str] = set()
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
-        val = Decimal(str(amount))
+        val = amount
         if currency and cur != currency:
             converted = convert_value(val, cur, currency, rate_map) if rate_map else None
             if converted is None:
@@ -296,7 +296,7 @@ async def get_income_breakdown(
     skipped: set[str] = set()
     cat_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
     for category, cur, amount in rows:
-        val = Decimal(str(amount))
+        val = amount
         if currency and cur != currency:
             converted = convert_value(val, cur, currency, rate_map) if rate_map else None
             if converted is None:

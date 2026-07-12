@@ -154,8 +154,18 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   const allYearMonths = useMemo(() => generateAllYearMonths(grid.months), [grid.months]);
 
   // Build cell lookup per row: year-month → cell.
+  // Build cell lookup per row: year-month → latest-dated cell in that month.
   const cellMaps = useMemo(
-    () => grid.rows.map((row) => new Map(row.cells.map((cell) => [toYearMonth(cell.date), cell]))),
+    () =>
+      grid.rows.map((row) => {
+        const map = new Map<string, SnapshotGridCell>();
+        for (const cell of row.cells) {
+          const key = toYearMonth(cell.date);
+          const existing = map.get(key);
+          if (!existing || cell.date > existing.date) map.set(key, cell);
+        }
+        return map;
+      }),
     [grid.rows],
   );
 

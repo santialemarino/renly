@@ -6,7 +6,9 @@ import pytest
 
 from app.domain import CardBucketBalance
 from app.models.credit_card import CreditCard
+from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.services import finance_metrics_service
+from app.utils.metrics import RateLookup
 
 
 def _card(*, card_id: int, is_active: bool) -> CreditCard:
@@ -23,8 +25,8 @@ class TestOverviewIncludesArchivedCards:
         cards = [_card(card_id=1, is_active=True), _card(card_id=2, is_active=False)]
         list_mock = AsyncMock(return_value=cards)
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", list_mock)
-        monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user", AsyncMock(return_value={}))
-        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user", AsyncMock(return_value={}))
+        monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         monkeypatch.setattr(
             finance_metrics_service.credit_card_service,
@@ -50,10 +52,10 @@ class TestPrevPeriodWindow:
     async def test_prev_window_is_adjacent_and_equal_length(self, monkeypatch):
         # Current window Jun 1-30 2026 (30 days inclusive). Previous must be May 2-31
         # (30 days inclusive) — the old code produced May 3-Jun 1, double-counting Jun 1.
-        income_mock = AsyncMock(side_effect=[{"ARS": 1000.0}, {"ARS": 800.0}])
-        expense_mock = AsyncMock(side_effect=[{"ARS": 400.0}, {"ARS": 500.0}])
-        monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user", income_mock)
-        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user", expense_mock)
+        income_mock = AsyncMock(side_effect=[[(2026, 6, "ARS", Decimal("1000"))], [(2026, 5, "ARS", Decimal("800"))]])
+        expense_mock = AsyncMock(side_effect=[[(2026, 6, "ARS", Decimal("400"))], [(2026, 5, "ARS", Decimal("500"))]])
+        monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", income_mock)
+        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", expense_mock)
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_overview(
@@ -70,6 +72,37 @@ class TestPrevPeriodWindow:
         assert result.expense_change_pct == Decimal("-0.2")
 
 
+# --- Overview totals converge on the monthly chart's per-month conversion ---
+
+
+class TestOverviewMatchesMonthly:
+    @pytest.mark.asyncio
+    async def test_overview_totals_equal_monthly_series_sum(self, monkeypatch):
+        # One ARS expense in each of two months, each converted at that month's own USD/ARS rate:
+        # May 10000/1000 = 10 USD, June 12000/1200 = 10 USD -> 20 USD total. The overview total must
+        # equal the sum of the monthly chart's converted points (per-month conversion convergence).
+        rates = {
+            ExchangeRatePair.USD_ARS_MEP: [
+                ExchangeRate(date=date(2026, 5, 1), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1000"), source="test"),
+                ExchangeRate(date=date(2026, 6, 1), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal("1200"), source="test"),
+            ],
+        }
+        lookup = RateLookup(dollar_preference="mep", rates_by_pair=rates)
+        monkeypatch.setattr(finance_metrics_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+        expense_rows = [(2026, 5, "ARS", Decimal("10000")), (2026, 6, "ARS", Decimal("12000"))]
+        monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", AsyncMock(return_value=expense_rows))
+        monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 30)))
+
+        overview = await finance_metrics_service.get_overview(AsyncMock(), 1, currency="USD")
+        monthly = await finance_metrics_service.get_monthly(AsyncMock(), 1, currency="USD")
+
+        series_expenses = sum((p.expenses for p in monthly.points), Decimal("0"))
+        assert overview.total_expenses == Decimal("20")
+        assert overview.total_expenses == series_expenses
+
+
 # --- Uncategorized slice flows through the breakdown ---
 
 
@@ -78,7 +111,7 @@ class TestUncategorizedSlice:
     async def test_expense_breakdown_includes_uncategorized(self, monkeypatch):
         # 3000 uncategorized + 1000 food = 4000 total -> 75% / 25%. Before the schema
         # widening this raised a validation error ('uncategorized' is not an enum member).
-        rows = [("food", "ARS", 1000.0), ("uncategorized", "ARS", 3000.0)]
+        rows = [("food", "ARS", Decimal("1000")), ("uncategorized", "ARS", Decimal("3000"))]
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)

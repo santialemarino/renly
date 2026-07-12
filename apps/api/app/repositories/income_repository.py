@@ -111,7 +111,7 @@ async def sum_by_user(
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> dict[str, float]:
+) -> dict[str, Decimal]:
     stmt = (
         select(
             IncomeEntry.currency,
@@ -125,7 +125,7 @@ async def sum_by_user(
     if date_to is not None:
         stmt = stmt.where(IncomeEntry.date <= date_to)
     result = await session.execute(stmt)
-    return {row[0]: float(row[1]) for row in result.all()}
+    return {row[0]: row[1] for row in result.all()}
 
 
 # Monthly income totals for a user grouped by currency.
@@ -136,7 +136,7 @@ async def sum_by_user_monthly(
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> list[tuple[int, int, str, float]]:
+) -> list[tuple[int, int, str, Decimal]]:
     year_col = func.extract("year", IncomeEntry.date).label("year")
     month_col = func.extract("month", IncomeEntry.date).label("month")
     stmt = (
@@ -155,7 +155,7 @@ async def sum_by_user_monthly(
     if date_to is not None:
         stmt = stmt.where(IncomeEntry.date <= date_to)
     result = await session.execute(stmt)
-    return [(int(row[0]), int(row[1]), row[2], float(row[3])) for row in result.all()]
+    return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
 
 
 # Income totals grouped by category for a user within a date range. NULL categories are
@@ -168,7 +168,7 @@ async def sum_by_user_grouped_by_category(
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> list[tuple[str, str, float]]:
+) -> list[tuple[str, str, Decimal]]:
     stmt = (
         select(
             IncomeEntry.category,
@@ -183,7 +183,7 @@ async def sum_by_user_grouped_by_category(
     if date_to is not None:
         stmt = stmt.where(IncomeEntry.date <= date_to)
     result = await session.execute(stmt)
-    return [("uncategorized" if row[0] is None else str(row[0]), row[1], float(row[2])) for row in result.all()]
+    return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
 
 
 # Namespace to call repository functions (e.g. income_repository.list_by_user_filtered).

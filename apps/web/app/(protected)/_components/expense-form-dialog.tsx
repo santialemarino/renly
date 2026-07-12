@@ -59,6 +59,7 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
+import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
@@ -214,7 +215,12 @@ export function ExpenseFormDialog({
   });
   const watchedSubscriptionId = useWatch({ control: form.control, name: 'subscriptionId' });
   const watchedInstallmentId = useWatch({ control: form.control, name: 'installmentId' });
+  const watchedCyclesToAdvance = useWatch({ control: form.control, name: 'cyclesToAdvance' });
+  const watchedAmount = useWatch({ control: form.control, name: 'amount' });
   const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
+  // When pre-paying multiple cycles the amount is per-cycle and the API inserts cycles × amount rows.
+  const cyclesToAdvanceNum = Number(watchedCyclesToAdvance ?? '1') || 1;
+  const amountNum = Number(watchedAmount ?? '');
   // Multi-cycle Mark Paid input is visible only for recurring obligations on the prefill
   // path (Phase 3, follow-up Item 2). One-off obligations / regular create flows hide it.
   // State-latched at open-time rather than derived live: when the dialog is closing,
@@ -570,7 +576,11 @@ export function ExpenseFormDialog({
                   name="amount"
                   render={({ field }) => (
                     <FormItem required className="flex-1">
-                      <FormLabel>{t('form.amount.label')}</FormLabel>
+                      <FormLabel>
+                        {cyclesToAdvanceNum > 1
+                          ? t('form.amount.perCycleLabel')
+                          : t('form.amount.label')}
+                      </FormLabel>
                       <FormControl>
                         <LocaleAmountInput
                           {...field}
@@ -617,6 +627,17 @@ export function ExpenseFormDialog({
                                 />
                               </FormControl>
                               <FormMessage />
+                              {cyclesToAdvanceNum > 1 && amountNum > 0 && (
+                                <p className="text-paragraph-sm text-muted-foreground">
+                                  {t('form.cyclesToAdvance.totalPreview', {
+                                    total: formatAmount(
+                                      String(cyclesToAdvanceNum * amountNum),
+                                      locale,
+                                      watchedCurrency || undefined,
+                                    ),
+                                  })}
+                                </p>
+                              )}
                             </FormItem>
                           )}
                         />
