@@ -100,7 +100,7 @@ def compute_fixed_monthly_commitments(
 # Returns (monthly_income, skipped_currencies) — buckets whose rate is missing are excluded
 # from the total and reported.
 def compute_monthly_income(
-    income_by_currency: dict[str, float],
+    income_by_currency: dict[str, Decimal],
     *,
     days: int,
     target_currency: str | None,
@@ -115,7 +115,7 @@ def compute_monthly_income(
     total = ZERO
     skipped: set[str] = set()
     for currency, amount in income_by_currency.items():
-        val = Decimal(str(amount))
+        val = amount
         if target_currency and currency != target_currency:
             converted = convert_value(val, currency, target_currency, rate_map) if rate_map else None
             if converted is None:

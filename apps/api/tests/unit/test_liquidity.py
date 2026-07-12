@@ -245,7 +245,7 @@ class TestComputeMonthlyIncome:
     def test_zero_days_returns_zero_defensively(self):
         # Guard against pathological inputs — division by zero protection.
         total, skipped = compute_monthly_income(
-            {"USD": 300.0},
+            {"USD": Decimal("300")},
             days=0,
             target_currency=None,
             lookup=None,
@@ -257,7 +257,7 @@ class TestComputeMonthlyIncome:
     def test_thirty_day_window_is_identity(self):
         # 30 days of $300 income, 30-day window: monthly equivalent = $300.
         total, skipped = compute_monthly_income(
-            {"USD": 300.0},
+            {"USD": Decimal("300")},
             days=30,
             target_currency=None,
             lookup=None,
@@ -269,7 +269,7 @@ class TestComputeMonthlyIncome:
     def test_sixty_day_window_halves(self):
         # 60 days of $600 income, normalised to 30 days = $300/month.
         total, skipped = compute_monthly_income(
-            {"USD": 600.0},
+            {"USD": Decimal("600")},
             days=60,
             target_currency=None,
             lookup=None,
@@ -281,7 +281,7 @@ class TestComputeMonthlyIncome:
     def test_seventeen_day_window_scales_up(self):
         # Early app life: 17 days of $170 income, normalised to 30 days = $300/month.
         total, skipped = compute_monthly_income(
-            {"USD": 170.0},
+            {"USD": Decimal("170")},
             days=17,
             target_currency=None,
             lookup=None,
@@ -293,7 +293,7 @@ class TestComputeMonthlyIncome:
     def test_ninety_day_window_thirds(self):
         # 90-day window of $900 -> $300/month (normalised).
         total, skipped = compute_monthly_income(
-            {"USD": 900.0},
+            {"USD": Decimal("900")},
             days=90,
             target_currency=None,
             lookup=None,
@@ -305,7 +305,7 @@ class TestComputeMonthlyIncome:
     def test_multi_currency_converted_to_target(self):
         # 1 USD = 1200 ARS. $100 USD + 120000 ARS over 30 days = $100 + $100 = $200/month.
         total, skipped = compute_monthly_income(
-            {"USD": 100.0, "ARS": 120000.0},
+            {"USD": Decimal("100"), "ARS": Decimal("120000")},
             days=30,
             target_currency="USD",
             lookup=FIXED_LOOKUP,
@@ -317,7 +317,7 @@ class TestComputeMonthlyIncome:
     def test_no_target_currency_skips_conversion(self):
         # target_currency=None means no conversion — totals sum raw across currencies.
         total, skipped = compute_monthly_income(
-            {"USD": 100.0, "ARS": 200.0},
+            {"USD": Decimal("100"), "ARS": Decimal("200")},
             days=30,
             target_currency=None,
             lookup=FIXED_LOOKUP,
@@ -329,7 +329,7 @@ class TestComputeMonthlyIncome:
     def test_missing_rate_bucket_is_skipped_and_reported(self):
         # FIXED_LOOKUP only maps USD/ARS — the CLP bucket has no rate, so it's excluded and reported.
         total, skipped = compute_monthly_income(
-            {"USD": 300.0, "CLP": 900000.0},
+            {"USD": Decimal("300"), "CLP": Decimal("900000")},
             days=30,
             target_currency="USD",
             lookup=FIXED_LOOKUP,

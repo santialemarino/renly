@@ -153,7 +153,6 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   // Generate all year-month keys between global min and max (fill gaps).
   const allYearMonths = useMemo(() => generateAllYearMonths(grid.months), [grid.months]);
 
-  // Build cell lookup per row: year-month → cell.
   // Build cell lookup per row: year-month → latest-dated cell in that month.
   const cellMaps = useMemo(
     () =>
