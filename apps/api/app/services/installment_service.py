@@ -7,7 +7,10 @@ from app.domain import AdvanceResult, CycleAdvanceDecision, InstallmentLockedFie
 from app.models.installment import Installment
 from app.models.user import User
 from app.repositories import installment_repository
+from app.schemas.installment import InstallmentResponse
+from app.services import exchange_rate_service
 from app.services.auto_expense_service import closest_installment_cuota
+from app.utils.metrics import RateLookup, convert_optional
 
 # Contractual fields locked once any installment has been charged (current_installment > 1).
 # Always editable: name, current_installment (manual correction), is_active (archive).
@@ -32,7 +35,21 @@ def diff_locked_fields(existing: Installment, fields: dict[str, object]) -> list
     return changed
 
 
-# List installments for a user with optional search, sorting, and archive filtering.
+# Maps an installment to its response, converting both amount fields at today's rate when a
+# display currency is requested (plans are current-state rows, not historical events).
+def _to_response(
+    installment: Installment,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type,
+) -> InstallmentResponse:
+    resp = InstallmentResponse.model_validate(installment)
+    resp.converted_total_amount = convert_optional(installment.total_amount, installment.currency, currency, lookup, today)
+    resp.converted_installment_amount = convert_optional(installment.installment_amount, installment.currency, currency, lookup, today)
+    return resp
+
+
+# List installments for a user with optional search, sorting, archive filtering, and conversion.
 # `include_ids` lets callers widen an active-only listing with specific archived plans
 # so the expense edit dialog can still render the plan name of a since-archived link.
 async def list_installments(
@@ -44,8 +61,9 @@ async def list_installments(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
-) -> list[Installment]:
-    return await installment_repository.list_by_user(
+    currency: str | None = None,
+) -> list[InstallmentResponse]:
+    installments = await installment_repository.list_by_user(
         session,
         user.id,
         search=search,
@@ -54,6 +72,9 @@ async def list_installments(
         active_only=active_only,
         include_ids=include_ids,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    return [_to_response(i, currency, lookup, today) for i in installments]
 
 
 # Get a single installment by id. Raises NotFoundError if not found.
@@ -62,6 +83,20 @@ async def get_installment(session: AsyncSession, installment_id: int, user: User
     if installment is None:
         raise NotFoundError("Installment not found.")
     return installment
+
+
+# Get a single installment as its response schema, converted when a display currency is requested.
+async def get_installment_response(
+    session: AsyncSession,
+    installment_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> InstallmentResponse:
+    installment = await get_installment(session, installment_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    return _to_response(installment, currency, lookup, today)
 
 
 # Create a new installment plan.

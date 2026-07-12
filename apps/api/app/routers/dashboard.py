@@ -13,7 +13,6 @@ from app.schemas.dashboard import (
     DashboardOverviewResponse,
 )
 from app.services import dashboard_service
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -31,12 +30,10 @@ async def get_overview(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardOverviewResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_overview(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -51,12 +48,10 @@ async def get_evolution(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardEvolutionResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_evolution(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -69,12 +64,10 @@ async def get_composition(
     session: SessionDep,
     currency: str | None = Query(default=None, description=CURRENCY_DESC),
 ) -> DashboardCompositionResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_composition(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
     )
 
 
@@ -85,10 +78,8 @@ async def get_liquidity(
     session: SessionDep,
     currency: str | None = Query(default=None, description=CURRENCY_DESC),
 ) -> DashboardLiquidityResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_liquidity(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
     )

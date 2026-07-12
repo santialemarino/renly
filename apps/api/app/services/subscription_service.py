@@ -7,11 +7,27 @@ from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, Rever
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import subscription_repository
+from app.schemas.subscription import SubscriptionResponse
+from app.services import exchange_rate_service
 from app.services.auto_expense_service import closest_subscription_cycle
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# List subscriptions for a user with optional search, sorting, and archive filtering.
+# Maps a subscription to its response, converting the amount at today's rate when a display
+# currency is requested (plans are current-state rows, not historical events).
+def _to_response(
+    subscription: Subscription,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type,
+) -> SubscriptionResponse:
+    resp = SubscriptionResponse.model_validate(subscription)
+    resp.converted_amount = convert_optional(subscription.amount, subscription.currency, currency, lookup, today)
+    return resp
+
+
+# List subscriptions for a user with optional search, sorting, archive filtering, and conversion.
 # `include_ids` lets callers widen an active-only listing with specific archived plans
 # so the expense edit dialog can still render the plan name of a since-archived link.
 async def list_subscriptions(
@@ -23,8 +39,9 @@ async def list_subscriptions(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
-) -> list[Subscription]:
-    return await subscription_repository.list_by_user(
+    currency: str | None = None,
+) -> list[SubscriptionResponse]:
+    subscriptions = await subscription_repository.list_by_user(
         session,
         user.id,
         search=search,
@@ -33,6 +50,9 @@ async def list_subscriptions(
         active_only=active_only,
         include_ids=include_ids,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    return [_to_response(s, currency, lookup, today) for s in subscriptions]
 
 
 # Get a single subscription by id. Raises NotFoundError if not found.
@@ -41,6 +61,20 @@ async def get_subscription(session: AsyncSession, subscription_id: int, user: Us
     if subscription is None:
         raise NotFoundError("Subscription not found.")
     return subscription
+
+
+# Get a single subscription as its response schema, converted when a display currency is requested.
+async def get_subscription_response(
+    session: AsyncSession,
+    subscription_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> SubscriptionResponse:
+    subscription = await get_subscription(session, subscription_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    return _to_response(subscription, currency, lookup, today)
 
 
 # Create a new subscription.

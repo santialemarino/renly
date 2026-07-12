@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
 from app.schemas.settings import LANGUAGE_MODE_VALUES, SUPPORTED_LANGUAGES, TIMEZONE_MODE_VALUES
+from app.utils.liquidity import DEFAULT_LIQUIDITY_THRESHOLD_PCT
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
@@ -212,6 +213,27 @@ async def update_settings(
     await session.commit()
     await session.refresh(row)
     return _settings_to_response(row.settings)
+
+
+# Reads the user's dollar rate preference from settings. Returns default if not set.
+async def get_dollar_pref(session: AsyncSession, user_id: int) -> str:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+        if isinstance(pref, str) and pref:
+            return pref
+    return DOLLAR_RATE_DEFAULT
+
+
+# Reads the user's liquidity-alert threshold from settings. Returns the backend default
+# when unset or invalid. Range is enforced server-side via the SettingsUpdate validator.
+async def get_liquidity_threshold(session: AsyncSession, user_id: int) -> int:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        value = row.settings.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
+        if isinstance(value, int) and 1 <= value <= 99:
+            return value
+    return DEFAULT_LIQUIDITY_THRESHOLD_PCT
 
 
 # Latches a single boolean onboarding-internal settings flag to True via a targeted JSONB merge

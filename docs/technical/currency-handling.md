@@ -52,15 +52,15 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
 - **Investor dashboard**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
 - **Expenses page**: passes `currency` to `getExpenses({ currency })`. Table shows `convertedAmount` when a display currency is active, original `amount` otherwise. Currency column removed — the switcher indicates the display currency.
 - **Income page**: same pattern as expenses — passes `currency` to `getIncome({ currency })`.
-- **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `get_rate_map` pipeline. Same "Original" → primary fallback as the investor dashboard.
+- **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `RateLookup` pipeline. Same "Original" → primary fallback as the investor dashboard.
 
 ### 3. Backend conversion (date-aware as of Phase 3, Step C)
 
 All conversion happens at query time in the service layer. Stored values are never modified. **Conversion uses the FX rate that was in effect on the value's own date**, not today's rate, so historical dashboards stay deterministic across time.
 
 ```
-Router reads user's dollar_rate_preference from settings
-  → calls mh.build_rate_lookup(session, dollar_preference)  # one DB round-trip per request
+Service builds one rate lookup per request (routers just pass currency through)
+  → exchange_rate_service.get_user_rate_lookup(session, user_id)  # reads dollar pref + one DB round-trip
   → lookup pre-loads every stored rate, grouped by pair, sorted by date
 
 Per row / per snapshot / per cashflow:
@@ -90,8 +90,8 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 | Card balance display (running total)                   | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
 | Finance-metrics period totals (category breakdowns)    | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
 
-- **Helpers**: `utils/metrics.py` — `convert_value()`, `can_convert()`, `RateLookup`, `build_rate_lookup()`, `get_rate_map()` (kept as a backward-compat shim returning today's rate map).
-- **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income, payments_calendar, asset_prices, etc.).
+- **Helpers**: `utils/metrics.py` (pure, no DB) — `convert_value()`, `convert_optional()`, `can_convert()`, `RateLookup`. Rate loading (`build_rate_lookup()` / `get_user_rate_lookup()`) lives in `exchange_rate_service`; the old `get_rate_map()` shim was removed.
+- **Shared utility**: `get_dollar_pref(session, user_id)` and `get_liquidity_threshold(session, user_id)` live in `settings_service` (the former `utils/settings.py` was removed). They are read by services — via `exchange_rate_service.get_user_rate_lookup` — not by routers.
 - **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
 
@@ -199,7 +199,7 @@ All rates are stored against USD; any pair converts through USD as pivot.
 
 **Pivot example:** BRL → ARS = BRL → USD (divide by USD/BRL rate) → ARS (multiply by USD/ARS rate).
 
-**Rate map:** `get_rate_map(session, dollar_preference)` builds a `{currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The `dollar_preference` param determines which USD/ARS rate pair to use.
+**Rate map:** `RateLookup.get_rate_map_at(as_of_date)` returns a `{currency: Decimal}` dict for the rates in effect on that date, where each value means "1 USD = X currency". USD itself is always 1. The lookup's `dollar_preference` determines which USD/ARS rate pair to use.
 
 **Combobox:** The env fallback currencies are pinned at the top in a stable "Common" group. User-configured preferred currencies appear in a "Preferred" group below. All other currencies appear in an "Other currencies" group.
 

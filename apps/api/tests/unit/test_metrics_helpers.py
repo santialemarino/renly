@@ -1,12 +1,15 @@
 from datetime import date
 from decimal import Decimal
 
+from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.utils.metrics import (
+    RateLookup,
     build_irr_cashflows,
     can_convert,
     compute_period_returns,
+    convert_optional,
     convert_value,
     invested_capital,
     net_cash_flow,
@@ -290,3 +293,34 @@ class TestConvertValue:
         # 100 EUR → USD: 100 / 0.92 = 108.6956... . Quantized to 2 places (banker's rounding -> .70).
         result = convert_value(Decimal("100"), "EUR", "USD", self.RATE_MAP)
         assert result == Decimal("108.70")
+
+
+# --- convert_optional ---
+
+
+def _lookup_with_mep(rate: str) -> RateLookup:
+    rates = {
+        ExchangeRatePair.USD_ARS_MEP: [
+            ExchangeRate(date=date(2026, 1, 1), pair=ExchangeRatePair.USD_ARS_MEP, rate=Decimal(rate), source="test"),
+        ],
+    }
+    return RateLookup(dollar_preference="mep", rates_by_pair=rates)
+
+
+class TestConvertOptional:
+    def test_no_target_currency_returns_none(self):
+        assert convert_optional(Decimal("100"), "USD", None, _lookup_with_mep("1000"), date(2026, 1, 15)) is None
+
+    def test_same_currency_returns_value_without_lookup(self):
+        assert convert_optional(Decimal("100"), "USD", "USD", None, date(2026, 1, 15)) == Decimal("100")
+
+    def test_missing_lookup_returns_none(self):
+        assert convert_optional(Decimal("100"), "USD", "ARS", None, date(2026, 1, 15)) is None
+
+    def test_empty_lookup_returns_none(self):
+        empty = RateLookup(dollar_preference="mep", rates_by_pair={})
+        assert convert_optional(Decimal("100"), "USD", "ARS", empty, date(2026, 1, 15)) is None
+
+    def test_converts_at_the_given_date(self):
+        result = convert_optional(Decimal("100"), "USD", "ARS", _lookup_with_mep("1000"), date(2026, 1, 15))
+        assert result == Decimal("100000.00")

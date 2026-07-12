@@ -23,7 +23,7 @@ from app.schemas.dashboard import (
     NetWorthEvolutionPoint,
     SkippedLiquidityEntity,
 )
-from app.services import credit_card_service, finance_metrics_service, metrics_service
+from app.services import credit_card_service, exchange_rate_service, finance_metrics_service, metrics_service, settings_service
 from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.liquidity import (
     LIQUIDITY_INCOME_MIN_HISTORY_DAYS,
@@ -33,8 +33,7 @@ from app.utils.liquidity import (
     compute_fixed_monthly_commitments,
     compute_monthly_income,
 )
-from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
-from app.utils.settings import get_liquidity_threshold
+from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal("0")
 
@@ -97,22 +96,23 @@ async def get_overview(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> DashboardOverviewResponse:
+    # One rate lookup per request — shared by the investment and finance halves.
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
     # Sequential calls — AsyncSession is not safe for concurrent use.
     portfolio = await metrics_service.get_portfolio_metrics(
         session,
         user_id,
         currency=currency,
-        dollar_preference=dollar_preference,
+        lookup=lookup,
     )
     finance = await finance_metrics_service.get_overview(
         session,
         user_id,
         currency=currency,
-        dollar_preference=dollar_preference,
+        lookup=lookup,
         date_from=date_from,
         date_to=date_to,
     )
@@ -159,15 +159,16 @@ async def get_evolution(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> DashboardEvolutionResponse:
+    # One rate lookup per request — shared by the portfolio evolution and card-balance series.
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
     portfolio_evo = await metrics_service.get_portfolio_evolution(
         session,
         user_id,
         currency=currency,
-        dollar_preference=dollar_preference,
+        lookup=lookup,
         start_date=date_from,
         end_date=date_to,
     )
@@ -184,7 +185,6 @@ async def get_evolution(
     if card_ids:
         expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
         settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
-        lookup = await build_rate_lookup(session, dollar_preference) if currency else None
         card_balance_by_month = compute_monthly_card_balances(
             expense_monthly,
             settlement_monthly,
@@ -218,13 +218,14 @@ async def get_composition(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
 ) -> DashboardCompositionResponse:
+    # One rate lookup per request — shared by the allocation call and the card-liability conversion.
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
     allocation = await metrics_service.get_allocation(
         session,
         user_id,
         currency=currency,
-        dollar_preference=dollar_preference,
+        lookup=lookup,
     )
 
     # Compute total card liability, converting each bucket's balance to display currency at TODAY's
@@ -235,7 +236,6 @@ async def get_composition(
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
-        lookup = await build_rate_lookup(session, dollar_preference) if currency else None
         rate_map = lookup.get_rate_map_at(date_type.today()) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
@@ -271,13 +271,12 @@ async def get_liquidity(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
 ) -> DashboardLiquidityResponse:
-    threshold = await get_liquidity_threshold(session, user_id)
+    threshold = await settings_service.get_liquidity_threshold(session, user_id)
     today = date_type.today()
 
     # Build the rate lookup once — reused for commitments + income conversions.
-    lookup = await build_rate_lookup(session, dollar_preference) if currency else None
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
     rate_map_today = lookup.get_rate_map_at(today) if lookup else None
 
     # Commitments: load active rows from the four sources, amortise to monthly-equivalent

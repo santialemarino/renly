@@ -19,8 +19,8 @@ from app.schemas.finance_metrics import (
     IncomeCategoryItem,
     MonthlyPoint,
 )
-from app.services import credit_card_service
-from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
+from app.services import credit_card_service, exchange_rate_service
+from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal("0")
 
@@ -59,11 +59,11 @@ async def get_overview(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: RateLookup | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceOverviewResponse:
-    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, user_id, currency, lookup)
     today = date_type.today()
     anchor = date_to or today
 
@@ -147,11 +147,10 @@ async def get_monthly(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceMonthlyResponse:
-    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, user_id, currency)
 
     income_rows = await income_repository.sum_by_user_monthly(
         session,
@@ -206,11 +205,10 @@ async def get_expense_breakdown(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> ExpenseBreakdownResponse:
-    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, user_id, currency)
     anchor = date_to or date_type.today()
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
@@ -250,11 +248,10 @@ async def get_income_breakdown(
     user_id: int,
     *,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> IncomeBreakdownResponse:
-    lookup = await _build_lookup_if_needed(session, currency, dollar_preference)
+    lookup = await _build_lookup_if_needed(session, user_id, currency)
     anchor = date_to or date_type.today()
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
@@ -288,11 +285,15 @@ async def get_income_breakdown(
 
 
 # Returns a pre-loaded RateLookup when a display currency is requested. None otherwise.
+# Reuses a prebuilt per-request lookup when the caller (dashboard_service) already built one.
 async def _build_lookup_if_needed(
     session: AsyncSession,
+    user_id: int,
     currency: str | None,
-    dollar_preference: str | None,
+    lookup: RateLookup | None = None,
 ) -> RateLookup | None:
     if not currency:
         return None
-    return await build_rate_lookup(session, dollar_preference)
+    if lookup is not None:
+        return lookup
+    return await exchange_rate_service.get_user_rate_lookup(session, user_id)

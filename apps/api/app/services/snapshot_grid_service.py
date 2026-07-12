@@ -14,6 +14,7 @@ from app.schemas.snapshot_grid import (
     SnapshotGridRow,
     SnapshotGridTransaction,
 )
+from app.services import exchange_rate_service
 from app.utils import metrics as mh
 
 
@@ -28,7 +29,6 @@ async def get_snapshot_grid(
     group_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> SnapshotGridResponse:
@@ -58,7 +58,7 @@ async def get_snapshot_grid(
     if currency:
         needs_conversion = any(inv.base_currency != currency for inv in investments)
         if needs_conversion:
-            lookup = await mh.build_rate_lookup(session, dollar_preference)
+            lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
             if lookup.get_rate_map_at(date_type.today()) is None:
                 raise ExchangeRateUnavailableError(currency)
     inv_ids = [i.id for i in investments]

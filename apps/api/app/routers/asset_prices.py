@@ -5,11 +5,8 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.models.investment import InvestmentCategory
-from app.repositories import user_settings_repository
 from app.schemas.asset_price import AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
 from app.services import asset_price_service
-from app.services.settings_service import DOLLAR_RATE_DEFAULT, SETTINGS_KEY_DOLLAR_RATE_PREFERENCE
-from app.utils import metrics as mh
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
 
@@ -25,37 +22,7 @@ async def lookup_price(
     category: InvestmentCategory = Query(description="Investment category (determines provider)."),
     convert_to: str | None = Query(default=None, description="Target currency for conversion."),
 ) -> PriceLookupResponse | None:
-    price = await asset_price_service.get_or_fetch_price(session, ticker, category, date)
-    if price is None:
-        return None
-
-    converted_price = None
-    converted_currency = None
-
-    if convert_to and convert_to != price.currency:
-        row = await user_settings_repository.get_by_user_id(session, current_user.id)
-        dp = DOLLAR_RATE_DEFAULT
-        if row and row.settings:
-            pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
-            if isinstance(pref, str) and pref:
-                dp = pref
-        # Convert at the price's historical date (Phase 3, Step C). A January price displayed in
-        # USD uses January's rate, not today's.
-        lookup = await mh.build_rate_lookup(session, dp)
-        rate_map = lookup.get_rate_map_at(price.date)
-        if rate_map and mh.can_convert(price.currency, convert_to):
-            converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
-            converted_currency = convert_to
-
-    return PriceLookupResponse(
-        ticker=price.ticker,
-        date=price.date,
-        price=price.price,
-        currency=price.currency,
-        converted_price=converted_price,
-        converted_currency=converted_currency,
-        source=price.source,
-    )
+    return await asset_price_service.lookup_price(session, current_user.id, ticker, category, date, convert_to)
 
 
 # Returns the latest stored price for a ticker.

@@ -9,8 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset_price import AssetPrice
 from app.models.investment import Investment, InvestmentCategory
 from app.repositories.asset_price_repository import asset_price_repository
-from app.services import price_providers
+from app.schemas.asset_price import PriceLookupResponse
+from app.services import exchange_rate_service, price_providers
 from app.services.price_providers import PriceProviderInfo, PriceResult
+from app.utils import metrics as mh
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,42 @@ async def get_or_fetch_price(
     # Not in DB — try to fetch from provider for that date range.
     await fetch_and_store_prices(session, ticker, category, price_date, price_date)
     return await asset_price_repository.get_by_ticker_and_date(session, ticker, price_date)
+
+
+# Returns the price for a ticker on a date as the lookup response, converting to convert_to
+# when requested. Conversion uses the rate at the price's own historical date (Phase 3,
+# Step C): a January price displayed in USD uses January's rate, not today's.
+# Returns None when no price could be found or fetched.
+async def lookup_price(
+    session: AsyncSession,
+    user_id: int,
+    ticker: str,
+    category: InvestmentCategory,
+    price_date: date_type,
+    convert_to: str | None,
+) -> PriceLookupResponse | None:
+    price = await get_or_fetch_price(session, ticker, category, price_date)
+    if price is None:
+        return None
+
+    converted_price = None
+    converted_currency = None
+    if convert_to and convert_to != price.currency:
+        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+        rate_map = lookup.get_rate_map_at(price.date)
+        if rate_map and mh.can_convert(price.currency, convert_to):
+            converted_price = mh.convert_value(price.price, price.currency, convert_to, rate_map)
+            converted_currency = convert_to
+
+    return PriceLookupResponse(
+        ticker=price.ticker,
+        date=price.date,
+        price=price.price,
+        currency=price.currency,
+        converted_price=converted_price,
+        converted_currency=converted_currency,
+        source=price.source,
+    )
 
 
 # Fetches prices from the appropriate provider and stores them in the DB.

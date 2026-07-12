@@ -7,13 +7,29 @@ from app.domain import AdvanceResult, NotFoundError, ReverseResult
 from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
-from app.repositories import payment_obligation_repository
+from app.repositories import expense_repository, payment_obligation_repository
+from app.schemas.payment_obligation import PaymentObligationResponse
+from app.services import exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# List payment obligations for a user with optional search, sorting, and archive filtering.
-# `include_ids` lets callers widen an active-only listing with specific archived obligations
-# so the expense edit dialog can still render the obligation name of a since-archived link.
+# Maps an obligation to its response, converting the amount at today's rate when a display
+# currency is requested (obligations are current-state rows, not historical events).
+def _to_response(
+    obligation: PaymentObligation,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type,
+) -> PaymentObligationResponse:
+    resp = PaymentObligationResponse.model_validate(obligation)
+    resp.converted_amount = convert_optional(obligation.amount, obligation.currency, currency, lookup, today)
+    return resp
+
+
+# List payment obligations for a user with optional search, sorting, archive filtering, and
+# conversion. `include_ids` lets callers widen an active-only listing with specific archived
+# obligations so the expense edit dialog can still render the name of a since-archived link.
 async def list_obligations(
     session: AsyncSession,
     user: User,
@@ -23,8 +39,9 @@ async def list_obligations(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
-) -> list[PaymentObligation]:
-    return await payment_obligation_repository.list_by_user(
+    currency: str | None = None,
+) -> list[PaymentObligationResponse]:
+    obligations = await payment_obligation_repository.list_by_user(
         session,
         user.id,
         search=search,
@@ -33,6 +50,17 @@ async def list_obligations(
         active_only=active_only,
         include_ids=include_ids,
     )
+    # Batch-load latest-paid date per obligation in one query so archived one-off rows
+    # can display "Paid on YYYY-MM-DD" without an N+1 lookup (Phase 3, Step E, 6.i).
+    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, user.id, [o.id for o in obligations])
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    responses: list[PaymentObligationResponse] = []
+    for o in obligations:
+        resp = _to_response(o, currency, lookup, today)
+        resp.last_payment_date = last_paid_dates.get(o.id)
+        responses.append(resp)
+    return responses
 
 
 # Get a single payment obligation by id. Raises NotFoundError if not found.
@@ -41,6 +69,23 @@ async def get_obligation(session: AsyncSession, obligation_id: int, user: User) 
     if obligation is None:
         raise NotFoundError("Payment obligation not found.")
     return obligation
+
+
+# Get a single obligation as its response schema, converted when a display currency is requested.
+async def get_obligation_response(
+    session: AsyncSession,
+    obligation_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> PaymentObligationResponse:
+    obligation = await get_obligation(session, obligation_id, user)
+    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, user.id, [obligation.id])
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    today = date_type.today()
+    resp = _to_response(obligation, currency, lookup, today)
+    resp.last_payment_date = last_paid_dates.get(obligation.id)
+    return resp
 
 
 # Create a new payment obligation. Auto-derives anchor_day from next_due_date.day so

@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.exchange_rate import ExchangeRate
 from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse
+from app.services import settings_service
 from app.services.exchange_rate_providers import EXCHANGE_RATE_PROVIDERS
+from app.utils.metrics import RateLookup
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,24 @@ async def get_rates_by_date(
 ) -> list[ExchangeRateResponse]:
     rates = await exchange_rate_repository.get_by_date(session, rate_date)
     return [ExchangeRateResponse.model_validate(r) for r in rates]
+
+
+# Builds a RateLookup pre-loaded with every stored exchange rate. One DB round-trip;
+# callers reuse the returned object across many per-row lookups within a request.
+async def build_rate_lookup(
+    session: AsyncSession,
+    dollar_preference: str | None = None,
+) -> RateLookup:
+    rates_by_pair = await exchange_rate_repository.get_all_grouped_by_pair(session)
+    return RateLookup(dollar_preference, rates_by_pair)
+
+
+# Builds the per-request RateLookup honoring the user's dollar-rate preference. The single
+# entry point converting services use; build ONE per request and pass it down to composed
+# service calls so the rates table is never loaded twice for the same request.
+async def get_user_rate_lookup(session: AsyncSession, user_id: int) -> RateLookup:
+    dollar_preference = await settings_service.get_dollar_pref(session, user_id)
+    return await build_rate_lookup(session, dollar_preference)
 
 
 # Fetches latest rates from all registered providers in parallel and stores them.

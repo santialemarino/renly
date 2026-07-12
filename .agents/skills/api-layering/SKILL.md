@@ -33,6 +33,22 @@ If a service function does multiple writes (e.g., create group + set members), t
 
 Wrap write operations in try/except and call `session.rollback()` before re-raising. This prevents the session from being left in a broken state.
 
+## Currency conversion (services own it)
+
+Display-currency conversion is a service-layer concern. Routers never read the dollar
+preference, never build rate lookups, and never convert values — they pass the `currency`
+query param through and return the schema the service built.
+
+- `exchange_rate_service.get_user_rate_lookup(session, user_id)` is the single entry point:
+  it reads the user's dollar-rate preference and returns a `RateLookup` pre-loaded with every
+  stored rate. Build **one per request** and pass it down to composed service calls via their
+  `lookup=` parameter — never build a second lookup for the same request.
+- `app/utils/metrics.py` stays pure (no DB): `RateLookup` (data structure), `convert_value`,
+  `convert_optional`, `can_convert`.
+- Per-row converted response fields use `convert_optional(value, from_currency,
+target_currency, lookup, as_of_date)` — historical rows (expenses, income, calendar items)
+  convert at their own date; current-state rows (plans, card balances) at today's.
+
 ## Performance rules
 
 ### Never query inside a loop (N+1)

@@ -13,7 +13,6 @@ from app.schemas.finance_metrics import (
     IncomeBreakdownResponse,
 )
 from app.services import finance_metrics_service
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/finance-metrics", tags=["finance-metrics"])
 
@@ -31,12 +30,10 @@ async def get_overview(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> FinanceOverviewResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await finance_metrics_service.get_overview(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -51,12 +48,10 @@ async def get_monthly(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> FinanceMonthlyResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await finance_metrics_service.get_monthly(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -71,12 +66,10 @@ async def get_expense_breakdown(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> ExpenseBreakdownResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await finance_metrics_service.get_expense_breakdown(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -91,12 +84,10 @@ async def get_income_breakdown(
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> IncomeBreakdownResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await finance_metrics_service.get_income_breakdown(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )

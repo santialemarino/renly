@@ -14,14 +14,17 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
+from app.schemas.expense import ExpenseListResponse, ExpenseResponse
 from app.services import (
     card_reconciliation_service,
+    exchange_rate_service,
     installment_service,
     payment_obligation_service,
     settings_service,
     subscription_service,
 )
 from app.utils.dates import OBLIGATION_MONTH_STEP
+from app.utils.metrics import RateLookup, convert_optional
 
 # Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
 # user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
@@ -45,7 +48,16 @@ class AutoChargeMatchResult:
     source_plan_name: str
 
 
-# List expenses for a user with optional filters and pagination.
+# Maps an entry to its response, converting at the entry's historical date (Phase 3, Step C).
+# Expenses are records of past events — the display value reflects the rate in effect when the
+# expense actually happened, so re-opening the page on a different day shows the same number.
+def _to_response(entry: ExpenseEntry, currency: str | None, lookup: RateLookup | None) -> ExpenseResponse:
+    resp = ExpenseResponse.model_validate(entry)
+    resp.converted_amount = convert_optional(entry.amount, entry.currency, currency, lookup, entry.date)
+    return resp
+
+
+# List expenses for a user with optional filters, pagination, and display-currency conversion.
 async def list_expenses(
     session: AsyncSession,
     user: User,
@@ -55,10 +67,11 @@ async def list_expenses(
     payment_method: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    currency: str | None = None,
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[ExpenseEntry], int]:
-    return await expense_repository.list_by_user_filtered(
+) -> ExpenseListResponse:
+    entries, total = await expense_repository.list_by_user_filtered(
         session,
         user.id,
         search=search,
@@ -69,6 +82,14 @@ async def list_expenses(
         page=page,
         page_size=page_size,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    return ExpenseListResponse(
+        items=[_to_response(e, currency, lookup) for e in entries],
+        total=total,
+        page=page,
+        page_size=page_size,
+        display_currency=currency,
+    )
 
 
 # Get a single expense by id. Raises NotFoundError if not found.
@@ -77,6 +98,19 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
     if entry is None:
         raise NotFoundError("Expense not found.")
     return entry
+
+
+# Get a single expense as its response schema, converted when a display currency is requested.
+async def get_expense_response(
+    session: AsyncSession,
+    expense_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> ExpenseResponse:
+    entry = await get_expense(session, expense_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    return _to_response(entry, currency, lookup)
 
 
 # Inserts the expense row. Extracted (Phase 3, follow-up Item 2) so create_expense and

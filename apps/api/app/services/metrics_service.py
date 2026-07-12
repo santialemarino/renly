@@ -27,6 +27,7 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
     SkippedInvestment,
 )
+from app.services import exchange_rate_service
 from app.utils import metrics as mh
 
 ZERO = Decimal("0")
@@ -101,7 +102,6 @@ async def get_investment_metrics(
     investment_id: int,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
 ) -> InvestmentMetricsResponse:
     inv = await investment_repository.get_by_id(session, investment_id, user_id)
     if inv is None:
@@ -110,7 +110,7 @@ async def get_investment_metrics(
     snapshots = await metrics_repository.list_snapshots_by_investments(session, [investment_id])
     transactions = await metrics_repository.list_transactions_by_investments(session, [investment_id])
 
-    lookup = await _get_required_lookup(session, currency, [inv], dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, [inv])
     return _build_investment_metrics(inv, snapshots, transactions, currency, lookup)
 
 
@@ -120,7 +120,7 @@ async def get_portfolio_metrics(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -139,7 +139,7 @@ async def get_portfolio_metrics(
             skipped_investments=skipped,
         )
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, investments, lookup)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
@@ -306,7 +306,7 @@ async def get_portfolio_evolution(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -319,7 +319,7 @@ async def get_portfolio_evolution(
     if not investments:
         return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, investments, lookup)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
 
@@ -409,7 +409,7 @@ async def get_allocation(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -420,7 +420,7 @@ async def get_allocation(
     if not investments:
         return AllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, investments, lookup)
     inv_ids = [i.id for i in investments]
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
 
@@ -450,7 +450,6 @@ async def get_allocation_by_group(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -461,7 +460,7 @@ async def get_allocation_by_group(
     if not investments:
         return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, investments)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
@@ -524,7 +523,6 @@ async def get_investments_summary(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -537,7 +535,7 @@ async def get_investments_summary(
     if not investments:
         return InvestmentsSummaryResponse(items=[], skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, investments)
     inv_ids = [i.id for i in investments]
 
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -611,19 +609,21 @@ async def get_investments_summary(
 # Returns a RateLookup pre-loaded with every stored rate (Phase 3, Step C — date-aware conversion).
 # Callers look up per-row dates via lookup.get_rate_map_at(...). Raises ExchangeRateUnavailableError
 # if conversion is needed but the rates table is empty. Returns None when currency is None or no
-# conversion is needed at all.
+# conversion is needed at all. Reuses a prebuilt per-request lookup when the caller already built one.
 async def _get_required_lookup(
     session: AsyncSession,
+    user_id: int,
     currency: str | None,
     investments: list[Investment],
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
 ) -> mh.RateLookup | None:
     if not currency:
         return None
     needs_conversion = any(inv.base_currency != currency for inv in investments)
     if not needs_conversion:
         return None
-    lookup = await mh.build_rate_lookup(session, dollar_preference)
+    if lookup is None:
+        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
     if lookup.get_rate_map_at(date_type.today()) is None:
         raise ExchangeRateUnavailableError(currency)
     return lookup

@@ -1,11 +1,11 @@
-# Pure calculation functions for investment and portfolio metrics.
+# Pure calculation functions and data structures for investment and portfolio metrics.
+# Nothing in this module touches the DB — rate loading lives in the service layer
+# (exchange_rate_service.build_rate_lookup / get_user_rate_lookup).
 
 import bisect
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.currency import get_ars_pair, is_supported
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
@@ -197,6 +197,29 @@ def convert_value(
     return (value / from_rate * to_rate).quantize(Decimal("0.01"))
 
 
+# Converts a value into the requested display currency at the rate in effect on as_of_date.
+# The shared per-row conversion used by every service that fills a converted_* response field.
+# Returns None when no display currency was requested or when no rates are stored at all (the
+# caller leaves the converted field null); returns value unchanged when currencies match.
+def convert_optional(
+    value: Decimal,
+    from_currency: str,
+    target_currency: str | None,
+    lookup: "RateLookup | None",
+    as_of_date: date_type,
+) -> Decimal | None:
+    if not target_currency:
+        return None
+    if from_currency == target_currency:
+        return value
+    if lookup is None:
+        return None
+    rate_map = lookup.get_rate_map_at(as_of_date)
+    if rate_map is None:
+        return None
+    return convert_value(value, from_currency, target_currency, rate_map)
+
+
 # Mapping from non-ARS currency code to its USD pair. ARS uses the dollar-preference pair.
 _NON_ARS_PAIRS = {
     "BRL": ExchangeRatePair.USD_BRL,
@@ -265,26 +288,3 @@ class RateLookup:
             return rates[idx].rate
         # Pre-history fallback: use the earliest rate so display never breaks for ancient dates.
         return rates[0].rate
-
-
-# Builds a RateLookup pre-loaded with every stored exchange rate. One DB round-trip per request;
-# callers reuse the returned object across many per-row lookups.
-async def build_rate_lookup(
-    session: AsyncSession,
-    dollar_preference: str | None = None,
-) -> RateLookup:
-    from app.repositories.exchange_rate_repository import exchange_rate_repository
-
-    rates_by_pair = await exchange_rate_repository.get_all_grouped_by_pair(session)
-    return RateLookup(dollar_preference, rates_by_pair)
-
-
-# Backward-compat shim: returns the rate map valid TODAY. Equivalent to the previous
-# implementation (latest stored rate per pair). New code should prefer build_rate_lookup +
-# get_rate_map_at(row.date) so historical values stay deterministic across time.
-async def get_rate_map(
-    session: AsyncSession,
-    dollar_preference: str | None = None,
-) -> dict[str, Decimal] | None:
-    lookup = await build_rate_lookup(session, dollar_preference)
-    return lookup.get_rate_map_at(date_type.today())

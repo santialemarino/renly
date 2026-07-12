@@ -6,8 +6,8 @@ from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
-from app.routers.payments_calendar import _to_response
 from app.services.payments_calendar_service import (
+    _to_response,
     installment_past_paid_cuotas_in_window,
     obligation_dates_in_window,
     obligation_past_paid_cycles_in_window,

@@ -21,13 +21,54 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
-from app.services import card_reconciliation_service, credit_card_service
+from app.schemas.payments_calendar import PaymentsCalendarItemResponse, PaymentsCalendarResponse
+from app.services import card_reconciliation_service, credit_card_service, exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month, step_back_by_cycle
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# Aggregates calendar items for the given month. Order: by date ascending,
-# stable within the same date by type (subscription, installment, obligation, card_due).
-async def get_calendar(session: AsyncSession, user: User, *, year: int, month: int) -> list[CalendarItem]:
+# Maps a service CalendarItem to its response shape, attaching converted_amount when requested.
+# Conversion uses the rate as of the item's own event date (Phase 3, Step C). Past months on the
+# calendar therefore display historical-rate amounts; future-dated items fall back to today's
+# latest rate (the RateLookup's natural behaviour for dates without a stored quote).
+def _to_response(
+    item: CalendarItem,
+    target_currency: str | None,
+    lookup: RateLookup | None,
+) -> PaymentsCalendarItemResponse:
+    # Past-paid obligations set `conversion_date` to the linked expense's actual date
+    # so the rate matches what the expenses list shows; everything else uses the cycle date.
+    fx_date = item.conversion_date or item.date
+    converted = convert_optional(item.amount, item.currency, target_currency, lookup, fx_date)
+    return PaymentsCalendarItemResponse(
+        type=item.type,
+        date=item.date,
+        name=item.name,
+        amount=item.amount,
+        currency=item.currency,
+        converted_amount=converted,
+        payment_method=item.payment_method,
+        credit_card_id=item.credit_card_id,
+        source_id=item.source_id,
+        cuota_index=item.cuota_index,
+        installments_count=item.installments_count,
+        recurrence=item.recurrence,
+        is_paid=item.is_paid,
+        linked_expense_id=item.linked_expense_id,
+    )
+
+
+# Aggregates calendar items for the given month, converting amounts to the display currency
+# when requested. Order: by date ascending, stable within the same date by type (subscription,
+# installment, obligation, card_due).
+async def get_calendar(
+    session: AsyncSession,
+    user: User,
+    *,
+    year: int,
+    month: int,
+    currency: str | None = None,
+) -> PaymentsCalendarResponse:
     period_start, period_end = _month_range(year, month)
 
     subscription_items = await _subscription_items(session, user, period_start, period_end)
@@ -37,7 +78,13 @@ async def get_calendar(session: AsyncSession, user: User, *, year: int, month: i
 
     items = subscription_items + installment_items + obligation_items + card_due_items
     items.sort(key=lambda i: (i.date, _TYPE_ORDER.get(i.type, 99)))
-    return items
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    return PaymentsCalendarResponse(
+        year=year,
+        month=month,
+        currency=currency,
+        items=[_to_response(item, currency, lookup) for item in items],
+    )
 
 
 # --- Aggregators per source ---
