@@ -2,16 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  ListChecks,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, ListChecks, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -27,13 +18,13 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { InstallmentDeleteDialog } from '@/app/(protected)/installments/_components/installment-delete-dialog';
 import { InstallmentFormDialog } from '@/app/(protected)/installments/_components/installment-form-dialog';
 import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -42,42 +33,6 @@ import type { SortOrder } from '@/lib/api/types';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: InstallmentSortField;
-  sortBy: InstallmentSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 interface InstallmentsTableProps {
   installments: Installment[];
@@ -159,56 +114,41 @@ export function InstallmentsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('installment_amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.installmentAmount')}
-                  <SortIcon column="installment_amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('total_amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.totalAmount')}
-                  <SortIcon column="total_amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('current_installment')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.progress')}
-                  <SortIcon column="current_installment" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('next_cuota_date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.nextCuotaDate')}
-                  <SortIcon column="next_cuota_date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.installmentAmount')}
+                column="installment_amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.totalAmount')}
+                column="total_amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.progress')}
+                column="current_installment"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.nextCuotaDate')}
+                column="next_cuota_date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.paymentMethod')}</TableHead>
               <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>
             </TableRow>

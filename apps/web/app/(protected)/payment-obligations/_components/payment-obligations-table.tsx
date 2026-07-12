@@ -2,17 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  BadgeDollarSign,
-  ChevronsUpDown,
-  FileText,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, BadgeDollarSign, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -28,7 +18,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import {
   ExpenseFormDialog,
   type PrefillFromObligation,
@@ -44,6 +33,7 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -51,42 +41,6 @@ import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/pa
 import type { SortOrder } from '@/lib/api/types';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: PaymentObligationSortField;
-  sortBy: PaymentObligationSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 interface PaymentObligationsTableProps {
   obligations: PaymentObligation[];
@@ -217,46 +171,34 @@ export function PaymentObligationsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.amount')}
-                  <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('next_due_date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.dueDate')}
-                  <SortIcon column="next_due_date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('recurrence')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.recurrence')}
-                  <SortIcon column="recurrence" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.amount')}
+                column="amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.dueDate')}
+                column="next_due_date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.recurrence')}
+                column="recurrence"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.category')}</TableHead>
               <TableHead>{t('table.paymentMethod')}</TableHead>
               <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>

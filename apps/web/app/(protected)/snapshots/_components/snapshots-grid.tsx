@@ -2,15 +2,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  CircleDollarSign,
-  Minus,
-  Plus,
-  Table2,
-} from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleDollarSign, Minus, Plus, Table2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -25,10 +17,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
+import { SortIcon } from '@/components/sort-icon';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 import { formatMonth, formatSignedPct, formatValue } from '@/lib/utils/format';
@@ -62,33 +54,6 @@ function generateAllYearMonths(dates: string[]): string[] {
   }
 
   return result;
-}
-
-function SortIcon({ active, order }: { active: boolean; order: 'asc' | 'desc' }) {
-  const isAsc = active && order === 'asc';
-  const isDesc = active && order === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
 }
 
 interface CellContentProps {

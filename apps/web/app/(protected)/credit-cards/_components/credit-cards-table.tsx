@@ -5,10 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Archive,
   ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
   ChevronRight,
-  ChevronsUpDown,
   CreditCard as CreditCardIcon,
   Pencil,
   Plus,
@@ -42,6 +39,7 @@ import {
   unarchiveCreditCard,
   type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
@@ -52,42 +50,6 @@ import { formatDateForLocale } from '@/lib/utils/format';
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly.
 const SETTLEMENTS_DISPLAY_DELAY_MS = 500;
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: CreditCardSortField;
-  sortBy: CreditCardSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 function SettlementsSection({
   cardId,
@@ -333,46 +295,34 @@ export function CreditCardsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('closing_day')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.closingDay')}
-                  <SortIcon column="closing_day" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('due_day')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.dueDay')}
-                  <SortIcon column="due_day" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('currency')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.currency')}
-                  <SortIcon column="currency" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.closingDay')}
+                column="closing_day"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.dueDay')}
+                column="due_day"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.currency')}
+                column="currency"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.balance')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>

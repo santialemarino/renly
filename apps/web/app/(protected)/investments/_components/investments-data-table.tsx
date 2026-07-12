@@ -2,15 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  Pencil,
-  Rows3,
-} from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Rows3 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -33,10 +25,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type {
@@ -46,43 +38,6 @@ import type {
   InvestmentSortField,
 } from '@/lib/api/investments';
 import type { SortOrder } from '@/lib/api/types';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: InvestmentSortField;
-  sortBy: InvestmentSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  // All three icons share the same grid cell; only one is visible at a time via opacity/scale.
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 function RowActions({
   investment,
@@ -253,48 +208,36 @@ export function InvestmentsDataTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">{t('table.id')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.groups')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('category')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.category')}
-                  <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('base_currency')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.currency')}
-                  <SortIcon column="base_currency" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.category')}
+                column="category"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.currency')}
+                column="base_currency"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.ticker')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('broker')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.broker')}
-                  <SortIcon column="broker" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.broker')}
+                column="broker"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>

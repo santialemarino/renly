@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, CircleDollarSign, Pencil, Trash2 } from 'lucide-react';
+import { CircleDollarSign, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
@@ -24,51 +24,15 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
 import type { SortOrder } from '@/lib/api/types';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: IncomeSortField;
-  sortBy: IncomeSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 function RowActions({
   income,
@@ -199,36 +163,27 @@ export function IncomeDataTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.date')}
-                  <SortIcon column="date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.amount')}
-                  <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('category')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.category')}
-                  <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.date')}
+                column="date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.amount')}
+                column="amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.category')}
+                column="category"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.notes')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
