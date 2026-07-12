@@ -12,7 +12,7 @@ import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -43,9 +43,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   // picker degrades to the full list and the API's 422 still guards.
   const supportedCurrencies = await getSupportedCurrencies().catch(() => undefined);
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency = savedCurrency || primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   const data = await getIncome({
     search: params.search,

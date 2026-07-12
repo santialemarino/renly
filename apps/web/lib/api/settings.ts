@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { getCreditCards, type CreditCard } from '@/lib/api/credit-cards';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -82,3 +83,16 @@ export const getSettings = cache(async (): Promise<SettingsData> => {
   if (!res.ok) throw new Error('Failed to fetch settings');
   return mapSettings(await res.json());
 });
+
+// Settings + credit cards for a protected list page, fetched in parallel with
+// page-safe fallbacks (null settings / empty card list on error).
+export async function getPageSettings(): Promise<{
+  settings: SettingsData | null;
+  creditCards: CreditCard[];
+}> {
+  const [settings, creditCards] = await Promise.all([
+    getSettings().catch(() => null),
+    getCreditCards().catch(() => []),
+  ]);
+  return { settings, creditCards };
+}

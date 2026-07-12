@@ -6,6 +6,17 @@ export const ORIGINAL_CURRENCY = 'original';
 export const ACTIVE_CURRENCY_COOKIE = 'active-currency';
 export const CURRENCY_COLLAPSED_COOKIE = 'currency-collapsed';
 
+// Resolves the page display currency from the active-currency cookie: a concrete
+// currency code when one is active, or undefined when viewing original currencies.
+export function resolveActiveCurrency(
+  cookieStore: { get: (name: string) => { value: string } | undefined },
+  primaryCurrency: string,
+): string | undefined {
+  const saved = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
+  const active = saved || primaryCurrency;
+  return active !== ORIGINAL_CURRENCY ? active : undefined;
+}
+
 interface CurrencyState {
   activeCurrency: string;
   setActiveCurrency: (currency: string) => void;

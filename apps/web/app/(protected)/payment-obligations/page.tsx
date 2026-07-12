@@ -4,17 +4,16 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PaymentObligationsTable } from '@/app/(protected)/payment-obligations/_components/payment-obligations-table';
 import { PaymentObligationsToolbar } from '@/app/(protected)/payment-obligations/_components/payment-obligations-toolbar';
-import { getCreditCards } from '@/lib/api/credit-cards';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import {
   getPaymentObligations,
   type PaymentObligationSortField,
 } from '@/lib/api/payment-obligations';
-import { getSettings } from '@/lib/api/settings';
+import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -37,9 +36,8 @@ export default async function PaymentObligationsPage({
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards, supportedCurrencies] = await Promise.all([
-    getSettings().catch(() => null),
-    getCreditCards().catch(() => []),
+  const [{ settings, creditCards }, supportedCurrencies] = await Promise.all([
+    getPageSettings(),
     // The Mark-Paid expense dialog restricts its currency picker to the convertible set; on a
     // fetch error the picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
@@ -47,9 +45,7 @@ export default async function PaymentObligationsPage({
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency = savedCurrency || primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   const obligations = await getPaymentObligations({
     search: params.search,

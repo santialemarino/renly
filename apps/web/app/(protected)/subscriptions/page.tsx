@@ -4,14 +4,13 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SubscriptionsTable } from '@/app/(protected)/subscriptions/_components/subscriptions-table';
 import { SubscriptionsToolbar } from '@/app/(protected)/subscriptions/_components/subscriptions-toolbar';
-import { getCreditCards } from '@/lib/api/credit-cards';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
-import { getSettings } from '@/lib/api/settings';
+import { getPageSettings } from '@/lib/api/settings';
 import { getSubscriptions, type SubscriptionSortField } from '@/lib/api/subscriptions';
 import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -32,9 +31,8 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards, supportedCurrencies] = await Promise.all([
-    getSettings().catch(() => null),
-    getCreditCards().catch(() => []),
+  const [{ settings, creditCards }, supportedCurrencies] = await Promise.all([
+    getPageSettings(),
     // Entry forms restrict their currency picker to the convertible set; on a fetch error the
     // picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
@@ -42,9 +40,7 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency = savedCurrency || primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   const subscriptions = await getSubscriptions({
     search: params.search,
