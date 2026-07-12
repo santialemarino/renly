@@ -137,12 +137,10 @@ async def update_subscription(
     if new_card_id is not None and new_card_id != subscription.credit_card_id:
         if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
             raise NotFoundError("Credit card not found")
-    if "next_billing_date" in fields and fields["next_billing_date"] is not None:
-        nbd = fields["next_billing_date"]
-        if isinstance(nbd, date_type):
-            fields["anchor_day"] = nbd.day
     for key, value in fields.items():
         setattr(subscription, key, value)
+    if "next_billing_date" in fields and fields["next_billing_date"] is not None:
+        subscription.anchor_day = subscription.next_billing_date.day
     await subscription_repository.save(session, subscription)
     await session.commit()
     await session.refresh(subscription)
