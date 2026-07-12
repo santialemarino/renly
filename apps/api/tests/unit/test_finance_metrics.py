@@ -25,6 +25,7 @@ class TestOverviewIncludesArchivedCards:
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", list_mock)
         monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user", AsyncMock(return_value={}))
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user", AsyncMock(return_value={}))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         monkeypatch.setattr(
             finance_metrics_service.credit_card_service,
             "get_card_balances",
@@ -54,6 +55,7 @@ class TestPrevPeriodWindow:
         monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user", income_mock)
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user", expense_mock)
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_overview(
             AsyncMock(),
             1,
@@ -78,6 +80,7 @@ class TestUncategorizedSlice:
         # widening this raised a validation error ('uncategorized' is not an enum member).
         rows = [("food", "ARS", 1000.0), ("uncategorized", "ARS", 3000.0)]
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)
         assert result.total_expenses == Decimal("4000")
         assert [(i.category, i.value, i.percentage) for i in result.items] == [

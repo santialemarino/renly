@@ -28,6 +28,7 @@ import {
 } from '@/lib/constants/health-thresholds';
 import { hasNoCoreData } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
 
@@ -74,6 +75,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
   const currency = isOriginalSelected ? primary : activeCurrency;
   const userPresets = buildPresets(settings?.periodPresets);
+  // User-tz "today": period boundaries resolve in the user's settings timezone.
+  const timeZone = settings?.timezone ?? undefined;
 
   // Parse date range from period presets or explicit dates.
   const period = params.period;
@@ -84,8 +87,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     startDate = params.start_date;
     endDate = params.end_date;
   } else if (period && period !== 'all') {
-    startDate = presetToStartDate(period);
-    endDate = new Date().toISOString().slice(0, 10);
+    startDate = presetToStartDate(period, timeZone);
+    endDate = todayInTimezone(timeZone);
   }
 
   // Build filter params.

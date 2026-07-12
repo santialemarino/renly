@@ -653,6 +653,8 @@ async def _get_required_lookup(
         return None
     if lookup is None:
         lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+    # Probe date is irrelevant here: get_rate_map_at returns None only when the rates table is
+    # empty, so the server-local today is fine (no user-timezone read needed for this check).
     if lookup.get_rate_map_at(date_type.today()) is None:
         raise ExchangeRateUnavailableError(currency)
     return lookup

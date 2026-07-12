@@ -13,6 +13,7 @@ import { getSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { currentYearMonth } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -45,10 +46,12 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const activeCurrency = savedCurrency || primary;
   const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
 
-  // Default to the current month when the URL doesn't carry year/month.
-  const now = new Date();
-  const year = parseYearMonth(params.year) ?? now.getFullYear();
-  const month = parseYearMonth(params.month) ?? now.getMonth() + 1;
+  // Default to the current month — resolved in the user's settings timezone — when the URL
+  // doesn't carry year/month.
+  const timeZone = settings?.timezone ?? undefined;
+  const { year: nowYear, month: nowMonth } = currentYearMonth(timeZone);
+  const year = parseYearMonth(params.year) ?? nowYear;
+  const month = parseYearMonth(params.month) ?? nowMonth;
 
   // Round 2: the calendar plus the full plan lists (filtered below), one parallel round instead of
   // the previous calendar → plan-lists waterfall.
@@ -85,7 +88,7 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <PaymentsCalendarHeader year={year} month={month} />
+      <PaymentsCalendarHeader year={year} month={month} timeZone={timeZone} />
       <PaymentsCalendarList
         items={calendar.items}
         year={year}
@@ -97,6 +100,7 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
         activeCurrency={currency}
+        timeZone={timeZone}
       />
     </div>
   );

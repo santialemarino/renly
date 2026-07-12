@@ -32,6 +32,7 @@ import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 import { buildPresets, presetToStartDate } from '@/lib/utils/period-presets';
 
@@ -72,6 +73,8 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   const isOriginalSelected = activeCurrency === ORIGINAL_CURRENCY;
   const currency = isOriginalSelected ? primary : activeCurrency;
   const userPresets = buildPresets(settings?.periodPresets);
+  // User-tz "today": period boundaries resolve in the user's settings timezone.
+  const timeZone = settings?.timezone ?? undefined;
 
   // Parse filter params (singular from URL, wrapped in arrays for the API).
   const investmentIds = params.investment_id
@@ -90,8 +93,8 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
     startDate = params.start_date;
     endDate = params.end_date;
   } else if (period && period !== 'all') {
-    startDate = presetToStartDate(period);
-    endDate = new Date().toISOString().slice(0, 10);
+    startDate = presetToStartDate(period, timeZone);
+    endDate = todayInTimezone(timeZone);
   }
 
   const isSingleInvestment = investmentIds?.length === 1;

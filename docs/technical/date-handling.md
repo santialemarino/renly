@@ -12,7 +12,7 @@ The dashboard supports two types of date range filtering:
 
 Preset buttons (1M, 3M, 6M, YTD, All) compute a date range automatically.
 
-**Reference point:** Always `now()` (today's real date). If your latest snapshot is from two months ago and you select "1M", the evolution chart may still show data (it forward-fills monthly values from the last known snapshot), but the metric cards may show partial or zero results since TWR/IRR are computed only from snapshots that fall within the selected range.
+**Reference point:** "Today" resolved in the **user's settings timezone** (Settings → Localization; auto-synced from the browser by default, or set manually), falling back to the environment zone when unset. If your latest snapshot is from two months ago and you select "1M", the evolution chart may still show data (it forward-fills monthly values from the last known snapshot), but the metric cards may show partial or zero results since TWR/IRR are computed only from snapshots that fall within the selected range.
 
 **Start date snapping:** Presets snap the **start date of the range** to the 1st of the month. Snapshots always keep their real dates — only the range boundary moves. This prevents monthly snapshots from being accidentally excluded by day-level precision.
 
@@ -32,7 +32,7 @@ The snapshot didn't move in either case. The difference is where the range start
 | YTD    | January 1st of current year | 2026-01-01                   |
 | All    | No filter applied           | —                            |
 
-**End date:** Always today's date.
+**End date:** Always today's date **in the user's settings timezone**.
 
 **1Y vs YTD:** These are different. 1Y starts 12 months back. YTD starts on January 1st of the current year. In March 2026: 1Y covers 12 months (Mar 2025–Mar 2026), YTD covers ~3 months (Jan–Mar).
 
@@ -70,3 +70,18 @@ NEXT_PUBLIC_PERIOD_PRESET_4=YTD
 ```
 
 Format: `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If no env vars are set, defaults to: 1M, 3M, 6M, YTD, All.
+
+## Whose "today"? (timezones)
+
+Renly resolves every user-facing "today" — period-preset boundaries, the dashboards' default
+end date, the payments-calendar default month and today-highlight, and credit-card statement
+periods — in the **user's settings timezone** (`user_settings.timezone`, auto-synced from the
+browser unless set manually). Web code uses `todayInTimezone` / `currentYearMonth`
+(`apps/web/lib/utils/dates.ts`); API request paths use `get_user_today`
+(`apps/api/app/services/settings_service.py`), built on the same `today_in_timezone` util the
+auto-expense scheduler uses for per-user local dates. When no timezone is stored, the web falls
+back to the environment's default zone and the API to UTC.
+
+Two deliberate exceptions keep the **server** date: global scheduler batches that stamp shared
+data (auto-snapshots, exchange-rate/CEDEAR-ratio fetch dates), and rate-availability probes,
+where the query date can't change the outcome.

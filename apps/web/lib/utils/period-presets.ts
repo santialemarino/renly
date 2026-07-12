@@ -1,6 +1,7 @@
 // Runtime functions for period preset formatting, building, and date computation.
 
 import { PERIOD_PRESETS, PRESET_PATTERN, type PeriodPreset } from '@/lib/constants/period-presets';
+import { currentYearMonth } from '@/lib/utils/dates';
 
 const UNIT_MONTH = 'M';
 const UNIT_YEAR = 'Y';
@@ -41,15 +42,25 @@ export function formatPresetLabel(
   return `${amount}${translations.monthSuffix}`;
 }
 
-// Computes a start date from a preset code relative to now, snapped to start of month.
-export function presetToStartDate(code: string): string | undefined {
+// First day of the month `shiftMonths` months away from (year, month), as YYYY-MM-DD.
+function startOfMonthShifted(year: number, month: number, shiftMonths: number): string {
+  const total = year * 12 + (month - 1) + shiftMonths;
+  const shiftedYear = Math.floor(total / 12);
+  const shiftedMonth = (total % 12) + 1;
+  return `${shiftedYear}-${String(shiftedMonth).padStart(2, '0')}-01`;
+}
+
+// Computes a start date from a preset code relative to the user's "today" in the given IANA
+// timezone (undefined = environment default zone), snapped to start of month. Pure string
+// arithmetic — no Date object, so no local/UTC or DST skew.
+export function presetToStartDate(code: string, timeZone?: string): string | undefined {
   if (code === PRESET_ALL) return undefined;
 
-  const now = new Date();
+  const { year, month } = currentYearMonth(timeZone);
   const upper = code.toUpperCase();
 
   if (upper === PRESET_YTD) {
-    return `${now.getFullYear()}-01-01`;
+    return `${year}-01-01`;
   }
 
   const match = upper.match(UNIT_PATTERN);
@@ -59,13 +70,11 @@ export function presetToStartDate(code: string): string | undefined {
   const unit = match[2];
 
   if (unit === UNIT_MONTH) {
-    const d = new Date(now.getFullYear(), now.getMonth() - amount, 1);
-    return d.toISOString().slice(0, 10);
+    return startOfMonthShifted(year, month, -amount);
   }
 
   if (YEAR_ALIASES.includes(unit)) {
-    const d = new Date(now.getFullYear() - amount, now.getMonth(), 1);
-    return d.toISOString().slice(0, 10);
+    return startOfMonthShifted(year, month, -amount * 12);
   }
 
   return undefined;

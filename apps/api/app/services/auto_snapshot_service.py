@@ -30,6 +30,9 @@ async def generate_auto_snapshots(session: AsyncSession) -> int:
     if not investments:
         return 0
 
+    # Server-local date on purpose: auto-snapshots are one global batch (a single date for all
+    # users, deduped per investment per date). Per-user local dates would split the batch and
+    # the existing-snapshot dedup key. User-facing "today" semantics live in request paths.
     today = date_type.today()
     inv_ids = [inv.id for inv in investments]
     tickers = [inv.ticker for inv in investments if inv.ticker]

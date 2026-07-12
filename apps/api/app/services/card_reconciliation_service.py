@@ -6,7 +6,6 @@
 #   - mark_stale_for_date(): stale-detection hook called from expense/settlement create/update/delete.
 #   - list_recent_statements(): drives the Reconciliations sub-section UI per bucket.
 
-from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -24,6 +23,7 @@ from app.repositories import (
     expense_repository,
     income_repository,
 )
+from app.services import settings_service
 from app.utils.dates import compute_statement_period, resolve_day_in_month
 
 # Number of recent statement periods to surface per bucket in the Reconciliations sub-section.
@@ -98,7 +98,7 @@ async def list_recent_statements(
     card: CreditCard,
     currency: str,
 ) -> list[dict]:
-    today = datetime.now(UTC).date()
+    today = await settings_service.get_user_today(session, card.user_id)
 
     # Find the most recent statement closing date at or before today.
     this_month_close = resolve_day_in_month(card.closing_day, today.year, today.month)

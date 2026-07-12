@@ -269,7 +269,7 @@ async def get_composition(
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
-        rate_map = lookup.get_rate_map_at(date_type.today()) if lookup else None
+        rate_map = lookup.get_rate_map_at(await settings_service.get_user_today(session, user_id)) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
@@ -315,7 +315,7 @@ async def get_liquidity(
     currency: str | None = None,
 ) -> DashboardLiquidityResponse:
     threshold = await settings_service.get_liquidity_threshold(session, user_id)
-    today = date_type.today()
+    today = await settings_service.get_user_today(session, user_id)
 
     # Build the rate lookup once — reused for commitments + income conversions.
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None

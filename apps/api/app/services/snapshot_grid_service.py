@@ -61,6 +61,9 @@ async def get_snapshot_grid(
         needs_conversion = any(inv.base_currency != currency for inv in investments)
         if needs_conversion:
             lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+            # Server-local today is deliberate: this rate map only gates convertibility (empty-table
+            # probe + per-pair membership below), where the <=1-day difference vs the user's local
+            # date is immaterial — no user-timezone read needed. Cell values use each row's own date.
             rate_map_today = lookup.get_rate_map_at(date_type.today())
             if rate_map_today is None:
                 raise ExchangeRateUnavailableError(currency)

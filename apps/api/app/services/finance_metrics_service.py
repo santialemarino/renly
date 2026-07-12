@@ -20,7 +20,7 @@ from app.schemas.finance_metrics import (
     IncomeCategoryItem,
     MonthlyPoint,
 )
-from app.services import credit_card_service, exchange_rate_service
+from app.services import credit_card_service, exchange_rate_service, settings_service
 from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal("0")
@@ -71,7 +71,7 @@ async def get_overview(
     date_to: date_type | None = None,
 ) -> FinanceOverviewResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency, lookup)
-    today = date_type.today()
+    today = await settings_service.get_user_today(session, user_id)
     anchor = date_to or today
 
     # Current period totals.
@@ -233,7 +233,7 @@ async def get_expense_breakdown(
     date_to: date_type | None = None,
 ) -> ExpenseBreakdownResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency)
-    anchor = date_to or date_type.today()
+    anchor = date_to or await settings_service.get_user_today(session, user_id)
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await expense_repository.sum_by_user_grouped_by_category(
@@ -282,7 +282,7 @@ async def get_income_breakdown(
     date_to: date_type | None = None,
 ) -> IncomeBreakdownResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency)
-    anchor = date_to or date_type.today()
+    anchor = date_to or await settings_service.get_user_today(session, user_id)
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await income_repository.sum_by_user_grouped_by_category(

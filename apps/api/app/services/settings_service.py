@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy import cast
@@ -9,6 +11,7 @@ from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
 from app.schemas.settings import LANGUAGE_MODE_VALUES, SUPPORTED_LANGUAGES, TIMEZONE_MODE_VALUES
+from app.utils.dates import today_in_timezone
 from app.utils.liquidity import DEFAULT_LIQUIDITY_THRESHOLD_PCT
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
@@ -234,6 +237,24 @@ async def get_liquidity_threshold(session: AsyncSession, user_id: int) -> int:
         if isinstance(value, int) and 1 <= value <= 99:
             return value
     return DEFAULT_LIQUIDITY_THRESHOLD_PCT
+
+
+# Reads the user's IANA timezone from settings. Returns None when unset (callers fall back to UTC).
+async def get_user_timezone(session: AsyncSession, user_id: int) -> str | None:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        tz = row.settings.get(SETTINGS_KEY_TIMEZONE)
+        if isinstance(tz, str) and tz:
+            return tz
+    return None
+
+
+# Returns the user's local calendar date "today" (settings timezone, UTC fallback) — the
+# request-path counterpart of the scheduler's per-user local-date derivation. `now_utc` is
+# injectable for tests, mirroring auto_expense_service.
+async def get_user_today(session: AsyncSession, user_id: int, now_utc: datetime | None = None) -> date_type:
+    tz = await get_user_timezone(session, user_id)
+    return today_in_timezone(now_utc or datetime.now(UTC), tz)
 
 
 # Latches a single boolean onboarding-internal settings flag to True via a targeted JSONB merge

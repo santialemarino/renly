@@ -1,6 +1,11 @@
 from datetime import date
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
+import pytest
+
+from app.models.credit_card import CreditCard
+from app.services import card_reconciliation_service
 from app.services.card_reconciliation_service import compute_reconciliation_difference, cumulative_balances_at
 
 # --- compute_reconciliation_difference ---
@@ -63,3 +68,39 @@ class TestCumulativeBalancesAt:
         closings = [date(2026, 1, 31), date(2026, 2, 28)]
         result = cumulative_balances_at(closings, [], [])
         assert result == {date(2026, 1, 31): Decimal("0"), date(2026, 2, 28): Decimal("0")}
+
+
+# --- list_recent_statements: user-timezone "today" ---
+
+
+# Patches the user-today derivation and every repository read list_recent_statements makes, so the
+# statement walk runs purely in memory (no session — passed as None). get_user_today is patched on
+# the imported settings_service module (the service calls it as settings_service.get_user_today).
+def _patch_statement_deps(monkeypatch, user_today):
+    monkeypatch.setattr(card_reconciliation_service.settings_service, "get_user_today", AsyncMock(return_value=user_today))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "list_by_card", AsyncMock(return_value=[]))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "get_first_activity_date", AsyncMock(return_value=None))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "list_expense_daily_sums", AsyncMock(return_value=[]))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "list_settlement_daily_sums", AsyncMock(return_value=[]))
+
+
+class TestListRecentStatementsUserToday:
+    @pytest.mark.asyncio
+    async def test_rolls_to_new_statement_on_user_local_closing_day(self, monkeypatch):
+        # closing_day=15 and user-local today July 15 -> the July statement just closed.
+        _patch_statement_deps(monkeypatch, date(2026, 7, 15))
+        card = CreditCard(id=1, user_id=1, name="Test", closing_day=15, due_day=25, currency="ARS")
+        statements = await card_reconciliation_service.list_recent_statements(None, card, "ARS")
+        # With no reconciliations and no activity, only the latest closed statement survives.
+        assert len(statements) == 1
+        assert statements[0]["period_end"] == date(2026, 7, 15)
+
+    @pytest.mark.asyncio
+    async def test_stays_on_previous_statement_before_user_local_closing_day(self, monkeypatch):
+        # One user-local day earlier (e.g. an ART evening that is already July 15 in UTC): the
+        # latest closed statement is still June's.
+        _patch_statement_deps(monkeypatch, date(2026, 7, 14))
+        card = CreditCard(id=1, user_id=1, name="Test", closing_day=15, due_day=25, currency="ARS")
+        statements = await card_reconciliation_service.list_recent_statements(None, card, "ARS")
+        assert len(statements) == 1
+        assert statements[0]["period_end"] == date(2026, 6, 15)

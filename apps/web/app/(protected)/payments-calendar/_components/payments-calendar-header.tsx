@@ -7,14 +7,16 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
+import { currentYearMonth } from '@/lib/utils/dates';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarHeaderProps {
   year: number;
   month: number;
+  timeZone?: string;
 }
 
-export function PaymentsCalendarHeader({ year, month }: PaymentsCalendarHeaderProps) {
+export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalendarHeaderProps) {
   const t = useTranslations('paymentsCalendar');
   const locale = useLocale();
   const router = useRouter();
@@ -41,8 +43,8 @@ export function PaymentsCalendarHeader({ year, month }: PaymentsCalendarHeaderPr
   }
 
   function handleToday() {
-    const now = new Date();
-    navigate(now.getFullYear(), now.getMonth() + 1);
+    const { year: nowYear, month: nowMonth } = currentYearMonth(timeZone);
+    navigate(nowYear, nowMonth);
   }
 
   // Locale-aware month name (e.g. "May" / "mayo").
