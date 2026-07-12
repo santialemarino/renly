@@ -7,11 +7,8 @@ import { SubscriptionsToolbar } from '@/app/(protected)/subscriptions/_component
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getSettings } from '@/lib/api/settings';
-import {
-  getSubscriptions,
-  type SortOrder,
-  type SubscriptionSortField,
-} from '@/lib/api/subscriptions';
+import { getSubscriptions, type SubscriptionSortField } from '@/lib/api/subscriptions';
+import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -76,7 +77,6 @@ export type PaymentObligationSortField =
   | 'next_due_date'
   | 'recurrence'
   | 'category';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetPaymentObligationsParams {
   search?: string;

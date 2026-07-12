@@ -44,7 +44,8 @@ import {
 } from '@/app/(protected)/credit-cards/credit-card-actions';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
-import type { CreditCard, CreditCardSortField, SortOrder } from '@/lib/api/credit-cards';
+import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
+import type { SortOrder } from '@/lib/api/types';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 

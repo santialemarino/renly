@@ -44,8 +44,8 @@ import type {
   InvestmentGroup,
   InvestmentListResponse,
   InvestmentSortField,
-  SortOrder,
 } from '@/lib/api/investments';
+import type { SortOrder } from '@/lib/api/types';
 
 function SortIcon({
   column,

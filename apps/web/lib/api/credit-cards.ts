@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -100,7 +101,6 @@ function mapSettlement(raw: CardSettlementRaw): CardSettlement {
 // --- API functions ---
 
 export type CreditCardSortField = 'name' | 'closing_day' | 'due_day' | 'currency';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetCreditCardsParams {
   search?: string;

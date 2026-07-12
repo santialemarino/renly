@@ -47,11 +47,8 @@ import {
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type {
-  PaymentObligation,
-  PaymentObligationSortField,
-  SortOrder,
-} from '@/lib/api/payment-obligations';
+import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/payment-obligations';
+import type { SortOrder } from '@/lib/api/types';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 

@@ -29,7 +29,8 @@ import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
-import type { IncomeEntry, IncomeListResponse, IncomeSortField, SortOrder } from '@/lib/api/income';
+import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
+import type { SortOrder } from '@/lib/api/types';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 

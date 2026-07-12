@@ -37,7 +37,8 @@ import {
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
+import type { Installment, InstallmentSortField } from '@/lib/api/installments';
+import type { SortOrder } from '@/lib/api/types';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';

@@ -23,9 +23,9 @@ import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/groups';
+import type { SortOrder } from '@/lib/api/types';
 
 type SortField = 'id' | 'name';
-type SortOrder = 'asc' | 'desc';
 
 function SortIcon({
   column,

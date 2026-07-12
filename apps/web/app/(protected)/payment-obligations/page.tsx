@@ -9,9 +9,9 @@ import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import {
   getPaymentObligations,
   type PaymentObligationSortField,
-  type SortOrder,
 } from '@/lib/api/payment-obligations';
 import { getSettings } from '@/lib/api/settings';
+import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
