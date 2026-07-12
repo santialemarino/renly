@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -30,6 +29,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { IncomeEntry } from '@/lib/api/income';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
 
 interface IncomeFormDialogProps {
@@ -71,33 +71,27 @@ export function IncomeFormDialog({
 
   const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key), locale);
 
-  // Reset form when dialog opens or income entry changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        date: income?.date ?? '',
-        amount: income?.amount ? String(Number(income.amount)) : '',
-        currency: income?.currency ?? '',
-        category: (income?.category ?? undefined) as IncomeFormValues['category'],
-        notes: income?.notes ?? '',
-      });
-    }
-  }, [open, income, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: income,
+    toValues: (i) => ({
+      date: i?.date ?? '',
+      amount: i?.amount ? String(Number(i.amount)) : '',
+      currency: i?.currency ?? '',
+      category: (i?.category ?? undefined) as IncomeFormValues['category'],
+      notes: i?.notes ?? '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: IncomeFormValues) {
-    try {
-      if (isEdit) {
-        await updateIncome(income.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createIncome(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateIncome(income.id, values) : createIncome(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (

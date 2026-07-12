@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -39,6 +38,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { formatAmount } from '@/lib/utils/currency';
 
 interface InstallmentFormDialogProps {
@@ -130,28 +130,28 @@ export function InstallmentFormDialog({
   const showDerivedLine =
     computedTotalToPay !== null && (watchedHasInterest ? computedInterest !== null : true);
 
-  // Reset form when dialog opens or installment changes.
-  useEffect(() => {
-    if (open) {
-      const hasInterest = deriveHasInterest(installment);
-      form.reset({
-        name: installment?.name ?? '',
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: installment,
+    toValues: (i) => {
+      const hasInterest = deriveHasInterest(i);
+      return {
+        name: i?.name ?? '',
         hasInterest,
-        originalPrice:
-          hasInterest && installment?.totalAmount ? String(Number(installment.totalAmount)) : '',
-        installmentAmount: installment?.installmentAmount
-          ? String(Number(installment.installmentAmount))
-          : '',
-        currency: installment?.currency ?? '',
-        installmentsCount: installment ? String(installment.installmentsCount) : '',
-        currentInstallment: installment ? String(installment.currentInstallment) : '1',
-        startDate: installment?.startDate ?? '',
-        paymentMethod: (installment?.paymentMethod ??
-          undefined) as InstallmentFormValues['paymentMethod'],
-        creditCardId: installment?.creditCardId ?? undefined,
-      });
-    }
-  }, [open, installment, form]);
+        originalPrice: hasInterest && i?.totalAmount ? String(Number(i.totalAmount)) : '',
+        installmentAmount: i?.installmentAmount ? String(Number(i.installmentAmount)) : '',
+        currency: i?.currency ?? '',
+        installmentsCount: i ? String(i.installmentsCount) : '',
+        currentInstallment: i ? String(i.currentInstallment) : '1',
+        startDate: i?.startDate ?? '',
+        paymentMethod: (i?.paymentMethod ?? undefined) as InstallmentFormValues['paymentMethod'],
+        creditCardId: i?.creditCardId ?? undefined,
+      };
+    },
+    onSuccess,
+  });
 
   // Clear originalPrice when toggling to No interest so it doesn't linger as form state.
   useEffect(() => {
@@ -161,19 +161,11 @@ export function InstallmentFormDialog({
   }, [watchedHasInterest, form]);
 
   async function onSubmit(values: InstallmentFormValues) {
-    try {
-      if (isEdit) {
-        await updateInstallment(installment.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createInstallment(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateInstallment(installment.id, values) : createInstallment(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (

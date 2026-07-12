@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -36,6 +35,7 @@ import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface SubscriptionFormDialogProps {
   open: boolean;
@@ -80,37 +80,29 @@ export function SubscriptionFormDialog({
   const isEdit = !!subscription;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  // Reset form when dialog opens or subscription changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: subscription?.name ?? '',
-        amount: subscription?.amount ? String(Number(subscription.amount)) : '',
-        currency: subscription?.currency ?? '',
-        billingCycle:
-          (subscription?.billingCycle as SubscriptionFormValues['billingCycle']) ?? 'monthly',
-        nextBillingDate: subscription?.nextBillingDate ?? '',
-        paymentMethod: (subscription?.paymentMethod ??
-          undefined) as SubscriptionFormValues['paymentMethod'],
-        creditCardId: subscription?.creditCardId ?? undefined,
-      });
-    }
-  }, [open, subscription, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: subscription,
+    toValues: (s) => ({
+      name: s?.name ?? '',
+      amount: s?.amount ? String(Number(s.amount)) : '',
+      currency: s?.currency ?? '',
+      billingCycle: (s?.billingCycle as SubscriptionFormValues['billingCycle']) ?? 'monthly',
+      nextBillingDate: s?.nextBillingDate ?? '',
+      paymentMethod: (s?.paymentMethod ?? undefined) as SubscriptionFormValues['paymentMethod'],
+      creditCardId: s?.creditCardId ?? undefined,
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: SubscriptionFormValues) {
-    try {
-      if (isEdit) {
-        await updateSubscription(subscription.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createSubscription(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateSubscription(subscription.id, values) : createSubscription(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (

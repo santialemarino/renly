@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -28,6 +27,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface CreditCardFormDialogProps {
   open: boolean;
@@ -74,34 +74,34 @@ export function CreditCardFormDialog({
 
   const isEdit = !!card;
 
-  // Reset form when dialog opens or card changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: card?.name ?? '',
-        closingDay: card ? String(card.closingDay) : '',
-        dueDay: card ? String(card.dueDay) : '',
-        currency: card?.currency ?? '',
-        monthlyPayment: card?.monthlyPayment != null ? String(card.monthlyPayment) : '',
-      });
-    }
-  }, [open, card, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: card,
+    toValues: (c) => ({
+      name: c?.name ?? '',
+      closingDay: c ? String(c.closingDay) : '',
+      dueDay: c ? String(c.dueDay) : '',
+      currency: c?.currency ?? '',
+      monthlyPayment: c?.monthlyPayment != null ? String(c.monthlyPayment) : '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: CreditCardFormValues) {
-    try {
-      if (isEdit) {
-        await updateCreditCard(card.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        const created = await createCreditCard(values);
-        toast.success(t('form.createSuccess'));
-        onCreated?.(created);
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      async () => {
+        if (isEdit) {
+          await updateCreditCard(card.id, values);
+        } else {
+          const created = await createCreditCard(values);
+          onCreated?.(created);
+        }
+      },
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (

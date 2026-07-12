@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -37,6 +36,7 @@ import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 // Form-internal sentinel for "no recurrence" — the API stores NULL, but a Select
@@ -92,41 +92,35 @@ export function PaymentObligationFormDialog({
 
   const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key), locale);
 
-  // Reset form when dialog opens or obligation changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: obligation?.name ?? '',
-        amount: obligation?.amount ? String(Number(obligation.amount)) : '',
-        currency: obligation?.currency ?? '',
-        nextDueDate: obligation?.nextDueDate ?? '',
-        recurrence: (obligation?.recurrence ??
-          undefined) as PaymentObligationFormValues['recurrence'],
-        category: obligation?.category ?? '',
-        expenseCategory: (obligation?.expenseCategory ??
-          undefined) as PaymentObligationFormValues['expenseCategory'],
-        paymentMethod: (obligation?.paymentMethod ??
-          undefined) as PaymentObligationFormValues['paymentMethod'],
-        creditCardId: obligation?.creditCardId ?? undefined,
-        notes: obligation?.notes ?? '',
-      });
-    }
-  }, [open, obligation, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: obligation,
+    toValues: (o) => ({
+      name: o?.name ?? '',
+      amount: o?.amount ? String(Number(o.amount)) : '',
+      currency: o?.currency ?? '',
+      nextDueDate: o?.nextDueDate ?? '',
+      recurrence: (o?.recurrence ?? undefined) as PaymentObligationFormValues['recurrence'],
+      category: o?.category ?? '',
+      expenseCategory: (o?.expenseCategory ??
+        undefined) as PaymentObligationFormValues['expenseCategory'],
+      paymentMethod: (o?.paymentMethod ??
+        undefined) as PaymentObligationFormValues['paymentMethod'],
+      creditCardId: o?.creditCardId ?? undefined,
+      notes: o?.notes ?? '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: PaymentObligationFormValues) {
-    try {
-      if (isEdit) {
-        await updatePaymentObligation(obligation.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createPaymentObligation(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () =>
+        isEdit ? updatePaymentObligation(obligation.id, values) : createPaymentObligation(values),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
