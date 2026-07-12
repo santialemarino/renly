@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import { getExpenseById } from '@/app/(protected)/expenses/expenses-actions';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';

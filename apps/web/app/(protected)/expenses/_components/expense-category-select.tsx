@@ -20,15 +20,14 @@ export function ExpenseCategorySelect({
   className,
 }: ExpenseCategorySelectProps) {
   const locale = useLocale();
-  const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
   return (
     <FilterCombobox
-      items={sortExpenseCategoriesByLabel((key) => t(key), locale)}
+      items={sortExpenseCategoriesByLabel((key) => tCommon(key), locale)}
       value={value}
       onValueChange={onValueChange}
-      labelFor={(cat) => t(`categories.${cat}`)}
+      labelFor={(cat) => tCommon(`categories.${cat}`)}
       allLabel={tCommon('allCategories')}
       icon={Tag}
       align="start"

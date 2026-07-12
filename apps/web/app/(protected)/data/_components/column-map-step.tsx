@@ -73,7 +73,7 @@ function FieldMapCombobox({ value, columns, ignoreLabel, onChange }: FieldMapCom
         <Button
           variant="outline"
           role="combobox"
-          className="h-9 w-full justify-between px-3 gap-x-2 border-border bg-background shadow-xs text-paragraph-sm font-normal hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="h-9 w-full justify-between px-3 gap-x-2 border-border bg-background shadow-xs text-paragraph-sm font-normal hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className={cn('truncate', !value && 'text-muted-foreground')}>
             {value ?? ignoreLabel}

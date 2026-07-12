@@ -141,8 +141,8 @@ export function InvestmentFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -156,8 +156,8 @@ export function InvestmentFormDialog({
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.category.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.category.label')}</FormLabel>
                     <Select value={field.value ?? ''} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -181,8 +181,8 @@ export function InvestmentFormDialog({
                 control={form.control}
                 name="baseCurrency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <Tooltip>
                         <TooltipTrigger asChild>

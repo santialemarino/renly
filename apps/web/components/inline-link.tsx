@@ -47,8 +47,8 @@ interface InlineLinkBaseProps {
 // Either a navigation (href, optionally a download) or an in-page action (onClick) — same affordance.
 type InlineLinkProps = InlineLinkBaseProps &
   (
-    | { href: string; download?: boolean; onClick?: never }
-    | { onClick: () => void; href?: never; download?: never }
+    | { href: string; download?: boolean; external?: boolean; onClick?: never }
+    | { onClick: () => void; href?: never; download?: never; external?: never }
   );
 
 /*
@@ -57,8 +57,9 @@ type InlineLinkProps = InlineLinkBaseProps &
  * underline (text-decoration-color transitions in/out); an optional leading icon rotates on hover.
  * Keyboard focus replaces the default browser outline with the gentlest spring "bump"
  * (animate-focus-bump-subtle — a true 1→1.05→1 keyframe, sized for text where the 1.15 soft bump
- * moves too much), so focus reads distinct from hover. Renders a `<Link>` when given an `href`,
- * otherwise a `<button>` for the action — the styling is identical.
+ * moves too much), so focus reads distinct from hover. Renders a `<Link>` when given an `href`
+ * (or a plain `<a target="_blank" rel="noopener noreferrer">` when `external` — Next `<Link>` is for
+ * internal routes), otherwise a `<button>` for the action — the styling is identical.
  */
 export function InlineLink(props: InlineLinkProps) {
   const { color = 'blue', size = 'sm', icon: Icon, className, children } = props;
@@ -82,6 +83,14 @@ export function InlineLink(props: InlineLinkProps) {
   ) : (
     children
   );
+
+  if ('href' in props && props.href !== undefined && props.external) {
+    return (
+      <a href={props.href} target="_blank" rel="noopener noreferrer" className={root}>
+        {content}
+      </a>
+    );
+  }
 
   if ('href' in props && props.href !== undefined) {
     return (

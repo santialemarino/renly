@@ -20,12 +20,12 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
-import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
-import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
-} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+} from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
+import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
@@ -144,6 +144,7 @@ export function ExpensesDataTable({
 }) {
   const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
     useTableSort<ExpenseSortField>(ROUTES.expenses, { resetPage: true });
@@ -219,7 +220,7 @@ export function ExpensesDataTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    {expense.category ? t(`categories.${expense.category}`) : '—'}
+                    {expense.category ? tCommon(`categories.${expense.category}`) : '—'}
                   </TableCell>
                   <TableCell>
                     {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}

@@ -88,6 +88,7 @@ export function ChangePasswordSection() {
                   <Input
                     {...field}
                     type="password"
+                    passwordToggleLabel={tCommon('form.togglePassword')}
                     autoComplete="current-password"
                     surface
                     blueEye
@@ -105,7 +106,14 @@ export function ChangePasswordSection() {
               <FormItem>
                 <FormLabel>{t('password.newLabel')}</FormLabel>
                 <FormControl>
-                  <Input {...field} type="password" autoComplete="new-password" surface blueEye />
+                  <Input
+                    {...field}
+                    type="password"
+                    autoComplete="new-password"
+                    surface
+                    blueEye
+                    passwordToggleLabel={tCommon('form.togglePassword')}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -124,7 +132,14 @@ export function ChangePasswordSection() {
               <FormItem>
                 <FormLabel>{t('password.confirmLabel')}</FormLabel>
                 <FormControl>
-                  <Input {...field} type="password" autoComplete="new-password" surface blueEye />
+                  <Input
+                    {...field}
+                    type="password"
+                    autoComplete="new-password"
+                    surface
+                    blueEye
+                    passwordToggleLabel={tCommon('form.togglePassword')}
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>

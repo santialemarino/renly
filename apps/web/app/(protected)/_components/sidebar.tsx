@@ -218,9 +218,9 @@ export function AppSidebar({
   initialExpanded,
   showDisclosureToggle,
 }: AppSidebarProps) {
+  const t = useTranslations('sidebar');
   const pathname = usePathname();
   const router = useRouter();
-  const t = useTranslations('sidebar');
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
   /*
@@ -229,8 +229,6 @@ export function AppSidebar({
    */
   const [expandedByUser, setExpandedByUser] = useState(initialExpanded);
   const reduce = useReducedMotion() ?? false;
-
-  useEffect(() => setMounted(true), []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const isCommitmentsActive = COMMITMENTS_GROUP.some(({ href }) => isActive(href));
@@ -252,6 +250,8 @@ export function AppSidebar({
   const collapsibleContentClass = mounted
     ? 'overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up'
     : 'overflow-hidden';
+
+  useEffect(() => setMounted(true), []);
 
   async function handleLogout() {
     setLoggingOut(true);

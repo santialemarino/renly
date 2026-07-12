@@ -23,6 +23,11 @@ export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalend
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
+  // Locale-aware month name (e.g. "May" / "mayo").
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
+    month: 'long',
+  });
+
   function navigate(targetYear: number, targetMonth: number) {
     const params = new URLSearchParams(searchParams.toString());
     params.set('year', String(targetYear));
@@ -47,14 +52,9 @@ export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalend
     navigate(nowYear, nowMonth);
   }
 
-  // Locale-aware month name (e.g. "May" / "mayo").
-  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
-    month: 'long',
-  });
-
   return (
     <div className="flex items-center justify-between gap-x-3 pb-1">
-      <div className="text-heading-lg font-semibold tabular-nums">
+      <div className="text-heading-4 tabular-nums">
         {t('monthLabel', { month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), year })}
       </div>
       <div className="flex items-center gap-x-2">

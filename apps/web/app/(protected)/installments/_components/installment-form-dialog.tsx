@@ -188,8 +188,8 @@ export function InstallmentFormDialog({
                 control={form.control}
                 name="name"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.name.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.name.label')}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder={t('form.name.placeholder')} />
                     </FormControl>
@@ -242,8 +242,8 @@ export function InstallmentFormDialog({
                         control={form.control}
                         name="originalPrice"
                         render={({ field }) => (
-                          <FormItem className="flex-1 min-w-0">
-                            <FormLabel required>{t('form.originalPrice.label')}</FormLabel>
+                          <FormItem required className="flex-1 min-w-0">
+                            <FormLabel>{t('form.originalPrice.label')}</FormLabel>
                             <FormControl>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -266,8 +266,8 @@ export function InstallmentFormDialog({
                         control={form.control}
                         name="currency"
                         render={({ field }) => (
-                          <FormItem className="flex-1 min-w-0">
-                            <FormLabel required>{t('form.currency.label')}</FormLabel>
+                          <FormItem required className="flex-1 min-w-0">
+                            <FormLabel>{t('form.currency.label')}</FormLabel>
                             <FormControl>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -307,8 +307,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="installmentAmount"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
+                    <FormItem required className="flex-1">
+                      <FormLabel>{t('form.installmentAmount.label')}</FormLabel>
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -331,8 +331,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="installmentsCount"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel required>{t('form.installmentsCount.label')}</FormLabel>
+                    <FormItem required className="flex-1">
+                      <FormLabel>{t('form.installmentsCount.label')}</FormLabel>
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -417,8 +417,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="currency"
                       render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormLabel required>{t('form.currency.label')}</FormLabel>
+                        <FormItem required className="flex-1 min-w-0">
+                          <FormLabel>{t('form.currency.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -448,8 +448,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="startDate"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                        <FormItem required className="flex-1">
+                          <FormLabel>{t('form.startDate.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -490,8 +490,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="startDate"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                        <FormItem required>
+                          <FormLabel>{t('form.startDate.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -523,8 +523,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="currentInstallment"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
+                    <FormItem required>
+                      <FormLabel>{t('form.currentInstallment.label')}</FormLabel>
                       <FormControl>
                         <IntegerInput
                           {...field}

@@ -148,8 +148,8 @@ export function ReconciliationFormDialog({
               control={form.control}
               name="statementBalance"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.bankBalance')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.bankBalance')}</FormLabel>
                   <FormControl>
                     <LocaleAmountInput
                       {...field}

@@ -278,7 +278,7 @@ export function ExpenseFormDialog({
       watchedCreditCardId,
     ) === 'mismatch';
 
-  const sortedCategories = sortExpenseCategoriesByLabel((key) => t(key), locale);
+  const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
 
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   // cyclesToAdvance defaults to '1' only on a recurring-obligation prefill (Phase 3,
@@ -526,8 +526,8 @@ export function ExpenseFormDialog({
                 control={form.control}
                 name="date"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('form.date.label')}</FormLabel>
+                  <FormItem required>
+                    <FormLabel>{t('form.date.label')}</FormLabel>
                     <FormControl>
                       <DatePickerInput
                         value={field.value || undefined}
@@ -545,8 +545,8 @@ export function ExpenseFormDialog({
                   control={form.control}
                   name="currency"
                   render={({ field }) => (
-                    <FormItem className="flex-1 min-w-0">
-                      <FormLabel required>{t('form.currency.label')}</FormLabel>
+                    <FormItem required className="flex-1 min-w-0">
+                      <FormLabel>{t('form.currency.label')}</FormLabel>
                       <FormControl>
                         <CurrencyCombobox
                           compact
@@ -569,8 +569,8 @@ export function ExpenseFormDialog({
                   control={form.control}
                   name="amount"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel required>{t('form.amount.label')}</FormLabel>
+                    <FormItem required className="flex-1">
+                      <FormLabel>{t('form.amount.label')}</FormLabel>
                       <FormControl>
                         <LocaleAmountInput
                           {...field}
@@ -644,7 +644,7 @@ export function ExpenseFormDialog({
                             <SelectContent>
                               {sortedCategories.map((cat) => (
                                 <SelectItem key={cat} value={cat}>
-                                  {t(`categories.${cat}`)}
+                                  {tCommon(`categories.${cat}`)}
                                 </SelectItem>
                               ))}
                             </SelectContent>

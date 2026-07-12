@@ -143,6 +143,7 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
                             <Input
                               {...field}
                               type="password"
+                              passwordToggleLabel={tCommon('form.togglePassword')}
                               autoComplete="new-password"
                               placeholder={t('form.password.placeholder')}
                               blueEye
@@ -168,6 +169,7 @@ export function ResetPasswordCard({ token }: ResetPasswordCardProps) {
                             <Input
                               {...field}
                               type="password"
+                              passwordToggleLabel={tCommon('form.togglePassword')}
                               autoComplete="new-password"
                               placeholder={t('form.confirmPassword.placeholder')}
                               blueEye

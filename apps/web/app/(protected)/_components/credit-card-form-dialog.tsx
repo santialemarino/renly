@@ -127,8 +127,8 @@ export function CreditCardFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -142,8 +142,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="closingDay"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.closingDay.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.closingDay.label')}</FormLabel>
                     <FormControl>
                       <IntegerInput {...field} placeholder={t('form.closingDay.placeholder')} />
                     </FormControl>
@@ -156,8 +156,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="dueDay"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.dueDay.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.dueDay.label')}</FormLabel>
                     <FormControl>
                       <IntegerInput {...field} placeholder={t('form.dueDay.placeholder')} />
                     </FormControl>
@@ -170,8 +170,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact

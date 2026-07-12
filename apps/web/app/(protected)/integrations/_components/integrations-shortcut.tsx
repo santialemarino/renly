@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ExternalLink, Smartphone } from 'lucide-react';
+import { ExternalLink, Smartphone } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -15,8 +15,9 @@ import {
   Label,
   Separator,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { saveShortcutCurrencies } from '@/app/(protected)/integrations/integrations-actions';
+import { ComboboxChevron } from '@/components/combobox-chevron';
+import { InlineLink } from '@/components/inline-link';
 import { InfoHint } from '@/components/styled-hint';
 
 // iCloud share link for the iOS Shortcut.
@@ -70,15 +71,9 @@ export function IntegrationsShortcut({
 
       {/* iCloud download link */}
       {ICLOUD_LINK ? (
-        <a
-          href={ICLOUD_LINK}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group/link inline-flex self-start items-center gap-x-2 underline decoration-transparent transition-[text-decoration-color] duration-200 hover:decoration-current focus-visible:decoration-current focus-visible:outline-none text-paragraph-sm-medium text-blue-600"
-        >
-          <ExternalLink className="size-4 group-focus-visible/link:animate-focus-bump-soft" />
+        <InlineLink href={ICLOUD_LINK} external icon={ExternalLink} className="self-start">
           {t('shortcut.downloadLink')}
-        </a>
+        </InlineLink>
       ) : (
         <div className="flex items-center p-3 gap-x-3 border border-dashed rounded-lg">
           <Smartphone className="size-4 shrink-0 text-muted-foreground" />
@@ -114,15 +109,11 @@ export function IntegrationsShortcut({
 
       {/* Installation instructions */}
       <Collapsible open={instructionsOpen} onOpenChange={setInstructionsOpen}>
-        <CollapsibleTrigger className="group/install flex items-center gap-x-2 transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none text-paragraph-sm-medium text-muted-foreground">
-          <span
-            className={cn(
-              'inline-flex transition-transform duration-200',
-              instructionsOpen ? 'rotate-180' : 'rotate-0',
-            )}
-          >
-            <ChevronDown className="size-4 transition-[transform,opacity] duration-150 opacity-50 group-hover/install:opacity-100 group-hover/install:scale-110 group-focus-visible/install:opacity-100 group-focus-visible/install:scale-110" />
-          </span>
+        <CollapsibleTrigger className="group/button flex items-center gap-x-2 transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none text-paragraph-sm-medium text-muted-foreground">
+          <ComboboxChevron
+            open={instructionsOpen}
+            className="group-focus-visible/button:text-foreground"
+          />
           {t('shortcut.instructions.title')}
         </CollapsibleTrigger>
         <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">

@@ -20,15 +20,14 @@ export function IncomeCategorySelect({
   className,
 }: IncomeCategorySelectProps) {
   const locale = useLocale();
-  const t = useTranslations('income');
   const tCommon = useTranslations('common');
 
   return (
     <FilterCombobox
-      items={sortIncomeCategoriesByLabel((key) => t(key), locale)}
+      items={sortIncomeCategoriesByLabel((key) => tCommon(key), locale)}
       value={value}
       onValueChange={onValueChange}
-      labelFor={(cat) => t(`categories.${cat}`)}
+      labelFor={(cat) => tCommon(`categories.${cat}`)}
       allLabel={tCommon('allCategories')}
       icon={Tag}
       align="start"

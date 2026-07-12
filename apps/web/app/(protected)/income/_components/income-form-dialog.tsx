@@ -69,7 +69,7 @@ export function IncomeFormDialog({
   const isEdit = !!income;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key), locale);
+  const sortedCategories = sortIncomeCategoriesByLabel((key) => tCommon(key), locale);
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -112,8 +112,8 @@ export function IncomeFormDialog({
               control={form.control}
               name="date"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.date.label')}</FormLabel>
                   <FormControl>
                     <DatePickerInput
                       value={field.value || undefined}
@@ -131,8 +131,8 @@ export function IncomeFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
@@ -155,8 +155,8 @@ export function IncomeFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.amount.label')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -185,7 +185,7 @@ export function IncomeFormDialog({
                     <SelectContent>
                       {sortedCategories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
-                          {t(`categories.${cat}`)}
+                          {tCommon(`categories.${cat}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>

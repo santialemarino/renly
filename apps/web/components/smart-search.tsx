@@ -76,7 +76,7 @@ export function SmartSearch({
               className={cn(
                 'flex h-9 w-full min-w-0 items-center px-3 gap-x-2 border rounded-lg shadow-xs',
                 'transition-[border-color,box-shadow] duration-200 ease-in-out',
-                'hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none',
+                'hover:border-ring focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
                 'text-paragraph-sm text-muted-foreground overflow-hidden',
                 surface ? 'bg-background' : 'bg-input',
                 'border-border',

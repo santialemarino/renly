@@ -106,8 +106,8 @@ export function SettlementFormDialog({
                 control={form.control}
                 name="date"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('settlements.form.date')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('settlements.form.date')}</FormLabel>
                     <FormControl>
                       <DatePickerInput
                         value={field.value || undefined}
@@ -124,8 +124,8 @@ export function SettlementFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('settlements.form.amount')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('settlements.form.amount')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -144,8 +144,8 @@ export function SettlementFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel required>{t('settlements.form.bucket')}</FormLabel>
+                  <FormItem required>
+                    <FormLabel>{t('settlements.form.bucket')}</FormLabel>
                     <FormControl>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <SelectTrigger className="w-full">

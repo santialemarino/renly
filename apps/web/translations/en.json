@@ -26,7 +26,8 @@
         "passwordRequirements": "Password does not meet the requirements",
         "passwordMismatch": "Passwords do not match",
         "serverError": "Something went wrong. Please try again later."
-      }
+      },
+      "togglePassword": "Show password"
     },
     "amountMismatch": {
       "obligation": {
@@ -49,16 +50,46 @@
       }
     },
     "categories": {
+      "bonus": "Bonuses",
+      "card_credits_and_refunds": "Card Credits & Refunds",
+      "card_fees_and_taxes": "Card Fees & Taxes",
       "cedears": "CEDEARs",
+      "clothing": "Clothing",
       "corporate_bonds": "Corporate Bonds",
       "crypto": "Crypto",
+      "dining": "Restaurants & Dining",
+      "dividends": "Dividends",
       "dollars": "Dollars",
+      "education": "Education",
+      "entertainment": "Entertainment",
       "fci": "Mutual Funds",
+      "food": "Food & Groceries",
+      "freelance": "Freelance",
+      "gifts": "Gifts",
       "government_bonds": "Government Bonds",
+      "health": "Health & Medical",
+      "home_maintenance": "Home & Maintenance",
+      "insurance": "Insurance",
+      "investment_returns": "Investment Returns",
+      "kids": "Kids",
       "other": "Other",
+      "personal_care": "Personal Care",
+      "pets": "Pets",
       "real_estate": "Real Estate",
+      "refunds": "Refunds",
+      "rent": "Rent",
+      "rental_income": "Rental Income",
+      "salary": "Salary",
+      "sales": "Sales",
+      "sports": "Sports & Fitness",
       "stocks": "Stocks",
-      "term_deposit": "Term Deposit"
+      "subscriptions": "Subscriptions",
+      "taxes": "Taxes",
+      "term_deposit": "Term Deposit",
+      "transport": "Transport",
+      "travel": "Travel",
+      "uncategorized": "Uncategorized",
+      "utilities": "Utilities"
     },
     "paymentMethod": {
       "label": "Payment method",
@@ -151,7 +182,12 @@
       },
       "rights": "All rights reserved."
     },
-    "requestAccess": "Request access"
+    "requestAccess": "Request access",
+    "export": {
+      "label": "Export",
+      "loading": "Preparing…",
+      "success": "Your data export has been downloaded."
+    }
   },
   "login": {
     "metadata": {
@@ -454,20 +490,6 @@
       "previous": "Previous",
       "next": "Next"
     },
-    "categories": {
-      "bonus": "Bonuses",
-      "card_credits_and_refunds": "Card Credits & Refunds",
-      "dividends": "Dividends",
-      "freelance": "Freelance",
-      "gifts": "Gifts",
-      "investment_returns": "Investment Returns",
-      "other": "Other",
-      "refunds": "Refunds",
-      "rental_income": "Rental Income",
-      "salary": "Salary",
-      "sales": "Sales",
-      "uncategorized": "Uncategorized"
-    },
     "form": {
       "titleCreate": "Add income",
       "titleEdit": "Edit income",
@@ -543,30 +565,6 @@
     "pagination": {
       "previous": "Previous",
       "next": "Next"
-    },
-    "categories": {
-      "card_fees_and_taxes": "Card Fees & Taxes",
-      "clothing": "Clothing",
-      "dining": "Restaurants & Dining",
-      "education": "Education",
-      "entertainment": "Entertainment",
-      "food": "Food & Groceries",
-      "gifts": "Gifts",
-      "health": "Health & Medical",
-      "home_maintenance": "Home & Maintenance",
-      "insurance": "Insurance",
-      "kids": "Kids",
-      "other": "Other",
-      "personal_care": "Personal Care",
-      "pets": "Pets",
-      "rent": "Rent",
-      "sports": "Sports & Fitness",
-      "subscriptions": "Subscriptions",
-      "taxes": "Taxes",
-      "transport": "Transport",
-      "travel": "Travel",
-      "uncategorized": "Uncategorized",
-      "utilities": "Utilities"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1065,7 +1063,7 @@
       "fetchError": "Couldn't load the linked expense."
     },
     "installment": {
-      "progress": "Cuota {index} of {total}"
+      "progress": "Installment {index} of {total}"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1968,10 +1966,7 @@
       "json": {
         "title": "Export your data",
         "description": "Download all your Renly data as a JSON file."
-      },
-      "label": "Export",
-      "loading": "Preparing…",
-      "success": "Your data export has been downloaded."
+      }
     }
   },
   "landing": {

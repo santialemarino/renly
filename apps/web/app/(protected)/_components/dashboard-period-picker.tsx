@@ -111,7 +111,7 @@ export function DashboardPeriodPicker({
               <Button
                 variant={isCustom ? 'default' : 'outline'}
                 blue={isCustom}
-                className="h-9 w-full gap-x-1.5 px-3 text-sm"
+                className="h-9 w-full gap-x-1.5 px-3 text-paragraph-sm"
               >
                 <CalendarDays className="size-4" />
                 {isCustom && dateRange?.from && dateRange?.to

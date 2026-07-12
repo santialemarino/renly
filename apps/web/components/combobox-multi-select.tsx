@@ -103,7 +103,7 @@ export function ComboboxMultiSelect({
               'text-paragraph-sm font-normal',
               selectedIds.length > 0 ? 'text-foreground' : 'text-muted-foreground',
               'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
               surface ? 'bg-background' : 'bg-input',
             )}
           >

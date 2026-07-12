@@ -12,6 +12,8 @@ interface InputProps extends Omit<React.ComponentProps<'input'>, 'prefix'> {
   blue?: boolean;
   blueEye?: boolean;
   surface?: boolean;
+  // Accessible name for the password show/hide toggle; pass a translated string.
+  passwordToggleLabel?: string;
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -27,6 +29,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       blue = false,
       blueEye = false,
       surface = false,
+      passwordToggleLabel,
       ...props
     },
     ref,
@@ -95,6 +98,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           <button
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
+            aria-label={passwordToggleLabel}
+            aria-pressed={showPassword}
             className={cn(
               // Bump (scale-110) on both hover and focus-visible — matches the icon-button idiom in
               // search-input / currency-combobox and replaces the default browser focus outline.

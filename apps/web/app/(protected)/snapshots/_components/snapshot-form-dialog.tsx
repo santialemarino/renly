@@ -341,8 +341,8 @@ export function SnapshotFormDialog({
                   control={form.control}
                   name="date"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel required>{t('form.date.label')}</FormLabel>
+                    <FormItem required>
+                      <FormLabel>{t('form.date.label')}</FormLabel>
                       <FormControl>
                         <DatePickerInput
                           value={field.value}
@@ -444,8 +444,12 @@ export function SnapshotFormDialog({
                   control={form.control}
                   name="value"
                   render={({ field }) => (
-                    <FormItem className="flex-1 min-w-0" {...(quantityMode ? { inert: true } : {})}>
-                      <FormLabel required>{t('form.value.label')}</FormLabel>
+                    <FormItem
+                      required
+                      className="flex-1 min-w-0"
+                      {...(quantityMode ? { inert: true } : {})}
+                    >
+                      <FormLabel>{t('form.value.label')}</FormLabel>
                       <FormControl>
                         <LocaleAmountInput
                           {...field}

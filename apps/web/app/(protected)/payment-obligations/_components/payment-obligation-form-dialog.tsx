@@ -64,7 +64,6 @@ export function PaymentObligationFormDialog({
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const tCommon = useTranslations('common');
-  const tExpenses = useTranslations('expenses');
 
   const schema = useMemo(
     () => buildPaymentObligationFormSchema(tCommon('form.errors.required')),
@@ -90,7 +89,7 @@ export function PaymentObligationFormDialog({
   const isEdit = !!obligation;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key), locale);
+  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -141,8 +140,8 @@ export function PaymentObligationFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -156,8 +155,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.amount.label')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -174,8 +173,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
@@ -199,8 +198,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="nextDueDate"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.dueDate.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.dueDate.label')}</FormLabel>
                     <FormControl>
                       <DatePickerInput
                         value={field.value || undefined}
@@ -284,7 +283,7 @@ export function PaymentObligationFormDialog({
                       <SelectContent>
                         {sortedExpenseCategories.map((cat) => (
                           <SelectItem key={cat} value={cat}>
-                            {tExpenses(`categories.${cat}`)}
+                            {tCommon(`categories.${cat}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -104,6 +104,7 @@ export function IncomeDataTable({
 }) {
   const locale = useLocale();
   const t = useTranslations('income');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
     useTableSort<IncomeSortField>(ROUTES.income, { resetPage: true });
@@ -167,7 +168,9 @@ export function IncomeDataTable({
                       entry.convertedAmount ? activeCurrency : entry.currency,
                     )}
                   </TableCell>
-                  <TableCell>{entry.category ? t(`categories.${entry.category}`) : '—'}</TableCell>
+                  <TableCell>
+                    {entry.category ? tCommon(`categories.${entry.category}`) : '—'}
+                  </TableCell>
                   <TableCell className="max-w-48 truncate text-muted-foreground">
                     {entry.notes ?? '—'}
                   </TableCell>

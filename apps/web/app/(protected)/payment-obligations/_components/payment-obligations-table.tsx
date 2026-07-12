@@ -21,11 +21,11 @@ import {
 import {
   ExpenseFormDialog,
   type PrefillFromObligation,
-} from '@/app/(protected)/expenses/_components/expense-form-dialog';
+} from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
-} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+} from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import { PaymentObligationDeleteDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-delete-dialog';
 import { PaymentObligationFormDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-form-dialog';

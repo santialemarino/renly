@@ -26,7 +26,8 @@
         "passwordRequirements": "La contraseña no cumple los requisitos",
         "passwordMismatch": "Las contraseñas no coinciden",
         "serverError": "Algo salió mal. Intentá de nuevo más tarde."
-      }
+      },
+      "togglePassword": "Mostrar contraseña"
     },
     "amountMismatch": {
       "obligation": {
@@ -49,16 +50,46 @@
       }
     },
     "categories": {
+      "bonus": "Bonificaciones",
+      "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
+      "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
       "cedears": "CEDEARs",
+      "clothing": "Ropa",
       "corporate_bonds": "Obligaciones Negociables",
       "crypto": "Cripto",
+      "dining": "Restaurantes",
+      "dividends": "Dividendos",
       "dollars": "Dólares",
+      "education": "Educación",
+      "entertainment": "Entretenimiento",
       "fci": "Fondos Comunes",
+      "food": "Comida y Supermercado",
+      "freelance": "Freelance",
+      "gifts": "Regalos",
       "government_bonds": "Bonos Soberanos",
+      "health": "Salud",
+      "home_maintenance": "Hogar y Mantenimiento",
+      "insurance": "Seguros",
+      "investment_returns": "Retornos de Inversión",
+      "kids": "Hijos",
       "other": "Otro",
+      "personal_care": "Cuidado Personal",
+      "pets": "Mascotas",
       "real_estate": "Inmuebles",
+      "refunds": "Reembolsos",
+      "rent": "Alquiler",
+      "rental_income": "Alquiler",
+      "salary": "Sueldo",
+      "sales": "Ventas",
+      "sports": "Deportes y Fitness",
       "stocks": "Acciones",
-      "term_deposit": "Plazo Fijo"
+      "subscriptions": "Suscripciones",
+      "taxes": "Impuestos",
+      "term_deposit": "Plazo Fijo",
+      "transport": "Transporte",
+      "travel": "Viajes",
+      "uncategorized": "Sin categoría",
+      "utilities": "Servicios"
     },
     "paymentMethod": {
       "label": "Método de pago",
@@ -151,7 +182,12 @@
       },
       "rights": "Todos los derechos reservados."
     },
-    "requestAccess": "Solicitar acceso"
+    "requestAccess": "Solicitar acceso",
+    "export": {
+      "label": "Exportar",
+      "loading": "Preparando…",
+      "success": "Tu exportación de datos fue descargada."
+    }
   },
   "login": {
     "metadata": {
@@ -454,20 +490,6 @@
       "previous": "Anterior",
       "next": "Siguiente"
     },
-    "categories": {
-      "bonus": "Bonificaciones",
-      "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
-      "dividends": "Dividendos",
-      "freelance": "Freelance",
-      "gifts": "Regalos",
-      "investment_returns": "Retornos de Inversión",
-      "other": "Otro",
-      "refunds": "Reembolsos",
-      "rental_income": "Alquiler",
-      "salary": "Sueldo",
-      "sales": "Ventas",
-      "uncategorized": "Sin categoría"
-    },
     "form": {
       "titleCreate": "Agregar ingreso",
       "titleEdit": "Editar ingreso",
@@ -543,30 +565,6 @@
     "pagination": {
       "previous": "Anterior",
       "next": "Siguiente"
-    },
-    "categories": {
-      "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
-      "clothing": "Ropa",
-      "dining": "Restaurantes",
-      "education": "Educación",
-      "entertainment": "Entretenimiento",
-      "food": "Comida y Supermercado",
-      "gifts": "Regalos",
-      "health": "Salud",
-      "home_maintenance": "Hogar y Mantenimiento",
-      "insurance": "Seguros",
-      "kids": "Hijos",
-      "other": "Otro",
-      "personal_care": "Cuidado Personal",
-      "pets": "Mascotas",
-      "rent": "Alquiler",
-      "sports": "Deportes y Fitness",
-      "subscriptions": "Suscripciones",
-      "taxes": "Impuestos",
-      "transport": "Transporte",
-      "travel": "Viajes",
-      "uncategorized": "Sin categoría",
-      "utilities": "Servicios"
     },
     "paymentMethods": {
       "cash": "Efectivo",
@@ -1968,10 +1966,7 @@
       "json": {
         "title": "Exportar tus datos",
         "description": "Descargá todos tus datos de Renly en un archivo JSON."
-      },
-      "label": "Exportar",
-      "loading": "Preparando…",
-      "success": "Tu exportación de datos fue descargada."
+      }
     }
   },
   "landing": {

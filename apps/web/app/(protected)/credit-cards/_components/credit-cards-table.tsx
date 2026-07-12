@@ -44,6 +44,7 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
+import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
@@ -104,7 +105,7 @@ function SettlementsSection({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
               <div className="px-8 py-4 bg-muted/30">
@@ -123,7 +124,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="text-paragraph-sm text-muted-foreground"
                     >
                       {t('settlements.loading')}
@@ -134,7 +135,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="text-paragraph-sm text-muted-foreground"
                     >
                       {t('settlements.empty')}
@@ -145,7 +146,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                     >
                       <Table>
                         <TableHeader>
