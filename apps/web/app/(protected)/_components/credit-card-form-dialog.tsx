@@ -35,6 +35,9 @@ interface CreditCardFormDialogProps {
   card?: CreditCard;
   preferredCurrencies?: string[];
   onSuccess: () => void;
+  // Fires only on CREATE success with the freshly-created card, before onSuccess.
+  // PaymentMethodFields uses it to append + auto-select the card inline.
+  onCreated?: (card: CreditCard) => void;
 }
 
 export function CreditCardFormDialog({
@@ -43,6 +46,7 @@ export function CreditCardFormDialog({
   card,
   preferredCurrencies,
   onSuccess,
+  onCreated,
 }: CreditCardFormDialogProps) {
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');
@@ -89,8 +93,9 @@ export function CreditCardFormDialog({
         await updateCreditCard(card.id, values);
         toast.success(t('form.updateSuccess'));
       } else {
-        await createCreditCard(values);
+        const created = await createCreditCard(values);
         toast.success(t('form.createSuccess'));
+        onCreated?.(created);
       }
       onSuccess();
       onOpenChange(false);
