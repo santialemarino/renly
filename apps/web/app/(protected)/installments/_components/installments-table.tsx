@@ -6,24 +6,14 @@ import { Archive, ArchiveRestore, ListChecks, Pencil, Trash2 } from 'lucide-reac
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@repo/ui/components';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
 import { InstallmentDeleteDialog } from '@/app/(protected)/installments/_components/installment-delete-dialog';
 import { InstallmentFormDialog } from '@/app/(protected)/installments/_components/installment-form-dialog';
 import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -197,81 +187,44 @@ export function InstallmentsTable({
                     <TableCell className="text-center">
                       {!inst.isActive ? (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => handleUnarchive(inst)}
-                                disabled={archivingId === inst.id}
-                                aria-label="Unarchive"
-                              >
-                                <ArchiveRestore className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(inst)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={ArchiveRestore}
+                            tooltip={t('actions.unarchive')}
+                            ariaLabel="Unarchive"
+                            onClick={() => handleUnarchive(inst)}
+                            disabled={archivingId === inst.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(inst)}
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setEditInstallment(inst)}
-                                aria-label="Edit"
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleArchive(inst)}
-                                disabled={archivingId === inst.id}
-                                aria-label="Archive"
-                              >
-                                <Archive className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.archive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(inst)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={Pencil}
+                            tooltip={t('actions.edit')}
+                            ariaLabel="Edit"
+                            onClick={() => setEditInstallment(inst)}
+                          />
+                          <RowActionButton
+                            icon={Archive}
+                            tooltip={t('actions.archive')}
+                            ariaLabel="Archive"
+                            variant="muted"
+                            onClick={() => handleArchive(inst)}
+                            disabled={archivingId === inst.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(inst)}
+                          />
                         </div>
                       )}
                     </TableCell>

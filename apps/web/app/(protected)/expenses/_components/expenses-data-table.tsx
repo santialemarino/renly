@@ -6,7 +6,6 @@ import { Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
-  Button,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -20,9 +19,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
@@ -30,6 +26,7 @@ import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
 } from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -70,40 +67,25 @@ function RowActions({
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-              aria-label="Edit"
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.edit')}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteOpen(true);
-              }}
-              aria-label="Delete"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.delete')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={Pencil}
+          tooltip={t('actions.edit')}
+          ariaLabel="Edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditOpen(true);
+          }}
+        />
+        <RowActionButton
+          icon={Trash2}
+          tooltip={t('actions.delete')}
+          ariaLabel="Delete"
+          variant="destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeleteOpen(true);
+          }}
+        />
       </div>
 
       <ExpenseFormDialog

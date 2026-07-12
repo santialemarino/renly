@@ -5,20 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@repo/ui/components';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
 import { GroupDeleteFormDialog } from '@/app/(protected)/groups/_components/group-delete-form-dialog';
 import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -144,34 +134,19 @@ function GroupRow({
         </TableCell>
         <TableCell className="text-center">
           <div className="flex items-center justify-center gap-x-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  onClick={() => setEditOpen(true)}
-                  aria-label="Edit"
-                >
-                  <Pencil className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('form.editTitle')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => setDeleteOpen(true)}
-                  aria-label="Delete"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('delete.title')}</TooltipContent>
-            </Tooltip>
+            <RowActionButton
+              icon={Pencil}
+              tooltip={t('form.editTitle')}
+              ariaLabel="Edit"
+              onClick={() => setEditOpen(true)}
+            />
+            <RowActionButton
+              icon={Trash2}
+              tooltip={t('delete.title')}
+              ariaLabel="Delete"
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+            />
           </div>
         </TableCell>
       </TableRow>

@@ -39,6 +39,7 @@ import {
   unarchiveCreditCard,
   type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -350,68 +351,38 @@ export function CreditCardsTable({
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!card.isActive ? (
                           <div className="flex items-center justify-center">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => handleUnarchive(card)}
-                                  disabled={unarchiving === card.id}
-                                  aria-label="Unarchive"
-                                >
-                                  <ArchiveRestore className="size-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                            </Tooltip>
+                            <RowActionButton
+                              icon={ArchiveRestore}
+                              tooltip={t('actions.unarchive')}
+                              ariaLabel="Unarchive"
+                              onClick={() => handleUnarchive(card)}
+                              disabled={unarchiving === card.id}
+                            />
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-x-1">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => setEditCard(card)}
-                                  aria-label="Edit"
-                                >
-                                  <Pencil className="size-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t('actions.edit')}</TooltipContent>
-                            </Tooltip>
+                            <RowActionButton
+                              icon={Pencil}
+                              tooltip={t('actions.edit')}
+                              ariaLabel="Edit"
+                              onClick={() => setEditCard(card)}
+                            />
                             {card.hasExpenses ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 text-muted-foreground hover:text-foreground"
-                                    onClick={() => setArchiveCard(card)}
-                                    aria-label="Archive"
-                                  >
-                                    <Archive className="size-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t('actions.archive')}</TooltipContent>
-                              </Tooltip>
+                              <RowActionButton
+                                icon={Archive}
+                                tooltip={t('actions.archive')}
+                                ariaLabel="Archive"
+                                variant="muted"
+                                onClick={() => setArchiveCard(card)}
+                              />
                             ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 text-muted-foreground hover:text-destructive"
-                                    onClick={() => setDeleteCardState(card)}
-                                    aria-label="Delete"
-                                  >
-                                    <Trash2 className="size-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t('actions.delete')}</TooltipContent>
-                              </Tooltip>
+                              <RowActionButton
+                                icon={Trash2}
+                                tooltip={t('actions.delete')}
+                                ariaLabel="Delete"
+                                variant="destructive"
+                                onClick={() => setDeleteCardState(card)}
+                              />
                             )}
                           </div>
                         )}

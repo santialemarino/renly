@@ -33,6 +33,7 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -231,35 +232,20 @@ export function PaymentObligationsTable({
                     <TableCell className="text-center">
                       {!o.isActive ? (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => handleUnarchive(o)}
-                                disabled={archivingId === o.id}
-                                aria-label="Unarchive"
-                              >
-                                <ArchiveRestore className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(o)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={ArchiveRestore}
+                            tooltip={t('actions.unarchive')}
+                            ariaLabel="Unarchive"
+                            onClick={() => handleUnarchive(o)}
+                            disabled={archivingId === o.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(o)}
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-x-1">
@@ -277,49 +263,27 @@ export function PaymentObligationsTable({
                             </TooltipTrigger>
                             <TooltipContent>{t('actions.markPaid')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setEditObligation(o)}
-                                aria-label="Edit"
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleArchive(o)}
-                                disabled={archivingId === o.id}
-                                aria-label="Archive"
-                              >
-                                <Archive className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.archive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(o)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={Pencil}
+                            tooltip={t('actions.edit')}
+                            ariaLabel="Edit"
+                            onClick={() => setEditObligation(o)}
+                          />
+                          <RowActionButton
+                            icon={Archive}
+                            tooltip={t('actions.archive')}
+                            ariaLabel="Archive"
+                            variant="muted"
+                            onClick={() => handleArchive(o)}
+                            disabled={archivingId === o.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(o)}
+                          />
                         </div>
                       )}
                     </TableCell>

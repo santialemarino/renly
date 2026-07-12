@@ -7,7 +7,6 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
-  Button,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -21,13 +20,11 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -72,21 +69,13 @@ function RowActions({
   if (!investment.isActive) {
     return (
       <div className="flex items-center justify-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={handleUnarchive}
-              disabled={unarchiving}
-              aria-label="Unarchive"
-            >
-              <ArchiveRestore className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={ArchiveRestore}
+          tooltip={t('actions.unarchive')}
+          ariaLabel="Unarchive"
+          onClick={handleUnarchive}
+          disabled={unarchiving}
+        />
       </div>
     );
   }
@@ -94,40 +83,25 @@ function RowActions({
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-              aria-label="Edit"
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.edit')}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                setArchiveOpen(true);
-              }}
-              aria-label="Archive"
-            >
-              <Archive className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.archive')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={Pencil}
+          tooltip={t('actions.edit')}
+          ariaLabel="Edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditOpen(true);
+          }}
+        />
+        <RowActionButton
+          icon={Archive}
+          tooltip={t('actions.archive')}
+          ariaLabel="Archive"
+          variant="muted"
+          onClick={(e) => {
+            e.stopPropagation();
+            setArchiveOpen(true);
+          }}
+        />
       </div>
 
       <InvestmentFormDialog
