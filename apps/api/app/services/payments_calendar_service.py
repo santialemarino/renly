@@ -363,7 +363,7 @@ async def _card_due_items(
     card_currencies = {c.id: c.currency for c in cards}
     # We use get_card_balances purely for the list of active buckets per card —
     # the running-balance amount is recomputed at the relevant closing date below.
-    buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+    buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user.id)
 
     last_day = calendar.monthrange(year, month)[1]
 

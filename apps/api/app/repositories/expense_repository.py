@@ -101,13 +101,18 @@ async def delete(session: AsyncSession, entry: ExpenseEntry) -> None:
 
 
 # Count expenses linked to a specific credit card.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
-    result = await session.execute(select(func.count()).where(ExpenseEntry.credit_card_id == credit_card_id))
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).where(
+            ExpenseEntry.credit_card_id == credit_card_id,
+            ExpenseEntry.user_id == user_id,
+        )
+    )
     return int(result.scalar_one())
 
 
 # Count expenses grouped by credit card id. Returns {card_id: count}.
-async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int], user_id: int) -> dict[int, int]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
@@ -115,7 +120,10 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
             ExpenseEntry.credit_card_id,
             func.count(),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id)
     )
     return {row[0]: int(row[1]) for row in result.all()}
@@ -125,6 +133,7 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 async def sum_by_credit_card_ids_grouped(
     session: AsyncSession,
     credit_card_ids: list[int],
+    user_id: int,
 ) -> dict[int, dict[str, float]]:
     if not credit_card_ids:
         return {}
@@ -134,7 +143,10 @@ async def sum_by_credit_card_ids_grouped(
             ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id, ExpenseEntry.currency)
     )
     grouped: dict[int, dict[str, float]] = {}
@@ -148,6 +160,7 @@ async def sum_by_credit_card_ids_grouped(
 async def sum_by_credit_card_ids_monthly(
     session: AsyncSession,
     credit_card_ids: list[int],
+    user_id: int,
 ) -> list[tuple[int, int, int, str, float]]:
     if not credit_card_ids:
         return []
@@ -161,7 +174,10 @@ async def sum_by_credit_card_ids_monthly(
             ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id, year_col, month_col, ExpenseEntry.currency)
         .order_by(year_col, month_col)
     )

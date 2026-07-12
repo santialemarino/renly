@@ -133,7 +133,7 @@ async def get_overview(
     card_balance = ZERO
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user_id)
         today_rate_map = lookup.get_rate_map_at(today) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:

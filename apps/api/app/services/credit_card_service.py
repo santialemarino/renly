@@ -82,10 +82,11 @@ async def get_card_balances(
     session: AsyncSession,
     card_ids: list[int],
     card_currencies: dict[int, str],
+    user_id: int,
 ) -> dict[int, list[CardBucketBalance]]:
     if not card_ids:
         return {}
-    expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids)
+    expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids, user_id)
     settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
 
@@ -135,7 +136,7 @@ async def update_card(
 async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
     references = (
-        ("expenses", await expense_repository.count_by_credit_card(session, card_id)),
+        ("expenses", await expense_repository.count_by_credit_card(session, card_id, user.id)),
         ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id)),
         ("installment plans", await installment_repository.count_by_credit_card(session, card_id)),
         ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id)),

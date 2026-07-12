@@ -216,7 +216,7 @@ async def get_evolution(
     card_balance_by_month: dict[tuple[int, int], Decimal] = {}
     skipped_currencies: list[str] = []
     if card_ids:
-        expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
+        expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids, user_id)
         settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
         card_balance_by_month, skipped_currencies = compute_monthly_card_balances(
             expense_monthly,
@@ -268,7 +268,7 @@ async def get_composition(
     skipped: set[str] = set()
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+        balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user_id)
         rate_map = lookup.get_rate_map_at(await settings_service.get_user_today(session, user_id)) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
