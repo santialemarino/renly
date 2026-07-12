@@ -17,8 +17,8 @@ import {
   Input,
   Label,
 } from '@repo/ui/components';
+import { CopyButton } from '@/app/(protected)/integrations/_components/copy-button';
 import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
-import { CopyButton } from '@/components/copy-button';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
 import { getLocaleTag } from '@/lib/utils/locale';

@@ -56,9 +56,9 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
-import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';

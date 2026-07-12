@@ -5,7 +5,7 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { LinkCard } from '@/components/link-card';
+import { LinkCard } from '@/app/(protected)/dashboard/_components/link-card';
 import { ROUTES } from '@/config/routes';
 import type { DashboardLiquidity, DashboardOverview, LiquidityState } from '@/lib/api/dashboard';
 import { INCOME_EXPENSE_RATIO_BREAKEVEN } from '@/lib/constants/health-thresholds';
