@@ -230,7 +230,7 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
           <WarningHint
             show={!!(primaryUnsupported || secondaryUnsupported)}
             separator
-            parentGap={24}
+            parentGap={12}
           >
             {tCommon.rich('currency.unsupportedHint', {
               bold: (chunks) => <strong>{chunks}</strong>,
