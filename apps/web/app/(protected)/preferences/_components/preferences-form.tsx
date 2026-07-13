@@ -37,16 +37,16 @@ import {
   FALLBACK_SECONDARY_CURRENCY,
 } from '@/lib/constants/currency';
 import { ENV_PERIOD_PRESETS, ENV_PRESET_CODES } from '@/lib/constants/period-presets';
-import { isCurrencySupported } from '@/lib/utils/currency';
 import { localizePreset } from '@/lib/utils/period-presets';
 
 const ENV_PREFERRED = ENV_PREFERRED_CURRENCIES.join(', ');
 
 interface PreferencesFormProps {
   initialSettings: SettingsData;
+  supportedCurrencies: string[] | undefined;
 }
 
-export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
+export function PreferencesForm({ initialSettings, supportedCurrencies }: PreferencesFormProps) {
   const t = useTranslations('preferences');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -87,12 +87,15 @@ export function PreferencesForm({ initialSettings }: PreferencesFormProps) {
         .filter(Boolean)
     : undefined;
 
-  const primaryUnsupported = primaryCurrency && !isCurrencySupported(primaryCurrency);
-  const secondaryUnsupported = secondaryCurrency && !isCurrencySupported(secondaryCurrency);
+  // Convertibility check against the backend registry (single source of truth). Fails open
+  // when the supported set is unavailable (fetch error) so no spurious warning is shown.
+  const isSupported = (code: string) => !supportedCurrencies || supportedCurrencies.includes(code);
+  const primaryUnsupported = primaryCurrency && !isSupported(primaryCurrency);
+  const secondaryUnsupported = secondaryCurrency && !isSupported(secondaryCurrency);
 
   function handleCurrencyChange(value: string | null, onChange: (v: string | null) => void) {
     onChange(value);
-    if (value && !isCurrencySupported(value)) {
+    if (value && !isSupported(value)) {
       toast.warning(tCommon('currency.unsupportedSelect', { currency: value }));
     }
   }

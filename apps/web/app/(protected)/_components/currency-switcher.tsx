@@ -16,17 +16,18 @@ import {
   ORIGINAL_CURRENCY,
   useCurrencyStore,
 } from '@/lib/stores/currency-store';
-import { isCurrencySupported } from '@/lib/utils/currency';
 
 interface CurrencySwitcherProps {
   displayCurrencies: string[];
   activeCurrency: string;
+  supportedCurrencies: string[] | undefined;
   initialCollapsed: boolean;
 }
 
 export function CurrencySwitcher({
   displayCurrencies,
   activeCurrency: initialActive,
+  supportedCurrencies,
   initialCollapsed,
 }: CurrencySwitcherProps) {
   const t = useTranslations('sidebar');
@@ -57,7 +58,8 @@ export function CurrencySwitcher({
     setActive(v);
     setActiveCurrency(v);
 
-    if (v !== ORIGINAL_CURRENCY && !isCurrencySupported(v)) {
+    // Fail open when the supported set is unavailable (fetch error) — no spurious warning.
+    if (v !== ORIGINAL_CURRENCY && supportedCurrencies && !supportedCurrencies.includes(v)) {
       toast.warning(tCommon('currency.unsupportedSwitch', { currency: v }));
     }
 

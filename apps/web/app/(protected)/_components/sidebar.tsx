@@ -202,6 +202,7 @@ function NavSubItem({
 interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
+  supportedCurrencies: string[] | undefined;
   currencyCollapsed: boolean;
   isAdmin: boolean;
   signupMode: SignupMode;
@@ -212,6 +213,7 @@ interface AppSidebarProps {
 export function AppSidebar({
   displayCurrencies,
   activeCurrency,
+  supportedCurrencies,
   currencyCollapsed,
   isAdmin,
   signupMode,
@@ -539,6 +541,7 @@ export function AppSidebar({
               key={displayCurrencies.join(',')}
               displayCurrencies={displayCurrencies}
               activeCurrency={activeCurrency}
+              supportedCurrencies={supportedCurrencies}
               initialCollapsed={currencyCollapsed}
             />
           </SidebarGroupContent>
