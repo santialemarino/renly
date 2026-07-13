@@ -343,12 +343,15 @@ async def create_expenses_for_obligation_cycles(
 #   - None -> Y (add)            : advance NEW plan (subject to Item 9's matched-equals-current rule).
 #   - X -> Y (swap, same type)   : reverse OLD plan + advance NEW plan.
 #   - cross-type swap            : reverse OLD plan + advance NEW plan (different plan types).
-#   - unchanged                  : no-op.
+#   - unchanged FK, date moved   : reverse OLD date + advance NEW date on the SAME sub/installment
+#                                  (self-gating primitives → inert unless this expense governs the
+#                                  cursor top; obligations exempt — they archive with no cursor).
+#   - unchanged FK + same date   : no-op.
 # Mutual exclusivity at the row level (at most one OLD FK set) + the Pydantic validator
 # (at most one NEW FK set) means at most one reverse target and at most one advance target
-# fire per update — so the response carries at most one of each. Returns
-# (entry, advance_result, reverse_result) so the router can populate the response's
-# advance_change + reverse_change fields for the frontend toast.
+# fire per FK transition; the same-plan date edit points both at one plan. The response carries
+# at most one of each. Returns (entry, advance_result, reverse_result) so the router can populate
+# the response's advance_change + reverse_change fields for the frontend toast.
 async def update_expense(
     session: AsyncSession,
     expense_id: int,
@@ -369,6 +372,7 @@ async def update_expense(
     new_subscription_id = fields["subscription_id"] if "subscription_id" in fields else old_subscription_id
     new_installment_id = fields["installment_id"] if "installment_id" in fields else old_installment_id
     new_card_id = fields["credit_card_id"] if "credit_card_id" in fields else old_card_id
+    new_date = fields["date"] if "date" in fields else old_date
 
     # Effective payment pairing after the merge: a kept-or-set card id requires the
     # effective method to be credit_card (the schema validator only sees same-request pairs).
@@ -400,6 +404,19 @@ async def update_expense(
         advance_target = ("subscription", new_subscription_id)
     elif new_installment_id is not None and new_installment_id != old_installment_id:
         advance_target = ("installment", new_installment_id)
+
+    # Same-plan date edit: the subscription/installment link stays but its date moved, so the
+    # cursor must be recomputed — reverse the old date's advance and re-apply the new date's on
+    # the SAME plan. Both primitives self-gate (reverse only when the old date advanced the cursor
+    # to its current spot; advance only when the new date matches the post-reverse cursor), so a
+    # non-cursor-top edit is inert. Obligations archive once and carry no cursor, so they're exempt.
+    if reverse_target is None and advance_target is None and new_date != old_date:
+        if new_subscription_id is not None:
+            reverse_target = ("subscription", new_subscription_id)
+            advance_target = ("subscription", new_subscription_id)
+        elif new_installment_id is not None:
+            reverse_target = ("installment", new_installment_id)
+            advance_target = ("installment", new_installment_id)
 
     # SEC-4: validate any newly-set or changed FK belongs to the user before mutating the row or
     # stale-marking a card. Unchanged FKs were already validated when first attached.
