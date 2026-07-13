@@ -207,6 +207,7 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
           overlay, dimming the form behind (same stacking the expense form's soft-confirm
           dialogs already use). The host form stays mounted, so its values survive. */}
       <CreditCardFormDialog
+        stacked
         open={cardDialogOpen}
         onOpenChange={setCardDialogOpen}
         preferredCurrencies={preferredCurrencies}

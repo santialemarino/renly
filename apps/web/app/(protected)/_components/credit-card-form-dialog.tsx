@@ -38,6 +38,10 @@ interface CreditCardFormDialogProps {
   // Fires only on CREATE success with the freshly-created card, before onSuccess.
   // PaymentMethodFields uses it to append + auto-select the card inline.
   onCreated?: (card: CreditCard) => void;
+  // Rendered stacked on top of a host entry form (PaymentMethodFields' inline creation): a
+  // narrower width so it reads as a distinct panel on top instead of overlapping the host's
+  // edges 1:1. Standalone usage (Credit Cards page) leaves it default.
+  stacked?: boolean;
 }
 
 export function CreditCardFormDialog({
@@ -47,6 +51,7 @@ export function CreditCardFormDialog({
   preferredCurrencies,
   onSuccess,
   onCreated,
+  stacked = false,
 }: CreditCardFormDialogProps) {
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');
@@ -106,7 +111,7 @@ export function CreditCardFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={stacked ? 'sm:max-w-md' : undefined}>
         <DialogHeader>
           <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
         </DialogHeader>
