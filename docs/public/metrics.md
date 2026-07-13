@@ -112,10 +112,10 @@ current value minus invested.
 
 ## "vs last month"
 
-The small change indicator under the gain card compares the latest portfolio value against the
-portfolio value at the end of the previous month, both taken from the same monthly series as the
-evolution chart (in your display currency). If all your data is within a single month, there is
-no previous month to compare against and the indicator is hidden.
+The small change indicator under the gain card compares your latest portfolio value against its
+value at the end of the previous calendar month (in your display currency), drawn from the same
+underlying portfolio values that feed the evolution chart. If all your data is within a single
+month, there is no previous month to compare against and the indicator is hidden.
 
 ## Distribution and allocation
 
