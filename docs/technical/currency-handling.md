@@ -14,7 +14,7 @@ The global currency switcher in the sidebar offers three options (configured in 
 
 Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). The set is served by `GET /exchange-rates/currencies` (derived from `app/domain/currency.py`, the single source of truth) and drives the entry-form pickers.
 
-**Entry forms** (expense / income / subscription) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported entry currency with **422**. The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
+**Entry forms** (expense / income / subscription / installment / payment obligation) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported entry currency with **422**. The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
 
 ### Dollar rate preference
 

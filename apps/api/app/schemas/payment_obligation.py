@@ -4,11 +4,11 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /payment-obligations.
@@ -31,6 +31,8 @@ class PaymentObligationCreate(RequestBase):
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
     # a card-less credit_card entry is allowed (zero-card users, imports).
     @model_validator(mode="after")
@@ -52,6 +54,8 @@ class PaymentObligationUpdate(RequestBase):
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the obligation is active.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # Same-request pairing guard: only fires when BOTH keys were provided. The merged
     # effective check (request fields over the stored row) lives in the service.

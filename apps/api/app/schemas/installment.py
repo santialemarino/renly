@@ -4,10 +4,10 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, computed_field, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 from app.utils.dates import add_months
 
 
@@ -22,6 +22,8 @@ class InstallmentCreate(RequestBase):
     current_installment: int = Field(default=1, description="Index of the next installment to issue (1-based).", ge=1)
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
     # a card-less credit_card entry is allowed (zero-card users, imports).
@@ -43,6 +45,8 @@ class InstallmentUpdate(RequestBase):
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the installment plan is active.")
     start_date: date_type | None = Field(default=None, description="Date of the first installment.")
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # Same-request pairing guard: only fires when BOTH keys were provided. The merged
     # effective check (request fields over the stored row) lives in the service.

@@ -10,6 +10,8 @@ from app.models.asset_price import AssetPrice
 from app.models.investment import InvestmentCategory
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.income import IncomeCreate
+from app.schemas.installment import InstallmentCreate, InstallmentUpdate
+from app.schemas.payment_obligation import PaymentObligationCreate, PaymentObligationUpdate
 from app.schemas.subscription import SubscriptionCreate
 from app.services import asset_price_service, exchange_rate_service
 from app.utils.metrics import RateLookup
@@ -62,6 +64,45 @@ class TestEntryCurrencyAllowlist:
                 billing_cycle="monthly",
                 next_billing_date=date(2026, 1, 1),
             )
+
+    def test_installment_create_normalizes_lowercase(self):
+        body = InstallmentCreate(
+            name="TV",
+            total_amount=Decimal("120.00"),
+            installment_amount=Decimal("10.00"),
+            currency="usd",
+            installments_count=12,
+            start_date=date(2026, 1, 1),
+        )
+        assert body.currency == "USD"
+
+    def test_installment_create_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            InstallmentCreate(
+                name="TV",
+                total_amount=Decimal("120.00"),
+                installment_amount=Decimal("10.00"),
+                currency="CLP",
+                installments_count=12,
+                start_date=date(2026, 1, 1),
+            )
+
+    def test_installment_update_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            InstallmentUpdate(currency="JPY")
+
+    def test_payment_obligation_create_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            PaymentObligationCreate(
+                name="Electricity",
+                amount=Decimal("10.00"),
+                currency="CHF",
+                next_due_date=date(2026, 1, 1),
+            )
+
+    def test_payment_obligation_update_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            PaymentObligationUpdate(currency="CLP")
 
 
 # Asset-price lookup only reports converted_* when a rate actually existed.
