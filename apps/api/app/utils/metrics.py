@@ -91,6 +91,28 @@ def xirr(
     if all(a >= 0 for a in amounts) or all(a <= 0 for a in amounts):
         return None
 
+    # Well-definedness guard (Norström's criterion). A money-weighted return is only
+    # unambiguous when the time-ordered cumulative cash flow crosses zero at most once. A
+    # non-conventional series (e.g. invest -> withdraw more than invested -> reinvest) can
+    # cross repeatedly and admit several real IRRs, so bisection would return a
+    # bracket-accidental one; suppress those (None) and let TWR — timing-independent — carry
+    # the return. Break-even and simple gain/loss series never cross more than once, so they
+    # still report their unique rate. An exact-zero cumulative carries no sign; a later flow
+    # resolves the direction.
+    cumulative = 0.0
+    prev_sign = 0
+    crossings = 0
+    for a in amounts:
+        cumulative += a
+        sign = 1 if cumulative > 0 else -1 if cumulative < 0 else 0
+        if sign == 0:
+            continue
+        if prev_sign != 0 and sign != prev_sign:
+            crossings += 1
+        prev_sign = sign
+    if crossings > 1:
+        return None
+
     # NPV of the series at a given rate; rate > -1 keeps every power real.
     def npv(rate: float) -> float:
         return sum(a / (1.0 + rate) ** t for a, t in zip(amounts, day_fracs))

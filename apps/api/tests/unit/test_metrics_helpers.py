@@ -239,18 +239,44 @@ class TestXIRR:
         assert xirr([(date(2025, 1, 1), -100.0), (date(2025, 6, 1), -200.0)]) is None
         assert xirr([(date(2025, 1, 1), 100.0), (date(2025, 6, 1), 200.0)]) is None
 
-    def test_alternating_signs_no_crash(self):
-        # A shape from the fuzzing crash class (old Newton wandered into the complex plane and
-        # raised). Bisection finds the deterministic bracketed root at ~0.7516.
+    def test_multi_crossing_series_suppressed(self):
+        # A non-conventional series whose cumulative cash flow crosses zero more than once
+        # (-1000 -> +4000 -> -2000 -> +1000) can admit several real IRRs, so the bracketed
+        # root would be accidental. The well-definedness guard suppresses it (None) before
+        # bisection — which also keeps the old fuzzing crash class (complex intermediates)
+        # unreachable. TWR carries the return for such series.
         cfs = [
             (date(2025, 1, 1), -1000.0),
             (date(2025, 2, 1), 5000.0),
             (date(2025, 3, 1), -6000.0),
             (date(2026, 1, 1), 3000.0),
         ]
+        assert xirr(cfs) is None
+
+    def test_break_even_is_unique(self):
+        # Cumulative ends at exactly zero (no strict positive crossing) yet the IRR is a
+        # unique 0%: the guard keeps it (crossings <= 1), never suppressing a flat holding.
+        cfs = [
+            (date(2025, 1, 1), -1000.0),
+            (date(2026, 1, 1), 1000.0),
+        ]
         result = xirr(cfs)
         assert result is not None
-        assert abs(result - Decimal("0.7516")) < Decimal("0.001")
+        assert abs(result) < Decimal("0.0001")
+
+    def test_single_crossing_with_intermediate_withdrawal_kept(self):
+        # Mid-stream withdrawal then a larger terminal inflow: three flow sign changes but the
+        # cumulative (-1000 -> -700 -> -900 -> +400) crosses zero once, so the IRR is unique
+        # by Norström and is reported (not suppressed).
+        cfs = [
+            (date(2025, 1, 1), -1000.0),
+            (date(2025, 5, 1), 300.0),
+            (date(2025, 9, 1), -200.0),
+            (date(2026, 1, 1), 1400.0),
+        ]
+        result = xirr(cfs)
+        assert result is not None
+        assert result > ZERO
 
     def test_unsorted_input_is_sorted_internally(self):
         # Portfolio series concatenate per-investment flows; result must not depend on order.

@@ -86,6 +86,13 @@ Because IRR is annualized, Renly only shows it once your cashflow history spans 
 days. Annualizing just a few days of data would produce absurd numbers (a good week extrapolated
 to a year looks like millions of percent), so shorter histories show "—" instead.
 
+IRR is also only well-defined for a **conventional** cash flow — money that, on balance, goes out
+and later comes back. If your history is unusual enough that the running total crosses zero more
+than once (for example, you withdrew more than you had put in and then reinvested), several
+different rates can satisfy the equation at once, so no single IRR is meaningful. Renly shows "—"
+for IRR in those cases and you should rely on TWR, which doesn't depend on the timing of your
+cash flows.
+
 ## When to use TWR vs. IRR
 
 | Question                                 | Use                                                       |
