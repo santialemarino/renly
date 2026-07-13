@@ -22,6 +22,10 @@ class TestSchedulerConfig:
         scheduler_module.start_scheduler()
         return recorder
 
+    # The scheduler runs in UTC so the *_HOUR_UTC cron hours fire at those UTC hours on any host.
+    def test_scheduler_timezone_is_utc(self):
+        assert str(scheduler_module.scheduler.timezone) == "UTC"
+
     # Every job must survive a late tick: hours-scale grace, coalesced to a single run.
     def test_all_jobs_have_misfire_grace_and_coalesce(self, monkeypatch):
         recorder = self._record(monkeypatch)

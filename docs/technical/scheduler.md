@@ -6,7 +6,7 @@ APScheduler-based background job system for periodic data fetching and auto-snap
 
 ## Setup
 
-The scheduler uses `APScheduler.AsyncIOScheduler` and integrates with FastAPI's lifespan. `start_scheduler()` is called on app startup; `stop_scheduler()` on shutdown.
+The scheduler uses `APScheduler.AsyncIOScheduler` and integrates with FastAPI's lifespan. `start_scheduler()` is called on app startup; `stop_scheduler()` on shutdown. It is pinned to UTC (`AsyncIOScheduler(timezone="UTC")`), so every cron hour below (the `*_HOUR_UTC` constants) fires at that UTC hour regardless of the host's local timezone — matching the startup catch-up's UTC reasoning.
 
 Each job wrapper creates its own `AdminSessionLocal()` session (not tied to a request) and catches all exceptions at the top level — a failing job logs the error and does not crash the application. Background jobs run with no user context, so they use the **privileged** session (`DATABASE_ADMIN_URL`, the table owner) which bypasses Row-Level Security (SEC-15) — a single job legitimately spans every user's rows.
 
