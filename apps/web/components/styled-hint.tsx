@@ -92,15 +92,20 @@ export function StyledHint({
   // Static rendering (no animation) when `show` is not provided.
   if (show === undefined) return content;
 
+  // The negative marginTop cancels the parent's flex gap so the hint sits at the right resting
+  // position. It is ANIMATED in lockstep with height (not a static style) so on collapse the
+  // upward pull releases as the box shrinks — a static pull would keep yanking the separator up
+  // into the element above for the last frames. Resting geometry is unchanged (marginTop settles
+  // at -parentGap while open).
   return (
     <AnimatePresence initial={false}>
       {show && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
+          initial={{ opacity: 0, height: 0, marginTop: 0 }}
+          animate={{ opacity: 1, height: 'auto', marginTop: -parentGap }}
+          exit={{ opacity: 0, height: 0, marginTop: 0 }}
           transition={{ duration: ANIMATION_DEFAULT }}
-          style={{ overflow: 'hidden', marginTop: -parentGap }}
+          style={{ overflow: 'hidden' }}
         >
           {content}
         </motion.div>
