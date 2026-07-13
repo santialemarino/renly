@@ -18,8 +18,8 @@ from app.services import (
 logger = logging.getLogger(__name__)
 
 # Pinned to UTC so the cron hours below (all named *_HOUR_UTC) fire at those UTC hours regardless
-# of the host's local timezone, matching the startup catch-up's UTC reasoning. (A bare
-# datetime.timezone is rejected by APScheduler 3.x — it wants a named/pytz zone, hence the string.)
+# of the host's local timezone, matching the startup catch-up's UTC reasoning. The string form is
+# accepted across APScheduler 3.x versions and reads unambiguously at the call site.
 scheduler = AsyncIOScheduler(timezone="UTC")
 
 # Schedule configuration.
