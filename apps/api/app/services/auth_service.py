@@ -104,6 +104,13 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
     if settings.signup_mode == SignupMode.invite:
         invite = await invite_service.get_valid_invite(session, invite_token, email)
 
+    # Release the admin-pool connection before the breach check (network) and the ~250ms threaded
+    # bcrypt below: login/register/API-key verification share the small admin pool, so holding a
+    # connection across the hash would let a register burst exhaust it and queue on pool_timeout.
+    # The existence check + insert re-acquire a connection; expire_on_commit=False keeps the invite
+    # row usable for consume_invite without a reload. No-op when nothing was read (open mode).
+    await session.commit()
+
     if await is_password_breached(password):
         raise PasswordBreachedError()
 

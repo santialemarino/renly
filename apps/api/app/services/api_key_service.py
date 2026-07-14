@@ -53,6 +53,11 @@ async def revoke_key(session: AsyncSession, key_id: int, user: User) -> None:
 async def verify_api_key(session: AsyncSession, raw_key: str) -> User | None:
     prefix = raw_key[:KEY_PREFIX_LENGTH]
     candidates = await api_key_repository.list_active_by_prefix(session, prefix)
+    # Release the admin-pool connection before the ~250ms threaded bcrypt per candidate: this runs
+    # on the shared admin pool (pre-auth, no user context), so holding a connection across the hash
+    # would let an API-key burst exhaust it and queue on pool_timeout. The last-used update below
+    # re-acquires; expire_on_commit=False keeps the candidate rows usable without a reload.
+    await session.commit()
     for key in candidates:
         if await asyncio.to_thread(checkpw, raw_key.encode(), key.key_hash.encode()):
             key.last_used_at = utcnow()
