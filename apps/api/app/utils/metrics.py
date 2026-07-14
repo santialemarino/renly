@@ -99,11 +99,16 @@ def xirr(
     # the return. Break-even and simple gain/loss series never cross more than once, so they
     # still report their unique rate. An exact-zero cumulative carries no sign; a later flow
     # resolves the direction.
-    cumulative = 0.0
+    #
+    # Accumulate in Decimal, not float: the flows are 2-dp money (built via float(Decimal(...))),
+    # so a mid-series balance that nets to exactly zero cancels cleanly in Decimal and is read as a
+    # zero-touch (skipped, no crossing). Summed in float it lands on a ~1e-14 residue whose sign
+    # fabricates two spurious crossings, which would wrongly suppress a genuinely unique IRR.
+    cumulative = ZERO
     prev_sign = 0
     crossings = 0
     for a in amounts:
-        cumulative += a
+        cumulative += Decimal(str(a))
         sign = 1 if cumulative > 0 else -1 if cumulative < 0 else 0
         if sign == 0:
             continue

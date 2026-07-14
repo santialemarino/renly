@@ -278,6 +278,23 @@ class TestXIRR:
         assert result is not None
         assert result > ZERO
 
+    def test_single_crossing_through_exact_intermediate_zero_kept(self):
+        # Regression: a unique-IRR series whose cumulative passes through an EXACT zero mid-stream,
+        # reached by a sum of distinct fractional-cent flows. True cumulative is
+        # -1000.30 -> -500.20 -> 0.00 -> -400.00 -> +50.55 (sign pattern -,-,(0),-,+ = one crossing),
+        # so the IRR is unique and must be reported. Accumulated in float, the mid-series zero lands
+        # on a ~1e-14 residue whose sign fabricates two extra crossings and wrongly suppresses it;
+        # the guard accumulates in Decimal to keep the touch a touch, not a crossing.
+        cfs = [
+            (date(2025, 1, 1), -1000.30),
+            (date(2025, 3, 1), 500.10),
+            (date(2025, 5, 1), 500.20),
+            (date(2025, 7, 1), -400.00),
+            (date(2025, 9, 1), 450.55),
+        ]
+        result = xirr(cfs)
+        assert result is not None
+
     def test_unsorted_input_is_sorted_internally(self):
         # Portfolio series concatenate per-investment flows; result must not depend on order.
         cfs = [
