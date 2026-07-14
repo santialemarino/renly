@@ -129,8 +129,13 @@ async def get_overview(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> DashboardOverviewResponse:
-    # One rate lookup per request — shared by the investment and finance halves.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
+    # One user_settings read + one rate lookup per request, shared by the investment and finance
+    # halves. get_request_settings folds the dollar preference (which builds the lookup) and the
+    # timezone (the finance card-balance rate anchor) into a single row read; only needed when a
+    # display currency is requested — otherwise nothing converts.
+    rs = await settings_service.get_request_settings(session, user_id) if currency else None
+    lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
+    today = settings_service.today_for_timezone(rs.timezone) if rs else None
     # Sequential calls — AsyncSession is not safe for concurrent use.
     portfolio = await metrics_service.get_portfolio_metrics(
         session,
@@ -143,6 +148,7 @@ async def get_overview(
         user_id,
         currency=currency,
         lookup=lookup,
+        today=today,
         date_from=date_from,
         date_to=date_to,
     )
@@ -180,7 +186,10 @@ async def get_overview(
         savings_rate=savings_rate,
         income_expense_ratio=income_expense_ratio,
         currency=currency,
-        skipped_currencies=finance.skipped_currencies,
+        # Fail-loud: surface BOTH sides' inconvertible currencies (finance/liability skips plus any
+        # investment base currency that couldn't reach the display currency), so the summary flags
+        # everything its totals had to exclude — not just the liability half.
+        skipped_currencies=sorted(set(finance.skipped_currencies) | {s.base_currency for s in portfolio.skipped_investments}),
     )
 
 
@@ -250,8 +259,10 @@ async def get_composition(
     *,
     currency: str | None = None,
 ) -> DashboardCompositionResponse:
-    # One rate lookup per request — shared by the allocation call and the card-liability conversion.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
+    # One user_settings read + one rate lookup per request (only when converting): the dollar
+    # preference builds the lookup and the timezone anchors the card-liability conversion to today.
+    rs = await settings_service.get_request_settings(session, user_id) if currency else None
+    lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
     allocation = await metrics_service.get_allocation(
         session,
         user_id,
@@ -269,7 +280,7 @@ async def get_composition(
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user_id)
-        rate_map = lookup.get_rate_map_at(await settings_service.get_user_today(session, user_id)) if lookup else None
+        rate_map = lookup.get_rate_map_at(settings_service.today_for_timezone(rs.timezone)) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
@@ -305,7 +316,9 @@ async def get_composition(
         total_assets=total_assets,
         total_liabilities=card_balance,
         currency=currency,
-        skipped_currencies=sorted(skipped),
+        # Fail-loud: include both the liability-bucket skips and any investment base currency the
+        # allocation couldn't convert, so the donut flags every currency excluded from either side.
+        skipped_currencies=sorted(skipped | {s.base_currency for s in allocation.skipped_investments}),
     )
 
 
@@ -317,11 +330,14 @@ async def get_liquidity(
     *,
     currency: str | None = None,
 ) -> DashboardLiquidityResponse:
-    threshold = await settings_service.get_liquidity_threshold(session, user_id)
-    today = await settings_service.get_user_today(session, user_id)
+    # One user_settings read for the threshold, timezone (today), and dollar preference this
+    # endpoint needs, instead of three separate indexed reads.
+    rs = await settings_service.get_request_settings(session, user_id)
+    threshold = rs.liquidity_threshold_pct
+    today = settings_service.today_for_timezone(rs.timezone)
 
     # Build the rate lookup once — reused for commitments + income conversions.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
+    lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if currency else None
     rate_map_today = lookup.get_rate_map_at(today) if lookup else None
 
     # Commitments: load active rows from the four sources, amortise to monthly-equivalent

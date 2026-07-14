@@ -7,8 +7,8 @@ import pytest
 from app.domain import CardBucketBalance
 from app.models.credit_card import CreditCard
 from app.models.investment import InvestmentCategory
-from app.schemas.metrics import AllocationItem, AllocationResponse
-from app.services import dashboard_service
+from app.schemas.metrics import AllocationItem, AllocationResponse, SkippedInvestment
+from app.services import dashboard_service, exchange_rate_service, settings_service
 from app.services.dashboard_service import compute_monthly_card_balances, forward_fill_card_balances
 
 # Rate map: 1 USD = 1200 ARS.
@@ -257,3 +257,22 @@ class TestCompositionPercentages:
             (CAT_B, Decimal("32")),
             ("liabilities", Decimal("20")),
         ]
+
+    @pytest.mark.asyncio
+    async def test_asset_side_skipped_currency_surfaced(self, monkeypatch):
+        # Fail-loud: an investment whose base currency can't reach the display currency is excluded
+        # from total_assets AND its currency is surfaced in skipped_currencies (previously the
+        # dashboard flagged only liability-side skips, silently dropping inconvertible assets).
+        allocation = AllocationResponse(
+            items=[AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("100"))],
+            total_value=Decimal("600"),
+            skipped_investments=[SkippedInvestment(investment_id=9, name="Petrobras", base_currency="BRL")],
+        )
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=allocation))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(settings_service, "get_request_settings", AsyncMock(return_value=settings_service.RequestSettings("mep", None, 50)))
+        monkeypatch.setattr(exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=_FixedLookup(RATE_MAP)))
+
+        result = await dashboard_service.get_composition(AsyncMock(), 1, currency="USD")
+
+        assert "BRL" in result.skipped_currencies

@@ -64,11 +64,15 @@ async def get_overview(
     *,
     currency: str | None = None,
     lookup: RateLookup | None = None,
+    today: date_type | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceOverviewResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency, lookup)
-    today = await settings_service.get_user_today(session, user_id)
+    # The caller (dashboard overview) passes today from its merged settings read; standalone callers
+    # (the finance-metrics router) omit it and resolve it here.
+    if today is None:
+        today = await settings_service.get_user_today(session, user_id)
 
     # Current period totals — summed from per-month buckets converted at each month's end, so a
     # window's total_income/total_expenses equal the sum of the monthly chart's converted points

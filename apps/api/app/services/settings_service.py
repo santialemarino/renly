@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from datetime import date as date_type
 from decimal import Decimal
+from typing import NamedTuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -247,12 +248,42 @@ async def get_user_timezone(session: AsyncSession, user_id: int) -> str | None:
     return None
 
 
+# Resolves the user's local calendar "today" from an already-loaded IANA timezone (no DB read) —
+# the pure counterpart of get_user_today for callers that already hold the timezone. `now_utc` is
+# injectable for tests.
+def today_for_timezone(timezone: str | None, now_utc: datetime | None = None) -> date_type:
+    return today_in_timezone(now_utc or datetime.now(UTC), timezone)
+
+
 # Returns the user's local calendar date "today" (settings timezone, UTC fallback) — the
 # request-path counterpart of the scheduler's per-user local-date derivation. `now_utc` is
 # injectable for tests, mirroring auto_expense_service.
 async def get_user_today(session: AsyncSession, user_id: int, now_utc: datetime | None = None) -> date_type:
     tz = await get_user_timezone(session, user_id)
-    return today_in_timezone(now_utc or datetime.now(UTC), tz)
+    return today_for_timezone(tz, now_utc)
+
+
+# The per-request settings the dashboard aggregates need together.
+class RequestSettings(NamedTuple):
+    dollar_preference: str
+    timezone: str | None
+    liquidity_threshold_pct: int
+
+
+# Loads dollar-rate preference, IANA timezone, and the liquidity threshold from ONE user_settings
+# read for a request that needs several of them, instead of the separate indexed reads the
+# individual getters (get_dollar_pref + get_user_timezone + get_liquidity_threshold) would each do.
+# Same parsing and fallbacks as those getters — no behaviour change, just one round-trip (P09 D4).
+async def get_request_settings(session: AsyncSession, user_id: int) -> RequestSettings:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    data = row.settings if row and row.settings else {}
+    raw_pref = data.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+    dollar_preference = raw_pref if isinstance(raw_pref, str) and raw_pref else DOLLAR_RATE_DEFAULT
+    raw_tz = data.get(SETTINGS_KEY_TIMEZONE)
+    timezone = raw_tz if isinstance(raw_tz, str) and raw_tz else None
+    raw_threshold = data.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
+    liquidity_threshold_pct = raw_threshold if isinstance(raw_threshold, int) and 1 <= raw_threshold <= 99 else DEFAULT_LIQUIDITY_THRESHOLD_PCT
+    return RequestSettings(dollar_preference, timezone, liquidity_threshold_pct)
 
 
 # Retires a section's first-run sample by latching its per-entity flag (alongside the entity being
