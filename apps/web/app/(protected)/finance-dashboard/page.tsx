@@ -110,7 +110,7 @@ export default async function FinanceDashboardPage({ searchParams }: FinanceDash
       </div>
 
       <DismissableCurrencyHint show={!isOriginalSelected} />
-      <WarningHint show={isOriginalSelected}>
+      <WarningHint show={isOriginalSelected} parentGap={16}>
         {t.rich('currencyFallback', {
           currency,
           bold: (chunks) => <strong>{chunks}</strong>,

@@ -70,10 +70,12 @@ export function GroupsToolbar({
         </div>
       </LayoutGroup>
 
-      <WarningHint show={nearLimit && !atLimit}>
+      <WarningHint show={nearLimit && !atLimit} parentGap={8}>
         {t('softLimit.approaching', { count: groupCount, max: maxGroups })}
       </WarningHint>
-      <WarningHint show={atLimit}>{t('softLimit.reached', { max: maxGroups })}</WarningHint>
+      <WarningHint show={atLimit} parentGap={8}>
+        {t('softLimit.reached', { max: maxGroups })}
+      </WarningHint>
 
       <GroupFormDialog
         open={createOpen}

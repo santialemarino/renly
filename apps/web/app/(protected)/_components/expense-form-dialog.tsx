@@ -728,7 +728,7 @@ export function ExpenseFormDialog({
                           {t('form.linkedObligation.lockedFromMarkPaid')}
                         </p>
                       )}
-                      <StyledHint variant="warning" show={obligationMismatch}>
+                      <StyledHint variant="warning" show={obligationMismatch} parentGap={8}>
                         {t('form.linkedObligation.mismatch')}
                       </StyledHint>
                       <FormMessage />
@@ -767,7 +767,7 @@ export function ExpenseFormDialog({
                       }}
                     />
                   </FormControl>
-                  <StyledHint variant="warning" show={subInstallmentMismatch}>
+                  <StyledHint variant="warning" show={subInstallmentMismatch} parentGap={8}>
                     {t('form.linkedSubInstallment.mismatch')}
                   </StyledHint>
                 </FormItem>

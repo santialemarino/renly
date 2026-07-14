@@ -131,7 +131,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {showWelcome && <OnboardingWelcome status={onboardingStatus} autoStartTour={autoStartTour} />}
 
       <DismissableCurrencyHint show={!isOriginalSelected} />
-      <WarningHint show={isOriginalSelected}>
+      <WarningHint show={isOriginalSelected} parentGap={16}>
         {t.rich('currencyFallback', {
           currency,
           bold: (chunks) => <strong>{chunks}</strong>,
