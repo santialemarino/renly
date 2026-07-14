@@ -1,7 +1,15 @@
 from datetime import date as date_type
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
-from app.services.dashboard_service import compute_monthly_card_balances
+import pytest
+
+from app.domain import CardBucketBalance
+from app.models.credit_card import CreditCard
+from app.models.investment import InvestmentCategory
+from app.schemas.metrics import AllocationItem, AllocationResponse, SkippedInvestment
+from app.services import dashboard_service, exchange_rate_service, settings_service
+from app.services.dashboard_service import compute_monthly_card_balances, forward_fill_card_balances
 
 # Rate map: 1 USD = 1200 ARS.
 RATE_MAP = {
@@ -36,7 +44,7 @@ class TestComputeMonthlyCardBalances:
         settlements = [
             (1, 2026, 2, "USD", 80.0),
         ]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -46,6 +54,7 @@ class TestComputeMonthlyCardBalances:
         # Jan: 100 - 0 = 100. Feb: 100 + 50 - 80 = 70.
         assert result[(2026, 1)] == Decimal("100")
         assert result[(2026, 2)] == Decimal("70")
+        assert skipped == []
 
     def test_multi_card_multi_currency_converts_each_bucket(self):
         expenses = [
@@ -53,7 +62,7 @@ class TestComputeMonthlyCardBalances:
             (2, 2026, 1, "ARS", 1200.0),  # 1200 ARS = 1 USD.
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD", 2: "ARS"},
@@ -62,6 +71,7 @@ class TestComputeMonthlyCardBalances:
         )
         # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
         assert result[(2026, 1)] == Decimal("101")
+        assert skipped == []
 
     def test_cumulative_across_months(self):
         expenses = [
@@ -69,7 +79,7 @@ class TestComputeMonthlyCardBalances:
             (1, 2026, 3, "USD", 50.0),
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -80,11 +90,12 @@ class TestComputeMonthlyCardBalances:
         assert result[(2026, 1)] == Decimal("100")
         assert (2026, 2) not in result
         assert result[(2026, 3)] == Decimal("150")
+        assert skipped == []
 
     def test_settlement_exceeds_expenses(self):
         expenses = [(1, 2026, 1, "USD", 50.0)]
         settlements = [(1, 2026, 1, "USD", 100.0)]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -93,9 +104,10 @@ class TestComputeMonthlyCardBalances:
         )
         # Overpayment: 50 - 100 = -50.
         assert result[(2026, 1)] == Decimal("-50")
+        assert skipped == []
 
     def test_empty_inputs(self):
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             [],
             [],
             card_currencies={},
@@ -103,6 +115,7 @@ class TestComputeMonthlyCardBalances:
             lookup=FIXED_LOOKUP,
         )
         assert result == {}
+        assert skipped == []
 
     def test_no_target_currency_passes_values_through(self):
         # When no target currency is set, every bucket's value is summed raw.
@@ -111,7 +124,7 @@ class TestComputeMonthlyCardBalances:
             (1, 2026, 1, "ARS", 500.0),
         ]
         settlements = []
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -120,13 +133,14 @@ class TestComputeMonthlyCardBalances:
         )
         # No conversion: 100 + 500 = 600.
         assert result[(2026, 1)] == Decimal("600")
+        assert skipped == []
 
     def test_foreign_bucket_settled_in_its_own_currency(self):
         # ARS card with USD bucket activity — both expense and settlement live in USD,
         # so the USD bucket cancels cleanly without going through card currency.
         expenses = [(1, 2026, 1, "USD", 50.0)]
         settlements = [(1, 2026, 1, "USD", 50.0)]
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "ARS"},
@@ -134,12 +148,13 @@ class TestComputeMonthlyCardBalances:
             lookup=FIXED_LOOKUP,
         )
         assert result[(2026, 1)] == Decimal("0")
+        assert skipped == []
 
     def test_each_bucket_converts_from_its_own_currency(self):
         # ARS-currency settlement on a USD card converts directly from ARS, not via card currency.
         expenses = [(1, 2026, 1, "USD", 100.0)]
         settlements = [(1, 2026, 1, "ARS", 1200.0)]  # 1200 ARS = 1 USD.
-        result = compute_monthly_card_balances(
+        result, skipped = compute_monthly_card_balances(
             expenses,
             settlements,
             card_currencies={1: "USD"},
@@ -148,3 +163,116 @@ class TestComputeMonthlyCardBalances:
         )
         # 100 USD expense - 1 USD settlement (from 1200 ARS) = 99 USD.
         assert result[(2026, 1)] == Decimal("99")
+        assert skipped == []
+
+    def test_missing_rate_row_is_skipped_and_reported(self):
+        # FIXED_LOOKUP maps only USD/ARS — the EUR expense row must be excluded, not passed through.
+        result, skipped = compute_monthly_card_balances(
+            [(1, 2026, 1, "ARS", 1200.0), (1, 2026, 1, "EUR", 50.0)],
+            [],
+            card_currencies={1: "ARS"},
+            target_currency="USD",
+            lookup=FIXED_LOOKUP,
+        )
+        assert skipped == ["EUR"]
+        # 1200 ARS -> 1 USD at the fake rate; EUR contributes nothing.
+        assert result[(2026, 1)] == Decimal("1")
+
+
+# --- forward_fill_card_balances ---
+
+
+class TestForwardFillCardBalances:
+    def test_months_after_activity_keep_prior_balance(self):
+        # Card ran up 500 in Oct 2025; portfolio window starts Jan 2026 with no card
+        # activity. Old merge read 0 for Jan/Feb — the outstanding 500 must persist.
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2)],
+            {(2025, 10): Decimal("500")},
+        )
+        assert balances == [Decimal("500"), Decimal("500")]
+
+    def test_gap_months_between_activity_forward_fill(self):
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2), (2026, 3), (2026, 4)],
+            {(2026, 1): Decimal("100"), (2026, 3): Decimal("150")},
+        )
+        assert balances == [Decimal("100"), Decimal("100"), Decimal("150"), Decimal("150")]
+
+    def test_months_before_first_activity_read_zero(self):
+        balances = forward_fill_card_balances(
+            [(2026, 1), (2026, 2), (2026, 3)],
+            {(2026, 3): Decimal("100")},
+        )
+        assert balances == [Decimal("0"), Decimal("0"), Decimal("100")]
+
+    def test_empty_activity_reads_zero(self):
+        assert forward_fill_card_balances([(2026, 1)], {}) == [Decimal("0")]
+
+
+# --- get_composition percentage base ---
+
+
+CAT_A, CAT_B = list(InvestmentCategory)[:2]
+
+
+def _allocation() -> AllocationResponse:
+    return AllocationResponse(
+        items=[
+            AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("60")),
+            AllocationItem(category=CAT_B, value=Decimal("400"), percentage=Decimal("40")),
+        ],
+        total_value=Decimal("1000"),
+    )
+
+
+class TestCompositionPercentages:
+    def _patch(self, monkeypatch, *, balance: Decimal) -> None:
+        card = CreditCard(id=1, user_id=1, name="Visa", closing_day=20, due_day=5, currency="ARS", is_active=True)
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=_allocation()))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[card]))
+        monkeypatch.setattr(
+            dashboard_service.credit_card_service,
+            "get_card_balances",
+            AsyncMock(return_value={1: [CardBucketBalance(currency="ARS", balance=balance)]}),
+        )
+
+    @pytest.mark.asyncio
+    async def test_negative_card_balance_excluded_from_base(self, monkeypatch):
+        # Net credit of 100: old code divided by 900 (60/40 became 66.67/44.44, sum 111%).
+        # New base is the displayed items alone (1000) -> exactly 60 / 40.
+        self._patch(monkeypatch, balance=Decimal("-100"))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [i.percentage for i in result.items] == [Decimal("60"), Decimal("40")]
+        assert [i.label for i in result.items] == [CAT_A, CAT_B]
+        assert result.total_liabilities == Decimal("-100")
+
+    @pytest.mark.asyncio
+    async def test_positive_card_balance_unchanged_base(self, monkeypatch):
+        # 600 + 400 assets + 250 liability -> base 1250: 48 / 32 / 20 (identical to old).
+        self._patch(monkeypatch, balance=Decimal("250"))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [(i.label, i.percentage) for i in result.items] == [
+            (CAT_A, Decimal("48")),
+            (CAT_B, Decimal("32")),
+            ("liabilities", Decimal("20")),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_asset_side_skipped_currency_surfaced(self, monkeypatch):
+        # Fail-loud: an investment whose base currency can't reach the display currency is excluded
+        # from total_assets AND its currency is surfaced in skipped_currencies (previously the
+        # dashboard flagged only liability-side skips, silently dropping inconvertible assets).
+        allocation = AllocationResponse(
+            items=[AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("100"))],
+            total_value=Decimal("600"),
+            skipped_investments=[SkippedInvestment(investment_id=9, name="Petrobras", base_currency="BRL")],
+        )
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=allocation))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(settings_service, "get_request_settings", AsyncMock(return_value=settings_service.RequestSettings("mep", None, 50)))
+        monkeypatch.setattr(exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=_FixedLookup(RATE_MAP)))
+
+        result = await dashboard_service.get_composition(AsyncMock(), 1, currency="USD")
+
+        assert "BRL" in result.skipped_currencies

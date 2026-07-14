@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -22,22 +20,24 @@ services:
       dockerfile: ./docker/api.Dockerfile
     ports:
       - '8000:8000'
+      # Published here (not on web) because web shares this service's network namespace below.
+      - '3000:3000'
     depends_on:
       - postgres
+    # Optional root .env for overrides; every required var has a working local default below.
+    # Vars absent from both simply keep their in-code defaults (config.py).
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - DATABASE_ADMIN_URL=${DATABASE_ADMIN_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ALGORITHM=${JWT_ALGORITHM}
-      - JWT_EXPIRE_MINUTES=${JWT_EXPIRE_MINUTES}
-      - REFRESH_TOKEN_REMEMBER_DAYS=${REFRESH_TOKEN_REMEMBER_DAYS}
-      - REFRESH_TOKEN_DEFAULT_HOURS=${REFRESH_TOKEN_DEFAULT_HOURS}
-      - WEB_BASE_URL=${WEB_BASE_URL}
-      - EMAIL_PROVIDER=${EMAIL_PROVIDER}
-      - EMAIL_API_KEY=${EMAIL_API_KEY}
-      - EMAIL_FROM=${EMAIL_FROM}
+      # In-container hosts are service names. Local compose runs single-role (the owner for both
+      # URLs), so RLS is bypassed here like any single-role local setup; production uses the
+      # two-role env contract from the deploy runbook instead of compose.
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://renly:renly@postgres:5432/renly}
+      DATABASE_ADMIN_URL: ${DATABASE_ADMIN_URL:-postgresql+asyncpg://renly:renly@postgres:5432/renly}
+      # Local-dev placeholder (32+ chars, validated at startup). Must equal web's NEXTAUTH_SECRET.
+      JWT_SECRET: ${JWT_SECRET:-renly-local-compose-dev-secret-0123456789}
+      WEB_BASE_URL: ${WEB_BASE_URL:-http://localhost:3000}
 
   web:
     container_name: renly-web
@@ -47,11 +47,21 @@ services:
       dockerfile: ./docker/web.Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
-    ports:
-      - '3000:3000'
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    # Shares the api service's network namespace so the single build-time-inlined
+    # NEXT_PUBLIC_API_URL (http://localhost:8000) works from BOTH sides: the host browser reaches
+    # the api via the published port, and the web server's own fetches reach it on localhost
+    # inside the shared namespace. (A service-name URL would fix SSR but break the browser-side
+    # auth forms; NEXT_PUBLIC_* values cannot be changed at runtime.)
+    network_mode: 'service:api'
+    depends_on:
+      - api
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      NODE_ENV: production
+      PORT: 3000
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      # Must equal the api's JWT_SECRET (same placeholder default).
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-renly-local-compose-dev-secret-0123456789}
 
 volumes:
   postgres_data:

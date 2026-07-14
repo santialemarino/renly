@@ -11,12 +11,6 @@ from app.models.cedear_ratio import CedearRatio
 from app.models.utils import utcnow
 
 
-# Returns the current ratio for a CEDEAR ticker (latest by effective_date).
-async def get_latest(session: AsyncSession, ticker: str) -> CedearRatio | None:
-    result = await session.execute(select(CedearRatio).where(CedearRatio.ticker == ticker).order_by(CedearRatio.effective_date.desc()).limit(1))
-    return result.scalar_one_or_none()
-
-
 # Returns {ticker: ratio} for all given tickers (latest effective_date each).
 async def get_latest_by_tickers(session: AsyncSession, tickers: list[str]) -> dict[str, Decimal]:
     if not tickers:
@@ -36,52 +30,44 @@ async def get_latest_by_tickers(session: AsyncSession, tickers: list[str]) -> di
     return {r.ticker: r.ratio for r in result.scalars().all()}
 
 
-# Returns all current ratios (latest effective_date per ticker).
-async def get_all_latest(session: AsyncSession) -> list[CedearRatio]:
-    # For the small dataset (~30 CEDEARs), fetch all and deduplicate in Python.
-    result = await session.execute(select(CedearRatio).order_by(CedearRatio.ticker, CedearRatio.effective_date.desc()))
-    all_ratios = result.scalars().all()
-    seen: set[str] = set()
-    latest: list[CedearRatio] = []
-    for r in all_ratios:
-        if r.ticker not in seen:
-            seen.add(r.ticker)
-            latest.append(r)
-    return latest
-
-
-# Creates or updates a single ratio by (ticker, effective_date) using ON CONFLICT.
-async def upsert(session: AsyncSession, ratio: CedearRatio) -> None:
+# Bulk upserts multiple ratios in a single statement by (ticker, effective_date). Rows must be
+# pre-deduped on that key — one statement can't update a conflict target twice. Returns the row count.
+async def bulk_upsert(session: AsyncSession, ratios: list[CedearRatio]) -> int:
+    if not ratios:
+        return 0
     now = utcnow()
+    values = [
+        {
+            "ticker": r.ticker,
+            "underlying": r.underlying,
+            "ratio": r.ratio,
+            "effective_date": r.effective_date,
+            "source": r.source,
+            "updated_at": now,
+        }
+        for r in ratios
+    ]
     stmt = (
         insert(CedearRatio)
-        .values(
-            ticker=ratio.ticker,
-            underlying=ratio.underlying,
-            ratio=ratio.ratio,
-            effective_date=ratio.effective_date,
-            source=ratio.source,
-            updated_at=now,
-        )
+        .values(values)
         .on_conflict_do_update(
             index_elements=["ticker", "effective_date"],
             set_={
-                "underlying": ratio.underlying,
-                "ratio": ratio.ratio,
-                "source": ratio.source,
-                "updated_at": now,
+                "underlying": insert(CedearRatio).excluded.underlying,
+                "ratio": insert(CedearRatio).excluded.ratio,
+                "source": insert(CedearRatio).excluded.source,
+                "updated_at": insert(CedearRatio).excluded.updated_at,
             },
         )
     )
     await session.execute(stmt)
+    return len(values)
 
 
 # Namespace for CEDEAR ratio repository functions.
 class CedearRatioRepository:
-    get_all_latest = staticmethod(get_all_latest)
-    get_latest = staticmethod(get_latest)
+    bulk_upsert = staticmethod(bulk_upsert)
     get_latest_by_tickers = staticmethod(get_latest_by_tickers)
-    upsert = staticmethod(upsert)
 
 
 # Singleton used by services.

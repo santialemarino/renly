@@ -27,31 +27,38 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
     SkippedInvestment,
 )
+from app.services import exchange_rate_service
 from app.utils import metrics as mh
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
 
 
-# Splits investments into convertible and skipped based on currency support.
+# Splits investments into convertible and skipped. An investment is skipped when its base
+# currency is statically unsupported OR when the rates needed to reach the display currency
+# are missing from the stored data (fail-loud: a value must never pass through unconverted).
 # When no currency is requested, all investments are convertible (no conversion needed).
 def _split_by_convertibility(
     investments: list[Investment],
     currency: str | None,
+    lookup: mh.RateLookup | None,
 ) -> tuple[list[Investment], list[SkippedInvestment]]:
     if not currency:
         return investments, []
+    rate_map = lookup.get_rate_map_at(date_type.today()) if lookup else None
     convertible: list[Investment] = []
     skipped: list[SkippedInvestment] = []
     for inv in investments:
-        if mh.can_convert(inv.base_currency, currency):
+        base = inv.base_currency
+        data_present = rate_map is not None and base in rate_map and currency in rate_map
+        if base == currency or (mh.can_convert(base, currency) and data_present):
             convertible.append(inv)
         else:
             skipped.append(
                 SkippedInvestment(
                     investment_id=inv.id,
                     name=inv.name,
-                    base_currency=inv.base_currency,
+                    base_currency=base,
                 )
             )
     return convertible, skipped
@@ -101,7 +108,6 @@ async def get_investment_metrics(
     investment_id: int,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
 ) -> InvestmentMetricsResponse:
     inv = await investment_repository.get_by_id(session, investment_id, user_id)
     if inv is None:
@@ -110,7 +116,13 @@ async def get_investment_metrics(
     snapshots = await metrics_repository.list_snapshots_by_investments(session, [investment_id])
     transactions = await metrics_repository.list_transactions_by_investments(session, [investment_id])
 
-    lookup = await _get_required_lookup(session, currency, [inv], dollar_preference)
+    lookup = await _get_required_lookup(session, user_id, currency, [inv])
+    # Single-investment endpoint has no skip list — a missing pair is a hard 503, never a
+    # silently unconverted number.
+    if currency and lookup is not None:
+        rate_map = lookup.get_rate_map_at(date_type.today())
+        if rate_map is None or inv.base_currency not in rate_map or currency not in rate_map:
+            raise ExchangeRateUnavailableError(currency)
     return _build_investment_metrics(inv, snapshots, transactions, currency, lookup)
 
 
@@ -120,7 +132,7 @@ async def get_portfolio_metrics(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -129,7 +141,9 @@ async def get_portfolio_metrics(
     end_date: date_type | None = None,
 ) -> PortfolioMetricsResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
-    investments, skipped = _split_by_convertibility(all_investments, currency)
+    # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
+    lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
+    investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
         return PortfolioMetricsResponse(
             total_value=ZERO,
@@ -139,151 +153,139 @@ async def get_portfolio_metrics(
             skipped_investments=skipped,
         )
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
     all_transactions = await metrics_repository.list_transactions_by_investments(session, inv_ids)
 
     snap_by_inv = mh.group_snapshots_by_investment(all_snapshots)
-    latest_map = {inv_id: snaps[-1] for inv_id, snaps in snap_by_inv.items()}
     tx_by_inv = mh.group_transactions_by_investment(all_transactions)
 
     # Build a lookup from investment_id to base_currency.
     inv_currency = {i.id: i.base_currency for i in investments}
 
-    # Total current value — convert each investment's latest snapshot at the snapshot's own date.
-    def _convert_snap(snap: InvestmentSnapshot, base: str) -> Decimal:
-        if not (currency and lookup):
-            return snap.value
-        rate_map = lookup.get_rate_map_at(snap.date)
-        if rate_map is None:
-            return snap.value
-        return mh.convert_value(snap.value, base, currency, rate_map)
-
-    total_value = sum(_convert_snap(snap, inv_currency.get(inv_id, "")) for inv_id, snap in latest_map.items())
-
-    # Total invested capital — convert each transaction at its own date, then sum.
-    def _converted_invested_capital(inv_id: int) -> Decimal:
-        txs = tx_by_inv.get(inv_id, [])
-        if not (currency and lookup):
-            return mh.invested_capital(txs)
-        base = inv_currency.get(inv_id, "")
-        total = ZERO
-        for tx in txs:
-            rate_map = lookup.get_rate_map_at(tx.date)
-            amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else tx.amount
-            if tx.type in (TransactionType.deposit, TransactionType.buy):
-                total += amount
-            else:
-                total -= amount
-        return total
-
-    total_invested = sum(_converted_invested_capital(inv_id) for inv_id in inv_ids)
-
-    absolute_gain = total_value - total_invested
-
-    # Simple return is only meaningful when invested capital is positive.
-    total_return_pct = None
-    if total_invested > ZERO:
-        total_return_pct = total_value / total_invested - ONE
-
-    # Month-over-month change — convert each snapshot at its own date.
-    curr_for_change = ZERO
-    prev_total = ZERO
-    has_prev = False
-    for inv_id in inv_ids:
-        snaps = snap_by_inv.get(inv_id, [])
-        if len(snaps) >= 2:
-            base = inv_currency.get(inv_id, "")
-            curr_for_change += _convert_snap(snaps[-1], base)
-            prev_total += _convert_snap(snaps[-2], base)
-            has_prev = True
-
-    month_change = (curr_for_change - prev_total) if has_prev else None
-    month_change_pct = None
-    if has_prev and prev_total != ZERO:
-        month_change_pct = (curr_for_change - prev_total) / prev_total
-
-    # Portfolio TWR: compute monthly portfolio-level returns, then chain.
-    # For each unique date, sum all investment values (forward-fill + convert).
-    # Then compute period return between consecutive portfolio totals.
-    all_dates: set[date_type] = set()
+    # Per-investment {date: value} with each snapshot converted at its OWN date, so every series
+    # below (totals, TWR, month change, IRR) reflects what the portfolio actually looked like in
+    # display currency at each point in time.
     inv_date_value: dict[int, dict[date_type, Decimal]] = {}
     for inv_id, snaps in snap_by_inv.items():
         dv: dict[date_type, Decimal] = {}
         base = inv_currency.get(inv_id, "")
         for s in snaps:
-            # Convert each historical snapshot at its OWN date so the TWR chain reflects what the
-            # portfolio actually looked like in display currency at each point in time.
             v = s.value
             rate_map = _rate_map_at(lookup, s.date) if currency else None
             if currency and rate_map:
-                v = mh.convert_value(v, base, currency, rate_map)
-            dv[s.date] = v
-            all_dates.add(s.date)
-        inv_date_value[inv_id] = dv
-
-    sorted_dates = sorted(all_dates)
-
-    # Build portfolio totals per date (forward-fill).
-    last_known: dict[int, Decimal] = {}
-    portfolio_totals: list[tuple[date_type, Decimal]] = []
-    for d in sorted_dates:
-        total = ZERO
-        for inv_id in inv_ids:
-            dv = inv_date_value.get(inv_id, {})
-            if d in dv:
-                last_known[inv_id] = dv[d]
-            total += last_known.get(inv_id, ZERO)
-        portfolio_totals.append((d, total))
-
-    # Compute net cash flows per period and chain returns.
-    portfolio_returns: list[Decimal] = []
-    for i in range(1, len(portfolio_totals)):
-        prev_date, prev_val = portfolio_totals[i - 1]
-        curr_date, curr_val = portfolio_totals[i]
-        # Sum net cash flows across all investments in this period — convert each tx at its own date.
-        period_ncf = ZERO
-        for inv_id in inv_ids:
-            base = inv_currency.get(inv_id, "")
-            for tx in tx_by_inv.get(inv_id, []):
-                if not (prev_date < tx.date <= curr_date):
+                converted = mh.convert_value(v, base, currency, rate_map)
+                if converted is None:
                     continue
-                amount = tx.amount
-                rate_map = _rate_map_at(lookup, tx.date) if currency else None
-                if currency and rate_map:
-                    amount = mh.convert_value(amount, base, currency, rate_map)
-                if tx.type in (TransactionType.deposit, TransactionType.buy):
-                    period_ncf += amount
-                else:
-                    period_ncf -= amount
-        r = mh.period_return(prev_val, curr_val, period_ncf)
-        if r is not None:
-            if start_date and curr_date < start_date:
-                continue
-            if end_date and curr_date > end_date:
-                continue
-            portfolio_returns.append(r)
+                v = converted
+            dv[s.date] = v
+        inv_date_value[inv_id] = dv
+    first_snap_dates = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
+
+    # Converted signed flows per investment (positive = money in, negative = money out), each
+    # transaction converted at its own date.
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]] = {}
+    for inv_id in inv_ids:
+        base = inv_currency.get(inv_id, "")
+        flows: list[tuple[date_type, Decimal]] = []
+        for tx in tx_by_inv.get(inv_id, []):
+            amount = tx.amount
+            rate_map = _rate_map_at(lookup, tx.date) if currency else None
+            if currency and rate_map:
+                converted = mh.convert_value(amount, base, currency, rate_map)
+                if converted is None:
+                    continue
+                amount = converted
+            if tx.type in (TransactionType.deposit, TransactionType.buy):
+                flows.append((tx.date, amount))
+            else:
+                flows.append((tx.date, -amount))
+        flows_by_inv[inv_id] = flows
+
+    # Forward-filled portfolio totals plus portfolio-level period returns; a new investment's
+    # first snapshot counts as contributed capital in its period, not return.
+    portfolio_totals, dated_returns = mh.portfolio_totals_and_returns(inv_date_value, flows_by_inv)
+
+    # Portfolio TWR: chain the period returns that fall inside the requested window.
+    portfolio_returns = [r for d, r in dated_returns if r is not None and (not start_date or d >= start_date) and (not end_date or d <= end_date)]
     portfolio_twr = mh.twr(portfolio_returns)
 
-    # Portfolio IRR: combined cashflow series across all investments. Each cashflow converts at
-    # its own date so mixed-currency portfolios reflect historical FX, not today's rate.
-    all_cashflows: list[tuple[date_type, float]] = []
-    for inv_id in inv_ids:
-        snaps = snap_by_inv.get(inv_id, [])
-        txs = tx_by_inv.get(inv_id, [])
-        cfs = mh.build_irr_cashflows(snaps, txs)
-        base = inv_currency.get(inv_id, "")
-        if currency and lookup:
-            converted_cfs: list[tuple[date_type, float]] = []
-            for d, a in cfs:
-                rate_map = lookup.get_rate_map_at(d)
-                amount = mh.convert_value(Decimal(str(a)), base, currency, rate_map) if rate_map else Decimal(str(a))
-                converted_cfs.append((d, float(amount)))
-            cfs = converted_cfs
-        if start_date or end_date:
-            cfs = [(d, a) for d, a in cfs if (not start_date or d >= start_date) and (not end_date or d <= end_date)]
-        all_cashflows.extend(cfs)
+    # Headline value/invested/gain: all-time without a window, period metrics with one
+    # (value at window end, net flows inside the window, gain = end - start - net flows).
+    if start_date or end_date:
+        window_start_value = mh.portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
+        if end_date:
+            window_end_value = mh.portfolio_value_at(portfolio_totals, end_date)
+        else:
+            window_end_value = portfolio_totals[-1][1] if portfolio_totals else ZERO
+        # Net flows inside the window: real transactions after each investment's first snapshot,
+        # plus the first snapshot itself when the investment was born inside the window.
+        window_net_flows = ZERO
+        for inv_id, flows in flows_by_inv.items():
+            first_date = first_snap_dates.get(inv_id)
+            for flow_date, amount in flows:
+                if first_date is not None and flow_date <= first_date:
+                    continue
+                if start_date and flow_date <= start_date:
+                    continue
+                if end_date and flow_date > end_date:
+                    continue
+                window_net_flows += amount
+        for inv_id, first_date in first_snap_dates.items():
+            if start_date and first_date <= start_date:
+                continue
+            if end_date and first_date > end_date:
+                continue
+            window_net_flows += inv_date_value[inv_id][first_date]
+        total_value = window_end_value
+        total_invested = window_net_flows
+        absolute_gain = window_end_value - window_start_value - window_net_flows
+        # Period simple return over the capital at work (start value + contributed flows).
+        denominator = window_start_value + window_net_flows
+        total_return_pct = absolute_gain / denominator if denominator > ZERO else None
+    else:
+        total_value = portfolio_totals[-1][1] if portfolio_totals else ZERO
+        total_invested = sum((amount for flows in flows_by_inv.values() for _, amount in flows), ZERO)
+        absolute_gain = total_value - total_invested
+        # Simple return is only meaningful when invested capital is positive.
+        total_return_pct = None
+        if total_invested > ZERO:
+            total_return_pct = total_value / total_invested - ONE
+
+    # Month-over-month change from the forward-filled totals series in display currency:
+    # latest total vs the last total dated before the latest entry's month.
+    month_change = None
+    month_change_pct = None
+    mom = mh.month_over_month(portfolio_totals)
+    if mom is not None:
+        prev_total, curr_total = mom
+        month_change = curr_total - prev_total
+        if prev_total != ZERO:
+            month_change_pct = month_change / prev_total
+
+    # Portfolio IRR: combined cashflow series across all investments, each cashflow converted at
+    # its own date. With a window, boundary valuations from the totals series replace the raw
+    # flows outside it.
+    all_cashflows: list[tuple[date_type, float]]
+    if start_date or end_date:
+        all_cashflows = mh.build_windowed_portfolio_cashflows(portfolio_totals, inv_date_value, flows_by_inv, start_date, end_date)
+    else:
+        all_cashflows = []
+        for inv_id in inv_ids:
+            snaps = snap_by_inv.get(inv_id, [])
+            txs = tx_by_inv.get(inv_id, [])
+            cfs = mh.build_irr_cashflows(snaps, txs)
+            base = inv_currency.get(inv_id, "")
+            if currency and lookup:
+                converted_cfs: list[tuple[date_type, float]] = []
+                for d, a in cfs:
+                    rate_map = lookup.get_rate_map_at(d)
+                    amount = mh.convert_value(Decimal(str(a)), base, currency, rate_map) if rate_map else None
+                    if amount is None:
+                        continue
+                    converted_cfs.append((d, float(amount)))
+                cfs = converted_cfs
+            all_cashflows.extend(cfs)
     portfolio_irr = mh.xirr(all_cashflows) if len(all_cashflows) >= 2 else None
 
     return PortfolioMetricsResponse(
@@ -306,7 +308,7 @@ async def get_portfolio_evolution(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -315,11 +317,12 @@ async def get_portfolio_evolution(
     end_date: date_type | None = None,
 ) -> PortfolioEvolutionResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
-    investments, skipped = _split_by_convertibility(all_investments, currency)
+    # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
+    lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
+    investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
         return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
 
@@ -348,7 +351,7 @@ async def get_portfolio_evolution(
         inv_date_source[inv_id] = ds
 
     if not all_dates:
-        return PortfolioEvolutionResponse(points=[], currency=currency)
+        return PortfolioEvolutionResponse(points=[], currency=currency, skipped_investments=skipped)
 
     # Generate all months from earliest to latest snapshot date.
     min_date = min(all_dates)
@@ -390,7 +393,10 @@ async def get_portfolio_evolution(
             source_date = last_known_source_date.get(inv_id, month)
             rate_map = _rate_map_at(lookup, source_date) if currency else None
             if currency and rate_map:
-                val = mh.convert_value(val, inv_currency.get(inv_id, ""), currency, rate_map)
+                converted = mh.convert_value(val, inv_currency.get(inv_id, ""), currency, rate_map)
+                if converted is None:
+                    continue
+                val = converted
             total += val
         points.append(EvolutionPoint(date=month, total_value=total))
 
@@ -409,18 +415,19 @@ async def get_allocation(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
 ) -> AllocationResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
-    investments, skipped = _split_by_convertibility(all_investments, currency)
+    # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
+    lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
+    investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
         return AllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
 
@@ -431,7 +438,10 @@ async def get_allocation(
             v = snapshot.value
             rate_map = _rate_map_at(lookup, snapshot.date) if currency else None
             if currency and rate_map:
-                v = mh.convert_value(v, inv.base_currency, currency, rate_map)
+                converted = mh.convert_value(v, inv.base_currency, currency, rate_map)
+                if converted is None:
+                    continue
+                v = converted
             cat_values[inv.category] += v
 
     total_value = sum(cat_values.values(), ZERO)
@@ -450,18 +460,18 @@ async def get_allocation_by_group(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
 ) -> GroupAllocationResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
-    investments, skipped = _split_by_convertibility(all_investments, currency)
+    # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
+    lookup = await _get_required_lookup(session, user_id, currency, all_investments)
+    investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
         return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
     latest_map = await metrics_repository.get_latest_snapshots(session, inv_ids)
@@ -472,7 +482,10 @@ async def get_allocation_by_group(
         v = snapshot.value
         rate_map = _rate_map_at(lookup, snapshot.date) if currency else None
         if currency and rate_map:
-            v = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
+            converted = mh.convert_value(v, inv_currency.get(inv_id, ""), currency, rate_map)
+            if converted is None:
+                continue
+            v = converted
         inv_values[inv_id] = v
 
     # Load groups and their memberships — batch query.
@@ -524,7 +537,6 @@ async def get_investments_summary(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
-    dollar_preference: str | None = None,
     investment_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     category: str | None = None,
@@ -533,11 +545,12 @@ async def get_investments_summary(
     end_date: date_type | None = None,
 ) -> InvestmentsSummaryResponse:
     all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
-    investments, skipped = _split_by_convertibility(all_investments, currency)
+    # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
+    lookup = await _get_required_lookup(session, user_id, currency, all_investments)
+    investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
         return InvestmentsSummaryResponse(items=[], skipped_investments=skipped)
 
-    lookup = await _get_required_lookup(session, currency, investments, dollar_preference)
     inv_ids = [i.id for i in investments]
 
     all_snapshots = await metrics_repository.list_snapshots_by_investments(session, inv_ids)
@@ -562,11 +575,23 @@ async def get_investments_summary(
         cap = mh.invested_capital(txs)
         absolute_gain = (current_value - cap) if current_value is not None else None
 
-        # Month-over-month change (computed BEFORE conversion — uses original currency).
+        # Month-over-month change from month-bucketed converted values: latest snapshot vs the
+        # last snapshot dated before the latest one's month (consistent with the portfolio card).
         month_change_pct = None
-        if len(snaps) >= 2:
-            curr_v = snaps[-1].value
-            prev_v = snaps[-2].value
+        converted_series: list[tuple[date_type, Decimal]] = []
+        for s in snaps:
+            v = s.value
+            if currency and lookup:
+                rate_map = lookup.get_rate_map_at(s.date)
+                if rate_map:
+                    converted = mh.convert_value(v, base, currency, rate_map)
+                    if converted is None:
+                        continue
+                    v = converted
+            converted_series.append((s.date, v))
+        mom = mh.month_over_month(converted_series)
+        if mom is not None:
+            prev_v, curr_v = mom
             if prev_v != ZERO:
                 month_change_pct = (curr_v - prev_v) / prev_v
 
@@ -580,7 +605,9 @@ async def get_investments_summary(
             converted_cap = ZERO
             for tx in txs:
                 rate_map = lookup.get_rate_map_at(tx.date)
-                amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else tx.amount
+                amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else None
+                if amount is None:
+                    continue
                 if tx.type in (TransactionType.deposit, TransactionType.buy):
                     converted_cap += amount
                 else:
@@ -611,19 +638,23 @@ async def get_investments_summary(
 # Returns a RateLookup pre-loaded with every stored rate (Phase 3, Step C — date-aware conversion).
 # Callers look up per-row dates via lookup.get_rate_map_at(...). Raises ExchangeRateUnavailableError
 # if conversion is needed but the rates table is empty. Returns None when currency is None or no
-# conversion is needed at all.
+# conversion is needed at all. Reuses a prebuilt per-request lookup when the caller already built one.
 async def _get_required_lookup(
     session: AsyncSession,
+    user_id: int,
     currency: str | None,
     investments: list[Investment],
-    dollar_preference: str | None = None,
+    lookup: mh.RateLookup | None = None,
 ) -> mh.RateLookup | None:
     if not currency:
         return None
     needs_conversion = any(inv.base_currency != currency for inv in investments)
     if not needs_conversion:
         return None
-    lookup = await mh.build_rate_lookup(session, dollar_preference)
+    if lookup is None:
+        lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id)
+    # Probe date is irrelevant here: get_rate_map_at returns None only when the rates table is
+    # empty, so the server-local today is fine (no user-timezone read needed for this check).
     if lookup.get_rate_map_at(date_type.today()) is None:
         raise ExchangeRateUnavailableError(currency)
     return lookup
@@ -652,8 +683,9 @@ def _build_investment_metrics(
     current_value = latest_snap.value if latest_snap else None
     absolute_gain = (current_value - cap) if current_value is not None else None
 
+    # Simple return is only meaningful when invested capital is positive (mirrors portfolio level).
     simple_return = None
-    if current_value is not None and cap != ZERO:
+    if current_value is not None and cap > ZERO:
         simple_return = current_value / cap - ONE
 
     # Period returns.
@@ -670,7 +702,10 @@ def _build_investment_metrics(
         converted_irr: list[tuple[date_type, float]] = []
         for d, a in irr_cashflows:
             rate_map = lookup.get_rate_map_at(d)
-            amount = mh.convert_value(Decimal(str(a)), base, currency, rate_map) if rate_map else Decimal(str(a))
+            amount = mh.convert_value(Decimal(str(a)), base, currency, rate_map) if rate_map else None
+            # Defensive: unreachable after the pair-presence gate above.
+            if amount is None:
+                continue
             converted_irr.append((d, float(amount)))
         irr_cashflows = converted_irr
     irr_val = mh.xirr(irr_cashflows)
@@ -684,7 +719,9 @@ def _build_investment_metrics(
         converted_cap = ZERO
         for tx in transactions:
             rate_map = lookup.get_rate_map_at(tx.date)
-            amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else tx.amount
+            amount = mh.convert_value(tx.amount, base, currency, rate_map) if rate_map else None
+            if amount is None:
+                continue
             if tx.type in (TransactionType.deposit, TransactionType.buy):
                 converted_cap += amount
             else:
@@ -698,7 +735,10 @@ def _build_investment_metrics(
         if currency and lookup:
             rate_map = lookup.get_rate_map_at(d)
             if rate_map:
-                converted_v = mh.convert_value(v, base, currency, rate_map)
+                converted = mh.convert_value(v, base, currency, rate_map)
+                if converted is None:
+                    continue
+                converted_v = converted
         period_returns.append(PeriodReturnItem(date=d, value=converted_v, return_pct=r))
 
     return InvestmentMetricsResponse(

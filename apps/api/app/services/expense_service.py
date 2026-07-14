@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, ReverseResult
+from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, PaymentMethod, PaymentPairingError, ReverseResult
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import (
@@ -14,14 +14,17 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
+from app.schemas.expense import ExpenseListResponse, ExpenseResponse
 from app.services import (
     card_reconciliation_service,
+    exchange_rate_service,
     installment_service,
     payment_obligation_service,
     settings_service,
     subscription_service,
 )
 from app.utils.dates import OBLIGATION_MONTH_STEP
+from app.utils.metrics import RateLookup, convert_optional
 
 # Match window for the manual-dupe expense warning (Phase 3, Step D). Mirrors the
 # user-facing constant DUPE_MATCH_WINDOW_DAYS in apps/web/lib/constants/expenses.ts.
@@ -45,7 +48,16 @@ class AutoChargeMatchResult:
     source_plan_name: str
 
 
-# List expenses for a user with optional filters and pagination.
+# Maps an entry to its response, converting at the entry's historical date (Phase 3, Step C).
+# Expenses are records of past events — the display value reflects the rate in effect when the
+# expense actually happened, so re-opening the page on a different day shows the same number.
+def _to_response(entry: ExpenseEntry, currency: str | None, lookup: RateLookup | None) -> ExpenseResponse:
+    resp = ExpenseResponse.model_validate(entry)
+    resp.converted_amount = convert_optional(entry.amount, entry.currency, currency, lookup, entry.date)
+    return resp
+
+
+# List expenses for a user with optional filters, pagination, and display-currency conversion.
 async def list_expenses(
     session: AsyncSession,
     user: User,
@@ -55,10 +67,11 @@ async def list_expenses(
     payment_method: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    currency: str | None = None,
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[ExpenseEntry], int]:
-    return await expense_repository.list_by_user_filtered(
+) -> ExpenseListResponse:
+    entries, total = await expense_repository.list_by_user_filtered(
         session,
         user.id,
         search=search,
@@ -69,6 +82,23 @@ async def list_expenses(
         page=page,
         page_size=page_size,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    items: list[ExpenseResponse] = []
+    skipped: set[str] = set()
+    for e in entries:
+        resp = _to_response(e, currency, lookup)
+        # A requested conversion that yielded null means the rate was missing — flag the row's currency.
+        if currency and e.currency != currency and resp.converted_amount is None:
+            skipped.add(e.currency)
+        items.append(resp)
+    return ExpenseListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        display_currency=currency,
+        skipped_currencies=sorted(skipped),
+    )
 
 
 # Get a single expense by id. Raises NotFoundError if not found.
@@ -77,6 +107,19 @@ async def get_expense(session: AsyncSession, expense_id: int, user: User) -> Exp
     if entry is None:
         raise NotFoundError("Expense not found.")
     return entry
+
+
+# Get a single expense as its response schema, converted when a display currency is requested.
+async def get_expense_response(
+    session: AsyncSession,
+    expense_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> ExpenseResponse:
+    entry = await get_expense(session, expense_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    return _to_response(entry, currency, lookup)
 
 
 # Inserts the expense row. Extracted (Phase 3, follow-up Item 2) so create_expense and
@@ -300,12 +343,15 @@ async def create_expenses_for_obligation_cycles(
 #   - None -> Y (add)            : advance NEW plan (subject to Item 9's matched-equals-current rule).
 #   - X -> Y (swap, same type)   : reverse OLD plan + advance NEW plan.
 #   - cross-type swap            : reverse OLD plan + advance NEW plan (different plan types).
-#   - unchanged                  : no-op.
+#   - unchanged FK, date moved   : reverse OLD date + advance NEW date on the SAME sub/installment
+#                                  (self-gating primitives → inert unless this expense governs the
+#                                  cursor top; obligations exempt — they archive with no cursor).
+#   - unchanged FK + same date   : no-op.
 # Mutual exclusivity at the row level (at most one OLD FK set) + the Pydantic validator
 # (at most one NEW FK set) means at most one reverse target and at most one advance target
-# fire per update — so the response carries at most one of each. Returns
-# (entry, advance_result, reverse_result) so the router can populate the response's
-# advance_change + reverse_change fields for the frontend toast.
+# fire per FK transition; the same-plan date edit points both at one plan. The response carries
+# at most one of each. Returns (entry, advance_result, reverse_result) so the router can populate
+# the response's advance_change + reverse_change fields for the frontend toast.
 async def update_expense(
     session: AsyncSession,
     expense_id: int,
@@ -326,6 +372,13 @@ async def update_expense(
     new_subscription_id = fields["subscription_id"] if "subscription_id" in fields else old_subscription_id
     new_installment_id = fields["installment_id"] if "installment_id" in fields else old_installment_id
     new_card_id = fields["credit_card_id"] if "credit_card_id" in fields else old_card_id
+    new_date = fields["date"] if "date" in fields else old_date
+
+    # Effective payment pairing after the merge: a kept-or-set card id requires the
+    # effective method to be credit_card (the schema validator only sees same-request pairs).
+    new_payment_method = fields["payment_method"] if "payment_method" in fields else entry.payment_method
+    if new_card_id is not None and new_payment_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
 
     # Reverse target: OLD plan that loses this expense. At most one fires (mutual exclusivity
     # on the row guarantees at most one old FK is set). Resolve most-recent BEFORE mutation
@@ -351,6 +404,26 @@ async def update_expense(
         advance_target = ("subscription", new_subscription_id)
     elif new_installment_id is not None and new_installment_id != old_installment_id:
         advance_target = ("installment", new_installment_id)
+
+    # Same-plan date edit: the subscription/installment link stays but its date moved, so model it
+    # as unlink-at-old-date + relink-at-new-date to keep the cursor consistent with delete+create.
+    # The reverse fires only when this row is the most-recent link for the plan — the same
+    # is_most_recent gate the FK-swap (above) and delete paths use, since only the newest link's
+    # date can govern the cursor top — AND its old date actually advanced the cursor (reverse_for_unlink
+    # recomputes that). The advance re-claims the cursor cycle when the new date lands on it
+    # (advance_for_manual_entry self-gates), mirroring create. So an edit that is below the cursor
+    # OR is not the most-recent link is inert. Obligations archive once and carry no cursor, so
+    # they're exempt. (A date edit on a non-most-recent link that DID over-subscribe the cursor
+    # cycle is the locked recompute-from-all-linked residual, shared with delete+create.)
+    if reverse_target is None and advance_target is None and new_date != old_date:
+        if new_subscription_id is not None:
+            if await expense_repository.is_most_recent_linked_subscription_expense(session, user.id, new_subscription_id, entry.id):
+                reverse_target = ("subscription", new_subscription_id)
+            advance_target = ("subscription", new_subscription_id)
+        elif new_installment_id is not None:
+            if await expense_repository.is_most_recent_linked_installment_expense(session, user.id, new_installment_id, entry.id):
+                reverse_target = ("installment", new_installment_id)
+            advance_target = ("installment", new_installment_id)
 
     # SEC-4: validate any newly-set or changed FK belongs to the user before mutating the row or
     # stale-marking a card. Unchanged FKs were already validated when first attached.
@@ -379,9 +452,11 @@ async def update_expense(
         if plan_type == "obligation":
             reverse_result = await payment_obligation_service.reverse_for_unlink(session, plan_id, user)
         elif plan_type == "subscription":
-            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user)
+            # Pass the row's pre-edit date: the reverse fires only if that link's advance
+            # decision (recomputed) actually moved the cursor.
+            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user, old_date)
         elif plan_type == "installment":
-            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user, old_date)
 
     advance_result: AdvanceResult | None = None
     if advance_target is not None:
@@ -434,9 +509,9 @@ async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> 
         if plan_type == "obligation":
             reverse_result = await payment_obligation_service.reverse_for_unlink(session, plan_id, user)
         elif plan_type == "subscription":
-            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await subscription_service.reverse_for_unlink(session, plan_id, user, old_date)
         elif plan_type == "installment":
-            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user)
+            reverse_result = await installment_service.reverse_for_unlink(session, plan_id, user, old_date)
 
     await session.commit()
     return reverse_result

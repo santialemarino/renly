@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -39,6 +38,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { CATEGORY_CAPABILITIES, type InvestmentCategory } from '@/lib/constants/categories';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 interface InvestmentFormDialogProps {
@@ -91,21 +91,22 @@ export function InvestmentFormDialog({
   const tickerHint =
     watchedCategory && showTicker ? t(`form.ticker.hints.${watchedCategory}`) : null;
 
-  // Reset form values when the dialog opens or the target investment changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: investment?.name ?? '',
-        category: (investment?.category ??
-          undefined) as unknown as InvestmentFormValues['category'],
-        baseCurrency: investment?.baseCurrency ?? '',
-        ticker: investment?.ticker ?? '',
-        broker: investment?.broker ?? '',
-        notes: investment?.notes ?? '',
-        groupIds: investment?.groups.map((g) => g.id) ?? [],
-      });
-    }
-  }, [open, investment, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: investment,
+    toValues: (inv) => ({
+      name: inv?.name ?? '',
+      category: (inv?.category ?? undefined) as unknown as InvestmentFormValues['category'],
+      baseCurrency: inv?.baseCurrency ?? '',
+      ticker: inv?.ticker ?? '',
+      broker: inv?.broker ?? '',
+      notes: inv?.notes ?? '',
+      groupIds: inv?.groups.map((g) => g.id) ?? [],
+    }),
+    onSuccess,
+  });
 
   // Clear ticker when switching to a category that doesn't support it.
   useEffect(() => {
@@ -115,19 +116,11 @@ export function InvestmentFormDialog({
   }, [showTicker, form]);
 
   async function onSubmit(values: InvestmentFormValues) {
-    try {
-      if (isEdit) {
-        await updateInvestment(investment.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createInvestment(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateInvestment(investment.id, values) : createInvestment(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
@@ -148,8 +141,8 @@ export function InvestmentFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -163,8 +156,8 @@ export function InvestmentFormDialog({
                 control={form.control}
                 name="category"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.category.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.category.label')}</FormLabel>
                     <Select value={field.value ?? ''} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -188,8 +181,8 @@ export function InvestmentFormDialog({
                 control={form.control}
                 name="baseCurrency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <Tooltip>
                         <TooltipTrigger asChild>

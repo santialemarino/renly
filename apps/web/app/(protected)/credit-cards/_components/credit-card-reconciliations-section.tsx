@@ -23,6 +23,7 @@ import { ReconciliationDeleteDialog } from '@/app/(protected)/credit-cards/_comp
 import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_components/reconciliation-form-dialog';
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
+import { ANIMATION_FAST } from '@/lib/constants/animations';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 import { getLocaleTag } from '@/lib/utils/locale';
@@ -134,7 +135,7 @@ export function CreditCardReconciliationsSection({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: ANIMATION_FAST }}
                     className="text-paragraph-sm text-muted-foreground"
                   >
                     {t('loading')}
@@ -145,7 +146,7 @@ export function CreditCardReconciliationsSection({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: ANIMATION_FAST }}
                     className="text-paragraph-sm text-muted-foreground"
                   >
                     {t('empty')}
@@ -156,7 +157,7 @@ export function CreditCardReconciliationsSection({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.15 }}
+                    transition={{ duration: ANIMATION_FAST }}
                   >
                     <Table>
                       <TableHeader>

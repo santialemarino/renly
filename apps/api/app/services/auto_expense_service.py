@@ -6,21 +6,21 @@
 # Idempotent across re-runs (dedup-keyed on (source plan, date)).
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain import claimed_installment_cuotas, claimed_subscription_cycles
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
-from app.repositories import user_settings_repository
+from app.repositories import installment_repository, subscription_repository, user_settings_repository
 from app.utils.dates import (
     add_months,
     advance_by_cycle,
     local_hour_for_user,
-    step_back_by_cycle,
     today_in_timezone,
 )
 
@@ -62,80 +62,6 @@ def subscription_dates_to_emit(
     return dates
 
 
-# Returns the subscription cycle date closest to `target_date` measured by absolute
-# day distance (Phase 3, follow-up 3b). Walks the cycle anchored on next_billing_date
-# forward or backward — including PAST cycles before the current cursor — and picks
-# the candidate with the smallest |target - cycle|. Pure function; the caller checks
-# whether the matched cycle equals the current cursor before advancing (Item 9, Option C).
-# The closest-cycle math implicitly enforces a half-cycle window around the cursor — an
-# entry within half a cycle of the cursor matches it; further out, it matches a neighbour
-# and the strict-equality predicate refuses to advance. Defensive safety cap on the walk
-# prevents runaway loops on degenerate cycles.
-def closest_subscription_cycle(
-    next_billing_date: date_type,
-    billing_cycle: str,
-    target_date: date_type,
-    *,
-    anchor_day: int | None = None,
-) -> date_type:
-    if anchor_day is None:
-        anchor_day = next_billing_date.day
-    # Forward walk first if the target is at-or-after the cursor.
-    if target_date >= next_billing_date:
-        cursor = next_billing_date
-        steps = 0
-        while steps < 1000:
-            nxt = advance_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
-            if nxt <= cursor or nxt > target_date:
-                break
-            cursor = nxt
-            steps += 1
-        nxt = advance_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
-        if nxt <= cursor:
-            return cursor
-        return cursor if abs((cursor - target_date).days) <= abs((nxt - target_date).days) else nxt
-    # Backward walk: the target is before the current cursor.
-    cursor = next_billing_date
-    steps = 0
-    while steps < 1000:
-        prev = step_back_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
-        if prev >= cursor or prev < target_date:
-            break
-        cursor = prev
-        steps += 1
-    prev = step_back_by_cycle(cursor, billing_cycle, anchor_day=anchor_day)
-    if prev >= cursor:
-        return cursor
-    return cursor if abs((cursor - target_date).days) <= abs((prev - target_date).days) else prev
-
-
-# Returns the (index, date) of the installment closest to `target_date` for an installment
-# plan, or None when the plan is already fully paid (`current_installment > installments_count`).
-# Indices are 1-based; date = add_months(start_date, idx - 1). Pure function; the caller
-# checks whether the matched installment equals the current cursor before advancing
-# (Item 9, Option C). The closest-installment math implicitly enforces a half-month
-# window around the cursor.
-def closest_installment_cuota(
-    start_date: date_type,
-    current_installment: int,
-    installments_count: int,
-    target_date: date_type,
-) -> tuple[int, date_type] | None:
-    if current_installment > installments_count:
-        return None
-    # Closed-form approximation: compare target's month offset from start_date to the
-    # installment grid, then check the 1-step neighbourhood to absorb the short-month clamp.
-    months_diff = (target_date.year - start_date.year) * 12 + (target_date.month - start_date.month)
-    approx_idx = months_diff + 1
-    candidates: list[tuple[int, date_type]] = []
-    for idx in (approx_idx - 1, approx_idx, approx_idx + 1):
-        clamped = max(1, min(idx, installments_count))
-        cuota_date = add_months(start_date, clamped - 1)
-        candidates.append((clamped, cuota_date))
-    best = min(candidates, key=lambda pair: abs((pair[1] - target_date).days))
-    return best
-
-
 # Returns (index, date) pairs an installment plan should have emitted up to and
 # including today. Pure function — does not mutate the installment record.
 # Indices are 1-based; date is start_date + (index - 1) months.
@@ -156,6 +82,13 @@ def installment_cuotas_to_emit(
     return cuotas
 
 
+# Inclusive SQL cutoff for the due-scan: a user's local "today" can lead the UTC date by up to
+# 14 hours (UTC+14), so scanning to utc_date + 1 day covers every user's local today. The exact
+# per-user local-date comparison below still decides what actually emits.
+def _scan_cutoff(now_utc: datetime) -> date_type:
+    return now_utc.date() + timedelta(days=1)
+
+
 # Auto-generates expense entries for active subscriptions and installments
 # belonging to users whose local-time-now hour equals AUTO_EXPENSES_HOUR_LOCAL.
 # Users with no stored timezone fall back to UTC. Idempotent on re-runs.
@@ -165,25 +98,29 @@ async def generate_auto_expenses(session: AsyncSession, *, now_utc: datetime | N
 
     user_timezones = await user_settings_repository.get_all_timezones(session)
 
-    sub_count = await _generate_subscription_expenses(session, now_utc, user_timezones)
-    inst_count = await _generate_installment_expenses(session, now_utc, user_timezones)
+    sub_created, sub_advanced = await _generate_subscription_expenses(session, now_utc, user_timezones)
+    inst_created, inst_advanced = await _generate_installment_expenses(session, now_utc, user_timezones)
 
-    if sub_count or inst_count:
+    # Commit also on emission-free ticks that advanced a cursor (pre-paid cycles): the
+    # dedup suppresses the insert but the cursor catch-up must persist.
+    if sub_created or inst_created or sub_advanced or inst_advanced:
         await session.commit()
-    return sub_count + inst_count
+    return sub_created + inst_created
 
 
 # Emits expense_entries for active subscriptions belonging to eligible users
 # (those whose local hour matches AUTO_EXPENSES_HOUR_LOCAL on this tick).
+# Returns (created, advanced): entries inserted and plan cursors moved. The caller commits
+# when either is non-zero — cycle-proximity dedup can advance a cursor past a pre-paid
+# cycle without inserting anything, and that advance must still persist.
 async def _generate_subscription_expenses(
     session: AsyncSession,
     now_utc: datetime,
     user_timezones: dict[int, str],
-) -> int:
-    result = await session.execute(select(Subscription).where(Subscription.is_active.is_(True)))
-    subscriptions = list(result.scalars().all())
+) -> tuple[int, int]:
+    subscriptions = await subscription_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not subscriptions:
-        return 0
+        return 0, 0
 
     # Filter to subscriptions whose user is currently at AUTO_EXPENSES_HOUR_LOCAL
     # AND whose next_billing_date has been reached in that user's local tz.
@@ -197,12 +134,13 @@ async def _generate_subscription_expenses(
             continue
         pending.append((sub, today_for_user))
     if not pending:
-        return 0
+        return 0, 0
 
     sub_ids = [s.id for s, _ in pending]
     existing = await _existing_subscription_dates(session, sub_ids)
 
     created = 0
+    advanced = 0
     for sub, today_for_user in pending:
         dates = subscription_dates_to_emit(
             sub.next_billing_date,
@@ -212,8 +150,20 @@ async def _generate_subscription_expenses(
         )
         if not dates:
             continue
+        # Dedup by cycle proximity: every linked expense claims the cycle its own date binds
+        # to under the same closest-cycle matching the manual-entry advance uses, so an
+        # off-date pre-pay (e.g. an expense dated Jun 28 linked to the Jun 30 cycle) blocks
+        # the back-fill from double-emitting that cycle. Exact-date rows claim their own
+        # cycle, so this subsumes the old exact-date check; the partial UNIQUE INDEX on
+        # (subscription_id, date) remains as a last-resort backstop.
+        claimed = claimed_subscription_cycles(
+            sub.next_billing_date,
+            sub.billing_cycle,
+            existing.get(sub.id, set()),
+            anchor_day=sub.anchor_day,
+        )
         for d in dates:
-            if (sub.id, d) in existing:
+            if d in claimed:
                 continue
             session.add(
                 ExpenseEntry(
@@ -229,27 +179,31 @@ async def _generate_subscription_expenses(
                 )
             )
             created += 1
-        # Advance to the first cycle strictly after today.
+        # Advance to the first cycle strictly after today — also when every emission was
+        # deduped: that is exactly how a pre-paid cycle's frozen cursor catches up.
         next_after = advance_by_cycle(dates[-1], sub.billing_cycle, anchor_day=sub.anchor_day)
         sub.next_billing_date = next_after
         session.add(sub)
+        advanced += 1
 
     if created:
         await session.flush()
         logger.info("Auto-expenses: created %d subscription charges at %s UTC.", created, now_utc.isoformat())
-    return created
+    return created, advanced
 
 
 # Emits expense_entries for active installment plans belonging to eligible users.
+# Returns (created, advanced): entries inserted and plan cursors moved. The caller commits
+# when either is non-zero — cycle-proximity dedup can advance a cursor past a pre-paid
+# cuota without inserting anything, and that advance must still persist.
 async def _generate_installment_expenses(
     session: AsyncSession,
     now_utc: datetime,
     user_timezones: dict[int, str],
-) -> int:
-    result = await session.execute(select(Installment).where(Installment.is_active.is_(True)))
-    installments = list(result.scalars().all())
+) -> tuple[int, int]:
+    installments = await installment_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not installments:
-        return 0
+        return 0, 0
 
     pending: list[tuple[Installment, date_type]] = []
     for inst in installments:
@@ -263,12 +217,13 @@ async def _generate_installment_expenses(
             continue
         pending.append((inst, today_for_user))
     if not pending:
-        return 0
+        return 0, 0
 
     inst_ids = [i.id for i, _ in pending]
     existing = await _existing_installment_dates(session, inst_ids)
 
     created = 0
+    advanced = 0
     for inst, today_for_user in pending:
         cuotas = installment_cuotas_to_emit(
             inst.start_date,
@@ -278,8 +233,16 @@ async def _generate_installment_expenses(
         )
         if not cuotas:
             continue
-        for _idx, cuota_date in cuotas:
-            if (inst.id, cuota_date) in existing:
+        # Dedup by cycle proximity — linked expenses claim the cuota INDEX their date binds
+        # to (same closest-cuota matching as the manual-entry advance), so an off-date
+        # pre-pay blocks the back-fill from double-emitting that cuota.
+        claimed = claimed_installment_cuotas(
+            inst.start_date,
+            inst.installments_count,
+            existing.get(inst.id, set()),
+        )
+        for idx, cuota_date in cuotas:
+            if idx in claimed:
                 continue
             session.add(
                 ExpenseEntry(
@@ -295,31 +258,41 @@ async def _generate_installment_expenses(
                 )
             )
             created += 1
-        # Advance the installment counter past the last emitted index; flip the plan
-        # inactive once we're past the final installment.
+        # Advance the installment counter past the last emitted index (also when every
+        # emission was deduped); flip the plan inactive once past the final installment.
         last_idx = cuotas[-1][0]
         inst.current_installment = last_idx + 1
         if inst.current_installment > inst.installments_count:
             inst.is_active = False
         session.add(inst)
+        advanced += 1
 
     if created:
         await session.flush()
         logger.info("Auto-expenses: created %d installment charges at %s UTC.", created, now_utc.isoformat())
-    return created
+    return created, advanced
 
 
-# Returns the set of (subscription_id, date) tuples already present in expense_entries.
-async def _existing_subscription_dates(session: AsyncSession, sub_ids: list[int]) -> set[tuple[int, date_type]]:
+# Returns {subscription_id: set of linked expense dates} for every expense row linked to
+# the given subscriptions. Unwindowed — cycle-proximity dedup binds each date to its
+# closest cycle, so the plan's full linked history loads in one query before the loop.
+async def _existing_subscription_dates(session: AsyncSession, sub_ids: list[int]) -> dict[int, set[date_type]]:
     if not sub_ids:
-        return set()
+        return {}
     result = await session.execute(select(ExpenseEntry.subscription_id, ExpenseEntry.date).where(ExpenseEntry.subscription_id.in_(sub_ids)))
-    return {(row[0], row[1]) for row in result.all()}
+    grouped: dict[int, set[date_type]] = {}
+    for sub_id, d in result.all():
+        grouped.setdefault(sub_id, set()).add(d)
+    return grouped
 
 
-# Returns the set of (installment_id, date) tuples already present in expense_entries.
-async def _existing_installment_dates(session: AsyncSession, inst_ids: list[int]) -> set[tuple[int, date_type]]:
+# Returns {installment_id: set of linked expense dates} for every expense row linked to
+# the given installment plans. Unwindowed, one query — mirror of the subscription loader.
+async def _existing_installment_dates(session: AsyncSession, inst_ids: list[int]) -> dict[int, set[date_type]]:
     if not inst_ids:
-        return set()
+        return {}
     result = await session.execute(select(ExpenseEntry.installment_id, ExpenseEntry.date).where(ExpenseEntry.installment_id.in_(inst_ids)))
-    return {(row[0], row[1]) for row in result.all()}
+    grouped: dict[int, set[date_type]] = {}
+    for inst_id, d in result.all():
+        grouped.setdefault(inst_id, set()).add(d)
+    return grouped

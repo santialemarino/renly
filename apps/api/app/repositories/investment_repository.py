@@ -129,12 +129,15 @@ async def list_names_by_user(session: AsyncSession, user_id: int) -> list[str]:
     return list(result.scalars().all())
 
 
-# Returns (id, name, ticker) for the user's investments, oldest first (to resolve import references).
-async def list_identifiers_by_user(session: AsyncSession, user_id: int) -> list[tuple[int, str, str | None]]:
+# Returns (id, name, ticker, base_currency) for every investment owned by the user. Powers the
+# nested-import resolver (identifier match + row-currency-vs-base validation).
+async def list_identifiers_by_user(session: AsyncSession, user_id: int) -> list[tuple[int, str, str | None, str]]:
     result = await session.execute(
-        select(Investment.id, Investment.name, Investment.ticker).where(Investment.user_id == user_id).order_by(Investment.id)
+        select(Investment.id, Investment.name, Investment.ticker, Investment.base_currency)
+        .where(Investment.user_id == user_id)
+        .order_by(Investment.id)
     )
-    return [(row[0], row[1], row[2]) for row in result.all()]
+    return [(row[0], row[1], row[2], row[3]) for row in result.all()]
 
 
 # Persists a new investment and flushes to get the id.

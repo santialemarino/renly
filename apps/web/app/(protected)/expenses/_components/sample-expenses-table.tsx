@@ -12,6 +12,7 @@ import { formatDateForLocale } from '@/lib/utils/format';
 export function SampleExpensesTable() {
   const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
 
   const columns: SampleColumn<Expense>[] = [
     { header: t('table.date'), cell: (e) => formatDateForLocale(e.date, locale) },
@@ -22,7 +23,7 @@ export function SampleExpensesTable() {
     },
     {
       header: t('table.category'),
-      cell: (e) => (e.category ? t(`categories.${e.category}`) : '—'),
+      cell: (e) => (e.category ? tCommon(`categories.${e.category}`) : '—'),
     },
     {
       header: t('table.paymentMethod'),
@@ -32,11 +33,11 @@ export function SampleExpensesTable() {
   ];
 
   const getDetail = (e: Expense) => ({
-    title: e.category ? t(`categories.${e.category}`) : formatDateForLocale(e.date, locale),
+    title: e.category ? tCommon(`categories.${e.category}`) : formatDateForLocale(e.date, locale),
     fields: [
       { label: t('table.date'), value: formatDateForLocale(e.date, locale) },
       { label: t('table.amount'), value: formatAmount(e.amount, locale, e.currency) },
-      { label: t('table.category'), value: e.category ? t(`categories.${e.category}`) : '—' },
+      { label: t('table.category'), value: e.category ? tCommon(`categories.${e.category}`) : '—' },
       {
         label: t('table.paymentMethod'),
         value: e.paymentMethod ? t(`paymentMethods.${e.paymentMethod}`) : '—',

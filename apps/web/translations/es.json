@@ -26,7 +26,8 @@
         "passwordRequirements": "La contraseña no cumple los requisitos",
         "passwordMismatch": "Las contraseñas no coinciden",
         "serverError": "Algo salió mal. Intentá de nuevo más tarde."
-      }
+      },
+      "togglePassword": "Mostrar contraseña"
     },
     "amountMismatch": {
       "obligation": {
@@ -49,16 +50,64 @@
       }
     },
     "categories": {
+      "bonus": "Bonificaciones",
+      "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
+      "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
       "cedears": "CEDEARs",
+      "clothing": "Ropa",
       "corporate_bonds": "Obligaciones Negociables",
       "crypto": "Cripto",
+      "dining": "Restaurantes",
+      "dividends": "Dividendos",
       "dollars": "Dólares",
+      "education": "Educación",
+      "entertainment": "Entretenimiento",
       "fci": "Fondos Comunes",
+      "food": "Comida y Supermercado",
+      "freelance": "Freelance",
+      "gifts": "Regalos",
       "government_bonds": "Bonos Soberanos",
+      "health": "Salud",
+      "home_maintenance": "Hogar y Mantenimiento",
+      "insurance": "Seguros",
+      "investment_returns": "Retornos de Inversión",
+      "kids": "Hijos",
       "other": "Otro",
+      "personal_care": "Cuidado Personal",
+      "pets": "Mascotas",
       "real_estate": "Inmuebles",
+      "refunds": "Reembolsos",
+      "rent": "Alquiler",
+      "rental_income": "Alquiler",
+      "salary": "Sueldo",
+      "sales": "Ventas",
+      "sports": "Deportes y Fitness",
       "stocks": "Acciones",
-      "term_deposit": "Plazo Fijo"
+      "subscriptions": "Suscripciones",
+      "taxes": "Impuestos",
+      "term_deposit": "Plazo Fijo",
+      "transport": "Transporte",
+      "travel": "Viajes",
+      "uncategorized": "Sin categoría",
+      "utilities": "Servicios"
+    },
+    "paymentMethod": {
+      "label": "Método de pago",
+      "placeholder": "Seleccioná un método",
+      "methods": {
+        "cash": "Efectivo",
+        "debit": "Débito",
+        "transfer": "Transferencia",
+        "credit_card": "Tarjeta de Crédito"
+      },
+      "creditCard": {
+        "label": "Tarjeta de crédito",
+        "placeholder": "Seleccioná una tarjeta"
+      },
+      "noCards": {
+        "message": "Todavía no tenés ninguna tarjeta de crédito.",
+        "addCard": "Agregar tarjeta"
+      }
     },
     "allCategories": "Todas las categorías",
     "groupFilter": {
@@ -133,7 +182,12 @@
       },
       "rights": "Todos los derechos reservados."
     },
-    "requestAccess": "Solicitar acceso"
+    "requestAccess": "Solicitar acceso",
+    "export": {
+      "label": "Exportar",
+      "loading": "Preparando…",
+      "success": "Tu exportación de datos fue descargada."
+    }
   },
   "login": {
     "metadata": {
@@ -436,19 +490,6 @@
       "previous": "Anterior",
       "next": "Siguiente"
     },
-    "categories": {
-      "bonus": "Bonificaciones",
-      "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
-      "dividends": "Dividendos",
-      "freelance": "Freelance",
-      "gifts": "Regalos",
-      "investment_returns": "Retornos de Inversión",
-      "other": "Otro",
-      "refunds": "Reembolsos",
-      "rental_income": "Alquiler",
-      "salary": "Sueldo",
-      "sales": "Ventas"
-    },
     "form": {
       "titleCreate": "Agregar ingreso",
       "titleEdit": "Editar ingreso",
@@ -525,29 +566,6 @@
       "previous": "Anterior",
       "next": "Siguiente"
     },
-    "categories": {
-      "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
-      "clothing": "Ropa",
-      "dining": "Restaurantes",
-      "education": "Educación",
-      "entertainment": "Entretenimiento",
-      "food": "Comida y Supermercado",
-      "gifts": "Regalos",
-      "health": "Salud",
-      "home_maintenance": "Hogar y Mantenimiento",
-      "insurance": "Seguros",
-      "kids": "Hijos",
-      "other": "Otro",
-      "personal_care": "Cuidado Personal",
-      "pets": "Mascotas",
-      "rent": "Alquiler",
-      "sports": "Deportes y Fitness",
-      "subscriptions": "Suscripciones",
-      "taxes": "Impuestos",
-      "transport": "Transporte",
-      "travel": "Viajes",
-      "utilities": "Servicios"
-    },
     "paymentMethods": {
       "cash": "Efectivo",
       "debit": "Débito",
@@ -563,7 +581,8 @@
       },
       "amount": {
         "label": "Monto",
-        "placeholder": "0,00"
+        "placeholder": "0,00",
+        "perCycleLabel": "Monto por ciclo"
       },
       "currency": {
         "label": "Moneda",
@@ -575,19 +594,12 @@
         "label": "Categoría",
         "placeholder": "Seleccioná una categoría"
       },
-      "paymentMethod": {
-        "label": "Método de pago",
-        "placeholder": "Seleccioná un método"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
-      },
       "cyclesToAdvance": {
         "label": "Ciclos a pre-pagar",
         "errors": {
           "invalid": "Ingresá un número entre 1 y {max}."
-        }
+        },
+        "totalPreview": "Total: {total}"
       },
       "notes": {
         "label": "Notas",
@@ -725,7 +737,8 @@
         "label": "Pago mensual",
         "placeholder": "0",
         "hint": "Opcional. Si arrastrás saldo en esta tarjeta y pagás un monto típico cada mes, ponelo acá — cuenta como compromiso fijo en la tarjeta de Liquidez. Dejá vacío si la pagás en su totalidad.",
-        "invalid": "Debe ser un número no negativo."
+        "invalid": "Debe ser un número no negativo.",
+        "overlapHint": "Renly ya cuenta las suscripciones y cuotas pagadas con esta tarjeta. Definilo solo para pagos de deuda revolvente además de esos."
       },
       "cancel": "Cancelar",
       "cta": {
@@ -904,14 +917,6 @@
         "label": "Próximo cobro",
         "placeholder": "Seleccioná una fecha"
       },
-      "paymentMethod": {
-        "label": "Forma de pago",
-        "placeholder": "Seleccioná una forma de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
-      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -1011,14 +1016,6 @@
       "expenseCategory": {
         "label": "Categoría de gasto",
         "placeholder": "Elegí una categoría de gasto"
-      },
-      "paymentMethod": {
-        "label": "Método de pago",
-        "placeholder": "Elegí un método de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Elegí una tarjeta"
       },
       "notes": {
         "label": "Notas",
@@ -1158,14 +1155,6 @@
         "label": "Fecha de inicio",
         "placeholder": "Seleccioná una fecha"
       },
-      "paymentMethod": {
-        "label": "Forma de pago",
-        "placeholder": "Seleccioná una forma de pago"
-      },
-      "creditCard": {
-        "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
-      },
       "derived": {
         "total": "Total: {amount}",
         "totalToPay": "Total a pagar: {amount}",
@@ -1205,6 +1194,8 @@
       "twr": "TWR",
       "irr": "IRR",
       "gain": "Ganancia",
+      "periodEndValue": "Valor al Cierre del Período",
+      "periodGain": "Ganancia del Período",
       "vsLastMonth": "vs mes anterior"
     },
     "period": {
@@ -1507,7 +1498,8 @@
       },
       "createSuccess": "Snapshot creado.",
       "updateSuccess": "Snapshot actualizado.",
-      "saveError": "Error al guardar el snapshot."
+      "saveError": "Error al guardar el snapshot.",
+      "transactionSaveError": "Se guardó el snapshot, pero no se pudo guardar la transacción. Volvé a abrir el snapshot para reintentarla."
     }
   },
   "preferences": {
@@ -1977,10 +1969,7 @@
       "json": {
         "title": "Exportar tus datos",
         "description": "Descargá todos tus datos de Renly en un archivo JSON."
-      },
-      "label": "Exportar",
-      "loading": "Preparando…",
-      "success": "Tu exportación de datos fue descargada."
+      }
     }
   },
   "landing": {

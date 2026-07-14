@@ -39,20 +39,19 @@ export function FinanceDashboardDistribution({
 }: FinanceDashboardDistributionProps) {
   const locale = useLocale();
   const t = useTranslations('financeDashboard');
-  const tExpenses = useTranslations('expenses');
-  const tIncome = useTranslations('income');
+  const tCommon = useTranslations('common');
   const [mode, setMode] = useState<Mode>('expense');
 
   const isExpenseMode = mode === 'expense';
 
   const chartData = isExpenseMode
     ? expenseBreakdown.items.map((item) => ({
-        name: tExpenses(`categories.${item.category}`),
+        name: tCommon(`categories.${item.category}`),
         value: item.value,
         percentage: item.percentage,
       }))
     : incomeBreakdown.items.map((item) => ({
-        name: tIncome(`categories.${item.category}`),
+        name: tCommon(`categories.${item.category}`),
         value: item.value,
         percentage: item.percentage,
       }));

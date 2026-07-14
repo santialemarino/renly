@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.dashboard import (
     DashboardCompositionResponse,
@@ -13,11 +14,9 @@ from app.schemas.dashboard import (
     DashboardOverviewResponse,
 )
 from app.services import dashboard_service
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 DATE_FROM_DESC = "Start of date range (YYYY-MM-DD, inclusive)."
 DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 
@@ -27,16 +26,14 @@ DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 async def get_overview(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardOverviewResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_overview(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -47,16 +44,14 @@ async def get_overview(
 async def get_evolution(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardEvolutionResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_evolution(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         date_from=date_from,
         date_to=date_to,
     )
@@ -67,14 +62,12 @@ async def get_evolution(
 async def get_composition(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> DashboardCompositionResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_composition(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
     )
 
 
@@ -83,12 +76,10 @@ async def get_composition(
 async def get_liquidity(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> DashboardLiquidityResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await dashboard_service.get_liquidity(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
     )

@@ -26,3 +26,8 @@ class ExchangeRateResponse(BaseModel):
 class LatestRatesResponse(BaseModel):
     rates: list[ExchangeRateResponse] = Field(description="Latest rate for each pair.")
     last_update: date_type | None = Field(default=None, description="Most recent date across all pairs.")
+
+
+# Response for GET /exchange-rates/currencies. The supported set drives entry-form pickers.
+class SupportedCurrenciesResponse(BaseModel):
+    currencies: list[str] = Field(description="ISO 4217 codes with exchange-rate support, sorted alphabetically.")

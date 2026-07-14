@@ -4,12 +4,12 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InstallmentsTable } from '@/app/(protected)/installments/_components/installments-table';
 import { InstallmentsToolbar } from '@/app/(protected)/installments/_components/installments-toolbar';
-import { getCreditCards } from '@/lib/api/credit-cards';
-import { getInstallments, type InstallmentSortField, type SortOrder } from '@/lib/api/installments';
-import { getSettings } from '@/lib/api/settings';
+import { getInstallments, type InstallmentSortField } from '@/lib/api/installments';
+import { getPageSettings } from '@/lib/api/settings';
+import type { SortOrder } from '@/lib/api/types';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -30,16 +30,11 @@ export default async function InstallmentsPage({ searchParams }: InstallmentsPag
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [settings, creditCards] = await Promise.all([
-    getSettings().catch(() => null),
-    getCreditCards().catch(() => []),
-  ]);
+  const { settings, creditCards } = await getPageSettings();
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency = savedCurrency || primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   const installments = await getInstallments({
     search: params.search,

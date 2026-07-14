@@ -162,13 +162,13 @@ class TestConvertValueHistorical:
         unchanged = convert_value(Decimal("1.234"), "USD", "USD", rate_map)
         assert unchanged == Decimal("1.234")
 
-    def test_unsupported_pair_returns_value_unchanged(self):
-        # When either side is missing from the rate map, convert_value bails early and
-        # returns the input unchanged (no quantization applied — matches prior behaviour).
+    def test_missing_pair_returns_none(self):
+        # When either side is missing from the rate map, convert_value fails loud and returns
+        # None so callers skip the row instead of summing an unconverted value.
         rates = {
             ExchangeRatePair.USD_BRL: [_rate(ExchangeRatePair.USD_BRL, date(2026, 1, 1), "5")],
         }
         lookup = RateLookup("mep", rates)
         rate_map = lookup.get_rate_map_at(date(2026, 1, 1))
-        # ARS rate is missing -> bail, return input untouched.
-        assert convert_value(Decimal("1.234"), "ARS", "BRL", rate_map) == Decimal("1.234")
+        # ARS rate is missing -> fail loud, return None.
+        assert convert_value(Decimal("1.234"), "ARS", "BRL", rate_map) is None

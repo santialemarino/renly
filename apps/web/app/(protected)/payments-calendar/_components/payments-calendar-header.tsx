@@ -7,19 +7,26 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
+import { currentYearMonth } from '@/lib/utils/dates';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarHeaderProps {
   year: number;
   month: number;
+  timeZone?: string;
 }
 
-export function PaymentsCalendarHeader({ year, month }: PaymentsCalendarHeaderProps) {
+export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalendarHeaderProps) {
   const t = useTranslations('paymentsCalendar');
   const locale = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+
+  // Locale-aware month name (e.g. "May" / "mayo").
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
+    month: 'long',
+  });
 
   function navigate(targetYear: number, targetMonth: number) {
     const params = new URLSearchParams(searchParams.toString());
@@ -41,18 +48,13 @@ export function PaymentsCalendarHeader({ year, month }: PaymentsCalendarHeaderPr
   }
 
   function handleToday() {
-    const now = new Date();
-    navigate(now.getFullYear(), now.getMonth() + 1);
+    const { year: nowYear, month: nowMonth } = currentYearMonth(timeZone);
+    navigate(nowYear, nowMonth);
   }
-
-  // Locale-aware month name (e.g. "May" / "mayo").
-  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
-    month: 'long',
-  });
 
   return (
     <div className="flex items-center justify-between gap-x-3 pb-1">
-      <div className="text-heading-lg font-semibold tabular-nums">
+      <div className="text-heading-4 tabular-nums">
         {t('monthLabel', { month: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1), year })}
       </div>
       <div className="flex items-center gap-x-2">

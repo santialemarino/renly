@@ -5,11 +5,13 @@ import { getDateFnsLocale, getLocaleTag } from '@/lib/utils/locale';
 interface FormatValueOptions {
   locale?: string;
   compact?: boolean;
+  // Max fraction digits for non-compact output (ISO-4217 sub-unit precision when currency-driven).
+  maxDecimals?: number;
 }
 
 // Formats a number with thousand separators, stripping .00 for integers. Pass `compact: true` for axis/tooltip-style abbreviated output (e.g. "1.5M", "23K").
 export function formatValue(value: number, options: FormatValueOptions = {}): string {
-  const { locale, compact = false } = options;
+  const { locale, compact = false, maxDecimals = 2 } = options;
   if (compact) {
     return new Intl.NumberFormat(getLocaleTag(locale), {
       notation: 'compact',
@@ -20,7 +22,7 @@ export function formatValue(value: number, options: FormatValueOptions = {}): st
   const hasDecimals = value % 1 !== 0;
   return new Intl.NumberFormat(getLocaleTag(locale), {
     minimumFractionDigits: 0,
-    maximumFractionDigits: hasDecimals ? 2 : 0,
+    maximumFractionDigits: hasDecimals ? maxDecimals : 0,
   }).format(value);
 }
 

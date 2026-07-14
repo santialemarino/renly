@@ -1,82 +1,28 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  ListChecks,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Archive, ArchiveRestore, ListChecks, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
 import { InstallmentDeleteDialog } from '@/app/(protected)/installments/_components/installment-delete-dialog';
 import { InstallmentFormDialog } from '@/app/(protected)/installments/_components/installment-form-dialog';
 import {
   archiveInstallment,
   unarchiveInstallment,
 } from '@/app/(protected)/installments/installment-actions';
+import { RowActionButton } from '@/components/row-action-button';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type { Installment, InstallmentSortField, SortOrder } from '@/lib/api/installments';
+import type { Installment, InstallmentSortField } from '@/lib/api/installments';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: InstallmentSortField;
-  sortBy: InstallmentSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 interface InstallmentsTableProps {
   installments: Installment[];
@@ -96,35 +42,12 @@ export function InstallmentsTable({
   const locale = useLocale();
   const t = useTranslations('installments');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<InstallmentSortField>(
+    ROUTES.installments,
+  );
   const [editInstallment, setEditInstallment] = useState<Installment | null>(null);
   const [deleteState, setDeleteState] = useState<Installment | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as InstallmentSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.installments}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: InstallmentSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
 
   async function handleArchive(inst: Installment) {
     setArchivingId(inst.id);
@@ -158,56 +81,41 @@ export function InstallmentsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('installment_amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.installmentAmount')}
-                  <SortIcon column="installment_amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('total_amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.totalAmount')}
-                  <SortIcon column="total_amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('current_installment')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.progress')}
-                  <SortIcon column="current_installment" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('next_cuota_date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.nextCuotaDate')}
-                  <SortIcon column="next_cuota_date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.installmentAmount')}
+                column="installment_amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.totalAmount')}
+                column="total_amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.progress')}
+                column="current_installment"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.nextCuotaDate')}
+                column="next_cuota_date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.paymentMethod')}</TableHead>
               <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>
             </TableRow>
@@ -279,81 +187,44 @@ export function InstallmentsTable({
                     <TableCell className="text-center">
                       {!inst.isActive ? (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => handleUnarchive(inst)}
-                                disabled={archivingId === inst.id}
-                                aria-label="Unarchive"
-                              >
-                                <ArchiveRestore className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(inst)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={ArchiveRestore}
+                            tooltip={t('actions.unarchive')}
+                            ariaLabel="Unarchive"
+                            onClick={() => handleUnarchive(inst)}
+                            disabled={archivingId === inst.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(inst)}
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setEditInstallment(inst)}
-                                aria-label="Edit"
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleArchive(inst)}
-                                disabled={archivingId === inst.id}
-                                aria-label="Archive"
-                              >
-                                <Archive className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.archive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(inst)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={Pencil}
+                            tooltip={t('actions.edit')}
+                            ariaLabel="Edit"
+                            onClick={() => setEditInstallment(inst)}
+                          />
+                          <RowActionButton
+                            icon={Archive}
+                            tooltip={t('actions.archive')}
+                            ariaLabel="Archive"
+                            variant="muted"
+                            onClick={() => handleArchive(inst)}
+                            disabled={archivingId === inst.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(inst)}
+                          />
                         </div>
                       )}
                     </TableCell>

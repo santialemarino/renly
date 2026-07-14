@@ -42,9 +42,10 @@ export function GroupDeleteFormDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
+      entity={group}
       title={t('delete.title')}
-      description={t('delete.description', { name: group.name, count: group.investmentIds.length })}
-      confirmName={group.name}
+      description={(g) => t('delete.description', { name: g.name, count: g.investmentIds.length })}
+      confirmName={(g) => g.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}

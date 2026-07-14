@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.domain import AdvanceResult, ReverseResult
 from app.models.expense_entry import ExpenseCategory
@@ -21,30 +22,8 @@ from app.schemas.expense import (
     PlanCursorChange,
 )
 from app.services import expense_service
-from app.utils.metrics import RateLookup, build_rate_lookup, convert_value
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
-
-
-# Converts an entry's amount at the entry's historical date (Phase 3, Step C).
-# Expenses are records of past events — display value reflects the rate that was in effect
-# when the expense actually happened, so re-opening the page on a different day shows the
-# same number.
-def _convert_entry(
-    resp: ExpenseResponse,
-    entry_currency: str,
-    entry_date: date_type,
-    target_currency: str | None,
-    lookup: RateLookup | None,
-) -> ExpenseResponse:
-    if target_currency and lookup and entry_currency != target_currency:
-        rate_map = lookup.get_rate_map_at(entry_date)
-        if rate_map:
-            resp.converted_amount = convert_value(resp.amount, entry_currency, target_currency, rate_map)
-    elif target_currency and entry_currency == target_currency:
-        resp.converted_amount = resp.amount
-    return resp
 
 
 # Maps an AdvanceResult / ReverseResult to the PlanCursorChange response field.
@@ -66,16 +45,16 @@ def _cursor_change(result: AdvanceResult | ReverseResult | None) -> PlanCursorCh
 async def list_expenses(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Search notes."),
     category: ExpenseCategory | None = Query(default=None, description="Filter by category."),
     payment_method: str | None = Query(default=None, description="Filter by payment method."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> ExpenseListResponse:
-    entries, total = await expense_service.list_expenses(
+    return await expense_service.list_expenses(
         session,
         current_user,
         search=search,
@@ -83,22 +62,9 @@ async def list_expenses(
         payment_method=payment_method,
         date_from=date_from,
         date_to=date_to,
+        currency=currency,
         page=page,
         page_size=page_size,
-    )
-
-    lookup: RateLookup | None = None
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        lookup = await build_rate_lookup(session, dp)
-
-    items = [_convert_entry(ExpenseResponse.model_validate(e), e.currency, e.date, currency, lookup) for e in entries]
-    return ExpenseListResponse(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        display_currency=currency,
     )
 
 
@@ -181,15 +147,9 @@ async def get_expense(
     expense_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> ExpenseResponse:
-    entry = await expense_service.get_expense(session, expense_id, current_user)
-    resp = ExpenseResponse.model_validate(entry)
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        lookup = await build_rate_lookup(session, dp)
-        resp = _convert_entry(resp, entry.currency, entry.date, currency, lookup)
-    return resp
+    return await expense_service.get_expense_response(session, expense_id, current_user, currency=currency)
 
 
 # Create a new expense. Supports both JWT (web) and API key (iOS Shortcut) auth.

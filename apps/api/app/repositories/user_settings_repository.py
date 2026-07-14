@@ -1,5 +1,7 @@
 # Data access for user settings.
 
+from sqlalchemy import cast
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -44,11 +46,29 @@ async def save(session: AsyncSession, user_settings: UserSettings) -> None:
     session.add(user_settings)
 
 
+# Latches a single boolean settings flag to True via a targeted JSONB merge upsert (never a
+# read-modify-write of the whole blob) so it can't clobber a concurrent settings write, and works
+# whether or not a settings row exists yet. Idempotent; does NOT commit — the caller's transaction
+# persists it.
+async def latch_flag(session: AsyncSession, user_id: int, key: str) -> None:
+    marker = {key: True}
+    stmt = (
+        insert(UserSettings)
+        .values(user_id=user_id, settings=marker)
+        .on_conflict_do_update(
+            index_elements=["user_id"],
+            set_={"settings": UserSettings.__table__.c.settings.op("||")(cast(marker, JSONB))},
+        )
+    )
+    await session.execute(stmt)
+
+
 # Namespace to call repository functions (e.g. user_settings_repository.get_by_user_id).
 class UserSettingsRepository:
     create = staticmethod(create)
     get_all_timezones = staticmethod(get_all_timezones)
     get_by_user_id = staticmethod(get_by_user_id)
+    latch_flag = staticmethod(latch_flag)
     save = staticmethod(save)
 
 

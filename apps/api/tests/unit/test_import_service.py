@@ -19,6 +19,7 @@ from app.domain.import_specs import (
     TRANSACTIONS_SPEC,
     ImportEntity,
 )
+from app.domain.payment_method import PaymentMethod
 from app.main import create_app
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
@@ -323,9 +324,23 @@ class TestExpenseSpec:
         preview, _ = self._validate([["2026-01-05", "100", "USD", "wat", "", ""]])
         assert preview[0].status == "invalid"
 
-    def test_overlong_payment_method_is_invalid(self):
-        preview, _ = self._validate([["2026-01-05", "100", "USD", "food", "x" * 21, ""]])
-        assert preview[0].status == "invalid"
+    def test_mapped_payment_method_coerces(self):
+        preview, coerced = self._validate([["2026-01-05", "100", "USD", "food", "Visa", ""]])
+        assert preview[0].status == "valid"
+        assert preview[0].warnings == []
+        assert coerced[0]["payment_method"] == PaymentMethod.credit_card
+
+    def test_unmapped_payment_method_warns_but_row_imports(self):
+        preview, coerced = self._validate([["2026-01-05", "100", "USD", "food", "Cheque", ""]])
+        assert preview[0].status == "valid"
+        assert len(preview[0].warnings) == 1
+        assert "Unknown payment method" in preview[0].warnings[0]
+        assert "payment_method" not in coerced[0]
+
+    def test_warning_does_not_change_summary_counts(self):
+        preview, _ = self._validate([["2026-01-05", "100", "USD", "food", "Cheque", ""]])
+        summary = import_service._summarize(preview)
+        assert (summary.valid, summary.invalid, summary.duplicate) == (1, 0, 0)
 
     def test_composite_dedup_within_file(self):
         rows = [
@@ -416,6 +431,31 @@ class TestExpenseImport:
         assert inserted[0].source == "manual"
         session.commit.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_confirm_persists_mapped_and_dropped_payment_method(self, monkeypatch):
+        monkeypatch.setattr(import_service.expense_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
+        bulk = AsyncMock(side_effect=lambda session, entries: entries)
+        monkeypatch.setattr(import_service.expense_repository, "bulk_create", bulk)
+        content = _csv("Date,Amount,Currency,Category,Payment method,Notes\n2026-01-05,100,USD,food,Visa,a\n2026-01-06,200,USD,food,Cheque,b\n")
+        mapping = {
+            "date": "Date",
+            "amount": "Amount",
+            "currency": "Currency",
+            "category": "Category",
+            "payment_method": "Payment method",
+            "notes": "Notes",
+        }
+
+        result = await import_service.confirm_import(AsyncMock(), USER, ImportEntity.expenses, "x.csv", content, mapping, False)
+
+        assert result.created == 2
+        inserted = bulk.call_args.args[1]
+        # Imports never attach a card — P06's validator allows a card-less credit_card row.
+        assert inserted[0].payment_method == PaymentMethod.credit_card
+        assert inserted[0].credit_card_id is None
+        # The unmapped "Cheque" dropped to a warning → persisted as None.
+        assert inserted[1].payment_method is None
+
 
 class TestIncomeImport:
     @pytest.mark.asyncio
@@ -490,7 +530,7 @@ class TestImportEndpoints:
     @pytest.mark.parametrize("entity", ["snapshots", "transactions"])
     def test_nested_entity_preview_endpoint_returns_200(self, entity, monkeypatch):
         # Exercises route → service → spec + investment resolution for the nested entities.
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
         content = {
             "snapshots": b"Investment,Date,Value,Currency\nApple,2026-01-31,100,USD\n",
@@ -527,6 +567,12 @@ class TestQuantityCoercer:
             ("0", Decimal("0.000000")),
             ("1.5", Decimal("1.5")),
             ("0.00012345", Decimal("0.000123")),  # 6-decimal precision
+            ("0.125", Decimal("0.125")),  # lone dot + 3-digit fraction stays DECIMAL for quantity (was 125)
+            ("1.500", Decimal("1.5")),  # "1.500" shares means 1.5, not 1500
+            ("1,500", Decimal("1.5")),  # same rule for the comma
+            ("0,5", Decimal("0.5")),
+            ("1.500,25", Decimal("1500.25")),  # both separators present → unaffected by the quantity rule
+            ("1.500.000", Decimal("1500000")),  # multiple same separators remain grouping
         ],
     )
     def test_parses_quantity(self, raw, expected):
@@ -560,6 +606,29 @@ class TestTransactionTypeCoercer:
             import_specs._coerce_transaction_type("teleport")
 
 
+class TestPaymentMethodCoercer:
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            ("cash", PaymentMethod.cash),
+            ("Efectivo", PaymentMethod.cash),
+            ("débito", PaymentMethod.debit),
+            ("TRANSFERENCIA", PaymentMethod.transfer),
+            ("credit card", PaymentMethod.credit_card),
+            ("tarjeta de crédito", PaymentMethod.credit_card),
+            ("VISA", PaymentMethod.credit_card),
+            ("mastercard", PaymentMethod.credit_card),
+        ],
+    )
+    def test_maps_aliases(self, raw, expected):
+        assert import_specs._coerce_payment_method(raw) == expected
+
+    @pytest.mark.parametrize("raw", ["cheque", "gift card", "bitcoin"])
+    def test_rejects_unknown(self, raw):
+        with pytest.raises(ValueError, match="Unknown payment method"):
+            import_specs._coerce_payment_method(raw)
+
+
 class TestInvestmentCurrencyCoercer:
     @pytest.mark.parametrize(("raw", "expected"), [("usd", Currency.USD), ("ARS", Currency.ARS)])
     def test_parses_currency(self, raw, expected):
@@ -575,24 +644,40 @@ class TestInvestmentResolver:
     @pytest.mark.asyncio
     async def test_resolves_ticker_first_then_name_lowest_id(self, monkeypatch):
         # Two investments named "Apple" (ids 3, 7); a third with ticker "AAPL" (id 5).
-        identifiers = [(3, "Apple", None), (5, "Apple Inc", "AAPL"), (7, "Apple", None)]
+        identifiers = [(3, "Apple", None, "USD"), (5, "Apple Inc", "AAPL", "USD"), (7, "Apple", None, "USD")]
         monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=identifiers))
         resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
 
-        ticker_row: dict[str, object] = {"investment": "aapl"}
+        ticker_row: dict[str, object] = {"investment": "aapl", "currency": "USD"}
         resolve(ticker_row)
         assert ticker_row["investment_id"] == 5  # ticker match wins
 
-        name_row: dict[str, object] = {"investment": "apple"}
+        name_row: dict[str, object] = {"investment": "apple", "currency": "USD"}
         resolve(name_row)
         assert name_row["investment_id"] == 3  # ambiguous name → lowest (oldest) id
 
     @pytest.mark.asyncio
     async def test_unmatched_identifier_raises(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", None)]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", None, "USD")]))
         resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.snapshots)
         with pytest.raises(ValueError, match="not found"):
-            resolve({"investment": "Tesla"})
+            resolve({"investment": "Tesla", "currency": "USD"})
+
+    @pytest.mark.asyncio
+    async def test_row_currency_must_match_base(self, monkeypatch):
+        # ARS row for a USD-based investment is invalid — mirrors the API's 400.
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
+        with pytest.raises(ValueError, match="does not match the investment's base currency"):
+            resolve({"investment": "AAPL", "currency": "ARS"})
+
+    @pytest.mark.asyncio
+    async def test_matching_currency_resolves(self, monkeypatch):
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
+        resolve = await import_service._build_resolver(AsyncMock(), USER, ImportEntity.transactions)
+        row: dict[str, object] = {"investment": "AAPL", "currency": "USD"}
+        resolve(row)
+        assert row["investment_id"] == 1
 
     @pytest.mark.asyncio
     async def test_top_level_entity_has_no_resolver(self):
@@ -709,7 +794,7 @@ class TestTransactionSpec:
 class TestSnapshotImport:
     @pytest.mark.asyncio
     async def test_confirm_upserts_and_collapses_within_file(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         upsert = AsyncMock(side_effect=lambda session, snapshots: len(snapshots))
         monkeypatch.setattr(import_service.snapshot_repository, "bulk_upsert", upsert)
         session = AsyncMock()
@@ -732,7 +817,7 @@ class TestSnapshotImport:
 class TestTransactionImport:
     @pytest.mark.asyncio
     async def test_confirm_inserts_matched_skips_unmatched(self, monkeypatch):
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=[]))
         bulk = AsyncMock(side_effect=lambda session, txns: txns)
         monkeypatch.setattr(import_service.transaction_repository, "bulk_create", bulk)
@@ -753,7 +838,7 @@ class TestTransactionImport:
     async def test_confirm_dedups_against_existing_db_row(self, monkeypatch):
         # Existing keys arrive as DB-shaped tuples (int, date, TransactionType, Decimal, Currency,
         # Decimal); confirm they normalize to the same key as the coerced import row so it skips.
-        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL")]))
+        monkeypatch.setattr(import_service.investment_repository, "list_identifiers_by_user", AsyncMock(return_value=[(1, "Apple", "AAPL", "USD")]))
         existing = [(1, date(2026, 1, 5), TransactionType.buy, Decimal("100.00"), Currency.USD, Decimal("5.000000"))]
         monkeypatch.setattr(import_service.transaction_repository, "list_dedup_keys_by_user", AsyncMock(return_value=existing))
         bulk = AsyncMock(side_effect=lambda session, txns: txns)

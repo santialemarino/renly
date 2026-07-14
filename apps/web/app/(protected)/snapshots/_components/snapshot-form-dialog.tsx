@@ -271,10 +271,14 @@ export function SnapshotFormDialog({
         quantity: values.quantity || undefined,
         currency: baseCurrency,
       });
+    } catch {
+      toast.error(t('form.saveError'));
+      return;
+    }
 
-      const wantsTx =
-        values.includeTransaction && values.transactionAmount && values.transactionType;
+    const wantsTx = values.includeTransaction && values.transactionAmount && values.transactionType;
 
+    try {
       if (wantsTx && existingTx) {
         await updateTransaction(investmentId, existingTx.id, {
           amount: values.transactionAmount!,
@@ -292,13 +296,21 @@ export function SnapshotFormDialog({
       } else if (!wantsTx && existingTx) {
         await deleteTransaction(investmentId, existingTx.id);
       }
-
-      toast.success(isEdit ? t('form.updateSuccess') : t('form.createSuccess'));
+    } catch {
+      /*
+       * Partial failure: the snapshot is already persisted (no combined endpoint by
+       * design), so a generic "failed to save" would lie. Surface the specific state,
+       * close, and refresh via onSuccess so the saved snapshot is visible in the grid.
+       */
+      toast.error(t('form.transactionSaveError'));
       onSuccess();
       onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
+      return;
     }
+
+    toast.success(isEdit ? t('form.updateSuccess') : t('form.createSuccess'));
+    onSuccess();
+    onOpenChange(false);
   }
 
   const hasTicker = !!ticker;
@@ -329,8 +341,8 @@ export function SnapshotFormDialog({
                   control={form.control}
                   name="date"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel required>{t('form.date.label')}</FormLabel>
+                    <FormItem required>
+                      <FormLabel>{t('form.date.label')}</FormLabel>
                       <FormControl>
                         <DatePickerInput
                           value={field.value}
@@ -432,8 +444,12 @@ export function SnapshotFormDialog({
                   control={form.control}
                   name="value"
                   render={({ field }) => (
-                    <FormItem className="flex-1 min-w-0" {...(quantityMode ? { inert: true } : {})}>
-                      <FormLabel required>{t('form.value.label')}</FormLabel>
+                    <FormItem
+                      required
+                      className="flex-1 min-w-0"
+                      {...(quantityMode ? { inert: true } : {})}
+                    >
+                      <FormLabel>{t('form.value.label')}</FormLabel>
                       <FormControl>
                         <LocaleAmountInput
                           {...field}

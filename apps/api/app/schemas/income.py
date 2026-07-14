@@ -4,10 +4,10 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.income_entry import IncomeCategory
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /income.
@@ -18,6 +18,9 @@ class IncomeCreate(RequestBase):
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
 
 # Body for PUT /income/{id}. Partial update.
 class IncomeUpdate(RequestBase):
@@ -26,6 +29,9 @@ class IncomeUpdate(RequestBase):
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    # Entry currencies must be convertible — reject codes outside the supported registry (422).
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
 # Response for a single income entry.
@@ -51,3 +57,7 @@ class IncomeListResponse(BaseModel):
     page: int = Field(description="Current page (1-based).")
     page_size: int = Field(description="Items per page.")
     display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes on this page whose converted_amount is null because no exchange rate was stored.",
+    )

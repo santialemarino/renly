@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -14,12 +14,15 @@ import {
   Label,
 } from '@repo/ui/components';
 
-interface TypeToConfirmDialogProps {
+interface TypeToConfirmDialogProps<TEntity> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Entity being confirmed. May go null while the close animation plays — the last
+  // non-null value is retained internally so the copy doesn't blank out mid-exit.
+  entity: TEntity | null;
   title: string;
-  description: string;
-  confirmName: string;
+  description: (entity: TEntity) => string;
+  confirmName: (entity: TEntity) => string;
   onConfirm: () => void | Promise<void>;
   loading?: boolean;
   loadingLabel?: string;
@@ -27,9 +30,10 @@ interface TypeToConfirmDialogProps {
   variant?: 'destructive' | 'default';
 }
 
-export function TypeToConfirmDialog({
+export function TypeToConfirmDialog<TEntity>({
   open,
   onOpenChange,
+  entity,
   title,
   description,
   confirmName,
@@ -38,11 +42,17 @@ export function TypeToConfirmDialog({
   loadingLabel,
   confirmLabel,
   variant = 'destructive',
-}: TypeToConfirmDialogProps) {
+}: TypeToConfirmDialogProps<TEntity>) {
   const t = useTranslations('common');
   const [value, setValue] = useState('');
 
-  const matches = value.trim() === confirmName.trim();
+  // Preserve the entity during the close animation so the copy doesn't disappear mid-exit.
+  const lastEntity = useRef(entity);
+  if (entity) lastEntity.current = entity;
+  const display = entity ?? lastEntity.current;
+
+  const name = display ? confirmName(display) : '';
+  const matches = value.trim() === name.trim();
 
   useEffect(() => {
     if (!open) setValue('');
@@ -55,16 +65,16 @@ export function TypeToConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-y-3">
-          <p className="text-paragraph-sm text-muted-foreground">{description}</p>
+          <p className="text-paragraph-sm text-muted-foreground">
+            {display ? description(display) : ''}
+          </p>
           <div className="flex flex-col gap-y-1.5">
-            <Label htmlFor="type-to-confirm">
-              {t('typeToConfirm.label', { name: confirmName })}
-            </Label>
+            <Label htmlFor="type-to-confirm">{t('typeToConfirm.label', { name })}</Label>
             <Input
               id="type-to-confirm"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder={confirmName}
+              placeholder={name}
               surface
               autoComplete="off"
               autoFocus

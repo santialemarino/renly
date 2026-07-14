@@ -1,9 +1,15 @@
 from datetime import UTC, date, datetime
+from decimal import Decimal
+from unittest.mock import AsyncMock, Mock
 
+import pytest
+
+from app.models.expense_entry import ExpenseEntry
+from app.models.subscription import Subscription
 from app.services.auto_expense_service import (
     AUTO_EXPENSES_HOUR_LOCAL,
-    closest_installment_cuota,
-    closest_subscription_cycle,
+    _generate_subscription_expenses,
+    _scan_cutoff,
     installment_cuotas_to_emit,
     subscription_dates_to_emit,
 )
@@ -174,86 +180,14 @@ class TestInstallmentCuotasToEmit:
         ]
 
 
-# --- closest_subscription_cycle ---
-
-
-class TestClosestSubscriptionCycle:
-    # Finds the cycle date nearest to a target manual-entry date. Walks forward or
-    # backward from next_billing_date; the caller decides whether the returned cycle
-    # is within tolerance and at-or-after the cursor.
-
-    def test_target_equals_cursor_returns_cursor(self):
-        cursor = date(2026, 6, 15)
-        assert closest_subscription_cycle(cursor, BILLING_CYCLE_MONTHLY, cursor) == cursor
-
-    def test_target_before_cursor_within_one_cycle_returns_past_cycle(self):
-        # cursor = Jun 15, target = May 25 -> past cycle May 15 is closer (10 days)
-        # than Jun 15 (21 days).
-        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 5, 25)) == date(2026, 5, 15)
-
-    def test_target_after_cursor_within_window_returns_cursor(self):
-        # cursor = Jun 15, target = Jun 20 -> Jun 15 (5 days) closer than Jul 15 (25 days).
-        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 6, 20)) == date(2026, 6, 15)
-
-    def test_target_well_after_cursor_walks_forward(self):
-        # cursor = Jun 15, target = Aug 15 -> Aug 15 is exactly the second cycle ahead.
-        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 8, 15)) == date(2026, 8, 15)
-
-    def test_anchor_day_31_walks_without_drift(self):
-        # cursor = Mar 31 anchor=31, target = May 28 -> closest is May 31 (3 days)
-        # not Apr 30 (28 days).
-        result = closest_subscription_cycle(date(2026, 3, 31), BILLING_CYCLE_MONTHLY, date(2026, 5, 28), anchor_day=31)
-        assert result == date(2026, 5, 31)
-
-    def test_weekly_walks_in_seven_day_steps(self):
-        # cursor = Jun 15 (Mon), target = Jun 24 -> cycle Jun 22 (2 days) closer than Jun 29 (5 days).
-        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_WEEKLY, date(2026, 6, 24)) == date(2026, 6, 22)
-
-    def test_target_in_distant_past_walks_backward(self):
-        # cursor = Jun 15, target = Jan 20 -> closest cycle Jan 15 (5 days) not Feb 15 (26 days).
-        assert closest_subscription_cycle(date(2026, 6, 15), BILLING_CYCLE_MONTHLY, date(2026, 1, 20)) == date(2026, 1, 15)
-
-
-# --- closest_installment_cuota ---
-
-
-class TestClosestInstallmentCuota:
-    def test_target_on_cuota_grid_returns_exact_match(self):
-        # start = Jan 1, current = 1, count = 12, target = Apr 1 -> cuota 4.
-        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2026, 4, 1)) == (4, date(2026, 4, 1))
-
-    def test_target_between_cuotas_picks_closer(self):
-        # start = Jan 1, target = Apr 20 -> cuota 4 (Apr 1, 19 days) closer than cuota 5 (May 1, 11 days).
-        # Actually May 1 (11 days) is closer than Apr 1 (19 days), so cuota 5.
-        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2026, 4, 20)) == (5, date(2026, 5, 1))
-
-    def test_target_before_first_cuota_clamps_to_one(self):
-        assert closest_installment_cuota(date(2026, 1, 1), 1, 12, date(2025, 12, 15)) == (1, date(2026, 1, 1))
-
-    def test_target_after_last_cuota_clamps_to_count(self):
-        # start = Jan 1, count = 3 -> final cuota Mar 1. Target Aug 1 still returns 3 (clamped).
-        assert closest_installment_cuota(date(2026, 1, 1), 1, 3, date(2026, 8, 1)) == (3, date(2026, 3, 1))
-
-    def test_returns_none_when_plan_fully_paid(self):
-        # current_installment > installments_count means plan is done; can't advance further.
-        assert closest_installment_cuota(date(2026, 1, 1), 13, 12, date(2026, 6, 15)) is None
-
-    def test_short_month_clamp_does_not_skew_closest(self):
-        # start = Jan 31 -> cuota 2 clamps to Feb 28. Target Feb 28 -> exact match on cuota 2.
-        assert closest_installment_cuota(date(2026, 1, 31), 1, 6, date(2026, 2, 28)) == (2, date(2026, 2, 28))
-
-
 # --- Timezone-aware eligibility (Step G) ---
 
 
+# The hourly cron processes a user iff their local-hour-now equals AUTO_EXPENSES_HOUR_LOCAL.
+# Combined with the existing back-fill loop and today_in_timezone, this gives the user-local
+# day-boundary semantics. These tests exercise the primitives composed by
+# _generate_subscription_expenses (filter + today_in_user_tz + back-fill).
 class TestTimezoneAwareEligibility:
-    """
-    The hourly cron processes a user iff their local-hour-now equals AUTO_EXPENSES_HOUR_LOCAL.
-    Combined with the existing back-fill loop and today_in_timezone, this gives the
-    user-local day-boundary semantics. These tests exercise the primitives composed
-    by _generate_subscription_expenses (filter + today_in_user_tz + back-fill).
-    """
-
     def test_argentina_user_at_04_utc_is_eligible(self):
         # 04:00 UTC = 01:00 ART -> matches AUTO_EXPENSES_HOUR_LOCAL.
         now = datetime(2026, 5, 25, 4, 0, tzinfo=UTC)
@@ -291,3 +225,81 @@ class TestTimezoneAwareEligibility:
     def test_constant_value_is_one(self):
         # Documented invariant: auto-expenses fire at the user's local 01:00.
         assert AUTO_EXPENSES_HOUR_LOCAL == 1
+
+
+# --- Cycle-proximity dedup in the back-fill loop ---
+
+
+class TestSchedulerCycleDedup:
+    def _session(self, subscriptions, linked_rows):
+        # First execute() call loads active subscriptions, second loads linked expense
+        # dates ((sub_id, date) rows) — mirror the service's two queries.
+        subs_result = Mock()
+        subs_result.scalars.return_value.all.return_value = subscriptions
+        linked_result = Mock()
+        linked_result.all.return_value = linked_rows
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=[subs_result, linked_result])
+        session.add = Mock()
+        session.flush = AsyncMock()
+        return session
+
+    def _sub(self) -> Subscription:
+        return Subscription(
+            id=1,
+            user_id=1,
+            name="Netflix",
+            amount=Decimal("5990"),
+            currency="ARS",
+            billing_cycle=BILLING_CYCLE_MONTHLY,
+            next_billing_date=date(2026, 6, 30),
+            anchor_day=30,
+            is_active=True,
+        )
+
+    @pytest.mark.asyncio
+    async def test_pre_paid_cycle_not_double_emitted_but_cursor_advances(self):
+        # Audit P0 scenario: Jun 30 cycle pre-paid via a linked expense dated Jun 28.
+        # The Jul 1 tick (04:00 UTC = 01:00 ART) must emit NOTHING for Jun 30, yet still
+        # advance the cursor to Jul 30 and report the advance so the caller commits.
+        sub = self._sub()
+        session = self._session([sub], [(1, date(2026, 6, 28))])
+        now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        assert created == 0
+        assert advanced == 1
+        added_entries = [c.args[0] for c in session.add.call_args_list if isinstance(c.args[0], ExpenseEntry)]
+        assert added_entries == []
+        assert sub.next_billing_date == date(2026, 7, 30)
+
+    @pytest.mark.asyncio
+    async def test_unpaid_cycle_still_emitted(self):
+        # Regression: no linked expenses -> the Jun 30 charge is emitted exactly as before.
+        sub = self._sub()
+        session = self._session([sub], [])
+        now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        assert created == 1
+        assert advanced == 1
+        added_entries = [c.args[0] for c in session.add.call_args_list if isinstance(c.args[0], ExpenseEntry)]
+        assert [e.date for e in added_entries] == [date(2026, 6, 30)]
+        assert added_entries[0].subscription_id == 1
+        assert sub.next_billing_date == date(2026, 7, 30)
+
+    @pytest.mark.asyncio
+    async def test_exact_date_row_still_dedups(self):
+        # Regression: the old exact-date dedup is subsumed — a scheduler row dated exactly
+        # Jun 30 claims the Jun 30 cycle.
+        sub = self._sub()
+        session = self._session([sub], [(1, date(2026, 6, 30))])
+        now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        assert created == 0
+        assert advanced == 1
+        assert sub.next_billing_date == date(2026, 7, 30)
+
+
+class Test_ScanCutoff:
+    # The SQL due-scan cutoff leads the UTC date by one day so it covers every user's local today.
+    def test_cutoff_is_utc_date_plus_one(self):
+        assert _scan_cutoff(datetime(2026, 7, 12, 3, 0, tzinfo=UTC)) == date(2026, 7, 13)

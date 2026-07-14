@@ -1,11 +1,11 @@
-# Pure calculation functions for investment and portfolio metrics.
+# Pure calculation functions and data structures for investment and portfolio metrics.
+# Nothing in this module touches the DB — rate loading lives in the service layer
+# (exchange_rate_service.build_rate_lookup / get_user_rate_lookup).
 
 import bisect
 from collections import defaultdict
 from datetime import date as date_type
 from decimal import Decimal
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.currency import get_ars_pair, is_supported
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
@@ -14,6 +14,9 @@ from app.models.transaction import Transaction, TransactionType
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
+
+# Minimum cashflow span for an annualised IRR; annualising a shorter span produces absurd rates.
+MIN_IRR_SPAN_DAYS = 30
 
 
 # Computes period return between two snapshots, adjusting for net cash flow.
@@ -63,39 +66,94 @@ def net_cash_flow(
     return total
 
 
-# Computes XIRR (annualised money-weighted return) via Newton-Raphson.
-# cashflows: list of (date, amount) where outflows are negative, inflows positive.
-# Returns None if it cannot converge or there are insufficient data points.
+# Computes XIRR (annualised money-weighted return) via bisection on the NPV sign change.
+# cashflows: list of (date, amount) where outflows are negative, inflows positive; any order.
+# Returns None when there are insufficient data points, the span is under MIN_IRR_SPAN_DAYS,
+# all amounts share one sign, or no bracketing interval with an NPV sign change exists.
 def xirr(
     cashflows: list[tuple[date_type, float]],
-    guess: float = 0.1,
     max_iter: int = 200,
     tol: float = 1e-7,
 ) -> Decimal | None:
     if len(cashflows) < 2:
         return None
 
-    d0 = cashflows[0][0]
-    day_fracs = [(cf[0] - d0).days / 365.0 for cf in cashflows]
-    amounts = [cf[1] for cf in cashflows]
+    ordered = sorted(cashflows, key=lambda cf: cf[0])
+    d0 = ordered[0][0]
+    day_fracs = [(cf[0] - d0).days / 365.0 for cf in ordered]
+    amounts = [cf[1] for cf in ordered]
 
-    rate = guess
-    for _ in range(max_iter):
-        npv = sum(a / (1 + rate) ** t if t != 0 else a for a, t in zip(amounts, day_fracs))
-        dnpv = sum(-t * a / (1 + rate) ** (t + 1) for a, t in zip(amounts, day_fracs) if t != 0)
-        if abs(dnpv) < 1e-12:
+    # Annualising over a very short span produces absurd rates; suppress below the minimum.
+    if (ordered[-1][0] - d0).days < MIN_IRR_SPAN_DAYS:
+        return None
+
+    # An IRR only exists when the series has both inflows and outflows.
+    if all(a >= 0 for a in amounts) or all(a <= 0 for a in amounts):
+        return None
+
+    # Well-definedness guard (Norström's criterion). A money-weighted return is only
+    # unambiguous when the time-ordered cumulative cash flow crosses zero at most once. A
+    # non-conventional series (e.g. invest -> withdraw more than invested -> reinvest) can
+    # cross repeatedly and admit several real IRRs, so bisection would return a
+    # bracket-accidental one; suppress those (None) and let TWR — timing-independent — carry
+    # the return. Break-even and simple gain/loss series never cross more than once, so they
+    # still report their unique rate. An exact-zero cumulative carries no sign; a later flow
+    # resolves the direction.
+    #
+    # Accumulate in Decimal, not float: the flows are 2-dp money (built via float(Decimal(...))),
+    # so a mid-series balance that nets to exactly zero cancels cleanly in Decimal and is read as a
+    # zero-touch (skipped, no crossing). Summed in float it lands on a ~1e-14 residue whose sign
+    # fabricates two spurious crossings, which would wrongly suppress a genuinely unique IRR.
+    cumulative = ZERO
+    prev_sign = 0
+    crossings = 0
+    for a in amounts:
+        cumulative += Decimal(str(a))
+        sign = 1 if cumulative > 0 else -1 if cumulative < 0 else 0
+        if sign == 0:
+            continue
+        if prev_sign != 0 and sign != prev_sign:
+            crossings += 1
+        prev_sign = sign
+    if crossings > 1:
+        return None
+
+    # NPV of the series at a given rate; rate > -1 keeps every power real.
+    def npv(rate: float) -> float:
+        return sum(a / (1.0 + rate) ** t for a, t in zip(amounts, day_fracs))
+
+    try:
+        lo, hi = -0.9999, 10.0
+        npv_lo = npv(lo)
+        npv_hi = npv(hi)
+        # Expand the upper bracket for extreme positive rates before giving up. NPV tends to the
+        # earliest cashflow as rate grows and to a huge value of the latest cashflow's sign as
+        # rate approaches -1, so a realistic series changes sign somewhere in between.
+        while npv_lo * npv_hi > 0 and hi < 1e6:
+            hi *= 10.0
+            npv_hi = npv(hi)
+        if npv_lo * npv_hi > 0:
             return None
-        new_rate = rate - npv / dnpv
-        if abs(new_rate - rate) < tol:
-            return Decimal(str(round(new_rate, 6)))
-        rate = new_rate
-
-    return None
+        for _ in range(max_iter):
+            mid = (lo + hi) / 2.0
+            npv_mid = npv(mid)
+            if abs(npv_mid) < tol or (hi - lo) / 2.0 < tol:
+                return Decimal(str(round(mid, 6)))
+            if npv_lo * npv_mid < 0:
+                hi = mid
+            else:
+                lo = mid
+                npv_lo = npv_mid
+        return Decimal(str(round((lo + hi) / 2.0, 6)))
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return None
 
 
 # Builds XIRR cashflows for an investment.
-# First snapshot as outflow (negative), deposits as outflows, withdrawals as inflows,
-# final snapshot as inflow (positive).
+# First snapshot as outflow (negative), deposits as outflows, withdrawals as inflows, and the
+# terminal snapshot value as an inflow dated max(last snapshot date, last transaction date) so
+# trailing transactions never dangle past the terminal value. A series whose terminal date
+# equals the first date (one snapshot, no later transactions) carries no rate information → [].
 def build_irr_cashflows(
     snapshots: list[InvestmentSnapshot],
     transactions: list[Transaction],
@@ -108,6 +166,7 @@ def build_irr_cashflows(
         (first.date, -float(first.value)),
     ]
 
+    last_event_date = first.date
     for tx in transactions:
         if tx.date <= first.date:
             continue
@@ -115,10 +174,14 @@ def build_irr_cashflows(
             cashflows.append((tx.date, -float(tx.amount)))
         else:
             cashflows.append((tx.date, float(tx.amount)))
+        if tx.date > last_event_date:
+            last_event_date = tx.date
 
     last = snapshots[-1]
-    if last.date != first.date:
-        cashflows.append((last.date, float(last.value)))
+    terminal_date = max(last.date, last_event_date)
+    if terminal_date == first.date:
+        return []
+    cashflows.append((terminal_date, float(last.value)))
 
     return cashflows
 
@@ -144,6 +207,140 @@ def compute_period_returns(
         results.append((curr.date, curr.value, r))
 
     return results
+
+
+# Forward-fills per-investment snapshot values into portfolio totals per date and chains
+# period returns. A new investment's first snapshot value counts as a cash inflow in the
+# period where it appears (contributed capital, not return); flows dated on or before an
+# investment's first snapshot are ignored as already embodied in that first value.
+# inv_date_value: {investment_id: {date: value}} (values already in display currency).
+# flows_by_inv: {investment_id: [(date, signed amount)]} — positive = money in, negative = out.
+# Returns (totals, returns): [(date, portfolio total)] and [(date, period return or None)].
+def portfolio_totals_and_returns(
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+) -> tuple[list[tuple[date_type, Decimal]], list[tuple[date_type, Decimal | None]]]:
+    all_dates = sorted({d for dv in inv_date_value.values() for d in dv})
+    if not all_dates:
+        return [], []
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
+
+    last_known: dict[int, Decimal] = {}
+    totals: list[tuple[date_type, Decimal]] = []
+    for d in all_dates:
+        total = ZERO
+        for inv_id, dv in inv_date_value.items():
+            if d in dv:
+                last_known[inv_id] = dv[d]
+            total += last_known.get(inv_id, ZERO)
+        totals.append((d, total))
+
+    returns: list[tuple[date_type, Decimal | None]] = []
+    for i in range(1, len(totals)):
+        prev_date, prev_val = totals[i - 1]
+        curr_date, curr_val = totals[i]
+        period_ncf = ZERO
+        for inv_id, flows in flows_by_inv.items():
+            first_date = first_snap_date.get(inv_id)
+            for flow_date, amount in flows:
+                if first_date is not None and flow_date <= first_date:
+                    continue
+                if prev_date < flow_date <= curr_date:
+                    period_ncf += amount
+        for inv_id, first_date in first_snap_date.items():
+            if prev_date < first_date <= curr_date:
+                period_ncf += inv_date_value[inv_id][first_date]
+        returns.append((curr_date, period_return(prev_val, curr_val, period_ncf)))
+    return totals, returns
+
+
+# Forward-filled portfolio value at as_of_date: the last total dated on or before it.
+# Returns ZERO when the series has no entry that early.
+def portfolio_value_at(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    as_of_date: date_type,
+) -> Decimal:
+    value = ZERO
+    for d, total in portfolio_totals:
+        if d > as_of_date:
+            break
+        value = total
+    return value
+
+
+# Selects the latest value and the last value dated before the latest entry's month from a
+# chronological (date, value) series. Returns (previous, current), or None when the series
+# has no entry before the latest month (nothing to compare against).
+def month_over_month(
+    series: list[tuple[date_type, Decimal]],
+) -> tuple[Decimal, Decimal] | None:
+    if not series:
+        return None
+    curr_date, curr_value = series[-1]
+    month_start = date_type(curr_date.year, curr_date.month, 1)
+    prev_values = [v for d, v in series if d < month_start]
+    if not prev_values:
+        return None
+    return prev_values[-1], curr_value
+
+
+# Builds the money-weighted cashflow series for a date-windowed portfolio IRR: an outflow of
+# the forward-filled portfolio value at the window start, real flows and first-snapshot
+# outflows inside the window, and an inflow of the forward-filled value at the window end
+# (dated at the latest data or flow date inside the window). Zero boundary values are omitted.
+# Same argument shapes as portfolio_totals_and_returns.
+def build_windowed_portfolio_cashflows(
+    portfolio_totals: list[tuple[date_type, Decimal]],
+    inv_date_value: dict[int, dict[date_type, Decimal]],
+    flows_by_inv: dict[int, list[tuple[date_type, Decimal]]],
+    start_date: date_type | None,
+    end_date: date_type | None,
+) -> list[tuple[date_type, float]]:
+    if not portfolio_totals:
+        return []
+
+    start_value = portfolio_value_at(portfolio_totals, start_date) if start_date else ZERO
+    end_value = ZERO
+    end_value_date: date_type | None = None
+    for d, total in portfolio_totals:
+        if end_date is not None and d > end_date:
+            break
+        end_value = total
+        end_value_date = d
+    if end_value_date is None:
+        return []
+
+    # True when d falls inside the (start, end] window.
+    def _in_window(d: date_type) -> bool:
+        if start_date and d <= start_date:
+            return False
+        if end_date and d > end_date:
+            return False
+        return True
+
+    cashflows: list[tuple[date_type, float]] = []
+    if start_date and start_value > ZERO:
+        cashflows.append((start_date, -float(start_value)))
+
+    first_snap_date = {inv_id: min(dv) for inv_id, dv in inv_date_value.items() if dv}
+    last_flow_date = end_value_date
+    for inv_id, first_date in first_snap_date.items():
+        if _in_window(first_date):
+            cashflows.append((first_date, -float(inv_date_value[inv_id][first_date])))
+            last_flow_date = max(last_flow_date, first_date)
+    for inv_id, flows in flows_by_inv.items():
+        first_date = first_snap_date.get(inv_id)
+        for flow_date, amount in flows:
+            if first_date is not None and flow_date <= first_date:
+                continue
+            if _in_window(flow_date):
+                cashflows.append((flow_date, -float(amount)))
+                last_flow_date = max(last_flow_date, flow_date)
+
+    if end_value > ZERO:
+        cashflows.append((max(end_value_date, last_flow_date), float(end_value)))
+
+    return sorted(cashflows, key=lambda cf: cf[0])
 
 
 # Groups snapshots by investment_id. Returns {investment_id: [snapshots sorted by date]}.
@@ -176,7 +373,9 @@ def can_convert(from_currency: str, to_currency: str) -> bool:
 
 # Converts a value between any two supported currencies via USD as pivot.
 # rate_map: {currency: Decimal} where each value is "1 USD = X <currency>".
-# USD itself has an implicit rate of 1. Returns value unchanged if same or unsupported.
+# USD itself has an implicit rate of 1. Returns the value unchanged when currencies match;
+# returns None when either rate is missing from the map — callers must SKIP the row and surface
+# it in a skipped list, never sum the unconverted value (fail-loud).
 # The result is quantized to 2 decimal places: every response schema field that holds a
 # converted amount declares `decimal_places=2, max_digits=18`, and the raw `value /
 # from_rate * to_rate` runs under Python's default 28-digit Decimal precision — which
@@ -187,14 +386,38 @@ def convert_value(
     from_currency: str,
     to_currency: str,
     rate_map: dict[str, Decimal],
-) -> Decimal:
+) -> Decimal | None:
     if from_currency == to_currency:
         return value
     from_rate = rate_map.get(from_currency)
     to_rate = rate_map.get(to_currency)
     if from_rate is None or to_rate is None:
-        return value
+        return None
     return (value / from_rate * to_rate).quantize(Decimal("0.01"))
+
+
+# Converts a value into the requested display currency at the rate in effect on as_of_date.
+# The shared per-row conversion used by every service that fills a converted_* response field.
+# Returns None when no display currency was requested, when no rates are stored, or when the
+# needed rate is missing (the caller leaves the converted field null and flags the row's currency
+# in the response's skipped list); returns value unchanged when currencies match.
+def convert_optional(
+    value: Decimal,
+    from_currency: str,
+    target_currency: str | None,
+    lookup: "RateLookup | None",
+    as_of_date: date_type,
+) -> Decimal | None:
+    if not target_currency:
+        return None
+    if from_currency == target_currency:
+        return value
+    if lookup is None:
+        return None
+    rate_map = lookup.get_rate_map_at(as_of_date)
+    if rate_map is None:
+        return None
+    return convert_value(value, from_currency, target_currency, rate_map)
 
 
 # Mapping from non-ARS currency code to its USD pair. ARS uses the dollar-preference pair.
@@ -265,26 +488,3 @@ class RateLookup:
             return rates[idx].rate
         # Pre-history fallback: use the earliest rate so display never breaks for ancient dates.
         return rates[0].rate
-
-
-# Builds a RateLookup pre-loaded with every stored exchange rate. One DB round-trip per request;
-# callers reuse the returned object across many per-row lookups.
-async def build_rate_lookup(
-    session: AsyncSession,
-    dollar_preference: str | None = None,
-) -> RateLookup:
-    from app.repositories.exchange_rate_repository import exchange_rate_repository
-
-    rates_by_pair = await exchange_rate_repository.get_all_grouped_by_pair(session)
-    return RateLookup(dollar_preference, rates_by_pair)
-
-
-# Backward-compat shim: returns the rate map valid TODAY. Equivalent to the previous
-# implementation (latest stored rate per pair). New code should prefer build_rate_lookup +
-# get_rate_map_at(row.date) so historical values stay deterministic across time.
-async def get_rate_map(
-    session: AsyncSession,
-    dollar_preference: str | None = None,
-) -> dict[str, Decimal] | None:
-    lookup = await build_rate_lookup(session, dollar_preference)
-    return lookup.get_rate_map_at(date_type.today())

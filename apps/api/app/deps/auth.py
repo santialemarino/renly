@@ -12,6 +12,8 @@ from app.models.user import User
 bearer = HTTPBearer()
 
 
+# Authenticates the request: decodes the bearer JWT, sets the RLS user context, and loads the user.
+# Raises 401 on any invalid, expired, or revoked (session_epoch mismatch) token.
 async def get_current_user(
     session: SessionDep,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],

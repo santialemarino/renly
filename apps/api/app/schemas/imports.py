@@ -15,6 +15,7 @@ class ImportPreviewRow(BaseModel):
     values: dict[str, str] = Field(description="Mapped source values keyed by target field.")
     status: str = Field(description="Row outcome: valid, invalid, or duplicate.")
     errors: list[str] = Field(default_factory=list, description="Validation errors for this row.")
+    warnings: list[str] = Field(default_factory=list, description="Non-blocking warnings; the row still imports but the flagged value is dropped.")
 
 
 # Row counts across the whole preview.

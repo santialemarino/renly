@@ -1,34 +1,16 @@
-from decimal import Decimal
-
 from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
-from app.repositories import expense_repository
 from app.schemas.payment_obligation import (
     PaymentObligationCreate,
     PaymentObligationResponse,
     PaymentObligationUpdate,
 )
 from app.services import payment_obligation_service
-from app.utils.metrics import convert_value, get_rate_map
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/payment-obligations", tags=["payment-obligations"])
-
-
-# Converts an obligation's amount if a target currency and rate map are provided.
-def _convert_response(
-    resp: PaymentObligationResponse,
-    entry_currency: str,
-    target_currency: str | None,
-    rate_map: dict[str, Decimal] | None,
-) -> PaymentObligationResponse:
-    if target_currency and rate_map and entry_currency != target_currency:
-        resp.converted_amount = convert_value(resp.amount, entry_currency, target_currency, rate_map)
-    elif target_currency and entry_currency == target_currency:
-        resp.converted_amount = resp.amount
-    return resp
 
 
 # List payment obligations for the current user with optional search, sorting, and currency conversion.
@@ -36,6 +18,7 @@ def _convert_response(
 async def list_obligations(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Filter obligations by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
@@ -51,9 +34,8 @@ async def list_obligations(
             "name in the dropdown. Ignored when show_archived=true (everything is already included)."
         ),
     ),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[PaymentObligationResponse]:
-    obligations = await payment_obligation_service.list_obligations(
+    return await payment_obligation_service.list_obligations(
         session,
         current_user,
         search=search,
@@ -61,23 +43,8 @@ async def list_obligations(
         sort_order=sort_order,
         active_only=not show_archived,
         include_ids=include_ids,
+        currency=currency,
     )
-
-    rate_map = None
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
-
-    # Batch-load latest-paid date per obligation in one query so archived one-off rows
-    # can display "Paid on YYYY-MM-DD" without an N+1 lookup (Phase 3, Step E, 6.i).
-    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, current_user.id, [o.id for o in obligations])
-
-    responses: list[PaymentObligationResponse] = []
-    for o in obligations:
-        resp = PaymentObligationResponse.model_validate(o)
-        resp.last_payment_date = last_paid_dates.get(o.id)
-        responses.append(_convert_response(resp, o.currency, currency, rate_map))
-    return responses
 
 
 # Get a single payment obligation by id (with optional currency conversion).
@@ -86,17 +53,9 @@ async def get_obligation(
     obligation_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> PaymentObligationResponse:
-    obligation = await payment_obligation_service.get_obligation(session, obligation_id, current_user)
-    resp = PaymentObligationResponse.model_validate(obligation)
-    last_paid_dates = await expense_repository.max_linked_obligation_dates(session, current_user.id, [obligation.id])
-    resp.last_payment_date = last_paid_dates.get(obligation.id)
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
-        resp = _convert_response(resp, obligation.currency, currency, rate_map)
-    return resp
+    return await payment_obligation_service.get_obligation_response(session, obligation_id, current_user, currency=currency)
 
 
 # Create a new payment obligation.

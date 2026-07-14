@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -63,7 +64,6 @@ export type SubscriptionSortField =
   | 'currency'
   | 'billing_cycle'
   | 'next_billing_date';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetSubscriptionsParams {
   search?: string;

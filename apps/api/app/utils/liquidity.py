@@ -83,6 +83,10 @@ def compute_fixed_monthly_commitments(
         # Only revolving-debt users (those who fill monthly_payment) contribute here.
         # Pay-in-full users leave monthly_payment NULL — their card-funded subs/installments
         # are already in the count via their own rows.
+        # Residual overlap (by design): a revolving user whose card ALSO funds subscriptions or
+        # installments double-counts those plans — once via their own rows above and once inside
+        # monthly_payment. The card form's helper copy documents this: set monthly_payment only for
+        # revolving debt BEYOND the plans Renly already tracks, so the user can avoid the overlap.
         if card.monthly_payment is None:
             continue
         totals[card.currency] += card.monthly_payment
@@ -93,27 +97,35 @@ def compute_fixed_monthly_commitments(
 # Normalises a multi-currency income window to a monthly-equivalent in target currency.
 # `days` is the actual width of the window; scales by 30/days so a 17-day window still
 # returns a monthly figure. Conversion anchors on anchor_date (typically window end).
+# Returns (monthly_income, skipped_currencies) — buckets whose rate is missing are excluded
+# from the total and reported.
 def compute_monthly_income(
-    income_by_currency: dict[str, float],
+    income_by_currency: dict[str, Decimal],
     *,
     days: int,
     target_currency: str | None,
     lookup: RateLookup | None,
     anchor_date: date_type,
-) -> Decimal:
+) -> tuple[Decimal, set[str]]:
     if days <= 0:
-        return ZERO
+        return ZERO, set()
 
     rate_map = lookup.get_rate_map_at(anchor_date) if (target_currency and lookup) else None
 
     total = ZERO
+    skipped: set[str] = set()
     for currency, amount in income_by_currency.items():
-        val = Decimal(str(amount))
-        if target_currency and rate_map and currency != target_currency:
-            val = convert_value(val, currency, target_currency, rate_map)
+        val = amount
+        if target_currency and currency != target_currency:
+            converted = convert_value(val, currency, target_currency, rate_map) if rate_map else None
+            if converted is None:
+                # Fail-loud: an inconvertible bucket must not pollute the converted total.
+                skipped.add(currency)
+                continue
+            val = converted
         total += val
 
-    return total * Decimal(30) / Decimal(days)
+    return total * Decimal(30) / Decimal(days), skipped
 
 
 # Classifies a ratio against the user's threshold and the +caution-band ceiling.

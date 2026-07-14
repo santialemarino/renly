@@ -111,6 +111,7 @@ export function AccountDangerZone({ email }: AccountDangerZoneProps) {
               <Input
                 id="delete-password"
                 type="password"
+                passwordToggleLabel={tCommon('form.togglePassword')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 surface

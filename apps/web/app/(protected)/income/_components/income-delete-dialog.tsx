@@ -4,15 +4,8 @@ import { useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components';
 import { deleteIncome } from '@/app/(protected)/income/income-actions';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { IncomeEntry } from '@/lib/api/income';
 import { formatAmount } from '@/lib/utils/currency';
 
@@ -48,35 +41,22 @@ export function IncomeDeleteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('delete.confirm', {
-            amount: formatAmount(income.amount, locale, income.currency),
-            currency: income.currency,
-          })}
-        </p>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="whitespace-nowrap"
-            onClick={() => onOpenChange(false)}
-          >
-            {t('form.cancel')}
-          </Button>
-          <Button
-            onClick={handleDelete}
-            disabled={deleting}
-            variant="destructive"
-            className="whitespace-nowrap"
-          >
-            {deleting ? t('delete.deleting') : t('delete.confirmButton')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      entity={income}
+      title={t('delete.title')}
+      description={(i) =>
+        t('delete.confirm', {
+          amount: formatAmount(i.amount, locale, i.currency),
+          currency: i.currency,
+        })
+      }
+      onConfirm={handleDelete}
+      loading={deleting}
+      loadingLabel={t('delete.deleting')}
+      confirmLabel={t('delete.confirmButton')}
+      cancelLabel={t('form.cancel')}
+    />
   );
 }

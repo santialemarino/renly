@@ -79,13 +79,25 @@ async def signup_context(session: AdminSessionDep, invite: str | None = None) ->
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_LIMIT)
 async def login(request: Request, response: Response, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
+    invalid_credentials = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     user = await auth_service.get_user_by_email(session, body.email)
-    if not user or not auth_service.verify_password(body.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Release the admin-pool connection before the ~250ms threaded bcrypt: login/register/API-key
+    # verification share the small admin pool, and holding a connection across the hash would let an
+    # auth burst exhaust it and queue on pool_timeout. The by-email read is done; commit() returns
+    # the connection now and issue_refresh_token below re-acquires one for the write.
+    # expire_on_commit=False keeps `user` usable without a reload.
+    await session.commit()
+    if user is None:
+        # Timing equalization (AUTH-5): burn the same bcrypt cost as a real verify so an unknown
+        # email is indistinguishable from a wrong password by response time.
+        await auth_service.verify_password(body.password, auth_service.DUMMY_PASSWORD_HASH)
+        raise invalid_credentials
+    if not await auth_service.verify_password(body.password, user.password_hash):
+        raise invalid_credentials
     if user.email_verified_at is None:
         raise EmailNotVerifiedError()
 

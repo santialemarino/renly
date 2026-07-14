@@ -5,7 +5,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -15,11 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -37,13 +31,14 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { InfoHint } from '@/components/styled-hint';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { formatAmount } from '@/lib/utils/currency';
 
 interface InstallmentFormDialogProps {
@@ -103,7 +98,6 @@ export function InstallmentFormDialog({
     },
   });
 
-  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const watchedHasInterest = useWatch({ control: form.control, name: 'hasInterest' });
   const watchedInstallmentAmount = useWatch({ control: form.control, name: 'installmentAmount' });
   const watchedInstallmentsCount = useWatch({ control: form.control, name: 'installmentsCount' });
@@ -112,8 +106,6 @@ export function InstallmentFormDialog({
 
   const isEdit = !!installment;
   const isLocked = isEdit && Number(installment.currentInstallment) > 1;
-  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
   // Derived totals shown below the per-installment row.
   const installmentNum = Number(watchedInstallmentAmount);
@@ -138,35 +130,28 @@ export function InstallmentFormDialog({
   const showDerivedLine =
     computedTotalToPay !== null && (watchedHasInterest ? computedInterest !== null : true);
 
-  // Reset form when dialog opens or installment changes.
-  useEffect(() => {
-    if (open) {
-      const hasInterest = deriveHasInterest(installment);
-      form.reset({
-        name: installment?.name ?? '',
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: installment,
+    toValues: (i) => {
+      const hasInterest = deriveHasInterest(i);
+      return {
+        name: i?.name ?? '',
         hasInterest,
-        originalPrice:
-          hasInterest && installment?.totalAmount ? String(Number(installment.totalAmount)) : '',
-        installmentAmount: installment?.installmentAmount
-          ? String(Number(installment.installmentAmount))
-          : '',
-        currency: installment?.currency ?? '',
-        installmentsCount: installment ? String(installment.installmentsCount) : '',
-        currentInstallment: installment ? String(installment.currentInstallment) : '1',
-        startDate: installment?.startDate ?? '',
-        paymentMethod: (installment?.paymentMethod ??
-          undefined) as InstallmentFormValues['paymentMethod'],
-        creditCardId: installment?.creditCardId ?? undefined,
-      });
-    }
-  }, [open, installment, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
+        originalPrice: hasInterest && i?.totalAmount ? String(Number(i.totalAmount)) : '',
+        installmentAmount: i?.installmentAmount ? String(Number(i.installmentAmount)) : '',
+        currency: i?.currency ?? '',
+        installmentsCount: i ? String(i.installmentsCount) : '',
+        currentInstallment: i ? String(i.currentInstallment) : '1',
+        startDate: i?.startDate ?? '',
+        paymentMethod: (i?.paymentMethod ?? undefined) as InstallmentFormValues['paymentMethod'],
+        creditCardId: i?.creditCardId ?? undefined,
+      };
+    },
+    onSuccess,
+  });
 
   // Clear originalPrice when toggling to No interest so it doesn't linger as form state.
   useEffect(() => {
@@ -176,19 +161,11 @@ export function InstallmentFormDialog({
   }, [watchedHasInterest, form]);
 
   async function onSubmit(values: InstallmentFormValues) {
-    try {
-      if (isEdit) {
-        await updateInstallment(installment.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createInstallment(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateInstallment(installment.id, values) : createInstallment(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
@@ -211,8 +188,8 @@ export function InstallmentFormDialog({
                 control={form.control}
                 name="name"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.name.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.name.label')}</FormLabel>
                     <FormControl>
                       <Input {...field} placeholder={t('form.name.placeholder')} />
                     </FormControl>
@@ -265,8 +242,8 @@ export function InstallmentFormDialog({
                         control={form.control}
                         name="originalPrice"
                         render={({ field }) => (
-                          <FormItem className="flex-1 min-w-0">
-                            <FormLabel required>{t('form.originalPrice.label')}</FormLabel>
+                          <FormItem required className="flex-1 min-w-0">
+                            <FormLabel>{t('form.originalPrice.label')}</FormLabel>
                             <FormControl>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -289,8 +266,8 @@ export function InstallmentFormDialog({
                         control={form.control}
                         name="currency"
                         render={({ field }) => (
-                          <FormItem className="flex-1 min-w-0">
-                            <FormLabel required>{t('form.currency.label')}</FormLabel>
+                          <FormItem required className="flex-1 min-w-0">
+                            <FormLabel>{t('form.currency.label')}</FormLabel>
                             <FormControl>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -330,8 +307,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="installmentAmount"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel required>{t('form.installmentAmount.label')}</FormLabel>
+                    <FormItem required className="flex-1">
+                      <FormLabel>{t('form.installmentAmount.label')}</FormLabel>
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -354,8 +331,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="installmentsCount"
                   render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormLabel required>{t('form.installmentsCount.label')}</FormLabel>
+                    <FormItem required className="flex-1">
+                      <FormLabel>{t('form.installmentsCount.label')}</FormLabel>
                       <FormControl>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -440,8 +417,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="currency"
                       render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormLabel required>{t('form.currency.label')}</FormLabel>
+                        <FormItem required className="flex-1 min-w-0">
+                          <FormLabel>{t('form.currency.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -471,8 +448,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="startDate"
                       render={({ field }) => (
-                        <FormItem className="flex-1">
-                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                        <FormItem required className="flex-1">
+                          <FormLabel>{t('form.startDate.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -513,8 +490,8 @@ export function InstallmentFormDialog({
                       control={form.control}
                       name="startDate"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel required>{t('form.startDate.label')}</FormLabel>
+                        <FormItem required>
+                          <FormLabel>{t('form.startDate.label')}</FormLabel>
                           <FormControl>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -546,8 +523,8 @@ export function InstallmentFormDialog({
                   control={form.control}
                   name="currentInstallment"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel required>{t('form.currentInstallment.label')}</FormLabel>
+                    <FormItem required>
+                      <FormLabel>{t('form.currentInstallment.label')}</FormLabel>
                       <FormControl>
                         <IntegerInput
                           {...field}
@@ -565,93 +542,14 @@ export function InstallmentFormDialog({
             )}
 
             {/* Payment method full-width. */}
-            <FormField
+            <PaymentMethodFields
               control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div>
-                        <Select
-                          value={field.value ?? ''}
-                          onValueChange={field.onChange}
-                          disabled={isLocked}
-                        >
-                          <FormControl>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {PAYMENT_METHODS.map((method) => (
-                              <SelectItem key={method} value={method}>
-                                {t(`paymentMethods.${method}`)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </TooltipTrigger>
-                    {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                  </Tooltip>
-                  <FormMessage />
-                </FormItem>
-              )}
+              setValue={form.setValue}
+              creditCards={creditCards}
+              preferredCurrencies={preferredCurrencies}
+              disabled={isLocked}
+              disabledTooltip={t('form.locked')}
             />
-
-            {/* Conditional credit card. */}
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div>
-                                <Select
-                                  value={field.value?.toString() ?? ''}
-                                  onValueChange={(v) => field.onChange(Number(v))}
-                                  disabled={isLocked}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {activeCards.map((card) => (
-                                      <SelectItem key={card.id} value={card.id.toString()}>
-                                        {card.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </TooltipTrigger>
-                            {isLocked && <TooltipContent>{t('form.locked')}</TooltipContent>}
-                          </Tooltip>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </form>
         </Form>
 

@@ -92,6 +92,11 @@ export function StyledHint({
   // Static rendering (no animation) when `show` is not provided.
   if (show === undefined) return content;
 
+  // `parentGap` MUST equal the flex `gap` of the hint's immediate parent: the negative marginTop
+  // cancels that parent gap so the collapsed (height 0) element's footprint is exactly one gap —
+  // which makes appear/collapse seamless (no residual-gap snap on unmount) AND keeps the internal
+  // separator→text gap symmetric with the text→next-separator gap. A mismatch over-pulls the
+  // margin (the separator yanks into the element above on collapse) and makes the spacing lopsided.
   return (
     <AnimatePresence initial={false}>
       {show && (

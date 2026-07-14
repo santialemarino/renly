@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -30,6 +29,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { IncomeEntry } from '@/lib/api/income';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
 
 interface IncomeFormDialogProps {
@@ -37,6 +37,7 @@ interface IncomeFormDialogProps {
   onOpenChange: (open: boolean) => void;
   income?: IncomeEntry;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -45,6 +46,7 @@ export function IncomeFormDialog({
   onOpenChange,
   income,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: IncomeFormDialogProps) {
   const locale = useLocale();
@@ -67,35 +69,29 @@ export function IncomeFormDialog({
   const isEdit = !!income;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  const sortedCategories = sortIncomeCategoriesByLabel((key) => t(key), locale);
+  const sortedCategories = sortIncomeCategoriesByLabel((key) => tCommon(key), locale);
 
-  // Reset form when dialog opens or income entry changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        date: income?.date ?? '',
-        amount: income?.amount ? String(Number(income.amount)) : '',
-        currency: income?.currency ?? '',
-        category: (income?.category ?? undefined) as IncomeFormValues['category'],
-        notes: income?.notes ?? '',
-      });
-    }
-  }, [open, income, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: income,
+    toValues: (i) => ({
+      date: i?.date ?? '',
+      amount: i?.amount ? String(Number(i.amount)) : '',
+      currency: i?.currency ?? '',
+      category: (i?.category ?? undefined) as IncomeFormValues['category'],
+      notes: i?.notes ?? '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: IncomeFormValues) {
-    try {
-      if (isEdit) {
-        await updateIncome(income.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createIncome(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateIncome(income.id, values) : createIncome(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
@@ -116,8 +112,8 @@ export function IncomeFormDialog({
               control={form.control}
               name="date"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.date.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.date.label')}</FormLabel>
                   <FormControl>
                     <DatePickerInput
                       value={field.value || undefined}
@@ -135,14 +131,15 @@ export function IncomeFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}
@@ -158,8 +155,8 @@ export function IncomeFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.amount.label')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -188,7 +185,7 @@ export function IncomeFormDialog({
                     <SelectContent>
                       {sortedCategories.map((cat) => (
                         <SelectItem key={cat} value={cat}>
-                          {t(`categories.${cat}`)}
+                          {tCommon(`categories.${cat}`)}
                         </SelectItem>
                       ))}
                     </SelectContent>

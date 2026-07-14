@@ -12,7 +12,9 @@ The global currency switcher in the sidebar offers three options (configured in 
 
 ### Supported currencies
 
-Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). Other ISO 4217 currencies can be stored as an investment's `base_currency` but will display a warning icon and toast when selected in the currency combobox. Values fall back to original currency when conversion is not available.
+Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). The set is served by `GET /exchange-rates/currencies` (derived from `app/domain/currency.py`, the single source of truth) and drives the entry-form pickers.
+
+**Entry forms** (expense / income / subscription / installment / payment obligation) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported entry currency with **422**. The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
 
 ### Dollar rate preference
 
@@ -48,20 +50,25 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
          → if currency: pass to API as ?currency=USD
 ```
 
+The display `currency` query param is **case-insensitive**: every read endpoint takes it through a shared `DisplayCurrency` dependency (`app/deps/currency.py`) that uppercases it before conversion, so a direct or third-party caller sending `?currency=usd` converts identically to `?currency=USD` instead of silently skipping conversion (the rate maps are uppercase-keyed). The asset-price `convert_to` param is normalized the same way. The web always sends uppercase.
+
 - **Snapshots page**: passes `currency` to `getSnapshotGrid({ currency })`.
 - **Investor dashboard**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
 - **Expenses page**: passes `currency` to `getExpenses({ currency })`. Table shows `convertedAmount` when a display currency is active, original `amount` otherwise. Currency column removed — the switcher indicates the display currency.
 - **Income page**: same pattern as expenses — passes `currency` to `getIncome({ currency })`.
-- **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `get_rate_map` pipeline. Same "Original" → primary fallback as the investor dashboard.
+- **Financial dashboard**: passes `currency` to all finance metric endpoints (`/finance-metrics/overview`, `/monthly`, `/expense-breakdown`, `/income-breakdown`). Multi-currency entries are aggregated into the display currency via `_sum_converted()` helper using the same `convert_value` + `RateLookup` pipeline. Same "Original" → primary fallback as the investor dashboard.
 
 ### 3. Backend conversion (date-aware as of Phase 3, Step C)
 
 All conversion happens at query time in the service layer. Stored values are never modified. **Conversion uses the FX rate that was in effect on the value's own date**, not today's rate, so historical dashboards stay deterministic across time.
 
 ```
-Router reads user's dollar_rate_preference from settings
-  → calls mh.build_rate_lookup(session, dollar_preference)  # one DB round-trip per request
+Service builds one rate lookup per request (routers just pass currency through)
+  → exchange_rate_service.get_user_rate_lookup(session, user_id)  # reads dollar pref + one DB round-trip
   → lookup pre-loads every stored rate, grouped by pair, sorted by date
+  # Dashboard overview/composition/liquidity fold the dollar pref + timezone + liquidity threshold
+  # into ONE user_settings read via settings_service.get_request_settings, then build the lookup
+  # from the pre-read dollar preference — one settings round-trip instead of two or three.
 
 Per row / per snapshot / per cashflow:
   → rate_map = lookup.get_rate_map_at(row.date)
@@ -73,6 +80,16 @@ Per row / per snapshot / per cashflow:
 ```
 
 The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pair via binary search. If `as_of_date` predates every stored rate, it falls back to the earliest available rate so the page never breaks. Per-date rate maps are memoised so repeated lookups for the same date are O(1).
+
+**Grouped-rates cache.** The full grouped-by-pair load that backs every `RateLookup` is served from a process-level TTL cache (`RATES_CACHE_TTL_SECONDS = 600`) in `exchange_rate_service.get_rates_grouped_by_pair_cached`. Rates are global (not per-user) and only change when the 6-hourly scheduler stores fresh quotes, so this stops every converting endpoint from re-reading the whole `exchange_rates` table per request. `exchange_rate_service.invalidate_rates_cache()` is called right after the scheduler upserts fresh rates so they serve immediately instead of waiting out the TTL. The composite index `idx_exchange_rates_pair_date (pair, date)` serves the per-pair, date-ordered scan (the pre-existing `idx_exchange_rates_date` on `date DESC` alone cannot).
+
+**Fail-loud conversion.** `convert_value` returns `Decimal | None` — `None` when either currency's rate is missing from the map. A value is **never** summed unconverted. Callers handle `None` by skipping and reporting:
+
+- **Aggregates** (finance overview / monthly / breakdowns, dashboard overview / evolution / composition, expense & income lists, payments calendar) exclude the row and list its code in an additive `skipped_currencies: string[]` response field.
+- **Liquidity** reuses `skipped_entities` (a new `income` entry type carries the currency code as its name).
+- **Metrics & snapshot grid** extend the data-presence-aware `skipped_investments` — an investment whose base or the display currency has no stored rates is excluded and surfaced.
+- **Per-row `converted_*` fields** (expense/income/plan/calendar rows, asset-price lookup) stay **null** on a missing rate, never the unconverted number.
+- **Single-investment metrics** raise `ExchangeRateUnavailableError` (503) rather than silently drop conversion.
 
 **Which date a value converts at, by use case:**
 
@@ -90,8 +107,8 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 | Card balance display (running total)                   | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
 | Finance-metrics period totals (category breakdowns)    | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
 
-- **Helpers**: `utils/metrics.py` — `convert_value()`, `can_convert()`, `RateLookup`, `build_rate_lookup()`, `get_rate_map()` (kept as a backward-compat shim returning today's rate map).
-- **Shared utility**: `utils/settings.py` — `get_dollar_pref(session, user_id)` reads the user's dollar rate preference from settings. Used by all routers that support currency conversion (metrics, snapshot_grid, expenses, income, payments_calendar, asset_prices, etc.).
+- **Helpers**: `utils/metrics.py` (pure, no DB) — `convert_value()`, `convert_optional()`, `can_convert()`, `RateLookup`. Rate loading (`build_rate_lookup()` / `get_user_rate_lookup()`) lives in `exchange_rate_service`; the old `get_rate_map()` shim was removed.
+- **Shared utility**: `get_dollar_pref(session, user_id)` and `get_liquidity_threshold(session, user_id)` live in `settings_service` (the former `utils/settings.py` was removed). They are read by services — via `exchange_rate_service.get_user_rate_lookup` — not by routers.
 - **Domain**: `domain/currency.py` — `SUPPORTED_CURRENCIES`, `get_ars_pair(preference)` maps dollar preference to `ExchangeRatePair`, `is_supported(code)`.
 - **Schema fields**: All monetary API responses include a `currency` field indicating the display currency.
 
@@ -113,6 +130,10 @@ The snapshot form always uses `original_value` / `original_amount` to populate f
 ### 4.1 Investment currency lock
 
 An investment's `base_currency` cannot be changed once snapshots exist — changing it would silently corrupt all stored values (e.g., 50 USD becomes 50 ARS). The backend rejects currency changes with 409 Conflict when snapshots exist. The frontend disables the currency combobox on the edit form (with a tooltip explaining why). Investments with zero snapshots can freely change currency.
+
+### 4.2 Snapshot / transaction row currency must equal the investment base
+
+A snapshot or transaction valued in a currency other than its investment's `base_currency` would misvalue every downstream metric (~1000× for ARS↔USD). The snapshot-upsert and transaction create/update paths reject a mismatch with **400** (`InvestmentCurrencyMismatchError`, message `Currency <X> does not match the investment's base currency (<Y>).`); there is no auto-convert. The snapshot/transaction **importers** apply the same rule per row — a mismatched row is flagged invalid with the same message (the resolver knows each investment's base currency).
 
 ### 5. Exchange rate fetching
 
@@ -199,7 +220,7 @@ All rates are stored against USD; any pair converts through USD as pivot.
 
 **Pivot example:** BRL → ARS = BRL → USD (divide by USD/BRL rate) → ARS (multiply by USD/ARS rate).
 
-**Rate map:** `get_rate_map(session, dollar_preference)` builds a `{currency: Decimal}` dict where each value means "1 USD = X currency". USD itself is always 1. The `dollar_preference` param determines which USD/ARS rate pair to use.
+**Rate map:** `RateLookup.get_rate_map_at(as_of_date)` returns a `{currency: Decimal}` dict for the rates in effect on that date, where each value means "1 USD = X currency". USD itself is always 1. The lookup's `dollar_preference` determines which USD/ARS rate pair to use.
 
 **Combobox:** The env fallback currencies are pinned at the top in a stable "Common" group. User-configured preferred currencies appear in a "Preferred" group below. All other currencies appear in an "Other currencies" group.
 

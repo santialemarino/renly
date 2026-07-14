@@ -27,6 +27,38 @@ async def get_ids_with_snapshots(session: AsyncSession, investment_ids: list[int
     return {row[0] for row in result.all()}
 
 
+# Returns the set of investment IDs that already have a snapshot on the given date.
+async def get_ids_with_snapshot_on_date(session: AsyncSession, investment_ids: list[int], snapshot_date: date) -> set[int]:
+    if not investment_ids:
+        return set()
+    result = await session.execute(
+        select(InvestmentSnapshot.investment_id).where(
+            InvestmentSnapshot.investment_id.in_(investment_ids),
+            InvestmentSnapshot.date == snapshot_date,
+        )
+    )
+    return {row[0] for row in result.all()}
+
+
+# Returns {investment_id: latest InvestmentSnapshot} for each investment (max-date row per id).
+async def get_latest_by_investments(session: AsyncSession, investment_ids: list[int]) -> dict[int, InvestmentSnapshot]:
+    if not investment_ids:
+        return {}
+    subq = (
+        select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date"))
+        .where(InvestmentSnapshot.investment_id.in_(investment_ids))
+        .group_by(InvestmentSnapshot.investment_id)
+        .subquery()
+    )
+    result = await session.execute(
+        select(InvestmentSnapshot).join(
+            subq,
+            (InvestmentSnapshot.investment_id == subq.c.investment_id) & (InvestmentSnapshot.date == subq.c.max_date),
+        )
+    )
+    return {s.investment_id: s for s in result.scalars().all()}
+
+
 # Lists snapshots for an investment, most recent first.
 async def list_by_investment(
     session: AsyncSession,
@@ -108,7 +140,9 @@ class SnapshotRepository:
     bulk_upsert = staticmethod(bulk_upsert)
     create = staticmethod(create)
     get_by_investment_and_date = staticmethod(get_by_investment_and_date)
+    get_ids_with_snapshot_on_date = staticmethod(get_ids_with_snapshot_on_date)
     get_ids_with_snapshots = staticmethod(get_ids_with_snapshots)
+    get_latest_by_investments = staticmethod(get_latest_by_investments)
     has_snapshots = staticmethod(has_snapshots)
     list_by_investment = staticmethod(list_by_investment)
     save = staticmethod(save)

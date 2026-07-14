@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.metrics import (
     AllocationResponse,
@@ -15,26 +16,25 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
 )
 from app.services import metrics_service
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
-CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 INVESTMENT_IDS_DESC = "Filter to specific investment IDs."
 GROUP_IDS_DESC = "Filter to investments in these groups (union)."
 CATEGORY_DESC = "Filter to investments of this category."
 SEARCH_DESC = "Filter by investment name (case-insensitive)."
-START_DATE_DESC = "Start of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
-END_DATE_DESC = "End of date range (YYYY-MM-DD). Affects TWR, IRR, gain."
+START_DATE_DESC = "Start of date range (YYYY-MM-DD). Windows TWR/IRR and turns value/invested/gain into period metrics."
+END_DATE_DESC = "End of date range (YYYY-MM-DD). Windows TWR/IRR and turns value/invested/gain into period metrics."
 
 
-# Returns portfolio-level metrics (total value, invested, gain, month change).
+# Returns portfolio-level metrics (total value, invested, gain, month change). With
+# start_date/end_date the value/invested/gain fields become period metrics over that window.
 # Supports filtering by investment IDs, group IDs, or category.
 @router.get("/portfolio", response_model=PortfolioMetricsResponse)
 async def get_portfolio_metrics(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -42,12 +42,10 @@ async def get_portfolio_metrics(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioMetricsResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_portfolio_metrics(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         investment_ids=investment_ids,
         group_ids=group_ids,
         category=category,
@@ -63,7 +61,7 @@ async def get_portfolio_metrics(
 async def get_portfolio_evolution(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -71,12 +69,10 @@ async def get_portfolio_evolution(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> PortfolioEvolutionResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_portfolio_evolution(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         investment_ids=investment_ids,
         group_ids=group_ids,
         category=category,
@@ -93,15 +89,13 @@ async def get_investment_metrics(
     investment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> InvestmentMetricsResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_investment_metrics(
         session,
         investment_id,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
     )
 
 
@@ -111,18 +105,16 @@ async def get_investment_metrics(
 async def get_allocation(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
 ) -> AllocationResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_allocation(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         investment_ids=investment_ids,
         group_ids=group_ids,
         category=category,
@@ -136,18 +128,16 @@ async def get_allocation(
 async def get_allocation_by_group(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
 ) -> GroupAllocationResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_allocation_by_group(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         investment_ids=investment_ids,
         group_ids=group_ids,
         category=category,
@@ -161,7 +151,7 @@ async def get_allocation_by_group(
 async def get_investments_summary(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -169,12 +159,10 @@ async def get_investments_summary(
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
     end_date: date_type | None = Query(default=None, description=END_DATE_DESC),
 ) -> InvestmentsSummaryResponse:
-    dp = await get_dollar_pref(session, current_user.id)
     return await metrics_service.get_investments_summary(
         session,
         current_user.id,
         currency=currency,
-        dollar_preference=dp,
         investment_ids=investment_ids,
         group_ids=group_ids,
         category=category,

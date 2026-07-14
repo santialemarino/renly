@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -70,7 +71,6 @@ export interface InvestmentGroup {
 }
 
 export type InvestmentSortField = 'name' | 'category' | 'base_currency' | 'broker';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetInvestmentsParams {
   search?: string;

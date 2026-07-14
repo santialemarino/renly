@@ -405,6 +405,7 @@ _cafci_registry: dict[str, str] | None = None
 _cafci_lock: asyncio.Lock | None = None
 
 
+# Returns the process-wide CAFCI download lock, creating it lazily on first use.
 def _get_cafci_lock() -> asyncio.Lock:
     global _cafci_lock
     if _cafci_lock is None:

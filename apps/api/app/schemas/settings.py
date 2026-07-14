@@ -155,6 +155,7 @@ class SettingsUpdate(RequestBase):
         description="Set true when the user finishes or dismisses first-run onboarding.",
     )
 
+    # Rejects timezone values that are not valid IANA zone names.
     @field_validator("timezone")
     @classmethod
     def _validate_timezone(cls, value: str | None) -> str | None:
@@ -162,10 +163,13 @@ class SettingsUpdate(RequestBase):
             return None
         try:
             ZoneInfo(value)
-        except ZoneInfoNotFoundError as exc:
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            # ValueError covers a syntactically invalid key (absolute path or '..'); surface the
+            # same clean 422 instead of leaking the raw ValueError through Pydantic.
             raise ValueError(f"Unknown IANA timezone: {value!r}.") from exc
         return value
 
+    # Rejects timezone_mode values outside TIMEZONE_MODE_VALUES.
     @field_validator("timezone_mode")
     @classmethod
     def _validate_timezone_mode(cls, value: str | None) -> str | None:
@@ -175,6 +179,7 @@ class SettingsUpdate(RequestBase):
             raise ValueError(f"timezone_mode must be one of {TIMEZONE_MODE_VALUES}.")
         return value
 
+    # Rejects language values outside SUPPORTED_LANGUAGES.
     @field_validator("language")
     @classmethod
     def _validate_language(cls, value: str | None) -> str | None:
@@ -184,6 +189,7 @@ class SettingsUpdate(RequestBase):
             raise ValueError(f"language must be one of {SUPPORTED_LANGUAGES}.")
         return value
 
+    # Rejects language_mode values outside LANGUAGE_MODE_VALUES.
     @field_validator("language_mode")
     @classmethod
     def _validate_language_mode(cls, value: str | None) -> str | None:
@@ -193,6 +199,7 @@ class SettingsUpdate(RequestBase):
             raise ValueError(f"language_mode must be one of {LANGUAGE_MODE_VALUES}.")
         return value
 
+    # Rejects liquidity thresholds outside [1, 99].
     @field_validator("liquidity_threshold_pct")
     @classmethod
     def _validate_liquidity_threshold_pct(cls, value: int | None) -> int | None:
@@ -202,6 +209,7 @@ class SettingsUpdate(RequestBase):
             raise ValueError("liquidity_threshold_pct must be in [1, 99].")
         return value
 
+    # Rejects savings-rate thresholds outside [1, 99].
     @field_validator("savings_rate_healthy_pct", "savings_rate_moderate_pct")
     @classmethod
     def _validate_savings_rate_pct(cls, value: int | None) -> int | None:
@@ -211,6 +219,7 @@ class SettingsUpdate(RequestBase):
             raise ValueError("savings rate threshold must be in [1, 99].")
         return value
 
+    # Rejects income/expense ratio thresholds outside [0.1, 10.0].
     @field_validator("income_expense_ratio_healthy")
     @classmethod
     def _validate_income_expense_ratio_healthy(cls, value: Decimal | None) -> Decimal | None:

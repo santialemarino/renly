@@ -29,9 +29,31 @@ Repositories call `session.add()` and optionally `session.flush()` (to get gener
 
 If a service function does multiple writes (e.g., create group + set members), they must all succeed or all fail. With repository-level commits removed, a single `session.commit()` at the end of the service function achieves this. If an error occurs, the session rolls back on exit.
 
-### Explicit rollback on write errors
+### Rollback is handled by the session teardown
 
-Wrap write operations in try/except and call `session.rollback()` before re-raising. This prevents the session from being left in a broken state.
+Services do NOT need try/except + `session.rollback()` around writes. The session dependency
+(`app/db.py get_session`) yields from `async with AsyncSessionLocal() as session:` — when the
+request scope exits (normally or via an exception), the `async with` closes the session, which
+rolls back any transaction that was never committed. So an error raised before the service's
+`session.commit()` persists nothing, and the connection returns to the pool clean. An explicit
+`session.rollback()` is only warranted when a service wants to recover mid-request and continue
+issuing queries on the same session after a failed write.
+
+## Currency conversion (services own it)
+
+Display-currency conversion is a service-layer concern. Routers never read the dollar
+preference, never build rate lookups, and never convert values — they pass the `currency`
+query param through and return the schema the service built.
+
+- `exchange_rate_service.get_user_rate_lookup(session, user_id)` is the single entry point:
+  it reads the user's dollar-rate preference and returns a `RateLookup` pre-loaded with every
+  stored rate. Build **one per request** and pass it down to composed service calls via their
+  `lookup=` parameter — never build a second lookup for the same request.
+- `app/utils/metrics.py` stays pure (no DB): `RateLookup` (data structure), `convert_value`,
+  `convert_optional`, `can_convert`.
+- Per-row converted response fields use `convert_optional(value, from_currency,
+target_currency, lookup, as_of_date)` — historical rows (expenses, income, calendar items)
+  convert at their own date; current-state rows (plans, card balances) at today's.
 
 ## Performance rules
 

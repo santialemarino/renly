@@ -12,7 +12,6 @@ import {
   type RestorePreview,
   type RestoreResult,
 } from '@/lib/api/restore';
-import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // Action results carry either the data or a message the client toasts. Returned (not thrown) so the
 // API's detail message survives — Next.js sanitizes thrown server-action errors in production.
@@ -61,11 +60,4 @@ export async function confirmRestore(formData: FormData): Promise<RestoreConfirm
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'restore_failed' };
   }
-}
-
-// Returns the user's full data export as a JSON string for client-side download (AUTH-6).
-export async function exportData(): Promise<string> {
-  const res = await authenticatedFetch('/me/export', { method: 'GET' });
-  if (!res.ok) throw new Error('export_failed');
-  return res.text();
 }

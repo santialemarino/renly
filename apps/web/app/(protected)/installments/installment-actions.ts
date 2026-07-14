@@ -6,9 +6,12 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 function toBody(values: InstallmentFormValues) {
   const installmentNum = Number(values.installmentAmount);
   const countNum = Number(values.installmentsCount);
+  // Cents math: 5.85 × 3 is 17.549999999999997 in binary floats → the API's
+  // decimal_places=2 rejects it with a 422. Rounding the per-installment amount to integer
+  // cents first keeps the product exact (count is a validated positive integer).
   const totalAmount = values.hasInterest
     ? Number(values.originalPrice ?? '0')
-    : installmentNum * countNum;
+    : (Math.round(installmentNum * 100) * countNum) / 100;
   return {
     name: values.name,
     total_amount: totalAmount,

@@ -12,6 +12,7 @@ import { formatDateForLocale } from '@/lib/utils/format';
 export function SampleIncomeTable() {
   const locale = useLocale();
   const t = useTranslations('income');
+  const tCommon = useTranslations('common');
 
   const columns: SampleColumn<IncomeEntry>[] = [
     { header: t('table.date'), cell: (e) => formatDateForLocale(e.date, locale) },
@@ -22,17 +23,17 @@ export function SampleIncomeTable() {
     },
     {
       header: t('table.category'),
-      cell: (e) => (e.category ? t(`categories.${e.category}`) : '—'),
+      cell: (e) => (e.category ? tCommon(`categories.${e.category}`) : '—'),
     },
     { header: t('table.notes'), cell: (e) => e.notes ?? '—' },
   ];
 
   const getDetail = (e: IncomeEntry) => ({
-    title: e.category ? t(`categories.${e.category}`) : formatDateForLocale(e.date, locale),
+    title: e.category ? tCommon(`categories.${e.category}`) : formatDateForLocale(e.date, locale),
     fields: [
       { label: t('table.date'), value: formatDateForLocale(e.date, locale) },
       { label: t('table.amount'), value: formatAmount(e.amount, locale, e.currency) },
-      { label: t('table.category'), value: e.category ? t(`categories.${e.category}`) : '—' },
+      { label: t('table.category'), value: e.category ? tCommon(`categories.${e.category}`) : '—' },
       { label: t('table.notes'), value: e.notes ?? '—' },
     ],
   });

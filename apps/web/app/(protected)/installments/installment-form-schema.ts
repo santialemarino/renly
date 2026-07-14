@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { PAYMENT_METHODS } from '@/lib/constants/categories';
+
 interface BuildInstallmentFormSchemaArgs {
   requiredMsg: string;
   invalidCountMsg: string;
@@ -26,7 +28,7 @@ export function buildInstallmentFormSchema({
       installmentsCount: positiveIntField,
       currentInstallment: positiveIntField,
       startDate: z.string().min(1, { message: requiredMsg }),
-      paymentMethod: z.enum(['cash', 'debit', 'transfer', 'credit_card']).optional(),
+      paymentMethod: z.enum(PAYMENT_METHODS).optional(),
       creditCardId: z.number().optional(),
     })
     .superRefine((values, ctx) => {

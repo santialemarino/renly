@@ -1,6 +1,7 @@
 # Scheduled jobs for background tasks (exchange rates, asset prices, auto-snapshots, CEDEAR ratios).
 
 import logging
+from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -16,7 +17,10 @@ from app.services import (
 
 logger = logging.getLogger(__name__)
 
-scheduler = AsyncIOScheduler()
+# Pinned to UTC so the cron hours below (all named *_HOUR_UTC) fire at those UTC hours regardless
+# of the host's local timezone, matching the startup catch-up's UTC reasoning. The string form is
+# accepted across APScheduler 3.x versions and reads unambiguously at the call site.
+scheduler = AsyncIOScheduler(timezone="UTC")
 
 # Schedule configuration.
 EXCHANGE_RATES_INTERVAL_HOURS = 6
@@ -24,6 +28,13 @@ ASSET_PRICES_HOUR_UTC = 22
 AUTO_SNAPSHOTS_HOUR_UTC = 23
 CEDEAR_RATIOS_DAY_OF_MONTH = 1
 CEDEAR_RATIOS_HOUR_UTC = 0
+
+# Misfire policy: with the in-memory job store, APScheduler's default 1s grace silently skips any
+# tick the loop couldn't serve on time. Six hours of grace + coalesce=True means a late tick fires
+# exactly once (never a burst) — every job here is idempotent/back-filling, so a late run is safe.
+MISFIRE_GRACE_SECONDS = 6 * 3600
+# Days after a month-end within which the startup catch-up will still run a missed auto-snapshot.
+AUTO_SNAPSHOTS_CATCHUP_DAYS = 3
 
 
 # Fetches latest exchange rates from all sources (DolarApi + Frankfurter) and stores them.
@@ -76,9 +87,26 @@ async def _update_cedear_ratios() -> None:
         logger.exception("Scheduled CEDEAR ratio update failed.")
 
 
-def start_scheduler() -> None:
-    from datetime import UTC, datetime
+# Startup catch-up for the month-end auto-snapshot job. The in-memory job store loses all schedule
+# state on restart, so a restart spanning the month-end tick would silently skip a whole month of
+# auto-snapshots — misfire_grace_time cannot help across restarts. The window/dedup logic lives in
+# the service; this wrapper only owns the session + error isolation.
+async def _auto_snapshots_startup_catchup() -> None:
+    try:
+        async with AdminSessionLocal() as session:
+            ran = await auto_snapshot_service.run_startup_catchup(
+                session,
+                catchup_days=AUTO_SNAPSHOTS_CATCHUP_DAYS,
+                snapshots_hour_utc=AUTO_SNAPSHOTS_HOUR_UTC,
+            )
+            if ran:
+                logger.info("Auto-snapshot startup catch-up ran (missed month-end tick detected).")
+    except Exception:
+        logger.exception("Auto-snapshot startup catch-up failed.")
 
+
+# Registers all background jobs and starts the scheduler. Called from the app lifespan on startup.
+def start_scheduler() -> None:
     # Exchange rates: run immediately on startup, then every 6 hours.
     scheduler.add_job(
         _update_exchange_rates,
@@ -86,6 +114,8 @@ def start_scheduler() -> None:
         hours=EXCHANGE_RATES_INTERVAL_HOURS,
         id="update_exchange_rates",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
         next_run_time=datetime.now(UTC),
     )
 
@@ -96,6 +126,8 @@ def start_scheduler() -> None:
         hour=ASSET_PRICES_HOUR_UTC,
         id="update_asset_prices",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
     )
 
     # Auto-snapshots: run on the last day of each month at 23:00 UTC (after price fetch).
@@ -106,6 +138,8 @@ def start_scheduler() -> None:
         hour=AUTO_SNAPSHOTS_HOUR_UTC,
         id="generate_auto_snapshots",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
     )
 
     # Auto-expenses: run hourly. The service filters users whose local-time-now hour
@@ -117,6 +151,8 @@ def start_scheduler() -> None:
         minute=0,
         id="generate_auto_expenses",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
     )
 
     # CEDEAR ratios: run monthly (1st of each month at 00:00 UTC) + on startup.
@@ -127,7 +163,20 @@ def start_scheduler() -> None:
         hour=CEDEAR_RATIOS_HOUR_UTC,
         id="update_cedear_ratios",
         replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
         next_run_time=datetime.now(UTC),
+    )
+
+    # One-shot startup check for a month-end auto-snapshot missed across a restart.
+    scheduler.add_job(
+        _auto_snapshots_startup_catchup,
+        "date",
+        run_date=datetime.now(UTC),
+        id="auto_snapshots_startup_catchup",
+        replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
     )
 
     scheduler.start()
@@ -145,6 +194,7 @@ def start_scheduler() -> None:
     )
 
 
+# Stops the scheduler without waiting for running jobs. Called from the app lifespan on shutdown.
 def stop_scheduler() -> None:
     scheduler.shutdown(wait=False)
     logger.info("Scheduler stopped.")

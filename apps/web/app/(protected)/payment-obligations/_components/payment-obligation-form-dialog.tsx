@@ -1,11 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -34,11 +32,11 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
-import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 // Form-internal sentinel for "no recurrence" — the API stores NULL, but a Select
@@ -66,7 +64,6 @@ export function PaymentObligationFormDialog({
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const tCommon = useTranslations('common');
-  const tExpenses = useTranslations('expenses');
 
   const schema = useMemo(
     () => buildPaymentObligationFormSchema(tCommon('form.errors.required')),
@@ -90,55 +87,39 @@ export function PaymentObligationFormDialog({
   });
 
   const isEdit = !!obligation;
-  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
-  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tExpenses(key), locale);
+  const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
 
-  // Reset form when dialog opens or obligation changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: obligation?.name ?? '',
-        amount: obligation?.amount ? String(Number(obligation.amount)) : '',
-        currency: obligation?.currency ?? '',
-        nextDueDate: obligation?.nextDueDate ?? '',
-        recurrence: (obligation?.recurrence ??
-          undefined) as PaymentObligationFormValues['recurrence'],
-        category: obligation?.category ?? '',
-        expenseCategory: (obligation?.expenseCategory ??
-          undefined) as PaymentObligationFormValues['expenseCategory'],
-        paymentMethod: (obligation?.paymentMethod ??
-          undefined) as PaymentObligationFormValues['paymentMethod'],
-        creditCardId: obligation?.creditCardId ?? undefined,
-        notes: obligation?.notes ?? '',
-      });
-    }
-  }, [open, obligation, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: obligation,
+    toValues: (o) => ({
+      name: o?.name ?? '',
+      amount: o?.amount ? String(Number(o.amount)) : '',
+      currency: o?.currency ?? '',
+      nextDueDate: o?.nextDueDate ?? '',
+      recurrence: (o?.recurrence ?? undefined) as PaymentObligationFormValues['recurrence'],
+      category: o?.category ?? '',
+      expenseCategory: (o?.expenseCategory ??
+        undefined) as PaymentObligationFormValues['expenseCategory'],
+      paymentMethod: (o?.paymentMethod ??
+        undefined) as PaymentObligationFormValues['paymentMethod'],
+      creditCardId: o?.creditCardId ?? undefined,
+      notes: o?.notes ?? '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: PaymentObligationFormValues) {
-    try {
-      if (isEdit) {
-        await updatePaymentObligation(obligation.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createPaymentObligation(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () =>
+        isEdit ? updatePaymentObligation(obligation.id, values) : createPaymentObligation(values),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
@@ -159,8 +140,8 @@ export function PaymentObligationFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -174,8 +155,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.amount.label')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -192,8 +173,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
@@ -217,8 +198,8 @@ export function PaymentObligationFormDialog({
                 control={form.control}
                 name="nextDueDate"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.dueDate.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.dueDate.label')}</FormLabel>
                     <FormControl>
                       <DatePickerInput
                         value={field.value || undefined}
@@ -302,7 +283,7 @@ export function PaymentObligationFormDialog({
                       <SelectContent>
                         {sortedExpenseCategories.map((cat) => (
                           <SelectItem key={cat} value={cat}>
-                            {tExpenses(`categories.${cat}`)}
+                            {tCommon(`categories.${cat}`)}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -313,73 +294,12 @@ export function PaymentObligationFormDialog({
               />
             </div>
 
-            <FormField
+            <PaymentMethodFields
               control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {t(`paymentMethods.${method}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+              setValue={form.setValue}
+              creditCards={creditCards}
+              preferredCurrencies={preferredCurrencies}
             />
-
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Select
-                            value={field.value?.toString() ?? ''}
-                            onValueChange={(v) => field.onChange(Number(v))}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {activeCards.map((card) => (
-                                <SelectItem key={card.id} value={card.id.toString()}>
-                                  {card.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
 
             <FormField
               control={form.control}

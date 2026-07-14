@@ -4,9 +4,10 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from app.schemas.base import RequestBase
+from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
+from app.schemas.base import RequestBase, validate_supported_currency
 from app.utils.dates import add_months
 
 
@@ -19,8 +20,17 @@ class InstallmentCreate(RequestBase):
     installments_count: int = Field(description="Total number of installments.", ge=1)
     start_date: date_type = Field(description="Date of the first installment.")
     current_installment: int = Field(default=1, description="Index of the next installment to issue (1-based).", ge=1)
-    payment_method: str | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
+    # a card-less credit_card entry is allowed (zero-card users, imports).
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "InstallmentCreate":
+        ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        return self
 
 
 # Body for PUT /installments/{id}. Partial update.
@@ -31,10 +41,21 @@ class InstallmentUpdate(RequestBase):
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     installments_count: int | None = Field(default=None, description="Total number of installments.", ge=1)
     current_installment: int | None = Field(default=None, description="Index of the next installment to issue.", ge=1)
-    payment_method: str | None = Field(default=None, description="Payment method.", max_length=20)
+    payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
     is_active: bool | None = Field(default=None, description="Whether the installment plan is active.")
     start_date: date_type | None = Field(default=None, description="Date of the first installment.")
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # Same-request pairing guard: only fires when BOTH keys were provided. The merged
+    # effective check (request fields over the stored row) lives in the service.
+    @model_validator(mode="after")
+    def validate_payment_pairing(self) -> "InstallmentUpdate":
+        provided = self.model_fields_set
+        if "payment_method" in provided and "credit_card_id" in provided:
+            ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        return self
 
 
 # Response for a single installment. `next_cuota_date` is derived from `start_date +

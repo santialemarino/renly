@@ -2,6 +2,7 @@
 
 from datetime import date as date_type
 
+from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -14,6 +15,25 @@ from app.models.utils import utcnow
 async def get_latest(session: AsyncSession, ticker: str) -> AssetPrice | None:
     result = await session.execute(select(AssetPrice).where(AssetPrice.ticker == ticker).order_by(AssetPrice.date.desc()).limit(1))
     return result.scalar_one_or_none()
+
+
+# Returns {ticker: AssetPrice} for the latest stored price of each ticker.
+async def get_latest_by_tickers(session: AsyncSession, tickers: list[str]) -> dict[str, AssetPrice]:
+    if not tickers:
+        return {}
+    subq = (
+        select(AssetPrice.ticker, func.max(AssetPrice.date).label("max_date"))
+        .where(AssetPrice.ticker.in_(tickers))
+        .group_by(AssetPrice.ticker)
+        .subquery()
+    )
+    result = await session.execute(
+        select(AssetPrice).join(
+            subq,
+            (AssetPrice.ticker == subq.c.ticker) & (AssetPrice.date == subq.c.max_date),
+        )
+    )
+    return {p.ticker: p for p in result.scalars().all()}
 
 
 # Returns a price by ticker and date. Returns None if not found.
@@ -46,32 +66,6 @@ async def get_history(
     stmt = stmt.order_by(AssetPrice.date.desc())
     result = await session.execute(stmt)
     return list(result.scalars().all())
-
-
-# Creates or updates a single price by (ticker, date) using ON CONFLICT.
-async def upsert(session: AsyncSession, price: AssetPrice) -> None:
-    now = utcnow()
-    stmt = (
-        insert(AssetPrice)
-        .values(
-            ticker=price.ticker,
-            date=price.date,
-            price=price.price,
-            currency=price.currency,
-            source=price.source,
-            updated_at=now,
-        )
-        .on_conflict_do_update(
-            index_elements=["ticker", "date"],
-            set_={
-                "price": price.price,
-                "currency": price.currency,
-                "source": price.source,
-                "updated_at": now,
-            },
-        )
-    )
-    await session.execute(stmt)
 
 
 # Bulk upserts multiple prices in a single statement. Returns the number of rows affected.
@@ -113,7 +107,7 @@ class AssetPriceRepository:
     get_by_ticker_and_date = staticmethod(get_by_ticker_and_date)
     get_history = staticmethod(get_history)
     get_latest = staticmethod(get_latest)
-    upsert = staticmethod(upsert)
+    get_latest_by_tickers = staticmethod(get_latest_by_tickers)
 
 
 # Singleton used by services.

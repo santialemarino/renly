@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
-from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse
+from app.schemas.exchange_rate import ExchangeRateResponse, LatestRatesResponse, SupportedCurrenciesResponse
 from app.services import exchange_rate_service
 
 router = APIRouter(prefix="/exchange-rates", tags=["exchange-rates"])
@@ -29,3 +29,11 @@ async def get_rates_by_date(
     date: date_type = Query(description="Date to fetch rates for (YYYY-MM-DD)."),
 ) -> list[ExchangeRateResponse]:
     return await exchange_rate_service.get_rates_by_date(session, date)
+
+
+# Returns the currency codes with exchange-rate support. Drives the entry-form currency pickers.
+@router.get("/currencies", response_model=SupportedCurrenciesResponse)
+async def get_supported_currencies(
+    current_user: CurrentUser,
+) -> SupportedCurrenciesResponse:
+    return exchange_rate_service.get_supported_currencies()

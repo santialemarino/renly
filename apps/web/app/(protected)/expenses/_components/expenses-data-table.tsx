@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, ChevronsUpDown, Pencil, Receipt, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
 import {
-  Button,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -20,66 +19,30 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
-import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
-import { ExpenseFormDialog } from '@/app/(protected)/expenses/_components/expense-form-dialog';
+import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
-} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+} from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
+import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
+import { RowActionButton } from '@/components/row-action-button';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type { Expense, ExpenseListResponse, ExpenseSortField, SortOrder } from '@/lib/api/expenses';
+import type { Expense, ExpenseListResponse, ExpenseSortField } from '@/lib/api/expenses';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: ExpenseSortField;
-  sortBy: ExpenseSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 function RowActions({
   expense,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -89,6 +52,7 @@ function RowActions({
 }: {
   expense: Expense;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -103,40 +67,25 @@ function RowActions({
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-              aria-label="Edit"
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.edit')}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground hover:text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteOpen(true);
-              }}
-              aria-label="Delete"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.delete')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={Pencil}
+          tooltip={t('actions.edit')}
+          ariaLabel="Edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditOpen(true);
+          }}
+        />
+        <RowActionButton
+          icon={Trash2}
+          tooltip={t('actions.delete')}
+          ariaLabel="Delete"
+          variant="destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeleteOpen(true);
+          }}
+        />
       </div>
 
       <ExpenseFormDialog
@@ -144,6 +93,7 @@ function RowActions({
         onOpenChange={setEditOpen}
         expense={expense}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
@@ -174,6 +124,7 @@ function RowActions({
 export function ExpensesDataTable({
   data,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
@@ -183,6 +134,7 @@ export function ExpensesDataTable({
 }: {
   data: ExpenseListResponse;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
@@ -192,37 +144,14 @@ export function ExpensesDataTable({
 }) {
   const locale = useLocale();
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
+    useTableSort<ExpenseSortField>(ROUTES.expenses, { resetPage: true });
   // Amount-mismatch follow-up prompt fired from the edit dialog (Phase 3, follow-up
   // Item 6). Lives at the table level rather than per row so the prompt survives the
   // edit dialog's close animation and works the same on any row.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as ExpenseSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.expenses}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: ExpenseSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc', page: null });
-      } else {
-        navigate({ sort_by: null, sort_order: null, page: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc', page: null });
-    }
-  }
 
   function handlePageChange(page: number) {
     navigate({ page: page > 1 ? String(page) : null });
@@ -237,46 +166,34 @@ export function ExpensesDataTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.date')}
-                  <SortIcon column="date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.amount')}
-                  <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('category')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.category')}
-                  <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('payment_method')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.paymentMethod')}
-                  <SortIcon column="payment_method" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.date')}
+                column="date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.amount')}
+                column="amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.category')}
+                column="category"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.paymentMethod')}
+                column="payment_method"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.notes')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
@@ -303,7 +220,7 @@ export function ExpensesDataTable({
                     )}
                   </TableCell>
                   <TableCell>
-                    {expense.category ? t(`categories.${expense.category}`) : '—'}
+                    {expense.category ? tCommon(`categories.${expense.category}`) : '—'}
                   </TableCell>
                   <TableCell>
                     {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}
@@ -315,6 +232,7 @@ export function ExpensesDataTable({
                     <RowActions
                       expense={expense}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}

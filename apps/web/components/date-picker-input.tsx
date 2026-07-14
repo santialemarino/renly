@@ -62,11 +62,11 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
               surface ? 'bg-background' : 'bg-input',
               // Default state: regular border, hover hint, blue ring on focus-visible.
               'border-border hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
               // Aria-invalid: red border, no ring (override Button's built-in aria-invalid:ring-3).
               'aria-invalid:border-destructive aria-invalid:ring-0',
               // Aria-invalid + focus-visible: red ring restored (compound variant wins via specificity).
-              'aria-invalid:focus-visible:border-destructive aria-invalid:focus-visible:ring-[3px] aria-invalid:focus-visible:ring-destructive/30',
+              'aria-invalid:focus-visible:border-destructive aria-invalid:focus-visible:ring-3 aria-invalid:focus-visible:ring-destructive/30',
               !isValidDate && 'text-muted-foreground',
               className,
             )}

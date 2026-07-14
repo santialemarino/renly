@@ -9,25 +9,67 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CalendarItem
+from app.domain import CalendarItem, closest_installment_cuota, closest_subscription_cycle
 from app.models.installment import Installment
 from app.models.payment_obligation import PaymentObligation
 from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import (
+    card_reconciliation_repository,
     credit_card_repository,
     expense_repository,
     installment_repository,
     payment_obligation_repository,
     subscription_repository,
 )
-from app.services import card_reconciliation_service, credit_card_service
+from app.schemas.payments_calendar import PaymentsCalendarItemResponse, PaymentsCalendarResponse
+from app.services import card_reconciliation_service, credit_card_service, exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months, add_months_anchored, advance_by_cycle, resolve_day_in_month, step_back_by_cycle
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# Aggregates calendar items for the given month. Order: by date ascending,
-# stable within the same date by type (subscription, installment, obligation, card_due).
-async def get_calendar(session: AsyncSession, user: User, *, year: int, month: int) -> list[CalendarItem]:
+# Maps a service CalendarItem to its response shape, attaching converted_amount when requested.
+# Conversion uses the rate as of the item's own event date (Phase 3, Step C). Past months on the
+# calendar therefore display historical-rate amounts; future-dated items fall back to today's
+# latest rate (the RateLookup's natural behaviour for dates without a stored quote).
+def _to_response(
+    item: CalendarItem,
+    target_currency: str | None,
+    lookup: RateLookup | None,
+) -> PaymentsCalendarItemResponse:
+    # Past-paid obligations set `conversion_date` to the linked expense's actual date
+    # so the rate matches what the expenses list shows; everything else uses the cycle date.
+    fx_date = item.conversion_date or item.date
+    converted = convert_optional(item.amount, item.currency, target_currency, lookup, fx_date)
+    return PaymentsCalendarItemResponse(
+        type=item.type,
+        date=item.date,
+        name=item.name,
+        amount=item.amount,
+        currency=item.currency,
+        converted_amount=converted,
+        payment_method=item.payment_method,
+        credit_card_id=item.credit_card_id,
+        source_id=item.source_id,
+        cuota_index=item.cuota_index,
+        installments_count=item.installments_count,
+        recurrence=item.recurrence,
+        is_paid=item.is_paid,
+        linked_expense_id=item.linked_expense_id,
+    )
+
+
+# Aggregates calendar items for the given month, converting amounts to the display currency
+# when requested. Order: by date ascending, stable within the same date by type (subscription,
+# installment, obligation, card_due).
+async def get_calendar(
+    session: AsyncSession,
+    user: User,
+    *,
+    year: int,
+    month: int,
+    currency: str | None = None,
+) -> PaymentsCalendarResponse:
     period_start, period_end = _month_range(year, month)
 
     subscription_items = await _subscription_items(session, user, period_start, period_end)
@@ -37,7 +79,21 @@ async def get_calendar(session: AsyncSession, user: User, *, year: int, month: i
 
     items = subscription_items + installment_items + obligation_items + card_due_items
     items.sort(key=lambda i: (i.date, _TYPE_ORDER.get(i.type, 99)))
-    return items
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    responses: list[PaymentsCalendarItemResponse] = []
+    skipped: set[str] = set()
+    for item in items:
+        resp = _to_response(item, currency, lookup)
+        if currency and item.currency != currency and resp.converted_amount is None:
+            skipped.add(item.currency)
+        responses.append(resp)
+    return PaymentsCalendarResponse(
+        year=year,
+        month=month,
+        currency=currency,
+        items=responses,
+        skipped_currencies=sorted(skipped),
+    )
 
 
 # --- Aggregators per source ---
@@ -56,10 +112,11 @@ def _month_range(year: int, month: int) -> tuple[date_type, date_type]:
 # CURRENT amount + currency.
 #
 # Backward projection: walks from `next_billing_date` backward and emits every PAST cycle
-# inside the window whose scheduler-emitted expense row exists (matched via the partial
-# UNIQUE INDEX on `(subscription_id, date)`). Each past cycle uses the LINKED EXPENSE's
-# historical amount + currency so editing the subscription later doesn't rewrite the
-# calendar's history. is_paid=True so the UI swaps the badge for a green Paid one.
+# inside the window that has a linked expense BOUND to it — each linked expense is matched
+# to its closest cycle (same half-cycle rule as the manual-entry advance), so a cycle paid
+# a few days off its date still shows its Paid badge. Each past cycle uses the LINKED
+# EXPENSE's historical amount + currency so editing the subscription later doesn't rewrite
+# the calendar's history. is_paid=True so the UI swaps the badge for a green Paid one.
 async def _subscription_items(
     session: AsyncSession,
     user: User,
@@ -70,19 +127,18 @@ async def _subscription_items(
     if not subscriptions:
         return []
 
-    # Batch-load auto-emitted expense rows for these subscriptions across the window in
-    # one query — backward walker reads from the resulting dict, no N+1.
-    paid_by_sub = await expense_repository.linked_subscription_expenses_by_date(
+    # Batch-load ALL linked expense rows for these subscriptions in one query — the
+    # backward walker binds each expense to its closest cycle, so it needs the full
+    # history, not a window slice. No N+1.
+    linked_by_sub = await expense_repository.list_linked_subscription_expenses(
         session,
         user.id,
         [s.id for s in subscriptions],
-        period_start,
-        period_end,
     )
 
     items: list[CalendarItem] = []
     for sub in subscriptions:
-        paid_expenses = paid_by_sub.get(sub.id, {})
+        linked_expenses = linked_by_sub.get(sub.id, [])
         # Forward: unpaid future cycles.
         for d in subscription_dates_in_window(sub, period_start, period_end):
             items.append(
@@ -99,7 +155,7 @@ async def _subscription_items(
                 )
             )
         # Backward: past paid cycles inside the window.
-        for cycle_date, expense in subscription_past_paid_cycles_in_window(sub, period_start, period_end, paid_expenses):
+        for cycle_date, expense in subscription_past_paid_cycles_in_window(sub, period_start, period_end, linked_expenses):
             items.append(
                 CalendarItem(
                     type="subscription",
@@ -125,8 +181,9 @@ async def _subscription_items(
 # current `installment_amount` + currency (the field lock guarantees these don't drift
 # after the first installment fires).
 #
-# Backward projection: emits each PAST installment (`1..current_installment - 1`) whose
-# date lands inside the window AND whose scheduler-emitted expense row exists. is_paid=True.
+# Backward projection: emits each PAST installment (`1..current_installment - 1`) whose date
+# lands inside the window and has a linked expense BOUND to its cuota (each linked expense
+# matched to its closest cuota, same half-cycle rule as the manual-entry advance). is_paid=True.
 async def _installment_items(
     session: AsyncSession,
     user: User,
@@ -137,17 +194,15 @@ async def _installment_items(
     if not installments:
         return []
 
-    paid_by_inst = await expense_repository.linked_installment_expenses_by_date(
+    linked_by_inst = await expense_repository.list_linked_installment_expenses(
         session,
         user.id,
         [i.id for i in installments],
-        period_start,
-        period_end,
     )
 
     items: list[CalendarItem] = []
     for inst in installments:
-        paid_expenses = paid_by_inst.get(inst.id, {})
+        linked_expenses = linked_by_inst.get(inst.id, [])
         # Forward: unpaid future installments.
         for idx in range(inst.current_installment, inst.installments_count + 1):
             cuota_date = add_months(inst.start_date, idx - 1)
@@ -171,7 +226,7 @@ async def _installment_items(
                 )
             )
         # Backward: past paid installments inside the window.
-        for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, paid_expenses):
+        for idx, cuota_date, expense in installment_past_paid_cuotas_in_window(inst, period_start, period_end, linked_expenses):
             items.append(
                 CalendarItem(
                     type="installment",
@@ -282,14 +337,16 @@ async def _obligation_items(
     return items
 
 
-# Credit-card due-date events for the requested month. One event per active card per
-# bucket with non-zero balance, dated on the card's resolved due_day in the month.
-# The amount is the bucket's running-balance snapshot at the matching statement closing
-# date (Phase 3, Step 5 — running-balance model). When closing_day <= due_day, the
-# bill due in month M is for the statement closed in M; otherwise it's the previous
-# month's statement. Carryover from older unpaid statements is implicit in the snapshot,
-# matching how a real bank resumen reads.
-# Issues one balance lookup per (card, currency) — small N in practice (1–3 cards per user).
+# Credit-card due-date events for the requested month. One event per card per bucket with
+# non-zero balance, dated on the card's resolved due_day in the month. The amount is the
+# bucket's running-balance snapshot at the matching statement closing date (Phase 3, Step 5 —
+# running-balance model). When closing_day <= due_day, the bill due in month M is for the
+# statement closed in M; otherwise it's the previous month's statement. Carryover from older
+# unpaid statements is implicit in the snapshot, matching how a real bank resumen reads.
+# Archived cards are included (an archived card with outstanding balance still has real due
+# dates — archive is a UI filter, P04). Balances are batched: one grouped expenses + one grouped
+# settlements query per DISTINCT closing date (typically 1-2 for 1-3 cards) instead of two
+# queries per card×bucket.
 async def _card_due_items(
     session: AsyncSession,
     user: User,
@@ -298,7 +355,7 @@ async def _card_due_items(
     year: int,
     month: int,
 ) -> list[CalendarItem]:
-    cards = await credit_card_repository.list_by_user(session, user.id, active_only=True)
+    cards = await credit_card_repository.list_by_user(session, user.id, active_only=False)
     if not cards:
         return []
 
@@ -306,20 +363,46 @@ async def _card_due_items(
     card_currencies = {c.id: c.currency for c in cards}
     # We use get_card_balances purely for the list of active buckets per card —
     # the running-balance amount is recomputed at the relevant closing date below.
-    buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies)
+    buckets_by_card = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user.id)
 
     last_day = calendar.monthrange(year, month)[1]
-    items: list[CalendarItem] = []
+
+    # Resolve each card's due/closing date, then group cards by distinct closing date so the
+    # running-balance snapshots batch into one grouped query per closing (not per card×bucket).
+    due_by_card: dict[int, date_type] = {}
+    closing_by_card: dict[int, date_type] = {}
+    cards_by_closing: dict[date_type, list[int]] = {}
     for card in cards:
         due_day = min(card.due_day, last_day)
         due_date = date_type(year, month, due_day)
         if due_date < period_start or due_date > period_end:
             continue
+        due_by_card[card.id] = due_date
         closing_date = _statement_closing_for_due(card.closing_day, due_date)
+        closing_by_card[card.id] = closing_date
+        cards_by_closing.setdefault(closing_date, []).append(card.id)
+
+    snapshots: dict[tuple[int, str], Decimal] = {}
+    for closing_date, ids in cards_by_closing.items():
+        snapshots.update(await card_reconciliation_service.compute_bucket_balances_at(session, ids, closing_date))
+
+    items: list[CalendarItem] = []
+    for card in cards:
+        due_date = due_by_card.get(card.id)
+        if due_date is None:
+            continue
+        closing_date = closing_by_card[card.id]
         for bucket in buckets_by_card.get(card.id, []):
-            snapshot = await card_reconciliation_service.compute_bucket_balance_at(session, card.id, bucket.currency, closing_date)
+            snapshot = snapshots.get((card.id, bucket.currency), Decimal(0))
             if snapshot == Decimal(0):
                 continue
+            # Paid-marking (P04): the frozen statement amount stays, but settlements dated inside
+            # (closing_date, due_date] covering it flip the badge to Paid. Negative snapshots
+            # (credit balance) are not a bill — never marked paid.
+            is_paid = False
+            if snapshot > Decimal(0):
+                settled = await card_reconciliation_repository.sum_settlements_between(session, card.id, bucket.currency, closing_date, due_date)
+                is_paid = settled >= snapshot
             items.append(
                 CalendarItem(
                     type="card_due",
@@ -328,6 +411,7 @@ async def _card_due_items(
                     amount=snapshot,
                     currency=bucket.currency,
                     source_id=card.id,
+                    is_paid=is_paid,
                 )
             )
     return items
@@ -369,21 +453,35 @@ def subscription_dates_in_window(
     return dates
 
 
-# Returns (cycle_date, linked_expense) pairs for every PAST cycle of a subscription
-# inside the window whose scheduler-emitted expense row exists. Walks backward from
-# next_billing_date one cycle at a time, matching each cursor against the supplied
-# dict of paid expenses by date (the partial UNIQUE INDEX on (subscription_id, date)
-# guarantees at most one expense per cycle, so the dict lookup is unambiguous).
-# Stops as soon as the cursor walks past period_start (further past cycles can't
-# intersect the window).
+# Returns (cycle_date, linked_expense) pairs for every PAST PAID cycle of a subscription
+# inside the window. Mirrors the obligations' positional backward walk, with the pairing
+# made robust for plans whose links don't all advance the cursor: each linked expense is
+# BOUND to the cycle its date matches under the same closest-cycle rule the manual-entry
+# advance uses (half-cycle tolerance), then the walk backward from next_billing_date emits
+# every in-window cycle that owns a bound expense. Off-date payments (Mar 31 cycle paid
+# Mar 29) badge their cycle; multi-jump pre-pays bind AT the cursor and stay with the
+# forward (unpaid) walker until the scheduler advances past them; historical back-links
+# badge their own old cycle instead of the newest one. When two expenses bind to the same
+# cycle the newest wins (`linked_expenses` must be sorted DESC by expense date).
+# Stops as soon as the walk passes period_start.
 def subscription_past_paid_cycles_in_window(
     sub: Subscription,
     period_start: date_type,
     period_end: date_type,
-    paid_expenses_by_date: dict[date_type, object],
+    linked_expenses: list,
 ) -> list[tuple]:
-    if not paid_expenses_by_date:
+    if not linked_expenses:
         return []
+
+    expense_by_cycle: dict[date_type, object] = {}
+    for expense in linked_expenses:
+        bound = closest_subscription_cycle(
+            sub.next_billing_date,
+            sub.billing_cycle,
+            expense.date,
+            anchor_day=sub.anchor_day,
+        )
+        expense_by_cycle.setdefault(bound, expense)
 
     pairs: list[tuple] = []
     cursor = sub.next_billing_date
@@ -396,31 +494,41 @@ def subscription_past_paid_cycles_in_window(
         if cursor < period_start:
             break
         if cursor <= period_end:
-            expense = paid_expenses_by_date.get(cursor)
+            expense = expense_by_cycle.get(cursor)
             if expense is not None:
                 pairs.append((cursor, expense))
         iterations += 1
     return pairs
 
 
-# Returns (index, date, linked_expense) tuples for every PAST installment of an
-# installment plan inside the window whose scheduler-emitted expense row exists.
-# Installment dates are deterministic (start_date + (idx-1) months), iteration bounded
-# by [1, current_installment). `paid_expenses_by_date` is the pre-loaded window-restricted
-# dict; lookup is unambiguous because the partial UNIQUE INDEX on (installment_id, date)
-# allows at most one row per installment.
+# Returns (index, date, linked_expense) tuples for every PAST PAID cuota of an installment
+# plan inside the window. Each linked expense is BOUND to the cuota index its date matches
+# under the same closest-cuota rule the manual-entry advance uses, so an off-date payment
+# still badges its cuota. Iteration stays bounded by [1, current_installment): indices at
+# or past the cursor (multi-jump pre-pays) remain with the forward (unpaid) walker until
+# the scheduler advances the counter. Newest expense wins a contested index
+# (`linked_expenses` must be sorted DESC by expense date).
 def installment_past_paid_cuotas_in_window(
     inst: Installment,
     period_start: date_type,
     period_end: date_type,
-    paid_expenses_by_date: dict[date_type, object],
+    linked_expenses: list,
 ) -> list[tuple]:
+    if not linked_expenses:
+        return []
+
+    expense_by_idx: dict[int, object] = {}
+    for expense in linked_expenses:
+        match = closest_installment_cuota(inst.start_date, 1, inst.installments_count, expense.date)
+        if match is not None:
+            expense_by_idx.setdefault(match[0], expense)
+
     pairs: list[tuple] = []
     for idx in range(1, inst.current_installment):
         cuota_date = add_months(inst.start_date, idx - 1)
         if cuota_date < period_start or cuota_date > period_end:
             continue
-        expense = paid_expenses_by_date.get(cuota_date)
+        expense = expense_by_idx.get(idx)
         if expense is None:
             continue
         pairs.append((idx, cuota_date, expense))

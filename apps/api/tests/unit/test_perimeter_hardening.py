@@ -1,3 +1,4 @@
+import bcrypt
 import pytest
 from fastapi.testclient import TestClient
 from starlette.requests import Request
@@ -9,7 +10,6 @@ from app.middleware import MAX_REQUEST_BODY_BYTES
 from app.models.user import User
 from app.models.utils import utcnow
 from app.rate_limit import client_ip, limiter
-from app.services import auth_service
 
 # Perimeter-hardening coverage for the M1 bundle: rate limiting + 429 (SEC-1), docs lockdown
 # (SEC-7), catch-all 500 handler (SEC-8), env-driven CORS (SEC-9), request body-size limit
@@ -18,6 +18,8 @@ from app.services import auth_service
 _DB_URL = "postgresql+asyncpg://user:pass@localhost:5432/renly"
 _SECRET = "x" * 32
 _PASSWORD = "correct horse battery staple"
+# hash_password is async (bcrypt runs in a worker thread); precompute the fixture hash directly.
+_PASSWORD_HASH = bcrypt.hashpw(_PASSWORD.encode(), bcrypt.gensalt()).decode()
 
 
 def _settings(**overrides) -> Settings:
@@ -110,7 +112,7 @@ class TestRateLimiting:
             name="Santi",
             email="me@example.com",
             session_epoch=0,
-            password_hash=auth_service.hash_password(_PASSWORD),
+            password_hash=_PASSWORD_HASH,
             email_verified_at=utcnow(),
         )
         client = _client(existing_user=user)

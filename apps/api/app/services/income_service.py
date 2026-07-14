@@ -7,10 +7,21 @@ from app.domain import NotFoundError
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import income_repository
-from app.services import settings_service
+from app.schemas.income import IncomeListResponse, IncomeResponse
+from app.services import exchange_rate_service, settings_service
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# List income entries for a user with optional filters and pagination.
+# Maps an entry to its response, converting at the entry's historical date (Phase 3, Step C).
+# Income entries are records of past events — the display value reflects the rate in effect when
+# the income was received.
+def _to_response(entry: IncomeEntry, currency: str | None, lookup: RateLookup | None) -> IncomeResponse:
+    resp = IncomeResponse.model_validate(entry)
+    resp.converted_amount = convert_optional(entry.amount, entry.currency, currency, lookup, entry.date)
+    return resp
+
+
+# List income entries for a user with optional filters, pagination, and display-currency conversion.
 async def list_income(
     session: AsyncSession,
     user: User,
@@ -19,10 +30,11 @@ async def list_income(
     category: IncomeCategory | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    currency: str | None = None,
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[IncomeEntry], int]:
-    return await income_repository.list_by_user_filtered(
+) -> IncomeListResponse:
+    entries, total = await income_repository.list_by_user_filtered(
         session,
         user.id,
         search=search,
@@ -32,6 +44,23 @@ async def list_income(
         page=page,
         page_size=page_size,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    items: list[IncomeResponse] = []
+    skipped: set[str] = set()
+    for e in entries:
+        resp = _to_response(e, currency, lookup)
+        # A requested conversion that yielded null means the rate was missing — flag the row's currency.
+        if currency and e.currency != currency and resp.converted_amount is None:
+            skipped.add(e.currency)
+        items.append(resp)
+    return IncomeListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        display_currency=currency,
+        skipped_currencies=sorted(skipped),
+    )
 
 
 # Get a single income entry by id. Raises NotFoundError if not found.
@@ -40,6 +69,19 @@ async def get_income(session: AsyncSession, income_id: int, user: User) -> Incom
     if entry is None:
         raise NotFoundError("Income entry not found.")
     return entry
+
+
+# Get a single income entry as its response schema, converted when a display currency is requested.
+async def get_income_response(
+    session: AsyncSession,
+    income_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> IncomeResponse:
+    entry = await get_income(session, income_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    return _to_response(entry, currency, lookup)
 
 
 # Create a new income entry.

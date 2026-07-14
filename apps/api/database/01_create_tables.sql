@@ -195,6 +195,7 @@ CREATE TABLE exchange_rates (
 );
 
 CREATE INDEX idx_exchange_rates_date ON exchange_rates(date DESC);
+CREATE INDEX idx_exchange_rates_pair_date ON exchange_rates(pair, date);
 
 -- Investment groups
 -- User-defined groups for aggregating investments (e.g. Retirement, Kids, Trading).

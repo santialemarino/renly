@@ -10,9 +10,13 @@ import { formatSignedPct, formatSignedValue, formatValue, valueColor } from '@/l
 
 interface InvestorDashboardMetricCardsProps {
   metrics: PortfolioMetrics;
+  hasPeriod?: boolean;
 }
 
-export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetricCardsProps) {
+export function InvestorDashboardMetricCards({
+  metrics,
+  hasPeriod = false,
+}: InvestorDashboardMetricCardsProps) {
   const locale = useLocale();
   const t = useTranslations('investorDashboard');
 
@@ -20,7 +24,9 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* Total Value */}
       <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalValue')}</span>
+        <span className="text-paragraph-sm text-muted-foreground">
+          {t(hasPeriod ? 'cards.periodEndValue' : 'cards.totalValue')}
+        </span>
         <p className="text-heading-3">{formatValue(metrics.totalValue, { locale })}</p>
       </Card>
 
@@ -60,7 +66,9 @@ export function InvestorDashboardMetricCards({ metrics }: InvestorDashboardMetri
 
       {/* Gain + simple return % + month change subtext */}
       <Card compact>
-        <span className="text-paragraph-sm text-muted-foreground">{t('cards.gain')}</span>
+        <span className="text-paragraph-sm text-muted-foreground">
+          {t(hasPeriod ? 'cards.periodGain' : 'cards.gain')}
+        </span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(metrics.absoluteGain))}>
             {formatValue(metrics.absoluteGain, { locale })}

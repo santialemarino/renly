@@ -26,7 +26,8 @@
         "passwordRequirements": "Password does not meet the requirements",
         "passwordMismatch": "Passwords do not match",
         "serverError": "Something went wrong. Please try again later."
-      }
+      },
+      "togglePassword": "Show password"
     },
     "amountMismatch": {
       "obligation": {
@@ -49,16 +50,64 @@
       }
     },
     "categories": {
+      "bonus": "Bonuses",
+      "card_credits_and_refunds": "Card Credits & Refunds",
+      "card_fees_and_taxes": "Card Fees & Taxes",
       "cedears": "CEDEARs",
+      "clothing": "Clothing",
       "corporate_bonds": "Corporate Bonds",
       "crypto": "Crypto",
+      "dining": "Restaurants & Dining",
+      "dividends": "Dividends",
       "dollars": "Dollars",
+      "education": "Education",
+      "entertainment": "Entertainment",
       "fci": "Mutual Funds",
+      "food": "Food & Groceries",
+      "freelance": "Freelance",
+      "gifts": "Gifts",
       "government_bonds": "Government Bonds",
+      "health": "Health & Medical",
+      "home_maintenance": "Home & Maintenance",
+      "insurance": "Insurance",
+      "investment_returns": "Investment Returns",
+      "kids": "Kids",
       "other": "Other",
+      "personal_care": "Personal Care",
+      "pets": "Pets",
       "real_estate": "Real Estate",
+      "refunds": "Refunds",
+      "rent": "Rent",
+      "rental_income": "Rental Income",
+      "salary": "Salary",
+      "sales": "Sales",
+      "sports": "Sports & Fitness",
       "stocks": "Stocks",
-      "term_deposit": "Term Deposit"
+      "subscriptions": "Subscriptions",
+      "taxes": "Taxes",
+      "term_deposit": "Term Deposit",
+      "transport": "Transport",
+      "travel": "Travel",
+      "uncategorized": "Uncategorized",
+      "utilities": "Utilities"
+    },
+    "paymentMethod": {
+      "label": "Payment method",
+      "placeholder": "Select a method",
+      "methods": {
+        "cash": "Cash",
+        "debit": "Debit",
+        "transfer": "Transfer",
+        "credit_card": "Credit Card"
+      },
+      "creditCard": {
+        "label": "Credit card",
+        "placeholder": "Select a card"
+      },
+      "noCards": {
+        "message": "You don't have any credit cards yet.",
+        "addCard": "Add a card"
+      }
     },
     "allCategories": "All categories",
     "groupFilter": {
@@ -133,7 +182,12 @@
       },
       "rights": "All rights reserved."
     },
-    "requestAccess": "Request access"
+    "requestAccess": "Request access",
+    "export": {
+      "label": "Export",
+      "loading": "Preparing…",
+      "success": "Your data export has been downloaded."
+    }
   },
   "login": {
     "metadata": {
@@ -436,19 +490,6 @@
       "previous": "Previous",
       "next": "Next"
     },
-    "categories": {
-      "bonus": "Bonuses",
-      "card_credits_and_refunds": "Card Credits & Refunds",
-      "dividends": "Dividends",
-      "freelance": "Freelance",
-      "gifts": "Gifts",
-      "investment_returns": "Investment Returns",
-      "other": "Other",
-      "refunds": "Refunds",
-      "rental_income": "Rental Income",
-      "salary": "Salary",
-      "sales": "Sales"
-    },
     "form": {
       "titleCreate": "Add income",
       "titleEdit": "Edit income",
@@ -525,29 +566,6 @@
       "previous": "Previous",
       "next": "Next"
     },
-    "categories": {
-      "card_fees_and_taxes": "Card Fees & Taxes",
-      "clothing": "Clothing",
-      "dining": "Restaurants & Dining",
-      "education": "Education",
-      "entertainment": "Entertainment",
-      "food": "Food & Groceries",
-      "gifts": "Gifts",
-      "health": "Health & Medical",
-      "home_maintenance": "Home & Maintenance",
-      "insurance": "Insurance",
-      "kids": "Kids",
-      "other": "Other",
-      "personal_care": "Personal Care",
-      "pets": "Pets",
-      "rent": "Rent",
-      "sports": "Sports & Fitness",
-      "subscriptions": "Subscriptions",
-      "taxes": "Taxes",
-      "transport": "Transport",
-      "travel": "Travel",
-      "utilities": "Utilities"
-    },
     "paymentMethods": {
       "cash": "Cash",
       "debit": "Debit",
@@ -563,7 +581,8 @@
       },
       "amount": {
         "label": "Amount",
-        "placeholder": "0.00"
+        "placeholder": "0.00",
+        "perCycleLabel": "Amount per cycle"
       },
       "currency": {
         "label": "Currency",
@@ -575,19 +594,12 @@
         "label": "Category",
         "placeholder": "Select a category"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a card"
-      },
       "cyclesToAdvance": {
         "label": "Cycles to pre-pay",
         "errors": {
           "invalid": "Enter a number between 1 and {max}."
-        }
+        },
+        "totalPreview": "Total: {total}"
       },
       "notes": {
         "label": "Notes",
@@ -725,7 +737,8 @@
         "label": "Monthly payment",
         "placeholder": "0",
         "hint": "Optional. If you carry a balance on this card and pay a typical amount each month, set it here — it counts as a fixed commitment on the Liquidity card. Leave empty when you pay in full.",
-        "invalid": "Must be a non-negative number."
+        "invalid": "Must be a non-negative number.",
+        "overlapHint": "Renly already counts subscriptions and installments paid with this card. Set this only for revolving debt payments beyond those."
       },
       "cancel": "Cancel",
       "cta": {
@@ -904,14 +917,6 @@
         "label": "Next billing date",
         "placeholder": "Select a date"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
-      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -1012,14 +1017,6 @@
         "label": "Expense category",
         "placeholder": "Select an expense category"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
-      },
       "notes": {
         "label": "Notes",
         "placeholder": "Optional notes..."
@@ -1069,7 +1066,7 @@
       "fetchError": "Couldn't load the linked expense."
     },
     "installment": {
-      "progress": "Cuota {index} of {total}"
+      "progress": "Installment {index} of {total}"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1158,14 +1155,6 @@
         "label": "Start date",
         "placeholder": "Select a date"
       },
-      "paymentMethod": {
-        "label": "Payment method",
-        "placeholder": "Select a payment method"
-      },
-      "creditCard": {
-        "label": "Credit card",
-        "placeholder": "Select a credit card"
-      },
       "derived": {
         "total": "Total: {amount}",
         "totalToPay": "Total to pay: {amount}",
@@ -1205,6 +1194,8 @@
       "twr": "TWR",
       "irr": "IRR",
       "gain": "Gain",
+      "periodEndValue": "Value at Period End",
+      "periodGain": "Period Gain",
       "vsLastMonth": "vs last month"
     },
     "period": {
@@ -1507,7 +1498,8 @@
       },
       "createSuccess": "Snapshot created.",
       "updateSuccess": "Snapshot updated.",
-      "saveError": "Failed to save snapshot."
+      "saveError": "Failed to save snapshot.",
+      "transactionSaveError": "The snapshot was saved, but the transaction could not be saved. Open the snapshot again to retry the transaction."
     }
   },
   "preferences": {
@@ -1977,10 +1969,7 @@
       "json": {
         "title": "Export your data",
         "description": "Download all your Renly data as a JSON file."
-      },
-      "label": "Export",
-      "loading": "Preparing…",
-      "success": "Your data export has been downloaded."
+      }
     }
   },
   "landing": {

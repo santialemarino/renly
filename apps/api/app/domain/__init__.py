@@ -6,7 +6,17 @@ from app.domain.currency import (
     get_ars_pair,
     is_supported,
 )
-from app.domain.cycle_advance import AdvanceResult, CycleAdvanceDecision, ReverseResult
+from app.domain.cycle_advance import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    ReverseResult,
+    claimed_installment_cuotas,
+    claimed_subscription_cycles,
+    closest_installment_cuota,
+    closest_subscription_cycle,
+    installment_link_advanced_cursor,
+    subscription_link_advanced_cursor,
+)
 from app.domain.errors import (
     CurrencyChangeBlockedError,
     EmailNotVerifiedError,
@@ -18,12 +28,15 @@ from app.domain.errors import (
     InvalidInviteError,
     InvalidRefreshTokenError,
     InvalidTokenError,
+    InvestmentCurrencyMismatchError,
     InviteEmailTakenError,
     NotFoundError,
     PasswordBreachedError,
+    PaymentPairingError,
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
+from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
 
 __all__ = [
@@ -41,13 +54,23 @@ __all__ = [
     "InvalidInviteError",
     "InvalidRefreshTokenError",
     "InvalidTokenError",
+    "InvestmentCurrencyMismatchError",
     "InviteEmailTakenError",
     "NotFoundError",
     "PasswordBreachedError",
+    "PaymentMethod",
+    "PaymentPairingError",
     "PlanRequiredError",
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
     "SUPPORTED_CURRENCIES",
+    "claimed_installment_cuotas",
+    "claimed_subscription_cycles",
+    "closest_installment_cuota",
+    "closest_subscription_cycle",
+    "ensure_payment_pairing",
     "get_ars_pair",
+    "installment_link_advanced_cursor",
     "is_supported",
+    "subscription_link_advanced_cursor",
 ]

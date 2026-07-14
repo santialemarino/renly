@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -82,7 +83,6 @@ export type InstallmentSortField =
   | 'current_installment'
   | 'start_date'
   | 'next_cuota_date';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetInstallmentsParams {
   search?: string;

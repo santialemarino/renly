@@ -28,7 +28,10 @@ class PaymentsCalendarItemResponse(BaseModel):
     recurrence: str | None = Field(default=None, description="Recurrence pattern (obligations only).")
     is_paid: bool = Field(
         default=False,
-        description="True when this cycle has a linked expense. Set on past-paid items (obligation / subscription / installment).",
+        description=(
+            "True when this event is settled: past-paid plan cycles (linked expense exists) and "
+            "card_due statements fully covered by settlements dated in (closing, due]."
+        ),
     )
     linked_expense_id: int | None = Field(
         default=None,
@@ -44,4 +47,8 @@ class PaymentsCalendarResponse(BaseModel):
     items: list[PaymentsCalendarItemResponse] = Field(
         default_factory=list,
         description="Calendar events sorted by date ascending, stable within the same date.",
+    )
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes of items this month whose converted_amount is null because no exchange rate was stored.",
     )

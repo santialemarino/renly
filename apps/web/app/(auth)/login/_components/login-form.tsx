@@ -86,6 +86,7 @@ export function LoginForm() {
                   <Input
                     {...field}
                     type="password"
+                    passwordToggleLabel={tCommon('form.togglePassword')}
                     autoComplete="current-password"
                     placeholder={t('form.password.placeholder')}
                     blueEye

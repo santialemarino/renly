@@ -101,13 +101,18 @@ async def delete(session: AsyncSession, entry: ExpenseEntry) -> None:
 
 
 # Count expenses linked to a specific credit card.
-async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
-    result = await session.execute(select(func.count()).where(ExpenseEntry.credit_card_id == credit_card_id))
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).where(
+            ExpenseEntry.credit_card_id == credit_card_id,
+            ExpenseEntry.user_id == user_id,
+        )
+    )
     return int(result.scalar_one())
 
 
 # Count expenses grouped by credit card id. Returns {card_id: count}.
-async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int]) -> dict[int, int]:
+async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[int], user_id: int) -> dict[int, int]:
     if not credit_card_ids:
         return {}
     result = await session.execute(
@@ -115,7 +120,10 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
             ExpenseEntry.credit_card_id,
             func.count(),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id)
     )
     return {row[0]: int(row[1]) for row in result.all()}
@@ -125,6 +133,7 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 async def sum_by_credit_card_ids_grouped(
     session: AsyncSession,
     credit_card_ids: list[int],
+    user_id: int,
 ) -> dict[int, dict[str, float]]:
     if not credit_card_ids:
         return {}
@@ -134,7 +143,10 @@ async def sum_by_credit_card_ids_grouped(
             ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id, ExpenseEntry.currency)
     )
     grouped: dict[int, dict[str, float]] = {}
@@ -148,6 +160,7 @@ async def sum_by_credit_card_ids_grouped(
 async def sum_by_credit_card_ids_monthly(
     session: AsyncSession,
     credit_card_ids: list[int],
+    user_id: int,
 ) -> list[tuple[int, int, int, str, float]]:
     if not credit_card_ids:
         return []
@@ -161,35 +174,14 @@ async def sum_by_credit_card_ids_monthly(
             ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
-        .where(ExpenseEntry.credit_card_id.in_(credit_card_ids))
+        .where(
+            ExpenseEntry.credit_card_id.in_(credit_card_ids),
+            ExpenseEntry.user_id == user_id,
+        )
         .group_by(ExpenseEntry.credit_card_id, year_col, month_col, ExpenseEntry.currency)
         .order_by(year_col, month_col)
     )
     return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
-
-
-# Total expenses for a user within a date range.
-async def sum_by_user(
-    session: AsyncSession,
-    user_id: int,
-    *,
-    date_from: date_type | None = None,
-    date_to: date_type | None = None,
-) -> dict[str, float]:
-    stmt = (
-        select(
-            ExpenseEntry.currency,
-            func.coalesce(func.sum(ExpenseEntry.amount), 0),
-        )
-        .where(ExpenseEntry.user_id == user_id)
-        .group_by(ExpenseEntry.currency)
-    )
-    if date_from is not None:
-        stmt = stmt.where(ExpenseEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(ExpenseEntry.date <= date_to)
-    result = await session.execute(stmt)
-    return {row[0]: float(row[1]) for row in result.all()}
 
 
 # Monthly expense totals for a user grouped by currency.
@@ -200,7 +192,7 @@ async def sum_by_user_monthly(
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> list[tuple[int, int, str, float]]:
+) -> list[tuple[int, int, str, Decimal]]:
     year_col = func.extract("year", ExpenseEntry.date).label("year")
     month_col = func.extract("month", ExpenseEntry.date).label("month")
     stmt = (
@@ -219,10 +211,12 @@ async def sum_by_user_monthly(
     if date_to is not None:
         stmt = stmt.where(ExpenseEntry.date <= date_to)
     result = await session.execute(stmt)
-    return [(int(row[0]), int(row[1]), row[2], float(row[3])) for row in result.all()]
+    return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
 
 
-# Expense totals grouped by category for a user within a date range.
+# Expense totals grouped by category for a user within a date range. NULL categories are
+# coalesced into the synthetic key 'uncategorized' so the breakdown covers every row
+# (the column is a native PG enum, so the coalesce happens in the row mapper, not SQL).
 # Returns a list of (category, currency, total) tuples.
 async def sum_by_user_grouped_by_category(
     session: AsyncSession,
@@ -230,14 +224,14 @@ async def sum_by_user_grouped_by_category(
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> list[tuple[str, str, float]]:
+) -> list[tuple[str, str, Decimal]]:
     stmt = (
         select(
             ExpenseEntry.category,
             ExpenseEntry.currency,
             func.coalesce(func.sum(ExpenseEntry.amount), 0),
         )
-        .where(ExpenseEntry.user_id == user_id, ExpenseEntry.category.isnot(None))
+        .where(ExpenseEntry.user_id == user_id)
         .group_by(ExpenseEntry.category, ExpenseEntry.currency)
     )
     if date_from is not None:
@@ -245,7 +239,7 @@ async def sum_by_user_grouped_by_category(
     if date_to is not None:
         stmt = stmt.where(ExpenseEntry.date <= date_to)
     result = await session.execute(stmt)
-    return [(str(row[0]), row[1], float(row[2])) for row in result.all()]
+    return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
 
 
 # Finds the most recent auto-generated expense (source IN subscription / installment)
@@ -336,59 +330,50 @@ async def max_linked_obligation_dates(
     return {row[0]: row[1] for row in result.all()}
 
 
-# Returns {subscription_id: {date: ExpenseEntry}} for scheduler-emitted expenses linked
-# to any of the given subscriptions, restricted to the [window_lo, window_hi] date range.
-# Used by the Payments Calendar backward walker to pair past cycle dates with the
-# actual auto-generated expense row for the Paid badge (symmetric to the obligation flow).
-# Date-indexed because subscriptions enforce one expense per (subscription_id, date) via
-# a partial UNIQUE INDEX — no need to handle multiples per cycle.
-async def linked_subscription_expenses_by_date(
+# Returns {subscription_id: [ExpenseEntry, ...]} for ALL expenses linked to any of the
+# given subscriptions, sorted by date DESC (newest first). The Payments Calendar pairs
+# past cycles against the full linked history (each expense bound to its closest cycle),
+# so no date-window restriction — mirror of list_linked_obligation_expenses.
+async def list_linked_subscription_expenses(
     session: AsyncSession,
     user_id: int,
     subscription_ids: list[int],
-    window_lo: date_type,
-    window_hi: date_type,
-) -> dict[int, dict[date_type, ExpenseEntry]]:
+) -> dict[int, list[ExpenseEntry]]:
     if not subscription_ids:
         return {}
     stmt = (
         select(ExpenseEntry)
         .where(ExpenseEntry.user_id == user_id)
         .where(ExpenseEntry.subscription_id.in_(subscription_ids))
-        .where(ExpenseEntry.date >= window_lo)
-        .where(ExpenseEntry.date <= window_hi)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
     )
     result = await session.execute(stmt)
-    grouped: dict[int, dict[date_type, ExpenseEntry]] = {}
+    grouped: dict[int, list[ExpenseEntry]] = {}
     for entry in result.scalars().all():
         assert entry.subscription_id is not None  # filtered by WHERE clause.
-        grouped.setdefault(entry.subscription_id, {})[entry.date] = entry
+        grouped.setdefault(entry.subscription_id, []).append(entry)
     return grouped
 
 
-# Same shape as linked_subscription_expenses_by_date but for installments — one auto-row
-# per (installment_id, date) (partial UNIQUE INDEX guarantees no duplicates).
-async def linked_installment_expenses_by_date(
+# Same shape for installments: {installment_id: [ExpenseEntry, ...]} sorted DESC by date.
+async def list_linked_installment_expenses(
     session: AsyncSession,
     user_id: int,
     installment_ids: list[int],
-    window_lo: date_type,
-    window_hi: date_type,
-) -> dict[int, dict[date_type, ExpenseEntry]]:
+) -> dict[int, list[ExpenseEntry]]:
     if not installment_ids:
         return {}
     stmt = (
         select(ExpenseEntry)
         .where(ExpenseEntry.user_id == user_id)
         .where(ExpenseEntry.installment_id.in_(installment_ids))
-        .where(ExpenseEntry.date >= window_lo)
-        .where(ExpenseEntry.date <= window_hi)
+        .order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
     )
     result = await session.execute(stmt)
-    grouped: dict[int, dict[date_type, ExpenseEntry]] = {}
+    grouped: dict[int, list[ExpenseEntry]] = {}
     for entry in result.scalars().all():
         assert entry.installment_id is not None  # filtered by WHERE clause.
-        grouped.setdefault(entry.installment_id, {})[entry.date] = entry
+        grouped.setdefault(entry.installment_id, []).append(entry)
     return grouped
 
 
@@ -467,16 +452,15 @@ class ExpenseRepository:
     is_most_recent_linked_installment_expense = staticmethod(is_most_recent_linked_installment_expense)
     is_most_recent_linked_obligation_expense = staticmethod(is_most_recent_linked_obligation_expense)
     is_most_recent_linked_subscription_expense = staticmethod(is_most_recent_linked_subscription_expense)
-    linked_installment_expenses_by_date = staticmethod(linked_installment_expenses_by_date)
-    linked_subscription_expenses_by_date = staticmethod(linked_subscription_expenses_by_date)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
+    list_linked_installment_expenses = staticmethod(list_linked_installment_expenses)
     list_linked_obligation_expenses = staticmethod(list_linked_obligation_expenses)
+    list_linked_subscription_expenses = staticmethod(list_linked_subscription_expenses)
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)
-    sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)
 

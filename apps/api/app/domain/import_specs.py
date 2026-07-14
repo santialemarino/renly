@@ -9,6 +9,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from enum import StrEnum
 
 from app.domain.currency import SUPPORTED_CURRENCIES, is_supported
+from app.domain.payment_method import PaymentMethod
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
 from app.models.investment import Currency, InvestmentCategory
@@ -26,12 +27,15 @@ class ImportEntity(StrEnum):
 
 
 # A single target field in an import spec. coerce raises ValueError(message) on an invalid value.
+# soft=True downgrades a coercion failure to a row-level warning: the value is dropped (the row
+# imports without it) instead of invalidating the row. Only meaningful for optional fields.
 @dataclass(frozen=True)
 class FieldSpec:
     key: str
     required: bool
     aliases: frozenset[str]
     coerce: Callable[[str], object]
+    soft: bool = False
 
 
 # An import spec for one entity: its target fields and the fields whose values form the dedup key.
@@ -231,6 +235,36 @@ _TRANSACTION_TYPE_ALIASES: dict[str, TransactionType] = {
 }
 
 
+# Payment method labels (EN/ES + card-brand shorthand) → PaymentMethod.
+_PAYMENT_METHOD_ALIASES: dict[str, PaymentMethod] = {
+    "cash": PaymentMethod.cash,
+    "efectivo": PaymentMethod.cash,
+    "contado": PaymentMethod.cash,
+    "credit_card": PaymentMethod.credit_card,
+    "credit card": PaymentMethod.credit_card,
+    "credit": PaymentMethod.credit_card,
+    "crédito": PaymentMethod.credit_card,
+    "credito": PaymentMethod.credit_card,
+    "tarjeta": PaymentMethod.credit_card,
+    "tarjeta de crédito": PaymentMethod.credit_card,
+    "tarjeta de credito": PaymentMethod.credit_card,
+    "visa": PaymentMethod.credit_card,
+    "mastercard": PaymentMethod.credit_card,
+    "amex": PaymentMethod.credit_card,
+    "debit": PaymentMethod.debit,
+    "debit card": PaymentMethod.debit,
+    "débito": PaymentMethod.debit,
+    "debito": PaymentMethod.debit,
+    "tarjeta de débito": PaymentMethod.debit,
+    "tarjeta de debito": PaymentMethod.debit,
+    "transfer": PaymentMethod.transfer,
+    "transferencia": PaymentMethod.transfer,
+    "transferencia bancaria": PaymentMethod.transfer,
+    "wire": PaymentMethod.transfer,
+    "wire transfer": PaymentMethod.transfer,
+}
+
+
 # Builds a coercer mapping a label to an enum member (category, transaction type). Raises on unknown.
 def _enum_coercer[T: StrEnum](enum_cls: type[T], aliases: dict[str, T], noun: str = "category") -> Callable[[str], T]:
     def coerce(raw: str) -> T:
@@ -247,6 +281,7 @@ _coerce_investment_category = _enum_coercer(InvestmentCategory, _INVESTMENT_CATE
 _coerce_expense_category = _enum_coercer(ExpenseCategory, _EXPENSE_CATEGORY_ALIASES)
 _coerce_income_category = _enum_coercer(IncomeCategory, _INCOME_CATEGORY_ALIASES)
 _coerce_transaction_type = _enum_coercer(TransactionType, _TRANSACTION_TYPE_ALIASES, noun="transaction type")
+_coerce_payment_method = _enum_coercer(PaymentMethod, _PAYMENT_METHOD_ALIASES, noun="payment method")
 
 
 # Normalizes a currency code (uppercased) and checks it is supported. Raises ValueError otherwise.
@@ -324,10 +359,12 @@ _MAX_AMOUNT = Decimal(10) ** _MAX_AMOUNT_INT_DIGITS
 
 
 # Normalizes a localized number string to a plain Decimal-parseable form. Handles both "1.234,56"
-# (AR/ES) and "1,234.56" (US): with both separators present the rightmost is the decimal mark; a
-# lone separator before exactly three digits reads as a thousands group (1.000 / 1,000 → 1000),
-# since money carries two decimals, not three.
-def _normalize_decimal_string(raw: str) -> str:
+# (AR/ES) and "1,234.56" (US): with both separators present the rightmost is the decimal mark.
+# With a single separator type the reading depends on the field: for 2-decimal money a lone
+# separator before exactly three digits is a thousands group (1.000 → 1000); for 6-decimal
+# fields (quantity) a lone separator is ALWAYS the decimal mark ("1.500" shares = 1.5) — pass
+# lone_separator_is_decimal=True. Multiple same separators are always grouping.
+def _normalize_decimal_string(raw: str, *, lone_separator_is_decimal: bool = False) -> str:
     text = raw.strip().replace(" ", "").replace(" ", "")
     has_dot = "." in text
     has_comma = "," in text
@@ -336,19 +373,23 @@ def _normalize_decimal_string(raw: str) -> str:
         grouping_sep = "," if decimal_sep == "." else "."
         return text.replace(grouping_sep, "").replace(decimal_sep, ".")
     if has_comma:
-        return _resolve_single_separator(text, ",")
+        return _resolve_single_separator(text, ",", lone_separator_is_decimal=lone_separator_is_decimal)
     if has_dot:
-        return _resolve_single_separator(text, ".")
+        return _resolve_single_separator(text, ".", lone_separator_is_decimal=lone_separator_is_decimal)
     return text
 
 
-# Resolves a number string carrying a single separator type as either decimal or thousands grouping.
-def _resolve_single_separator(text: str, sep: str) -> str:
+# Resolves a number string carrying a single separator type as either decimal or thousands
+# grouping. Multiple occurrences are always grouping; a lone separator is the decimal mark when
+# lone_separator_is_decimal is set, otherwise a 3-digit fraction reads as a thousands group
+# (the money heuristic).
+def _resolve_single_separator(text: str, sep: str, *, lone_separator_is_decimal: bool = False) -> str:
     if text.count(sep) > 1:
         return text.replace(sep, "")
-    integer, _, fraction = text.partition(sep)
-    if len(fraction) == 3 and fraction.isdigit():
-        return integer + fraction
+    if not lone_separator_is_decimal:
+        integer, _, fraction = text.partition(sep)
+        if len(fraction) == 3 and fraction.isdigit():
+            return integer + fraction
     return text.replace(sep, ".")
 
 
@@ -361,12 +402,15 @@ _MAX_QUANTITY = Decimal(10) ** 12
 # after quantizing (quantizing an over-large value raises InvalidOperation, not ValueError, which would
 # escape the per-row try/except in the service), then quantizes half-up. allow_zero permits 0 (e.g. a
 # closed-position snapshot value); otherwise the value must be strictly positive.
-def _decimal_coercer(noun: str, quant: Decimal, max_value: Decimal, *, allow_zero: bool) -> Callable[[str], Decimal]:
+# lone_separator_is_decimal switches the single-separator reading for 6-decimal fields.
+def _decimal_coercer(
+    noun: str, quant: Decimal, max_value: Decimal, *, allow_zero: bool, lone_separator_is_decimal: bool = False
+) -> Callable[[str], Decimal]:
     floor = "zero or greater" if allow_zero else "greater than zero"
 
     def coerce(raw: str) -> Decimal:
         try:
-            value = Decimal(_normalize_decimal_string(raw))
+            value = Decimal(_normalize_decimal_string(raw, lone_separator_is_decimal=lone_separator_is_decimal))
         except InvalidOperation as exc:
             raise ValueError(f"Invalid {noun} '{raw.strip()}'.") from exc
         if not value.is_finite() or value < 0 or (value == 0 and not allow_zero):
@@ -384,7 +428,7 @@ def _decimal_coercer(noun: str, quant: Decimal, max_value: Decimal, *, allow_zer
 # Amount is strictly positive (an expense/income/transaction); value and quantity allow zero.
 _coerce_amount = _decimal_coercer("amount", _AMOUNT_QUANT, _MAX_AMOUNT, allow_zero=False)
 _coerce_value = _decimal_coercer("value", _AMOUNT_QUANT, _MAX_AMOUNT, allow_zero=True)
-_coerce_quantity = _decimal_coercer("quantity", _QUANTITY_QUANT, _MAX_QUANTITY, allow_zero=True)
+_coerce_quantity = _decimal_coercer("quantity", _QUANTITY_QUANT, _MAX_QUANTITY, allow_zero=True, lone_separator_is_decimal=True)
 
 
 # Header aliases shared by the date / amount / currency / notes columns across expense and income.
@@ -501,7 +545,8 @@ EXPENSES_SPEC = ImportSpec(
             "payment_method",
             False,
             frozenset({"payment_method", "payment method", "method", "medio de pago", "método de pago", "metodo de pago", "forma de pago", "medio"}),
-            _text_coercer("Payment method", 20),
+            _coerce_payment_method,
+            soft=True,
         ),
         FieldSpec("notes", False, _NOTES_ALIASES, _text_coercer("Notes", 500)),
     ),

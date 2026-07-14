@@ -22,6 +22,10 @@ class DashboardOverviewResponse(BaseModel):
     savings_rate: Decimal | None = Field(default=None, description="(income - expenses) / income. Null when income is zero.")
     income_expense_ratio: Decimal | None = Field(default=None, description="income / expenses. Null when expenses are zero.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # Single data point for the net-worth evolution line chart.
@@ -36,27 +40,37 @@ class NetWorthEvolutionPoint(BaseModel):
 class DashboardEvolutionResponse(BaseModel):
     points: list[NetWorthEvolutionPoint] = Field(description="Monthly net worth points, chronological.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # One slice of the composition donut (investment category or liabilities).
 class CompositionItem(BaseModel):
     label: str = Field(description="Segment label (investment category name or 'liabilities').")
     value: Decimal = Field(description="Absolute value for this segment.")
-    percentage: Decimal = Field(description="Percentage of total gross value.")
+    percentage: Decimal = Field(description="Percentage of the summed item values (asset categories plus the liabilities item when present).")
 
 
 # Investment allocation by category plus a liabilities segment.
 class DashboardCompositionResponse(BaseModel):
     items: list[CompositionItem] = Field(description="Composition segments (investment categories + liabilities).")
     total_assets: Decimal = Field(description="Total investment portfolio value.")
-    total_liabilities: Decimal = Field(description="Total credit card balance.")
+    total_liabilities: Decimal = Field(description="Total credit card balance, including archived cards.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+    skipped_currencies: list[str] = Field(
+        default_factory=list,
+        description="Original-currency codes excluded from converted totals because no exchange rate was stored.",
+    )
 
 
 # Single skipped commitment whose currency couldn't be converted to the display currency.
 class SkippedLiquidityEntity(BaseModel):
-    type: str = Field(description="Entity type: subscription, installment, obligation, or credit_card.")
-    name: str = Field(description="User-facing name of the skipped entity.")
+    type: str = Field(description="Entity type (subscription, installment, obligation, credit_card, income).")
+    name: str = Field(
+        description="User-facing name of the skipped entity; for income entries this is the currency code (income is aggregated per currency).",
+    )
     currency: str = Field(description="The unsupported currency of the entity.")
 
 

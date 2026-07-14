@@ -145,7 +145,7 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
     body: {
       ...rest,
       payment_method: paymentMethod,
-      credit_card_id: creditCardId,
+      credit_card_id: paymentMethod === 'credit_card' ? (creditCardId ?? null) : null,
       payment_obligation_id: paymentObligationId ?? null,
       subscription_id: subscriptionId ?? null,
       installment_id: installmentId ?? null,
@@ -180,7 +180,7 @@ export async function updateExpense(
       category: values.category,
       notes: values.notes,
       payment_method: values.paymentMethod,
-      credit_card_id: values.creditCardId,
+      credit_card_id: values.paymentMethod === 'credit_card' ? (values.creditCardId ?? null) : null,
       payment_obligation_id: values.paymentObligationId ?? null,
       subscription_id: values.subscriptionId ?? null,
       installment_id: values.installmentId ?? null,

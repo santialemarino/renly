@@ -46,9 +46,14 @@ export function DashboardPeriodPicker({
   const activePreset = currentPeriod ?? (isCustom ? null : 'all');
 
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Parse as local midnight — a bare YYYY-MM-DD parses as UTC midnight and renders the
+  // prior day in negative-offset zones.
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     currentStartDate && currentEndDate
-      ? { from: new Date(currentStartDate), to: new Date(currentEndDate) }
+      ? {
+          from: new Date(`${currentStartDate}T00:00:00`),
+          to: new Date(`${currentEndDate}T00:00:00`),
+        }
       : undefined,
   );
 
@@ -106,7 +111,7 @@ export function DashboardPeriodPicker({
               <Button
                 variant={isCustom ? 'default' : 'outline'}
                 blue={isCustom}
-                className="h-9 w-full gap-x-1.5 px-3 text-sm"
+                className="h-9 w-full gap-x-1.5 px-3 text-paragraph-sm"
               >
                 <CalendarDays className="size-4" />
                 {isCustom && dateRange?.from && dateRange?.to

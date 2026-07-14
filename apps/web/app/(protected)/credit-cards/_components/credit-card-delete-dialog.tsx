@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -24,16 +24,15 @@ export function CreditCardDeleteDialog({
   const t = useTranslations('creditCards');
   const [deleting, setDeleting] = useState(false);
 
-  // Preserve card data during close animation so the name doesn't disappear.
-  const lastCard = useRef(card);
-  if (card) lastCard.current = card;
-  const displayCard = card ?? lastCard.current;
-
   async function handleDelete() {
     if (!card) return;
     setDeleting(true);
     try {
-      await deleteCreditCard(card.id);
+      const result = await deleteCreditCard(card.id);
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
       toast.success(t('delete.success'));
       onSuccess();
       onOpenChange(false);
@@ -48,9 +47,10 @@ export function CreditCardDeleteDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
+      entity={card}
       title={t('delete.title')}
-      description={t('delete.confirm', { name: displayCard?.name ?? '' })}
-      confirmName={displayCard?.name ?? ''}
+      description={(c) => t('delete.confirm', { name: c.name })}
+      confirmName={(c) => c.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}

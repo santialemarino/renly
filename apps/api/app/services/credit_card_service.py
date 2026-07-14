@@ -7,7 +7,14 @@ from app.domain import CardBucketBalance, HasLinkedExpensesError, NotFoundError
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.user import User
-from app.repositories import card_settlement_repository, credit_card_repository, expense_repository
+from app.repositories import (
+    card_settlement_repository,
+    credit_card_repository,
+    expense_repository,
+    installment_repository,
+    payment_obligation_repository,
+    subscription_repository,
+)
 from app.services import card_reconciliation_service
 
 # --- Credit cards ---
@@ -75,12 +82,19 @@ async def get_card_balances(
     session: AsyncSession,
     card_ids: list[int],
     card_currencies: dict[int, str],
+    user_id: int,
 ) -> dict[int, list[CardBucketBalance]]:
     if not card_ids:
         return {}
-    expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids)
+    expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids, user_id)
     settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
+
+
+# Returns {card_id: has-at-least-one-linked-expense} for the given cards in one batch query.
+async def cards_have_expenses(session: AsyncSession, card_ids: list[int], user_id: int) -> dict[int, bool]:
+    counts = await expense_repository.count_by_credit_card_ids(session, card_ids, user_id)
+    return {card_id: counts.get(card_id, 0) > 0 for card_id in card_ids}
 
 
 # Create a new credit card.
@@ -123,12 +137,19 @@ async def update_card(
     return card
 
 
-# Delete a credit card. Rejects if the card has linked expenses (409).
+# Delete a credit card. Rejects with 409 when any expense or plan still references the card,
+# naming the blocking entity kinds so the user knows what to detach or archive first.
 async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
-    expense_count = await expense_repository.count_by_credit_card(session, card_id)
-    if expense_count > 0:
-        raise HasLinkedExpensesError()
+    references = (
+        ("expenses", await expense_repository.count_by_credit_card(session, card_id, user.id)),
+        ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id, user.id)),
+        ("installment plans", await installment_repository.count_by_credit_card(session, card_id, user.id)),
+        ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id, user.id)),
+    )
+    linked = [noun for noun, count in references if count > 0]
+    if linked:
+        raise HasLinkedExpensesError(f"Cannot delete a credit card that has linked {', '.join(linked)}. Archive it instead.")
     await credit_card_repository.delete(session, card)
     await session.commit()
 

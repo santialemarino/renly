@@ -1,23 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Tag } from 'lucide-react';
+import { Tag } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import {
-  Button,
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
-import { ComboboxChevron } from '@/components/combobox-chevron';
-import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import { FilterCombobox } from '@/components/filter-combobox';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
 interface ExpenseCategorySelectProps {
@@ -34,73 +20,19 @@ export function ExpenseCategorySelect({
   className,
 }: ExpenseCategorySelectProps) {
   const locale = useLocale();
-  const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
-  const [open, setOpen] = useState(false);
-
-  const isAll = value === CATEGORY_ALL;
-  const label = isAll ? tCommon('allCategories') : t(`categories.${value}`);
-
-  const sorted = sortExpenseCategoriesByLabel((key) => t(key), locale);
-  const items = [CATEGORY_ALL, ...sorted];
-
-  function handleSelect(selected: string) {
-    onValueChange(selected);
-    setOpen(false);
-  }
 
   return (
-    <div className={className}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            className={cn(
-              'h-9 w-full justify-between px-3 gap-x-2 border-border shadow-xs',
-              'text-paragraph-sm font-normal',
-              isAll ? 'text-muted-foreground' : 'text-foreground',
-              'hover:border-ring',
-              'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              surface ? 'bg-background' : 'bg-input',
-            )}
-          >
-            <span className="flex items-center gap-x-2 truncate">
-              <Tag className="size-4 shrink-0" />
-              {label}
-            </span>
-            <ComboboxChevron open={open} />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          className="sm:min-w-78 w-(--radix-popover-trigger-width) p-0"
-          align="start"
-          sideOffset={8}
-        >
-          <Command>
-            <CommandList>
-              <CommandEmpty>{tCommon('groupFilter.empty')}</CommandEmpty>
-              <CommandGroup>
-                {items.map((cat) => {
-                  const isSelected = value === cat;
-                  const catLabel =
-                    cat === CATEGORY_ALL ? tCommon('allCategories') : t(`categories.${cat}`);
-                  return (
-                    <CommandItem key={cat} value={catLabel} onSelect={() => handleSelect(cat)}>
-                      <Check
-                        className={cn(
-                          'size-4 shrink-0 transition-all duration-150',
-                          isSelected ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-                        )}
-                      />
-                      {catLabel}
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    </div>
+    <FilterCombobox
+      items={sortExpenseCategoriesByLabel((key) => tCommon(key), locale)}
+      value={value}
+      onValueChange={onValueChange}
+      labelFor={(cat) => tCommon(`categories.${cat}`)}
+      allLabel={tCommon('allCategories')}
+      icon={Tag}
+      align="start"
+      surface={surface}
+      className={className}
+    />
   );
 }

@@ -1,18 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@repo/ui/components';
 import { deleteReconciliation } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { CardReconciliation } from '@/lib/api/card-reconciliations';
 
 interface ReconciliationDeleteDialogProps {
@@ -34,10 +27,6 @@ export function ReconciliationDeleteDialog({
   const tForm = useTranslations('creditCards.form');
   const [deleting, setDeleting] = useState(false);
 
-  // Preserve reconciliation data during close animation.
-  const lastRec = useRef(reconciliation);
-  if (reconciliation) lastRec.current = reconciliation;
-
   async function handleDelete() {
     if (!reconciliation) return;
     setDeleting(true);
@@ -54,30 +43,17 @@ export function ReconciliationDeleteDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{t('delete.title')}</DialogTitle>
-        </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">{t('delete.confirm')}</p>
-        <DialogFooter>
-          <Button
-            variant="outline"
-            className="whitespace-nowrap"
-            onClick={() => onOpenChange(false)}
-          >
-            {tForm('cancel')}
-          </Button>
-          <Button
-            onClick={handleDelete}
-            disabled={deleting}
-            variant="destructive"
-            className="whitespace-nowrap"
-          >
-            {deleting ? t('delete.deleting') : t('delete.confirmButton')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      entity={reconciliation}
+      title={t('delete.title')}
+      description={() => t('delete.confirm')}
+      onConfirm={handleDelete}
+      loading={deleting}
+      loadingLabel={t('delete.deleting')}
+      confirmLabel={t('delete.confirmButton')}
+      cancelLabel={tForm('cancel')}
+    />
   );
 }

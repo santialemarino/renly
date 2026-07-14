@@ -63,3 +63,23 @@ def test_notes_over_max_length_rejected(schema):
     base = next(kwargs for _, s, kwargs in _CAPPED_NOTES_SCHEMAS if s is schema)
     with pytest.raises(ValidationError):
         schema(**base, notes="x" * (NOTES_MAX_LENGTH + 1))
+
+
+# A zero or negative transaction amount is rejected — a negative "deposit" would silently
+# flip to a withdrawal in every downstream formula.
+@pytest.mark.parametrize("amount", [Decimal("0"), Decimal("-5.00")])
+def test_transaction_amount_must_be_positive(amount):
+    kwargs = {"date": date(2026, 1, 1), "currency": Currency.USD, "type": TransactionType.buy}
+    with pytest.raises(ValidationError):
+        TransactionCreate(amount=amount, **kwargs)
+    with pytest.raises(ValidationError):
+        TransactionUpdate(amount=amount)
+
+
+# Snapshot value zero is legitimate (a fully-withdrawn investment); negative is not.
+def test_snapshot_value_zero_accepted_negative_rejected():
+    kwargs = {"date": date(2026, 1, 1), "currency": Currency.USD}
+    body = SnapshotCreate(value=Decimal("0"), **kwargs)
+    assert body.value == Decimal("0")
+    with pytest.raises(ValidationError):
+        SnapshotCreate(value=Decimal("-1.00"), **kwargs)

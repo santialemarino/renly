@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Button } from '@repo/ui/components';
-import { exportData } from '@/app/(protected)/data/data-actions';
+import { exportData } from '@/components/export-data-actions';
 
 const EXPORT_FILENAME = 'renly-export.json';
 
@@ -18,8 +18,7 @@ interface ExportDataButtonProps {
 // Downloads the user's full data export (AUTH-6) as a JSON file. Shared by the Data page and the
 // account delete dialog (export-before-you-leave), so the export action lives in one place.
 export function ExportDataButton({ variant = 'outline', className }: ExportDataButtonProps) {
-  const t = useTranslations('data');
-  const tCommon = useTranslations('common');
+  const t = useTranslations('common');
   const [exporting, setExporting] = useState(false);
 
   async function handleExport() {
@@ -34,7 +33,7 @@ export function ExportDataButton({ variant = 'outline', className }: ExportDataB
       URL.revokeObjectURL(url);
       toast.success(t('export.success'));
     } catch {
-      toast.error(tCommon('form.errors.serverError'));
+      toast.error(t('form.errors.serverError'));
     } finally {
       setExporting(false);
     }

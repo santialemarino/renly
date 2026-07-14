@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -59,7 +60,6 @@ export interface ExpenseListResponse {
 }
 
 export type ExpenseSortField = 'date' | 'amount' | 'category' | 'payment_method';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetExpensesParams {
   search?: string;

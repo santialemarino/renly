@@ -3,15 +3,39 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, ReverseResult
+from app.domain import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
+    ReverseResult,
+    closest_subscription_cycle,
+    subscription_link_advanced_cursor,
+)
 from app.models.subscription import Subscription
 from app.models.user import User
-from app.repositories import subscription_repository
-from app.services.auto_expense_service import closest_subscription_cycle
+from app.repositories import credit_card_repository, subscription_repository
+from app.schemas.subscription import SubscriptionResponse
+from app.services import exchange_rate_service
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
+from app.utils.metrics import RateLookup, convert_optional
 
 
-# List subscriptions for a user with optional search, sorting, and archive filtering.
+# Maps a subscription to its response, converting the amount at today's rate when a display
+# currency is requested (plans are current-state rows, not historical events).
+def _to_response(
+    subscription: Subscription,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type,
+) -> SubscriptionResponse:
+    resp = SubscriptionResponse.model_validate(subscription)
+    resp.converted_amount = convert_optional(subscription.amount, subscription.currency, currency, lookup, today)
+    return resp
+
+
+# List subscriptions for a user with optional search, sorting, archive filtering, and conversion.
 # `include_ids` lets callers widen an active-only listing with specific archived plans
 # so the expense edit dialog can still render the plan name of a since-archived link.
 async def list_subscriptions(
@@ -23,8 +47,9 @@ async def list_subscriptions(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
-) -> list[Subscription]:
-    return await subscription_repository.list_by_user(
+    currency: str | None = None,
+) -> list[SubscriptionResponse]:
+    subscriptions = await subscription_repository.list_by_user(
         session,
         user.id,
         search=search,
@@ -33,6 +58,13 @@ async def list_subscriptions(
         active_only=active_only,
         include_ids=include_ids,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
+    today = date_type.today()
+    return [_to_response(s, currency, lookup, today) for s in subscriptions]
 
 
 # Get a single subscription by id. Raises NotFoundError if not found.
@@ -41,6 +73,24 @@ async def get_subscription(session: AsyncSession, subscription_id: int, user: Us
     if subscription is None:
         raise NotFoundError("Subscription not found.")
     return subscription
+
+
+# Get a single subscription as its response schema, converted when a display currency is requested.
+async def get_subscription_response(
+    session: AsyncSession,
+    subscription_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> SubscriptionResponse:
+    subscription = await get_subscription(session, subscription_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
+    today = date_type.today()
+    return _to_response(subscription, currency, lookup, today)
 
 
 # Create a new subscription.
@@ -58,6 +108,9 @@ async def create_subscription(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> Subscription:
+    # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
     subscription = Subscription(
         user_id=user.id,
         name=name,
@@ -84,12 +137,18 @@ async def update_subscription(
     **fields: object,
 ) -> Subscription:
     subscription = await get_subscription(session, subscription_id, user)
-    if "next_billing_date" in fields and fields["next_billing_date"] is not None:
-        nbd = fields["next_billing_date"]
-        if isinstance(nbd, date_type):
-            fields["anchor_day"] = nbd.day
+    # Effective payment pairing after the merge + SEC-4 ownership on a newly-set card.
+    new_card_id = fields.get("credit_card_id", subscription.credit_card_id)
+    new_method = fields.get("payment_method", subscription.payment_method)
+    if new_card_id is not None and new_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
+    if new_card_id is not None and new_card_id != subscription.credit_card_id:
+        if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
+            raise NotFoundError("Credit card not found")
     for key, value in fields.items():
         setattr(subscription, key, value)
+    if "next_billing_date" in fields and fields["next_billing_date"] is not None:
+        subscription.anchor_day = subscription.next_billing_date.day
     await subscription_repository.save(session, subscription)
     await session.commit()
     await session.refresh(subscription)
@@ -157,14 +216,24 @@ async def advance_for_manual_entry(session: AsyncSession, subscription_id: int, 
     )
 
 
-# Walks `next_billing_date` back by one billing cycle (Phase 3, follow-up Item 10).
-# Caller commits. Used by expense_service when the most-recent linked expense for a
-# subscription is deleted or unlinked. Returns a ReverseResult with the cursor delta
-# for Item 7's toast. No-op when the subscription can't be found or doesn't belong to
-# the user.
-async def reverse_for_unlink(session: AsyncSession, subscription_id: int, user: User) -> ReverseResult | None:
+# Walks `next_billing_date` back by one billing cycle when the deleted / unlinked expense
+# is the one whose advance moved the cursor there — recomputed from the expense's date via
+# the same closest-cycle match the create path uses (Phase 3, follow-up Item 10, hardened
+# by the audit's reverse-only-if-advanced fix). Historical back-links and multi-jump
+# pre-pays never advanced the cursor, so deleting them is a no-op: no scheduler re-emit of
+# an already-paid cycle, no wrong unpaid badge. Caller commits. Returns a ReverseResult
+# with the cursor delta for Item 7's toast; None when nothing was reversed or the
+# subscription can't be found / doesn't belong to the user.
+async def reverse_for_unlink(session: AsyncSession, subscription_id: int, user: User, entry_date: date_type) -> ReverseResult | None:
     subscription = await subscription_repository.get_by_id(session, subscription_id, user.id)
     if subscription is None:
+        return None
+    if not subscription_link_advanced_cursor(
+        subscription.next_billing_date,
+        subscription.billing_cycle,
+        entry_date,
+        anchor_day=subscription.anchor_day,
+    ):
         return None
     previous = subscription.next_billing_date
     subscription.next_billing_date = step_back_by_cycle(

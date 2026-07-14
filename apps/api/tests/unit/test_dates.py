@@ -243,6 +243,13 @@ class TestTodayInTimezone:
         now = datetime(2026, 5, 25, 23, 30, tzinfo=UTC)
         assert today_in_timezone(now, "Not/A/Real/Zone") == date(2026, 5, 25)
 
+    def test_path_syntax_invalid_name_falls_back_to_utc(self):
+        # A syntactically invalid key (absolute path / '..') raises ValueError, not
+        # ZoneInfoNotFoundError — it must still degrade to UTC rather than 500 the request.
+        now = datetime(2026, 5, 25, 23, 30, tzinfo=UTC)
+        assert today_in_timezone(now, "/etc/localtime") == date(2026, 5, 25)
+        assert today_in_timezone(now, "../secrets") == date(2026, 5, 25)
+
     def test_dst_transition_correct(self):
         # 2026-03-08 06:30 UTC = 2026-03-08 02:30 EDT (after spring-forward, 2 AM -> 3 AM).
         # New York's today should be March 8.
@@ -270,6 +277,12 @@ class TestLocalHourForUser:
     def test_invalid_name_falls_back_to_utc(self):
         now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
         assert local_hour_for_user(now, "Bogus/Zone") == 1
+
+    def test_path_syntax_invalid_name_falls_back_to_utc(self):
+        # Absolute-path / '..' keys raise ValueError; the scheduler must still degrade to UTC.
+        now = datetime(2026, 5, 25, 1, 0, tzinfo=UTC)
+        assert local_hour_for_user(now, "/etc/localtime") == 1
+        assert local_hour_for_user(now, "../secrets") == 1
 
     def test_tokyo_ahead_nine_hours(self):
         # 16:00 UTC = 01:00 JST next day.

@@ -2,6 +2,7 @@
 # confirm) bulk-insert. The parse/map/validate flow is entity-agnostic; per-entity persistence is a
 # thin dispatch. The server re-validates on confirm — it never trusts client-supplied row data.
 
+import asyncio
 from collections.abc import Callable
 from datetime import date as date_type
 from decimal import Decimal
@@ -119,6 +120,7 @@ def _validate_rows(
     for index, row in enumerate(rows):
         values: dict[str, str] = {}
         errors: list[str] = []
+        warnings: list[str] = []
         coerced: dict[str, object] = {}
         for field in spec.fields:
             column = mapping.get(field.key)
@@ -132,7 +134,11 @@ def _validate_rows(
             try:
                 coerced[field.key] = field.coerce(raw)
             except ValueError as exc:
-                errors.append(str(exc))
+                # Soft fields degrade to a warning: the value is dropped, the row still imports.
+                if field.soft:
+                    warnings.append(str(exc))
+                else:
+                    errors.append(str(exc))
         if not errors and resolve is not None:
             try:
                 resolve(coerced)
@@ -149,7 +155,7 @@ def _validate_rows(
                 if any(key):
                     seen.add(key)
             coerced_by_index[index] = coerced
-        preview_rows.append(ImportPreviewRow(row_number=index + 1, values=values, status=status, errors=errors))
+        preview_rows.append(ImportPreviewRow(row_number=index + 1, values=values, status=status, errors=errors, warnings=warnings))
     return preview_rows, coerced_by_index
 
 
@@ -183,16 +189,20 @@ async def _existing_keys(session: AsyncSession, user: User, spec: ImportSpec) ->
 # Builds a resolver mapping a row's `investment` identifier to `investment_id`, for nested entities.
 # Matches ticker first, then name; ambiguous matches resolve to the lowest (oldest) id. Returns None
 # for top-level entities. The resolver raises ValueError for an unmatched identifier (→ invalid row).
+# Also validates the row's currency against the resolved investment's base currency — a mismatched
+# row is invalid, mirroring the API's 400.
 async def _build_resolver(session: AsyncSession, user: User, entity: ImportEntity) -> Callable[[dict[str, object]], None] | None:
     if entity not in (ImportEntity.snapshots, ImportEntity.transactions):
         return None
     identifiers = await investment_repository.list_identifiers_by_user(session, user.id)
     by_ticker: dict[str, int] = {}
     by_name: dict[str, int] = {}
-    for investment_id, name, ticker in identifiers:
+    base_by_id: dict[int, str] = {}
+    for investment_id, name, ticker, base_currency in identifiers:
         by_name.setdefault(name.strip().lower(), investment_id)
         if ticker:
             by_ticker.setdefault(ticker.strip().upper(), investment_id)
+        base_by_id[investment_id] = base_currency
 
     def resolve(values: dict[str, object]) -> None:
         raw = str(values.get("investment", "")).strip()
@@ -201,6 +211,10 @@ async def _build_resolver(session: AsyncSession, user: User, entity: ImportEntit
             investment_id = by_name.get(raw.lower())
         if investment_id is None:
             raise ValueError(f"Investment '{raw}' not found.")
+        row_currency = str(values["currency"])
+        base_currency = base_by_id[investment_id]
+        if row_currency != base_currency:
+            raise ValueError(f"Currency {row_currency} does not match the investment's base currency ({base_currency}).")
         values["investment_id"] = investment_id
 
     return resolve
@@ -305,7 +319,7 @@ async def preview_import(
     mapping: dict[str, str],
 ) -> ImportPreviewResponse:
     spec = get_spec(entity)
-    columns, rows = _parse(filename, content)
+    columns, rows = await asyncio.to_thread(_parse, filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
     resolve = await _build_resolver(session, user, entity)
@@ -330,7 +344,7 @@ async def confirm_import(
     import_duplicates: bool,
 ) -> ImportResultResponse:
     spec = get_spec(entity)
-    columns, rows = _parse(filename, content)
+    columns, rows = await asyncio.to_thread(_parse, filename, content)
     applied = _resolve_mapping(spec, columns, mapping)
     existing_keys = await _existing_keys(session, user, spec)
     resolve = await _build_resolver(session, user, entity)

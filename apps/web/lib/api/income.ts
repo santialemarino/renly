@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -49,7 +50,6 @@ export interface IncomeListResponse {
 }
 
 export type IncomeSortField = 'date' | 'amount' | 'category';
-export type SortOrder = 'asc' | 'desc';
 
 export interface GetIncomeParams {
   search?: string;

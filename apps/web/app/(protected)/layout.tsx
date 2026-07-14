@@ -7,6 +7,7 @@ import { AppSidebar } from '@/app/(protected)/_components/sidebar';
 import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sync';
 import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE } from '@/config/routes';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { getSignupContext } from '@/lib/api/signup-context';
@@ -27,9 +28,13 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   }
 
   // Signup mode gates the admin "Invite people" item in the sidebar (only relevant in invite mode).
-  const [settings, { mode: signupMode }] = await Promise.all([
+  // supportedCurrencies feeds the currency switcher's "not convertible" warning from the same
+  // backend registry the entry pickers use (single source of truth); undefined on fetch error
+  // fails open (no spurious warning).
+  const [settings, { mode: signupMode }, supportedCurrencies] = await Promise.all([
     getSettings().catch(() => null),
     getSignupContext(),
+    getSupportedCurrencies().catch(() => undefined),
   ]);
   const cookieStore = await cookies();
 
@@ -73,6 +78,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
       <AppSidebar
         displayCurrencies={displayCurrencies}
         activeCurrency={activeCurrency}
+        supportedCurrencies={supportedCurrencies}
         currencyCollapsed={currencyCollapsed}
         isAdmin={session.user.isAdmin}
         signupMode={signupMode}

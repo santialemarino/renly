@@ -1,14 +1,11 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Archive,
   ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
   ChevronRight,
-  ChevronsUpDown,
   CreditCard as CreditCardIcon,
   Pencil,
   Plus,
@@ -31,9 +28,9 @@ import {
   TooltipTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
 import { CreditCardArchiveDialog } from '@/app/(protected)/credit-cards/_components/credit-card-archive-dialog';
 import { CreditCardDeleteDialog } from '@/app/(protected)/credit-cards/_components/credit-card-delete-dialog';
-import { CreditCardFormDialog } from '@/app/(protected)/credit-cards/_components/credit-card-form-dialog';
 import { CreditCardReconciliationsSection } from '@/app/(protected)/credit-cards/_components/credit-card-reconciliations-section';
 import { SettlementDeleteDialog } from '@/app/(protected)/credit-cards/_components/settlement-delete-dialog';
 import { SettlementFormDialog } from '@/app/(protected)/credit-cards/_components/settlement-form-dialog';
@@ -42,51 +39,19 @@ import {
   unarchiveCreditCard,
   type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { RowActionButton } from '@/components/row-action-button';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
-import type { CreditCard, CreditCardSortField, SortOrder } from '@/lib/api/credit-cards';
+import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
+import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly.
 const SETTLEMENTS_DISPLAY_DELAY_MS = 500;
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: CreditCardSortField;
-  sortBy: CreditCardSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 function SettlementsSection({
   cardId,
@@ -140,7 +105,7 @@ function SettlementsSection({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
               <div className="px-8 py-4 bg-muted/30">
@@ -159,7 +124,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="text-paragraph-sm text-muted-foreground"
                     >
                       {t('settlements.loading')}
@@ -170,7 +135,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="text-paragraph-sm text-muted-foreground"
                     >
                       {t('settlements.empty')}
@@ -181,7 +146,7 @@ function SettlementsSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: ANIMATION_FAST }}
                     >
                       <Table>
                         <TableHeader>
@@ -280,8 +245,9 @@ export function CreditCardsTable({
   const locale = useLocale();
   const t = useTranslations('creditCards');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<CreditCardSortField>(
+    ROUTES.creditCards,
+  );
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [editCard, setEditCard] = useState<CreditCard | null>(null);
   const [archiveCard, setArchiveCard] = useState<CreditCard | null>(null);
@@ -301,30 +267,6 @@ export function CreditCardsTable({
     }
   }
 
-  const sortBy = (searchParams.get('sort_by') as CreditCardSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.creditCards}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: CreditCardSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
-
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
@@ -332,46 +274,34 @@ export function CreditCardsTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-6" />
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('closing_day')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.closingDay')}
-                  <SortIcon column="closing_day" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('due_day')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.dueDay')}
-                  <SortIcon column="due_day" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('currency')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.currency')}
-                  <SortIcon column="currency" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.closingDay')}
+                column="closing_day"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.dueDay')}
+                column="due_day"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.currency')}
+                column="currency"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.balance')}</TableHead>
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
@@ -422,68 +352,38 @@ export function CreditCardsTable({
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!card.isActive ? (
                           <div className="flex items-center justify-center">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => handleUnarchive(card)}
-                                  disabled={unarchiving === card.id}
-                                  aria-label="Unarchive"
-                                >
-                                  <ArchiveRestore className="size-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                            </Tooltip>
+                            <RowActionButton
+                              icon={ArchiveRestore}
+                              tooltip={t('actions.unarchive')}
+                              ariaLabel="Unarchive"
+                              onClick={() => handleUnarchive(card)}
+                              disabled={unarchiving === card.id}
+                            />
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-x-1">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8"
-                                  onClick={() => setEditCard(card)}
-                                  aria-label="Edit"
-                                >
-                                  <Pencil className="size-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>{t('actions.edit')}</TooltipContent>
-                            </Tooltip>
+                            <RowActionButton
+                              icon={Pencil}
+                              tooltip={t('actions.edit')}
+                              ariaLabel="Edit"
+                              onClick={() => setEditCard(card)}
+                            />
                             {card.hasExpenses ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 text-muted-foreground hover:text-foreground"
-                                    onClick={() => setArchiveCard(card)}
-                                    aria-label="Archive"
-                                  >
-                                    <Archive className="size-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t('actions.archive')}</TooltipContent>
-                              </Tooltip>
+                              <RowActionButton
+                                icon={Archive}
+                                tooltip={t('actions.archive')}
+                                ariaLabel="Archive"
+                                variant="muted"
+                                onClick={() => setArchiveCard(card)}
+                              />
                             ) : (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 text-muted-foreground hover:text-destructive"
-                                    onClick={() => setDeleteCardState(card)}
-                                    aria-label="Delete"
-                                  >
-                                    <Trash2 className="size-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>{t('actions.delete')}</TooltipContent>
-                              </Tooltip>
+                              <RowActionButton
+                                icon={Trash2}
+                                tooltip={t('actions.delete')}
+                                ariaLabel="Delete"
+                                variant="destructive"
+                                onClick={() => setDeleteCardState(card)}
+                              />
                             )}
                           </div>
                         )}

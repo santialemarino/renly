@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -28,6 +27,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { CreditCard } from '@/lib/api/credit-cards';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface CreditCardFormDialogProps {
   open: boolean;
@@ -35,6 +35,13 @@ interface CreditCardFormDialogProps {
   card?: CreditCard;
   preferredCurrencies?: string[];
   onSuccess: () => void;
+  // Fires only on CREATE success with the freshly-created card, before onSuccess.
+  // PaymentMethodFields uses it to append + auto-select the card inline.
+  onCreated?: (card: CreditCard) => void;
+  // Rendered stacked on top of a host entry form (PaymentMethodFields' inline creation): a
+  // narrower width so it reads as a distinct panel on top instead of overlapping the host's
+  // edges 1:1. Standalone usage (Credit Cards page) leaves it default.
+  stacked?: boolean;
 }
 
 export function CreditCardFormDialog({
@@ -43,6 +50,8 @@ export function CreditCardFormDialog({
   card,
   preferredCurrencies,
   onSuccess,
+  onCreated,
+  stacked = false,
 }: CreditCardFormDialogProps) {
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');
@@ -70,38 +79,39 @@ export function CreditCardFormDialog({
 
   const isEdit = !!card;
 
-  // Reset form when dialog opens or card changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: card?.name ?? '',
-        closingDay: card ? String(card.closingDay) : '',
-        dueDay: card ? String(card.dueDay) : '',
-        currency: card?.currency ?? '',
-        monthlyPayment: card?.monthlyPayment != null ? String(card.monthlyPayment) : '',
-      });
-    }
-  }, [open, card, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: card,
+    toValues: (c) => ({
+      name: c?.name ?? '',
+      closingDay: c ? String(c.closingDay) : '',
+      dueDay: c ? String(c.dueDay) : '',
+      currency: c?.currency ?? '',
+      monthlyPayment: c?.monthlyPayment != null ? String(c.monthlyPayment) : '',
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: CreditCardFormValues) {
-    try {
-      if (isEdit) {
-        await updateCreditCard(card.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createCreditCard(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      async () => {
+        if (isEdit) {
+          await updateCreditCard(card.id, values);
+        } else {
+          const created = await createCreditCard(values);
+          onCreated?.(created);
+        }
+      },
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className={stacked ? 'sm:max-w-md' : undefined}>
         <DialogHeader>
           <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
         </DialogHeader>
@@ -110,15 +120,20 @@ export function CreditCardFormDialog({
           <form
             id="credit-card-form"
             className="flex flex-col min-w-0 gap-y-4"
-            onSubmit={form.handleSubmit(onSubmit)}
+            // Stop propagation so the submit doesn't bubble up the React tree to a host form
+            // when this dialog is stacked inside one (PaymentMethodFields' inline card creation).
+            onSubmit={(e) => {
+              e.stopPropagation();
+              void form.handleSubmit(onSubmit)(e);
+            }}
             noValidate
           >
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -132,8 +147,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="closingDay"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.closingDay.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.closingDay.label')}</FormLabel>
                     <FormControl>
                       <IntegerInput {...field} placeholder={t('form.closingDay.placeholder')} />
                     </FormControl>
@@ -146,8 +161,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="dueDay"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.dueDay.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.dueDay.label')}</FormLabel>
                     <FormControl>
                       <IntegerInput {...field} placeholder={t('form.dueDay.placeholder')} />
                     </FormControl>
@@ -160,8 +175,8 @@ export function CreditCardFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
@@ -195,6 +210,9 @@ export function CreditCardFormDialog({
                   </FormControl>
                   <p className="text-paragraph-xs text-muted-foreground">
                     {t('form.monthlyPayment.hint')}
+                  </p>
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.monthlyPayment.overlapHint')}
                   </p>
                   <FormMessage />
                 </FormItem>

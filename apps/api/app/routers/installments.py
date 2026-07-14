@@ -1,32 +1,13 @@
-from decimal import Decimal
-
 from fastapi import APIRouter, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.installment import InstallmentCreate, InstallmentResponse, InstallmentUpdate
 from app.services import installment_service
-from app.utils.metrics import convert_value, get_rate_map
-from app.utils.settings import get_dollar_pref
 
 router = APIRouter(prefix="/installments", tags=["installments"])
-
-
-# Converts an installment's amounts if a target currency and rate map are provided.
-def _convert_response(
-    resp: InstallmentResponse,
-    entry_currency: str,
-    target_currency: str | None,
-    rate_map: dict[str, Decimal] | None,
-) -> InstallmentResponse:
-    if target_currency and rate_map and entry_currency != target_currency:
-        resp.converted_total_amount = convert_value(resp.total_amount, entry_currency, target_currency, rate_map)
-        resp.converted_installment_amount = convert_value(resp.installment_amount, entry_currency, target_currency, rate_map)
-    elif target_currency and entry_currency == target_currency:
-        resp.converted_total_amount = resp.total_amount
-        resp.converted_installment_amount = resp.installment_amount
-    return resp
 
 
 # List installments for the current user with optional search, sorting, and currency conversion.
@@ -34,6 +15,7 @@ def _convert_response(
 async def list_installments(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Filter installments by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
@@ -52,9 +34,8 @@ async def list_installments(
             "Ignored when show_archived=true (everything is already included)."
         ),
     ),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[InstallmentResponse]:
-    installments = await installment_service.list_installments(
+    return await installment_service.list_installments(
         session,
         current_user,
         search=search,
@@ -62,14 +43,8 @@ async def list_installments(
         sort_order=sort_order,
         active_only=not show_archived,
         include_ids=include_ids,
+        currency=currency,
     )
-
-    rate_map = None
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
-
-    return [_convert_response(InstallmentResponse.model_validate(i), i.currency, currency, rate_map) for i in installments]
 
 
 # Get a single installment by id (with optional currency conversion).
@@ -78,15 +53,9 @@ async def get_installment(
     installment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> InstallmentResponse:
-    installment = await installment_service.get_installment(session, installment_id, current_user)
-    resp = InstallmentResponse.model_validate(installment)
-    if currency:
-        dp = await get_dollar_pref(session, current_user.id)
-        rate_map = await get_rate_map(session, dp)
-        resp = _convert_response(resp, installment.currency, currency, rate_map)
-    return resp
+    return await installment_service.get_installment_response(session, installment_id, current_user, currency=currency)
 
 
 # Create a new installment plan. Supports both JWT (web) and API key (iOS Shortcut) auth.

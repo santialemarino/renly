@@ -6,12 +6,13 @@ import { IncomeDataTable } from '@/app/(protected)/income/_components/income-dat
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
 import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
-import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
+import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {
@@ -38,10 +39,11 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   const settings = await getSettings().catch(() => null);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
+  // Entry forms restrict their currency picker to the convertible set; on a fetch error the
+  // picker degrades to the full list and the API's 422 still guards.
+  const supportedCurrencies = await getSupportedCurrencies().catch(() => undefined);
 
-  const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
-  const activeCurrency = savedCurrency || primary;
-  const currency = activeCurrency !== ORIGINAL_CURRENCY ? activeCurrency : undefined;
+  const currency = resolveActiveCurrency(cookieStore, primary);
 
   const data = await getIncome({
     search: params.search,
@@ -71,13 +73,17 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <DismissableCurrencyHint show={!!currency} />
-      <IncomeToolbar preferredCurrencies={preferredCurrencies} />
+      <IncomeToolbar
+        preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
+      />
       {showSample ? (
         <SampleIncomeTable />
       ) : (
         <IncomeDataTable
           data={data}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           activeCurrency={currency}
           firstRun={firstRun}
         />

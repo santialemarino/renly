@@ -1,10 +1,9 @@
-from datetime import date as date_type
-
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.payment_obligation import PaymentObligation
+from app.repositories.utils import apply_listing_filters
 
 _SORT_COLUMNS = {
     "name": PaymentObligation.name,
@@ -31,34 +30,17 @@ async def list_by_user(
     active_only: bool = True,
     include_ids: list[int] | None = None,
 ) -> list[PaymentObligation]:
-    stmt = select(PaymentObligation).where(PaymentObligation.user_id == user_id)
-    if active_only:
-        if include_ids:
-            stmt = stmt.where(or_(PaymentObligation.is_active.is_(True), PaymentObligation.id.in_(include_ids)))
-        else:
-            stmt = stmt.where(PaymentObligation.is_active.is_(True))
-    if search:
-        stmt = stmt.where(PaymentObligation.name.ilike(f"%{search}%"))
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else PaymentObligation.next_due_date
-    stmt = stmt.order_by(order_clause)
-    result = await session.execute(stmt)
-    return list(result.scalars().all())
-
-
-# Active obligations whose next_due_date is at or before the given upper bound.
-# Used by the Payments Calendar to project recurrences forward inside a window —
-# anchors after the window can't reach back, so we filter them out at the DB.
-async def list_active_anchored_to_or_before(
-    session: AsyncSession,
-    user_id: int,
-    upper_bound: date_type,
-) -> list[PaymentObligation]:
-    stmt = select(PaymentObligation).where(
-        PaymentObligation.user_id == user_id,
-        PaymentObligation.is_active.is_(True),
-        PaymentObligation.next_due_date <= upper_bound,
+    stmt = apply_listing_filters(
+        select(PaymentObligation),
+        PaymentObligation,
+        user_id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+        include_ids=include_ids,
+        sort_columns=_SORT_COLUMNS,
+        default_order=PaymentObligation.next_due_date,
     )
     result = await session.execute(stmt)
     return list(result.scalars().all())
@@ -87,14 +69,25 @@ async def delete(session: AsyncSession, obligation: PaymentObligation) -> None:
     await session.delete(obligation)
 
 
+# Count payment obligations linked to a specific credit card.
+async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).where(
+            PaymentObligation.credit_card_id == credit_card_id,
+            PaymentObligation.user_id == user_id,
+        )
+    )
+    return int(result.scalar_one())
+
+
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
 class PaymentObligationRepository:
     list_by_user = staticmethod(list_by_user)
-    list_active_anchored_to_or_before = staticmethod(list_active_anchored_to_or_before)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
+    count_by_credit_card = staticmethod(count_by_credit_card)
 
 
 # Singleton used by services to access payment obligation persistence.

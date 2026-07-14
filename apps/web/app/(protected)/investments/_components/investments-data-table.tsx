@@ -1,21 +1,12 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  ChevronsUpDown,
-  Pencil,
-  Rows3,
-} from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Archive, ArchiveRestore, Pencil, Rows3 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
-  Button,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -29,14 +20,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
+import { RowActionButton } from '@/components/row-action-button';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type {
@@ -44,45 +33,8 @@ import type {
   InvestmentGroup,
   InvestmentListResponse,
   InvestmentSortField,
-  SortOrder,
 } from '@/lib/api/investments';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: InvestmentSortField;
-  sortBy: InvestmentSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  // All three icons share the same grid cell; only one is visible at a time via opacity/scale.
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 
 function RowActions({
   investment,
@@ -117,21 +69,13 @@ function RowActions({
   if (!investment.isActive) {
     return (
       <div className="flex items-center justify-center">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={handleUnarchive}
-              disabled={unarchiving}
-              aria-label="Unarchive"
-            >
-              <ArchiveRestore className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={ArchiveRestore}
+          tooltip={t('actions.unarchive')}
+          ariaLabel="Unarchive"
+          onClick={handleUnarchive}
+          disabled={unarchiving}
+        />
       </div>
     );
   }
@@ -139,40 +83,25 @@ function RowActions({
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditOpen(true);
-              }}
-              aria-label="Edit"
-            >
-              <Pencil className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.edit')}</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-muted-foreground hover:text-foreground"
-              onClick={(e) => {
-                e.stopPropagation();
-                setArchiveOpen(true);
-              }}
-              aria-label="Archive"
-            >
-              <Archive className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('actions.archive')}</TooltipContent>
-        </Tooltip>
+        <RowActionButton
+          icon={Pencil}
+          tooltip={t('actions.edit')}
+          ariaLabel="Edit"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditOpen(true);
+          }}
+        />
+        <RowActionButton
+          icon={Archive}
+          tooltip={t('actions.archive')}
+          ariaLabel="Archive"
+          variant="muted"
+          onClick={(e) => {
+            e.stopPropagation();
+            setArchiveOpen(true);
+          }}
+        />
       </div>
 
       <InvestmentFormDialog
@@ -208,32 +137,8 @@ export function InvestmentsDataTable({
   const t = useTranslations('investments');
   const tCommon = useTranslations('common');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-
-  const sortBy = (searchParams.get('sort_by') as InvestmentSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.investments}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: InvestmentSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc', page: null });
-      } else {
-        navigate({ sort_by: null, sort_order: null, page: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc', page: null });
-    }
-  }
+  const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
+    useTableSort<InvestmentSortField>(ROUTES.investments, { resetPage: true });
 
   function handlePageChange(page: number) {
     navigate({ page: page > 1 ? String(page) : null });
@@ -253,48 +158,36 @@ export function InvestmentsDataTable({
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">{t('table.id')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.groups')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('category')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.category')}
-                  <SortIcon column="category" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('base_currency')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.currency')}
-                  <SortIcon column="base_currency" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.category')}
+                column="category"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.currency')}
+                column="base_currency"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.ticker')}</TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('broker')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.broker')}
-                  <SortIcon column="broker" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.broker')}
+                column="broker"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead className="w-20 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>

@@ -56,9 +56,9 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
+import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
-import { TruncatingTooltip } from '@/components/truncating-tooltip';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
@@ -202,6 +202,7 @@ function NavSubItem({
 interface AppSidebarProps {
   displayCurrencies: string[];
   activeCurrency: string;
+  supportedCurrencies: string[] | undefined;
   currencyCollapsed: boolean;
   isAdmin: boolean;
   signupMode: SignupMode;
@@ -212,15 +213,16 @@ interface AppSidebarProps {
 export function AppSidebar({
   displayCurrencies,
   activeCurrency,
+  supportedCurrencies,
   currencyCollapsed,
   isAdmin,
   signupMode,
   initialExpanded,
   showDisclosureToggle,
 }: AppSidebarProps) {
+  const t = useTranslations('sidebar');
   const pathname = usePathname();
   const router = useRouter();
-  const t = useTranslations('sidebar');
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
   /*
@@ -229,8 +231,6 @@ export function AppSidebar({
    */
   const [expandedByUser, setExpandedByUser] = useState(initialExpanded);
   const reduce = useReducedMotion() ?? false;
-
-  useEffect(() => setMounted(true), []);
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
   const isCommitmentsActive = COMMITMENTS_GROUP.some(({ href }) => isActive(href));
@@ -252,6 +252,8 @@ export function AppSidebar({
   const collapsibleContentClass = mounted
     ? 'overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up'
     : 'overflow-hidden';
+
+  useEffect(() => setMounted(true), []);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -539,6 +541,7 @@ export function AppSidebar({
               key={displayCurrencies.join(',')}
               displayCurrencies={displayCurrencies}
               activeCurrency={activeCurrency}
+              supportedCurrencies={supportedCurrencies}
               initialCollapsed={currencyCollapsed}
             />
           </SidebarGroupContent>

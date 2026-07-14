@@ -1,14 +1,16 @@
+from datetime import UTC, datetime
+from datetime import date as date_type
 from decimal import Decimal
+from typing import NamedTuple
 
-from sqlalchemy import cast
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
 from app.schemas.settings import LANGUAGE_MODE_VALUES, SUPPORTED_LANGUAGES, TIMEZONE_MODE_VALUES
+from app.utils.dates import today_in_timezone
+from app.utils.liquidity import DEFAULT_LIQUIDITY_THRESHOLD_PCT
 
 SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
@@ -55,6 +57,7 @@ LANGUAGE_MODE_MANUAL = "manual"
 _NOT_SET = object()
 
 
+# Normalizes the raw settings blob into the response dict: type-checks every key and applies fallbacks.
 def _settings_to_response(settings: dict) -> dict:
     raw_primary = settings.get(SETTINGS_KEY_PRIMARY)
     primary_currency = raw_primary if isinstance(raw_primary, str) and raw_primary else None
@@ -214,29 +217,81 @@ async def update_settings(
     return _settings_to_response(row.settings)
 
 
-# Latches a single boolean onboarding-internal settings flag to True via a targeted JSONB merge
-# upsert (never a read-modify-write of the whole blob) so it can't clobber a concurrent settings
-# write, and works whether or not a settings row exists yet. Idempotent; does NOT commit — the
-# caller's transaction persists it.
-async def _latch_flag(session: AsyncSession, user_id: int, key: str) -> None:
-    marker = {key: True}
-    stmt = (
-        pg_insert(UserSettings)
-        .values(user_id=user_id, settings=marker)
-        .on_conflict_do_update(
-            index_elements=["user_id"],
-            set_={"settings": UserSettings.__table__.c.settings.op("||")(cast(marker, JSONB))},
-        )
-    )
-    await session.execute(stmt)
+# Reads the user's dollar rate preference from settings. Returns default if not set.
+async def get_dollar_pref(session: AsyncSession, user_id: int) -> str:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        pref = row.settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+        if isinstance(pref, str) and pref:
+            return pref
+    return DOLLAR_RATE_DEFAULT
+
+
+# Reads the user's liquidity-alert threshold from settings. Returns the backend default
+# when unset or invalid. Range is enforced server-side via the SettingsUpdate validator.
+async def get_liquidity_threshold(session: AsyncSession, user_id: int) -> int:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        value = row.settings.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
+        if isinstance(value, int) and 1 <= value <= 99:
+            return value
+    return DEFAULT_LIQUIDITY_THRESHOLD_PCT
+
+
+# Reads the user's IANA timezone from settings. Returns None when unset (callers fall back to UTC).
+async def get_user_timezone(session: AsyncSession, user_id: int) -> str | None:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    if row and row.settings:
+        tz = row.settings.get(SETTINGS_KEY_TIMEZONE)
+        if isinstance(tz, str) and tz:
+            return tz
+    return None
+
+
+# Resolves the user's local calendar "today" from an already-loaded IANA timezone (no DB read) —
+# the pure counterpart of get_user_today for callers that already hold the timezone. `now_utc` is
+# injectable for tests.
+def today_for_timezone(timezone: str | None, now_utc: datetime | None = None) -> date_type:
+    return today_in_timezone(now_utc or datetime.now(UTC), timezone)
+
+
+# Returns the user's local calendar date "today" (settings timezone, UTC fallback) — the
+# request-path counterpart of the scheduler's per-user local-date derivation. `now_utc` is
+# injectable for tests, mirroring auto_expense_service.
+async def get_user_today(session: AsyncSession, user_id: int, now_utc: datetime | None = None) -> date_type:
+    tz = await get_user_timezone(session, user_id)
+    return today_for_timezone(tz, now_utc)
+
+
+# The per-request settings the dashboard aggregates need together.
+class RequestSettings(NamedTuple):
+    dollar_preference: str
+    timezone: str | None
+    liquidity_threshold_pct: int
+
+
+# Loads dollar-rate preference, IANA timezone, and the liquidity threshold from ONE user_settings
+# read for a request that needs several of them, instead of the separate indexed reads the
+# individual getters (get_dollar_pref + get_user_timezone + get_liquidity_threshold) would each do.
+# Same parsing and fallbacks as those getters — no behaviour change, just one round-trip (P09 D4).
+async def get_request_settings(session: AsyncSession, user_id: int) -> RequestSettings:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    data = row.settings if row and row.settings else {}
+    raw_pref = data.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
+    dollar_preference = raw_pref if isinstance(raw_pref, str) and raw_pref else DOLLAR_RATE_DEFAULT
+    raw_tz = data.get(SETTINGS_KEY_TIMEZONE)
+    timezone = raw_tz if isinstance(raw_tz, str) and raw_tz else None
+    raw_threshold = data.get(SETTINGS_KEY_LIQUIDITY_THRESHOLD_PCT)
+    liquidity_threshold_pct = raw_threshold if isinstance(raw_threshold, int) and 1 <= raw_threshold <= 99 else DEFAULT_LIQUIDITY_THRESHOLD_PCT
+    return RequestSettings(dollar_preference, timezone, liquidity_threshold_pct)
 
 
 # Retires a section's first-run sample by latching its per-entity flag (alongside the entity being
 # created, or on dismiss). Idempotent; does NOT commit. `entity` must be a key of SAMPLE_RETIRED_KEYS.
 async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> None:
-    await _latch_flag(session, user_id, SAMPLE_RETIRED_KEYS[entity])
+    await user_settings_repository.latch_flag(session, user_id, SAMPLE_RETIRED_KEYS[entity])
 
 
 # Latches the first-run welcome tour as completed so it never auto-shows again. Idempotent; does NOT commit.
 async def complete_tour(session: AsyncSession, user_id: int) -> None:
-    await _latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)
+    await user_settings_repository.latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)

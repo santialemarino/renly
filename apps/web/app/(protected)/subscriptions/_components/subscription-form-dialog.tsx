@@ -1,11 +1,9 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
-import { toast } from 'sonner';
 
 import {
   Button,
@@ -33,17 +31,18 @@ import {
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
-import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { PAYMENT_METHODS } from '@/lib/constants/categories';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
+import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface SubscriptionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   subscription?: Subscription;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   onSuccess: () => void;
 }
@@ -53,6 +52,7 @@ export function SubscriptionFormDialog({
   onOpenChange,
   subscription,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   onSuccess,
 }: SubscriptionFormDialogProps) {
@@ -78,49 +78,31 @@ export function SubscriptionFormDialog({
   });
 
   const isEdit = !!subscription;
-  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
-  const activeCards = creditCards?.filter((c) => c.isActive) ?? [];
-  const showCreditCard = watchedPaymentMethod === 'credit_card' && activeCards.length > 0;
 
-  // Reset form when dialog opens or subscription changes.
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: subscription?.name ?? '',
-        amount: subscription?.amount ? String(Number(subscription.amount)) : '',
-        currency: subscription?.currency ?? '',
-        billingCycle:
-          (subscription?.billingCycle as SubscriptionFormValues['billingCycle']) ?? 'monthly',
-        nextBillingDate: subscription?.nextBillingDate ?? '',
-        paymentMethod: (subscription?.paymentMethod ??
-          undefined) as SubscriptionFormValues['paymentMethod'],
-        creditCardId: subscription?.creditCardId ?? undefined,
-      });
-    }
-  }, [open, subscription, form]);
-
-  // Clear credit card when payment method changes away from credit_card.
-  useEffect(() => {
-    if (watchedPaymentMethod !== 'credit_card' && form.getValues('creditCardId')) {
-      form.setValue('creditCardId', undefined);
-    }
-  }, [watchedPaymentMethod, form]);
+  const { submitWithLifecycle } = useEntityFormDialog({
+    open,
+    onOpenChange,
+    form,
+    entity: subscription,
+    toValues: (s) => ({
+      name: s?.name ?? '',
+      amount: s?.amount ? String(Number(s.amount)) : '',
+      currency: s?.currency ?? '',
+      billingCycle: (s?.billingCycle as SubscriptionFormValues['billingCycle']) ?? 'monthly',
+      nextBillingDate: s?.nextBillingDate ?? '',
+      paymentMethod: (s?.paymentMethod ?? undefined) as SubscriptionFormValues['paymentMethod'],
+      creditCardId: s?.creditCardId ?? undefined,
+    }),
+    onSuccess,
+  });
 
   async function onSubmit(values: SubscriptionFormValues) {
-    try {
-      if (isEdit) {
-        await updateSubscription(subscription.id, values);
-        toast.success(t('form.updateSuccess'));
-      } else {
-        await createSubscription(values);
-        toast.success(t('form.createSuccess'));
-      }
-      onSuccess();
-      onOpenChange(false);
-    } catch {
-      toast.error(t('form.saveError'));
-    }
+    await submitWithLifecycle(
+      () => (isEdit ? updateSubscription(subscription.id, values) : createSubscription(values)),
+      t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
+      t('form.saveError'),
+    );
   }
 
   return (
@@ -141,8 +123,8 @@ export function SubscriptionFormDialog({
               control={form.control}
               name="name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel required>{t('form.name.label')}</FormLabel>
+                <FormItem required>
+                  <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder={t('form.name.placeholder')} />
                   </FormControl>
@@ -156,8 +138,8 @@ export function SubscriptionFormDialog({
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.amount.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.amount.label')}</FormLabel>
                     <FormControl>
                       <LocaleAmountInput
                         {...field}
@@ -174,14 +156,15 @@ export function SubscriptionFormDialog({
                 control={form.control}
                 name="currency"
                 render={({ field }) => (
-                  <FormItem className="flex-1 min-w-0">
-                    <FormLabel required>{t('form.currency.label')}</FormLabel>
+                  <FormItem required className="flex-1 min-w-0">
+                    <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
                       <CurrencyCombobox
                         compact
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}
@@ -199,8 +182,8 @@ export function SubscriptionFormDialog({
                 control={form.control}
                 name="billingCycle"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.billingCycle.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.billingCycle.label')}</FormLabel>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -224,8 +207,8 @@ export function SubscriptionFormDialog({
                 control={form.control}
                 name="nextBillingDate"
                 render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormLabel required>{t('form.nextBillingDate.label')}</FormLabel>
+                  <FormItem required className="flex-1">
+                    <FormLabel>{t('form.nextBillingDate.label')}</FormLabel>
                     <FormControl>
                       <DatePickerInput
                         value={field.value || undefined}
@@ -239,74 +222,12 @@ export function SubscriptionFormDialog({
               />
             </div>
 
-            <FormField
+            <PaymentMethodFields
               control={form.control}
-              name="paymentMethod"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('form.paymentMethod.label')}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t('form.paymentMethod.placeholder')} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {PAYMENT_METHODS.map((method) => (
-                        <SelectItem key={method} value={method}>
-                          {t(`paymentMethods.${method}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+              setValue={form.setValue}
+              creditCards={creditCards}
+              preferredCurrencies={preferredCurrencies}
             />
-
-            <AnimatePresence initial={false}>
-              {showCreditCard && (
-                <motion.div
-                  key="credit-card"
-                  layout
-                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                  transition={{ duration: ANIMATION_DEFAULT }}
-                  style={{ marginTop: -16 }}
-                >
-                  <div className="pt-4">
-                    <FormField
-                      control={form.control}
-                      name="creditCardId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('form.creditCard.label')}</FormLabel>
-                          <Select
-                            value={field.value?.toString() ?? ''}
-                            onValueChange={(v) => field.onChange(Number(v))}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.creditCard.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {activeCards.map((card) => (
-                                <SelectItem key={card.id} value={card.id.toString()}>
-                                  {card.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
           </form>
         </Form>
 

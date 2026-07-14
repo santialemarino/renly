@@ -1,18 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Archive,
-  ArchiveRestore,
-  ArrowDown,
-  ArrowUp,
-  BadgeDollarSign,
-  ChevronsUpDown,
-  FileText,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Archive, ArchiveRestore, BadgeDollarSign, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -28,15 +18,14 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import {
   ExpenseFormDialog,
   type PrefillFromObligation,
-} from '@/app/(protected)/expenses/_components/expense-form-dialog';
+} from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
-} from '@/app/(protected)/expenses/_components/linked-plan-amount-mismatch-dialog';
+} from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import { PaymentObligationDeleteDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-delete-dialog';
 import { PaymentObligationFormDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-form-dialog';
@@ -44,56 +33,20 @@ import {
   archivePaymentObligation,
   unarchivePaymentObligation,
 } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
+import { RowActionButton } from '@/components/row-action-button';
+import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
-import type {
-  PaymentObligation,
-  PaymentObligationSortField,
-  SortOrder,
-} from '@/lib/api/payment-obligations';
+import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/payment-obligations';
+import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-
-function SortIcon({
-  column,
-  sortBy,
-  sortOrder,
-}: {
-  column: PaymentObligationSortField;
-  sortBy: PaymentObligationSortField | null;
-  sortOrder: SortOrder;
-}) {
-  const active = sortBy === column;
-  const isAsc = active && sortOrder === 'asc';
-  const isDesc = active && sortOrder === 'desc';
-  return (
-    <span className="grid shrink-0 group-focus-visible/sort:animate-focus-bump">
-      <ChevronsUpDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-400 transition-all duration-200',
-          active ? 'scale-0 opacity-0' : 'scale-100 opacity-100',
-        )}
-      />
-      <ArrowUp
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isAsc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-      <ArrowDown
-        className={cn(
-          'col-start-1 row-start-1 size-3.5 text-blue-800 transition-all duration-200',
-          isDesc ? 'scale-100 opacity-100' : 'scale-0 opacity-0',
-        )}
-      />
-    </span>
-  );
-}
 
 interface PaymentObligationsTableProps {
   obligations: PaymentObligation[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeCurrency?: string;
   firstRun?: boolean;
@@ -102,6 +55,7 @@ interface PaymentObligationsTableProps {
 export function PaymentObligationsTable({
   obligations,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeCurrency,
   firstRun,
@@ -109,8 +63,8 @@ export function PaymentObligationsTable({
   const locale = useLocale();
   const t = useTranslations('paymentObligations');
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const { sortBy, sortOrder, handleSortChange, isPending } =
+    useTableSort<PaymentObligationSortField>(ROUTES.paymentObligations);
   const [editObligation, setEditObligation] = useState<PaymentObligation | null>(null);
   const [deleteState, setDeleteState] = useState<PaymentObligation | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
@@ -119,30 +73,6 @@ export function PaymentObligationsTable({
   // than the obligation's expected one (Phase 3, follow-up Item 6). Now uses the shared
   // LinkedPlanAmountMismatchDialog — the inline dialog was deduplicated.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
-
-  const sortBy = (searchParams.get('sort_by') as PaymentObligationSortField | null) ?? null;
-  const sortOrder = (searchParams.get('sort_order') as SortOrder | null) ?? 'asc';
-
-  function navigate(overrides: Record<string, string | null>) {
-    const params = new URLSearchParams(searchParams.toString());
-    Object.entries(overrides).forEach(([key, val]) => {
-      if (val === null) params.delete(key);
-      else params.set(key, val);
-    });
-    startTransition(() => router.push(`${ROUTES.paymentObligations}?${params.toString()}`));
-  }
-
-  function handleSortChange(column: PaymentObligationSortField) {
-    if (sortBy === column) {
-      if (sortOrder === 'asc') {
-        navigate({ sort_by: column, sort_order: 'desc' });
-      } else {
-        navigate({ sort_by: null, sort_order: null });
-      }
-    } else {
-      navigate({ sort_by: column, sort_order: 'asc' });
-    }
-  }
 
   // Fires after the expense form saves successfully under Mark Paid (Phase 3, follow-up
   // Item 6). The form already computed the amount mismatch; we just stash the plan ref so
@@ -218,46 +148,34 @@ export function PaymentObligationsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('name')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.name')}
-                  <SortIcon column="name" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('amount')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.amount')}
-                  <SortIcon column="amount" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('next_due_date')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.dueDate')}
-                  <SortIcon column="next_due_date" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
-              <TableHead>
-                <button
-                  type="button"
-                  onClick={() => handleSortChange('recurrence')}
-                  className="group/sort flex items-center gap-x-1 hover:text-foreground transition-colors focus-visible:outline-none"
-                >
-                  {t('table.recurrence')}
-                  <SortIcon column="recurrence" sortBy={sortBy} sortOrder={sortOrder} />
-                </button>
-              </TableHead>
+              <SortableTableHead
+                label={t('table.name')}
+                column="name"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.amount')}
+                column="amount"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.dueDate')}
+                column="next_due_date"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
+              <SortableTableHead
+                label={t('table.recurrence')}
+                column="recurrence"
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                onSort={handleSortChange}
+              />
               <TableHead>{t('table.category')}</TableHead>
               <TableHead>{t('table.paymentMethod')}</TableHead>
               <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>
@@ -314,35 +232,20 @@ export function PaymentObligationsTable({
                     <TableCell className="text-center">
                       {!o.isActive ? (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => handleUnarchive(o)}
-                                disabled={archivingId === o.id}
-                                aria-label="Unarchive"
-                              >
-                                <ArchiveRestore className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.unarchive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(o)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={ArchiveRestore}
+                            tooltip={t('actions.unarchive')}
+                            ariaLabel="Unarchive"
+                            onClick={() => handleUnarchive(o)}
+                            disabled={archivingId === o.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(o)}
+                          />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-x-1">
@@ -360,49 +263,27 @@ export function PaymentObligationsTable({
                             </TooltipTrigger>
                             <TooltipContent>{t('actions.markPaid')}</TooltipContent>
                           </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                onClick={() => setEditObligation(o)}
-                                aria-label="Edit"
-                              >
-                                <Pencil className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.edit')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleArchive(o)}
-                                disabled={archivingId === o.id}
-                                aria-label="Archive"
-                              >
-                                <Archive className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.archive')}</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-destructive"
-                                onClick={() => setDeleteState(o)}
-                                aria-label="Delete"
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.delete')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={Pencil}
+                            tooltip={t('actions.edit')}
+                            ariaLabel="Edit"
+                            onClick={() => setEditObligation(o)}
+                          />
+                          <RowActionButton
+                            icon={Archive}
+                            tooltip={t('actions.archive')}
+                            ariaLabel="Archive"
+                            variant="muted"
+                            onClick={() => handleArchive(o)}
+                            disabled={archivingId === o.id}
+                          />
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(o)}
+                          />
                         </div>
                       )}
                     </TableCell>
@@ -441,6 +322,7 @@ export function PaymentObligationsTable({
         }}
         prefillFromObligation={markPaidPrefill ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         activeObligations={obligations.filter((o) => o.isActive)}
         onLinkedPlanSave={handleLinkedPlanSave}

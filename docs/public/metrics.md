@@ -82,6 +82,17 @@ IRR finds the annual interest rate that would make all your cash flows (deposits
 
 IRR is annualized, meaning it's expressed as a yearly rate even if your investment has only been open for a few months.
 
+Because IRR is annualized, Renly only shows it once your cashflow history spans at least 30
+days. Annualizing just a few days of data would produce absurd numbers (a good week extrapolated
+to a year looks like millions of percent), so shorter histories show "—" instead.
+
+IRR is also only well-defined for a **conventional** cash flow — money that, on balance, goes out
+and later comes back. If your history is unusual enough that the running total crosses zero more
+than once (for example, you withdrew more than you had put in and then reinvested), several
+different rates can satisfy the equation at once, so no single IRR is meaningful. Renly shows "—"
+for IRR in those cases and you should rely on TWR, which doesn't depend on the timing of your
+cash flows.
+
 ## When to use TWR vs. IRR
 
 | Question                                 | Use                                                       |
@@ -90,6 +101,28 @@ IRR is annualized, meaning it's expressed as a yearly rate even if your investme
 | "How did **my money** actually do?"      | IRR                                                       |
 | "Should I compare two investments?"      | TWR (fair comparison, ignoring deposit timing)            |
 | "Did my deposit timing help or hurt me?" | Compare TWR and IRR -- if IRR > TWR, your timing was good |
+
+## Metrics with a date filter
+
+When you pick a period on the investor dashboard (a preset like "This year" or a custom range),
+the headline cards switch from all-time to period metrics:
+
+- **Value at period end** — what the portfolio was worth at the end of the selected period.
+- **Invested** — the net money you moved in during the period. A new investment's starting
+  value counts as money in (it entered the portfolio during the period).
+- **Period gain** — end value − start value − net money moved in during the period. This
+  isolates what the period itself earned you, regardless of how much was already there.
+- **TWR and IRR** are measured inside the period only.
+
+Without a date filter, the cards show all-time values: current value, total net invested, and
+current value minus invested.
+
+## "vs last month"
+
+The small change indicator under the gain card compares your latest portfolio value against its
+value at the end of the previous calendar month (in your display currency), drawn from the same
+underlying portfolio values that feed the evolution chart. If all your data is within a single
+month, there is no previous month to compare against and the indicator is hidden.
 
 ## Distribution and allocation
 
@@ -102,6 +135,14 @@ If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDE
 - Crypto: 30%
 
 You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **group** (Retirement, Trading, Kids, etc.).
+
+## Dashboard composition and finance comparisons
+
+**Net worth composition (assets vs. liabilities).** The composition donut on the main dashboard sizes each slice by its value, and the percentages are shares of the values actually shown — your asset categories plus a "liabilities" slice when you carry a card balance. When you have a net card credit (the card owes you), there is no liabilities slice and your asset percentages add up to exactly 100%.
+
+**Uncategorized entries.** The expense and income breakdown donuts on the finance dashboard now include an "Uncategorized" slice for entries you left without a category, so the donut always adds up to the same total as the summary card above it.
+
+**"vs previous period."** The change indicators on the finance dashboard compare your selected period against the period of the same length immediately before it — ending the day before your window starts, with no shared day. A June 1–30 view compares against May 2–31.
 
 ## Liquidity
 

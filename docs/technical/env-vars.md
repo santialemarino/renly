@@ -49,24 +49,21 @@ All environment variables used by the Renly backend and frontend, with defaults 
 
 ## Docker Compose overrides
 
-The `docker-compose.yml` passes these to services via `environment`:
+`docker-compose.yml` boots zero-config: the root `.env` is **optional** (`env_file` long syntax,
+`required: false`) and every required var has a working local default. Only the vars needing a
+compose-specific default appear under `environment`; everything else comes from the optional root
+`.env` (if present) or its in-code default (`config.py`).
 
-| Variable                      | Service         | Default via compose     |
-| ----------------------------- | --------------- | ----------------------- |
-| `POSTGRES_USER`               | postgres        | `renly`                 |
-| `POSTGRES_PASSWORD`           | postgres        | `renly`                 |
-| `POSTGRES_DB`                 | postgres        | `renly`                 |
-| `DATABASE_URL`                | api             | from `.env`             |
-| `DATABASE_ADMIN_URL`          | api             | from `.env`             |
-| `JWT_SECRET`                  | api             | from `.env`             |
-| `JWT_ALGORITHM`               | api             | from `.env`             |
-| `JWT_EXPIRE_MINUTES`          | api             | from `.env`             |
-| `REFRESH_TOKEN_REMEMBER_DAYS` | api             | from `.env`             |
-| `REFRESH_TOKEN_DEFAULT_HOURS` | api             | from `.env`             |
-| `WEB_BASE_URL`                | api             | from `.env`             |
-| `EMAIL_PROVIDER`              | api             | from `.env`             |
-| `EMAIL_API_KEY`               | api             | from `.env`             |
-| `EMAIL_FROM`                  | api             | from `.env`             |
-| `NEXT_PUBLIC_API_URL`         | web (build arg) | `http://localhost:8000` |
-| `NODE_ENV`                    | web             | `production`            |
-| `PORT`                        | web             | `3000`                  |
+| Variable                                              | Service         | Default via compose                                                     |
+| ----------------------------------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | postgres        | `renly` / `renly` / `renly`                                             |
+| `DATABASE_URL`                                        | api             | `postgresql+asyncpg://renly:renly@postgres:5432/renly` (service host)   |
+| `DATABASE_ADMIN_URL`                                  | api             | same as `DATABASE_URL` (single-role local compose)                      |
+| `JWT_SECRET`                                          | api             | dev placeholder (override via shell or root `.env`)                     |
+| `WEB_BASE_URL`                                        | api             | `http://localhost:3000`                                                 |
+| all other API vars                                    | api             | optional root `.env` (`env_file`, `required: false`) → in-code defaults |
+| `NEXT_PUBLIC_API_URL`                                 | web (build arg) | `http://localhost:8000`                                                 |
+| `NEXT_PUBLIC_SENTRY_DSN`                              | web (build arg) | empty (Sentry off)                                                      |
+| `NEXTAUTH_URL`                                        | web             | `http://localhost:3000`                                                 |
+| `NEXTAUTH_SECRET`                                     | web             | same dev placeholder as `JWT_SECRET`                                    |
+| `NODE_ENV` / `PORT`                                   | web             | `production` / `3000`                                                   |

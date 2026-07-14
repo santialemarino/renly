@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CurrencyChangeBlockedError, NotFoundError
+from app.domain import CurrencyChangeBlockedError, InvestmentCurrencyMismatchError, NotFoundError
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -18,12 +18,12 @@ from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, 
 from app.services import settings_service
 
 
+# Assembles InvestmentResponse, enriching it with group info and snapshot presence.
 def _build_response(
     inv: Investment,
     groups_map: dict[int, list[tuple[int, str]]],
     snapshots_set: set[int],
 ) -> InvestmentResponse:
-    # Assembles InvestmentResponse, enriching it with group info and snapshot presence.
     groups = [InvestmentGroupInfo(id=gid, name=gname) for gid, gname in groups_map.get(inv.id or 0, [])]
     return InvestmentResponse(
         id=inv.id or 0,
@@ -192,6 +192,11 @@ async def set_investment_groups(
     await session.commit()
 
 
+# Returns True if the investment has at least one snapshot.
+async def has_snapshots(session: AsyncSession, investment_id: int) -> bool:
+    return await snapshot_repository.has_snapshots(session, investment_id)
+
+
 # Lists snapshots for an investment. Raises 404 if investment not found or not owned.
 async def list_snapshots(
     session: AsyncSession,
@@ -214,7 +219,11 @@ async def upsert_snapshot(
     currency: Currency,
     notes: str | None = None,
 ) -> InvestmentSnapshot:
-    await get_investment(session, investment_id, user)
+    inv = await get_investment(session, investment_id, user)
+    # A snapshot valued in a different currency than the investment's base corrupts every
+    # metric downstream — reject instead of silently storing (fail-loud, no auto-convert).
+    if currency != inv.base_currency:
+        raise InvestmentCurrencyMismatchError(str(currency), str(inv.base_currency))
     existing = await snapshot_repository.get_by_investment_and_date(session, investment_id, snapshot_date)
     if existing is not None:
         existing.value = value
@@ -276,7 +285,11 @@ async def create_transaction(
     tx_type: TransactionType,
     notes: str | None = None,
 ) -> Transaction:
-    await get_investment(session, investment_id, user)
+    inv = await get_investment(session, investment_id, user)
+    # A transaction valued in a currency other than the investment's base corrupts every
+    # metric downstream — reject instead of silently storing (fail-loud, no auto-convert).
+    if currency != inv.base_currency:
+        raise InvestmentCurrencyMismatchError(str(currency), str(inv.base_currency))
     transaction = Transaction(
         investment_id=investment_id,
         user_id=user.id,
@@ -307,6 +320,10 @@ async def update_transaction(
     notes: str | None = None,
 ) -> Transaction:
     tx = await get_transaction(session, investment_id, transaction_id, user)
+    if currency is not None:
+        inv = await get_investment(session, investment_id, user)
+        if currency != inv.base_currency:
+            raise InvestmentCurrencyMismatchError(str(currency), str(inv.base_currency))
     if transaction_date is not None:
         tx.date = transaction_date
     if amount is not None:

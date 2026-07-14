@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -24,11 +24,6 @@ export function SubscriptionDeleteDialog({
   const t = useTranslations('subscriptions');
   const [deleting, setDeleting] = useState(false);
 
-  // Preserve subscription data during close animation so the name doesn't disappear.
-  const lastSubscription = useRef(subscription);
-  if (subscription) lastSubscription.current = subscription;
-  const display = subscription ?? lastSubscription.current;
-
   async function handleDelete() {
     if (!subscription) return;
     setDeleting(true);
@@ -48,9 +43,10 @@ export function SubscriptionDeleteDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
+      entity={subscription}
       title={t('delete.title')}
-      description={t('delete.confirm', { name: display?.name ?? '' })}
-      confirmName={display?.name ?? ''}
+      description={(s) => t('delete.confirm', { name: s.name })}
+      confirmName={(s) => s.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}

@@ -78,6 +78,7 @@ export function ChangeEmailSection({ currentEmail }: ChangeEmailSectionProps) {
                   <Input
                     {...field}
                     type="password"
+                    passwordToggleLabel={tCommon('form.togglePassword')}
                     autoComplete="current-password"
                     surface
                     blueEye

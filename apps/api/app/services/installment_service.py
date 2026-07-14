@@ -3,11 +3,23 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, InstallmentLockedFieldError, NotFoundError, ReverseResult
+from app.domain import (
+    AdvanceResult,
+    CycleAdvanceDecision,
+    InstallmentLockedFieldError,
+    NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
+    ReverseResult,
+    closest_installment_cuota,
+    installment_link_advanced_cursor,
+)
 from app.models.installment import Installment
 from app.models.user import User
-from app.repositories import installment_repository
-from app.services.auto_expense_service import closest_installment_cuota
+from app.repositories import credit_card_repository, installment_repository
+from app.schemas.installment import InstallmentResponse
+from app.services import exchange_rate_service
+from app.utils.metrics import RateLookup, convert_optional
 
 # Contractual fields locked once any installment has been charged (current_installment > 1).
 # Always editable: name, current_installment (manual correction), is_active (archive).
@@ -32,7 +44,21 @@ def diff_locked_fields(existing: Installment, fields: dict[str, object]) -> list
     return changed
 
 
-# List installments for a user with optional search, sorting, and archive filtering.
+# Maps an installment to its response, converting both amount fields at today's rate when a
+# display currency is requested (plans are current-state rows, not historical events).
+def _to_response(
+    installment: Installment,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type,
+) -> InstallmentResponse:
+    resp = InstallmentResponse.model_validate(installment)
+    resp.converted_total_amount = convert_optional(installment.total_amount, installment.currency, currency, lookup, today)
+    resp.converted_installment_amount = convert_optional(installment.installment_amount, installment.currency, currency, lookup, today)
+    return resp
+
+
+# List installments for a user with optional search, sorting, archive filtering, and conversion.
 # `include_ids` lets callers widen an active-only listing with specific archived plans
 # so the expense edit dialog can still render the plan name of a since-archived link.
 async def list_installments(
@@ -44,8 +70,9 @@ async def list_installments(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
-) -> list[Installment]:
-    return await installment_repository.list_by_user(
+    currency: str | None = None,
+) -> list[InstallmentResponse]:
+    installments = await installment_repository.list_by_user(
         session,
         user.id,
         search=search,
@@ -54,6 +81,13 @@ async def list_installments(
         active_only=active_only,
         include_ids=include_ids,
     )
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
+    today = date_type.today()
+    return [_to_response(i, currency, lookup, today) for i in installments]
 
 
 # Get a single installment by id. Raises NotFoundError if not found.
@@ -62,6 +96,24 @@ async def get_installment(session: AsyncSession, installment_id: int, user: User
     if installment is None:
         raise NotFoundError("Installment not found.")
     return installment
+
+
+# Get a single installment as its response schema, converted when a display currency is requested.
+async def get_installment_response(
+    session: AsyncSession,
+    installment_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+) -> InstallmentResponse:
+    installment = await get_installment(session, installment_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
+    today = date_type.today()
+    return _to_response(installment, currency, lookup, today)
 
 
 # Create a new installment plan.
@@ -79,6 +131,9 @@ async def create_installment(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> Installment:
+    # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
+    if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
+        raise NotFoundError("Credit card not found")
     installment = Installment(
         user_id=user.id,
         name=name,
@@ -110,6 +165,14 @@ async def update_installment(
         violated = diff_locked_fields(installment, fields)
         if violated:
             raise InstallmentLockedFieldError(violated)
+    # Effective payment pairing after the merge + SEC-4 ownership on a newly-set card.
+    new_card_id = fields.get("credit_card_id", installment.credit_card_id)
+    new_method = fields.get("payment_method", installment.payment_method)
+    if new_card_id is not None and new_method != PaymentMethod.credit_card:
+        raise PaymentPairingError()
+    if new_card_id is not None and new_card_id != installment.credit_card_id:
+        if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
+            raise NotFoundError("Credit card not found")
     for key, value in fields.items():
         setattr(installment, key, value)
     await installment_repository.save(session, installment)
@@ -195,11 +258,21 @@ async def advance_for_manual_entry(session: AsyncSession, installment_id: int, u
 # installment can't be found, doesn't belong to the user, or the cursor is already at
 # installment 1 (no installment 0 to step back to). `previous_cursor` reads empty (the
 # archive sentinel) only when the reverse re-activates a fully-paid plan.
-async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User) -> ReverseResult | None:
+# The reverse fires only when the deleted expense binds to the cuota immediately before the
+# cursor (recomputed via the create path's matcher) — deleting a historical or pre-pay link
+# is a no-op.
+async def reverse_for_unlink(session: AsyncSession, installment_id: int, user: User, entry_date: date_type) -> ReverseResult | None:
     installment = await installment_repository.get_by_id(session, installment_id, user.id)
     if installment is None:
         return None
     if installment.current_installment <= 1:
+        return None
+    if not installment_link_advanced_cursor(
+        installment.start_date,
+        installment.current_installment,
+        installment.installments_count,
+        entry_date,
+    ):
         return None
     previous_cursor = installment.current_installment
     reactivated = previous_cursor == installment.installments_count + 1

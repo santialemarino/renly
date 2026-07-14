@@ -15,16 +15,6 @@ from app.services.price_providers import BYMA_SOURCE, COMAFI_SOURCE
 logger = logging.getLogger(__name__)
 
 
-# Returns the current ratio for a CEDEAR ticker. Returns None if not found.
-async def get_ratio(session: AsyncSession, ticker: str) -> CedearRatio | None:
-    return await cedear_ratio_repository.get_latest(session, ticker)
-
-
-# Returns all current ratios.
-async def get_all_ratios(session: AsyncSession) -> list[CedearRatio]:
-    return await cedear_ratio_repository.get_all_latest(session)
-
-
 # Picks the best ratio source: newer date wins, then more entries, then Comafi preferred.
 def _pick_best(
     comafi: price_providers.RatioResult,
@@ -98,16 +88,15 @@ async def fetch_and_store_ratios(session: AsyncSession) -> int:
         return 0
 
     today = date_type.today()
-    for cedear_ticker, underlying, ratio_val in results:
-        ratio = CedearRatio(
-            ticker=cedear_ticker,
-            underlying=underlying,
-            ratio=ratio_val,
-            effective_date=today,
-            source=source,
-        )
-        await cedear_ratio_repository.upsert(session, ratio)
+    # Dedupe by ticker (last entry wins, matching the old per-row upsert order) — all rows share
+    # effective_date=today, and bulk_upsert requires unique (ticker, effective_date) rows.
+    deduped = {cedear_ticker: (underlying, ratio_val) for cedear_ticker, underlying, ratio_val in results}
+    ratios = [
+        CedearRatio(ticker=ticker, underlying=underlying, ratio=ratio_val, effective_date=today, source=source)
+        for ticker, (underlying, ratio_val) in deduped.items()
+    ]
+    stored = await cedear_ratio_repository.bulk_upsert(session, ratios)
 
     await session.commit()
-    logger.info("Stored %d CEDEAR ratios from %s.", len(results), source)
-    return len(results)
+    logger.info("Stored %d CEDEAR ratios from %s.", stored, source)
+    return stored

@@ -9,6 +9,7 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { formatAmount } from '@/lib/utils/currency';
+import { todayInTimezone } from '@/lib/utils/dates';
 import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarListProps {
@@ -16,11 +17,13 @@ interface PaymentsCalendarListProps {
   year: number;
   month: number;
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   creditCards?: CreditCard[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
   activeCurrency?: string;
+  timeZone?: string;
 }
 
 // Variant colour per entry type — keeps the timeline scannable.
@@ -39,11 +42,13 @@ export async function PaymentsCalendarList({
   year,
   month,
   preferredCurrencies,
+  supportedCurrencies,
   creditCards,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
   activeCurrency,
+  timeZone,
 }: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
   const locale = await getLocale();
@@ -67,11 +72,10 @@ export async function PaymentsCalendarList({
     groups.set(item.date, bucket);
   }
 
-  const today = new Date();
+  // Highlight "today" only when viewing the current month — both resolved in the user's tz.
+  const today = todayInTimezone(timeZone);
   const todayIso =
-    today.getFullYear() === year && today.getMonth() + 1 === month
-      ? today.toISOString().slice(0, 10)
-      : null;
+    Number(today.slice(0, 4)) === year && Number(today.slice(5, 7)) === month ? today : null;
 
   const sortedDates = Array.from(groups.keys()).sort();
 
@@ -158,6 +162,7 @@ export async function PaymentsCalendarList({
                       key={`${item.type}-${item.sourceId}-${idx}`}
                       linkedExpenseId={item.linkedExpenseId}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}
