@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.finance_metrics import (
     ExpenseBreakdownResponse,
@@ -16,7 +17,6 @@ from app.services import finance_metrics_service
 
 router = APIRouter(prefix="/finance-metrics", tags=["finance-metrics"])
 
-CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 DATE_FROM_DESC = "Start of date range (YYYY-MM-DD, inclusive)."
 DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 
@@ -26,7 +26,7 @@ DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 async def get_overview(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> FinanceOverviewResponse:
@@ -44,7 +44,7 @@ async def get_overview(
 async def get_monthly(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> FinanceMonthlyResponse:
@@ -62,7 +62,7 @@ async def get_monthly(
 async def get_expense_breakdown(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> ExpenseBreakdownResponse:
@@ -80,7 +80,7 @@ async def get_expense_breakdown(
 async def get_income_breakdown(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> IncomeBreakdownResponse:

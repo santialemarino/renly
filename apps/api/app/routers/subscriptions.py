@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.subscription import SubscriptionCreate, SubscriptionResponse, SubscriptionUpdate
 from app.services import subscription_service
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 async def list_subscriptions(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Filter subscriptions by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
@@ -29,7 +31,6 @@ async def list_subscriptions(
             "the dropdown. Ignored when show_archived=true (everything is already included)."
         ),
     ),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[SubscriptionResponse]:
     return await subscription_service.list_subscriptions(
         session,
@@ -49,7 +50,7 @@ async def get_subscription(
     subscription_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> SubscriptionResponse:
     return await subscription_service.get_subscription_response(session, subscription_id, current_user, currency=currency)
 

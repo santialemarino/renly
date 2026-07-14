@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.installment import InstallmentCreate, InstallmentResponse, InstallmentUpdate
 from app.services import installment_service
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/installments", tags=["installments"])
 async def list_installments(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Filter installments by name (case-insensitive)."),
     sort_by: str | None = Query(
         default=None,
@@ -32,7 +34,6 @@ async def list_installments(
             "Ignored when show_archived=true (everything is already included)."
         ),
     ),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
 ) -> list[InstallmentResponse]:
     return await installment_service.list_installments(
         session,
@@ -52,7 +53,7 @@ async def get_installment(
     installment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> InstallmentResponse:
     return await installment_service.get_installment_response(session, installment_id, current_user, currency=currency)
 

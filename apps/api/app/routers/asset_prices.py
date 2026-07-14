@@ -22,6 +22,9 @@ async def lookup_price(
     category: InvestmentCategory = Query(description="Investment category (determines provider)."),
     convert_to: str | None = Query(default=None, description="Target currency for conversion."),
 ) -> PriceLookupResponse | None:
+    # Uppercase-normalize the display target so a lowercase code converts instead of silently
+    # skipping (rate maps are uppercase-keyed), matching the DisplayCurrency dep on the read routes.
+    convert_to = convert_to.upper() if convert_to else None
     return await asset_price_service.lookup_price(session, current_user.id, ticker, category, date, convert_to)
 
 

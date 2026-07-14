@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.metrics import (
     AllocationResponse,
@@ -18,7 +19,6 @@ from app.services import metrics_service
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
-CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 INVESTMENT_IDS_DESC = "Filter to specific investment IDs."
 GROUP_IDS_DESC = "Filter to investments in these groups (union)."
 CATEGORY_DESC = "Filter to investments of this category."
@@ -34,7 +34,7 @@ END_DATE_DESC = "End of date range (YYYY-MM-DD). Windows TWR/IRR and turns value
 async def get_portfolio_metrics(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -61,7 +61,7 @@ async def get_portfolio_metrics(
 async def get_portfolio_evolution(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -89,7 +89,7 @@ async def get_investment_metrics(
     investment_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> InvestmentMetricsResponse:
     return await metrics_service.get_investment_metrics(
         session,
@@ -105,7 +105,7 @@ async def get_investment_metrics(
 async def get_allocation(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -128,7 +128,7 @@ async def get_allocation(
 async def get_allocation_by_group(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
@@ -151,7 +151,7 @@ async def get_allocation_by_group(
 async def get_investments_summary(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
     group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),

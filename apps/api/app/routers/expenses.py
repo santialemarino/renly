@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.domain import AdvanceResult, ReverseResult
 from app.models.expense_entry import ExpenseCategory
@@ -44,12 +45,12 @@ def _cursor_change(result: AdvanceResult | ReverseResult | None) -> PlanCursorCh
 async def list_expenses(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Search notes."),
     category: ExpenseCategory | None = Query(default=None, description="Filter by category."),
     payment_method: str | None = Query(default=None, description="Filter by payment method."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> ExpenseListResponse:
@@ -146,7 +147,7 @@ async def get_expense(
     expense_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> ExpenseResponse:
     return await expense_service.get_expense_response(session, expense_id, current_user, currency=currency)
 

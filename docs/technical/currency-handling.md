@@ -50,6 +50,8 @@ page.tsx → cookies().get('active-currency') → 'USD' | 'ARS' | 'original'
          → if currency: pass to API as ?currency=USD
 ```
 
+The display `currency` query param is **case-insensitive**: every read endpoint takes it through a shared `DisplayCurrency` dependency (`app/deps/currency.py`) that uppercases it before conversion, so a direct or third-party caller sending `?currency=usd` converts identically to `?currency=USD` instead of silently skipping conversion (the rate maps are uppercase-keyed). The asset-price `convert_to` param is normalized the same way. The web always sends uppercase.
+
 - **Snapshots page**: passes `currency` to `getSnapshotGrid({ currency })`.
 - **Investor dashboard**: passes `currency` to all metric endpoints. When "Original" is selected, falls back to the user's primary currency from Settings (aggregated metrics require a common currency).
 - **Expenses page**: passes `currency` to `getExpenses({ currency })`. Table shows `convertedAmount` when a display currency is active, original `amount` otherwise. Currency column removed — the switcher indicates the display currency.
@@ -64,6 +66,9 @@ All conversion happens at query time in the service layer. Stored values are nev
 Service builds one rate lookup per request (routers just pass currency through)
   → exchange_rate_service.get_user_rate_lookup(session, user_id)  # reads dollar pref + one DB round-trip
   → lookup pre-loads every stored rate, grouped by pair, sorted by date
+  # Dashboard overview/composition/liquidity fold the dollar pref + timezone + liquidity threshold
+  # into ONE user_settings read via settings_service.get_request_settings, then build the lookup
+  # from the pre-read dollar preference — one settings round-trip instead of two or three.
 
 Per row / per snapshot / per cashflow:
   → rate_map = lookup.get_rate_map_at(row.date)

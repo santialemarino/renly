@@ -5,6 +5,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.dashboard import (
     DashboardCompositionResponse,
@@ -16,7 +17,6 @@ from app.services import dashboard_service
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-CURRENCY_DESC = "Display currency (e.g. USD, ARS). Omit for original."
 DATE_FROM_DESC = "Start of date range (YYYY-MM-DD, inclusive)."
 DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 
@@ -26,7 +26,7 @@ DATE_TO_DESC = "End of date range (YYYY-MM-DD, inclusive)."
 async def get_overview(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardOverviewResponse:
@@ -44,7 +44,7 @@ async def get_overview(
 async def get_evolution(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
     date_from: date_type | None = Query(default=None, description=DATE_FROM_DESC),
     date_to: date_type | None = Query(default=None, description=DATE_TO_DESC),
 ) -> DashboardEvolutionResponse:
@@ -62,7 +62,7 @@ async def get_evolution(
 async def get_composition(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> DashboardCompositionResponse:
     return await dashboard_service.get_composition(
         session,
@@ -76,7 +76,7 @@ async def get_composition(
 async def get_liquidity(
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description=CURRENCY_DESC),
+    currency: DisplayCurrency,
 ) -> DashboardLiquidityResponse:
     return await dashboard_service.get_liquidity(
         session,

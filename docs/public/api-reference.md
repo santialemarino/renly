@@ -552,7 +552,7 @@ First-run onboarding state for the authenticated user, all derived from the acco
 
 ## Metrics
 
-All metric endpoints support currency conversion via the `currency` query parameter. Pass `currency=ARS` to see values in Argentine pesos, `currency=USD` for US dollars, etc. Omit it to see values in each investment's original currency.
+All metric endpoints support currency conversion via the `currency` query parameter. Pass `currency=ARS` to see values in Argentine pesos, `currency=USD` for US dollars, etc. Omit it to see values in each investment's original currency. The code is case-insensitive (`usd` and `USD` are equivalent).
 
 Most endpoints also accept these common filters:
 

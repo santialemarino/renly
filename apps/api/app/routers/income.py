@@ -3,6 +3,7 @@ from datetime import date as date_type
 from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
+from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.models.income_entry import IncomeCategory
 from app.schemas.income import IncomeCreate, IncomeListResponse, IncomeResponse, IncomeUpdate
@@ -16,11 +17,11 @@ router = APIRouter(prefix="/income", tags=["income"])
 async def list_income(
     current_user: CurrentUser,
     session: SessionDep,
+    currency: DisplayCurrency,
     search: str | None = Query(default=None, description="Search notes."),
     category: IncomeCategory | None = Query(default=None, description="Filter by category."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> IncomeListResponse:
@@ -43,7 +44,7 @@ async def get_income(
     income_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-    currency: str | None = Query(default=None, description="Display currency (e.g. USD, ARS). Omit for original."),
+    currency: DisplayCurrency,
 ) -> IncomeResponse:
     return await income_service.get_income_response(session, income_id, current_user, currency=currency)
 
