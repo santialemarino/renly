@@ -405,17 +405,24 @@ async def update_expense(
     elif new_installment_id is not None and new_installment_id != old_installment_id:
         advance_target = ("installment", new_installment_id)
 
-    # Same-plan date edit: the subscription/installment link stays but its date moved, so the
-    # cursor must be recomputed — reverse the old date's advance and re-apply the new date's on
-    # the SAME plan. Both primitives self-gate (reverse only when the old date advanced the cursor
-    # to its current spot; advance only when the new date matches the post-reverse cursor), so a
-    # non-cursor-top edit is inert. Obligations archive once and carry no cursor, so they're exempt.
+    # Same-plan date edit: the subscription/installment link stays but its date moved, so model it
+    # as unlink-at-old-date + relink-at-new-date to keep the cursor consistent with delete+create.
+    # The reverse fires only when this row is the most-recent link for the plan — the same
+    # is_most_recent gate the FK-swap (above) and delete paths use, since only the newest link's
+    # date can govern the cursor top — AND its old date actually advanced the cursor (reverse_for_unlink
+    # recomputes that). The advance re-claims the cursor cycle when the new date lands on it
+    # (advance_for_manual_entry self-gates), mirroring create. So an edit that is below the cursor
+    # OR is not the most-recent link is inert. Obligations archive once and carry no cursor, so
+    # they're exempt. (A date edit on a non-most-recent link that DID over-subscribe the cursor
+    # cycle is the locked recompute-from-all-linked residual, shared with delete+create.)
     if reverse_target is None and advance_target is None and new_date != old_date:
         if new_subscription_id is not None:
-            reverse_target = ("subscription", new_subscription_id)
+            if await expense_repository.is_most_recent_linked_subscription_expense(session, user.id, new_subscription_id, entry.id):
+                reverse_target = ("subscription", new_subscription_id)
             advance_target = ("subscription", new_subscription_id)
         elif new_installment_id is not None:
-            reverse_target = ("installment", new_installment_id)
+            if await expense_repository.is_most_recent_linked_installment_expense(session, user.id, new_installment_id, entry.id):
+                reverse_target = ("installment", new_installment_id)
             advance_target = ("installment", new_installment_id)
 
     # SEC-4: validate any newly-set or changed FK belongs to the user before mutating the row or

@@ -271,6 +271,12 @@ class TestUpdateExpenseTransitions:
         new_date = date(2026, 5, 20)
         entry = _entry(subscription_id=7, date_=old_date)
         _mock_repos(monkeypatch, entry)
+        # Most-recent link (the common single-link case): the reverse is eligible to fire.
+        monkeypatch.setattr(
+            expense_service.expense_repository,
+            "is_most_recent_linked_subscription_expense",
+            AsyncMock(return_value=True),
+        )
         reverse_result = ReverseResult(
             plan_type="subscription",
             plan_id=7,
@@ -299,6 +305,12 @@ class TestUpdateExpenseTransitions:
         new_date = date(2026, 7, 20)
         entry = _entry(installment_id=3, date_=old_date)
         _mock_repos(monkeypatch, entry)
+        # Most-recent link (the common single-link case): the reverse is eligible to fire.
+        monkeypatch.setattr(
+            expense_service.expense_repository,
+            "is_most_recent_linked_installment_expense",
+            AsyncMock(return_value=True),
+        )
         advance_result = AdvanceResult(
             plan_type="installment",
             plan_id=3,
@@ -318,6 +330,35 @@ class TestUpdateExpenseTransitions:
         assert reverse is None
         reverse_mock.assert_awaited_once_with(session, 3, USER, old_date)
         advance_mock.assert_awaited_once_with(session, 3, USER, new_date)
+
+    @pytest.mark.asyncio
+    async def test_date_edit_skips_reverse_when_not_most_recent(self, monkeypatch):
+        # A date edit on a subscription-linked expense that is NOT the most-recent link for the
+        # plan must NOT reverse the cursor — only the newest link can govern the cursor top, so
+        # the reverse is gated by is_most_recent exactly like the FK-swap and delete paths (this
+        # keeps the edit consistent with delete+create and avoids stepping the cursor back onto a
+        # cycle a newer link still covers). The advance stays ungated (it self-gates on the cursor).
+        old_date = date(2026, 6, 5)
+        new_date = date(2026, 5, 20)
+        entry = _entry(subscription_id=7, date_=old_date)
+        _mock_repos(monkeypatch, entry)
+        monkeypatch.setattr(
+            expense_service.expense_repository,
+            "is_most_recent_linked_subscription_expense",
+            AsyncMock(return_value=False),
+        )
+        advance_mock = AsyncMock(return_value=None)
+        reverse_mock = AsyncMock()
+        monkeypatch.setattr(subscription_service, "advance_for_manual_entry", advance_mock)
+        monkeypatch.setattr(subscription_service, "reverse_for_unlink", reverse_mock)
+        session = AsyncMock()
+
+        _entry_out, advance, reverse = await expense_service.update_expense(session, 1, USER, subscription_id=7, date=new_date)
+
+        assert reverse is None
+        reverse_mock.assert_not_called()
+        # The advance still runs (ungated, self-gating), mirroring create-at-new-date.
+        advance_mock.assert_awaited_once_with(session, 7, USER, new_date)
 
     @pytest.mark.asyncio
     async def test_date_edit_obligation_is_exempt(self, monkeypatch):
