@@ -54,6 +54,10 @@ async def list_obligations(
     # can display "Paid on YYYY-MM-DD" without an N+1 lookup (Phase 3, Step E, 6.i).
     last_paid_dates = await expense_repository.max_linked_obligation_dates(session, user.id, [o.id for o in obligations])
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
     today = date_type.today()
     responses: list[PaymentObligationResponse] = []
     for o in obligations:
@@ -82,6 +86,10 @@ async def get_obligation_response(
     obligation = await get_obligation(session, obligation_id, user)
     last_paid_dates = await expense_repository.max_linked_obligation_dates(session, user.id, [obligation.id])
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
     today = date_type.today()
     resp = _to_response(obligation, currency, lookup, today)
     resp.last_payment_date = last_paid_dates.get(obligation.id)

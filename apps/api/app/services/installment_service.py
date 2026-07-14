@@ -82,6 +82,10 @@ async def list_installments(
         include_ids=include_ids,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
     today = date_type.today()
     return [_to_response(i, currency, lookup, today) for i in installments]
 
@@ -104,6 +108,10 @@ async def get_installment_response(
 ) -> InstallmentResponse:
     installment = await get_installment(session, installment_id, user)
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local
+    # today. It only selects which daily FX map values a current-state amount; rates are never
+    # future-dated, so server-date always bisects to the freshest stored rate, whereas a user-local
+    # anchor (for a user behind UTC) could only pick a staler one. Not a period boundary.
     today = date_type.today()
     return _to_response(installment, currency, lookup, today)
 
