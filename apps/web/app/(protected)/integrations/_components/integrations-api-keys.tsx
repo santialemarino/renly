@@ -21,7 +21,7 @@ import { CopyButton } from '@/app/(protected)/integrations/_components/copy-butt
 import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
-import { getLocaleTag } from '@/lib/utils/locale';
+import { formatTimestampDate } from '@/lib/utils/format';
 
 interface IntegrationsApiKeysProps {
   initialKeys: ApiKey[];
@@ -87,15 +87,6 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
     } finally {
       setRevoking(false);
     }
-  }
-
-  // Formats a timestamp as a short date string.
-  function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
   }
 
   return (
@@ -175,9 +166,9 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
                     {key.name || t('apiKeys.unnamed')}
                   </span>
                   <span className="text-paragraph-xs text-muted-foreground">
-                    {t('apiKeys.created', { date: formatDate(key.createdAt) })}
+                    {t('apiKeys.created', { date: formatTimestampDate(key.createdAt, locale) })}
                     {key.lastUsedAt &&
-                      ` · ${t('apiKeys.lastUsed', { date: formatDate(key.lastUsedAt) })}`}
+                      ` · ${t('apiKeys.lastUsed', { date: formatTimestampDate(key.lastUsedAt, locale) })}`}
                   </span>
                 </div>
               </div>

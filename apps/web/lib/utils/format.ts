@@ -83,6 +83,15 @@ export function formatDateForLocale(
   return format(date, dateFormat, { locale: getDateFnsLocale(locale) });
 }
 
+// Formats a full ISO timestamp (e.g. "2026-07-16T12:00:00") as a short, locale-aware date label (e.g. "Jul 16, 2026" / "16 jul 2026"), dropping the time. For date-only (YYYY-MM-DD) strings use formatDateForLocale.
+export function formatTimestampDate(iso: string, locale?: string): string {
+  return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 // Formats a number as a compact value for chart Y axes and tooltips (e.g. 1500000 → "1.5M", 23000 → "23K").
 export function formatAxisValue(value: number, locale?: string): string {
   return formatValue(value, { locale, compact: true });

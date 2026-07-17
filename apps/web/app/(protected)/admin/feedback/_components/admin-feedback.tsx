@@ -13,7 +13,7 @@ import {
 } from '@repo/ui/components';
 import type { Feedback } from '@/lib/api/feedback';
 import type { FeedbackCategory } from '@/lib/constants/feedback';
-import { getLocaleTag } from '@/lib/utils/locale';
+import { formatTimestampDate } from '@/lib/utils/format';
 
 // Badge tone per category (outline base — quiet status chips).
 const CATEGORY_CLASS: Record<FeedbackCategory, string> = {
@@ -31,15 +31,6 @@ export function AdminFeedback({ feedback }: AdminFeedbackProps) {
   const locale = useLocale();
   const t = useTranslations('adminFeedback');
   const tFeedback = useTranslations('feedback');
-
-  // Formats a timestamp as a short date string.
-  function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
 
   if (feedback.length === 0) {
     return (
@@ -72,7 +63,9 @@ export function AdminFeedback({ feedback }: AdminFeedbackProps) {
               <TableCell className="max-w-md whitespace-pre-wrap text-muted-foreground">
                 {item.message}
               </TableCell>
-              <TableCell className="text-muted-foreground">{formatDate(item.createdAt)}</TableCell>
+              <TableCell className="text-muted-foreground">
+                {formatTimestampDate(item.createdAt, locale)}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
