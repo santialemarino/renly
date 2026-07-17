@@ -2079,8 +2079,8 @@
         "heading": "Rendimiento ponderado por tiempo (TWR)",
         "paragraphs": [
           "El TWR responde: ¿cómo se comportó la inversión en sí misma, sin importar cuándo agregué o retiré dinero? Imaginá que hubieras invertido exactamente $1 al inicio y nunca lo tocaras — el TWR es el rendimiento de ese peso.",
-          "Funciona encadenando el rendimiento de cada período. Si ganaste +5%, luego −2% y luego +4% en tres meses, tu TWR es 1,05 × 0,98 × 1,04 − 1 = +7,0%.",
-          "Como ignora el momento de tus aportes, el TWR es la forma justa de comparar dos inversiones, o de juzgar un fondo o una acción por sus propios méritos. Dos personas que tuvieron el mismo activo en la misma ventana ven el mismo TWR, aunque hayan aportado dinero en momentos distintos."
+          "Funciona encadenando el rendimiento de cada período. Si ganaste +5%, luego −2% y luego +4% en tres meses, tu TWR es 1,05 × 0,98 × 1,04 − 1 = +7,02%.",
+          "Como ignora el momento de tus aportes, el TWR es la forma justa de comparar dos inversiones, o de juzgar un fondo o una acción por sus propios méritos. Dos personas que tuvieron el mismo activo durante el mismo período ven el mismo TWR, aunque hayan aportado dinero en momentos distintos."
         ]
       },
       {
@@ -2107,7 +2107,7 @@
         "id": "currency",
         "heading": "Cómo funciona la conversión de monedas",
         "paragraphs": [
-          "Podés ver toda tu cartera en cualquier moneda soportada usando el selector de la barra lateral. Renly convierte cada valor pasando por el dólar estadounidense detrás de escena.",
+          "Podés ver todo tu portafolio en cualquier moneda soportada usando el selector de la barra lateral. Renly convierte cada valor pasando por el dólar estadounidense detrás de escena.",
           "Todas las conversiones usan el tipo de cambio de hoy — no el de la fecha de cada snapshot. Un valor del año pasado mostrado en pesos usa el tipo de cambio dólar-peso de hoy. Es a propósito: responde cuánto vale esto para mí hoy, y mantiene todos los números comparables cuando los ves en una sola moneda.",
           "Si Renly no puede convertir una inversión a la moneda elegida — por ejemplo, si el servicio de tipos de cambio no está disponible por un momento — esa inversión queda fuera de los totales en lugar de mostrarse con un valor incorrecto, y el dashboard señala cuáles se omitieron para que sepas que el total está incompleto."
         ]

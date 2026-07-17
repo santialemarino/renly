@@ -93,7 +93,8 @@ export function InlineLink(props: InlineLinkProps) {
   }
 
   // In-page anchor: a bare hash is same-page navigation, so render a plain <a>, not a Next <Link>
-  // (Next intercepts the click, which fights a smooth-scroll handler like useSmoothScrollToHash).
+  // (Next intercepts the click). Smooth scroll comes from an ancestor's useSmoothScrollToHash
+  // delegation; without one the link still works, degrading to a native jump.
   if ('href' in props && props.href !== undefined && props.href.startsWith('#')) {
     return (
       <a href={props.href} className={root}>

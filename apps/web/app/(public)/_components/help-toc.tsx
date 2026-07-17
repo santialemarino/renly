@@ -15,11 +15,13 @@ export function HelpToc({ label, sections }: HelpTocProps) {
 
   return (
     <nav
-      aria-label={label}
+      aria-labelledby="help-toc-label"
       onClick={scrollToHash}
       className="flex flex-col p-5 gap-y-3 bg-muted/30 border border-neutral-200 rounded-2xl"
     >
-      <span className="text-paragraph-sm-semibold text-neutral-950">{label}</span>
+      <span id="help-toc-label" className="text-paragraph-sm-semibold text-neutral-950">
+        {label}
+      </span>
       <ul className="flex flex-col gap-y-1.5">
         {sections.map((section) => (
           <li key={section.id}>

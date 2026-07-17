@@ -2079,7 +2079,7 @@
         "heading": "Time-weighted return (TWR)",
         "paragraphs": [
           "TWR answers: how did the investment itself perform, regardless of when I added or removed money? Imagine you had invested exactly $1 at the very start and never touched it — TWR is the return on that dollar.",
-          "It works by chaining each period's return together. If you earned +5%, then −2%, then +4% over three months, your TWR is 1.05 × 0.98 × 1.04 − 1 = +7.0%.",
+          "It works by chaining each period's return together. If you earned +5%, then −2%, then +4% over three months, your TWR is 1.05 × 0.98 × 1.04 − 1 = +7.02%.",
           "Because it ignores the timing of your deposits, TWR is the fair way to compare two investments, or to judge a fund or stock on its own merits. Two people who held the same asset over the same window see the same TWR, even if they added money at different times."
         ]
       },
