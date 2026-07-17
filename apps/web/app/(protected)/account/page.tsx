@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { Separator } from '@repo/ui/components';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AccountDangerZone } from '@/app/(protected)/account/_components/account-danger-zone';
+import { AccountLegalSection } from '@/app/(protected)/account/_components/account-legal-section';
 import { ChangeEmailSection } from '@/app/(protected)/account/_components/change-email-section';
 import { ChangePasswordSection } from '@/app/(protected)/account/_components/change-password-section';
 import { getSession } from '@/lib/auth';
@@ -24,6 +25,8 @@ export default async function AccountPage() {
         <ChangeEmailSection currentEmail={email} />
         <Separator />
         <ChangePasswordSection />
+        <Separator />
+        <AccountLegalSection />
         <Separator />
         <AccountDangerZone email={email} />
       </div>

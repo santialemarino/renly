@@ -1848,6 +1848,13 @@
         "invalidPassword": "The password is incorrect."
       }
     },
+    "legal": {
+      "title": "Legal",
+      "description": "Review our policies and terms.",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service",
+      "disclaimer": "Disclaimer"
+    },
     "danger": {
       "title": "Danger zone",
       "description": "Permanently delete your account.",
