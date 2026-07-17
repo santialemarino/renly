@@ -188,13 +188,15 @@
  * to instant under `prefers-reduced-motion: reduce`. This is intentionally UNLAYERED — normal
  * declarations outside any cascade layer beat every `@layer utilities` rule regardless of specificity
  * or source order, so it reliably overrides both the utilities above AND tw-animate-css's own
- * (ungated) animate-collapsible-* utilities, for every consumer of these classes. Radix Collapsible
- * still opens/closes/unmounts correctly with no animation — it detects the absent animation and skips
- * the transition wait, revealing/hiding instantly.
+ * (ungated) animate-collapsible-* utilities. The attribute-substring selector matches every element
+ * using these utilities under any Tailwind variant (data-[state=open]:, group-…, bare, etc.), so the
+ * gate is variant-proof and needs no class-name escaping. Radix Collapsible still opens/closes/unmounts
+ * correctly with no animation — it detects the absent animation and skips the transition wait,
+ * revealing/hiding instantly.
  */
 @media (prefers-reduced-motion: reduce) {
-  .data-\[state\=open\]\:animate-collapsible-down,
-  .data-\[state\=closed\]\:animate-collapsible-up {
+  [class*='animate-collapsible-down'],
+  [class*='animate-collapsible-up'] {
     animation: none;
   }
 }
