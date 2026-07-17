@@ -15,6 +15,7 @@ export async function PublicFooter() {
   const year = new Date().getFullYear();
 
   const links = [
+    { href: ROUTES.help, label: t('links.help') },
     { href: ROUTES.privacy, label: t('links.privacy') },
     { href: ROUTES.terms, label: t('links.terms') },
     { href: ROUTES.disclaimer, label: t('links.disclaimer') },

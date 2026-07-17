@@ -176,6 +176,7 @@
       "tagline": "Finanzas personales para inversores argentinos.",
       "disclaimerShort": "Renly es una herramienta informativa y no brinda asesoramiento financiero.",
       "links": {
+        "help": "Ayuda",
         "privacy": "Privacidad",
         "terms": "Términos",
         "disclaimer": "Descargo"
@@ -183,6 +184,7 @@
       "rights": "Todos los derechos reservados."
     },
     "requestAccess": "Solicitar acceso",
+    "learnMore": "Más información",
     "export": {
       "label": "Exportar",
       "loading": "Preparando…",
@@ -287,7 +289,8 @@
       "integrations": "Integraciones",
       "account": "Cuenta",
       "data": "Importar y exportar",
-      "invitePeople": "Invitar personas"
+      "invitePeople": "Invitar personas",
+      "help": "Ayuda"
     },
     "navGroups": {
       "finances": "Finanzas",
@@ -2034,6 +2037,82 @@
       "subtitle": "Creá tu cuenta gratis y mirá todo tu panorama financiero en minutos.",
       "button": "Crear mi cuenta"
     }
+  },
+  "help": {
+    "metadata": {
+      "title": "Ayuda y preguntas frecuentes",
+      "description": "Cómo funciona Renly y qué significa cada métrica: snapshots, rendimientos (TWR e IRR) y el modelo de monedas, explicados para cualquiera."
+    },
+    "title": "Ayuda y preguntas frecuentes",
+    "intro": "¿Recién empezás con Renly o con alguno de sus números? Estas explicaciones cortas cuentan cómo funciona la app y qué significa cada métrica, sin necesidad de saber de finanzas.",
+    "tocLabel": "En esta página",
+    "sections": [
+      {
+        "id": "getting-started",
+        "heading": "Primeros pasos",
+        "paragraphs": [
+          "Renly reúne tus inversiones y tus finanzas del día a día en un solo lugar, para que veas qué tenés, qué debés y cómo va cambiando todo con el tiempo.",
+          "Hay dos formas de empezar: cargar tu primera inversión, ingreso o gasto a mano, o importar lo que ya llevás en una planilla desde la página Importar y exportar — Renly lee archivos CSV y Excel y te guía para emparejar las columnas.",
+          "También conviene configurar tus monedas desde el principio, en Localización, así cada pantalla muestra tus números como esperás."
+        ]
+      },
+      {
+        "id": "snapshots",
+        "heading": "¿Qué es un snapshot?",
+        "paragraphs": [
+          "Un snapshot registra cuánto valía una de tus inversiones en una fecha dada. Es la materia prima detrás de cada gráfico y rendimiento: Renly solo puede mostrar cómo se movió tu dinero si sabe cuánto valían las cosas en distintos momentos.",
+          "Registrá un snapshot de cada inversión periódicamente, por ejemplo una vez por mes. Cuanto más historial construyas, más precisos serán tus rendimientos y gráficos de evolución.",
+          "Cuando agregás un snapshot también podés registrar una transacción junto a él —dinero que depositaste o retiraste ese período— para que Renly distinga el crecimiento real del dinero que simplemente agregaste."
+        ]
+      },
+      {
+        "id": "returns",
+        "heading": "Entender tus rendimientos",
+        "paragraphs": [
+          "Un rendimiento responde una pregunta simple: ¿mi dinero creció, y cuánto? El detalle es que agregar o retirar dinero a mitad de período puede hacer que una inversión sana parezca haber perdido, o que una plana parezca haber volado — así que Renly separa las dos cosas.",
+          "El bloque básico es el rendimiento del período: el cambio entre dos snapshots consecutivos, después de restar el dinero que agregaste o retiraste en el medio. Sin ese ajuste, poner $1.000 parecería una ganancia de $1.000, lo cual es engañoso.",
+          "Renly informa entonces dos rendimientos principales basados en esta idea: un rendimiento ponderado por tiempo (TWR) y un rendimiento ponderado por dinero (IRR). Responden preguntas distintas, que explicamos a continuación."
+        ]
+      },
+      {
+        "id": "twr",
+        "heading": "Rendimiento ponderado por tiempo (TWR)",
+        "paragraphs": [
+          "El TWR responde: ¿cómo se comportó la inversión en sí misma, sin importar cuándo agregué o retiré dinero? Imaginá que hubieras invertido exactamente $1 al inicio y nunca lo tocaras — el TWR es el rendimiento de ese peso.",
+          "Funciona encadenando el rendimiento de cada período. Si ganaste +5%, luego −2% y luego +4% en tres meses, tu TWR es 1,05 × 0,98 × 1,04 − 1 = +7,02%.",
+          "Como ignora el momento de tus aportes, el TWR es la forma justa de comparar dos inversiones, o de juzgar un fondo o una acción por sus propios méritos. Dos personas que tuvieron el mismo activo durante el mismo período ven el mismo TWR, aunque hayan aportado dinero en momentos distintos."
+        ]
+      },
+      {
+        "id": "irr",
+        "heading": "Rendimiento ponderado por dinero (IRR)",
+        "paragraphs": [
+          "El IRR —también llamado XIRR— responde: ¿a qué tasa creció mi dinero real, teniendo en cuenta cuándo lo agregué y lo retiré? A diferencia del TWR, acá el momento importa: depositar una suma grande justo antes de un buen tramo empuja tu IRR hacia arriba.",
+          "Pensalo como la tasa de interés de una caja de ahorro que habría producido tu resultado exacto, dadas las fechas precisas en que moviste dinero. Siempre se expresa como tasa anual, incluso para un historial corto.",
+          "Como está anualizado, Renly solo muestra el IRR una vez que tu historial abarca al menos 30 días — anualizar unos pocos días buenos daría números absurdos. También necesita un patrón de flujos normal (dinero que en general entra y más tarde vuelve); si tu historial es lo bastante inusual como para que tu total acumulado cruce el cero más de una vez, ninguna tasa única tiene sentido y Renly muestra un guion en su lugar. En esos casos, guiate por el TWR."
+        ]
+      },
+      {
+        "id": "twr-vs-irr",
+        "heading": "TWR vs IRR: ¿cuál mirar?",
+        "paragraphs": ["Los dos sirven; simplemente responden preguntas distintas."],
+        "items": [
+          "Para juzgar cómo se comportó una inversión, fondo o acción en sí misma — usá el TWR.",
+          "Para juzgar cómo le fue realmente a tu dinero, con el momento incluido — usá el IRR.",
+          "Para comparar dos inversiones de forma justa — usá el TWR, porque ignora cuándo depositaste.",
+          "Para ver si el momento de tus aportes ayudó o perjudicó — compará los dos: si el IRR es mayor que el TWR, tu timing jugó a favor."
+        ]
+      },
+      {
+        "id": "currency",
+        "heading": "Cómo funciona la conversión de monedas",
+        "paragraphs": [
+          "Podés ver todo tu portafolio en cualquier moneda soportada usando el selector de la barra lateral. Renly convierte cada valor pasando por el dólar estadounidense detrás de escena.",
+          "Todas las conversiones usan el tipo de cambio de hoy — no el de la fecha de cada snapshot. Un valor del año pasado mostrado en pesos usa el tipo de cambio dólar-peso de hoy. Es a propósito: responde cuánto vale esto para mí hoy, y mantiene todos los números comparables cuando los ves en una sola moneda.",
+          "Si Renly no puede convertir una inversión a la moneda elegida — por ejemplo, si el servicio de tipos de cambio no está disponible por un momento — esa inversión queda fuera de los totales en lugar de mostrarse con un valor incorrecto, y el dashboard señala cuáles se omitieron para que sepas que el total está incompleto."
+        ]
+      }
+    ]
   },
   "privacy": {
     "metadata": {

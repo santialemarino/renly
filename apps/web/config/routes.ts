@@ -1,6 +1,7 @@
 export const ROUTES = {
   home: '/dashboard',
   landing: '/',
+  help: '/help',
   privacy: '/privacy',
   terms: '/terms',
   disclaimer: '/disclaimer',
@@ -42,9 +43,10 @@ export const AUTH_ROUTES = [
   ROUTES.auth.verifyEmail,
 ] as const;
 
-/** Public, unauthenticated routes — the marketing landing and legal pages. */
+/** Public, unauthenticated routes — the marketing landing, help, and legal pages. */
 export const PUBLIC_ROUTES = [
   ROUTES.landing,
+  ROUTES.help,
   ROUTES.privacy,
   ROUTES.terms,
   ROUTES.disclaimer,

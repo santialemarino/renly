@@ -6,9 +6,9 @@ import { ROUTES } from '@/config/routes';
 import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession, isAuthenticatedSession } from '@/lib/auth';
 
-// Top bar shared by the landing and legal pages: brand wordmark + auth CTAs. Logged-out visitors
-// get sign up / log in; logged-in visitors get a single "go to the app" CTA instead. In invite-only
-// mode the sign-up CTA reads "Request access" (routes to the invite-only signup screen).
+// Top bar shared by the landing, help, and legal pages: brand wordmark + auth CTAs. Logged-out
+// visitors get sign up / log in; logged-in visitors get a single "go to the app" CTA instead. In
+// invite-only mode the sign-up CTA reads "Request access" (routes to the invite-only signup screen).
 // The before: layer extends the header color into the overscroll-bounce area above it, so the
 // sticky/translucent header shows no seam at the very top when the page rubber-bands.
 export async function PublicHeader() {
