@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
@@ -47,7 +47,14 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     defaultValues: { category: undefined, message: '' },
   });
 
-  // Submits the feedback; on success toasts, closes, and resets so the next open starts clean.
+  // Reset to a clean form each time the dialog opens, so a cancelled draft or a stale error never
+  // carries into the next open. Resetting on open (not on close) keeps the content intact through
+  // the close animation instead of blanking it mid-exit.
+  useEffect(() => {
+    if (open) form.reset({ category: undefined, message: '' });
+  }, [open, form]);
+
+  // Submits the feedback; on success toasts and closes (the next open resets the form).
   async function onSubmit(values: FeedbackFormData) {
     try {
       const ok = await submitFeedback(values);
@@ -56,7 +63,6 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
         return;
       }
       onOpenChange(false);
-      form.reset();
       toast.success(t('success'));
     } catch {
       toast.error(t('error'));
