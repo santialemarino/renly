@@ -486,8 +486,8 @@ export function AppSidebar({
                 </Collapsible>
               )}
 
-              {/* Help — a persistent entry to the public help/FAQ page, opened in a new tab so the
-                  user keeps the app open. Core (never hidden by progressive disclosure). */}
+              {/* Help — a persistent entry to the public help/FAQ page. Core (never hidden by
+                  progressive disclosure). */}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   asChild
@@ -498,10 +498,10 @@ export function AppSidebar({
                     'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                   )}
                 >
-                  <a href={ROUTES.help} target="_blank" rel="noopener noreferrer">
+                  <Link href={ROUTES.help}>
                     <HelpCircle />
                     <span>{t('nav.help')}</span>
-                  </a>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 

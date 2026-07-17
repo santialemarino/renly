@@ -79,7 +79,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
       {/* Concept nudge (shown once there are investments to snapshot; the empty state teaches the rest). */}
       <DismissableHint storageKey="snapshots-intro-dismissed" show={grid.rows.length > 0}>
         {t('intro')}{' '}
-        <InlineLink href={`${ROUTES.help}#snapshots`} external color="brand">
+        <InlineLink href={`${ROUTES.help}#snapshots`} color="brand">
           {tCommon('learnMore')}
         </InlineLink>
       </DismissableHint>

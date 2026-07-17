@@ -231,7 +231,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
       {/* Concept nudge explaining the return metrics; shown once the user has investments to measure. */}
       <DismissableHint storageKey="metrics-intro-dismissed" show={searchableInvestments.length > 0}>
         {t('metricsIntro')}{' '}
-        <InlineLink href={`${ROUTES.help}#returns`} external color="brand">
+        <InlineLink href={`${ROUTES.help}#returns`} color="brand">
           {tCommon('learnMore')}
         </InlineLink>
       </DismissableHint>
