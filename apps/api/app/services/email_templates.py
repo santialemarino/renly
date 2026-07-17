@@ -1,14 +1,18 @@
 # Builders for the account-lifecycle emails (SHELL-3 / AUTH-1, AUTH-2, AUTH-5, AUTH-8). Pure
 # functions returning an EmailMessage; no provider or I/O concerns live here.
 
+import html
+
 from app.services.email_service import EmailMessage
 
 _PRODUCT_NAME = "Renly"
 
 
-# Wraps body text in a minimal HTML document so the message renders in both HTML and plain-text clients.
+# Wraps plain body text in a minimal HTML document so the message renders in both HTML and plain-text
+# clients. Escapes each line — the body is TEXT, never markup — so user-controlled content (e.g. a
+# feedback message) can't inject HTML into the recipient's inbox.
 def _html(body: str) -> str:
-    paragraphs = "".join(f"<p>{line}</p>" for line in body.strip().split("\n\n"))
+    paragraphs = "".join(f"<p>{html.escape(line)}</p>" for line in body.strip().split("\n\n"))
     return f'<div style="font-family: sans-serif; line-height: 1.5;">{paragraphs}</div>'
 
 
