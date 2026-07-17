@@ -32,6 +32,7 @@ export const ROUTES = {
   account: '/account',
   data: '/data',
   admin: '/admin',
+  adminFeedback: '/admin/feedback',
 } as const;
 
 /** All auth routes — accessible without a session */

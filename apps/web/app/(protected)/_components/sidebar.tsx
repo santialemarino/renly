@@ -17,9 +17,11 @@ import {
   FolderOpen,
   Globe,
   HelpCircle,
+  Inbox,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageSquare,
   Puzzle,
   Receipt,
   RefreshCw,
@@ -57,6 +59,7 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
+import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
 import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
@@ -99,6 +102,7 @@ const SETTINGS_GROUP = [
 // invitePeople is only relevant in invite mode (in open mode anyone signs up, so there's no one to invite).
 const ADMIN_GROUP = [
   { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
+  { key: 'feedback', href: ROUTES.adminFeedback, icon: Inbox, inviteOnly: false },
 ] as const;
 
 /*
@@ -226,6 +230,7 @@ export function AppSidebar({
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   /*
    * A newcomer's client-side "Show more" state (seeded from the server's cookie-derived value) so
    * revealing/collapsing the advanced items animates without a server round-trip.
@@ -505,6 +510,22 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Send feedback — opens the feedback dialog. Core (never hidden by progressive disclosure). */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setFeedbackOpen(true)}
+                  size="lg"
+                  className={cn(
+                    '[&_svg]:size-5 text-paragraph-medium',
+                    NAV_ITEM_STYLES,
+                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                  )}
+                >
+                  <MessageSquare />
+                  <span>{t('nav.sendFeedback')}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules.
                   Animates in/out as the newcomer status changes; the label crossfades on toggle. */}
               <AnimatePresence initial={false}>
@@ -586,6 +607,8 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </Sidebar>
   );
 }
