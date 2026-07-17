@@ -54,7 +54,7 @@ export const PUBLIC_ROUTES = [
 ] as const;
 
 // Every leaf path in ROUTES, including the nested `auth` group, deduped.
-const ALL_ROUTE_PATHS = Array.from(
+export const ALL_ROUTE_PATHS = Array.from(
   new Set(
     Object.values(ROUTES).flatMap((value) =>
       typeof value === 'string' ? [value] : Object.values(value),
