@@ -156,43 +156,21 @@
   animation: pulse-scale 0.3s ease-in-out;
 }
 
-/* Collapsible expand/collapse animations (used by Radix Collapsible) */
-@keyframes collapsible-down {
-  from {
-    height: 0;
-  }
-  to {
-    height: var(--radix-collapsible-content-height);
-  }
-}
-
-@keyframes collapsible-up {
-  from {
-    height: var(--radix-collapsible-content-height);
-  }
-  to {
-    height: 0;
-  }
-}
-
-@utility animate-collapsible-down {
-  animation: collapsible-down 0.2s ease-in-out;
-}
-
-@utility animate-collapsible-up {
-  animation: collapsible-up 0.2s ease-in-out;
-}
-
 /*
+ * The Collapsible expand/collapse animations (animate-collapsible-down/up utilities + the
+ * collapsible-down/up keyframes reading --radix-collapsible-content-height) are provided by
+ * tw-animate-css (imported above), like the other Radix-primitive animations the app uses
+ * (animate-in/out, fade, zoom, slide). We don't re-declare them here — only the reduced-motion
+ * gate below, which tw-animate-css doesn't ship.
+ *
  * Reduced motion (ux-motion): the Collapsible height reveal is non-essential motion, so it collapses
- * to instant under `prefers-reduced-motion: reduce`. This is intentionally UNLAYERED — normal
- * declarations outside any cascade layer beat every `@layer utilities` rule regardless of specificity
- * or source order, so it reliably overrides both the utilities above AND tw-animate-css's own
- * (ungated) animate-collapsible-* utilities. The attribute-substring selector matches every element
- * using these utilities under any Tailwind variant (data-[state=open]:, group-…, bare, etc.), so the
- * gate is variant-proof and needs no class-name escaping. Radix Collapsible still opens/closes/unmounts
- * correctly with no animation — it detects the absent animation and skips the transition wait,
- * revealing/hiding instantly.
+ * to instant under `prefers-reduced-motion: reduce`. This is intentionally UNLAYERED — a normal
+ * declaration outside any cascade layer beats every `@layer utilities` rule regardless of specificity
+ * or source order, so it reliably overrides tw-animate-css's own (ungated) animate-collapsible-*
+ * utilities. The attribute-substring selector matches every element using these utilities under any
+ * Tailwind variant (data-[state=open]:, group-…, bare, etc.), so the gate is variant-proof and needs
+ * no class-name escaping. Radix Collapsible still opens/closes/unmounts correctly with no animation —
+ * it detects the absent animation and skips the transition wait, revealing/hiding instantly.
  */
 @media (prefers-reduced-motion: reduce) {
   [class*='animate-collapsible-down'],
