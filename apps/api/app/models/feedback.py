@@ -23,7 +23,7 @@ class Feedback(SQLModel, table=True):
     __tablename__ = "feedback"
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", index=True, description="Author of the feedback.")
+    user_id: int = Field(foreign_key="users.id", description="Author of the feedback.")
     category: FeedbackCategory = Field(sa_column=Column(SAEnum(FeedbackCategory, name="feedback_category"), nullable=False))
     message: str = Field(max_length=2000, description="Free-text feedback body.")
     created_at: datetime = Field(default_factory=utcnow)

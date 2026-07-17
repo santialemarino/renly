@@ -791,10 +791,6 @@ ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 CREATE POLICY api_keys_user_isolation ON api_keys
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
-ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
-CREATE POLICY feedback_user_isolation ON feedback
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
 ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY user_settings_user_isolation ON user_settings
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
@@ -823,6 +819,10 @@ CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
 ALTER TABLE invites ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invites_admin_isolation ON invites
   USING (invited_by = app_current_user_id()) WITH CHECK (invited_by = app_current_user_id());
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY feedback_user_isolation ON feedback
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 -- investment_group_members is a pure junction (composite PK, no surrogate user column).
 -- Isolation is keyed through the parent investment via an EXISTS-join — both parents
