@@ -1,14 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 
-import { HelpSection } from '@/app/(public)/_components/help-section';
 import { HelpToc } from '@/app/(public)/_components/help-toc';
+import { ProseSection, type ProseSectionData } from '@/app/(public)/_components/prose-section';
 
-interface HelpSectionData {
-  id: string;
-  heading: string;
-  paragraphs?: string[];
-  items?: string[];
-}
+// Help sections always carry an anchor id (deep-link + ToC targets), unlike the legal pages'.
+type HelpSectionData = ProseSectionData & { id: string };
 
 // Renders the public help/FAQ page from the `help` translation namespace: a title, intro, a
 // jump-to table of contents derived from the sections, then the anchored topic sections themselves.
@@ -27,13 +23,7 @@ export async function HelpPage() {
         sections={sections.map((section) => ({ id: section.id, heading: section.heading }))}
       />
       {sections.map((section) => (
-        <HelpSection
-          key={section.id}
-          id={section.id}
-          heading={section.heading}
-          paragraphs={section.paragraphs}
-          items={section.items}
-        />
+        <ProseSection key={section.id} {...section} />
       ))}
     </article>
   );
