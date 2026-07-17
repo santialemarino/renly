@@ -154,7 +154,15 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
                 placeholder={searchPlaceholder ?? tCommon('combobox.searchPlaceholder')}
               />
             )}
-            <CommandList ref={listRef} tabIndex={showSearch ? undefined : 0}>
+            <CommandList
+              ref={listRef}
+              tabIndex={showSearch ? undefined : 0}
+              // Thin, rounded scrollbar (matches the currency/timezone comboboxes).
+              className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+              // The Popover portals outside any open Dialog, whose react-remove-scroll lock otherwise
+              // swallows wheel events over this list — stop propagation so wheel/touchpad scroll works.
+              onWheel={(event) => event.stopPropagation()}
+            >
               <CommandEmpty>{emptyText ?? tCommon('combobox.empty')}</CommandEmpty>
               {groups.map((group, index) => (
                 <CommandGroup key={group.heading ?? `__ungrouped-${index}`} heading={group.heading}>
