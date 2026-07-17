@@ -19,6 +19,7 @@ import {
   HelpCircle,
   Inbox,
   LayoutDashboard,
+  LifeBuoy,
   ListChecks,
   LogOut,
   MessageSquare,
@@ -160,11 +161,14 @@ function RevealSubItem({
 }
 
 /*
- * A leaf nav sub-item (icon + label linking to a route). Advanced items animate their reveal via
- * RevealSubItem; the rest render as a plain sub-item. Shared by every uniform leaf nav list.
+ * A leaf nav sub-item (icon + label) — either a link (href) or an in-place action (onClick, e.g.
+ * opening a dialog). Advanced items animate their reveal via RevealSubItem; the rest render as a
+ * plain sub-item. Shared by every uniform leaf nav list.
  */
 function NavSubItem({
   href,
+  onClick,
+  ariaHasPopup,
   icon: Icon,
   label,
   active,
@@ -172,29 +176,36 @@ function NavSubItem({
   advancedVisible = true,
   reduce = false,
 }: {
-  href: string;
   icon: LucideIcon;
   label: string;
   active: boolean;
   advanced?: boolean;
   advancedVisible?: boolean;
   reduce?: boolean;
-}) {
+  // For an onClick action that opens an overlay (e.g. a dialog), so screen readers announce it.
+  ariaHasPopup?: React.AriaAttributes['aria-haspopup'];
+} & ({ href: string; onClick?: never } | { href?: never; onClick: () => void })) {
+  const subButtonClass = cn(
+    'h-8 text-paragraph-sm-medium',
+    NAV_ITEM_STYLES,
+    SUB_BUTTON_EXTRAS,
+    !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+  );
+  const inner = (
+    <>
+      <Icon />
+      <TruncatingTooltip text={label} side="right" />
+    </>
+  );
   const button = (
-    <SidebarMenuSubButton
-      asChild
-      isActive={active}
-      className={cn(
-        'h-8 text-paragraph-sm-medium',
-        NAV_ITEM_STYLES,
-        SUB_BUTTON_EXTRAS,
-        !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
+    <SidebarMenuSubButton asChild isActive={active} className={subButtonClass}>
+      {href ? (
+        <Link href={href}>{inner}</Link>
+      ) : (
+        <button type="button" onClick={onClick} aria-haspopup={ariaHasPopup}>
+          {inner}
+        </button>
       )}
-    >
-      <Link href={href}>
-        <Icon />
-        <TruncatingTooltip text={label} side="right" />
-      </Link>
     </SidebarMenuSubButton>
   );
 
@@ -498,41 +509,6 @@ export function AppSidebar({
                 </Collapsible>
               )}
 
-              {/* Help — a persistent entry to the public help/FAQ page. Core (never hidden by
-                  progressive disclosure). */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  size="lg"
-                  className={cn(
-                    '[&_svg]:size-5 text-paragraph-medium',
-                    NAV_ITEM_STYLES,
-                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                  )}
-                >
-                  <Link href={ROUTES.help}>
-                    <HelpCircle />
-                    <span>{t('nav.help')}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Send feedback — opens the feedback dialog. Core (never hidden by progressive disclosure). */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => setFeedbackOpen(true)}
-                  size="lg"
-                  className={cn(
-                    '[&_svg]:size-5 text-paragraph-medium',
-                    NAV_ITEM_STYLES,
-                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                  )}
-                >
-                  <MessageSquare />
-                  <span>{t('nav.sendFeedback')}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules.
                   Animates in/out as the newcomer status changes; the label crossfades on toggle. */}
               <AnimatePresence initial={false}>
@@ -598,6 +574,49 @@ export function AppSidebar({
 
       <SidebarFooter className="p-4 border-t border-sidebar-border">
         <SidebarMenu>
+          {/* Support — a collapsible utility group (Help + Send feedback). Content sits BELOW the
+              trigger (a normal expand-down, same as the other sidebar groups); because the footer is
+              bottom-anchored and Log out stays pinned, the whole group rises to make room — so it
+              reads as expanding downward while Log out never moves. Core (never hidden by
+              progressive disclosure). Unlike the other groups it has no in-sidebar active state — its
+              children are the public /help page (which renders its own layout, not this sidebar) and a
+              dialog action — so it starts closed and skips the active-trigger styling. */}
+          <Collapsible asChild defaultOpen={false} className="group/collapsible">
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className={cn(
+                    '[&_svg]:size-5 text-paragraph-medium',
+                    NAV_ITEM_STYLES,
+                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                  )}
+                >
+                  <LifeBuoy />
+                  <span>{t('navGroups.support')}</span>
+                  <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+              <CollapsibleContent className={collapsibleContentClass}>
+                <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                  <NavSubItem
+                    href={ROUTES.help}
+                    icon={HelpCircle}
+                    label={t('nav.help')}
+                    active={isActive(ROUTES.help)}
+                  />
+                  <NavSubItem
+                    onClick={() => setFeedbackOpen(true)}
+                    ariaHasPopup="dialog"
+                    icon={MessageSquare}
+                    label={t('nav.sendFeedback')}
+                    active={false}
+                  />
+                </SidebarMenuSub>
+              </CollapsibleContent>
+            </SidebarMenuItem>
+          </Collapsible>
+
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={handleLogout}
