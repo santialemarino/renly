@@ -31,13 +31,16 @@ export function CookieConsent() {
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="fixed inset-x-0 bottom-0 z-50 flex justify-center p-4"
+          className="fixed inset-x-0 bottom-0 z-50 flex justify-center p-4 pointer-events-none"
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: ANIMATION_DEFAULT }}
         >
-          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg sm:flex-row sm:w-fit sm:max-w-full sm:items-center sm:gap-x-4">
+          {/* pointer-events-none on the full-width container + pointer-events-auto on the card so the
+              banner's transparent edges don't intercept clicks over the sidebar footer (the card and
+              its button stay interactive). */}
+          <div className="flex flex-col w-full items-start p-4 gap-y-3 bg-background border border-neutral-200 rounded-xl shadow-lg pointer-events-auto sm:flex-row sm:w-fit sm:max-w-full sm:items-center sm:gap-x-4">
             <p className="text-paragraph-sm text-muted-foreground whitespace-pre-line">
               {t('message')}{' '}
               <InlineLink href={ROUTES.privacy} color="blue">
