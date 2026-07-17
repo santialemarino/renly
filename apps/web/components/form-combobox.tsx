@@ -9,7 +9,6 @@ import {
   Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
   Popover,
@@ -19,17 +18,16 @@ import {
 import { cn } from '@repo/ui/lib';
 import { ComboboxChevron } from '@/components/combobox-chevron';
 
-// Above this many options the search input auto-shows; below it the list is short enough to scan.
-const SEARCH_AUTO_THRESHOLD = 8;
+// How long a typed prefix is remembered before the blind type-ahead buffer resets (native <select> feel).
+const TYPEAHEAD_RESET_MS = 600;
 
 export interface FormComboboxOption {
   // The stable value passed to onValueChange. Values are strings, like Radix Select — number-valued
   // fields convert at the call site (value.toString() / Number(v)).
   value: string;
-  // Shown in the trigger when selected and used as the search text; also the row content unless
-  // `render` is provided.
+  // Shown in the trigger when selected, matched by type-ahead; also the row content unless `render` is set.
   label: string;
-  // Extra terms the search should match beyond the label (e.g. a code or synonym).
+  // Extra terms type-ahead/highlight identity should include beyond the label (e.g. a code or synonym).
   keywords?: string[];
   // A leading icon rendered in the row (and, when this option is selected, in the trigger).
   icon?: React.ComponentType<{ className?: string }>;
@@ -49,22 +47,25 @@ interface FormComboboxProps extends Omit<
   onValueChange: (value: string) => void;
   options: FormComboboxOption[];
   placeholder?: string;
-  searchPlaceholder?: string;
   emptyText?: string;
-  // Force the search input on/off; defaults to auto (shown once the list exceeds the threshold).
-  searchable?: boolean;
   // Matches the base Select's `surface` prop — `bg-background` instead of `bg-input`.
   surface?: boolean;
   triggerClassName?: string;
   contentClassName?: string;
 }
 
+// The cmdk item identity string: label + keywords for type-ahead matching, value appended for uniqueness.
+function itemValue(option: FormComboboxOption): string {
+  return `${option.label} ${option.keywords?.join(' ') ?? ''} ${option.value}`;
+}
+
 /*
- * Single-select form-field combobox: a Popover + `Command` list behind a Button trigger, matching
- * the toolbar comboboxes (FilterCombobox, CurrencyCombobox). Preferred over the base `Select` for
- * form fields because Radix Popover animates open AND closed (Radix Select snaps shut). Integrates
- * with the form stack: wrap it in `<FormControl>` and it receives id / aria-invalid / aria-describedby
- * on the trigger, so the label, error ring, and FormMessage wire up like any other field.
+ * Single-select form-field combobox: a Popover + `Command` list behind a Button trigger. Preferred
+ * over the base `Select` for form fields because Radix Popover animates open AND closed (Radix Select
+ * snaps shut). It has no search box — like a native <select>, it supports blind type-ahead (typing
+ * jumps the highlight to the first matching option) and arrow-key nav, so the list never filters or
+ * resizes (no re-flip). Integrates with the form stack: wrap it in `<FormControl>` and it receives
+ * id / aria-invalid / aria-describedby on the trigger, so the label, error ring, and FormMessage wire up.
  */
 export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProps>(
   function FormCombobox(
@@ -73,9 +74,7 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
       onValueChange,
       options,
       placeholder,
-      searchPlaceholder,
       emptyText,
-      searchable,
       surface = false,
       disabled,
       triggerClassName,
@@ -86,10 +85,17 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
   ) {
     const tCommon = useTranslations('common');
     const [open, setOpen] = React.useState(false);
+    // cmdk's currently-highlighted item value (controlled so type-ahead can move it).
+    const [active, setActive] = React.useState('');
     const listRef = React.useRef<HTMLDivElement>(null);
+    const typeahead = React.useRef<{ buffer: string; timer: ReturnType<typeof setTimeout> | null }>(
+      {
+        buffer: '',
+        timer: null,
+      },
+    );
 
     const selected = options.find((option) => option.value === value);
-    const showSearch = searchable ?? options.length > SEARCH_AUTO_THRESHOLD;
     const SelectedIcon = selected?.icon;
 
     // Group options in first-seen order; ungrouped options share a leading headless group.
@@ -101,13 +107,38 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
       else groups.push({ heading, options: [option] });
     }
 
+    function handleOpenChange(next: boolean) {
+      setOpen(next);
+      // Highlight the current value when opening so arrows/type-ahead start from it.
+      if (next) setActive(selected ? itemValue(selected) : '');
+    }
+
     function handleSelect(next: string) {
       onValueChange(next);
       setOpen(false);
     }
 
+    // Blind type-ahead: printable keys build a prefix that jumps the highlight to the first matching
+    // option (arrows/Enter stay with cmdk). No search box, so the list never filters or resizes.
+    function handleTypeahead(event: React.KeyboardEvent<HTMLDivElement>) {
+      if (event.key.length !== 1 || event.metaKey || event.ctrlKey || event.altKey) return;
+      const state = typeahead.current;
+      state.buffer += event.key.toLowerCase();
+      if (state.timer) clearTimeout(state.timer);
+      state.timer = setTimeout(() => {
+        typeahead.current.buffer = '';
+      }, TYPEAHEAD_RESET_MS);
+      const match = options.find(
+        (option) => !option.disabled && option.label.toLowerCase().startsWith(state.buffer),
+      );
+      if (match) {
+        setActive(itemValue(match));
+        event.preventDefault();
+      }
+    }
+
     return (
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
             ref={ref}
@@ -137,28 +168,20 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
           className={cn('w-(--radix-popover-trigger-width) p-0', contentClassName)}
           align="start"
           sideOffset={8}
-          // With a search input, Radix focuses it (cmdk arrow/typeahead nav works). Without one, focus
-          // the list instead so keydown lands inside the Command root — otherwise arrow keys are dead.
-          onOpenAutoFocus={
-            showSearch
-              ? undefined
-              : (event) => {
-                  event.preventDefault();
-                  listRef.current?.focus();
-                }
-          }
+          // No search input to receive focus — focus the list so keydown (arrows + type-ahead) lands
+          // inside the Command root.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            listRef.current?.focus();
+          }}
         >
-          <Command>
-            {showSearch && (
-              <CommandInput
-                placeholder={searchPlaceholder ?? tCommon('combobox.searchPlaceholder')}
-              />
-            )}
+          <Command value={active} onValueChange={setActive} shouldFilter={false}>
             <CommandList
               ref={listRef}
-              tabIndex={showSearch ? undefined : 0}
+              tabIndex={0}
+              onKeyDown={handleTypeahead}
               // Thin, rounded scrollbar (matches the currency/timezone comboboxes).
-              className="pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
+              className="pr-1 outline-none [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border"
               // The Popover portals outside any open Dialog, whose react-remove-scroll lock otherwise
               // swallows wheel events over this list — stop propagation so wheel/touchpad scroll works.
               onWheel={(event) => event.stopPropagation()}
@@ -172,9 +195,8 @@ export const FormCombobox = React.forwardRef<HTMLButtonElement, FormComboboxProp
                       <CommandItem
                         key={option.value}
                         // cmdk lowercases the value it passes to onSelect, so we ignore that arg and
-                        // use the option's real value from the closure. The value string drives search
-                        // (label + keywords appended); the trailing value keeps it unique per option.
-                        value={`${option.label} ${option.keywords?.join(' ') ?? ''} ${option.value}`}
+                        // select the option's real value from the closure.
+                        value={itemValue(option)}
                         disabled={option.disabled}
                         onSelect={() => handleSelect(option.value)}
                       >
