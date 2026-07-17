@@ -176,6 +176,7 @@
       "tagline": "Personal finance for Argentine investors.",
       "disclaimerShort": "Renly is an informational tool and does not provide financial advice.",
       "links": {
+        "help": "Help",
         "privacy": "Privacy",
         "terms": "Terms",
         "disclaimer": "Disclaimer"
@@ -183,6 +184,7 @@
       "rights": "All rights reserved."
     },
     "requestAccess": "Request access",
+    "learnMore": "Learn more",
     "export": {
       "label": "Export",
       "loading": "Preparing…",
@@ -287,7 +289,8 @@
       "integrations": "Integrations",
       "account": "Account",
       "data": "Import & Export",
-      "invitePeople": "Invite people"
+      "invitePeople": "Invite people",
+      "help": "Help"
     },
     "navGroups": {
       "finances": "Finances",
@@ -2034,6 +2037,82 @@
       "subtitle": "Create your free account and see your whole financial picture in minutes.",
       "button": "Create your account"
     }
+  },
+  "help": {
+    "metadata": {
+      "title": "Help & FAQ",
+      "description": "How Renly works and what each metric means — snapshots, returns (TWR and IRR), and the currency model, explained for everyone."
+    },
+    "title": "Help & FAQ",
+    "intro": "New to Renly, or to one of its numbers? These short explanations cover how the app works and what each metric means — no finance background needed.",
+    "tocLabel": "On this page",
+    "sections": [
+      {
+        "id": "getting-started",
+        "heading": "Getting started",
+        "paragraphs": [
+          "Renly keeps your investments and your everyday finances in one place, so you can see what you own, what you owe, and how it all changes over time.",
+          "There are two ways to begin: add your first investment, income, or expense by hand, or import what you already track in a spreadsheet from the Import & Export page — Renly reads CSV and Excel files and walks you through matching the columns.",
+          "It also helps to set your currencies early, under Localization, so every screen shows your numbers the way you expect."
+        ]
+      },
+      {
+        "id": "snapshots",
+        "heading": "What is a snapshot?",
+        "paragraphs": [
+          "A snapshot records what one of your investments was worth on a given date. It is the raw material behind every chart and return — Renly can only show how your money moved if it knows what things were worth at different points in time.",
+          "Record a snapshot for each investment regularly, for example once a month. The more history you build, the more accurate your returns and evolution charts become.",
+          "When you add a snapshot you can also log a transaction alongside it — money you deposited or withdrew that period — so Renly can tell real growth apart from money you simply added."
+        ]
+      },
+      {
+        "id": "returns",
+        "heading": "Understanding your returns",
+        "paragraphs": [
+          "A return answers a simple question: did my money grow, and by how much? The catch is that adding or withdrawing money mid-period can make a healthy investment look like it lost ground, or a flat one look like it soared — so Renly separates the two.",
+          "The building block is the period return: the change between two consecutive snapshots, after subtracting any money you added or removed in between. Without that adjustment, putting in $1,000 would look like a $1,000 gain, which is misleading.",
+          "Renly then reports two headline returns built on this idea — a time-weighted return (TWR) and a money-weighted return (IRR). They answer different questions, explained next."
+        ]
+      },
+      {
+        "id": "twr",
+        "heading": "Time-weighted return (TWR)",
+        "paragraphs": [
+          "TWR answers: how did the investment itself perform, regardless of when I added or removed money? Imagine you had invested exactly $1 at the very start and never touched it — TWR is the return on that dollar.",
+          "It works by chaining each period's return together. If you earned +5%, then −2%, then +4% over three months, your TWR is 1.05 × 0.98 × 1.04 − 1 = +7.0%.",
+          "Because it ignores the timing of your deposits, TWR is the fair way to compare two investments, or to judge a fund or stock on its own merits. Two people who held the same asset over the same window see the same TWR, even if they added money at different times."
+        ]
+      },
+      {
+        "id": "irr",
+        "heading": "Money-weighted return (IRR)",
+        "paragraphs": [
+          "IRR — also called XIRR — answers: at what rate did my actual money grow, taking into account when I added and removed it? Unlike TWR, timing matters: depositing a large sum right before a good stretch pushes your IRR up.",
+          "Think of it as the savings-account interest rate that would have produced your exact result, given the precise dates you moved money in and out. It is always expressed as an annual rate, even for a short history.",
+          "Because it is annualized, Renly only shows IRR once your history spans at least 30 days — annualizing a few good days would produce absurd numbers. It also needs a normal cash-flow pattern (money that broadly goes in and later comes back); if your history is unusual enough that your running total crosses zero more than once, no single rate is meaningful and Renly shows a dash instead. In those cases, rely on TWR."
+        ]
+      },
+      {
+        "id": "twr-vs-irr",
+        "heading": "TWR vs IRR: which should I look at?",
+        "paragraphs": ["Both are useful; they just answer different questions."],
+        "items": [
+          "To judge how an investment, fund, or stock performed on its own — use TWR.",
+          "To judge how your money actually did, timing and all — use IRR.",
+          "To compare two investments fairly — use TWR, since it ignores when you happened to deposit.",
+          "To see whether your deposit timing helped or hurt — compare the two: if IRR is higher than TWR, your timing worked in your favor."
+        ]
+      },
+      {
+        "id": "currency",
+        "heading": "How currency conversion works",
+        "paragraphs": [
+          "You can view your whole portfolio in any supported currency using the switcher in the sidebar. Renly converts every value through the US dollar behind the scenes.",
+          "All conversions use today's exchange rate — not the rate from the date of each snapshot. A value from last year shown in pesos uses today's dollar-to-peso rate. This is deliberate: it answers what is this worth to me today, and keeps every number comparable when you view them in a single currency.",
+          "If Renly cannot convert an investment to your chosen currency — for example the exchange-rate service is briefly unavailable — that investment is left out of the totals rather than shown with a wrong value, and the dashboard flags which ones were skipped so you know the total is incomplete."
+        ]
+      }
+    ]
   },
   "privacy": {
     "metadata": {

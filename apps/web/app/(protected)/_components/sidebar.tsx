@@ -16,6 +16,7 @@ import {
   FileText,
   FolderOpen,
   Globe,
+  HelpCircle,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -484,6 +485,25 @@ export function AppSidebar({
                   </SidebarMenuItem>
                 </Collapsible>
               )}
+
+              {/* Help — a persistent entry to the public help/FAQ page, opened in a new tab so the
+                  user keeps the app open. Core (never hidden by progressive disclosure). */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  size="lg"
+                  className={cn(
+                    '[&_svg]:size-5 text-paragraph-medium',
+                    NAV_ITEM_STYLES,
+                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                  )}
+                >
+                  <a href={ROUTES.help} target="_blank" rel="noopener noreferrer">
+                    <HelpCircle />
+                    <span>{t('nav.help')}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
 
               {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules.
                   Animates in/out as the newcomer status changes; the label crossfades on toggle. */}
