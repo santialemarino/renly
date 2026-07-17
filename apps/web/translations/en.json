@@ -300,7 +300,8 @@
       "commitments": "Commitments",
       "portfolio": "Investor",
       "settings": "Settings",
-      "administration": "Administration"
+      "administration": "Administration",
+      "support": "Support"
     },
     "currency": {
       "label": "Currency",

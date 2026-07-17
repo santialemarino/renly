@@ -300,7 +300,8 @@
       "commitments": "Compromisos",
       "portfolio": "Inversor",
       "settings": "Configuración",
-      "administration": "Administración"
+      "administration": "Administración",
+      "support": "Soporte"
     },
     "currency": {
       "label": "Moneda",
