@@ -1848,6 +1848,13 @@
         "invalidPassword": "La contraseña es incorrecta."
       }
     },
+    "legal": {
+      "title": "Legal",
+      "description": "Revisá nuestras políticas y términos.",
+      "privacy": "Política de Privacidad",
+      "terms": "Términos del Servicio",
+      "disclaimer": "Descargo de responsabilidad"
+    },
     "danger": {
       "title": "Zona de riesgo",
       "description": "Eliminá tu cuenta de forma permanente.",
