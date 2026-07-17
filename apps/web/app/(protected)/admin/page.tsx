@@ -3,8 +3,9 @@ import { getTranslations } from 'next-intl/server';
 
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AdminInvites } from '@/app/(protected)/admin/_components/admin-invites';
-import { AdminForbiddenError, getInvites } from '@/lib/api/invites';
+import { getInvites } from '@/lib/api/invites';
 import { getSignupContext } from '@/lib/api/signup-context';
+import { AdminForbiddenError } from '@/lib/api/types';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {

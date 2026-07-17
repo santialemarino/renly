@@ -94,6 +94,13 @@ CREATE TYPE invite_status AS ENUM (
   'revoked'
 );
 
+CREATE TYPE feedback_category AS ENUM (
+  'bug',
+  'idea',
+  'question',
+  'other'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -586,6 +593,21 @@ CREATE TABLE invites (
 CREATE INDEX idx_invites_invited_by ON invites(invited_by);
 
 -- ---------------------------------------------------------------------------
+-- Feedback (in-app feedback form)
+-- A message a user sends from the in-app feedback form. Stored here for review in the admin area;
+-- an email notification to every admin is sent best-effort on submission (not persisted). Owned by
+-- user_id (RLS); the admin review list reads across users on the privileged session.
+CREATE TABLE feedback (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category   feedback_category NOT NULL,
+  message    VARCHAR(2000) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX idx_feedback_user_id ON feedback(user_id);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
 -- so we use a trigger function applied to every table that has updated_at.
@@ -797,6 +819,10 @@ CREATE POLICY refresh_tokens_user_isolation ON refresh_tokens
 ALTER TABLE invites ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invites_admin_isolation ON invites
   USING (invited_by = app_current_user_id()) WITH CHECK (invited_by = app_current_user_id());
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+CREATE POLICY feedback_user_isolation ON feedback
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 -- investment_group_members is a pure junction (composite PK, no surrogate user column).
 -- Isolation is keyed through the parent investment via an EXISTS-join — both parents

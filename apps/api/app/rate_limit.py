@@ -27,6 +27,8 @@ INVITE_LIMIT = "30/hour"
 IMPORT_LIMIT = "20/hour"
 # Restore endpoints (re-import a full export; heavier than a single-entity import); tighter per user.
 RESTORE_LIMIT = "10/hour"
+# Feedback submissions (each can email the admins); bounded per user to cap outbound volume.
+FEEDBACK_LIMIT = "10/hour"
 
 
 # Resolves the client IP to throttle by. When trusted_proxy_count is 0 the app is reached directly,

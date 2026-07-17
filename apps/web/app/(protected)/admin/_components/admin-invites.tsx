@@ -24,7 +24,7 @@ import { inviteFormSchema, type InviteFormData } from '@/app/(protected)/admin/f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Invite, InviteStatus } from '@/lib/api/invites';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
-import { getLocaleTag } from '@/lib/utils/locale';
+import { formatTimestampDate } from '@/lib/utils/format';
 
 // Seconds before the same invite can be (re)sent again — matches the auth resend cooldown
 // (CheckEmailNotice). Each send/resend starts it; a backstop on top of the server rate limit.
@@ -149,15 +149,6 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
     }
   }
 
-  // Formats a timestamp as a short date string.
-  function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-
   return (
     <div className="flex flex-col w-full max-w-3xl gap-y-6">
       <Form {...form}>
@@ -235,10 +226,12 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
                     </AnimatePresence>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {formatDate(invite.createdAt)}
+                    {formatTimestampDate(invite.createdAt, locale)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {invite.consumedAt ? formatDate(invite.consumedAt) : t('table.never')}
+                    {invite.consumedAt
+                      ? formatTimestampDate(invite.consumedAt, locale)
+                      : t('table.never')}
                   </TableCell>
                   <TableCell>
                     {/* popLayout so the row's buttons grow/shrink smoothly as the Revoke action appears/disappears. */}

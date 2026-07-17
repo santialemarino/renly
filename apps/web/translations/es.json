@@ -25,7 +25,8 @@
         "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
         "passwordRequirements": "La contraseña no cumple los requisitos",
         "passwordMismatch": "Las contraseñas no coinciden",
-        "serverError": "Algo salió mal. Intentá de nuevo más tarde."
+        "serverError": "Algo salió mal. Intentá de nuevo más tarde.",
+        "tooLong": "Debe tener {max} caracteres o menos."
       },
       "togglePassword": "Mostrar contraseña"
     },
@@ -274,7 +275,7 @@
       "financeDashboard": "Dashboard",
       "income": "Ingresos",
       "expenses": "Gastos",
-      "creditCards": "Tarjetas de Crédito",
+      "creditCards": "Tarjetas de crédito",
       "subscriptions": "Suscripciones",
       "installments": "Cuotas",
       "paymentObligations": "Obligaciones de pago",
@@ -290,7 +291,9 @@
       "account": "Cuenta",
       "data": "Importar y exportar",
       "invitePeople": "Invitar personas",
-      "help": "Ayuda"
+      "help": "Ayuda",
+      "sendFeedback": "Enviar comentarios",
+      "feedback": "Comentarios"
     },
     "navGroups": {
       "finances": "Finanzas",
@@ -429,7 +432,7 @@
   },
   "financeDashboard": {
     "metadata": {
-      "title": "Dashboard Financiero",
+      "title": "Dashboard financiero",
       "description": "Resumen de ingresos, gastos y flujo de caja."
     },
     "title": "Finanzas",
@@ -675,10 +678,10 @@
   },
   "creditCards": {
     "metadata": {
-      "title": "Tarjetas de Crédito",
+      "title": "Tarjetas de crédito",
       "description": "Gestioná tus tarjetas de crédito"
     },
-    "title": "Tarjetas de Crédito",
+    "title": "Tarjetas de crédito",
     "subtitle": "Gestioná tus tarjetas de crédito y pagos.",
     "toolbar": {
       "searchPlaceholder": "Buscar tarjetas...",
@@ -2037,6 +2040,44 @@
       "subtitle": "Creá tu cuenta gratis y mirá todo tu panorama financiero en minutos.",
       "button": "Crear mi cuenta"
     }
+  },
+  "adminFeedback": {
+    "metadata": {
+      "title": "Comentarios",
+      "description": "Comentarios enviados por los usuarios de Renly."
+    },
+    "title": "Comentarios",
+    "subtitle": "Lo que los usuarios enviaron desde el formulario de comentarios.",
+    "table": {
+      "from": "De",
+      "category": "Categoría",
+      "message": "Mensaje",
+      "date": "Enviado"
+    },
+    "empty": "Todavía no hay comentarios."
+  },
+  "feedback": {
+    "title": "Enviar comentarios",
+    "description": "¿Encontraste un error, tenés una idea o una pregunta? Incluiremos el email de tu cuenta para poder responderte.",
+    "category": {
+      "label": "¿De qué se trata?",
+      "placeholder": "Elegí una categoría"
+    },
+    "categories": {
+      "bug": "Error",
+      "idea": "Idea",
+      "question": "Pregunta",
+      "other": "Otro"
+    },
+    "message": {
+      "label": "Tu mensaje",
+      "placeholder": "Contanos qué tenés en mente..."
+    },
+    "cancel": "Cancelar",
+    "submit": "Enviar",
+    "submitting": "Enviando...",
+    "success": "¡Gracias por tus comentarios!",
+    "error": "No pudimos enviar tus comentarios. Probá de nuevo."
   },
   "help": {
     "metadata": {

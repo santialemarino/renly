@@ -550,6 +550,17 @@ First-run onboarding state for the authenticated user, all derived from the acco
 
 ---
 
+## Feedback
+
+The in-app feedback channel. Any authenticated user can submit feedback; the caller's account email is attached server-side (not part of the body), and every admin is notified by email best-effort (a mail outage never fails the submission). Listing all feedback is admin-only.
+
+| Method | Path        | Description                                                                                                                                 |
+| ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/feedback` | Submit feedback. Body: `category` (`bug` \| `idea` \| `question` \| `other`), `message` (1–2000 chars). Returns `201` with the created row. |
+| `GET`  | `/feedback` | List all submitted feedback, newest first, each with the author's email. Admin only (`403` otherwise).                                      |
+
+---
+
 ## Metrics
 
 All metric endpoints support currency conversion via the `currency` query parameter. Pass `currency=ARS` to see values in Argentine pesos, `currency=USD` for US dollars, etc. Omit it to see values in each investment's original currency. The code is case-insensitive (`usd` and `USD` are equivalent).

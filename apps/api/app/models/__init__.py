@@ -9,6 +9,7 @@ from app.models.cedear_ratio import CedearRatio
 from app.models.credit_card import CreditCard
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
+from app.models.feedback import Feedback, FeedbackCategory
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
@@ -36,6 +37,8 @@ __all__ = [
     "ExchangeRatePair",
     "ExpenseCategory",
     "ExpenseEntry",
+    "Feedback",
+    "FeedbackCategory",
     "IncomeCategory",
     "IncomeEntry",
     "Installment",

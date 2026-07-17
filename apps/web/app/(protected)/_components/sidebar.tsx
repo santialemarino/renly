@@ -17,9 +17,11 @@ import {
   FolderOpen,
   Globe,
   HelpCircle,
+  Inbox,
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageSquare,
   Puzzle,
   Receipt,
   RefreshCw,
@@ -57,11 +59,12 @@ import {
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
+import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
 import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
-import { LOGIN_ROUTE, ROUTES } from '@/config/routes';
+import { ALL_ROUTE_PATHS, LOGIN_ROUTE, ROUTES } from '@/config/routes';
 import type { SignupMode } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 
@@ -99,6 +102,7 @@ const SETTINGS_GROUP = [
 // invitePeople is only relevant in invite mode (in open mode anyone signs up, so there's no one to invite).
 const ADMIN_GROUP = [
   { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
+  { key: 'feedback', href: ROUTES.adminFeedback, icon: Inbox, inviteOnly: false },
 ] as const;
 
 /*
@@ -107,6 +111,10 @@ const ADMIN_GROUP = [
  * as a whole via `advancedVisible`. The layout decides the initial state; the sidebar animates it.
  */
 const ADVANCED_NAV_KEYS = new Set<string>(['creditCards', 'groups']);
+
+// Every known route path, for the active-state check below: a sub-path that is itself a distinct
+// route is a sibling, not a child, so its parent (e.g. /admin vs /admin/feedback) shouldn't light up.
+const ROUTE_PATH_SET = new Set<string>(ALL_ROUTE_PATHS);
 
 /** Shared interactive states for all nav items (main buttons and sub-buttons). */
 const NAV_ITEM_STYLES =
@@ -226,6 +234,7 @@ export function AppSidebar({
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   /*
    * A newcomer's client-side "Show more" state (seeded from the server's cookie-derived value) so
    * revealing/collapsing the advanced items animates without a server round-trip.
@@ -233,7 +242,10 @@ export function AppSidebar({
   const [expandedByUser, setExpandedByUser] = useState(initialExpanded);
   const reduce = useReducedMotion() ?? false;
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+  // Active on the exact path, or on a deeper sub-path that isn't itself a distinct route (so /admin
+  // doesn't light up on the sibling /admin/feedback).
+  const isActive = (href: string) =>
+    pathname === href || (pathname.startsWith(href + '/') && !ROUTE_PATH_SET.has(pathname));
   const isCommitmentsActive = COMMITMENTS_GROUP.some(({ href }) => isActive(href));
   // Finances "section" is active when any direct child or any nested Commitments child is active.
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;
@@ -505,6 +517,22 @@ export function AppSidebar({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Send feedback — opens the feedback dialog. Core (never hidden by progressive disclosure). */}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => setFeedbackOpen(true)}
+                  size="lg"
+                  className={cn(
+                    '[&_svg]:size-5 text-paragraph-medium',
+                    NAV_ITEM_STYLES,
+                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                  )}
+                >
+                  <MessageSquare />
+                  <span>{t('nav.sendFeedback')}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Progressive disclosure (UX-7): let a first-run newcomer reveal the advanced modules.
                   Animates in/out as the newcomer status changes; the label crossfades on toggle. */}
               <AnimatePresence initial={false}>
@@ -586,6 +614,8 @@ export function AppSidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
     </Sidebar>
   );
 }

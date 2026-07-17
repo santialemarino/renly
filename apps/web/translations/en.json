@@ -25,7 +25,8 @@
         "passwordMaxLength": "Password must be less than {length} characters",
         "passwordRequirements": "Password does not meet the requirements",
         "passwordMismatch": "Passwords do not match",
-        "serverError": "Something went wrong. Please try again later."
+        "serverError": "Something went wrong. Please try again later.",
+        "tooLong": "Must be {max} characters or fewer."
       },
       "togglePassword": "Show password"
     },
@@ -284,13 +285,15 @@
       "groups": "Groups",
       "snapshots": "Snapshots",
       "preferences": "Preferences",
-      "alerts": "Alerts & limits",
+      "alerts": "Alerts & Limits",
       "localization": "Localization",
       "integrations": "Integrations",
       "account": "Account",
       "data": "Import & Export",
-      "invitePeople": "Invite people",
-      "help": "Help"
+      "invitePeople": "Invite People",
+      "help": "Help",
+      "sendFeedback": "Send Feedback",
+      "feedback": "Feedback"
     },
     "navGroups": {
       "finances": "Finances",
@@ -940,10 +943,10 @@
   },
   "paymentObligations": {
     "metadata": {
-      "title": "Payment obligations",
+      "title": "Payment Obligations",
       "description": "Manage your recurring and one-off payment obligations"
     },
-    "title": "Payment obligations",
+    "title": "Payment Obligations",
     "subtitle": "Track recurring bills and one-off payments (electricity, ABL, internet, taxes, ...).",
     "toolbar": {
       "searchPlaceholder": "Search payment obligations...",
@@ -1044,10 +1047,10 @@
   },
   "paymentsCalendar": {
     "metadata": {
-      "title": "Payments calendar",
+      "title": "Payments Calendar",
       "description": "Read-only timeline of upcoming payment obligations"
     },
-    "title": "Payments calendar",
+    "title": "Payments Calendar",
     "subtitle": "All your upcoming payments in one timeline — subscriptions, installments, payment obligations and credit-card due dates.",
     "empty": "Nothing due in {month}.",
     "noBuckets": "No active cards.",
@@ -1565,10 +1568,10 @@
   },
   "alerts": {
     "metadata": {
-      "title": "Alerts & limits",
+      "title": "Alerts & Limits",
       "description": "Configure thresholds and limits for dashboard health indicators."
     },
-    "title": "Alerts & limits",
+    "title": "Alerts & Limits",
     "subtitle": "Thresholds for dashboard indicators and account caps.",
     "form": {
       "sectionAccountLimits": "Account limits",
@@ -2037,6 +2040,44 @@
       "subtitle": "Create your free account and see your whole financial picture in minutes.",
       "button": "Create your account"
     }
+  },
+  "adminFeedback": {
+    "metadata": {
+      "title": "Feedback",
+      "description": "Feedback submitted by Renly users."
+    },
+    "title": "Feedback",
+    "subtitle": "What users have sent through the in-app feedback form.",
+    "table": {
+      "from": "From",
+      "category": "Category",
+      "message": "Message",
+      "date": "Sent"
+    },
+    "empty": "No feedback yet."
+  },
+  "feedback": {
+    "title": "Send feedback",
+    "description": "Found a bug, have an idea, or a question? We'll include your account email so we can follow up.",
+    "category": {
+      "label": "What's this about?",
+      "placeholder": "Select a category"
+    },
+    "categories": {
+      "bug": "Bug",
+      "idea": "Idea",
+      "question": "Question",
+      "other": "Other"
+    },
+    "message": {
+      "label": "Your message",
+      "placeholder": "Tell us what's on your mind..."
+    },
+    "cancel": "Cancel",
+    "submit": "Send",
+    "submitting": "Sending...",
+    "success": "Thanks for your feedback!",
+    "error": "Couldn't send your feedback. Please try again."
   },
   "help": {
     "metadata": {

@@ -1,14 +1,18 @@
 # Builders for the account-lifecycle emails (SHELL-3 / AUTH-1, AUTH-2, AUTH-5, AUTH-8). Pure
 # functions returning an EmailMessage; no provider or I/O concerns live here.
 
+import html
+
 from app.services.email_service import EmailMessage
 
 _PRODUCT_NAME = "Renly"
 
 
-# Wraps body text in a minimal HTML document so the message renders in both HTML and plain-text clients.
+# Wraps plain body text in a minimal HTML document so the message renders in both HTML and plain-text
+# clients. Escapes each line — the body is TEXT, never markup — so user-controlled content (e.g. a
+# feedback message) can't inject HTML into the recipient's inbox.
 def _html(body: str) -> str:
-    paragraphs = "".join(f"<p>{line}</p>" for line in body.strip().split("\n\n"))
+    paragraphs = "".join(f"<p>{html.escape(line)}</p>" for line in body.strip().split("\n\n"))
     return f'<div style="font-family: sans-serif; line-height: 1.5;">{paragraphs}</div>'
 
 
@@ -73,3 +77,9 @@ def email_change_taken_email(to: str, login_link: str) -> EmailMessage:
         "Otherwise, you can safely ignore this message."
     )
     return EmailMessage(to=to, subject=f"This email already has a {_PRODUCT_NAME} account", html=_html(text), text=text)
+
+
+# Notifies an admin that a user submitted feedback from the in-app form (SHELL-7). to = the admin.
+def feedback_notification_email(to: str, submitter_email: str, category: str, message: str) -> EmailMessage:
+    text = f"New {_PRODUCT_NAME} feedback ({category}) from {submitter_email}:\n\n{message}"
+    return EmailMessage(to=to, subject=f"New {_PRODUCT_NAME} feedback: {category}", html=_html(text), text=text)

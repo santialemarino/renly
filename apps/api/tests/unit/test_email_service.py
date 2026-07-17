@@ -110,3 +110,17 @@ class TestTemplates:
     def test_password_reset_email_carries_link(self):
         msg = email_templates.password_reset_email("user@example.com", "https://app/reset-password?token=r1")
         assert "r1" in msg.text
+
+    def test_feedback_notification_email_carries_category_submitter_and_message(self):
+        msg = email_templates.feedback_notification_email("admin@example.com", "user@example.com", "bug", "It broke")
+        assert msg.to == "admin@example.com"
+        assert "bug" in msg.subject
+        assert "user@example.com" in msg.text and "It broke" in msg.text
+
+    def test_feedback_notification_email_escapes_html_in_the_message(self):
+        # The feedback message is user-controlled free text; it must not inject HTML into the admin's
+        # inbox. The plain-text body keeps the raw characters; the HTML body escapes them.
+        msg = email_templates.feedback_notification_email("admin@example.com", "user@example.com", "bug", "<script>alert(1)</script>")
+        assert "<script>" not in msg.html
+        assert "&lt;script&gt;alert(1)&lt;/script&gt;" in msg.html
+        assert "<script>alert(1)</script>" in msg.text
