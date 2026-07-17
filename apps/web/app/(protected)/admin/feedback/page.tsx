@@ -4,7 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AdminFeedback } from '@/app/(protected)/admin/feedback/_components/admin-feedback';
 import { getFeedback } from '@/lib/api/feedback';
-import { AdminForbiddenError } from '@/lib/api/invites';
+import { AdminForbiddenError } from '@/lib/api/types';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 export async function generateMetadata() {

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { AdminForbiddenError } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -26,15 +27,6 @@ export interface Invite {
   expiresAt: string;
   consumedAt: string | null;
   createdAt: string;
-}
-
-// Thrown when the API denies admin access (403). The /admin page maps this to a 404 so the page's
-// existence stays hidden from non-admins (not a 403).
-export class AdminForbiddenError extends Error {
-  constructor() {
-    super('admin_forbidden');
-    this.name = 'AdminForbiddenError';
-  }
 }
 
 // --- Mappers ---

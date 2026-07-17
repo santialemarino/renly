@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { AdminForbiddenError } from '@/lib/api/invites';
+import { AdminForbiddenError } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { FeedbackCategory } from '@/lib/constants/feedback';
 
