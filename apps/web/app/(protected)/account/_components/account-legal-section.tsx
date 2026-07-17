@@ -19,7 +19,7 @@ export async function AccountLegalSection() {
   return (
     <section className="flex flex-col gap-y-4">
       <SectionHeader title={t('title')} description={t('description')} />
-      <nav className="flex flex-col items-start gap-y-3">
+      <nav aria-label={t('title')} className="flex flex-col items-start gap-y-3">
         {links.map((link) => (
           <InlineLink key={link.href} href={link.href} color="muted" icon={link.icon}>
             {link.label}
