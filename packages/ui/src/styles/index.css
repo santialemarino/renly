@@ -183,6 +183,22 @@
   animation: collapsible-up 0.2s ease-in-out;
 }
 
+/*
+ * Reduced motion (ux-motion): the Collapsible height reveal is non-essential motion, so it collapses
+ * to instant under `prefers-reduced-motion: reduce`. This is intentionally UNLAYERED — normal
+ * declarations outside any cascade layer beat every `@layer utilities` rule regardless of specificity
+ * or source order, so it reliably overrides both the utilities above AND tw-animate-css's own
+ * (ungated) animate-collapsible-* utilities, for every consumer of these classes. Radix Collapsible
+ * still opens/closes/unmounts correctly with no animation — it detects the absent animation and skips
+ * the transition wait, revealing/hiding instantly.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .data-\[state\=open\]\:animate-collapsible-down,
+  .data-\[state\=closed\]\:animate-collapsible-up {
+    animation: none;
+  }
+}
+
 @layer utilities {
   /* Safe area, number inputs, scrollbar hide */
   .min-h-safe-bottom {
