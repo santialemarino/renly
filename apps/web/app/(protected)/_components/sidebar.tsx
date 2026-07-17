@@ -161,12 +161,14 @@ function RevealSubItem({
 }
 
 /*
- * A leaf nav sub-item (icon + label linking to a route). Advanced items animate their reveal via
- * RevealSubItem; the rest render as a plain sub-item. Shared by every uniform leaf nav list.
+ * A leaf nav sub-item (icon + label) — either a link (href) or an in-place action (onClick, e.g.
+ * opening a dialog). Advanced items animate their reveal via RevealSubItem; the rest render as a
+ * plain sub-item. Shared by every uniform leaf nav list.
  */
 function NavSubItem({
   href,
   onClick,
+  ariaHasPopup,
   icon: Icon,
   label,
   active,
@@ -174,15 +176,15 @@ function NavSubItem({
   advancedVisible = true,
   reduce = false,
 }: {
-  href?: string;
-  onClick?: () => void;
   icon: LucideIcon;
   label: string;
   active: boolean;
   advanced?: boolean;
   advancedVisible?: boolean;
   reduce?: boolean;
-}) {
+  // For an onClick action that opens an overlay (e.g. a dialog), so screen readers announce it.
+  ariaHasPopup?: React.AriaAttributes['aria-haspopup'];
+} & ({ href: string; onClick?: never } | { href?: never; onClick: () => void })) {
   const subButtonClass = cn(
     'h-8 text-paragraph-sm-medium',
     NAV_ITEM_STYLES,
@@ -195,13 +197,12 @@ function NavSubItem({
       <TruncatingTooltip text={label} side="right" />
     </>
   );
-  // A leaf sub-item is either a link (href) or an in-place action (onClick, e.g. opening a dialog).
   const button = (
     <SidebarMenuSubButton asChild isActive={active} className={subButtonClass}>
       {href ? (
         <Link href={href}>{inner}</Link>
       ) : (
-        <button type="button" onClick={onClick}>
+        <button type="button" onClick={onClick} aria-haspopup={ariaHasPopup}>
           {inner}
         </button>
       )}
@@ -577,8 +578,10 @@ export function AppSidebar({
               trigger (a normal expand-down, same as the other sidebar groups); because the footer is
               bottom-anchored and Log out stays pinned, the whole group rises to make room — so it
               reads as expanding downward while Log out never moves. Core (never hidden by
-              progressive disclosure). */}
-          <Collapsible asChild className="group/collapsible">
+              progressive disclosure). Unlike the other groups it has no in-sidebar active state — its
+              children are the public /help page (which renders its own layout, not this sidebar) and a
+              dialog action — so it starts closed and skips the active-trigger styling. */}
+          <Collapsible asChild defaultOpen={false} className="group/collapsible">
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton
@@ -604,6 +607,7 @@ export function AppSidebar({
                   />
                   <NavSubItem
                     onClick={() => setFeedbackOpen(true)}
+                    ariaHasPopup="dialog"
                     icon={MessageSquare}
                     label={t('nav.sendFeedback')}
                     active={false}
