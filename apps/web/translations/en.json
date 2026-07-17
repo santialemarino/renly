@@ -285,14 +285,14 @@
       "groups": "Groups",
       "snapshots": "Snapshots",
       "preferences": "Preferences",
-      "alerts": "Alerts & limits",
+      "alerts": "Alerts & Limits",
       "localization": "Localization",
       "integrations": "Integrations",
       "account": "Account",
       "data": "Import & Export",
-      "invitePeople": "Invite people",
+      "invitePeople": "Invite People",
       "help": "Help",
-      "sendFeedback": "Send feedback",
+      "sendFeedback": "Send Feedback",
       "feedback": "Feedback"
     },
     "navGroups": {
@@ -943,10 +943,10 @@
   },
   "paymentObligations": {
     "metadata": {
-      "title": "Payment obligations",
+      "title": "Payment Obligations",
       "description": "Manage your recurring and one-off payment obligations"
     },
-    "title": "Payment obligations",
+    "title": "Payment Obligations",
     "subtitle": "Track recurring bills and one-off payments (electricity, ABL, internet, taxes, ...).",
     "toolbar": {
       "searchPlaceholder": "Search payment obligations...",
@@ -1047,10 +1047,10 @@
   },
   "paymentsCalendar": {
     "metadata": {
-      "title": "Payments calendar",
+      "title": "Payments Calendar",
       "description": "Read-only timeline of upcoming payment obligations"
     },
-    "title": "Payments calendar",
+    "title": "Payments Calendar",
     "subtitle": "All your upcoming payments in one timeline — subscriptions, installments, payment obligations and credit-card due dates.",
     "empty": "Nothing due in {month}.",
     "noBuckets": "No active cards.",
@@ -1568,10 +1568,10 @@
   },
   "alerts": {
     "metadata": {
-      "title": "Alerts & limits",
+      "title": "Alerts & Limits",
       "description": "Configure thresholds and limits for dashboard health indicators."
     },
-    "title": "Alerts & limits",
+    "title": "Alerts & Limits",
     "subtitle": "Thresholds for dashboard indicators and account caps.",
     "form": {
       "sectionAccountLimits": "Account limits",

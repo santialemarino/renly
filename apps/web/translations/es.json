@@ -275,7 +275,7 @@
       "financeDashboard": "Dashboard",
       "income": "Ingresos",
       "expenses": "Gastos",
-      "creditCards": "Tarjetas de Crédito",
+      "creditCards": "Tarjetas de crédito",
       "subscriptions": "Suscripciones",
       "installments": "Cuotas",
       "paymentObligations": "Obligaciones de pago",
@@ -432,7 +432,7 @@
   },
   "financeDashboard": {
     "metadata": {
-      "title": "Dashboard Financiero",
+      "title": "Dashboard financiero",
       "description": "Resumen de ingresos, gastos y flujo de caja."
     },
     "title": "Finanzas",
@@ -678,10 +678,10 @@
   },
   "creditCards": {
     "metadata": {
-      "title": "Tarjetas de Crédito",
+      "title": "Tarjetas de crédito",
       "description": "Gestioná tus tarjetas de crédito"
     },
-    "title": "Tarjetas de Crédito",
+    "title": "Tarjetas de crédito",
     "subtitle": "Gestioná tus tarjetas de crédito y pagos.",
     "toolbar": {
       "searchPlaceholder": "Buscar tarjetas...",
