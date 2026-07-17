@@ -73,3 +73,9 @@ def email_change_taken_email(to: str, login_link: str) -> EmailMessage:
         "Otherwise, you can safely ignore this message."
     )
     return EmailMessage(to=to, subject=f"This email already has a {_PRODUCT_NAME} account", html=_html(text), text=text)
+
+
+# Notifies an admin that a user submitted feedback from the in-app form (SHELL-7). to = the admin.
+def feedback_notification_email(to: str, submitter_email: str, category: str, message: str) -> EmailMessage:
+    text = f"New {_PRODUCT_NAME} feedback ({category}) from {submitter_email}:\n\n{message}"
+    return EmailMessage(to=to, subject=f"New {_PRODUCT_NAME} feedback: {category}", html=_html(text), text=text)
