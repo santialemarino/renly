@@ -13,11 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { createSettlement } from '@/app/(protected)/credit-cards/credit-card-actions';
@@ -27,6 +22,7 @@ import {
 } from '@/app/(protected)/credit-cards/settlement-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 
 interface SettlementFormDialogProps {
@@ -147,18 +143,12 @@ export function SettlementFormDialog({
                   <FormItem required>
                     <FormLabel>{t('settlements.form.bucket')}</FormLabel>
                     <FormControl>
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('settlements.form.bucketPlaceholder')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {bucketCurrencies.map((cur) => (
-                            <SelectItem key={cur} value={cur}>
-                              {cur}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormCombobox
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder={t('settlements.form.bucketPlaceholder')}
+                        options={bucketCurrencies.map((cur) => ({ value: cur, label: cur }))}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

@@ -17,11 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Switch,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -39,6 +34,7 @@ import {
 } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SnapshotGridCell } from '@/lib/api/snapshots';
@@ -594,20 +590,16 @@ export function SnapshotFormDialog({
                         render={({ field }) => (
                           <FormItem className="flex-1">
                             <FormLabel>{t('form.transaction.type')}</FormLabel>
-                            <Select value={field.value ?? 'deposit'} onValueChange={field.onChange}>
-                              <FormControl>
-                                <SelectTrigger className="w-full">
-                                  <SelectValue />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {TRANSACTION_TYPES.map((type) => (
-                                  <SelectItem key={type} value={type}>
-                                    {t(`form.transaction.types.${type}`)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <FormControl>
+                              <FormCombobox
+                                value={field.value ?? 'deposit'}
+                                onValueChange={field.onChange}
+                                options={TRANSACTION_TYPES.map((type) => ({
+                                  value: type,
+                                  label: t(`form.transaction.types.${type}`),
+                                }))}
+                              />
+                            </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}

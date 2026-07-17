@@ -4,22 +4,14 @@ import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
 import type { Installment } from '@/lib/api/installments';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { formatDateForLocale } from '@/lib/utils/format';
 
 // "Linked to subscription / installment" dropdown on the expense form (Phase 3, follow-up 3a).
-// One combined dropdown with two SelectGroups (Subscriptions + Installments). Sibling of
+// One combined dropdown with two groups (Subscriptions + Installments). Sibling of
 // LinkedObligationSelect — mutual exclusivity across the three FKs is enforced one level up
 // by the form. Rendered in both CREATE and EDIT modes after Item 10 (the FK is now editable
 // on PUT); only Mark Paid hides it via the prefill gate in ExpenseFormDialog. Tri-state
@@ -50,7 +42,7 @@ const NONE_VALUE = 'none';
 
 const STATUS_RANK: Record<MatchStatus, number> = { match: 0, unknown: 1, mismatch: 2 };
 
-// SelectItem values are prefixed so a single dropdown can encode both entity types
+// Option values are prefixed so a single dropdown can encode both entity types
 // without colliding ids (a subscription with id=3 and an installment with id=3 are
 // different selections).
 function encodeValue(value: LinkedSubInstallmentValue | null): string {
@@ -212,79 +204,94 @@ export function LinkedSubInstallmentSelect({
   const hasArchivedLinked =
     sortedSubscriptions.archived.length + sortedInstallments.archived.length > 0;
 
-  // SubscriptionRow / InstallmentRow rendered both as active and as archived; the only
-  // difference between groups is the wrapping SelectGroup label, so we inline the cells.
-  const renderSubRow = (sub: Subscription, status: MatchStatus) => {
+  // Row content for a subscription / installment (used as a FormCombobox option's `render`); rendered
+  // in both the active and the archived groups, which differ only by the option's `group` heading.
+  const subRowContent = (sub: Subscription, status: MatchStatus) => {
     const isSelected = value !== null && value.kind === 'subscription' && value.id === sub.id;
     return (
-      <SelectItem key={`sub-${sub.id}`} value={`sub:${sub.id}`}>
-        <div className="flex min-w-0 items-center gap-x-2">
-          <CircleDot
-            className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
-            aria-hidden
-          />
-          <span className="truncate">{sub.name}</span>
-          <span className="text-paragraph-xs text-muted-foreground">
-            {tCommon('nextCycleHint', { date: formatDateForLocale(sub.nextBillingDate, locale) })}
-          </span>
-        </div>
-      </SelectItem>
+      <div className="flex min-w-0 items-center gap-x-2">
+        <CircleDot
+          className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
+          aria-hidden
+        />
+        <span className="truncate">{sub.name}</span>
+        <span className="text-paragraph-xs text-muted-foreground">
+          {tCommon('nextCycleHint', { date: formatDateForLocale(sub.nextBillingDate, locale) })}
+        </span>
+      </div>
     );
   };
-  const renderInstRow = (inst: Installment, status: MatchStatus, nextChargeDate: string) => {
+  const instRowContent = (inst: Installment, status: MatchStatus, nextChargeDate: string) => {
     const isSelected = value !== null && value.kind === 'installment' && value.id === inst.id;
-    // Progress label matches the installments table convention:
-    // `paid / total` where paid = current_installment - 1 (clamped to 0).
-    const paid = Math.max(0, inst.currentInstallment - 1);
     return (
-      <SelectItem key={`inst-${inst.id}`} value={`inst:${inst.id}`}>
-        <div className="flex min-w-0 items-center gap-x-2">
-          <CircleDot
-            className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
-            aria-hidden
-          />
-          <span className="truncate">
-            {inst.name} ({paid}/{inst.installmentsCount})
-          </span>
-          <span className="text-paragraph-xs text-muted-foreground">
-            {tCommon('nextCycleHint', { date: formatDateForLocale(nextChargeDate, locale) })}
-          </span>
-        </div>
-      </SelectItem>
+      <div className="flex min-w-0 items-center gap-x-2">
+        <CircleDot
+          className={cn('size-3 shrink-0 transition-colors', dotColorClass(status, isSelected))}
+          aria-hidden
+        />
+        <span className="truncate">{installmentLabel(inst)}</span>
+        <span className="text-paragraph-xs text-muted-foreground">
+          {tCommon('nextCycleHint', { date: formatDateForLocale(nextChargeDate, locale) })}
+        </span>
+      </div>
     );
   };
 
+  const subscriptionsLabel = t('form.linkedSubInstallment.subscriptionsLabel');
+  const installmentsLabel = t('form.linkedSubInstallment.installmentsLabel');
+  const archivedGroupLabel = t('form.linkedSubInstallment.archivedGroupLabel');
+  const subOption = (
+    { sub, status }: { sub: Subscription; status: MatchStatus },
+    group: string,
+  ): FormComboboxOption => ({
+    value: `sub:${sub.id}`,
+    label: sub.name,
+    group,
+    render: subRowContent(sub, status),
+  });
+  const instOption = (
+    {
+      inst,
+      status,
+      nextChargeDate,
+    }: { inst: Installment; status: MatchStatus; nextChargeDate: string },
+    group: string,
+  ): FormComboboxOption => ({
+    value: `inst:${inst.id}`,
+    label: installmentLabel(inst),
+    group,
+    render: instRowContent(inst, status, nextChargeDate),
+  });
+
+  const options: FormComboboxOption[] = [
+    { value: NONE_VALUE, label: t('form.linkedSubInstallment.none') },
+    ...(hasActiveSubscriptions
+      ? sortedSubscriptions.active.map((entry) => subOption(entry, subscriptionsLabel))
+      : []),
+    ...(hasActiveInstallments
+      ? sortedInstallments.active.map((entry) => instOption(entry, installmentsLabel))
+      : []),
+    ...(hasArchivedLinked
+      ? [
+          ...sortedSubscriptions.archived.map((entry) => subOption(entry, archivedGroupLabel)),
+          ...sortedInstallments.archived.map((entry) => instOption(entry, archivedGroupLabel)),
+        ]
+      : []),
+  ];
+
   return (
-    <Select value={encodeValue(value)} onValueChange={(v) => onChange(decodeValue(v))}>
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder={t('form.linkedSubInstallment.placeholder')} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_VALUE}>{t('form.linkedSubInstallment.none')}</SelectItem>
-        {hasActiveSubscriptions && (
-          <SelectGroup>
-            <SelectLabel>{t('form.linkedSubInstallment.subscriptionsLabel')}</SelectLabel>
-            {sortedSubscriptions.active.map(({ sub, status }) => renderSubRow(sub, status))}
-          </SelectGroup>
-        )}
-        {hasActiveInstallments && (
-          <SelectGroup>
-            <SelectLabel>{t('form.linkedSubInstallment.installmentsLabel')}</SelectLabel>
-            {sortedInstallments.active.map(({ inst, status, nextChargeDate }) =>
-              renderInstRow(inst, status, nextChargeDate),
-            )}
-          </SelectGroup>
-        )}
-        {hasArchivedLinked && (
-          <SelectGroup>
-            <SelectLabel>{t('form.linkedSubInstallment.archivedGroupLabel')}</SelectLabel>
-            {sortedSubscriptions.archived.map(({ sub, status }) => renderSubRow(sub, status))}
-            {sortedInstallments.archived.map(({ inst, status, nextChargeDate }) =>
-              renderInstRow(inst, status, nextChargeDate),
-            )}
-          </SelectGroup>
-        )}
-      </SelectContent>
-    </Select>
+    <FormCombobox
+      value={encodeValue(value)}
+      onValueChange={(v) => onChange(decodeValue(v))}
+      placeholder={t('form.linkedSubInstallment.placeholder')}
+      options={options}
+    />
   );
+}
+
+// Progress label matches the installments table convention: `name (paid/total)` where
+// paid = current_installment - 1 (clamped to 0). Used for the row content, the trigger, and search.
+function installmentLabel(inst: Installment): string {
+  const paid = Math.max(0, inst.currentInstallment - 1);
+  return `${inst.name} (${paid}/${inst.installmentsCount})`;
 }

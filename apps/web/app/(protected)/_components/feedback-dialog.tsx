@@ -14,11 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { submitFeedback } from '@/app/(protected)/_components/feedback-actions';
@@ -27,6 +22,7 @@ import {
   type FeedbackFormData,
 } from '@/app/(protected)/_components/feedback-form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { FEEDBACK_CATEGORIES, MAX_FEEDBACK_LENGTH } from '@/lib/constants/feedback';
 
 interface FeedbackDialogProps {
@@ -90,20 +86,17 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               render={({ field }) => (
                 <FormItem required>
                   <FormLabel>{t('category.label')}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t('category.placeholder')} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {FEEDBACK_CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {t(`categories.${category}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <FormCombobox
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      placeholder={t('category.placeholder')}
+                      options={FEEDBACK_CATEGORIES.map((category) => ({
+                        value: category,
+                        label: t(`categories.${category}`),
+                      }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

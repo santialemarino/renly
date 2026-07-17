@@ -8,24 +8,14 @@ import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Hint,
-  Input,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Separator,
-} from '@repo/ui/components';
+import { Button, Hint, Input, Label, Separator } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import { saveSettings } from '@/app/(protected)/preferences/preferences-actions';
 import {
   buildSettingsFormSchema,
   type SettingsFormValues,
 } from '@/app/(protected)/preferences/preferences-form-schema';
+import { FormCombobox } from '@/components/form-combobox';
 import { InfoHint, WarningHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -246,18 +236,15 @@ export function PreferencesForm({ initialSettings, supportedCurrencies }: Prefer
               name="dollarRatePreference"
               control={control}
               render={({ field }) => (
-                <Select value={field.value ?? DOLLAR_RATE_DEFAULT} onValueChange={field.onChange}>
-                  <SelectTrigger className="w-full" surface>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DOLLAR_RATE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {t(`form.dollarRate.options.${opt.labelKey}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormCombobox
+                  surface
+                  value={field.value ?? DOLLAR_RATE_DEFAULT}
+                  onValueChange={field.onChange}
+                  options={DOLLAR_RATE_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: t(`form.dollarRate.options.${opt.labelKey}`),
+                  }))}
+                />
               )}
             />
             <InfoHint>
