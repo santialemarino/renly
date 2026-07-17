@@ -6,19 +6,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useWatch, type Control, type FieldValues, type UseFormSetValue } from 'react-hook-form';
 
-import {
-  Button,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@repo/ui/components';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components';
 import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PAYMENT_METHODS, type PaymentMethod } from '@/lib/constants/categories';
@@ -118,20 +109,18 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
           <FormItem>
             <FormLabel>{t('label')}</FormLabel>
             <MaybeLockedTooltip tooltip={disabledTooltip} show={disabled}>
-              <Select value={field.value ?? ''} onValueChange={field.onChange} disabled={disabled}>
-                <FormControl>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t('placeholder')} />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((method) => (
-                    <SelectItem key={method} value={method}>
-                      {t(`methods.${method}`)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <FormCombobox
+                  value={field.value ?? ''}
+                  onValueChange={field.onChange}
+                  disabled={disabled}
+                  placeholder={t('placeholder')}
+                  options={PAYMENT_METHODS.map((method) => ({
+                    value: method,
+                    label: t(`methods.${method}`),
+                  }))}
+                />
+              </FormControl>
             </MaybeLockedTooltip>
             <FormMessage />
           </FormItem>
@@ -157,27 +146,19 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
                     <FormItem>
                       <FormLabel>{t('creditCard.label')}</FormLabel>
                       <MaybeLockedTooltip tooltip={disabledTooltip} show={disabled}>
-                        <Select
-                          value={field.value?.toString() ?? ''}
-                          onValueChange={(v) => field.onChange(Number(v))}
-                          disabled={disabled}
-                        >
-                          <FormControl>
-                            <SelectTrigger
-                              className="w-full"
-                              data-testid="payment-method-card-select"
-                            >
-                              <SelectValue placeholder={t('creditCard.placeholder')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {activeCards.map((card) => (
-                              <SelectItem key={card.id} value={card.id.toString()}>
-                                {card.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <FormCombobox
+                            value={field.value?.toString() ?? ''}
+                            onValueChange={(v) => field.onChange(Number(v))}
+                            disabled={disabled}
+                            placeholder={t('creditCard.placeholder')}
+                            data-testid="payment-method-card-select"
+                            options={activeCards.map((card) => ({
+                              value: card.id.toString(),
+                              label: card.name,
+                            }))}
+                          />
+                        </FormControl>
                       </MaybeLockedTooltip>
                       <FormMessage />
                     </FormItem>

@@ -117,6 +117,9 @@
       "search": "Search groups...",
       "empty": "No groups found."
     },
+    "combobox": {
+      "empty": "No results found."
+    },
     "period": {
       "monthSuffix": "M",
       "yearSuffix": "Y"

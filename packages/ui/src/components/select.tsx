@@ -1,5 +1,12 @@
 'use client';
 
+/*
+ * Radix Select primitive. NOTE for form fields: prefer the app's FormCombobox
+ * (apps/web/components/form-combobox.tsx) over this. Radix Select animates on open but NOT on close
+ * (it has no forceMount/Presence on its content), so the dropdown snaps shut — whereas the
+ * Popover-based FormCombobox animates both directions and also gives search + keyboard typeahead.
+ * This primitive is kept as an available building block; just don't reach for it for form dropdowns.
+ */
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react';

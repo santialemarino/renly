@@ -12,11 +12,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
@@ -27,6 +22,7 @@ import {
 } from '@/app/(protected)/income/income-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { IncomeEntry } from '@/lib/api/income';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
@@ -176,20 +172,17 @@ export function IncomeFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('form.category.label')}</FormLabel>
-                  <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder={t('form.category.placeholder')} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {sortedCategories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {tCommon(`categories.${cat}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <FormCombobox
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      placeholder={t('form.category.placeholder')}
+                      options={sortedCategories.map((cat) => ({
+                        value: cat,
+                        label: tCommon(`categories.${cat}`),
+                      }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

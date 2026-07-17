@@ -13,11 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
@@ -31,6 +26,7 @@ import {
 } from '@/app/(protected)/payment-obligations/payment-obligation-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -218,30 +214,26 @@ export function PaymentObligationFormDialog({
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormLabel>{t('form.recurrence.label')}</FormLabel>
-                    <Select
-                      value={field.value ?? NONE_RECURRENCE}
-                      onValueChange={(v) =>
-                        field.onChange(
-                          v === NONE_RECURRENCE
-                            ? undefined
-                            : (v as PaymentObligationFormValues['recurrence']),
-                        )
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.recurrence.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NONE_RECURRENCE}>{t('recurrences.oneOff')}</SelectItem>
-                        {OBLIGATION_RECURRENCES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {t(`recurrences.${r}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value ?? NONE_RECURRENCE}
+                        onValueChange={(v) =>
+                          field.onChange(
+                            v === NONE_RECURRENCE
+                              ? undefined
+                              : (v as PaymentObligationFormValues['recurrence']),
+                          )
+                        }
+                        placeholder={t('form.recurrence.placeholder')}
+                        options={[
+                          { value: NONE_RECURRENCE, label: t('recurrences.oneOff') },
+                          ...OBLIGATION_RECURRENCES.map((r) => ({
+                            value: r,
+                            label: t(`recurrences.${r}`),
+                          })),
+                        ]}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -269,25 +261,19 @@ export function PaymentObligationFormDialog({
                 render={({ field }) => (
                   <FormItem className="flex-1">
                     <FormLabel>{t('form.expenseCategory.label')}</FormLabel>
-                    <Select
-                      value={field.value ?? ''}
-                      onValueChange={(v) =>
-                        field.onChange(v as PaymentObligationFormValues['expenseCategory'])
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.expenseCategory.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sortedExpenseCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {tCommon(`categories.${cat}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value ?? ''}
+                        onValueChange={(v) =>
+                          field.onChange(v as PaymentObligationFormValues['expenseCategory'])
+                        }
+                        placeholder={t('form.expenseCategory.placeholder')}
+                        options={sortedExpenseCategories.map((cat) => ({
+                          value: cat,
+                          label: tCommon(`categories.${cat}`),
+                        }))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

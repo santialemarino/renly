@@ -13,11 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
@@ -30,6 +25,7 @@ import {
 } from '@/app/(protected)/subscriptions/subscription-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -184,20 +180,17 @@ export function SubscriptionFormDialog({
                 render={({ field }) => (
                   <FormItem required className="flex-1">
                     <FormLabel>{t('form.billingCycle.label')}</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.billingCycle.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {BILLING_CYCLES.map((cycle) => (
-                          <SelectItem key={cycle} value={cycle}>
-                            {t(`billingCycles.${cycle}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        placeholder={t('form.billingCycle.placeholder')}
+                        options={BILLING_CYCLES.map((cycle) => ({
+                          value: cycle,
+                          label: t(`billingCycles.${cycle}`),
+                        }))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -14,11 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
   Tooltip,
   TooltipContent,
@@ -35,6 +30,7 @@ import {
 } from '@/app/(protected)/investments/investments-form-schema';
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import type { Investment, InvestmentGroup } from '@/lib/api/investments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { CATEGORY_CAPABILITIES, type InvestmentCategory } from '@/lib/constants/categories';
@@ -158,20 +154,17 @@ export function InvestmentFormDialog({
                 render={({ field }) => (
                   <FormItem required className="flex-1">
                     <FormLabel>{t('form.category.label')}</FormLabel>
-                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={t('form.category.placeholder')} />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {sortCategoriesByLabel(tCommon, locale).map((cat) => (
-                          <SelectItem key={cat} value={cat}>
-                            {tCommon(`categories.${cat}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <FormCombobox
+                        value={field.value ?? ''}
+                        onValueChange={field.onChange}
+                        placeholder={t('form.category.placeholder')}
+                        options={sortCategoriesByLabel(tCommon, locale).map((cat) => ({
+                          value: cat,
+                          label: tCommon(`categories.${cat}`),
+                        }))}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

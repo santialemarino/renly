@@ -6,23 +6,14 @@ import { useTranslations } from 'next-intl';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Hint,
-  Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Separator,
-} from '@repo/ui/components';
+import { Button, Hint, Label, Separator } from '@repo/ui/components';
 import { TimezoneCombobox } from '@/app/(protected)/_components/timezone-combobox';
 import { saveLocalization } from '@/app/(protected)/localization/localization-actions';
 import {
   localizationFormSchema,
   type LocalizationFormValues,
 } from '@/app/(protected)/localization/localization-form-schema';
+import { FormCombobox } from '@/components/form-combobox';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { DEFAULT_LOCALE } from '@/config/constants';
 import type { SettingsData } from '@/lib/api/settings';
@@ -184,18 +175,15 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
               name="language"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={handleLanguageChange}>
-                  <SelectTrigger className="w-full" surface>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {LANGUAGE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {t(`form.language.options.${opt.labelKey}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormCombobox
+                  surface
+                  value={field.value}
+                  onValueChange={handleLanguageChange}
+                  options={LANGUAGE_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: t(`form.language.options.${opt.labelKey}`),
+                  }))}
+                />
               )}
             />
           </div>

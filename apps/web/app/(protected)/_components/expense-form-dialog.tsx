@@ -14,11 +14,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
@@ -48,6 +43,7 @@ import {
 } from '@/app/(protected)/expenses/expenses-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { FormCombobox } from '@/components/form-combobox';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
@@ -656,20 +652,17 @@ export function ExpenseFormDialog({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t('form.category.label')}</FormLabel>
-                          <Select value={field.value ?? ''} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger className="w-full">
-                                <SelectValue placeholder={t('form.category.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {sortedCategories.map((cat) => (
-                                <SelectItem key={cat} value={cat}>
-                                  {tCommon(`categories.${cat}`)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <FormControl>
+                            <FormCombobox
+                              value={field.value ?? ''}
+                              onValueChange={field.onChange}
+                              placeholder={t('form.category.placeholder')}
+                              options={sortedCategories.map((cat) => ({
+                                value: cat,
+                                label: tCommon(`categories.${cat}`),
+                              }))}
+                            />
+                          </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}

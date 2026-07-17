@@ -4,16 +4,8 @@ import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectTrigger,
-  SelectValue,
-} from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { formatDateForLocale } from '@/lib/utils/format';
 
@@ -70,10 +62,10 @@ export function obligationMatchStatus(
   return anyUnknown ? 'unknown' : 'match';
 }
 
-// Renders one obligation row inside the dropdown. Extracted so the active and the
-// archived-currently-linked groups share rendering — the only difference between them
-// is the wrapping SelectGroup + label.
-function ObligationRow({
+// Renders the content of one obligation row (used as a FormCombobox option's `render`). Extracted so
+// the active and the archived-currently-linked groups share rendering — the only difference between
+// them is the option's `group` heading.
+function ObligationRowContent({
   obligation,
   status,
   isSelected,
@@ -103,17 +95,15 @@ function ObligationRow({
         ? 'text-amber-500'
         : 'text-muted-foreground';
   return (
-    <SelectItem value={String(obligation.id)}>
-      <div className="flex min-w-0 items-center gap-x-2">
-        {!disabled && (
-          <CircleDot className={cn('size-3 shrink-0 transition-colors', dotColor)} aria-hidden />
-        )}
-        <span className="truncate">{obligation.name}</span>
-        <span className="text-paragraph-xs text-muted-foreground">
-          {nextCycleHint({ date: formatDateForLocale(obligation.nextDueDate, locale) })}
-        </span>
-      </div>
-    </SelectItem>
+    <div className="flex min-w-0 items-center gap-x-2">
+      {!disabled && (
+        <CircleDot className={cn('size-3 shrink-0 transition-colors', dotColor)} aria-hidden />
+      )}
+      <span className="truncate">{obligation.name}</span>
+      <span className="text-paragraph-xs text-muted-foreground">
+        {nextCycleHint({ date: formatDateForLocale(obligation.nextDueDate, locale) })}
+      </span>
+    </div>
   );
 }
 
@@ -164,45 +154,39 @@ export function LinkedObligationSelect({
     return { activeSorted: active, archivedSorted: archived };
   }, [obligations, value, formCurrency, formPaymentMethod, formCreditCardId]);
 
+  const archivedGroupLabel = t('form.linkedObligation.archivedGroupLabel');
+  const toOption = (
+    { obligation, status }: { obligation: PaymentObligation; status: MatchStatus },
+    group?: string,
+  ): FormComboboxOption => ({
+    value: String(obligation.id),
+    label: obligation.name,
+    group,
+    render: (
+      <ObligationRowContent
+        obligation={obligation}
+        status={status}
+        isSelected={obligation.id === value}
+        disabled={disabled}
+        locale={locale}
+        nextCycleHint={(p) => tCommon('nextCycleHint', p)}
+      />
+    ),
+  });
+
+  const options: FormComboboxOption[] = [
+    { value: NONE_VALUE, label: t('form.linkedObligation.none') },
+    ...activeSorted.map((entry) => toOption(entry)),
+    ...archivedSorted.map((entry) => toOption(entry, archivedGroupLabel)),
+  ];
+
   return (
-    <Select
+    <FormCombobox
       value={value !== null ? String(value) : NONE_VALUE}
       onValueChange={(v) => onChange(v === NONE_VALUE ? null : Number(v))}
       disabled={disabled}
-    >
-      <SelectTrigger className="w-full">
-        <SelectValue placeholder={t('form.linkedObligation.placeholder')} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={NONE_VALUE}>{t('form.linkedObligation.none')}</SelectItem>
-        {activeSorted.map(({ obligation, status }) => (
-          <ObligationRow
-            key={obligation.id}
-            obligation={obligation}
-            status={status}
-            isSelected={obligation.id === value}
-            disabled={disabled}
-            locale={locale}
-            nextCycleHint={(p) => tCommon('nextCycleHint', p)}
-          />
-        ))}
-        {archivedSorted.length > 0 && (
-          <SelectGroup>
-            <SelectLabel>{t('form.linkedObligation.archivedGroupLabel')}</SelectLabel>
-            {archivedSorted.map(({ obligation, status }) => (
-              <ObligationRow
-                key={obligation.id}
-                obligation={obligation}
-                status={status}
-                isSelected={obligation.id === value}
-                disabled={disabled}
-                locale={locale}
-                nextCycleHint={(p) => tCommon('nextCycleHint', p)}
-              />
-            ))}
-          </SelectGroup>
-        )}
-      </SelectContent>
-    </Select>
+      placeholder={t('form.linkedObligation.placeholder')}
+      options={options}
+    />
   );
 }
