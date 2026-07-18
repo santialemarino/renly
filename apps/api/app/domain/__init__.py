@@ -19,6 +19,7 @@ from app.domain.cycle_advance import (
 )
 from app.domain.errors import (
     CurrencyChangeBlockedError,
+    DomainError,
     EmailNotVerifiedError,
     ExchangeRateUnavailableError,
     HasLinkedExpensesError,
@@ -45,6 +46,7 @@ __all__ = [
     "CardBucketBalance",
     "CurrencyChangeBlockedError",
     "CycleAdvanceDecision",
+    "DomainError",
     "EmailNotVerifiedError",
     "ExchangeRateUnavailableError",
     "HasLinkedExpensesError",

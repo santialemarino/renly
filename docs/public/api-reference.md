@@ -617,6 +617,8 @@ Most endpoints also accept these common filters:
 
 ## Error codes
 
+Every error response has a JSON body with a human-readable `detail` (English) and a stable machine-readable `code` (e.g. `not_found`, `invalid_credentials`, `has_linked_expenses`); some carry extra context fields (e.g. `installment_locked_field` includes `fields`). The `code` is locale-independent — clients map it to their own localized message and fall back to `detail`. The HTTP status is one of:
+
 | Code  | Meaning                                                                                                                                                                                                                                                                  |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `400` | Bad request -- e.g., a snapshot/transaction `currency` that doesn't match its investment's `base_currency`.                                                                                                                                                              |

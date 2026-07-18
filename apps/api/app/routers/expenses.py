@@ -1,13 +1,14 @@
 from datetime import date as date_type
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.domain import AdvanceResult, ReverseResult
+from app.http_errors import CodedHTTPException
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.expense import (
     AutoChargeMatch,
@@ -122,9 +123,10 @@ async def cycle_advance_preview(
     installment_id: int | None = Query(default=None, description="Installment id (mutually exclusive with subscription_id)."),
 ) -> CycleAdvancePreviewResponse:
     if (subscription_id is None) == (installment_id is None):
-        raise HTTPException(
+        raise CodedHTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Exactly one of subscription_id or installment_id must be set.",
+            code="mutually_exclusive_link",
         )
     decision = await expense_service.find_cycle_advance_decision(
         session,
@@ -181,7 +183,7 @@ async def create_expense(
                 payment_obligation_id=body.payment_obligation_id,  # type: ignore[arg-type]
             )
         except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            raise CodedHTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc), code="expense_cycle_invalid") from exc
     else:
         entry, advance_result = await expense_service.create_expense(
             session,

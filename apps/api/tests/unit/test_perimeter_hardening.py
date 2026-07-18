@@ -198,7 +198,7 @@ class TestBodySizeLimit:
             headers={"content-type": "application/json"},
         )
         assert response.status_code == 413
-        assert response.json() == {"detail": "Request body too large."}
+        assert response.json() == {"detail": "Request body too large.", "code": "request_too_large"}
 
     def test_normal_body_not_blocked(self):
         client = _client()
@@ -216,7 +216,7 @@ class TestBodySizeLimit:
 
         response = client.post("/auth/login", content=_stream(), headers={"content-type": "application/json"})
         assert response.status_code == 413
-        assert response.json() == {"detail": "Request body too large."}
+        assert response.json() == {"detail": "Request body too large.", "code": "request_too_large"}
 
 
 # --- SEC-1 (follow-up): client IP behind a reverse proxy ---

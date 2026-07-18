@@ -1,5 +1,7 @@
 'use server';
 
+import { getTranslations } from 'next-intl/server';
+
 import type { CreditCardFormValues } from '@/app/(protected)/credit-cards/credit-card-form-schema';
 import type { ReconciliationFormValues } from '@/app/(protected)/credit-cards/reconciliation-form-schema';
 import type { SettlementFormValues } from '@/app/(protected)/credit-cards/settlement-form-schema';
@@ -11,6 +13,7 @@ import {
 } from '@/lib/api/card-reconciliations';
 import { mapCreditCard, type CreditCard } from '@/lib/api/credit-cards';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
 
 function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
   const { closingDay, dueDay, monthlyPayment, ...rest } = values;
@@ -48,11 +51,10 @@ export async function deleteCreditCard(id: number): Promise<DeleteCreditCardResu
   const res = await authenticatedFetch(`/credit-cards/${id}`, { method: 'DELETE' });
   if (!res.ok) {
     if (res.status === 409) {
-      try {
-        const body: { detail?: unknown } = await res.json();
-        if (typeof body.detail === 'string') return { ok: false, conflictDetail: body.detail };
-      } catch {
-        // Not JSON; fall through to the generic error.
+      const parsed = await parseApiError(res);
+      if (parsed.code || parsed.detail) {
+        const t = await getTranslations('apiErrors');
+        return { ok: false, conflictDetail: resolveApiError(t, parsed, '') };
       }
     }
     throw new Error('Failed to delete credit card');

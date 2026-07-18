@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, Request, Response, status
 
 from app.config import SignupMode, settings
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.domain import EmailNotVerifiedError
+from app.http_errors import CodedHTTPException
 from app.models.auth_token import AuthTokenType
 from app.models.user import User
 from app.rate_limit import (
@@ -79,9 +80,10 @@ async def signup_context(session: AdminSessionDep, invite: str | None = None) ->
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(LOGIN_LIMIT)
 async def login(request: Request, response: Response, body: LoginRequest, session: AdminSessionDep) -> TokenResponse:
-    invalid_credentials = HTTPException(
+    invalid_credentials = CodedHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid credentials",
+        code="invalid_credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     user = await auth_service.get_user_by_email(session, body.email)

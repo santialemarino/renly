@@ -1,8 +1,11 @@
 'use server';
 
+import { getTranslations } from 'next-intl/server';
+
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import type { Expense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
 
 interface ExpenseRaw {
   id: number;
@@ -116,13 +119,13 @@ function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
   };
 }
 
+// Resolves a failed response to a localized conflict message (mapped API `code`, else raw `detail`),
+// or null when the body carries neither so the caller falls back to its generic error.
 async function readErrorDetail(res: Response): Promise<string | null> {
-  try {
-    const body: { detail?: unknown } = await res.json();
-    return typeof body.detail === 'string' ? body.detail : null;
-  } catch {
-    return null;
-  }
+  const parsed = await parseApiError(res);
+  if (!parsed.code && !parsed.detail) return null;
+  const t = await getTranslations('apiErrors');
+  return resolveApiError(t, parsed, '') || null;
 }
 
 export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationResult> {
