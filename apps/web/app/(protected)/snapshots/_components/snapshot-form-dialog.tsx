@@ -256,8 +256,8 @@ export function SnapshotFormDialog({
     if (!cedearRatio || !watchedQuantity) return null;
     const qty = parseFloat(watchedQuantity);
     if (isNaN(qty) || qty <= 0) return null;
-    return (qty / cedearRatio).toFixed(4);
-  }, [cedearRatio, watchedQuantity]);
+    return fmt.value(qty / cedearRatio, { maxDecimals: 4 });
+  }, [cedearRatio, watchedQuantity, fmt]);
 
   async function onSubmit(values: SnapshotFormValues) {
     try {

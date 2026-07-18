@@ -231,6 +231,10 @@ function ChartTooltipContent({
                         </span>
                       </div>
                       {item.value !== undefined && (
+                        // No Renly chart hits this default tooltip path — every consumer passes an
+                        // explicit `formatter` (routed through the locale-bound formatters). This
+                        // vendored fallback stays on the runtime's ambient locale because packages/ui
+                        // carries no i18n context to thread a locale in.
                         <span className="font-mono font-medium tabular-nums text-foreground">
                           {item.value.toLocaleString()}
                         </span>

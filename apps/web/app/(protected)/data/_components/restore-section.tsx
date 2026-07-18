@@ -20,8 +20,10 @@ import { confirmRestore, previewRestore } from '@/app/(protected)/data/data-acti
 import { SectionHeader } from '@/components/section-header';
 import type { RestorePreview } from '@/lib/api/restore';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 export function RestoreSection() {
+  const fmt = useFormatters();
   const t = useTranslations('data');
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -120,9 +122,9 @@ export function RestoreSection() {
             {preview.skippedEntities.length > 0 && (
               <span className="text-paragraph-xs text-muted-foreground">
                 {t('restore.notRestored', {
-                  entities: preview.skippedEntities
-                    .map((entity) => t(`restore.entities.${entity}`))
-                    .join(', '),
+                  entities: fmt.list(
+                    preview.skippedEntities.map((entity) => t(`restore.entities.${entity}`)),
+                  ),
                 })}
               </span>
             )}

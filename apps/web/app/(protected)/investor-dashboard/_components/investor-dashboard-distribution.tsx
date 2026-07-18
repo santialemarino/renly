@@ -40,9 +40,9 @@ export function InvestorDashboardDistribution({
   groupAllocation,
   forcedMode,
 }: InvestorDashboardDistributionProps) {
+  const fmt = useFormatters();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
-  const fmt = useFormatters();
   const [mode, setMode] = useState<Mode>(forcedMode ?? 'category');
 
   // When forcedMode is set, it overrides the user's toggle selection.

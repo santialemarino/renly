@@ -14,6 +14,7 @@ import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentGroup } from '@/lib/api/groups';
 import type { SortOrder } from '@/lib/api/types';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 type SortField = 'id' | 'name';
 
@@ -112,14 +113,16 @@ function GroupRow({
   investments: { id: number; name: string }[];
   onSuccess: () => void;
 }) {
+  const fmt = useFormatters();
   const t = useTranslations('groups');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const investmentNames = group.investmentIds
-    .map((id) => investmentMap.get(id))
-    .filter(Boolean)
-    .join(', ');
+  const investmentNames = fmt.list(
+    group.investmentIds
+      .map((id) => investmentMap.get(id))
+      .filter((name): name is string => name != null),
+  );
 
   return (
     <>

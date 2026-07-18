@@ -2,9 +2,11 @@ import { formatAmount } from '@/lib/i18n/currency';
 import {
   formatAxisValue,
   formatDateForLocale,
+  formatList,
   formatMonth,
   formatPct,
   formatRatePct,
+  formatRatio,
   formatSignedPct,
   formatSignedValue,
   formatTimestampDate,
@@ -28,10 +30,12 @@ export function createFormatters(locale: string) {
     signedPct: (pct: number) => formatSignedPct(pct, locale),
     pct: (value: number) => formatPct(value, locale),
     ratePct: (pct: number) => formatRatePct(pct, locale),
+    ratio: (value: number) => formatRatio(value, locale),
     month: (dateStr: string) => formatMonth(dateStr, locale),
     date: (iso: string, dateFormat?: string) => formatDateForLocale(iso, locale, dateFormat),
     timestampDate: (iso: string) => formatTimestampDate(iso, locale),
     axisValue: (value: number) => formatAxisValue(value, locale),
+    list: (items: Iterable<string>) => formatList(items, locale),
   };
 }
 

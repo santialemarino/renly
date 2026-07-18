@@ -61,6 +61,14 @@ export function formatRatePct(pct: number, locale?: string): string {
   }).format(pct);
 }
 
+// Formats a plain ratio with a fixed two decimals (e.g. 1.5 → "1.50", 2 → "2.00"). Unlike formatValue, trailing zeros are kept so ratios read consistently. No unit suffix — callers append it (e.g. "x").
+export function formatRatio(value: number, locale?: string): string {
+  return new Intl.NumberFormat(getLocaleTag(locale), {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 // Returns the color class: green for positive, red for negative, grey for zero/null.
 export function valueColor(value: number | null): string {
   if (value === null || value === 0) return 'text-muted-foreground';
@@ -95,4 +103,12 @@ export function formatTimestampDate(iso: string, locale?: string): string {
 // Formats a number as a compact value for chart Y axes and tooltips (e.g. 1500000 → "1.5M", 23000 → "23K").
 export function formatAxisValue(value: number, locale?: string): string {
   return formatValue(value, { locale, compact: true });
+}
+
+// Formats a list of strings into a locale-aware conjunction (e.g. "a, b, and c" / "a, b y c"). Empty → "", single → the item itself.
+export function formatList(items: Iterable<string>, locale?: string): string {
+  return new Intl.ListFormat(getLocaleTag(locale), {
+    style: 'long',
+    type: 'conjunction',
+  }).format(items);
 }

@@ -68,9 +68,9 @@ export function InstallmentFormDialog({
   creditCards,
   onSuccess,
 }: InstallmentFormDialogProps) {
+  const fmt = useFormatters();
   const t = useTranslations('installments');
   const tCommon = useTranslations('common');
-  const fmt = useFormatters();
 
   const schema = useMemo(
     () =>
