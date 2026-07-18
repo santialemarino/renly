@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Ban, Send } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -24,7 +24,7 @@ import { inviteFormSchema, type InviteFormData } from '@/app/(protected)/admin/f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import type { Invite, InviteStatus } from '@/lib/api/invites';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
-import { formatTimestampDate } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // Seconds before the same invite can be (re)sent again — matches the auth resend cooldown
 // (CheckEmailNotice). Each send/resend starts it; a backstop on top of the server rate limit.
@@ -43,9 +43,9 @@ interface AdminInvitesProps {
 }
 
 export function AdminInvites({ initialInvites }: AdminInvitesProps) {
-  const locale = useLocale();
   const t = useTranslations('admin');
   const tCommon = useTranslations('common');
+  const fmt = useFormatters();
   const reduceMotion = useReducedMotion();
 
   const form = useForm<InviteFormData>({
@@ -226,12 +226,10 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
                     </AnimatePresence>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {formatTimestampDate(invite.createdAt, locale)}
+                    {fmt.timestampDate(invite.createdAt)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {invite.consumedAt
-                      ? formatTimestampDate(invite.consumedAt, locale)
-                      : t('table.never')}
+                    {invite.consumedAt ? fmt.timestampDate(invite.consumedAt) : t('table.never')}
                   </TableCell>
                   <TableCell>
                     {/* popLayout so the row's buttons grow/shrink smoothly as the Revoke action appears/disappears. */}

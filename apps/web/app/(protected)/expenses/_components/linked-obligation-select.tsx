@@ -2,12 +2,12 @@
 
 import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
 import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // "Linked to obligation" dropdown on the expense form (Phase 3 follow-up to Step E).
 // Tri-state match model:
@@ -70,16 +70,15 @@ function ObligationRowContent({
   status,
   isSelected,
   disabled,
-  locale,
   nextCycleHint,
 }: {
   obligation: PaymentObligation;
   status: MatchStatus;
   isSelected: boolean;
   disabled: boolean | undefined;
-  locale: string;
   nextCycleHint: (params: { date: string }) => string;
 }) {
+  const fmt = useFormatters();
   // Dot color rules:
   //   - match               -> emerald (positive selection aid, regardless of selection).
   //   - unknown             -> muted (form not fully filled, no signal yet).
@@ -101,7 +100,7 @@ function ObligationRowContent({
       )}
       <span className="truncate">{obligation.name}</span>
       <span className="text-paragraph-xs text-muted-foreground">
-        {nextCycleHint({ date: formatDateForLocale(obligation.nextDueDate, locale) })}
+        {nextCycleHint({ date: fmt.date(obligation.nextDueDate) })}
       </span>
     </div>
   );
@@ -116,7 +115,6 @@ export function LinkedObligationSelect({
   formCreditCardId,
   onChange,
 }: LinkedObligationSelectProps) {
-  const locale = useLocale();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
@@ -168,7 +166,6 @@ export function LinkedObligationSelect({
         status={status}
         isSelected={obligation.id === value}
         disabled={disabled}
-        locale={locale}
         nextCycleHint={(p) => tCommon('nextCycleHint', p)}
       />
     ),

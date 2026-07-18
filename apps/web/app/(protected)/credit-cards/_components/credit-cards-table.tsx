@@ -12,7 +12,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -46,8 +46,7 @@ import { ROUTES } from '@/config/routes';
 import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // Minimum time (ms) from fetch start before showing the result.
 // Prevents layout flash when the fetch resolves instantly.
@@ -62,7 +61,7 @@ function SettlementsSection({
   bucketCurrencies: string[];
   expanded: boolean;
 }) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
   const [settlements, setSettlements] = useState<SettlementResult[]>([]);
@@ -161,9 +160,9 @@ function SettlementsSection({
                         <TableBody>
                           {settlements.map((s) => (
                             <TableRow key={s.id}>
-                              <TableCell>{formatDateForLocale(s.date, locale)}</TableCell>
+                              <TableCell>{fmt.date(s.date)}</TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(s.amount, locale, s.currency)}
+                                {fmt.amount(s.amount, s.currency)}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
                               <TableCell className="max-w-48 truncate text-muted-foreground">
@@ -242,7 +241,7 @@ export function CreditCardsTable({
   preferredCurrencies?: string[];
   firstRun?: boolean;
 }) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<CreditCardSortField>(
@@ -341,7 +340,7 @@ export function CreditCardsTable({
                         <div className="flex flex-col gap-y-0.5">
                           {card.balances.map((bucket) => (
                             <span key={bucket.currency} className="flex items-baseline gap-x-1.5">
-                              <span>{formatAmount(bucket.balance, locale, bucket.currency)}</span>
+                              <span>{fmt.amount(bucket.balance, bucket.currency)}</span>
                               <span className="text-paragraph-xs text-muted-foreground">
                                 {bucket.currency}
                               </span>

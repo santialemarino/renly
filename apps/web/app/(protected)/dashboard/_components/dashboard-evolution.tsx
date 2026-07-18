@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import {
   Area,
   AreaChart,
@@ -41,15 +41,15 @@ import {
   TOOLTIP_TEXT,
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
-import { formatAxisValue, formatMonth } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface DashboardEvolutionProps {
   evolution: DashboardEvolution;
 }
 
 export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) {
-  const locale = useLocale();
   const t = useTranslations('dashboard');
+  const fmt = useFormatters();
 
   const hasData = evolution.points.length > 0;
 
@@ -68,14 +68,14 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(value) => formatMonth(String(value), locale)}
+                  tickFormatter={(value) => fmt.month(String(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <YAxis
-                  tickFormatter={(value) => formatAxisValue(Number(value), locale)}
+                  tickFormatter={(value) => fmt.axisValue(Number(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
@@ -84,11 +84,8 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                 />
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
-                  labelFormatter={(label) => formatMonth(String(label), locale)}
-                  formatter={(value) => [
-                    formatAxisValue(Number(value), locale),
-                    t('chart.tooltipValue'),
-                  ]}
+                  labelFormatter={(label) => fmt.month(String(label))}
+                  formatter={(value) => [fmt.axisValue(Number(value)), t('chart.tooltipValue')]}
                   contentStyle={{
                     backgroundColor: TOOLTIP_BG,
                     color: TOOLTIP_TEXT,

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { deleteSettlement } from '@/app/(protected)/credit-cards/credit-card-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { formatAmount } from '@/lib/utils/currency';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface SettlementDeleteDialogProps {
   open: boolean;
@@ -23,7 +23,7 @@ export function SettlementDeleteDialog({
   settlement,
   onSuccess,
 }: SettlementDeleteDialogProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const [deleting, setDeleting] = useState(false);
 
@@ -50,7 +50,7 @@ export function SettlementDeleteDialog({
       title={t('settlements.delete.title')}
       description={(s) =>
         t('settlements.delete.confirm', {
-          amount: formatAmount(s.amount, locale, s.currency),
+          amount: fmt.amount(s.amount, s.currency),
           currency: s.currency,
         })
       }

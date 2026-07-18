@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
@@ -26,7 +26,7 @@ import {
   TOOLTIP_TEXT,
   Y_AXIS_WIDTH,
 } from '@/lib/constants/charts';
-import { formatAxisValue, formatMonth } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 const BAR_COLOR_INCOME = CHART_COLOR_POSITIVE;
 const BAR_COLOR_EXPENSES = CHART_COLOR_NEGATIVE;
@@ -37,7 +37,7 @@ interface FinanceDashboardMonthlyChartProps {
 }
 
 export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthlyChartProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('financeDashboard');
 
   const hasData = monthly.points.length > 0;
@@ -57,14 +57,14 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                 <CartesianGrid vertical={GRID_VERTICAL} strokeDasharray={GRID_STROKE_DASHARRAY} />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(value) => formatMonth(String(value), locale)}
+                  tickFormatter={(value) => fmt.month(String(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
                   fontSize={AXIS_FONT_SIZE}
                 />
                 <YAxis
-                  tickFormatter={(value) => formatAxisValue(Number(value), locale)}
+                  tickFormatter={(value) => fmt.axisValue(Number(value))}
                   tickLine={AXIS_TICK_LINE}
                   axisLine={AXIS_LINE}
                   tickMargin={AXIS_TICK_MARGIN}
@@ -73,9 +73,9 @@ export function FinanceDashboardMonthlyChart({ monthly }: FinanceDashboardMonthl
                 />
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
-                  labelFormatter={(label) => formatMonth(String(label), locale)}
+                  labelFormatter={(label) => fmt.month(String(label))}
                   formatter={(value, name) => [
-                    formatAxisValue(Number(value), locale),
+                    fmt.axisValue(Number(value)),
                     name === 'income'
                       ? t('monthlyChart.tooltipIncome')
                       : t('monthlyChart.tooltipExpenses'),

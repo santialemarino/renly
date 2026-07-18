@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import { deleteExpense } from '@/app/(protected)/expenses/expenses-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { Expense } from '@/lib/api/expenses';
-import { formatAmount } from '@/lib/utils/currency';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface ExpenseDeleteDialogProps {
   open: boolean;
@@ -23,7 +23,7 @@ export function ExpenseDeleteDialog({
   expense,
   onSuccess,
 }: ExpenseDeleteDialogProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('expenses');
   const [deleting, setDeleting] = useState(false);
 
@@ -33,7 +33,7 @@ export function ExpenseDeleteDialog({
       const cursorChange = await deleteExpense(expense.id);
       const baseMessage = t('delete.success');
       if (cursorChange) {
-        const resolution = resolveCursorToast(cursorChange, 'reverse', locale);
+        const resolution = resolveCursorToast(cursorChange, 'reverse', fmt.date);
         if (resolution) {
           toast.success(`${baseMessage} ${t(`form.${resolution.key}`, resolution.params)}`);
         } else {
@@ -59,7 +59,7 @@ export function ExpenseDeleteDialog({
       title={t('delete.title')}
       description={(e) =>
         t('delete.confirm', {
-          amount: formatAmount(e.amount, locale, e.currency),
+          amount: fmt.amount(e.amount, e.currency),
           currency: e.currency,
         })
       }

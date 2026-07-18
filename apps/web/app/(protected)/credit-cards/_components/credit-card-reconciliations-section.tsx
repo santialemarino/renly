@@ -24,9 +24,8 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
 
 interface CreditCardReconciliationsSectionProps {
   cardId: number;
@@ -40,6 +39,7 @@ export function CreditCardReconciliationsSection({
   expanded,
 }: CreditCardReconciliationsSectionProps) {
   const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards.reconciliations');
   const router = useRouter();
 
@@ -190,15 +190,10 @@ export function CreditCardReconciliationsSection({
                                 {formatPeriodLabel(statement.periodStart, statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-xs text-muted-foreground">
-                                {formatDateForLocale(statement.periodStart, locale)} →{' '}
-                                {formatDateForLocale(statement.periodEnd, locale)}
+                                {fmt.date(statement.periodStart)} → {fmt.date(statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(
-                                  statement.computedBalance,
-                                  locale,
-                                  statement.currency,
-                                )}{' '}
+                                {fmt.amount(statement.computedBalance, statement.currency)}{' '}
                                 <span className="text-paragraph-xs text-muted-foreground">
                                   {statement.currency}
                                 </span>

@@ -11,7 +11,7 @@ import {
   formatTimestampDate,
   formatValue,
   valueColor,
-} from '@/lib/utils/format';
+} from '@/lib/i18n/format';
 
 describe('formatValue', () => {
   it('groups thousands per locale and strips .00 for integers', () => {

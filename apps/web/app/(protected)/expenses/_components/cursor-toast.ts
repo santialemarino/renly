@@ -1,11 +1,11 @@
 import type { PlanCursorChange } from '@/app/(protected)/expenses/expenses-actions';
-import { formatDateForLocale } from '@/lib/utils/format';
 
 // Resolves the translation key + parameters for the cursor-change toast line that
 // extends the success toast on create / update / delete (Phase 3, follow-up Item 7).
 // Direction selects the namespace (`cursorAdvanceToast` vs `cursorReverseToast`);
-// plan-specific branches pick the right key. Date values are formatted via the locale
-// rather than passed as raw ISO strings so the toast reads naturally to the user.
+// plan-specific branches pick the right key. Date values are formatted via the passed
+// `formatDate` (a locale-bound formatter from `useFormatters`) rather than raw ISO
+// strings so the toast reads naturally to the user.
 // Returns null when the cursorChange carries no meaningful payload (defensive — the
 // backend only emits advance_change / reverse_change when something moved, but null-safe
 // routing here keeps the call sites simple). totalCount for installments comes from the
@@ -22,7 +22,7 @@ interface CursorToastResolution {
 export function resolveCursorToast(
   cursorChange: PlanCursorChange,
   direction: ToastDirection,
-  locale: string,
+  formatDate: (iso: string) => string,
 ): CursorToastResolution | null {
   const ns = direction === 'advance' ? 'cursorAdvanceToast' : 'cursorReverseToast';
   const { planType, planName, newCursor, previousCursor, totalCount } = cursorChange;
@@ -32,7 +32,7 @@ export function resolveCursorToast(
     // or re-activate on reverse, so there's no archive branch here.
     return {
       key: `${ns}.subscription`,
-      params: { planName, newCursor: formatDateForLocale(newCursor, locale) },
+      params: { planName, newCursor: formatDate(newCursor) },
     };
   }
 
@@ -47,7 +47,7 @@ export function resolveCursorToast(
     }
     return {
       key: `${ns}.obligation`,
-      params: { planName, newCursor: formatDateForLocale(newCursor, locale) },
+      params: { planName, newCursor: formatDate(newCursor) },
     };
   }
 

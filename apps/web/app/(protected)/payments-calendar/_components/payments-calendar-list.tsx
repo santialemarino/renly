@@ -8,8 +8,8 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatAmount } from '@/lib/utils/currency';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 interface PaymentsCalendarListProps {
@@ -52,6 +52,7 @@ export async function PaymentsCalendarList({
 }: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
   const locale = await getLocale();
+  const fmt = await getFormatters();
 
   if (items.length === 0) {
     const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
@@ -139,9 +140,8 @@ export async function PaymentsCalendarList({
                     </div>
                     <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
                       <span>
-                        {formatAmount(
+                        {fmt.amount(
                           displayAmount,
-                          locale,
                           item.convertedAmount ? activeCurrency : item.currency,
                         )}
                       </span>

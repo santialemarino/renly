@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, ListChecks, Pencil, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
@@ -21,8 +21,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField } from '@/lib/api/installments';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface InstallmentsTableProps {
   installments: Installment[];
@@ -39,8 +38,8 @@ export function InstallmentsTable({
   activeCurrency,
   firstRun,
 }: InstallmentsTableProps) {
-  const locale = useLocale();
   const t = useTranslations('installments');
+  const fmt = useFormatters();
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<InstallmentSortField>(
     ROUTES.installments,
@@ -151,18 +150,13 @@ export function InstallmentsTable({
                   <TableRow key={inst.id} className={!inst.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{inst.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(
-                        installmentDisplay,
-                        locale,
-                        isConverted ? activeCurrency : inst.currency,
-                      )}
+                      {fmt.amount(installmentDisplay, isConverted ? activeCurrency : inst.currency)}
                       {currencySuffix}
                     </TableCell>
                     <TableCell className="text-paragraph-sm text-muted-foreground tabular-nums">
                       <div>
-                        {formatAmount(
+                        {fmt.amount(
                           String(totalToPay),
-                          locale,
                           isConverted ? activeCurrency : inst.currency,
                         )}
                         {currencySuffix}
@@ -170,7 +164,7 @@ export function InstallmentsTable({
                       {interestAmount !== null && (
                         <div className="text-paragraph-xs">
                           {t('table.interestSubLine', {
-                            amount: `${formatAmount(String(interestAmount), locale, isConverted ? activeCurrency : inst.currency)}${currencySuffix}`,
+                            amount: `${fmt.amount(String(interestAmount), isConverted ? activeCurrency : inst.currency)}${currencySuffix}`,
                           })}
                         </div>
                       )}
@@ -178,9 +172,7 @@ export function InstallmentsTable({
                     <TableCell className="text-paragraph-sm-medium tabular-nums">
                       {progressLabel}
                     </TableCell>
-                    <TableCell>
-                      {inst.nextCuotaDate ? formatDateForLocale(inst.nextCuotaDate, locale) : '—'}
-                    </TableCell>
+                    <TableCell>{inst.nextCuotaDate ? fmt.date(inst.nextCuotaDate) : '—'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {inst.paymentMethod ? t(`paymentMethods.${inst.paymentMethod}`) : '—'}
                     </TableCell>

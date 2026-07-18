@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, EyeOff, Minus } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Card,
@@ -21,15 +21,15 @@ import {
 import { cn } from '@repo/ui/lib';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentsSummaryResponse } from '@/lib/api/metrics';
-import { formatSignedPct, formatValue } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface InvestorDashboardSummaryTableProps {
   summary: InvestmentsSummaryResponse;
 }
 
 export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSummaryTableProps) {
-  const locale = useLocale();
   const t = useTranslations('investorDashboard');
+  const fmt = useFormatters();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [hideInactive, setHideInactive] = useState(false);
@@ -95,12 +95,10 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                   >
                     <TableCell className="text-paragraph-sm-medium">{item.name}</TableCell>
                     <TableCell className="text-right text-paragraph-sm tabular-nums">
-                      {item.currentValue !== null
-                        ? formatValue(item.currentValue, { locale })
-                        : '—'}
+                      {item.currentValue !== null ? fmt.value(item.currentValue) : '—'}
                     </TableCell>
                     <TableCell className="text-right text-paragraph-sm tabular-nums">
-                      {formatValue(item.investedCapital, { locale })}
+                      {fmt.value(item.investedCapital)}
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -112,9 +110,7 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                             : 'text-red-500',
                       )}
                     >
-                      {item.absoluteGain !== null
-                        ? formatValue(item.absoluteGain, { locale })
-                        : '—'}
+                      {item.absoluteGain !== null ? fmt.value(item.absoluteGain) : '—'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div
@@ -127,9 +123,7 @@ export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSumm
                               : 'text-red-500',
                         )}
                       >
-                        {item.monthChangePct !== null
-                          ? formatSignedPct(item.monthChangePct, locale)
-                          : '—'}
+                        {item.monthChangePct !== null ? fmt.signedPct(item.monthChangePct) : '—'}
                         {!isChangeZero &&
                           ((item.monthChangePct ?? 0) > 0 ? (
                             <ArrowUp className="size-3.5" />

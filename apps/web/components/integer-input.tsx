@@ -9,7 +9,7 @@ import {
   blockSignKeys,
   composeKeyHandlers,
   sanitizeIntegerPaste,
-} from '@/lib/utils/numeric-input';
+} from '@/lib/i18n/numeric-input';
 
 interface IntegerInputProps {
   value?: string;

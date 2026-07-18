@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
 import {
@@ -39,7 +39,7 @@ import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
-import { formatAmount } from '@/lib/utils/currency';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface InstallmentFormDialogProps {
   open: boolean;
@@ -68,9 +68,9 @@ export function InstallmentFormDialog({
   creditCards,
   onSuccess,
 }: InstallmentFormDialogProps) {
-  const locale = useLocale();
   const t = useTranslations('installments');
   const tCommon = useTranslations('common');
+  const fmt = useFormatters();
 
   const schema = useMemo(
     () =>
@@ -371,26 +371,23 @@ export function InstallmentFormDialog({
                       {watchedHasInterest && computedInterest !== null ? (
                         <>
                           {t('form.derived.totalToPay', {
-                            amount: formatAmount(
+                            amount: fmt.amount(
                               String(computedTotalToPay),
-                              locale,
                               watchedCurrency || undefined,
                             ),
                           })}
                           {' · '}
                           {t('form.derived.interest', {
-                            amount: formatAmount(
+                            amount: fmt.amount(
                               String(computedInterest),
-                              locale,
                               watchedCurrency || undefined,
                             ),
                           })}
                         </>
                       ) : (
                         t('form.derived.total', {
-                          amount: formatAmount(
+                          amount: fmt.amount(
                             String(computedTotalToPay),
-                            locale,
                             watchedCurrency || undefined,
                           ),
                         })

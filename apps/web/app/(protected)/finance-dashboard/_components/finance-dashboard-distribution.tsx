@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
@@ -24,7 +24,7 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
-import { formatPct, formatValue } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 type Mode = 'expense' | 'income';
 
@@ -37,7 +37,7 @@ export function FinanceDashboardDistribution({
   expenseBreakdown,
   incomeBreakdown,
 }: FinanceDashboardDistributionProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('financeDashboard');
   const tCommon = useTranslations('common');
   const [mode, setMode] = useState<Mode>('expense');
@@ -128,7 +128,7 @@ export function FinanceDashboardDistribution({
                             {entry.name}
                           </span>
                           <span className="shrink-0 text-paragraph-xs-semibold">
-                            {formatPct(entry.percentage, locale)}%
+                            {fmt.pct(entry.percentage)}%
                           </span>
                         </div>
                       ))}
@@ -160,7 +160,7 @@ export function FinanceDashboardDistribution({
                       </Pie>
                       <Tooltip
                         animationDuration={TOOLTIP_ANIMATION_DURATION}
-                        formatter={(value) => formatValue(Number(value), { locale, compact: true })}
+                        formatter={(value) => fmt.value(Number(value), { compact: true })}
                         contentStyle={{
                           backgroundColor: TOOLTIP_BG,
                           color: TOOLTIP_TEXT,

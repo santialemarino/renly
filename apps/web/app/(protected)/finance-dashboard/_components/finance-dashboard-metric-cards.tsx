@@ -1,19 +1,20 @@
 'use client';
 
 import { CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import type { FinanceOverview } from '@/lib/api/finance-metrics';
-import { formatSignedPct, formatValue, valueColor } from '@/lib/utils/format';
+import { valueColor } from '@/lib/i18n/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface FinanceDashboardMetricCardsProps {
   overview: FinanceOverview;
 }
 
 export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetricCardsProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('financeDashboard');
 
   return (
@@ -21,13 +22,11 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
       {/* Total Income */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalIncome')}</span>
-        <p className="text-heading-3 text-emerald-600">
-          {formatValue(overview.totalIncome, { locale })}
-        </p>
+        <p className="text-heading-3 text-emerald-600">{fmt.value(overview.totalIncome)}</p>
         {overview.incomeChangePct !== null && overview.incomeChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
             <span className={cn('text-paragraph-xs', valueColor(overview.incomeChangePct))}>
-              {formatSignedPct(overview.incomeChangePct, locale)} {t('cards.vsPreviousPeriod')}
+              {fmt.signedPct(overview.incomeChangePct)} {t('cards.vsPreviousPeriod')}
             </span>
             {overview.incomeChangePct > 0 ? (
               <TrendingUp className="size-3.5 text-emerald-600" />
@@ -41,13 +40,11 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
       {/* Total Expenses */}
       <Card compact>
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.totalExpenses')}</span>
-        <p className="text-heading-3 text-red-500">
-          {formatValue(overview.totalExpenses, { locale })}
-        </p>
+        <p className="text-heading-3 text-red-500">{fmt.value(overview.totalExpenses)}</p>
         {overview.expenseChangePct !== null && overview.expenseChangePct !== 0 && (
           <div className="flex items-center gap-x-1">
             <span className={cn('text-paragraph-xs', valueColor(-overview.expenseChangePct))}>
-              {formatSignedPct(overview.expenseChangePct, locale)} {t('cards.vsPreviousPeriod')}
+              {fmt.signedPct(overview.expenseChangePct)} {t('cards.vsPreviousPeriod')}
             </span>
             {/* For expenses, up is bad (red), down is good (green). */}
             {overview.expenseChangePct > 0 ? (
@@ -64,7 +61,7 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
         <span className="text-paragraph-sm text-muted-foreground">{t('cards.net')}</span>
         <div className="flex items-center gap-x-2">
           <p className={cn('text-heading-3', valueColor(overview.net))}>
-            {formatValue(overview.net, { locale })}
+            {fmt.value(overview.net)}
           </p>
           {overview.net !== 0 &&
             (overview.net > 0 ? (
@@ -87,7 +84,7 @@ export function FinanceDashboardMetricCards({ overview }: FinanceDashboardMetric
               overview.creditCardBalance > 0 ? 'text-red-500' : 'text-muted-foreground',
             )}
           >
-            {formatValue(overview.creditCardBalance, { locale })}
+            {fmt.value(overview.creditCardBalance)}
           </p>
           {overview.creditCardBalance > 0 && <CreditCard className="size-5 text-red-500" />}
         </div>
