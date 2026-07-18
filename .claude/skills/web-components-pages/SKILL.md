@@ -236,6 +236,16 @@ When a form field has a default value (from env vars or elsewhere):
 - **Hint below input**: Use a `"default"` translation with parameterized value: `"Defaults to {value} if left empty."`. Always use `{value}` interpolation — never hardcode the default in the hint string. Don't mention "environment" — just say "defaults".
 - Both the placeholder and hint refer to the same default value, from the same source (env var or constant).
 
+## Formatting & locale
+
+Never thread a `locale` into formatter calls, and never call the pure formatters (`formatValue`, `formatAmount`, `formatDateForLocale`, `formatMonth`, …) directly in a component. Use the locale-bound hook so a call site can't forget the locale (removing the silent `en-US` fallback):
+
+- **Client components:** `const fmt = useFormatters()` (`@/lib/i18n/formatters`) → `fmt.value(n, opts?)`, `fmt.amount(str, currency?)`, `fmt.date(iso, dateFormat?)`, `fmt.month(str)`, `fmt.signedValue`, `fmt.signedPct`, `fmt.pct`, `fmt.ratePct`, `fmt.timestampDate`, `fmt.axisValue`. The hook reads the active locale from next-intl and binds it.
+- **Async Server Components:** `const fmt = await getFormatters()` (`@/lib/i18n/formatters-server`, `server-only`) — the same set, resolving the locale via next-intl on the server.
+- **Raw locale** (for `localeCompare`, an inline `Intl.*` formatter, or `getLocaleTag(...)`) comes from `fmt.locale` — do NOT add a separate `useLocale()` / `getLocale()` alongside `useFormatters()` / `getFormatters()`.
+- **`valueColor`** (sign → color class, no locale) stays a direct import from `@/lib/i18n/format`.
+- The pure formatters, the `LOCALES` registry, and the hook all live in `lib/i18n/` (see web-structure).
+
 ## Comments
 
 - **Default:** Use `//`. Multiple consecutive `//` lines are fine for a sequence of independent remarks.

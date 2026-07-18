@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
@@ -21,7 +21,7 @@ import {
   TOOLTIP_FONT_SIZE,
   TOOLTIP_TEXT,
 } from '@/lib/constants/charts';
-import { formatPct, formatValue } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 const LIABILITIES_COLOR = CHART_COLOR_NEGATIVE;
 
@@ -30,9 +30,9 @@ interface DashboardCompositionProps {
 }
 
 export function DashboardComposition({ composition }: DashboardCompositionProps) {
-  const locale = useLocale();
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
+  const fmt = useFormatters();
 
   const hasData = composition.length > 0;
 
@@ -77,7 +77,7 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
                           {entry.name}
                         </span>
                         <span className="shrink-0 text-paragraph-xs-semibold">
-                          {formatPct(entry.percentage, locale)}%
+                          {fmt.pct(entry.percentage)}%
                         </span>
                       </div>
                     );
@@ -111,7 +111,7 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
                     </Pie>
                     <Tooltip
                       animationDuration={TOOLTIP_ANIMATION_DURATION}
-                      formatter={(value) => [formatValue(Number(value), { locale, compact: true })]}
+                      formatter={(value) => [fmt.value(Number(value), { compact: true })]}
                       contentStyle={{
                         backgroundColor: TOOLTIP_BG,
                         color: TOOLTIP_TEXT,

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, BadgeDollarSign, FileText, Pencil, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -40,8 +40,7 @@ import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/payment-obligations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface PaymentObligationsTableProps {
   obligations: PaymentObligation[];
@@ -60,8 +59,8 @@ export function PaymentObligationsTable({
   activeCurrency,
   firstRun,
 }: PaymentObligationsTableProps) {
-  const locale = useLocale();
   const t = useTranslations('paymentObligations');
+  const fmt = useFormatters();
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } =
     useTableSort<PaymentObligationSortField>(ROUTES.paymentObligations);
@@ -205,23 +204,17 @@ export function PaymentObligationsTable({
                         {showPaidOn && (
                           <span className="text-paragraph-xs text-muted-foreground">
                             {t('table.paidOn', {
-                              date: o.lastPaymentDate
-                                ? formatDateForLocale(o.lastPaymentDate, locale)
-                                : '',
+                              date: o.lastPaymentDate ? fmt.date(o.lastPaymentDate) : '',
                             })}
                           </span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(
-                        displayAmount,
-                        locale,
-                        o.convertedAmount ? activeCurrency : o.currency,
-                      )}{' '}
+                      {fmt.amount(displayAmount, o.convertedAmount ? activeCurrency : o.currency)}{' '}
                       {o.convertedAmount ? '' : o.currency}
                     </TableCell>
-                    <TableCell>{formatDateForLocale(o.nextDueDate, locale)}</TableCell>
+                    <TableCell>{fmt.date(o.nextDueDate)}</TableCell>
                     <TableCell>
                       {o.recurrence ? t(`recurrences.${o.recurrence}`) : t('recurrences.oneOff')}
                     </TableCell>

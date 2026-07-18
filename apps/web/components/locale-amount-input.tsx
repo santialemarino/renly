@@ -6,21 +6,19 @@ import { useLocale } from 'next-intl';
 
 import { Input } from '@repo/ui/components';
 import {
-  formatAmountForInput,
-  getDecimalSeparator,
-  normalizeAmountFromInput,
-} from '@/lib/utils/locale';
-import {
   blockDecimalIfIntegerCurrency,
   blockScientificKeys,
   blockSecondDecimal,
   blockSignKeys,
   blockWrongLocaleDecimal,
   composeKeyHandlers,
+  formatAmountForInput,
+  getDecimalSeparator,
   limitDecimalsInString,
+  normalizeAmountFromInput,
   sanitizeDecimalChars,
   sanitizeDecimalPaste,
-} from '@/lib/utils/numeric-input';
+} from '@/lib/i18n/numeric-input';
 
 interface LocaleAmountInputProps {
   value?: string;

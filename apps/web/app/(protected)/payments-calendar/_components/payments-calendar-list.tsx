@@ -1,4 +1,4 @@
-import { getLocale, getTranslations } from 'next-intl/server';
+import { getTranslations } from 'next-intl/server';
 
 import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -8,8 +8,8 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatAmount } from '@/lib/utils/currency';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 interface PaymentsCalendarListProps {
@@ -51,10 +51,10 @@ export async function PaymentsCalendarList({
   timeZone,
 }: PaymentsCalendarListProps) {
   const t = await getTranslations('paymentsCalendar');
-  const locale = await getLocale();
+  const fmt = await getFormatters();
 
   if (items.length === 0) {
-    const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
+    const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(fmt.locale), {
       month: 'long',
     });
     return (
@@ -85,7 +85,7 @@ export async function PaymentsCalendarList({
         const dayItems = groups.get(dateStr) ?? [];
         const isToday = dateStr === todayIso;
         const day = new Date(`${dateStr}T00:00:00`);
-        const dayLabel = day.toLocaleDateString(getLocaleTag(locale), {
+        const dayLabel = day.toLocaleDateString(getLocaleTag(fmt.locale), {
           weekday: 'long',
           day: 'numeric',
         });
@@ -139,9 +139,8 @@ export async function PaymentsCalendarList({
                     </div>
                     <div className="flex items-baseline gap-x-1.5 text-paragraph-sm tabular-nums">
                       <span>
-                        {formatAmount(
+                        {fmt.amount(
                           displayAmount,
-                          locale,
                           item.convertedAmount ? activeCurrency : item.currency,
                         )}
                       </span>

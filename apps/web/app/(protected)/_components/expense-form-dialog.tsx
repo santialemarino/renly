@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -54,9 +54,8 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
 
 // Pre-fill payload passed by the obligations table "Mark paid" action (Phase 3, Step E).
 // When supplied (and `expense` is absent), the form opens in CREATE mode with values
@@ -171,7 +170,7 @@ export function ExpenseFormDialog({
   onSuccess,
   onLinkedPlanSave,
 }: ExpenseFormDialogProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
@@ -280,7 +279,7 @@ export function ExpenseFormDialog({
       watchedCreditCardId,
     ) === 'mismatch';
 
-  const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
+  const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), fmt.locale);
 
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   // cyclesToAdvance defaults to '1' only on a recurring-obligation prefill (Phase 3,
@@ -438,11 +437,11 @@ export function ExpenseFormDialog({
   function announceSave(baseMessage: string, outcome: ExpenseMutationOutcome) {
     const lines: string[] = [baseMessage];
     if (outcome.reverse) {
-      const r = resolveCursorToast(outcome.reverse, 'reverse', locale);
+      const r = resolveCursorToast(outcome.reverse, 'reverse', fmt.date);
       if (r) lines.push(t(`form.${r.key}`, r.params));
     }
     if (outcome.advance) {
-      const a = resolveCursorToast(outcome.advance, 'advance', locale);
+      const a = resolveCursorToast(outcome.advance, 'advance', fmt.date);
       if (a) lines.push(t(`form.${a.key}`, a.params));
     }
     toast.success(lines.join(' '));
@@ -626,9 +625,8 @@ export function ExpenseFormDialog({
                               {cyclesToAdvanceNum > 1 && amountNum > 0 && (
                                 <p className="text-paragraph-sm text-muted-foreground">
                                   {t('form.cyclesToAdvance.totalPreview', {
-                                    total: formatAmount(
+                                    total: fmt.amount(
                                       String(cyclesToAdvanceNum * amountNum),
-                                      locale,
                                       watchedCurrency || undefined,
                                     ),
                                   })}
@@ -878,17 +876,11 @@ export function ExpenseFormDialog({
               {cycleAdvanceDisplay.preview.multiJump
                 ? t('form.cycleAdvance.descriptionMultiJump', {
                     planName: cycleAdvanceDisplay.planName,
-                    nextExpectedDate: formatDateForLocale(
-                      cycleAdvanceDisplay.preview.nextExpectedDate,
-                      locale,
-                    ),
+                    nextExpectedDate: fmt.date(cycleAdvanceDisplay.preview.nextExpectedDate),
                   })
                 : t('form.cycleAdvance.descriptionBackDated', {
                     planName: cycleAdvanceDisplay.planName,
-                    nextExpectedDate: formatDateForLocale(
-                      cycleAdvanceDisplay.preview.nextExpectedDate,
-                      locale,
-                    ),
+                    nextExpectedDate: fmt.date(cycleAdvanceDisplay.preview.nextExpectedDate),
                   })}
             </p>
           )}

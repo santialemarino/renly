@@ -2,13 +2,13 @@
 
 import { useMemo } from 'react';
 import { CircleDot } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { cn } from '@repo/ui/lib';
 import { FormCombobox, type FormComboboxOption } from '@/components/form-combobox';
 import type { Installment } from '@/lib/api/installments';
 import type { Subscription } from '@/lib/api/subscriptions';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // "Linked to subscription / installment" dropdown on the expense form (Phase 3, follow-up 3a).
 // One combined dropdown with two groups (Subscriptions + Installments). Sibling of
@@ -134,7 +134,7 @@ export function LinkedSubInstallmentSelect({
   formCreditCardId,
   onChange,
 }: LinkedSubInstallmentSelectProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
 
@@ -216,7 +216,7 @@ export function LinkedSubInstallmentSelect({
         />
         <span className="truncate">{sub.name}</span>
         <span className="text-paragraph-xs text-muted-foreground">
-          {tCommon('nextCycleHint', { date: formatDateForLocale(sub.nextBillingDate, locale) })}
+          {tCommon('nextCycleHint', { date: fmt.date(sub.nextBillingDate) })}
         </span>
       </div>
     );
@@ -231,7 +231,7 @@ export function LinkedSubInstallmentSelect({
         />
         <span className="truncate">{installmentLabel(inst)}</span>
         <span className="text-paragraph-xs text-muted-foreground">
-          {tCommon('nextCycleHint', { date: formatDateForLocale(nextChargeDate, locale) })}
+          {tCommon('nextCycleHint', { date: fmt.date(nextChargeDate) })}
         </span>
       </div>
     );

@@ -2,22 +2,20 @@ import type { KeyboardEvent } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  formatAmountForInput,
-  getDecimalSeparator,
-  normalizeAmountFromInput,
-} from '@/lib/utils/locale';
-import {
   blockAllSeparators,
   blockDecimalIfIntegerCurrency,
   blockScientificKeys,
   blockSecondDecimal,
   blockSignKeys,
   blockWrongLocaleDecimal,
+  formatAmountForInput,
+  getDecimalSeparator,
   limitDecimalsInString,
+  normalizeAmountFromInput,
   sanitizeDecimalChars,
   sanitizeDecimalPaste,
   sanitizeIntegerPaste,
-} from '@/lib/utils/numeric-input';
+} from '@/lib/i18n/numeric-input';
 
 // Minimal fake keystroke event — the rules only read `key`, `currentTarget`, and `preventDefault`.
 function keyEvent(

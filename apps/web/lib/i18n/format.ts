@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 
 import { getDateFnsLocale, getLocaleTag } from '@/lib/i18n/locales';
 
-interface FormatValueOptions {
+export interface FormatValueOptions {
   locale?: string;
   compact?: boolean;
   // Max fraction digits for non-compact output (ISO-4217 sub-unit precision when currency-driven).

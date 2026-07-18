@@ -1,6 +1,6 @@
 'use client';
 
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Badge,
@@ -13,7 +13,7 @@ import {
 } from '@repo/ui/components';
 import type { Feedback } from '@/lib/api/feedback';
 import type { FeedbackCategory } from '@/lib/constants/feedback';
-import { formatTimestampDate } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // Badge tone per category (outline base — quiet status chips).
 const CATEGORY_CLASS: Record<FeedbackCategory, string> = {
@@ -28,9 +28,9 @@ interface AdminFeedbackProps {
 }
 
 export function AdminFeedback({ feedback }: AdminFeedbackProps) {
-  const locale = useLocale();
   const t = useTranslations('adminFeedback');
   const tFeedback = useTranslations('feedback');
+  const fmt = useFormatters();
 
   if (feedback.length === 0) {
     return (
@@ -64,7 +64,7 @@ export function AdminFeedback({ feedback }: AdminFeedbackProps) {
                 {item.message}
               </TableCell>
               <TableCell className="text-muted-foreground">
-                {formatTimestampDate(item.createdAt, locale)}
+                {fmt.timestampDate(item.createdAt)}
               </TableCell>
             </TableRow>
           ))}

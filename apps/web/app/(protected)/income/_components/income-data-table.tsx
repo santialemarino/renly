@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CircleDollarSign, Pencil, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Pagination,
@@ -28,8 +28,7 @@ import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 function RowActions({
   income,
@@ -102,7 +101,7 @@ export function IncomeDataTable({
   activeCurrency?: string;
   firstRun?: boolean;
 }) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('income');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -160,11 +159,10 @@ export function IncomeDataTable({
             ) : (
               items.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell>{formatDateForLocale(entry.date, locale)}</TableCell>
+                  <TableCell>{fmt.date(entry.date)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(
+                    {fmt.amount(
                       entry.convertedAmount ?? entry.amount,
-                      locale,
                       entry.convertedAmount ? activeCurrency : entry.currency,
                     )}
                   </TableCell>

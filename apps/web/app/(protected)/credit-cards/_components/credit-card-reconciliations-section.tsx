@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Info, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Badge,
@@ -24,9 +24,8 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
 
 interface CreditCardReconciliationsSectionProps {
   cardId: number;
@@ -39,7 +38,7 @@ export function CreditCardReconciliationsSection({
   bucketCurrencies,
   expanded,
 }: CreditCardReconciliationsSectionProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards.reconciliations');
   const router = useRouter();
 
@@ -93,7 +92,10 @@ export function CreditCardReconciliationsSection({
     // previous month for an end-of-month period (matches `formatMonth` +
     // `formatDateForLocale`).
     const endDate = new Date(end + 'T00:00:00');
-    return endDate.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: 'numeric' });
+    return endDate.toLocaleDateString(getLocaleTag(fmt.locale), {
+      month: 'short',
+      year: 'numeric',
+    });
   }
 
   function lastReconciledLabel(list: StatementPeriod[]): string {
@@ -190,15 +192,10 @@ export function CreditCardReconciliationsSection({
                                 {formatPeriodLabel(statement.periodStart, statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-xs text-muted-foreground">
-                                {formatDateForLocale(statement.periodStart, locale)} →{' '}
-                                {formatDateForLocale(statement.periodEnd, locale)}
+                                {fmt.date(statement.periodStart)} → {fmt.date(statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {formatAmount(
-                                  statement.computedBalance,
-                                  locale,
-                                  statement.currency,
-                                )}{' '}
+                                {fmt.amount(statement.computedBalance, statement.currency)}{' '}
                                 <span className="text-paragraph-xs text-muted-foreground">
                                   {statement.currency}
                                 </span>

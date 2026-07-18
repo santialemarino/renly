@@ -17,6 +17,15 @@ http://localhost:3000
 
 From repo root: `pnpm check:web` — Next typegen + `tsc --noEmit`. Same as pre-commit/CI.
 
+## Unit tests (Vitest)
+
+Pure-function tests (the locale/formatting layer + EN/ES keyset parity) live in `tests/unit/`. Config in `vitest.config.ts` (node environment; the `@/*` alias is wired via `vite-tsconfig-paths`). Scripts:
+
+- `pnpm test` — watch mode
+- `pnpm test:run` — single run (what root `pnpm test:web` calls)
+
+From repo root: `pnpm test:web`. Runs on every commit (pre-commit) and in CI Web. See the `testing` skill for what belongs here vs E2E.
+
 ## E2E tests (Playwright)
 
 Tests live in `tests/e2e/`. Config in `playwright.config.ts`. Scripts:

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -23,9 +23,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
 
 interface ReconciliationFormDialogProps {
   open: boolean;
@@ -42,7 +41,7 @@ export function ReconciliationFormDialog({
   statement,
   onSuccess,
 }: ReconciliationFormDialogProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('creditCards.reconciliations');
   const tCommon = useTranslations('common');
 
@@ -108,8 +107,8 @@ export function ReconciliationFormDialog({
           <DialogTitle>{t('form.title')}</DialogTitle>
           <p className="text-paragraph-sm text-muted-foreground">
             {t('form.periodRange', {
-              start: formatDateForLocale(statement.periodStart, locale),
-              end: formatDateForLocale(statement.periodEnd, locale),
+              start: fmt.date(statement.periodStart),
+              end: fmt.date(statement.periodEnd),
             })}
           </p>
           {isStale && <StyledHint variant="warning">{t('form.staleBanner')}</StyledHint>}
@@ -117,7 +116,7 @@ export function ReconciliationFormDialog({
             <StyledHint variant="info">
               {t('form.replaceBanner', {
                 date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(
-                  getLocaleTag(locale),
+                  getLocaleTag(fmt.locale),
                 ),
               })}
             </StyledHint>
@@ -134,7 +133,7 @@ export function ReconciliationFormDialog({
             <div className="flex flex-col gap-y-1">
               <span className="text-paragraph-sm-medium">{t('form.computedBalance')}</span>
               <span className="text-paragraph tabular-nums">
-                {formatAmount(statement.computedBalance, locale, statement.currency)}{' '}
+                {fmt.amount(statement.computedBalance, statement.currency)}{' '}
                 <span className="text-paragraph-xs text-muted-foreground">
                   {statement.currency}
                 </span>
@@ -168,7 +167,7 @@ export function ReconciliationFormDialog({
                   {t('form.difference')}
                 </span>
                 <span className="text-paragraph tabular-nums">
-                  {diff === 0 ? '0' : formatAmount(String(diff), locale, statement.currency)}{' '}
+                  {diff === 0 ? '0' : fmt.amount(String(diff), statement.currency)}{' '}
                   <span className="text-paragraph-xs text-muted-foreground">
                     {statement.currency}
                   </span>
@@ -176,12 +175,12 @@ export function ReconciliationFormDialog({
                 <span className="text-paragraph-xs text-muted-foreground">
                   {diffSide === 'expense' &&
                     t('form.differenceExpensePreview', {
-                      amount: formatAmount(String(Math.abs(diff)), locale, statement.currency),
+                      amount: fmt.amount(String(Math.abs(diff)), statement.currency),
                       currency: statement.currency,
                     })}
                   {diffSide === 'income' &&
                     t('form.differenceIncomePreview', {
-                      amount: formatAmount(String(Math.abs(diff)), locale, statement.currency),
+                      amount: fmt.amount(String(Math.abs(diff)), statement.currency),
                       currency: statement.currency,
                     })}
                   {diffSide === 'zero' && t('form.differenceZeroPreview')}

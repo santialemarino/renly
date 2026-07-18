@@ -190,7 +190,7 @@ Only USD, ARS, BRL, EUR, and GBP have exchange rate support. When a user selects
 
 - When conversion is not possible, all monetary values fall back to their `base_currency` (same as "Original" mode). No error — the page renders normally, just without conversion.
 
-**Supported check:** `lib/utils/currency.ts` — `isCurrencySupported()` checks against `['USD', 'ARS', 'BRL', 'EUR', 'GBP']`.
+**Supported check:** `lib/i18n/currency.ts` — `isCurrencySupported()` checks against `['USD', 'ARS', 'BRL', 'EUR', 'GBP']`.
 
 ### 8. Unconvertible investments in metrics
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { KeyRound, Plus, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import {
@@ -21,15 +21,15 @@ import { CopyButton } from '@/app/(protected)/integrations/_components/copy-butt
 import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
-import { formatTimestampDate } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface IntegrationsApiKeysProps {
   initialKeys: ApiKey[];
 }
 
 export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
-  const locale = useLocale();
   const t = useTranslations('integrations');
+  const fmt = useFormatters();
 
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [createOpen, setCreateOpen] = useState(false);
@@ -166,9 +166,9 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
                     {key.name || t('apiKeys.unnamed')}
                   </span>
                   <span className="text-paragraph-xs text-muted-foreground">
-                    {t('apiKeys.created', { date: formatTimestampDate(key.createdAt, locale) })}
+                    {t('apiKeys.created', { date: fmt.timestampDate(key.createdAt) })}
                     {key.lastUsedAt &&
-                      ` · ${t('apiKeys.lastUsed', { date: formatTimestampDate(key.lastUsedAt, locale) })}`}
+                      ` · ${t('apiKeys.lastUsed', { date: fmt.timestampDate(key.lastUsedAt) })}`}
                   </span>
                 </div>
               </div>

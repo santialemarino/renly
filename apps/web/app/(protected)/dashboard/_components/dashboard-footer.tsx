@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingUp, Wallet } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -9,8 +9,8 @@ import { LinkCard } from '@/app/(protected)/dashboard/_components/link-card';
 import { ROUTES } from '@/config/routes';
 import type { DashboardLiquidity, DashboardOverview, LiquidityState } from '@/lib/api/dashboard';
 import { INCOME_EXPENSE_RATIO_BREAKEVEN } from '@/lib/constants/health-thresholds';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { getLocaleTag } from '@/lib/i18n/locales';
-import { formatRatePct, formatValue } from '@/lib/utils/format';
 
 // Returns color class for savings rate, comparing the raw ratio (e.g. 0.20) against the user's
 // healthy / moderate thresholds (stored as integer percents like 20 / 10).
@@ -54,10 +54,10 @@ export function DashboardFooter({
   savingsRateModeratePct,
   incomeExpenseRatioHealthy,
 }: DashboardFooterProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('dashboard');
 
-  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(locale), {
+  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(fmt.locale), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -78,7 +78,7 @@ export function DashboardFooter({
               savingsRateColor(overview.savingsRate, savingsRateHealthyPct, savingsRateModeratePct),
             )}
           >
-            {overview.savingsRate !== null ? formatRatePct(overview.savingsRate, locale) : '—'}
+            {overview.savingsRate !== null ? fmt.ratePct(overview.savingsRate) : '—'}
           </p>
           <span className="text-paragraph-xs text-muted-foreground">
             {t('health.savingsRateHint')}
@@ -107,14 +107,14 @@ export function DashboardFooter({
         <Card compact>
           <span className="text-paragraph-sm text-muted-foreground">{t('health.liquidity')}</span>
           <p className={cn('text-heading-3', liquidityColor(liquidity.state))}>
-            {liquidity.ratio !== null ? formatRatePct(liquidity.ratio, locale) : '—'}
+            {liquidity.ratio !== null ? fmt.ratePct(liquidity.ratio) : '—'}
           </p>
           {liquidity.ratio !== null ? (
             <>
               <span className="text-paragraph-xs text-muted-foreground">
                 {t('health.liquidityBreakdown', {
-                  commitments: formatValue(liquidity.fixedMonthlyCommitments, { locale }),
-                  income: formatValue(liquidity.monthlyIncome, { locale }),
+                  commitments: fmt.value(liquidity.fixedMonthlyCommitments),
+                  income: fmt.value(liquidity.monthlyIncome),
                 })}
               </span>
               <span className="text-paragraph-mini text-muted-foreground">

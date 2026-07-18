@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { deleteIncome } from '@/app/(protected)/income/income-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import type { IncomeEntry } from '@/lib/api/income';
-import { formatAmount } from '@/lib/utils/currency';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface IncomeDeleteDialogProps {
   open: boolean;
@@ -22,7 +22,7 @@ export function IncomeDeleteDialog({
   income,
   onSuccess,
 }: IncomeDeleteDialogProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('income');
   const [deleting, setDeleting] = useState(false);
 
@@ -48,7 +48,7 @@ export function IncomeDeleteDialog({
       title={t('delete.title')}
       description={(i) =>
         t('delete.confirm', {
-          amount: formatAmount(i.amount, locale, i.currency),
+          amount: fmt.amount(i.amount, i.currency),
           currency: i.currency,
         })
       }

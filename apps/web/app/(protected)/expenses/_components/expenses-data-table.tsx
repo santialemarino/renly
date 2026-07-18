@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, Receipt, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Pagination,
@@ -36,8 +36,7 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 function RowActions({
   expense,
@@ -142,7 +141,7 @@ export function ExpensesDataTable({
   activeCurrency?: string;
   firstRun?: boolean;
 }) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -211,11 +210,10 @@ export function ExpensesDataTable({
             ) : (
               items.map((expense) => (
                 <TableRow key={expense.id}>
-                  <TableCell>{formatDateForLocale(expense.date, locale)}</TableCell>
+                  <TableCell>{fmt.date(expense.date)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
-                    {formatAmount(
+                    {fmt.amount(
                       expense.convertedAmount ?? expense.amount,
-                      locale,
                       expense.convertedAmount ? activeCurrency : expense.currency,
                     )}
                   </TableCell>

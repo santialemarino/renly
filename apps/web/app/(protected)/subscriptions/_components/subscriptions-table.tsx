@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive, ArchiveRestore, Pencil, RefreshCw, Trash2 } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
@@ -20,8 +20,7 @@ import { ROUTES } from '@/config/routes';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
-import { formatAmount } from '@/lib/utils/currency';
-import { formatDateForLocale } from '@/lib/utils/format';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 interface SubscriptionsTableProps {
   subscriptions: Subscription[];
@@ -40,8 +39,8 @@ export function SubscriptionsTable({
   activeCurrency,
   firstRun,
 }: SubscriptionsTableProps) {
-  const locale = useLocale();
   const t = useTranslations('subscriptions');
+  const fmt = useFormatters();
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<SubscriptionSortField>(
     ROUTES.subscriptions,
@@ -131,15 +130,14 @@ export function SubscriptionsTable({
                   <TableRow key={sub.id} className={!sub.isActive ? 'opacity-60' : undefined}>
                     <TableCell className="text-paragraph-sm-medium">{sub.name}</TableCell>
                     <TableCell className="text-paragraph-sm tabular-nums">
-                      {formatAmount(
+                      {fmt.amount(
                         displayAmount,
-                        locale,
                         sub.convertedAmount ? activeCurrency : sub.currency,
                       )}{' '}
                       {sub.convertedAmount ? '' : sub.currency}
                     </TableCell>
                     <TableCell>{t(`billingCycles.${sub.billingCycle}`)}</TableCell>
-                    <TableCell>{formatDateForLocale(sub.nextBillingDate, locale)}</TableCell>
+                    <TableCell>{fmt.date(sub.nextBillingDate)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {sub.paymentMethod ? t(`paymentMethods.${sub.paymentMethod}`) : '—'}
                     </TableCell>

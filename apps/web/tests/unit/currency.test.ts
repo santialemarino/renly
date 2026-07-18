@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatAmount } from '@/lib/utils/currency';
+import { formatAmount } from '@/lib/i18n/currency';
 
 describe('formatAmount', () => {
   it('defaults to 2 fraction digits without a currency', () => {
