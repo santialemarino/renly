@@ -4,6 +4,8 @@ import {
   formatDateForLocale,
   formatList,
   formatMonth,
+  formatMonthLong,
+  formatMonthYear,
   formatPct,
   formatRatePct,
   formatRatio,
@@ -11,6 +13,7 @@ import {
   formatSignedValue,
   formatTimestampDate,
   formatValue,
+  formatWeekdayDay,
   type FormatValueOptions,
 } from '@/lib/i18n/format';
 
@@ -33,6 +36,9 @@ export function createFormatters(locale: string, timeZone?: string) {
     ratePct: (pct: number) => formatRatePct(pct, locale),
     ratio: (value: number) => formatRatio(value, locale),
     month: (dateStr: string) => formatMonth(dateStr, locale),
+    monthLong: (year: number, month: number) => formatMonthLong(year, month, locale),
+    monthYear: (dateStr: string) => formatMonthYear(dateStr, locale),
+    weekdayDay: (dateStr: string) => formatWeekdayDay(dateStr, locale),
     date: (iso: string, dateFormat?: string) => formatDateForLocale(iso, locale, dateFormat),
     timestampDate: (iso: string) => formatTimestampDate(iso, locale, timeZone),
     axisValue: (value: number) => formatAxisValue(value, locale),

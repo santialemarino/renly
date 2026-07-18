@@ -97,9 +97,16 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
       const localeChanged = prevLocaleRef.current !== locale;
       prevLocaleRef.current = locale;
       if (localeChanged && (displayValue.endsWith('.') || displayValue.endsWith(','))) return;
-      if (normalizeAmountFromInput(displayValue, locale) !== value) {
-        setDisplayValue(formatAmountForInput(value, locale));
+      // Cap the incoming value to the currency's precision too, so a value loaded with more
+      // decimals than allowed (form.reset, editing a record, a field array) is truncated in BOTH
+      // the display and form state — mirroring the write path. When it already fits, `capped ===
+      // value` and this is behavior-identical to a plain resync. The precision effect below still
+      // handles a precision *tightening* while value/locale are unchanged.
+      const capped = limitDecimalsInString(value, '.', effectiveMaxDecimals);
+      if (normalizeAmountFromInput(displayValue, locale) !== capped) {
+        setDisplayValue(formatAmountForInput(capped, locale));
       }
+      if (capped !== value) onChange?.(capped);
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value, locale]);
 

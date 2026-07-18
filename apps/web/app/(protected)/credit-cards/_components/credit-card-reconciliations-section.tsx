@@ -25,7 +25,6 @@ import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-acti
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
-import { getLocaleTag } from '@/lib/i18n/locales';
 
 interface CreditCardReconciliationsSectionProps {
   cardId: number;
@@ -86,23 +85,18 @@ export function CreditCardReconciliationsSection({
     return statement.reconciliation.isStale ? 'stale' : 'reconciled';
   }
 
-  function formatPeriodLabel(start: string, end: string): string {
-    // YYYY-MM-DD -> Locale-aware short label using period_end as the anchor.
-    // Anchor at local midnight so negative-UTC-offset users don't read the
-    // previous month for an end-of-month period (matches `formatMonth` +
-    // `formatDateForLocale`).
-    const endDate = new Date(end + 'T00:00:00');
-    return endDate.toLocaleDateString(getLocaleTag(fmt.locale), {
-      month: 'short',
-      year: 'numeric',
-    });
+  function formatPeriodLabel(end: string): string {
+    // Short month + full year, anchored on period_end. `fmt.monthYear` anchors the date-only
+    // value at local midnight (never timezone-shifted), so a negative-UTC-offset user doesn't
+    // read the previous month for an end-of-month period.
+    return fmt.monthYear(end);
   }
 
   function lastReconciledLabel(list: StatementPeriod[]): string {
     const latestReconciled = list.find((s) => s.reconciliation && !s.reconciliation.isStale);
     if (!latestReconciled) return t('notYetReconciled');
     return t('lastReconciled', {
-      period: formatPeriodLabel(latestReconciled.periodStart, latestReconciled.periodEnd),
+      period: formatPeriodLabel(latestReconciled.periodEnd),
     });
   }
 
@@ -189,7 +183,7 @@ export function CreditCardReconciliationsSection({
                           return (
                             <TableRow key={`${statement.periodStart}-${statement.periodEnd}`}>
                               <TableCell className="text-paragraph-sm-medium">
-                                {formatPeriodLabel(statement.periodStart, statement.periodEnd)}
+                                {formatPeriodLabel(statement.periodEnd)}
                               </TableCell>
                               <TableCell className="text-paragraph-xs text-muted-foreground">
                                 {fmt.date(statement.periodStart)} → {fmt.date(statement.periodEnd)}

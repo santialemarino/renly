@@ -22,9 +22,10 @@ class InvestmentCategory(StrEnum):
     term_deposit = "term_deposit"
 
 
-# Supported currency code — the canonical list of currencies Renly handles (investment base
-# currencies, snapshots/transactions, and finance entries). app/domain/currency.py derives
-# SUPPORTED_CURRENCIES from this enum so both stay in sync. Order matches the DB enum, where
+# Supported currency code — the single source of truth for the set Renly handles. The DB `currency`
+# enum backs the snapshots/transactions columns; app/domain/currency.py derives SUPPORTED_CURRENCIES
+# from this enum, and the app layer validates investment base currencies + finance entries against
+# that same set (validate_supported_currency) so nothing can drift. Order matches the DB enum, where
 # migration 0009 appends BRL/EUR/GBP after the original ARS/USD.
 class Currency(StrEnum):
     ARS = "ARS"

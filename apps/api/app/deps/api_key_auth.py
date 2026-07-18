@@ -3,11 +3,12 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.db import set_session_user
 from app.deps.db import AdminSessionDep, SessionDep
+from app.http_errors import CodedHTTPException
 from app.models.user import User
 from app.services import api_key_service
 
@@ -20,9 +21,13 @@ async def get_jwt_or_api_key_user(
     admin_session: AdminSessionDep,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_optional)],
 ) -> User:
-    unauthorized = HTTPException(
+    # Carry the same `invalid_auth_token` code as the JWT-only dependency (deps/auth.py) so a
+    # session-expiry on a dual-auth endpoint localizes via the frontend error-code contract
+    # instead of falling back to the raw English detail.
+    unauthorized = CodedHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
+        code="invalid_auth_token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 

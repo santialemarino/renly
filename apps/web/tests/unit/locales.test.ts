@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEFAULT_LOCALE,
@@ -71,7 +71,17 @@ describe('mapBrowserLanguageToSupported', () => {
 });
 
 describe('detectBrowserLanguage', () => {
-  it('always resolves to a supported locale (browser language or default fallback)', () => {
-    expect([...SUPPORTED_LOCALES]).toContain(detectBrowserLanguage());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('maps the browser language to a supported locale', () => {
+    vi.stubGlobal('navigator', { language: 'es-AR' });
+    expect(detectBrowserLanguage()).toBe('es');
+    vi.stubGlobal('navigator', { language: 'pt-BR' });
+    expect(detectBrowserLanguage()).toBe('en');
+  });
+
+  it('falls back to the default locale when navigator is unavailable', () => {
+    vi.stubGlobal('navigator', undefined);
+    expect(detectBrowserLanguage()).toBe(DEFAULT_LOCALE);
   });
 });

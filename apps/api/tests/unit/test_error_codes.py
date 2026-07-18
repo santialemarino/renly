@@ -3,7 +3,8 @@ import json
 import pytest
 from fastapi import HTTPException
 
-from app.domain import InvestmentCurrencyMismatchError
+from app.deps.api_key_auth import get_jwt_or_api_key_user
+from app.domain import InstallmentLockedFieldError, InvestmentCurrencyMismatchError
 from app.domain.errors import DomainError
 from app.http_errors import CodedHTTPException
 from app.main import domain_error_handler, http_exception_handler
@@ -35,6 +36,15 @@ class TestDomainErrorCodes:
         codes = [cls.code for cls in _all_domain_errors()]
         assert len(codes) == len(set(codes)), f"duplicate domain-error codes: {codes}"
 
+    def test_base_defines_a_message_so_the_handler_never_attributeerrors(self):
+        # The app/main.py handler reads exc.message; the base must always expose one.
+        assert isinstance(DomainError.message, str) and DomainError.message
+
+    def test_installment_locked_field_prejoins_fields_for_scalar_placeholder(self):
+        # extra["fields"] is a display-ready string so the frontend's scalar {fields} renders cleanly.
+        exc = InstallmentLockedFieldError(["amount", "interest_rate"])
+        assert exc.extra == {"fields": "amount, interest_rate"}
+
 
 class TestErrorHandlers:
     @pytest.mark.asyncio
@@ -56,3 +66,15 @@ class TestErrorHandlers:
         # A plain HTTPException keeps the bare {detail} shape (frontend falls back to it).
         plain = await http_exception_handler(None, HTTPException(status_code=404, detail="Nope"))
         assert json.loads(plain.body) == {"detail": "Nope"}
+
+
+class TestDualAuthErrorCode:
+    # The dual-auth dependency carries the same invalid_auth_token code as the JWT-only dependency,
+    # so a session-expiry on a dual-auth endpoint localizes instead of showing raw English.
+    @pytest.mark.asyncio
+    async def test_missing_credentials_raise_coded_invalid_auth_token(self):
+        with pytest.raises(CodedHTTPException) as exc_info:
+            await get_jwt_or_api_key_user(session=None, admin_session=None, credentials=None)
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.code == "invalid_auth_token"
+        assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}

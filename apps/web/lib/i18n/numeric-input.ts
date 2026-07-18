@@ -1,16 +1,27 @@
 import type { KeyboardEvent } from 'react';
 
+import { numberFormat } from '@/lib/i18n/intl-cache';
 import { getLocaleTag } from '@/lib/i18n/locales';
+
+/*
+ * The keystroke/sanitize rule kit below assumes the active locale's decimal + group separators
+ * are drawn from `.` and `,` — true for every currently supported locale (en-US "1,234.56",
+ * es-AR "1.234,56"). `getDecimalSeparator`/`getGroupSeparator` themselves are locale-general
+ * (they read `Intl.formatToParts`), but `blockWrongLocaleDecimal`, `blockAllSeparators`, and the
+ * `sanitize*` regexes hardcode the `.`/`,` pair. Adding a locale whose group separator is a space
+ * (fr-FR U+202F) or apostrophe (de-CH) would need those three generalized — the same "when a new
+ * locale is actually added" trigger as the registry's RTL readiness.
+ */
 
 // Returns the locale's decimal separator (e.g. '.' for en-US, ',' for es-AR).
 export function getDecimalSeparator(locale?: string): string {
-  const parts = new Intl.NumberFormat(getLocaleTag(locale)).formatToParts(1.5);
+  const parts = numberFormat(getLocaleTag(locale)).formatToParts(1.5);
   return parts.find((p) => p.type === 'decimal')?.value ?? '.';
 }
 
 // Returns the locale's thousand-group separator (e.g. ',' for en-US, '.' for es-AR).
 export function getGroupSeparator(locale?: string): string {
-  const parts = new Intl.NumberFormat(getLocaleTag(locale)).formatToParts(1234.5);
+  const parts = numberFormat(getLocaleTag(locale)).formatToParts(1234.5);
   return parts.find((p) => p.type === 'group')?.value ?? ',';
 }
 
@@ -58,7 +69,8 @@ export function normalizeAmountFromInput(input: string, locale?: string): string
   if (!input) return '';
   const group = getGroupSeparator(locale);
   const decimal = getDecimalSeparator(locale);
-  return input.split(group).join('').replace(decimal, '.');
+  // split/join (not String.replace, which only swaps the first) so every decimal separator maps to `.`.
+  return input.split(group).join('').split(decimal).join('.');
 }
 
 /*
@@ -197,14 +209,26 @@ export function limitDecimalsInString(
 
 /*
  * Sanitize any text for decimal-mode inputs — strips whitespace and anything
- * that isn't a digit or the locale's decimal separator. Used as the change
- * handler safety net so non-keystroke paths (IME, autofill, drag-drop,
- * programmatic input) can't leak letters or whitespace into form state.
+ * that isn't a digit or the locale's decimal separator, then collapses to a
+ * single decimal separator (keeps the first, drops later ones but keeps their
+ * digits, e.g. `1.2.3` → `1.23`). Used as the change-handler safety net so
+ * non-keystroke paths (IME, autofill, drag-drop, programmatic input) — which
+ * bypass the second-decimal keystroke block — can't leak a multi-decimal string
+ * that would canonicalize to NaN.
  */
 export function sanitizeDecimalChars(text: string, locale?: string): string {
   const decimal = getDecimalSeparator(locale);
   const allowed = decimal === '.' ? /[^0-9.]/g : /[^0-9,]/g;
-  return text.replace(allowed, '');
+  const cleaned = text.replace(allowed, '');
+  const firstIdx = cleaned.indexOf(decimal);
+  if (firstIdx === -1) return cleaned;
+  return (
+    cleaned.slice(0, firstIdx + 1) +
+    cleaned
+      .slice(firstIdx + 1)
+      .split(decimal)
+      .join('')
+  );
 }
 
 /*

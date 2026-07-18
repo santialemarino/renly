@@ -10,10 +10,14 @@
 
 import html
 
+from app.schemas.settings import SUPPORTED_LANGUAGES
 from app.services.email_service import EmailMessage
 
 _PRODUCT_NAME = "Renly"
-_DEFAULT_LOCALE = "en"
+# The email fallback locale is the app's default language, so it can't drift from
+# settings_service.DEFAULT_LANGUAGE (both derive from SUPPORTED_LANGUAGES[0]) — the anti-enumeration
+# sends rely on the two being equal.
+_DEFAULT_LOCALE = SUPPORTED_LANGUAGES[0]
 
 # Localized subject + body per email. Bodies are TEXT (never markup); `{product}`/`{link}` and the
 # feedback placeholders are filled by each builder.

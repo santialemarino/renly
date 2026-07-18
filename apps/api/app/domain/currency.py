@@ -19,9 +19,10 @@ _DOLLAR_RATE_PAIRS: dict[str, ExchangeRatePair] = {
 DOLLAR_RATE_DEFAULT = "mep"
 
 
-# Returns the ExchangeRatePair for USD/ARS based on the dollar preference.
+# Returns the ExchangeRatePair for USD/ARS based on the dollar preference. A falsy or unknown
+# preference both resolve to the DOLLAR_RATE_DEFAULT pair (single default, no drift).
 def get_ars_pair(preference: str | None = None) -> ExchangeRatePair:
-    return _DOLLAR_RATE_PAIRS.get(preference or DOLLAR_RATE_DEFAULT, ExchangeRatePair.USD_ARS_MEP)
+    return _DOLLAR_RATE_PAIRS.get(preference or DOLLAR_RATE_DEFAULT, _DOLLAR_RATE_PAIRS[DOLLAR_RATE_DEFAULT])
 
 
 # Returns True when the currency code has exchange-rate support.
