@@ -19,7 +19,7 @@ From repo root: `pnpm check:web` — Next typegen + `tsc --noEmit`. Same as pre-
 
 ## Unit tests (Vitest)
 
-Pure-function tests (the locale/formatting layer + EN/ES keyset parity) live in `tests/unit/`. Config in `vitest.config.ts` (node environment; the `@/*` alias is wired via `vite-tsconfig-paths`). Scripts:
+Tests live in `tests/unit/`, split into two Vitest projects by file extension (`vitest.config.ts`): a `node` project for `*.test.ts` (pure functions — the locale/formatting layer + EN/ES keyset parity) and a `jsdom` project for `*.test.tsx` (React components driven with React Testing Library, e.g. `LocaleAmountInput`). The `@/*` alias is wired via `vite-tsconfig-paths`; the jsdom project loads `tests/setup-jsdom.ts`. Scripts:
 
 - `pnpm test` — watch mode
 - `pnpm test:run` — single run (what root `pnpm test:web` calls)
