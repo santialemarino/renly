@@ -1,9 +1,14 @@
 # App/server request hardening middleware (SEC-12 — the body-size half).
 
-from fastapi import HTTPException
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.http_errors import CodedHTTPException
+
+# Response body + machine code shared by both 413 paths (declared Content-Length vs streamed overflow).
+_TOO_LARGE_DETAIL = "Request body too large."
+_TOO_LARGE_CODE = "request_too_large"
 
 # Max accepted request body. The API only takes small JSON bodies (no uploads), so 1 MiB is generous.
 MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
@@ -32,7 +37,7 @@ class BodySizeLimitMiddleware:
             except ValueError:
                 declared = None
             if declared is not None and declared > self.max_body_bytes:
-                response = JSONResponse(status_code=413, content={"detail": "Request body too large."})
+                response = JSONResponse(status_code=413, content={"detail": _TOO_LARGE_DETAIL, "code": _TOO_LARGE_CODE})
                 await response(scope, receive, send)
                 return
 
@@ -46,7 +51,7 @@ class BodySizeLimitMiddleware:
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > self.max_body_bytes:
-                    raise HTTPException(status_code=413, detail="Request body too large.")
+                    raise CodedHTTPException(status_code=413, detail=_TOO_LARGE_DETAIL, code=_TOO_LARGE_CODE)
             return message
 
         await self.app(scope, limited_receive, send)

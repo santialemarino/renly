@@ -1,12 +1,13 @@
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from app.config import settings
 from app.db import set_session_user
 from app.deps.db import SessionDep
+from app.http_errors import CodedHTTPException
 from app.models.user import User
 
 bearer = HTTPBearer()
@@ -18,9 +19,10 @@ async def get_current_user(
     session: SessionDep,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
 ) -> User:
-    invalid = HTTPException(
+    invalid = CodedHTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid or expired token",
+        code="invalid_auth_token",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
@@ -59,7 +61,7 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 # invite endpoints (the real access control; RLS on the invites table is only defense-in-depth).
 async def get_admin_user(current_user: CurrentUser) -> User:
     if not current_user.is_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise CodedHTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required", code="admin_required")
     return current_user
 
 

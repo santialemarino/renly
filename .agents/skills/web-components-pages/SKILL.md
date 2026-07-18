@@ -210,6 +210,17 @@ await authenticatedFetch('/investments', {
 });
 ```
 
+### API errors → localized messages
+
+The backend returns `{ detail, code, …extra }` on failure (English `detail`, stable machine `code`).
+Never render the raw `detail` as the primary message — resolve the `code` to a localized string with
+`resolveApiError` (`@/lib/i18n/api-errors`), which maps `apiErrors.<code>` (interpolating the extra
+params) and **falls back to `detail`** for a code it doesn't map. Parse the response with
+`parseApiError(res)`; get the translator from `useTranslations('apiErrors')` (client) or
+`await getTranslations('apiErrors')` (server action / server-only lib). Add a new `apiErrors.<code>`
+key in BOTH `en.json` and `es.json` (keyset parity is tested) whenever the backend adds a code worth
+localizing. Success copy is owned by the frontend per action — don't render backend success prose.
+
 ## Translations
 
 - **Page-specific translations** live under the page's namespace (e.g. `investments.toolbar.searchPlaceholder`, `snapshots.form.titleCreate`).

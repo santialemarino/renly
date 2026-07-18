@@ -2360,5 +2360,32 @@
       "revokeError": "Couldn't revoke the invite.",
       "resendIn": "Resend in {seconds}s"
     }
+  },
+  "apiErrors": {
+    "invalid_credentials": "The credentials you entered are incorrect.",
+    "invalid_auth_token": "Your session is invalid or has expired. Please log in again.",
+    "email_not_verified": "Please verify your email address before logging in.",
+    "password_breached": "This password has appeared in a known data breach. Please choose a different one.",
+    "invalid_token": "This link is invalid or has expired. Please request a new one.",
+    "invalid_refresh_token": "Your session has expired. Please log in again.",
+    "invalid_invite": "This invite is invalid or has expired. Ask an admin for a new one.",
+    "invite_email_taken": "An account with this email already exists.",
+    "not_found": "The requested item could not be found.",
+    "currency_change_blocked": "Currency can't be changed because this investment has snapshots.",
+    "has_linked_expenses": "This credit card has linked expenses. Archive it instead of deleting it.",
+    "installment_locked_field": "Locked installment fields ({fields}) can't be changed after the first installment has been charged.",
+    "investment_currency_mismatch": "Currency {row_currency} doesn't match the investment's base currency ({base_currency}).",
+    "payment_pairing": "A credit card can only be set when the payment method is credit card.",
+    "plan_required": "This feature requires a Pro plan.",
+    "exchange_rate_unavailable": "Exchange rates are unavailable, so values can't be converted to {currency}.",
+    "reconciliation_period_mismatch": "The reconciliation period is invalid.",
+    "invalid_import_file": "The file couldn't be read. Upload a valid .csv, .tsv, or .xlsx file.",
+    "request_too_large": "That request is too large. Please reduce the amount of data and try again.",
+    "admin_required": "You don't have permission to do that.",
+    "mutually_exclusive_link": "Link the expense to exactly one plan.",
+    "expense_cycle_invalid": "That charge couldn't be scheduled. Please check the dates and try again.",
+    "duplicate_subscription_charge": "A charge is already recorded for this subscription on that date.",
+    "duplicate_installment_charge": "A charge is already recorded for this installment on that date.",
+    "integrity_conflict": "That change conflicts with existing data."
   }
 }

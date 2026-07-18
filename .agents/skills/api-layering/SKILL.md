@@ -39,6 +39,26 @@ rolls back any transaction that was never committed. So an error raised before t
 `session.rollback()` is only warranted when a service wants to recover mid-request and continue
 issuing queries on the same session after a failed write.
 
+## Error responses (codes, not localized prose)
+
+The backend stays **locale-agnostic**: it returns a stable machine `code` per error and an English
+`detail` (dev/fallback); the frontend maps `code` → a localized message. (Transactional emails are
+the one backend-localized exception — no frontend renderer.)
+
+- **Domain errors** (`app/domain/errors.py`) subclass `DomainError` and set a class-level `code`
+  (stable, unique kebab/snake string) and `status_code`; the constructor assigns `self.message`.
+  Errors that carry structured data override the `extra` property (e.g. `{"fields": [...]}`). A
+  single handler in `app/main.py` turns any `DomainError` into `{"detail", "code", **extra}` — do
+  NOT add a per-error handler. Raise domain errors from services; the router just lets them bubble.
+- **Ad-hoc HTTP errors** raised in routers / deps / middleware (login, admin gate, request-too-large,
+  a param-validation 400) use `CodedHTTPException(status_code, detail, code)` (`app/http_errors.py`)
+  so they join the same `{detail, code}` contract; a plain `HTTPException` stays `{detail}` (the
+  frontend falls back to it). Prefer a domain error when the condition is a domain rule.
+- Reuse an existing `code` when the condition is the same across sites (e.g. login and re-auth both
+  use `invalid_credentials`), so the frontend maps it once.
+- **Success responses** don't carry localized prose either — the frontend owns success copy per
+  action. Give a success ack a machine field only when a caller must branch on it (e.g. a token type).
+
 ## Currency conversion (services own it)
 
 Display-currency conversion is a service-layer concern. Routers never read the dollar

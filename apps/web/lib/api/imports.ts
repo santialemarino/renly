@@ -1,6 +1,9 @@
 import 'server-only';
 
+import { getTranslations } from 'next-intl/server';
+
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
@@ -108,15 +111,11 @@ function mapResult(raw: ImportResultRaw): ImportResult {
 
 // --- API functions ---
 
-// Reads the `{detail}` message from a failed import response, falling back to a generic message.
+// Builds an Error from a failed import response: the localized message for a mapped API `code`,
+// else the raw `detail`, else a generic fallback.
 async function importError(res: Response): Promise<Error> {
-  try {
-    const body = await res.json();
-    if (body && typeof body.detail === 'string') return new Error(body.detail);
-  } catch {
-    // The error body wasn't JSON; fall through to the generic message.
-  }
-  return new Error('import_failed');
+  const t = await getTranslations('apiErrors');
+  return new Error(resolveApiError(t, await parseApiError(res), 'import_failed'));
 }
 
 export async function fetchImportPreview(

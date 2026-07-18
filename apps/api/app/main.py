@@ -7,28 +7,11 @@ from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy.exc import IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import Settings
 from app.config import settings as default_settings
-from app.domain import (
-    CurrencyChangeBlockedError,
-    EmailNotVerifiedError,
-    ExchangeRateUnavailableError,
-    HasLinkedExpensesError,
-    InstallmentLockedFieldError,
-    InvalidCredentialsError,
-    InvalidImportFileError,
-    InvalidInviteError,
-    InvalidRefreshTokenError,
-    InvalidTokenError,
-    InvestmentCurrencyMismatchError,
-    InviteEmailTakenError,
-    NotFoundError,
-    PasswordBreachedError,
-    PaymentPairingError,
-    PlanRequiredError,
-    ReconciliationPeriodMismatchError,
-)
+from app.domain import DomainError
 from app.middleware import BodySizeLimitMiddleware
 from app.observability import init_sentry
 from app.rate_limit import limiter, rate_limit_exceeded_handler
@@ -74,92 +57,21 @@ async def lifespan(_app: FastAPI):
 # --- Exception handlers ---
 
 
-# Maps CurrencyChangeBlockedError to 409.
-async def currency_change_blocked_handler(_request: Request, exc: CurrencyChangeBlockedError):
-    return JSONResponse(status_code=409, content={"detail": exc.message})
+# Maps any DomainError to its status with a uniform {detail, code, **extra} body. The frontend maps
+# `code` to a localized message and falls back to `detail` (English) for a code it doesn't map.
+async def domain_error_handler(_request: Request, exc: DomainError):
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.message, "code": exc.code, **exc.extra})
 
 
-# Maps HasLinkedExpensesError to 409.
-async def has_linked_expenses_handler(_request: Request, exc: HasLinkedExpensesError):
-    return JSONResponse(status_code=409, content={"detail": exc.message})
-
-
-# Maps InstallmentLockedFieldError to 400 with the offending fields.
-async def installment_locked_field_handler(_request: Request, exc: InstallmentLockedFieldError):
-    return JSONResponse(
-        status_code=400,
-        content={"detail": exc.message, "code": exc.code, "fields": exc.fields},
-    )
-
-
-# Maps EmailNotVerifiedError to 403.
-async def email_not_verified_handler(_request: Request, exc: EmailNotVerifiedError):
-    return JSONResponse(status_code=403, content={"detail": exc.message})
-
-
-# Maps InvalidCredentialsError to 401.
-async def invalid_credentials_handler(_request: Request, exc: InvalidCredentialsError):
-    return JSONResponse(status_code=401, content={"detail": exc.message})
-
-
-# Maps InvalidImportFileError to 400.
-async def invalid_import_file_handler(_request: Request, exc: InvalidImportFileError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
-
-
-# Maps InvalidRefreshTokenError to 401.
-async def invalid_refresh_token_handler(_request: Request, exc: InvalidRefreshTokenError):
-    return JSONResponse(status_code=401, content={"detail": exc.message})
-
-
-# Maps InvalidTokenError to 400.
-async def invalid_token_handler(_request: Request, exc: InvalidTokenError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
-
-
-# Maps InvalidInviteError to 403.
-async def invalid_invite_handler(_request: Request, exc: InvalidInviteError):
-    return JSONResponse(status_code=403, content={"detail": exc.message})
-
-
-# Maps InvestmentCurrencyMismatchError to 400.
-async def investment_currency_mismatch_handler(_request: Request, exc: InvestmentCurrencyMismatchError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
-
-
-# Maps InviteEmailTakenError to 409.
-async def invite_email_taken_handler(_request: Request, exc: InviteEmailTakenError):
-    return JSONResponse(status_code=409, content={"detail": exc.message})
-
-
-# Maps NotFoundError to 404.
-async def not_found_exception_handler(_request: Request, exc: NotFoundError):
-    return JSONResponse(status_code=404, content={"detail": exc.message})
-
-
-# Maps PasswordBreachedError to 400.
-async def password_breached_handler(_request: Request, exc: PasswordBreachedError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
-
-
-# Maps PaymentPairingError to 400.
-async def payment_pairing_handler(_request: Request, exc: PaymentPairingError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
-
-
-# Maps PlanRequiredError to 402.
-async def plan_required_handler(_request: Request, exc: PlanRequiredError):
-    return JSONResponse(status_code=402, content={"detail": exc.message})
-
-
-# Maps ExchangeRateUnavailableError to 503.
-async def exchange_rate_unavailable_handler(_request: Request, exc: ExchangeRateUnavailableError):
-    return JSONResponse(status_code=503, content={"detail": exc.message})
-
-
-# Maps ReconciliationPeriodMismatchError to 400.
-async def reconciliation_period_mismatch_handler(_request: Request, exc: ReconciliationPeriodMismatchError):
-    return JSONResponse(status_code=400, content={"detail": exc.message})
+# Handles every HTTPException uniformly, adding `code` when the exception carries one (CodedHTTPException)
+# so router/deps/middleware exceptions join the same contract; a plain HTTPException stays {detail}.
+# Faithfully preserves status_code + headers (e.g. the login 401's WWW-Authenticate).
+async def http_exception_handler(_request: Request, exc: StarletteHTTPException):
+    content: dict = {"detail": exc.detail}
+    code = getattr(exc, "code", None)
+    if code is not None:
+        content["code"] = code
+    return JSONResponse(status_code=exc.status_code, content=content, headers=getattr(exc, "headers", None))
 
 
 # Maps SQLAlchemy IntegrityError to a clean 409 (Phase 3, follow-up Item 8.2). The most
@@ -179,16 +91,16 @@ async def integrity_error_handler(_request: Request, exc: IntegrityError):
     if matches("idx_expense_entries_subscription_date"):
         return JSONResponse(
             status_code=409,
-            content={"detail": "A charge is already recorded for this subscription on that date."},
+            content={"detail": "A charge is already recorded for this subscription on that date.", "code": "duplicate_subscription_charge"},
         )
     if matches("idx_expense_entries_installment_date"):
         return JSONResponse(
             status_code=409,
-            content={"detail": "A charge is already recorded for this installment on that date."},
+            content={"detail": "A charge is already recorded for this installment on that date.", "code": "duplicate_installment_charge"},
         )
     return JSONResponse(
         status_code=409,
-        content={"detail": "Conflict — a duplicate or constraint violation prevented the change."},
+        content={"detail": "Conflict — a duplicate or constraint violation prevented the change.", "code": "integrity_conflict"},
     )
 
 
@@ -228,23 +140,10 @@ _ROUTERS = (
 )
 
 _EXCEPTION_HANDLERS = {
-    CurrencyChangeBlockedError: currency_change_blocked_handler,
-    EmailNotVerifiedError: email_not_verified_handler,
-    HasLinkedExpensesError: has_linked_expenses_handler,
-    InstallmentLockedFieldError: installment_locked_field_handler,
-    InvalidCredentialsError: invalid_credentials_handler,
-    InvalidImportFileError: invalid_import_file_handler,
-    InvalidInviteError: invalid_invite_handler,
-    InvalidRefreshTokenError: invalid_refresh_token_handler,
-    InvalidTokenError: invalid_token_handler,
-    InvestmentCurrencyMismatchError: investment_currency_mismatch_handler,
-    InviteEmailTakenError: invite_email_taken_handler,
-    NotFoundError: not_found_exception_handler,
-    PasswordBreachedError: password_breached_handler,
-    PaymentPairingError: payment_pairing_handler,
-    PlanRequiredError: plan_required_handler,
-    ExchangeRateUnavailableError: exchange_rate_unavailable_handler,
-    ReconciliationPeriodMismatchError: reconciliation_period_mismatch_handler,
+    # One handler for the whole DomainError family (Starlette matches subclasses via the MRO).
+    DomainError: domain_error_handler,
+    # Adds `code` to any CodedHTTPException while leaving plain HTTPExceptions as {detail}.
+    StarletteHTTPException: http_exception_handler,
     IntegrityError: integrity_error_handler,
     RateLimitExceeded: rate_limit_exceeded_handler,
     Exception: unhandled_exception_handler,

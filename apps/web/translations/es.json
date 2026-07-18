@@ -2360,5 +2360,32 @@
       "revokeError": "No se pudo revocar la invitación.",
       "resendIn": "Reenviar en {seconds}s"
     }
+  },
+  "apiErrors": {
+    "invalid_credentials": "Los datos que ingresaste son incorrectos.",
+    "invalid_auth_token": "Tu sesión no es válida o expiró. Iniciá sesión de nuevo.",
+    "email_not_verified": "Verificá tu correo antes de iniciar sesión.",
+    "password_breached": "Esta contraseña apareció en una filtración de datos conocida. Elegí otra.",
+    "invalid_token": "Este enlace no es válido o expiró. Pedí uno nuevo.",
+    "invalid_refresh_token": "Tu sesión expiró. Iniciá sesión de nuevo.",
+    "invalid_invite": "Esta invitación no es válida o expiró. Pedile una nueva a un administrador.",
+    "invite_email_taken": "Ya existe una cuenta con este correo.",
+    "not_found": "No se encontró el elemento solicitado.",
+    "currency_change_blocked": "No se puede cambiar la moneda porque esta inversión tiene registros.",
+    "has_linked_expenses": "Esta tarjeta de crédito tiene gastos asociados. Archivala en lugar de eliminarla.",
+    "installment_locked_field": "Los campos bloqueados de la cuota ({fields}) no se pueden cambiar después de que se cobró la primera cuota.",
+    "investment_currency_mismatch": "La moneda {row_currency} no coincide con la moneda base de la inversión ({base_currency}).",
+    "payment_pairing": "Solo se puede asignar una tarjeta de crédito cuando el método de pago es tarjeta de crédito.",
+    "plan_required": "Esta función requiere un plan Pro.",
+    "exchange_rate_unavailable": "No hay cotizaciones disponibles, así que no se pueden convertir los valores a {currency}.",
+    "reconciliation_period_mismatch": "El período de conciliación no es válido.",
+    "invalid_import_file": "No se pudo leer el archivo. Subí un .csv, .tsv o .xlsx válido.",
+    "request_too_large": "La solicitud es demasiado grande. Reducí la cantidad de datos e intentá de nuevo.",
+    "admin_required": "No tenés permiso para hacer eso.",
+    "mutually_exclusive_link": "Asociá el gasto a exactamente un plan.",
+    "expense_cycle_invalid": "No se pudo programar el cobro. Revisá las fechas e intentá de nuevo.",
+    "duplicate_subscription_charge": "Ya hay un cobro registrado para esta suscripción en esa fecha.",
+    "duplicate_installment_charge": "Ya hay un cobro registrado para esta cuota en esa fecha.",
+    "integrity_conflict": "El cambio genera un conflicto con datos existentes."
   }
 }
