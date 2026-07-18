@@ -17,8 +17,8 @@ interface PaymentsCalendarHeaderProps {
 }
 
 export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalendarHeaderProps) {
-  const t = useTranslations('paymentsCalendar');
   const locale = useLocale();
+  const t = useTranslations('paymentsCalendar');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();

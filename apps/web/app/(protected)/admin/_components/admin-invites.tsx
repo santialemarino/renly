@@ -43,9 +43,9 @@ interface AdminInvitesProps {
 }
 
 export function AdminInvites({ initialInvites }: AdminInvitesProps) {
+  const fmt = useFormatters();
   const t = useTranslations('admin');
   const tCommon = useTranslations('common');
-  const fmt = useFormatters();
   const reduceMotion = useReducedMotion();
 
   const form = useForm<InviteFormData>({

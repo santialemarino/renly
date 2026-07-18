@@ -39,8 +39,8 @@ export function SubscriptionsTable({
   activeCurrency,
   firstRun,
 }: SubscriptionsTableProps) {
-  const t = useTranslations('subscriptions');
   const fmt = useFormatters();
+  const t = useTranslations('subscriptions');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<SubscriptionSortField>(
     ROUTES.subscriptions,

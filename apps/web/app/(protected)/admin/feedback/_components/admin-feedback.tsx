@@ -28,9 +28,9 @@ interface AdminFeedbackProps {
 }
 
 export function AdminFeedback({ feedback }: AdminFeedbackProps) {
+  const fmt = useFormatters();
   const t = useTranslations('adminFeedback');
   const tFeedback = useTranslations('feedback');
-  const fmt = useFormatters();
 
   if (feedback.length === 0) {
     return (

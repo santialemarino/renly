@@ -28,8 +28,8 @@ interface InvestorDashboardSummaryTableProps {
 }
 
 export function InvestorDashboardSummaryTable({ summary }: InvestorDashboardSummaryTableProps) {
-  const t = useTranslations('investorDashboard');
   const fmt = useFormatters();
+  const t = useTranslations('investorDashboard');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [hideInactive, setHideInactive] = useState(false);

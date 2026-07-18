@@ -59,8 +59,8 @@ export function PaymentObligationsTable({
   activeCurrency,
   firstRun,
 }: PaymentObligationsTableProps) {
-  const t = useTranslations('paymentObligations');
   const fmt = useFormatters();
+  const t = useTranslations('paymentObligations');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } =
     useTableSort<PaymentObligationSortField>(ROUTES.paymentObligations);

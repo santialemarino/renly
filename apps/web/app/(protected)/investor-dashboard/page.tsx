@@ -32,6 +32,7 @@ import {
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { todayInTimezone } from '@/lib/utils/dates';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -54,6 +55,7 @@ interface InvestorDashboardPageProps {
 
 export default async function InvestorDashboardPage({ searchParams }: InvestorDashboardPageProps) {
   const cookieStore = await cookies();
+  const fmt = await getFormatters();
   const t = await getTranslations('investorDashboard');
   const tCommon = await getTranslations('common');
   const params = await searchParams;
@@ -209,7 +211,7 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
             </WarningHint>
             <WarningHint show={skippedInvestments.length > 0}>
               {t('skippedInvestments', {
-                names: skippedInvestments.map((s) => `${s.name} (${s.baseCurrency})`).join(', '),
+                names: fmt.list(skippedInvestments.map((s) => `${s.name} (${s.baseCurrency})`)),
               })}
             </WarningHint>
           </>

@@ -48,8 +48,8 @@ interface InvestorDashboardEvolutionProps {
 }
 
 export function InvestorDashboardEvolution({ evolution }: InvestorDashboardEvolutionProps) {
-  const t = useTranslations('investorDashboard');
   const fmt = useFormatters();
+  const t = useTranslations('investorDashboard');
 
   const hasData = evolution.points.length > 0;
 

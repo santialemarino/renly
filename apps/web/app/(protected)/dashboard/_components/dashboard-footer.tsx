@@ -10,7 +10,6 @@ import { ROUTES } from '@/config/routes';
 import type { DashboardLiquidity, DashboardOverview, LiquidityState } from '@/lib/api/dashboard';
 import { INCOME_EXPENSE_RATIO_BREAKEVEN } from '@/lib/constants/health-thresholds';
 import { useFormatters } from '@/lib/i18n/formatters';
-import { getLocaleTag } from '@/lib/i18n/locales';
 
 // Returns color class for savings rate, comparing the raw ratio (e.g. 0.20) against the user's
 // healthy / moderate thresholds (stored as integer percents like 20 / 10).
@@ -57,11 +56,6 @@ export function DashboardFooter({
   const fmt = useFormatters();
   const t = useTranslations('dashboard');
 
-  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(fmt.locale), {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
   const showWindowHint =
     liquidity.actualWindowDays > 0 && liquidity.actualWindowDays < liquidity.incomeWindowDays;
   const skippedCount = liquidity.skippedEntities.length;
@@ -96,7 +90,7 @@ export function DashboardFooter({
             )}
           >
             {overview.incomeExpenseRatio !== null
-              ? `${ratioFormatter.format(overview.incomeExpenseRatio)}x`
+              ? `${fmt.ratio(overview.incomeExpenseRatio)}x`
               : '—'}
           </p>
           <span className="text-paragraph-xs text-muted-foreground">

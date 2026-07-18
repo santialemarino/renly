@@ -18,8 +18,8 @@ export function InvestorDashboardMetricCards({
   metrics,
   hasPeriod = false,
 }: InvestorDashboardMetricCardsProps) {
-  const t = useTranslations('investorDashboard');
   const fmt = useFormatters();
+  const t = useTranslations('investorDashboard');
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

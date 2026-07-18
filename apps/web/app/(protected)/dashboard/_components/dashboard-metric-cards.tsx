@@ -14,8 +14,8 @@ interface DashboardMetricCardsProps {
 }
 
 export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
-  const t = useTranslations('dashboard');
   const fmt = useFormatters();
+  const t = useTranslations('dashboard');
 
   return (
     <div

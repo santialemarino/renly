@@ -50,8 +50,8 @@ export async function PaymentsCalendarList({
   activeCurrency,
   timeZone,
 }: PaymentsCalendarListProps) {
-  const t = await getTranslations('paymentsCalendar');
   const fmt = await getFormatters();
+  const t = await getTranslations('paymentsCalendar');
 
   if (items.length === 0) {
     const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(fmt.locale), {

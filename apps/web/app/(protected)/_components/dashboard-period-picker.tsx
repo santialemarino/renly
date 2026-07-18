@@ -33,11 +33,11 @@ export function DashboardPeriodPicker({
   className,
 }: DashboardPeriodPickerProps) {
   const locale = useLocale();
-  const dateFnsLocale = getDateFnsLocale(locale);
   const t = useTranslations(translationNamespace);
   const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const dateFnsLocale = getDateFnsLocale(locale);
 
   const currentPeriod = searchParams.get('period');
   const currentStartDate = searchParams.get('start_date');

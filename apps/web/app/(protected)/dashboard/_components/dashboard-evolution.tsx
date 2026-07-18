@@ -48,8 +48,8 @@ interface DashboardEvolutionProps {
 }
 
 export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) {
-  const t = useTranslations('dashboard');
   const fmt = useFormatters();
+  const t = useTranslations('dashboard');
 
   const hasData = evolution.points.length > 0;
 

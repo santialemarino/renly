@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAxisValue,
   formatDateForLocale,
+  formatList,
   formatMonth,
   formatPct,
   formatRatePct,
+  formatRatio,
   formatSignedPct,
   formatSignedValue,
   formatTimestampDate,
@@ -56,6 +58,29 @@ describe('percentage formatters', () => {
   it('formatRatePct renders a ratio as a percent', () => {
     expect(formatRatePct(0.2, 'en')).toBe('20%');
     expect(formatRatePct(0.205, 'en')).toBe('20.5%');
+  });
+});
+
+describe('formatRatio', () => {
+  it('keeps a fixed two decimals per locale', () => {
+    expect(formatRatio(1.5, 'en')).toBe('1.50');
+    expect(formatRatio(1.5, 'es')).toBe('1,50');
+    expect(formatRatio(2, 'en')).toBe('2.00');
+    expect(formatRatio(1234.5, 'es')).toBe('1.234,50');
+  });
+});
+
+describe('formatList', () => {
+  it('joins with a locale-aware conjunction', () => {
+    expect(formatList(['A', 'B', 'C'], 'en')).toBe('A, B, and C');
+    expect(formatList(['A', 'B', 'C'], 'es')).toBe('A, B y C');
+    expect(formatList(['A', 'B'], 'en')).toBe('A and B');
+    expect(formatList(['A', 'B'], 'es')).toBe('A y B');
+  });
+
+  it('returns the single item alone and an empty list as ""', () => {
+    expect(formatList(['Solo'], 'en')).toBe('Solo');
+    expect(formatList([], 'en')).toBe('');
   });
 });
 

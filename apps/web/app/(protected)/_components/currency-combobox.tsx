@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import cc from 'currency-codes';
 import { iso31661 } from 'iso-3166';
 import { X } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 
 import {
   Button,
@@ -26,6 +26,7 @@ import {
   FALLBACK_PRIMARY_CURRENCY,
   FALLBACK_SECONDARY_CURRENCY,
 } from '@/lib/constants/currency';
+import { getLocaleTag } from '@/lib/i18n/locales';
 
 const CLEAR_ANIMATION_MS = 100;
 
@@ -58,16 +59,17 @@ function splitGroups(
   all: { code: string; name: string }[],
   pinnedCodes: string[],
   preferredCodes: string[],
+  localeTag: string,
 ) {
   const pinnedSet = new Set(pinnedCodes);
   const preferredSet = new Set(preferredCodes);
   const pinned = pinnedCodes.map((code) => all.find((c) => c.code === code)!).filter(Boolean);
   const preferred = all
     .filter((c) => !pinnedSet.has(c.code) && preferredSet.has(c.code))
-    .sort((a, b) => a.code.localeCompare(b.code));
+    .sort((a, b) => a.code.localeCompare(b.code, localeTag));
   const other = all
     .filter((c) => !pinnedSet.has(c.code) && !preferredSet.has(c.code))
-    .sort((a, b) => a.code.localeCompare(b.code));
+    .sort((a, b) => a.code.localeCompare(b.code, localeTag));
   return { pinned, preferred, other };
 }
 
@@ -115,6 +117,7 @@ export function CurrencyCombobox({
   onClear,
   'aria-invalid': ariaInvalid,
 }: CurrencyComboboxProps) {
+  const locale = useLocale();
   const t = useTranslations('common.currency');
   const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
@@ -138,6 +141,7 @@ export function CurrencyCombobox({
     allCurrencies,
     pinnedCurrencies ?? DEFAULT_PINNED_CODES,
     preferredCurrencies ?? ENV_PREFERRED_CURRENCIES,
+    getLocaleTag(locale),
   );
 
   // Filter helper — excludes sibling currency and non-matching search entries.

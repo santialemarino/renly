@@ -28,8 +28,8 @@ interface IntegrationsApiKeysProps {
 }
 
 export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
-  const t = useTranslations('integrations');
   const fmt = useFormatters();
+  const t = useTranslations('integrations');
 
   const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [createOpen, setCreateOpen] = useState(false);

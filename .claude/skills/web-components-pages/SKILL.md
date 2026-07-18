@@ -70,7 +70,7 @@ Keep all feature-specific modules in the same folder as the page that uses them:
 **Inside the component (declaration order):**
 
 1. **Session** — `getSession()` or similar, if the component needs it (server components).
-2. **Translations** — `useTranslations('namespace')`: first the specific/feature namespace (e.g. `login`), then `tCommon` / `useTranslations('common')` if needed.
+2. **i18n group — locale/formatters hook, then translations.** When the component formats or needs the locale, the hook (`useFormatters()` / `useLocale()`; server `getFormatters()` / `getLocale()`) comes **first**, immediately followed by `useTranslations('namespace')` — the specific/feature namespace, then `tCommon` / `useTranslations('common')` if needed. Keep the hook and `useTranslations` adjacent (see Formatting & locale).
 3. **Router** — `useRouter()` (client components).
 4. **State and refs** — `useState`, `useForm`, `useRef`, `useWatch`, etc.
 5. **Derived state / memo** — `useMemo`, computed values that depend on the above.
@@ -240,9 +240,11 @@ When a form field has a default value (from env vars or elsewhere):
 
 Never thread a `locale` into formatter calls, and never call the pure formatters (`formatValue`, `formatAmount`, `formatDateForLocale`, `formatMonth`, …) directly in a component. Use the locale-bound hook so a call site can't forget the locale (removing the silent `en-US` fallback):
 
-- **Client components:** `const fmt = useFormatters()` (`@/lib/i18n/formatters`) → `fmt.value(n, opts?)`, `fmt.amount(str, currency?)`, `fmt.date(iso, dateFormat?)`, `fmt.month(str)`, `fmt.signedValue`, `fmt.signedPct`, `fmt.pct`, `fmt.ratePct`, `fmt.timestampDate`, `fmt.axisValue`. The hook reads the active locale from next-intl and binds it.
+- **Client components:** `const fmt = useFormatters()` (`@/lib/i18n/formatters`) → `fmt.value(n, opts?)`, `fmt.amount(str, currency?)`, `fmt.date(iso, dateFormat?)`, `fmt.month(str)`, `fmt.signedValue`, `fmt.signedPct`, `fmt.pct`, `fmt.ratePct`, `fmt.ratio(n)` (fixed 2 decimals, no unit), `fmt.timestampDate`, `fmt.axisValue`, `fmt.list(items)` (locale-aware "a, b, and c" / "a, b y c" conjunction). The hook reads the active locale from next-intl and binds it.
 - **Async Server Components:** `const fmt = await getFormatters()` (`@/lib/i18n/formatters-server`, `server-only`) — the same set, resolving the locale via next-intl on the server.
-- **Raw locale** (for `localeCompare`, an inline `Intl.*` formatter, or `getLocaleTag(...)`) comes from `fmt.locale` — do NOT add a separate `useLocale()` / `getLocale()` alongside `useFormatters()` / `getFormatters()`.
+- **Raw locale** (for `localeCompare`, an inline `Intl.*` formatter, or `getLocaleTag(...)`) comes from `fmt.locale` — do NOT add a separate `useLocale()` / `getLocale()` alongside `useFormatters()` / `getFormatters()`. A component that needs only the raw locale and formats nothing (e.g. a picker that just `localeCompare`s codes) uses `useLocale()` directly.
+- **Declaration position.** The formatters/locale hook (`useFormatters()` / `useLocale()`; server `getFormatters()` / `getLocale()`) sits **immediately before `useTranslations(...)`** (server: before `getTranslations(...)`), so all i18n is grouped at the top of the declaration block: the hook, then the feature `useTranslations`, then `common`. Any value derived from the locale (e.g. `getDateFnsLocale(locale)`) moves down to the derived-state section so nothing splits the hook from `useTranslations`.
+- **User-facing lists** ("a, b, and c") go through `fmt.list`, never `.join(', ')` — the last conjunction is locale-specific. Leave non-prose comma joins alone (currency-code CSV inputs/placeholders, React keys, query strings).
 - **`valueColor`** (sign → color class, no locale) stays a direct import from `@/lib/i18n/format`.
 - The pure formatters, the `LOCALES` registry, and the hook all live in `lib/i18n/` (see web-structure).
 

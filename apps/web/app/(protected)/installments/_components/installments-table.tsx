@@ -38,8 +38,8 @@ export function InstallmentsTable({
   activeCurrency,
   firstRun,
 }: InstallmentsTableProps) {
-  const t = useTranslations('installments');
   const fmt = useFormatters();
+  const t = useTranslations('installments');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<InstallmentSortField>(
     ROUTES.installments,

@@ -30,9 +30,9 @@ interface DashboardCompositionProps {
 }
 
 export function DashboardComposition({ composition }: DashboardCompositionProps) {
+  const fmt = useFormatters();
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
-  const fmt = useFormatters();
 
   const hasData = composition.length > 0;
 
