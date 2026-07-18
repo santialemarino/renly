@@ -54,6 +54,9 @@ TIMEZONE_MODE_MANUAL = "manual"
 LANGUAGE_MODE_AUTO = "auto"
 LANGUAGE_MODE_MANUAL = "manual"
 
+# Default UI language; also the fallback locale for transactional emails when none is stored.
+DEFAULT_LANGUAGE = SUPPORTED_LANGUAGES[0]
+
 _NOT_SET = object()
 
 
@@ -246,6 +249,33 @@ async def get_user_timezone(session: AsyncSession, user_id: int) -> str | None:
         if isinstance(tz, str) and tz:
             return tz
     return None
+
+
+# Coerces a raw settings value into a supported language, or DEFAULT_LANGUAGE when unset/invalid.
+def _language_or_default(value: object) -> str:
+    return value if isinstance(value, str) and value in SUPPORTED_LANGUAGES else DEFAULT_LANGUAGE
+
+
+# Reads the user's stored UI language for localizing transactional emails. Returns DEFAULT_LANGUAGE
+# when unset or invalid, so a caller always has a valid locale to hand the email templates.
+async def get_user_language(session: AsyncSession, user_id: int) -> str:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    return _language_or_default(row.settings.get(SETTINGS_KEY_LANGUAGE) if row and row.settings else None)
+
+
+# Batch variant of get_user_language: returns {user_id: language} for every requested id (defaulting
+# ids with no stored/valid language), in one query. Used to localize admin feedback notifications
+# without an N+1 over the admin list.
+async def get_languages_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, str]:
+    stored = await user_settings_repository.get_languages_by_user_ids(session, user_ids)
+    return {user_id: _language_or_default(stored.get(user_id)) for user_id in user_ids}
+
+
+# Seeds a brand-new user's stored language (called from register before the shared commit, so it
+# joins that transaction — does NOT commit here). Gives later transactional emails to the user a
+# stored preference to localize by. The user has no settings row yet, so this creates it.
+async def seed_language(session: AsyncSession, user_id: int, language: str) -> None:
+    await user_settings_repository.create(session, UserSettings(user_id=user_id, settings={SETTINGS_KEY_LANGUAGE: language}))
 
 
 # Resolves the user's local calendar "today" from an already-loaded IANA timezone (no DB read) —

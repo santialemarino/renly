@@ -11,7 +11,7 @@ from app.models.auth_token import AuthToken
 from app.models.invite import Invite, InviteStatus
 from app.models.user import User
 from app.models.utils import utcnow
-from app.services import auth_service, invite_service
+from app.services import auth_service, invite_service, settings_service
 
 # Coverage for the invite-only access gate (go-live prerequisite): invite create / single-use consume
 # / expiry / email-mismatch, resend + revoke, the SIGNUP_MODE gate on registration (invite requires a
@@ -136,8 +136,15 @@ def wired(monkeypatch):
     monkeypatch.setattr(auth_service, "auth_token_repository", auth_tokens)
     monkeypatch.setattr(auth_service, "get_email_service", lambda: email)
     monkeypatch.setattr(auth_service, "is_password_breached", _not_breached)
+    # The invite emails resolve the inviting admin's language; stub it off the FakeSession.
+    monkeypatch.setattr(settings_service, "get_user_language", _stub_get_language)
     monkeypatch.setattr(settings, "signup_mode", SignupMode.invite)
     return users, invites, email
+
+
+# Language stub so invite/register flows don't hit the real settings repo on the FakeSession.
+async def _stub_get_language(_session, _user_id) -> str:
+    return "en"
 
 
 # --- Invite creation ---

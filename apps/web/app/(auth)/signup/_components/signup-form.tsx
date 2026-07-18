@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Lock } from 'lucide-react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button, Input } from '@repo/ui/components';
@@ -42,6 +42,7 @@ export function SignupForm({
   onSuccess,
   onError,
 }: SignupFormProps) {
+  const locale = useLocale();
   const t = useTranslations('signup');
   const tCommon = useTranslations('common');
 
@@ -76,6 +77,7 @@ export function SignupForm({
         email,
         password: data.password,
         inviteToken: inviteToken ?? undefined,
+        language: locale,
       });
       onSuccess(email);
     } catch (err) {

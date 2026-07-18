@@ -57,7 +57,7 @@ def _token_response(user: User, issued: refresh_token_service.IssuedRefreshToken
 @router.post("/register", response_model=MessageResponse, status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit(REGISTER_LIMIT)
 async def register(request: Request, response: Response, body: RegisterRequest, session: AdminSessionDep) -> MessageResponse:
-    await auth_service.register_account(session, body.name, body.email, body.password, body.invite_token)
+    await auth_service.register_account(session, body.name, body.email, body.password, body.invite_token, body.language)
     return MessageResponse(detail=_UNIFORM_ACK)
 
 

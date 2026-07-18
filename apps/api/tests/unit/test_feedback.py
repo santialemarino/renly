@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from app.models.feedback import Feedback, FeedbackCategory
 from app.models.user import User
 from app.schemas.feedback import FeedbackCreate
-from app.services import feedback_service
+from app.services import feedback_service, settings_service
 
 # Coverage for the in-app feedback channel (SHELL-7): request-body validation (category + message
 # bounds), and the service flow — store the row, then notify every admin by email best-effort (an
@@ -68,10 +68,17 @@ class FakeFeedbackRepo:
 
 class FakeUserRepo:
     def __init__(self, admin_emails: list[str]) -> None:
-        self.admin_emails = admin_emails
+        # Build admin User rows (id + email) — the service resolves each admin's language by id.
+        self.admins = [User(id=i + 1, name=f"Admin {i + 1}", email=email, password_hash="h", is_admin=True) for i, email in enumerate(admin_emails)]
 
-    async def list_admin_emails(self, session):
-        return self.admin_emails
+    async def list_admins(self, session):
+        return self.admins
+
+
+# Language stub: every admin resolves to English (the localization itself is covered in
+# test_email_service.py; here we only need the notification flow not to hit the real settings repo).
+async def _langs_en(session, user_ids):
+    return {user_id: "en" for user_id in user_ids}
 
 
 class FakeEmailService:
@@ -93,6 +100,7 @@ def wired(monkeypatch):
     monkeypatch.setattr(feedback_service, "feedback_repository", feedback_repo)
     monkeypatch.setattr(feedback_service, "user_repository", user_repo)
     monkeypatch.setattr(feedback_service, "get_email_service", lambda: email)
+    monkeypatch.setattr(settings_service, "get_languages_by_user_ids", _langs_en)
     return feedback_repo, user_repo, email
 
 
@@ -124,13 +132,14 @@ class TestCreateFeedback:
 
         assert {m.to for m in email.sent} == {"a@example.com", "b@example.com"}
         body = email.sent[0]
-        assert "sender@example.com" in body.text and "Add dark mode" in body.text and "idea" in body.subject
+        assert "sender@example.com" in body.text and "Add dark mode" in body.text and "Idea" in body.subject
 
     @pytest.mark.asyncio
     async def test_email_failure_does_not_break_submission(self, monkeypatch):
         feedback_repo = FakeFeedbackRepo()
         monkeypatch.setattr(feedback_service, "feedback_repository", feedback_repo)
         monkeypatch.setattr(feedback_service, "user_repository", FakeUserRepo(["a@example.com", "b@example.com"]))
+        monkeypatch.setattr(settings_service, "get_languages_by_user_ids", _langs_en)
         # First admin's send raises; the request must still succeed and the other admin still gets it.
         email = FakeEmailService(fail_for={"a@example.com"})
         monkeypatch.setattr(feedback_service, "get_email_service", lambda: email)
