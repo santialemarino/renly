@@ -40,6 +40,9 @@ jobs:
       - name: Type check
         run: pnpm --filter web run check-types
 
+      - name: Unit tests
+        run: pnpm --filter web run test:run
+
       - name: Build UI package
         run: pnpm build:ui
 

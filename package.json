@@ -28,6 +28,7 @@
     "build:ui": "pnpm --filter @repo/ui run build",
     "build:web": "pnpm --filter web run build",
     "test:api": "pnpm --filter api run test",
+    "test:web": "pnpm --filter web run test:run",
     "prepare": "husky",
     "db:init": "node scripts/db-init.mjs",
     "db:fork": "node scripts/db-fork.mjs",
