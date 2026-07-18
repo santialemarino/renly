@@ -5,6 +5,7 @@ from typing import NamedTuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.domain.currency import DOLLAR_RATE_DEFAULT
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
@@ -42,17 +43,6 @@ SAMPLE_RETIRED_KEYS = {
     "expenses": SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES,
     "income": SETTINGS_KEY_SAMPLES_RETIRED_INCOME,
 }
-
-# Valid values for dollar rate preference.
-DOLLAR_RATE_DEFAULT = "mep"
-
-# Valid values for timezone mode (re-exported from the schema for backward-compat with callers).
-TIMEZONE_MODE_AUTO = "auto"
-TIMEZONE_MODE_MANUAL = "manual"
-
-# Valid values for language mode.
-LANGUAGE_MODE_AUTO = "auto"
-LANGUAGE_MODE_MANUAL = "manual"
 
 # Default UI language; also the fallback locale for transactional emails when none is stored.
 DEFAULT_LANGUAGE = SUPPORTED_LANGUAGES[0]
