@@ -12,9 +12,9 @@ The global currency switcher in the sidebar offers three options (configured in 
 
 ### Supported currencies
 
-Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). The set is served by `GET /exchange-rates/currencies` (derived from `app/domain/currency.py`, the single source of truth) and drives the entry-form pickers.
+Five currencies have exchange rate support: **USD**, **ARS**, **BRL**, **EUR**, **GBP**. Any pair converts through USD as pivot (see Multi-currency pivot conversion below). The single source of truth is the **`Currency` enum** (`app/models/investment.py`); `app/domain/currency.py` derives `SUPPORTED_CURRENCIES` from it (`frozenset(c.value for c in Currency)`) so the two can never drift, and serves the set via `GET /exchange-rates/currencies`.
 
-**Entry forms** (expense / income / subscription / installment / payment obligation) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported entry currency with **422**. The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
+**Entry forms** (expense / income / subscription / installment / payment obligation) **and the investment form** (`base_currency`) only OFFER the supported set — the full-ISO "Other currencies" group is hidden there, and the API rejects an unsupported currency with **422** (finance entries and `base_currency` share the `validate_supported_currency` field-validator; snapshot/transaction rows are typed by the `Currency` enum). The "warning icon + fall back to original" behaviour below applies only to the **display and preference** pickers (which keep the full ISO list): a currency without exchange-rate support can still be selected for display/preferences and simply shows unconverted.
 
 ### Dollar rate preference
 

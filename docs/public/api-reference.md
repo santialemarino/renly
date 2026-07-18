@@ -77,11 +77,11 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 
 **Validation & dedup:** each row is coerced and validated against the entity's field rules (e.g. a recognized category, a supported currency, length limits, a parseable date and a positive amount). Rows that match an existing record — or an earlier row in the same file — are flagged as `duplicate` and skipped unless `import_duplicates` is `true`. The dedup key depends on the entity: investments match by `name` (case-insensitive); expenses and income (which have no natural key) match on the combination of `date`, `amount`, `currency`, `category`, and `notes`; transactions match on the resolved investment plus `date`, `type`, `amount`, `currency`, and `quantity`. **Snapshots are the exception — they upsert** (one snapshot per investment per date), so a re-import updates the existing date instead of being flagged as a duplicate. Invalid rows are always skipped; the rest are inserted. An unreadable or unsupported file returns `400`.
 
-**Nested entities (snapshots, transactions):** these belong to an investment, so the file must include an **`investment` column** holding a name or ticker. Each row is matched to one of your investments — ticker first, then name (case-insensitive) — and the lowest (oldest) id wins if more than one matches. A row whose `investment` matches none of your investments is flagged `invalid`; investments are never created by the import. Their `currency` is limited to `ARS` or `USD`.
+**Nested entities (snapshots, transactions):** these belong to an investment, so the file must include an **`investment` column** holding a name or ticker. Each row is matched to one of your investments — ticker first, then name (case-insensitive) — and the lowest (oldest) id wins if more than one matches. A row whose `investment` matches none of your investments is flagged `invalid`; investments are never created by the import. Their `currency` is limited to the supported set (`USD`, `ARS`, `BRL`, `EUR`, `GBP`).
 
 **Dates & amounts:** dates accept ISO (`YYYY-MM-DD`) plus common locale formats — day-first (`DD/MM/YYYY`) is preferred for ambiguous values, with unambiguous US dates still parsed. Amounts accept both `1.234,56` and `1,234.56` grouping and are stored to 2 decimal places; for 2-decimal money a lone separator before three digits reads as a thousands group (`1.500` → 1500). The 6-decimal `quantity` field is different: a lone separator is always the decimal mark (`1.500` → 1.5, `0.125` → 0.125).
 
-**Investments fields:** `name` (required), `category` (required), `base_currency` (required), `ticker`, `broker`, `notes`.
+**Investments fields:** `name` (required), `category` (required), `base_currency` (required, supported set — `USD`/`ARS`/`BRL`/`EUR`/`GBP`), `ticker`, `broker`, `notes`.
 
 **Expenses fields:** `date` (required), `amount` (required), `currency` (required), `category`, `payment_method`, `notes`. Imported rows are recorded with source `manual`. On import, `payment_method` also accepts common EN/ES and card-brand labels (e.g. `Efectivo`, `Débito`, `Transferencia`, `Visa`, `Mastercard`, `Tarjeta de crédito`), each mapped to a canonical value; an unrecognized value is dropped with a per-row warning (the row still imports, just without a payment method) rather than rejecting the row. Imports never attach a `credit_card_id`.
 
@@ -89,9 +89,9 @@ Both endpoints take a `multipart/form-data` body. A single file is capped at 1,0
 
 **Income fields:** `date` (required), `amount` (required), `currency` (required), `category`, `notes`. Imported rows are recorded with source `manual`.
 
-**Snapshots fields:** `investment` (required — name or ticker), `date` (required), `value` (required, `0` or greater), `currency` (required, `ARS`/`USD`), `quantity`, `notes`. Upserts on (investment, date). Imported rows are recorded with source `manual`.
+**Snapshots fields:** `investment` (required — name or ticker), `date` (required), `value` (required, `0` or greater), `currency` (required, supported set — must match the investment's `base_currency`), `quantity`, `notes`. Upserts on (investment, date). Imported rows are recorded with source `manual`.
 
-**Transactions fields:** `investment` (required — name or ticker), `date` (required), `amount` (required), `currency` (required, `ARS`/`USD`), `type` (required — `buy`/`sell`/`deposit`/`withdrawal`), `quantity`, `notes`.
+**Transactions fields:** `investment` (required — name or ticker), `date` (required), `amount` (required), `currency` (required, supported set — must match the investment's `base_currency`), `type` (required — `buy`/`sell`/`deposit`/`withdrawal`), `quantity`, `notes`.
 
 ---
 
