@@ -15,11 +15,12 @@ import {
 } from '@/lib/i18n/format';
 
 /*
- * The locale-bound formatter set. Every method closes over the resolved locale so call sites
- * never thread it (removing the silent en-US default footgun). Pure — no React, no next-intl —
- * so both the client hook (`useFormatters`) and the server helper (`getFormatters`) reuse it.
+ * The locale-bound formatter set. Every method closes over the resolved locale (and the user's
+ * timezone, for full-ISO timestamps) so call sites never thread them (removing the silent en-US
+ * default footgun). Pure — no React, no next-intl — so both the client hook (`useFormatters`) and
+ * the server helper (`getFormatters`) reuse it.
  */
-export function createFormatters(locale: string) {
+export function createFormatters(locale: string, timeZone?: string) {
   return {
     // The resolved locale, for the rare call site that still needs it directly (e.g. localeCompare).
     locale,
@@ -33,7 +34,7 @@ export function createFormatters(locale: string) {
     ratio: (value: number) => formatRatio(value, locale),
     month: (dateStr: string) => formatMonth(dateStr, locale),
     date: (iso: string, dateFormat?: string) => formatDateForLocale(iso, locale, dateFormat),
-    timestampDate: (iso: string) => formatTimestampDate(iso, locale),
+    timestampDate: (iso: string) => formatTimestampDate(iso, locale, timeZone),
     axisValue: (value: number) => formatAxisValue(value, locale),
     list: (items: Iterable<string>) => formatList(items, locale),
   };

@@ -1,7 +1,14 @@
 // Timezone constants and IANA zone list. The list comes from `Intl.supportedValuesOf('timeZone')`
 // at module load (Node >= 18, all modern browsers). Sorted alphabetically.
 
+import { COOKIE_MAX_AGE_1_YEAR } from '@/config/constants';
+
 export const TIMEZONE_DEFAULT = 'UTC';
+
+// Cookie carrying the active IANA timezone across requests — mirrors LOCALE_COOKIE. Written by the
+// localization save + timezone auto-sync actions, read by i18n/request.ts to drive next-intl's timeZone.
+export const TIMEZONE_COOKIE = 'NEXT_TIMEZONE';
+export const TIMEZONE_COOKIE_MAX_AGE = COOKIE_MAX_AGE_1_YEAR;
 
 export const TIMEZONE_MODE_AUTO = 'auto';
 export const TIMEZONE_MODE_MANUAL = 'manual';
@@ -27,6 +34,17 @@ export function detectBrowserTimezone(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || TIMEZONE_DEFAULT;
   } catch {
     return TIMEZONE_DEFAULT;
+  }
+}
+
+// True when the runtime recognises the IANA timezone name. Used to validate the timezone cookie
+// before handing it to next-intl (an unknown zone would otherwise throw in Intl formatters).
+export function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
   }
 }
 

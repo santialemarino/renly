@@ -1,6 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
 
+import { isValidTimezone, TIMEZONE_COOKIE } from '@/lib/constants/timezones';
 import { DEFAULT_LOCALE, LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/lib/i18n/locales';
 
 function getLocaleFromCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): string | null {
@@ -48,8 +49,15 @@ export default getRequestConfig(async () => {
     locale = DEFAULT_LOCALE;
   }
 
+  // Timezone cookie (set by saveLocalization + syncBrowserTimezone) drives next-intl's timeZone,
+  // which the formatters hook reads to render full ISO timestamps in the user's stored zone. When
+  // absent or invalid, leave it unset so timestamps fall back to the ambient (browser/server) zone.
+  const storedTimezone = cookieStore.get(TIMEZONE_COOKIE)?.value;
+  const timeZone = storedTimezone && isValidTimezone(storedTimezone) ? storedTimezone : undefined;
+
   return {
     locale,
+    timeZone,
     messages: (await import(`../translations/${locale}.json`)).default,
   };
 });

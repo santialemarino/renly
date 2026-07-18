@@ -91,12 +91,13 @@ export function formatDateForLocale(
   return format(date, dateFormat, { locale: getDateFnsLocale(locale) });
 }
 
-// Formats a full ISO timestamp (e.g. "2026-07-16T12:00:00") as a short, locale-aware date label (e.g. "Jul 16, 2026" / "16 jul 2026"), dropping the time. For date-only (YYYY-MM-DD) strings use formatDateForLocale.
-export function formatTimestampDate(iso: string, locale?: string): string {
+// Formats a full ISO timestamp (e.g. "2026-07-16T12:00:00Z") as a short, locale-aware date label (e.g. "Jul 16, 2026" / "16 jul 2026"), dropping the time. Renders in `timeZone` when given (the user's stored zone) so the calendar day is correct for the viewer; falls back to the ambient zone otherwise. For date-only (YYYY-MM-DD) strings use formatDateForLocale — those must stay on the local-midnight anchor and must NOT be timezone-shifted.
+export function formatTimestampDate(iso: string, locale?: string, timeZone?: string): string {
   return new Date(iso).toLocaleDateString(getLocaleTag(locale), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    timeZone,
   });
 }
 
