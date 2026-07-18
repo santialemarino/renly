@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { TIMEZONE_COOKIE, TIMEZONE_COOKIE_MAX_AGE } from '@/lib/constants/timezones';
 import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n/locales';
 
 interface SaveLocalizationParams {
@@ -14,8 +15,9 @@ interface SaveLocalizationParams {
 }
 
 // Persists the user's IANA timezone + language preference (explicit save from the
-// Localization form). Sets the NEXT_LOCALE cookie so SSR picks up the language change
-// from the next render. Invalidates the layout so subsequent navigations re-read settings.
+// Localization form). Sets the NEXT_LOCALE + NEXT_TIMEZONE cookies so SSR picks up the
+// language + timezone change from the next render. Invalidates the layout so subsequent
+// navigations re-read settings.
 export async function saveLocalization(params: SaveLocalizationParams): Promise<void> {
   const res = await authenticatedFetch('/settings', {
     method: 'PUT',
@@ -30,6 +32,11 @@ export async function saveLocalization(params: SaveLocalizationParams): Promise<
   const cookieStore = await cookies();
   cookieStore.set(LOCALE_COOKIE, params.language, {
     maxAge: LOCALE_COOKIE_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+  });
+  cookieStore.set(TIMEZONE_COOKIE, params.timezone, {
+    maxAge: TIMEZONE_COOKIE_MAX_AGE,
     path: '/',
     sameSite: 'lax',
   });

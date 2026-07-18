@@ -113,6 +113,22 @@ describe('date formatters', () => {
     expect(en).toContain('16');
     expect(en).toContain('2026');
   });
+
+  it('formatTimestampDate renders the calendar day in the given timezone', () => {
+    // 02:00 UTC on Jul 16 is still Jul 15 in Los Angeles (UTC-7) but Jul 16 in Sydney (UTC+10).
+    expect(formatTimestampDate('2026-07-16T02:00:00Z', 'en', 'America/Los_Angeles')).toBe(
+      'Jul 15, 2026',
+    );
+    expect(formatTimestampDate('2026-07-16T02:00:00Z', 'en', 'Australia/Sydney')).toBe(
+      'Jul 16, 2026',
+    );
+    expect(formatTimestampDate('2026-07-16T02:00:00Z', 'en', 'UTC')).toBe('Jul 16, 2026');
+  });
+
+  it('formatDateForLocale is date-only and never timezone-shifted (stays on the local-midnight anchor)', () => {
+    // A YYYY-MM-DD value renders its own calendar day regardless of any ambient/stored tz.
+    expect(formatDateForLocale('2026-07-16', 'en')).toBe('Jul 16, 2026');
+  });
 });
 
 describe('formatAxisValue', () => {

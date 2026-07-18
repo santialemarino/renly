@@ -24,7 +24,6 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
 import { useFormatters } from '@/lib/i18n/formatters';
-import { getLocaleTag } from '@/lib/i18n/locales';
 
 interface ReconciliationFormDialogProps {
   open: boolean;
@@ -115,9 +114,7 @@ export function ReconciliationFormDialog({
           {isReplace && !isStale && statement.reconciliation && (
             <StyledHint variant="info">
               {t('form.replaceBanner', {
-                date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(
-                  getLocaleTag(fmt.locale),
-                ),
+                date: fmt.timestampDate(statement.reconciliation.reconciledAt),
               })}
             </StyledHint>
           )}

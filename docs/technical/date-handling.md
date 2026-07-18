@@ -85,3 +85,20 @@ back to the environment's default zone and the API to UTC.
 Two deliberate exceptions keep the **server** date: global scheduler batches that stamp shared
 data (auto-snapshots, exchange-rate/CEDEAR-ratio fetch dates), and rate-availability probes,
 where the query date can't change the outcome.
+
+## Displaying timestamps vs date-only values
+
+The same timezone drives how **full ISO timestamps** (an instant — `created_at`, `reconciled_at`,
+API-key `last_used_at`, …) are rendered: `fmt.timestampDate` shows them on the calendar day of the
+user's stored timezone, so a value logged at 02:00 UTC reads as the previous day for a user in a
+negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIMEZONE` cookie
+(mirrors `NEXT_LOCALE`; written by the localization save + timezone auto-sync actions, read in
+`apps/web/i18n/request.ts` and returned as next-intl's `timeZone`, which the `useFormatters` /
+`getFormatters` hook binds). When no cookie is present the timestamp falls back to the ambient
+(browser/server) zone.
+
+**Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** `fmt.date` / `fmt.month` (and the
+inline period/day labels in the payments calendar and credit-card statements) anchor a date-only
+string at local midnight and render its own calendar day regardless of the stored timezone —
+shifting them would reintroduce an off-by-one at month/day boundaries. Only full timestamps carry a
+timezone.
