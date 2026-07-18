@@ -10,7 +10,10 @@ import {
   blockWrongLocaleDecimal,
   formatAmountForInput,
   getDecimalSeparator,
+  getGroupSeparator,
+  groupIntegerDigits,
   limitDecimalsInString,
+  mapCaretAfterRegroup,
   normalizeAmountFromInput,
   sanitizeDecimalChars,
   sanitizeDecimalPaste,
@@ -34,6 +37,11 @@ describe('locale separators', () => {
     expect(getDecimalSeparator('en')).toBe('.');
     expect(getDecimalSeparator('es')).toBe(',');
   });
+
+  it('reports the group separator per locale', () => {
+    expect(getGroupSeparator('en')).toBe(',');
+    expect(getGroupSeparator('es')).toBe('.');
+  });
 });
 
 describe('normalize / format round-trip', () => {
@@ -44,15 +52,53 @@ describe('normalize / format round-trip', () => {
     expect(normalizeAmountFromInput('', 'es')).toBe('');
   });
 
-  it('formats canonical .-decimal back to the locale separator (no grouping)', () => {
-    expect(formatAmountForInput('1234.56', 'es')).toBe('1234,56');
-    expect(formatAmountForInput('1234.56', 'en')).toBe('1234.56');
+  it('formats canonical .-decimal to the locale separator WITH thousand grouping', () => {
+    expect(formatAmountForInput('1234.56', 'es')).toBe('1.234,56');
+    expect(formatAmountForInput('1234.56', 'en')).toBe('1,234.56');
+    expect(formatAmountForInput('1234567.89', 'es')).toBe('1.234.567,89');
+    expect(formatAmountForInput('999', 'es')).toBe('999');
     expect(formatAmountForInput('', 'en')).toBe('');
+  });
+
+  it('preserves a trailing decimal separator (mid-typing, no fraction yet)', () => {
+    expect(formatAmountForInput('1234.', 'es')).toBe('1.234,');
+    expect(formatAmountForInput('1234.', 'en')).toBe('1,234.');
   });
 
   it('round-trips display → canonical → display', () => {
     const canonical = normalizeAmountFromInput('1.234,56', 'es');
-    expect(formatAmountForInput(canonical, 'es')).toBe('1234,56');
+    expect(formatAmountForInput(canonical, 'es')).toBe('1.234,56');
+  });
+});
+
+describe('groupIntegerDigits', () => {
+  it('inserts the separator every three digits from the right', () => {
+    expect(groupIntegerDigits('1', '.')).toBe('1');
+    expect(groupIntegerDigits('999', '.')).toBe('999');
+    expect(groupIntegerDigits('1234', '.')).toBe('1.234');
+    expect(groupIntegerDigits('1234567', ',')).toBe('1,234,567');
+    expect(groupIntegerDigits('', '.')).toBe('');
+  });
+});
+
+describe('mapCaretAfterRegroup', () => {
+  it('keeps the caret after the same digit when a group separator is inserted', () => {
+    // "9999" caret at end (4) → regrouped "9.999"; caret lands at the end (5).
+    expect(mapCaretAfterRegroup('9999', 4, '9.999', ',')).toBe(5);
+  });
+
+  it('keeps the caret after a just-typed trailing decimal separator', () => {
+    // es: "1234," (caret 5, after comma) → regrouped "1.234,"; caret stays after the comma (6).
+    expect(mapCaretAfterRegroup('1234,', 5, '1.234,', ',')).toBe(6);
+  });
+
+  it('maps a mid-number caret by digit count, ignoring separators', () => {
+    // Inserted "9" after "2" in "1.2934" (caret 4) → "12.934"; caret after the "9" (index 4).
+    expect(mapCaretAfterRegroup('1.2934', 4, '12.934', ',')).toBe(4);
+  });
+
+  it('returns 0 when no significant chars precede the caret', () => {
+    expect(mapCaretAfterRegroup('1.234', 0, '1.234', ',')).toBe(0);
   });
 });
 

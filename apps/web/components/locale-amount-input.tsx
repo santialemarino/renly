@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useEffect, useRef, useState } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import cc from 'currency-codes';
 import { useLocale } from 'next-intl';
 
@@ -14,11 +14,16 @@ import {
   composeKeyHandlers,
   formatAmountForInput,
   getDecimalSeparator,
+  getGroupSeparator,
   limitDecimalsInString,
+  mapCaretAfterRegroup,
   normalizeAmountFromInput,
   sanitizeDecimalChars,
   sanitizeDecimalPaste,
 } from '@/lib/i18n/numeric-input';
+
+// useLayoutEffect writes the caret before paint; fall back to useEffect on the server (SSR) to avoid React's no-op-layout-effect warning. Chosen once at module load, so it's not a conditional hook.
+const useIsomorphicLayoutEffect = typeof document !== 'undefined' ? useLayoutEffect : useEffect;
 
 interface LocaleAmountInputProps {
   value?: string;
@@ -37,27 +42,26 @@ interface LocaleAmountInputProps {
 
 /*
  * Locale-aware decimal amount input. Stores canonical `.`-decimal in form state;
- * displays in the user's locale format (e.g. "1234,56" for es-AR, "1234.56" for
- * en-US). Replaces `<Input type="number" step="0.01">` for amount and quantity
- * fields — fixes Chrome's silent rejection of `1234,56` for ARS users.
+ * displays in the user's locale format with live thousand-grouping as they type
+ * (e.g. "1.234.567,89" for es-AR, "1,234,567.89" for en-US). Replaces
+ * `<Input type="number" step="0.01">` for amount and quantity fields — fixes
+ * Chrome's silent rejection of `1234,56` for ARS users.
  *
- * Rule stack (composable, defined in `lib/utils/numeric-input.ts`):
- *  - block sign keys, block scientific notation
- *  - block the wrong-locale decimal separator
- *  - block a second decimal (selection-aware: keystroke allowed when the input's
- *    selection range overlaps the existing decimal)
- *  - block the decimal entirely for zero-precision currencies (JPY/KRW)
- *
- * Change handler runs `sanitizeDecimalChars` so non-keystroke paths (IME, autofill,
- * drag-drop, programmatic input) can't leak letters or whitespace into form state.
- * Paste handler uses "last separator wins" so `"1.234,56"` and `"1,234.56"` both
- * yield 1234.56 regardless of locale. `onChange` truncates fractional digits to
- * the currency's ISO sub-unit precision.
+ * Every mutation runs the same pipeline: sanitize the raw input → normalize to
+ * canonical → truncate to the currency's precision → re-group for display, then
+ * re-place the caret with `mapCaretAfterRegroup` (counting digits, not characters,
+ * so the inserted/removed group separators don't drift it). Keystroke rules
+ * (composed from `lib/i18n/numeric-input`) block sign/scientific keys, the wrong
+ * locale's decimal, a second decimal (selection-aware), and any decimal for
+ * zero-precision currencies. Backspace/Delete onto a group separator removes the
+ * adjacent digit (deleting the separator alone would just regroup back). Paste uses
+ * "last separator wins" so `"1.234,56"` and `"1,234.56"` both yield 1234.56.
  */
 const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
   ({ value = '', onChange, onBlur, name, currency, maxDecimals, ...rest }, ref) => {
     const locale = useLocale();
     const decimal = getDecimalSeparator(locale);
+    const group = getGroupSeparator(locale);
     const effectiveMaxDecimals =
       maxDecimals !== undefined
         ? maxDecimals
@@ -67,6 +71,16 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
 
     const [displayValue, setDisplayValue] = useState(() => formatAmountForInput(value, locale));
     const prevLocaleRef = useRef(locale);
+    const innerRef = useRef<HTMLInputElement | null>(null);
+    // Caret index to restore after a regroup re-renders the controlled value (null = no pending move).
+    const pendingCaretRef = useRef<number | null>(null);
+
+    // Merge the forwarded ref with the internal one used for caret manipulation.
+    function setRefs(node: HTMLInputElement | null) {
+      innerRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    }
 
     /*
      * Re-sync display when canonical value changes externally (e.g. form.reset).
@@ -106,27 +120,54 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [effectiveMaxDecimals]);
 
-    function applyValue(next: string) {
-      const limited = limitDecimalsInString(next, decimal, effectiveMaxDecimals);
-      setDisplayValue(limited);
-      onChange?.(normalizeAmountFromInput(limited, locale));
+    // Restore the caret after a regroup commits the new controlled value to the DOM.
+    useIsomorphicLayoutEffect(() => {
+      const caret = pendingCaretRef.current;
+      if (caret === null || innerRef.current === null) return;
+      pendingCaretRef.current = null;
+      innerRef.current.setSelectionRange(caret, caret);
+    });
+
+    /*
+     * The one write path: take the raw post-edit string + caret, canonicalize,
+     * truncate, re-group for display, push canonical to form state, and queue the
+     * caret restore. `rawDisplay`/`rawCaret` are what the browser produced (with
+     * stale group separators); `mapCaretAfterRegroup` reconciles them to the
+     * freshly grouped string.
+     */
+    function applyRawWithCaret(rawDisplay: string, rawCaret: number) {
+      const sanitized = sanitizeDecimalChars(rawDisplay, locale);
+      const canonical = limitDecimalsInString(
+        normalizeAmountFromInput(sanitized, locale),
+        '.',
+        effectiveMaxDecimals,
+      );
+      const nextDisplay = formatAmountForInput(canonical, locale);
+      // Queue the caret only when the display actually changes, so the ref is set iff the
+      // re-render (and its layout effect) will consume it — never left dangling for a later render.
+      if (nextDisplay !== displayValue) {
+        pendingCaretRef.current = mapCaretAfterRegroup(rawDisplay, rawCaret, nextDisplay, decimal);
+        setDisplayValue(nextDisplay);
+      }
+      onChange?.(canonical);
     }
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-      applyValue(sanitizeDecimalChars(e.target.value, locale));
+      const input = e.currentTarget;
+      applyRawWithCaret(input.value, input.selectionStart ?? input.value.length);
     }
 
     function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
       e.preventDefault();
-      const pasted = e.clipboardData.getData('text/plain');
-      const sanitized = sanitizeDecimalPaste(pasted, locale);
       const input = e.currentTarget;
       const start = input.selectionStart ?? input.value.length;
       const end = input.selectionEnd ?? input.value.length;
-      applyValue(input.value.slice(0, start) + sanitized + input.value.slice(end));
+      const sanitized = sanitizeDecimalPaste(e.clipboardData.getData('text/plain'), locale);
+      const rawDisplay = input.value.slice(0, start) + sanitized + input.value.slice(end);
+      applyRawWithCaret(rawDisplay, start + sanitized.length);
     }
 
-    const handleKeyDown = composeKeyHandlers(
+    const runKeyRules = composeKeyHandlers(
       blockSignKeys,
       blockScientificKeys,
       blockWrongLocaleDecimal(locale),
@@ -134,10 +175,31 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
       blockDecimalIfIntegerCurrency(locale, effectiveMaxDecimals),
     );
 
+    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+      runKeyRules(e);
+      if (e.defaultPrevented) return;
+      // Backspace/Delete onto a group separator removes the adjacent DIGIT — deleting
+      // the separator alone would immediately regroup back, trapping the caret.
+      const input = e.currentTarget;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      if (start === null || end === null || start !== end) return;
+      if (e.key === 'Backspace' && start > 1 && displayValue[start - 1] === group) {
+        e.preventDefault();
+        applyRawWithCaret(
+          displayValue.slice(0, start - 2) + displayValue.slice(start - 1),
+          start - 2,
+        );
+      } else if (e.key === 'Delete' && displayValue[start] === group) {
+        e.preventDefault();
+        applyRawWithCaret(displayValue.slice(0, start) + displayValue.slice(start + 2), start);
+      }
+    }
+
     return (
       <Input
         {...rest}
-        ref={ref}
+        ref={setRefs}
         type="text"
         inputMode="decimal"
         name={name}
