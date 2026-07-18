@@ -20,6 +20,22 @@ async def get_all_timezones(session: AsyncSession) -> dict[int, str]:
     return out
 
 
+# Returns {user_id: language} for the requested users that have a non-empty 'language' key in their
+# settings. Users without one are omitted; callers apply the default language.
+async def get_languages_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, str]:
+    if not user_ids:
+        return {}
+    result = await session.execute(
+        select(UserSettings.user_id, UserSettings.settings).where(UserSettings.user_id.in_(user_ids)),
+    )
+    out: dict[int, str] = {}
+    for user_id, settings in result.all():
+        language = settings.get("language") if isinstance(settings, dict) else None
+        if isinstance(language, str) and language:
+            out[user_id] = language
+    return out
+
+
 # Fetches settings row by user_id. Returns None if not found.
 async def get_by_user_id(
     session: AsyncSession,
@@ -68,6 +84,7 @@ class UserSettingsRepository:
     create = staticmethod(create)
     get_all_timezones = staticmethod(get_all_timezones)
     get_by_user_id = staticmethod(get_by_user_id)
+    get_languages_by_user_ids = staticmethod(get_languages_by_user_ids)
     latch_flag = staticmethod(latch_flag)
     save = staticmethod(save)
 

@@ -9,7 +9,7 @@ from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreac
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
-from app.services import account_service, auth_service
+from app.services import account_service, auth_service, settings_service
 
 # Coverage for the M2 account-lifecycle service flows: email verification (AUTH-1), password reset
 # (AUTH-2), change password/email (AUTH-8), account deletion + export (AUTH-6), and the uniform
@@ -113,6 +113,16 @@ async def _not_breached(_plain: str) -> bool:
     return False
 
 
+# Default language stubs so the flows don't hit the real settings repo on the FakeSession. Tests that
+# assert locale resolution override these via monkeypatch.
+async def _stub_get_language(_session, _user_id) -> str:
+    return "en"
+
+
+async def _stub_seed_language(_session, _user_id, _language) -> None:
+    return None
+
+
 # Wires the fakes into both service modules and disables the HIBP network call by default.
 @pytest.fixture
 def wired(monkeypatch):
@@ -125,6 +135,8 @@ def wired(monkeypatch):
     monkeypatch.setattr(auth_service, "is_password_breached", _not_breached)
     monkeypatch.setattr(account_service, "user_repository", users)
     monkeypatch.setattr(account_service, "invite_repository", FakeInviteRepo())
+    monkeypatch.setattr(settings_service, "get_user_language", _stub_get_language)
+    monkeypatch.setattr(settings_service, "seed_language", _stub_seed_language)
     # These flows cover open registration + the lifecycle; the invite-only gate is orthogonal and
     # has its own coverage (test_invites.py), so exercise registration in open mode here.
     monkeypatch.setattr(settings, "signup_mode", SignupMode.open)
@@ -442,3 +454,74 @@ class TestDummyPasswordHash:
     @pytest.mark.asyncio
     async def test_dummy_hash_never_matches(self):
         assert not await auth_service.verify_password("anything", auth_service.DUMMY_PASSWORD_HASH)
+
+
+# --- Email localization (F3) ---
+
+
+class TestEmailLocalization:
+    # Signup verification is localized to the locale the web passes, and that locale is seeded on the
+    # new user's settings for later transactional emails.
+    @pytest.mark.asyncio
+    async def test_register_localizes_verification_and_seeds_language(self, wired, monkeypatch):
+        users, tokens, email = wired
+        seeded: list[tuple[int, str]] = []
+
+        async def _capture_seed(_session, user_id, language):
+            seeded.append((user_id, language))
+
+        monkeypatch.setattr(settings_service, "seed_language", _capture_seed)
+
+        await auth_service.register_account(FakeSession(), "Santi", "new@example.com", _PASSWORD, language="es")
+
+        assert "Verificá" in email.sent[0].subject
+        user = await users.get_by_email(None, "new@example.com")
+        assert seeded == [(user.id, "es")]
+
+    # No locale passed → verification stays in the default (English) and nothing is seeded.
+    @pytest.mark.asyncio
+    async def test_register_without_language_uses_default_and_seeds_nothing(self, wired, monkeypatch):
+        _users, _tokens, email = wired
+        seeded: list[tuple[int, str]] = []
+
+        async def _capture_seed(_session, user_id, language):
+            seeded.append((user_id, language))
+
+        monkeypatch.setattr(settings_service, "seed_language", _capture_seed)
+
+        await auth_service.register_account(FakeSession(), "Santi", "new@example.com", _PASSWORD)
+
+        assert "Verify" in email.sent[0].subject
+        assert seeded == []
+
+    # The existing-account notice (anti-enumeration) must never adopt that account's stored language —
+    # it stays in the default locale even when the account's language is Spanish.
+    @pytest.mark.asyncio
+    async def test_account_exists_notice_uses_default_locale(self, wired, monkeypatch):
+        users, _tokens, email = wired
+        await users.create(None, User(name="Santi", email="taken@example.com", password_hash="h"))
+
+        async def _es(_session, _user_id) -> str:
+            return "es"
+
+        monkeypatch.setattr(settings_service, "get_user_language", _es)
+
+        await auth_service.register_account(FakeSession(), "Santi", "taken@example.com", _PASSWORD, language="es")
+
+        assert "already have" in email.sent[0].text.lower()
+
+    # Password reset (an existing-user flow) is localized to the user's stored language.
+    @pytest.mark.asyncio
+    async def test_password_reset_uses_stored_language(self, wired, monkeypatch):
+        users, _tokens, email = wired
+        await users.create(None, User(name="Santi", email="u@example.com", password_hash="h"))
+
+        async def _es(_session, _user_id) -> str:
+            return "es"
+
+        monkeypatch.setattr(settings_service, "get_user_language", _es)
+
+        await auth_service.request_password_reset(FakeSession(), "u@example.com")
+        await _drain_sends()
+
+        assert "Restablecé" in email.sent[0].subject

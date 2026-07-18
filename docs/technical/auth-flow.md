@@ -6,7 +6,7 @@ How authentication works across the backend (FastAPI) and frontend (Next.js + Ne
 
 ### Register (anti-enumeration, AUTH-5)
 
-1. `POST /auth/register` receives `{name, email, password, invite_token?}`.
+1. `POST /auth/register` receives `{name, email, password, invite_token?, language?}`. `language` is the web's active UI locale (`en` or `es`); it seeds the new user's stored language preference and localizes the verification email. Unsupported values are ignored (coerced to null) so a stray value never 422s signup.
 2. The request schema validates `email` as a real address (`EmailStr`) and normalizes it to lowercase, and enforces a 12-character minimum password — invalid input returns 422.
 3. **Invite gate (`SIGNUP_MODE`):** in `invite` mode (default), a valid, unconsumed, unexpired invite whose email matches the registering address is **required** — otherwise `403` (`InvalidInviteError`). It is validated first (the access gate), and consumed on success. In `open` mode the gate is skipped. The invite check only inspects the invite token + its bound email, so it never reveals whether the address already has an account — the uniform-`202` property below is preserved. See **Invite-only access gate** below.
 4. Checks the password against the HIBP Pwned Passwords range API (k-anonymity: SHA-1 the password, send only the first 5 hex chars, match the returned suffixes locally). A confirmed breach returns 400; if HIBP is unreachable the check fails open. This runs **before the existing-email branch** and is email-independent, so rejecting a breached password leaks nothing about the address.
@@ -99,6 +99,16 @@ Authenticated endpoints; each sensitive action re-verifies the current password 
 - `DELETE /me` `{password, confirmation}` — verifies the password and a typed confirmation matching the account email, then deletes the user. FK `ON DELETE CASCADE` removes every owned row. The web signs out and returns to login.
 
 `auth_tokens` (and `refresh_tokens`, AUTH-7) are under RLS keyed on `user_id` like every other user-owned table; in practice every flow that touches them runs on the privileged (owner) session and bypasses RLS — the pre-auth flows have no user context (login issues a refresh token before any request-session context exists; `/auth/refresh` carries a refresh token, not an access token), and the authenticated email-change request uses the privileged session so its target-address availability check can see other accounts. The per-user policies are defense-in-depth (SEC-15).
+
+### Transactional email localization
+
+Transactional emails are the one place the backend produces user-facing prose (there is no frontend renderer for them), so — unlike every other API response, which stays locale-agnostic — they are localized to the recipient's language. The builders in `app/services/email_templates.py` carry a plain Python `en`/`es` catalog (subject + body per template, no new dependency) and take a `locale`; an unknown locale falls back to English per string. Locale resolution per flow:
+
+- **Signup verification** uses the `language` the web passes to `/auth/register` (also seeded onto the new user's settings for later emails).
+- **Existing-user flows** (resend verification, password reset, email-change confirmation) read the user's stored `user_settings.settings->>'language'` via `settings_service.get_user_language`.
+- **Anti-enumeration sends** (account-exists, email-change-taken) use the **default** locale — they must not reveal the target account's stored language.
+- **Invites** use the inviting admin's stored language.
+- The **feedback notification** (admin-facing) is localized to each admin's stored language, with the category label translated; admin languages are batch-loaded (one query) to avoid an N+1.
 
 ## JWT structure
 

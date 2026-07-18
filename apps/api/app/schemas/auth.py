@@ -8,6 +8,7 @@ from app.config import SignupMode
 from app.models.auth_token import AuthTokenType
 from app.models.user import UserPlan
 from app.schemas.base import RequestBase
+from app.schemas.settings import SUPPORTED_LANGUAGES
 
 # Minimum password length enforced at registration.
 MIN_PASSWORD_LENGTH = 12
@@ -16,12 +17,29 @@ MIN_PASSWORD_LENGTH = 12
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
 
 
+# Coerces an unsupported (or empty) language to None so a stray value never 422s signup — the
+# service falls back to the default email locale.
+def _supported_language_or_none(value: str | None) -> str | None:
+    return value if value in SUPPORTED_LANGUAGES else None
+
+
+# Optional supported UI language ('en' | 'es'); anything else becomes None.
+SupportedLanguage = Annotated[str | None, AfterValidator(_supported_language_or_none)]
+
+
 # Body for POST /auth/register. Creates a new user.
 class RegisterRequest(RequestBase):
     name: str = Field(description="Full name of the user.")
     email: NormalizedEmail = Field(description="Email address (unique, normalized to lowercase).")
     password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="Plain password (will be hashed); minimum 12 characters.")
     invite_token: str | None = Field(default=None, description="Raw invite token from the emailed link; required in invite-only mode (SIGNUP_MODE).")
+    language: SupportedLanguage = Field(
+        default=None,
+        description=(
+            "Active UI locale ('en' | 'es') from the web; seeds the new user's language preference "
+            "and localizes the verification email. Unsupported values are ignored."
+        ),
+    )
 
 
 # Body for POST /auth/login. Authenticates an existing user.

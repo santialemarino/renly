@@ -6,6 +6,8 @@ export interface RegisterPayload {
   password: string;
   // Raw invite token from the emailed link; required by the API in invite-only mode (SIGNUP_MODE).
   inviteToken?: string;
+  // Active UI locale, so the API localizes the verification email and seeds the language preference.
+  language?: string;
 }
 
 // Thrown when the API rejects a password (the only 400 from register/reset): too weak or breached.
@@ -74,6 +76,7 @@ export async function registerRequest(data: RegisterPayload): Promise<void> {
       email: data.email,
       password: data.password,
       invite_token: data.inviteToken,
+      language: data.language,
     }),
   });
   if (res.status === 403) throw new InviteInvalidError();

@@ -6,10 +6,11 @@ from sqlmodel import select
 from app.models.user import User
 
 
-# Returns the emails of all admin users, for admin notifications (e.g. new feedback). Runs on the
-# privileged session — under RLS a non-admin can't read other users' rows.
-async def list_admin_emails(session: AsyncSession) -> list[str]:
-    result = await session.execute(select(User.email).where(User.is_admin))
+# Returns all admin users, for admin notifications (e.g. new feedback) that need each admin's id
+# (to resolve their language) plus their email. Runs on the privileged session — under RLS a
+# non-admin can't read other users' rows.
+async def list_admins(session: AsyncSession) -> list[User]:
+    result = await session.execute(select(User).where(User.is_admin))
     return list(result.scalars().all())
 
 
@@ -47,7 +48,7 @@ class UserRepository:
     delete = staticmethod(delete)
     get_by_email = staticmethod(get_by_email)
     get_by_id = staticmethod(get_by_id)
-    list_admin_emails = staticmethod(list_admin_emails)
+    list_admins = staticmethod(list_admins)
     save = staticmethod(save)
 
 

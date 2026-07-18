@@ -17,7 +17,7 @@ from app.domain import InvalidInviteError, InviteEmailTakenError, NotFoundError
 from app.models.invite import Invite, InviteStatus
 from app.models.utils import utcnow
 from app.repositories import invite_repository, user_repository
-from app.services import email_templates
+from app.services import email_templates, settings_service
 from app.services.email_service import EmailMessage, get_email_service
 
 logger = logging.getLogger(__name__)
@@ -86,7 +86,8 @@ async def create_invite(session: AsyncSession, email: str, invited_by_id: int) -
         invite.expires_at = expires_at
         await invite_repository.save(session, invite)
     await session.commit()
-    await _safe_send(email_templates.invite_email(email, _invite_link(raw_token)))
+    locale = await settings_service.get_user_language(session, invited_by_id)
+    await _safe_send(email_templates.invite_email(email, _invite_link(raw_token), locale=locale))
     return invite
 
 
@@ -106,7 +107,8 @@ async def resend_invite(session: AsyncSession, invite_id: int) -> Invite:
     invite.expires_at = utcnow() + INVITE_TOKEN_TTL
     await invite_repository.save(session, invite)
     await session.commit()
-    await _safe_send(email_templates.invite_email(invite.email, _invite_link(raw_token)))
+    locale = await settings_service.get_user_language(session, invite.invited_by)
+    await _safe_send(email_templates.invite_email(invite.email, _invite_link(raw_token), locale=locale))
     return invite
 
 

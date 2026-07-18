@@ -15,7 +15,7 @@ from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import auth_token_repository, user_repository
-from app.services import email_templates, invite_service
+from app.services import email_templates, invite_service, settings_service
 from app.services.email_service import EmailMessage, get_email_service
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,14 @@ async def get_user_by_email(session: AsyncSession, email: str) -> User | None:
 # required and consumed on success; the invite check gates access without leaking account existence
 # (it only inspects the invite token + its bound email, never the users table). In open mode the
 # gate is skipped. The invite token is validated first so an uninvited request is rejected outright.
-async def register_account(session: AsyncSession, name: str, email: str, password: str, invite_token: str | None = None) -> None:
+async def register_account(
+    session: AsyncSession,
+    name: str,
+    email: str,
+    password: str,
+    invite_token: str | None = None,
+    language: str | None = None,
+) -> None:
     invite = None
     if settings.signup_mode == SignupMode.invite:
         invite = await invite_service.get_valid_invite(session, invite_token, email)
@@ -119,6 +126,11 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
     # have accounts, which would defeat the uniform-202 anti-enumeration goal (AUTH-5).
     password_hash = await hash_password(password)
 
+    # The web passes the active UI locale so the verification email — and later transactional emails
+    # to this user — are localized. Anti-enumeration: the existing-account notice stays in the
+    # default locale (it must not reveal the account's own stored language).
+    email_locale = language or settings_service.DEFAULT_LANGUAGE
+
     existing = await user_repository.get_by_email(session, email)
     if existing is not None:
         if invite is not None:
@@ -129,11 +141,13 @@ async def register_account(session: AsyncSession, name: str, email: str, passwor
 
     user = User(name=name, email=email, password_hash=password_hash)
     user = await user_repository.create(session, user)
+    if language is not None:
+        await settings_service.seed_language(session, user.id, language)
     raw_token = await issue_token(session, user.id, AuthTokenType.email_verification, VERIFICATION_TOKEN_TTL)
     if invite is not None:
         await invite_service.consume_invite(session, invite)
     await session.commit()
-    await _safe_send(email_templates.verification_email(user.email, _verify_link(raw_token)))
+    await _safe_send(email_templates.verification_email(user.email, _verify_link(raw_token), locale=email_locale))
 
 
 # Increments user session_epoch and saves; invalidates all existing JWTs for this user.
@@ -238,9 +252,10 @@ async def request_verification_email(session: AsyncSession, email: str) -> None:
     user = await user_repository.get_by_email(session, email)
     if user is None or user.email_verified_at is not None:
         return
+    locale = await settings_service.get_user_language(session, user.id)
     raw_token = await issue_token(session, user.id, AuthTokenType.email_verification, VERIFICATION_TOKEN_TTL)
     await session.commit()
-    _send_in_background(email_templates.verification_email(user.email, _verify_link(raw_token)))
+    _send_in_background(email_templates.verification_email(user.email, _verify_link(raw_token), locale=locale))
 
 
 # Confirms a verification or email-change token (one endpoint serves both, dispatching on the token
@@ -286,14 +301,18 @@ async def request_email_change(session: AsyncSession, user: User, new_email: str
     if new_email == user.email:
         return
 
+    # Anti-enumeration: the "already taken" notice goes to a foreign address, so it uses the default
+    # locale (we must not leak that account's language); the confirmation to the user's own new
+    # address uses the requesting user's stored language.
     existing = await user_repository.get_by_email(session, new_email)
     if existing is not None and existing.id != user.id:
         await _safe_send(email_templates.email_change_taken_email(new_email, _login_link()))
         return
 
+    locale = await settings_service.get_user_language(session, user.id)
     raw_token = await issue_token(session, user.id, AuthTokenType.email_change, EMAIL_CHANGE_TOKEN_TTL, new_email=new_email)
     await session.commit()
-    await _safe_send(email_templates.email_change_email(new_email, _verify_link(raw_token)))
+    await _safe_send(email_templates.email_change_email(new_email, _verify_link(raw_token), locale=locale))
 
 
 # --- Password reset (AUTH-2) ---
@@ -305,9 +324,10 @@ async def request_password_reset(session: AsyncSession, email: str) -> None:
     user = await user_repository.get_by_email(session, email)
     if user is None:
         return
+    locale = await settings_service.get_user_language(session, user.id)
     raw_token = await issue_token(session, user.id, AuthTokenType.password_reset, RESET_TOKEN_TTL)
     await session.commit()
-    _send_in_background(email_templates.password_reset_email(user.email, _reset_link(raw_token)))
+    _send_in_background(email_templates.password_reset_email(user.email, _reset_link(raw_token), locale=locale))
 
 
 # Resets the password from a valid reset token: rejects breached passwords (AUTH-3), updates the

@@ -114,7 +114,7 @@ class TestTemplates:
     def test_feedback_notification_email_carries_category_submitter_and_message(self):
         msg = email_templates.feedback_notification_email("admin@example.com", "user@example.com", "bug", "It broke")
         assert msg.to == "admin@example.com"
-        assert "bug" in msg.subject
+        assert "Bug" in msg.subject  # default (en) category label
         assert "user@example.com" in msg.text and "It broke" in msg.text
 
     def test_feedback_notification_email_escapes_html_in_the_message(self):
@@ -124,3 +124,32 @@ class TestTemplates:
         assert "<script>" not in msg.html
         assert "&lt;script&gt;alert(1)&lt;/script&gt;" in msg.html
         assert "<script>alert(1)</script>" in msg.text
+
+
+# --- Localization ---
+
+
+class TestTemplateLocales:
+    def test_verification_email_localizes_subject_and_body(self):
+        en = email_templates.verification_email("user@example.com", "https://app/verify?token=t", locale="en")
+        es = email_templates.verification_email("user@example.com", "https://app/verify?token=t", locale="es")
+        assert "Verify" in en.subject and "Verificá" in es.subject
+        assert "Welcome" in en.text and "bienvenida" in es.text
+        assert "t" in en.text and "t" in es.text  # the link survives in both
+
+    def test_default_locale_is_english(self):
+        # Callers that don't resolve a locale (anti-enumeration/default paths) get English.
+        assert email_templates.account_exists_email("user@example.com", "https://app/login").subject == (
+            email_templates.account_exists_email("user@example.com", "https://app/login", locale="en").subject
+        )
+        assert "Ya tenés" in email_templates.account_exists_email("user@example.com", "https://app/login", locale="es").subject
+
+    def test_feedback_notification_translates_the_category_label(self):
+        en = email_templates.feedback_notification_email("admin@example.com", "u@e.com", "bug", "m", locale="en")
+        es = email_templates.feedback_notification_email("admin@example.com", "u@e.com", "bug", "m", locale="es")
+        assert "Bug" in en.subject and "feedback" in en.subject
+        assert "Error" in es.subject and "comentario" in es.subject
+
+    def test_unknown_locale_falls_back_to_english(self):
+        msg = email_templates.verification_email("user@example.com", "https://app/verify?token=t", locale="fr")
+        assert "Verify" in msg.subject
