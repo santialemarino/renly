@@ -4,6 +4,7 @@ import type { LucideIcon } from 'lucide-react';
 
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { AnimatedIcon } from '@/components/animated-icon';
 
 interface RowActionButtonProps {
   icon: LucideIcon;
@@ -32,6 +33,7 @@ export function RowActionButton({
         <Button
           variant="ghost"
           size="icon"
+          data-animate-icon
           className={cn(
             'size-8',
             variant === 'destructive' && 'text-muted-foreground hover:text-destructive',
@@ -41,7 +43,7 @@ export function RowActionButton({
           disabled={disabled}
           aria-label={ariaLabel}
         >
-          <Icon className="size-4" />
+          <AnimatedIcon icon={Icon} className="size-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{tooltip}</TooltipContent>
