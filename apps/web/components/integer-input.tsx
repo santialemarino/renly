@@ -23,7 +23,7 @@ interface IntegerInputProps {
   'aria-invalid'?: boolean | 'true' | 'false';
 }
 
-// Natural-number input for fields that store digit-only strings (day-of-month, counts, integer percentages). Replaces `<Input type="number">` and `<Input inputMode="numeric">` everywhere. Rule stack (composable, defined in `lib/utils/numeric-input.ts`): block sign keys, block scientific notation, block both decimal separators. Paste handler strips everything but digits. Range validation stays in Zod — this component only guarantees the value is a digit-only string.
+// Natural-number input for fields that store digit-only strings (day-of-month, counts, integer percentages). Replaces `<Input type="number">` and `<Input inputMode="numeric">` everywhere. Rule stack (composable, defined in `lib/i18n/numeric-input.ts`): block sign keys, block scientific notation, block both decimal separators. Paste handler strips everything but digits. Range validation stays in Zod — this component only guarantees the value is a digit-only string.
 const IntegerInput = forwardRef<HTMLInputElement, IntegerInputProps>(
   ({ value = '', onChange, onBlur, name, ...rest }, ref) => {
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {

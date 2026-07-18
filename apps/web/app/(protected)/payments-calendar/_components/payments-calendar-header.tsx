@@ -3,11 +3,11 @@
 import { useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
-import { getLocaleTag } from '@/lib/i18n/locales';
+import { useFormatters } from '@/lib/i18n/formatters';
 import { currentYearMonth } from '@/lib/utils/dates';
 
 interface PaymentsCalendarHeaderProps {
@@ -17,16 +17,14 @@ interface PaymentsCalendarHeaderProps {
 }
 
 export function PaymentsCalendarHeader({ year, month, timeZone }: PaymentsCalendarHeaderProps) {
-  const locale = useLocale();
+  const fmt = useFormatters();
   const t = useTranslations('paymentsCalendar');
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
 
   // Locale-aware month name (e.g. "May" / "mayo").
-  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(locale), {
-    month: 'long',
-  });
+  const monthLabel = fmt.monthLong(year, month);
 
   function navigate(targetYear: number, targetMonth: number) {
     const params = new URLSearchParams(searchParams.toString());

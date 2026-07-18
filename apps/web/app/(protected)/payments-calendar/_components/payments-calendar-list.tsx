@@ -9,7 +9,6 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { getFormatters } from '@/lib/i18n/formatters-server';
-import { getLocaleTag } from '@/lib/i18n/locales';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 interface PaymentsCalendarListProps {
@@ -54,9 +53,7 @@ export async function PaymentsCalendarList({
   const t = await getTranslations('paymentsCalendar');
 
   if (items.length === 0) {
-    const monthName = new Date(year, month - 1, 1).toLocaleDateString(getLocaleTag(fmt.locale), {
-      month: 'long',
-    });
+    const monthName = fmt.monthLong(year, month);
     return (
       <div className="rounded-lg border border-border py-10 text-center text-muted-foreground">
         {t('empty', { month: monthName.charAt(0).toUpperCase() + monthName.slice(1) })}
@@ -84,11 +81,7 @@ export async function PaymentsCalendarList({
       {sortedDates.map((dateStr) => {
         const dayItems = groups.get(dateStr) ?? [];
         const isToday = dateStr === todayIso;
-        const day = new Date(`${dateStr}T00:00:00`);
-        const dayLabel = day.toLocaleDateString(getLocaleTag(fmt.locale), {
-          weekday: 'long',
-          day: 'numeric',
-        });
+        const dayLabel = fmt.weekdayDay(dateStr);
         return (
           <div key={dateStr} className="flex flex-col gap-y-2">
             <div

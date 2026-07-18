@@ -5,6 +5,8 @@ import {
   formatDateForLocale,
   formatList,
   formatMonth,
+  formatMonthLong,
+  formatMonthYear,
   formatPct,
   formatRatePct,
   formatRatio,
@@ -12,6 +14,7 @@ import {
   formatSignedValue,
   formatTimestampDate,
   formatValue,
+  formatWeekdayDay,
   valueColor,
 } from '@/lib/i18n/format';
 
@@ -40,6 +43,17 @@ describe('formatSignedValue', () => {
     expect(formatSignedValue(1234, 'en')).toBe('+1,234');
     expect(formatSignedValue(-1234, 'en')).toBe('-1,234');
     expect(formatSignedValue(0, 'en')).toBe('0');
+  });
+
+  it('renders a magnitude that rounds to zero as unsigned "0" (never "-0"/"+0")', () => {
+    expect(formatSignedValue(-0.004, 'en')).toBe('0');
+    expect(formatSignedValue(0.004, 'en')).toBe('0');
+  });
+
+  it('keeps decimals and the sign for genuinely non-zero fractional values', () => {
+    expect(formatSignedValue(-1234.5, 'en')).toBe('-1,234.5');
+    expect(formatSignedValue(-0.006, 'en')).toBe('-0.01');
+    expect(formatSignedValue(1234.5, 'es')).toBe('+1.234,5');
   });
 });
 
@@ -105,6 +119,27 @@ describe('date formatters', () => {
   it('formatMonth renders a short month + 2-digit year', () => {
     expect(formatMonth('2025-01-15', 'en')).toBe('Jan 25');
     expect(formatMonth('2025-01-15', 'es')).toContain('ene');
+  });
+
+  it('formatMonthLong renders the long month for a (year, 1-based month) pair', () => {
+    expect(formatMonthLong(2025, 5, 'en')).toBe('May');
+    expect(formatMonthLong(2025, 1, 'en')).toBe('January');
+    expect(formatMonthLong(2025, 5, 'es')).toBe('mayo');
+  });
+
+  it('formatMonthYear renders a short month + full year (distinct from formatMonth)', () => {
+    expect(formatMonthYear('2025-01-31', 'en')).toBe('Jan 2025');
+    const es = formatMonthYear('2025-01-31', 'es');
+    expect(es).toContain('ene');
+    expect(es).toContain('2025');
+  });
+
+  it('formatWeekdayDay renders the long weekday + day-of-month', () => {
+    // 2025-01-06 is a Monday. Field ordering follows the locale's CLDR pattern, so assert parts.
+    const en = formatWeekdayDay('2025-01-06', 'en');
+    expect(en).toContain('Monday');
+    expect(en).toContain('6');
+    expect(formatWeekdayDay('2025-01-06', 'es')).toContain('lunes');
   });
 
   it('formatTimestampDate drops the time to a short date', () => {

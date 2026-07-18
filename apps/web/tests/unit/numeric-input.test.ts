@@ -8,6 +8,7 @@ import {
   blockSecondDecimal,
   blockSignKeys,
   blockWrongLocaleDecimal,
+  composeKeyHandlers,
   formatAmountForInput,
   getDecimalSeparator,
   getGroupSeparator,
@@ -50,6 +51,11 @@ describe('normalize / format round-trip', () => {
     expect(normalizeAmountFromInput('1.234,56', 'es')).toBe('1234.56');
     expect(normalizeAmountFromInput('1,234.56', 'en')).toBe('1234.56');
     expect(normalizeAmountFromInput('', 'es')).toBe('');
+  });
+
+  it('strips every group separator (not just the first)', () => {
+    expect(normalizeAmountFromInput('1.234.567,89', 'es')).toBe('1234567.89');
+    expect(normalizeAmountFromInput('1,234,567.89', 'en')).toBe('1234567.89');
   });
 
   it('formats canonical .-decimal to the locale separator WITH thousand grouping', () => {
@@ -110,6 +116,11 @@ describe('paste sanitizers', () => {
     expect(sanitizeDecimalPaste('abc', 'es')).toBe('');
   });
 
+  it('sanitizeDecimalPaste drops a bare separator (would canonicalize to NaN)', () => {
+    expect(sanitizeDecimalPaste(',', 'es')).toBe('');
+    expect(sanitizeDecimalPaste('.', 'en')).toBe('');
+  });
+
   it('sanitizeIntegerPaste strips everything but digits', () => {
     expect(sanitizeIntegerPaste('1,234')).toBe('1234');
     expect(sanitizeIntegerPaste('12.5abc')).toBe('125');
@@ -120,6 +131,24 @@ describe('sanitizeDecimalChars', () => {
   it('drops letters/whitespace but keeps digits and the locale decimal', () => {
     expect(sanitizeDecimalChars('12a3.4', 'en')).toBe('123.4');
     expect(sanitizeDecimalChars('12a3,4', 'es')).toBe('123,4');
+    expect(sanitizeDecimalChars('1 2 3.4', 'en')).toBe('123.4');
+  });
+
+  it('collapses a multi-decimal string to a single separator (IME/drop/programmatic safety net)', () => {
+    // The keystroke path blocks a second decimal; these non-keystroke paths flow through here.
+    expect(sanitizeDecimalChars('1.2.3', 'en')).toBe('1.23');
+    expect(sanitizeDecimalChars('1,2,3', 'es')).toBe('1,23');
+  });
+});
+
+describe('composeKeyHandlers', () => {
+  it('runs every handler in order on one keystroke', () => {
+    const calls: string[] = [];
+    composeKeyHandlers(
+      () => calls.push('a'),
+      () => calls.push('b'),
+    )(keyEvent('5'));
+    expect(calls).toEqual(['a', 'b']);
   });
 });
 

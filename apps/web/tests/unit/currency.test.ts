@@ -25,4 +25,10 @@ describe('formatAmount', () => {
   it('returns the raw input for a non-numeric string', () => {
     expect(formatAmount('abc', 'en')).toBe('abc');
   });
+
+  it('passes an empty or blank string through instead of rendering "0"', () => {
+    // Number('') is 0 (not NaN), so without the guard an empty amount would render "0".
+    expect(formatAmount('', 'en')).toBe('');
+    expect(formatAmount('   ', 'en')).toBe('   ');
+  });
 });

@@ -136,7 +136,42 @@ describe('LocaleAmountInput — integer currency', () => {
   });
 });
 
+// Fully-controlled harness (value comes from props, not internal state) so a test can push a new
+// `value` post-mount — the way form.reset / editing a loaded record feeds the input.
+function ControlledHarness({
+  value,
+  maxDecimals,
+  onValue,
+}: {
+  value: string;
+  maxDecimals?: number;
+  onValue?: (v: string) => void;
+}) {
+  return (
+    <NextIntlClientProvider locale="en" messages={{}} timeZone="UTC">
+      <LocaleAmountInput
+        value={value}
+        onChange={onValue}
+        maxDecimals={maxDecimals}
+        aria-label="amount"
+      />
+    </NextIntlClientProvider>
+  );
+}
+
 describe('LocaleAmountInput — effects', () => {
+  it('truncates to the currency precision when a value with too many decimals is loaded (resync)', () => {
+    const onValue = vi.fn();
+    const { container, rerender } = render(
+      <ControlledHarness value="" maxDecimals={0} onValue={onValue} />,
+    );
+    const input = getInput(container);
+    // A record loads a 2-decimal value into a 0-decimal (JPY-style) field post-mount.
+    rerender(<ControlledHarness value="100.50" maxDecimals={0} onValue={onValue} />);
+    expect(input.value).toBe('100');
+    expect(onValue).toHaveBeenLastCalledWith('100');
+  });
+
   it('re-truncates to the currency precision when the currency tightens', async () => {
     const user = userEvent.setup();
     const { container, rerender } = render(<Harness locale="en" />);
