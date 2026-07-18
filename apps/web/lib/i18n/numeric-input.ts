@@ -9,9 +9,48 @@ export function getDecimalSeparator(locale?: string): string {
 }
 
 // Returns the locale's thousand-group separator (e.g. ',' for en-US, '.' for es-AR).
-function getGroupSeparator(locale?: string): string {
+export function getGroupSeparator(locale?: string): string {
   const parts = new Intl.NumberFormat(getLocaleTag(locale)).formatToParts(1234.5);
   return parts.find((p) => p.type === 'group')?.value ?? ',';
+}
+
+// Groups a run of integer digits with the given separator, every three from the right (`1234567` → `1,234,567`). Pure string op — input must be digits only (no separators), returned unchanged when 3 digits or fewer.
+export function groupIntegerDigits(integer: string, groupSep: string): string {
+  if (integer.length <= 3) return integer;
+  return integer.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep);
+}
+
+/*
+ * Maps the caret across a regroup: given where the caret sat in `oldDisplay` and
+ * the freshly regrouped `newDisplay`, returns the caret index in `newDisplay` that
+ * keeps the same position relative to the user's digits. Counts "significant" chars
+ * — digits plus the decimal separator — left of the old caret (ignoring group
+ * separators, which are exactly what moves, and any stray char that will be
+ * stripped), then places the caret after that many significant chars in the new
+ * string. Counting the decimal separator keeps the caret after a just-typed
+ * trailing separator (`1234,` → `1.234,`, caret stays after the comma).
+ */
+export function mapCaretAfterRegroup(
+  oldDisplay: string,
+  oldCaret: number,
+  newDisplay: string,
+  decimalSep: string,
+): number {
+  const isSignificant = (ch: string | undefined) =>
+    ch !== undefined && ((ch >= '0' && ch <= '9') || ch === decimalSep);
+  let significant = 0;
+  for (let i = 0; i < oldCaret && i < oldDisplay.length; i++) {
+    if (isSignificant(oldDisplay[i])) significant++;
+  }
+  if (significant === 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < newDisplay.length; i++) {
+    if (isSignificant(newDisplay[i])) {
+      seen++;
+      if (seen === significant) return i + 1;
+    }
+  }
+  return newDisplay.length;
 }
 
 // Normalizes a user-typed locale-formatted amount string to canonical `.`-decimal. Strips thousand separators; replaces locale decimal separator with `.`. Used by `LocaleAmountInput` to convert display text to form-state canonical.
@@ -22,12 +61,22 @@ export function normalizeAmountFromInput(input: string, locale?: string): string
   return input.split(group).join('').replace(decimal, '.');
 }
 
-// Formats a canonical `.`-decimal amount string for display in a locale-aware input field. Replaces `.` with the locale's decimal separator. Does NOT add thousand separators (input fields show raw values).
+/*
+ * Formats a canonical `.`-decimal amount string for display in a locale-aware input
+ * field: groups the integer part with the locale's thousand separator and swaps `.`
+ * for the locale's decimal separator (e.g. `1234567.89` → `1.234.567,89` es-AR,
+ * `1,234,567.89` en-US). A trailing `.` (mid-typing, no fraction yet) is preserved
+ * as a trailing decimal separator so the caret can stay past it.
+ */
 export function formatAmountForInput(canonical: string, locale?: string): string {
   if (!canonical) return '';
+  const group = getGroupSeparator(locale);
   const decimal = getDecimalSeparator(locale);
-  if (decimal === '.') return canonical;
-  return canonical.replace('.', decimal);
+  const dotIdx = canonical.indexOf('.');
+  const integer = dotIdx === -1 ? canonical : canonical.slice(0, dotIdx);
+  const grouped = groupIntegerDigits(integer, group);
+  if (dotIdx === -1) return grouped;
+  return `${grouped}${decimal}${canonical.slice(dotIdx + 1)}`;
 }
 
 /*
