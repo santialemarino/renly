@@ -8,7 +8,7 @@ description: Where tests live, how to run them, and what to test in the Renly re
 ## Current state
 
 - **API tests:** `apps/api/tests/unit/` — pytest, ~850 tests across ~50 files covering metrics/date/liquidity helpers, service flows (mocked sessions/repos), schema validation, and in-process endpoint behavior.
-- **Web unit tests:** `apps/web/tests/unit/` — Vitest (node environment), for pure functions — today the locale/formatting layer (`lib/i18n/`, `lib/utils/format|currency|numeric-input`) plus EN/ES translation keyset parity. Config: `apps/web/vitest.config.ts` (`vite-tsconfig-paths` wires the `@/*` alias). Run with `pnpm test:web`.
+- **Web unit tests:** `apps/web/tests/unit/` — Vitest (node environment), for pure functions — today the locale/formatting layer (all under `lib/i18n/`) plus EN/ES translation keyset parity. Config: `apps/web/vitest.config.ts` (`vite-tsconfig-paths` wires the `@/*` alias). Run with `pnpm test:web`.
 - **Web E2E tests:** `apps/web/tests/e2e/` — Playwright. See the `e2e-testing` skill for full conventions, configuration, and the playwright-cli workflow.
 - **Pre-commit:** `pnpm test:api` + `pnpm test:web` run on every commit. Also run in CI (`ci.api.yml` / `ci.web.yml`).
 

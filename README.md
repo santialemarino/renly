@@ -66,6 +66,7 @@ pnpm dev
 | `pnpm check:web`             | Web TypeScript type check                                                                |
 | `pnpm check-types`           | TypeScript type check (all workspaces/turbo)                                             |
 | `pnpm test:api`              | Run API unit tests (pytest)                                                              |
+| `pnpm test:web`              | Run web unit tests (Vitest, single run)                                                  |
 | `pnpm --filter web test:e2e` | Run Playwright E2E tests (web) — needs `pnpm dev` and `playwright install chromium` once |
 
 ## Documentation
@@ -86,8 +87,9 @@ On every `git commit`, Husky runs:
 - **API** — `pnpm check:api` so the app loads (runs from `apps/api`).
 - **API tests** — `pnpm test:api` runs pytest unit tests.
 - **Web** — `pnpm check:web` so TypeScript compiles.
+- **Web tests** — `pnpm test:web` runs Vitest unit tests.
 
-To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:web`.
+To run manually: `pnpm format`, `pnpm lint:fix`, `pnpm check:api`, `pnpm check:web`, `pnpm test:api`, `pnpm test:web`.
 
 ## Docker
 

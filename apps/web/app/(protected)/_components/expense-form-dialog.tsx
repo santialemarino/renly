@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -170,7 +170,6 @@ export function ExpenseFormDialog({
   onSuccess,
   onLinkedPlanSave,
 }: ExpenseFormDialogProps) {
-  const locale = useLocale();
   const fmt = useFormatters();
   const t = useTranslations('expenses');
   const tCommon = useTranslations('common');
@@ -280,7 +279,7 @@ export function ExpenseFormDialog({
       watchedCreditCardId,
     ) === 'mismatch';
 
-  const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
+  const sortedCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), fmt.locale);
 
   // Reset form when dialog opens. Priority: edit expense > obligation pre-fill > empty.
   // cyclesToAdvance defaults to '1' only on a recurring-obligation prefill (Phase 3,

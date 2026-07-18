@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Info, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import {
   Badge,
@@ -38,7 +38,6 @@ export function CreditCardReconciliationsSection({
   bucketCurrencies,
   expanded,
 }: CreditCardReconciliationsSectionProps) {
-  const locale = useLocale();
   const fmt = useFormatters();
   const t = useTranslations('creditCards.reconciliations');
   const router = useRouter();
@@ -93,7 +92,10 @@ export function CreditCardReconciliationsSection({
     // previous month for an end-of-month period (matches `formatMonth` +
     // `formatDateForLocale`).
     const endDate = new Date(end + 'T00:00:00');
-    return endDate.toLocaleDateString(getLocaleTag(locale), { month: 'short', year: 'numeric' });
+    return endDate.toLocaleDateString(getLocaleTag(fmt.locale), {
+      month: 'short',
+      year: 'numeric',
+    });
   }
 
   function lastReconciledLabel(list: StatementPeriod[]): string {

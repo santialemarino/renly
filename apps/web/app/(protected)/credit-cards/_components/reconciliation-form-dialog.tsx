@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -41,7 +41,6 @@ export function ReconciliationFormDialog({
   statement,
   onSuccess,
 }: ReconciliationFormDialogProps) {
-  const locale = useLocale();
   const fmt = useFormatters();
   const t = useTranslations('creditCards.reconciliations');
   const tCommon = useTranslations('common');
@@ -117,7 +116,7 @@ export function ReconciliationFormDialog({
             <StyledHint variant="info">
               {t('form.replaceBanner', {
                 date: new Date(statement.reconciliation.reconciledAt).toLocaleDateString(
-                  getLocaleTag(locale),
+                  getLocaleTag(fmt.locale),
                 ),
               })}
             </StyledHint>

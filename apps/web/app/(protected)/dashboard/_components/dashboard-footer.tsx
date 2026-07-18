@@ -1,7 +1,7 @@
 'use client';
 
 import { TrendingUp, Wallet } from 'lucide-react';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -54,11 +54,10 @@ export function DashboardFooter({
   savingsRateModeratePct,
   incomeExpenseRatioHealthy,
 }: DashboardFooterProps) {
-  const locale = useLocale();
-  const t = useTranslations('dashboard');
   const fmt = useFormatters();
+  const t = useTranslations('dashboard');
 
-  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(locale), {
+  const ratioFormatter = new Intl.NumberFormat(getLocaleTag(fmt.locale), {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
