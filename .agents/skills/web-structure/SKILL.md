@@ -25,6 +25,7 @@ description: Frontend app structure and where to create files (pages, components
 - **Reusable across apps (design system):** Put in `packages/ui/src/components`, add to the package's `index.ts`, and import from `@repo/ui/components` in the web app.
 - **Routes:** `config/routes.ts` for `ROUTES`, `AUTH_ROUTES`, `LOGIN_ROUTE`.
 - **Constants:** `lib/constants/<topic>.ts` — one file per topic (e.g. `animations.ts`, `currency.ts`, `charts.ts`). Only for constants imported by 2+ files. Single-file constants stay in the file that uses them.
+- **i18n / locale:** `lib/i18n/` is the home for locale + formatting code. `lib/i18n/locales.ts` holds the single `LOCALES` registry — the source of truth every locale-derived value flows from (`Locale`/`TextDirection` types, `DEFAULT_LOCALE`, `SUPPORTED_LOCALES`, `getLocaleTag`, `getDateFnsLocale`, `getLocaleDirection`, `LANGUAGE_OPTIONS`, `LANGUAGE_MODE_*`, `LOCALE_COOKIE`, browser-language detection). Adding a language is one registry entry plus a matching `translations/<code>.json`. The next-intl framework config stays at its required root path `i18n/request.ts` (not under `lib/`).
 
 ## Directory layout (apps/web/)
 
