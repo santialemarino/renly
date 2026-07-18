@@ -8,9 +8,9 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { PaymentsCalendarItem } from '@/lib/api/payments-calendar';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { getLocaleTag } from '@/lib/i18n/locales';
 import { formatAmount } from '@/lib/utils/currency';
 import { todayInTimezone } from '@/lib/utils/dates';
-import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarListProps {
   items: PaymentsCalendarItem[];

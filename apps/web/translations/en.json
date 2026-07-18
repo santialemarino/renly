@@ -1648,11 +1648,7 @@
       "language": {
         "label": "Language",
         "hintAuto": "Auto-detected from your browser. Picking a different value switches to Manual.",
-        "hintManual": "Manually selected. Switch to Automatic to follow the browser again.",
-        "options": {
-          "en": "English",
-          "es": "Español"
-        }
+        "hintManual": "Manually selected. Switch to Automatic to follow the browser again."
       },
       "timezoneMode": {
         "label": "Detection",

@@ -23,9 +23,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { StatementPeriod } from '@/lib/api/card-reconciliations';
+import { getLocaleTag } from '@/lib/i18n/locales';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-import { getLocaleTag } from '@/lib/utils/locale';
 
 interface ReconciliationFormDialogProps {
   open: boolean;

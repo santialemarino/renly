@@ -1,6 +1,6 @@
 import { format } from 'date-fns';
 
-import { getDateFnsLocale, getLocaleTag } from '@/lib/utils/locale';
+import { getDateFnsLocale, getLocaleTag } from '@/lib/i18n/locales';
 
 interface FormatValueOptions {
   locale?: string;

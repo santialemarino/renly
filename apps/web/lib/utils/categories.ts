@@ -6,7 +6,7 @@ import {
   type IncomeCategory,
   type InvestmentCategory,
 } from '@/lib/constants/categories';
-import { getLocaleTag } from '@/lib/utils/locale';
+import { getLocaleTag } from '@/lib/i18n/locales';
 
 // Sorts categories alphabetically by translated label, with "other" always last.
 function sortWithOtherLast<T extends string>(

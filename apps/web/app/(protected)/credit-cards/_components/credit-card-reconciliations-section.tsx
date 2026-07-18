@@ -24,9 +24,9 @@ import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_compon
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
+import { getLocaleTag } from '@/lib/i18n/locales';
 import { formatAmount } from '@/lib/utils/currency';
 import { formatDateForLocale } from '@/lib/utils/format';
-import { getLocaleTag } from '@/lib/utils/locale';
 
 interface CreditCardReconciliationsSectionProps {
   cardId: number;

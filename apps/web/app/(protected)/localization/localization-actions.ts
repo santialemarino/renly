@@ -3,8 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/config/constants';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n/locales';
 
 interface SaveLocalizationParams {
   timezone: string;

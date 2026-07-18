@@ -3,9 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
-import { LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/config/constants';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { LANGUAGE_MODE_AUTO } from '@/lib/constants/languages';
+import { LANGUAGE_MODE_AUTO, LOCALE_COOKIE, LOCALE_COOKIE_MAX_AGE } from '@/lib/i18n/locales';
 
 // Silent PUT of browser-detected language. Called from the layout-level LanguageAutoSync
 // effect when mode is 'auto' and the browser language differs from stored. Keeps mode = auto.

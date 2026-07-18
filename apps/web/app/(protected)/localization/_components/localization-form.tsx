@@ -15,20 +15,20 @@ import {
 } from '@/app/(protected)/localization/localization-form-schema';
 import { FormCombobox } from '@/components/form-combobox';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
-import { DEFAULT_LOCALE } from '@/config/constants';
 import type { SettingsData } from '@/lib/api/settings';
-import {
-  detectBrowserLanguage,
-  LANGUAGE_MODE_AUTO,
-  LANGUAGE_MODE_MANUAL,
-  LANGUAGE_OPTIONS,
-} from '@/lib/constants/languages';
 import {
   detectBrowserTimezone,
   TIMEZONE_DEFAULT,
   TIMEZONE_MODE_AUTO,
   TIMEZONE_MODE_MANUAL,
 } from '@/lib/constants/timezones';
+import {
+  DEFAULT_LOCALE,
+  detectBrowserLanguage,
+  LANGUAGE_MODE_AUTO,
+  LANGUAGE_MODE_MANUAL,
+  LANGUAGE_OPTIONS,
+} from '@/lib/i18n/locales';
 
 interface LocalizationFormProps {
   initialSettings: SettingsData;
@@ -179,10 +179,7 @@ export function LocalizationForm({ initialSettings }: LocalizationFormProps) {
                   surface
                   value={field.value}
                   onValueChange={handleLanguageChange}
-                  options={LANGUAGE_OPTIONS.map((opt) => ({
-                    value: opt.value,
-                    label: t(`form.language.options.${opt.labelKey}`),
-                  }))}
+                  options={LANGUAGE_OPTIONS}
                 />
               )}
             />

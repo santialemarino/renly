@@ -4,8 +4,8 @@ import { cookies } from 'next/headers';
 import NextAuth from 'next-auth';
 
 import { authConfig } from '@/auth.config';
-import { LOCALE_COOKIE } from '@/config/constants';
 import { logoutRequest } from '@/lib/auth-api';
+import { LOCALE_COOKIE } from '@/lib/i18n/locales';
 
 export const { auth, signIn, signOut } = NextAuth(authConfig);
 
