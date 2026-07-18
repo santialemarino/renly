@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 
 import { syncBrowserLanguage } from '@/app/(protected)/_components/language-auto-sync-actions';
-import { detectBrowserLanguage, LANGUAGE_MODE_AUTO } from '@/lib/constants/languages';
+import { detectBrowserLanguage, LANGUAGE_MODE_AUTO } from '@/lib/i18n/locales';
 
 interface LanguageAutoSyncProps {
   storedLanguage: string | null;

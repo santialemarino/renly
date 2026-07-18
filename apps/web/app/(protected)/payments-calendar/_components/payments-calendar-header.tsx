@@ -7,8 +7,8 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { Button } from '@repo/ui/components';
 import { ROUTES } from '@/config/routes';
+import { getLocaleTag } from '@/lib/i18n/locales';
 import { currentYearMonth } from '@/lib/utils/dates';
-import { getLocaleTag } from '@/lib/utils/locale';
 
 interface PaymentsCalendarHeaderProps {
   year: number;

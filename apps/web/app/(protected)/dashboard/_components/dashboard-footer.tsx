@@ -9,8 +9,8 @@ import { LinkCard } from '@/app/(protected)/dashboard/_components/link-card';
 import { ROUTES } from '@/config/routes';
 import type { DashboardLiquidity, DashboardOverview, LiquidityState } from '@/lib/api/dashboard';
 import { INCOME_EXPENSE_RATIO_BREAKEVEN } from '@/lib/constants/health-thresholds';
+import { getLocaleTag } from '@/lib/i18n/locales';
 import { formatRatePct, formatValue } from '@/lib/utils/format';
-import { getLocaleTag } from '@/lib/utils/locale';
 
 // Returns color class for savings rate, comparing the raw ratio (e.g. 0.20) against the user's
 // healthy / moderate thresholds (stored as integer percents like 20 / 10).

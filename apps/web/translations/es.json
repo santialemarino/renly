@@ -1648,11 +1648,7 @@
       "language": {
         "label": "Idioma",
         "hintAuto": "Detectado automáticamente desde tu navegador. Elegir un valor distinto cambia a Manual.",
-        "hintManual": "Seleccionado manualmente. Cambiá a Automática para volver a seguir al navegador.",
-        "options": {
-          "en": "English",
-          "es": "Español"
-        }
+        "hintManual": "Seleccionado manualmente. Cambiá a Automática para volver a seguir al navegador."
       },
       "timezoneMode": {
         "label": "Detección",

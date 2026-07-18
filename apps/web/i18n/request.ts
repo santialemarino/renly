@@ -1,7 +1,7 @@
 import { cookies, headers } from 'next/headers';
 import { getRequestConfig } from 'next-intl/server';
 
-import { DEFAULT_LOCALE, LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/config/constants';
+import { DEFAULT_LOCALE, LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/lib/i18n/locales';
 
 function getLocaleFromCookie(cookieStore: Awaited<ReturnType<typeof cookies>>): string | null {
   const stored = cookieStore.get(LOCALE_COOKIE)?.value;

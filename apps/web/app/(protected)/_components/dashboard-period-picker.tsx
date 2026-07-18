@@ -13,7 +13,7 @@ import { cn } from '@repo/ui/lib';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { PERIOD_PRESETS, type PeriodPreset } from '@/lib/constants/period-presets';
-import { getDateFnsLocale } from '@/lib/utils/locale';
+import { getDateFnsLocale } from '@/lib/i18n/locales';
 import { formatPresetLabel } from '@/lib/utils/period-presets';
 
 const DATE_FORMAT = 'MMM d, yyyy';

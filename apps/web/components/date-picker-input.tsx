@@ -7,7 +7,7 @@ import { useLocale } from 'next-intl';
 
 import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
-import { getDateFnsLocale } from '@/lib/utils/locale';
+import { getDateFnsLocale } from '@/lib/i18n/locales';
 
 const DATE_FORMAT_DISPLAY = 'PPP';
 const DATE_FORMAT_VALUE = 'yyyy-MM-dd';

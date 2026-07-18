@@ -1,8 +1,7 @@
 import { z } from 'zod';
 
-import { SUPPORTED_LOCALES } from '@/config/constants';
-import { LANGUAGE_MODES } from '@/lib/constants/languages';
 import { TIMEZONE_MODES } from '@/lib/constants/timezones';
+import { LANGUAGE_MODES, SUPPORTED_LOCALES } from '@/lib/i18n/locales';
 
 export const localizationFormSchema = z.object({
   timezone: z.string().min(1),
