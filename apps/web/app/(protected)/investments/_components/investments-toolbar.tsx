@@ -19,9 +19,11 @@ import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigat
 export function InvestmentsToolbar({
   groups,
   preferredCurrencies,
+  supportedCurrencies,
 }: {
   groups: InvestmentGroup[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
 }) {
   const t = useTranslations('investments');
   const router = useRouter();
@@ -85,6 +87,7 @@ export function InvestmentsToolbar({
         onOpenChange={setCreateOpen}
         groups={groups}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>
