@@ -97,8 +97,10 @@ negative-UTC-offset zone. The timezone reaches the formatter through a `NEXT_TIM
 `getFormatters` hook binds). When no cookie is present the timestamp falls back to the ambient
 (browser/server) zone.
 
-**Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** `fmt.date` / `fmt.month` (and the
-inline period/day labels in the payments calendar and credit-card statements) anchor a date-only
-string at local midnight and render its own calendar day regardless of the stored timezone —
-shifting them would reintroduce an off-by-one at month/day boundaries. Only full timestamps carry a
-timezone.
+**Date-only values (`YYYY-MM-DD`) are never timezone-shifted.** Every date-only label goes through a
+`fmt.*` method — `fmt.date` / `fmt.month`, plus `fmt.monthLong` (long month name), `fmt.monthYear`
+(short month + full year, e.g. credit-card statement periods), and `fmt.weekdayDay` (long weekday +
+day, e.g. the payments-calendar day headers). All of them anchor the value at local midnight and
+render its own calendar day regardless of the stored timezone — shifting them would reintroduce an
+off-by-one at month/day boundaries. Only full timestamps (`fmt.timestampDate`) carry a timezone.
+Components never call `toLocaleDateString` inline; that lives only inside the `lib/i18n` formatters.
