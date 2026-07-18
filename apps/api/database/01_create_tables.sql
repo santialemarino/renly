@@ -20,7 +20,10 @@ CREATE TYPE investment_category AS ENUM (
 
 CREATE TYPE currency AS ENUM (
   'ARS',
-  'USD'
+  'USD',
+  'BRL',
+  'EUR',
+  'GBP'
 );
 
 CREATE TYPE transaction_type AS ENUM (

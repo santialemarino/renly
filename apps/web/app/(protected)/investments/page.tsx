@@ -4,6 +4,7 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InvestmentsDataTable } from '@/app/(protected)/investments/_components/investments-data-table';
 import { InvestmentsToolbar } from '@/app/(protected)/investments/_components/investments-toolbar';
 import { SampleInvestmentsTable } from '@/app/(protected)/investments/_components/sample-investments-table';
+import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
@@ -35,7 +36,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
     ? (Array.isArray(groupIdsRaw) ? groupIdsRaw : [groupIdsRaw]).map(Number).filter(Boolean)
     : undefined;
 
-  const [data, groups, settings] = await Promise.all([
+  const [data, groups, settings, supportedCurrencies] = await Promise.all([
     getInvestments({
       search: params.search,
       groupIds,
@@ -47,6 +48,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
     }),
     getGroups(),
     getSettings().catch(() => null),
+    getSupportedCurrencies().catch(() => undefined),
   ]);
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -67,7 +69,11 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <InvestmentsToolbar groups={groups} preferredCurrencies={preferredCurrencies} />
+      <InvestmentsToolbar
+        groups={groups}
+        preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
+      />
       {showSample ? (
         <SampleInvestmentsTable />
       ) : (
@@ -75,6 +81,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
           data={data}
           groups={groups}
           preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
           firstRun={firstRun}
         />
       )}

@@ -293,7 +293,7 @@ def _coerce_currency(raw: str) -> str:
     return code
 
 
-# Normalizes a snapshot/transaction currency (ARS or USD only, per the Currency enum). Raises otherwise.
+# Normalizes a snapshot/transaction currency to a Currency enum member (the supported set). Raises otherwise.
 def _coerce_investment_currency(raw: str) -> Currency:
     code = raw.strip().upper()
     try:

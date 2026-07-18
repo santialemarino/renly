@@ -7,12 +7,16 @@ from pydantic import ValidationError
 
 from app.domain.currency import SUPPORTED_CURRENCIES
 from app.models.asset_price import AssetPrice
-from app.models.investment import InvestmentCategory
+from app.models.investment import Currency, InvestmentCategory
+from app.models.transaction import TransactionType
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.income import IncomeCreate
 from app.schemas.installment import InstallmentCreate, InstallmentUpdate
+from app.schemas.investment import InvestmentCreate, InvestmentUpdate
 from app.schemas.payment_obligation import PaymentObligationCreate, PaymentObligationUpdate
+from app.schemas.snapshot import SnapshotCreate
 from app.schemas.subscription import SubscriptionCreate
+from app.schemas.transaction import TransactionCreate
 from app.services import asset_price_service, exchange_rate_service
 from app.utils.metrics import RateLookup
 
@@ -22,6 +26,52 @@ class TestSupportedCurrenciesSource:
     def test_returns_sorted_domain_registry(self):
         resp = exchange_rate_service.get_supported_currencies()
         assert resp.currencies == sorted(SUPPORTED_CURRENCIES)
+
+    def test_supported_set_derives_from_currency_enum(self):
+        # Single source of truth: the frozenset is derived from the Currency enum, so both agree.
+        assert SUPPORTED_CURRENCIES == frozenset(c.value for c in Currency)
+        assert set(SUPPORTED_CURRENCIES) == {"USD", "ARS", "BRL", "EUR", "GBP"}
+
+
+# base_currency on investments uses the same supported-set allowlist as finance entries.
+class TestInvestmentBaseCurrency:
+    def test_create_accepts_supported_currency(self):
+        body = InvestmentCreate(name="ETF", category=InvestmentCategory.stocks, base_currency="BRL")
+        assert body.base_currency == "BRL"
+
+    def test_create_normalizes_lowercase(self):
+        body = InvestmentCreate(name="ETF", category=InvestmentCategory.stocks, base_currency="eur")
+        assert body.base_currency == "EUR"
+
+    def test_create_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            InvestmentCreate(name="ETF", category=InvestmentCategory.stocks, base_currency="JPY")
+
+    def test_create_rejects_too_long_code(self):
+        with pytest.raises(ValidationError):
+            InvestmentCreate(name="ETF", category=InvestmentCategory.stocks, base_currency="TOOLONG")
+
+    def test_update_allows_omitted_currency(self):
+        assert InvestmentUpdate(name="Renamed").base_currency is None
+
+    def test_update_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            InvestmentUpdate(base_currency="CLP")
+
+
+# Snapshot/transaction rows can now be denominated in any supported currency (the widened Currency enum).
+class TestInvestmentDenominationCurrency:
+    def test_snapshot_accepts_new_currency(self):
+        body = SnapshotCreate(date=date(2026, 1, 31), value=Decimal("100.00"), currency="BRL")
+        assert body.currency == Currency.BRL
+
+    def test_transaction_accepts_new_currency(self):
+        body = TransactionCreate(date=date(2026, 1, 5), amount=Decimal("100.00"), currency="EUR", type=TransactionType.buy)
+        assert body.currency == Currency.EUR
+
+    def test_snapshot_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError):
+            SnapshotCreate(date=date(2026, 1, 31), value=Decimal("100.00"), currency="JPY")
 
 
 # 422 allowlist on the three finance-entry schemas (create + update variants).

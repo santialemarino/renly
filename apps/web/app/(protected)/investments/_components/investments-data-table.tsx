@@ -40,11 +40,13 @@ function RowActions({
   investment,
   groups,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: {
   investment: Investment;
   groups: InvestmentGroup[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }) {
   const t = useTranslations('investments');
@@ -110,6 +112,7 @@ function RowActions({
         investment={investment}
         groups={groups}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         onSuccess={onSuccess}
       />
 
@@ -127,11 +130,13 @@ export function InvestmentsDataTable({
   data,
   groups,
   preferredCurrencies,
+  supportedCurrencies,
   firstRun,
 }: {
   data: InvestmentListResponse;
   groups: InvestmentGroup[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   firstRun?: boolean;
 }) {
   const t = useTranslations('investments');
@@ -239,6 +244,7 @@ export function InvestmentsDataTable({
                       investment={investment}
                       groups={groups}
                       preferredCurrencies={preferredCurrencies}
+                      supportedCurrencies={supportedCurrencies}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>

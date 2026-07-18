@@ -3,9 +3,11 @@
 # The dollar rate preference (oficial/mep/blue) determines which USD/ARS rate to use.
 
 from app.models.exchange_rate import ExchangeRatePair
+from app.models.investment import Currency
 
-# All currencies with exchange rate support.
-SUPPORTED_CURRENCIES = frozenset({"USD", "ARS", "BRL", "EUR", "GBP"})
+# All currencies Renly supports, derived from the Currency enum (the single source of truth) so the
+# two never drift. Every member has exchange-rate support (USD is the pivot; the rest have a USD pair).
+SUPPORTED_CURRENCIES = frozenset(c.value for c in Currency)
 
 # Maps dollar rate preference string to the ExchangeRatePair for USD/ARS.
 _DOLLAR_RATE_PAIRS: dict[str, ExchangeRatePair] = {

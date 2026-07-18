@@ -630,12 +630,15 @@ class TestPaymentMethodCoercer:
 
 
 class TestInvestmentCurrencyCoercer:
-    @pytest.mark.parametrize(("raw", "expected"), [("usd", Currency.USD), ("ARS", Currency.ARS)])
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [("usd", Currency.USD), ("ARS", Currency.ARS), ("brl", Currency.BRL), ("EUR", Currency.EUR), ("gbp", Currency.GBP)],
+    )
     def test_parses_currency(self, raw, expected):
         assert import_specs._coerce_investment_currency(raw) == expected
 
-    @pytest.mark.parametrize("raw", ["BRL", "EUR", "JPY"])
-    def test_rejects_non_ars_usd(self, raw):
+    @pytest.mark.parametrize("raw", ["JPY", "CLP", "XXX"])
+    def test_rejects_unsupported_currency(self, raw):
         with pytest.raises(ValueError, match="Unsupported currency"):
             import_specs._coerce_investment_currency(raw)
 
@@ -727,8 +730,13 @@ class TestSnapshotSpec:
         assert preview[0].status == "invalid"
         assert any("Investment is required" in error for error in preview[0].errors)
 
-    def test_non_ars_usd_currency_is_invalid(self):
-        preview, _ = self._validate([["Apple", "2026-01-31", "100", "BRL", "", ""]])
+    def test_supported_currency_is_valid(self):
+        preview, coerced = self._validate([["Apple", "2026-01-31", "100", "BRL", "", ""]])
+        assert preview[0].status == "valid"
+        assert coerced[0]["currency"] == Currency.BRL
+
+    def test_unsupported_currency_is_invalid(self):
+        preview, _ = self._validate([["Apple", "2026-01-31", "100", "JPY", "", ""]])
         assert preview[0].status == "invalid"
 
     def test_no_soft_dedup_repeated_dates_stay_valid(self):

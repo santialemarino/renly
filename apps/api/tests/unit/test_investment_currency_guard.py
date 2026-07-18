@@ -42,6 +42,20 @@ class TestSnapshotCurrencyGuard:
         )
         create_mock.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_newly_supported_currency_passes(self, monkeypatch):
+        # A BRL investment + BRL snapshot must clear the guard now that the Currency enum covers the full set.
+        brl_investment = Investment(id=1, user_id=1, name="ETF", category="stocks", base_currency=Currency.BRL)
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=brl_investment))
+        monkeypatch.setattr(investment_service.snapshot_repository, "get_by_investment_and_date", AsyncMock(return_value=None))
+        create_mock = AsyncMock(side_effect=lambda session, snapshot: snapshot)
+        monkeypatch.setattr(investment_service.snapshot_repository, "create", create_mock)
+        snapshot = await investment_service.upsert_snapshot(
+            AsyncMock(), 1, USER, snapshot_date=date(2026, 1, 31), value=Decimal("100.00"), currency=Currency.BRL
+        )
+        create_mock.assert_awaited_once()
+        assert snapshot.currency == Currency.BRL
+
 
 class TestTransactionCurrencyGuard:
     @pytest.mark.asyncio

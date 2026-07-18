@@ -43,6 +43,7 @@ interface InvestmentFormDialogProps {
   investment?: Investment;
   groups: InvestmentGroup[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   onSuccess: () => void;
 }
 
@@ -52,6 +53,7 @@ export function InvestmentFormDialog({
   investment,
   groups,
   preferredCurrencies,
+  supportedCurrencies,
   onSuccess,
 }: InvestmentFormDialogProps) {
   const locale = useLocale();
@@ -185,6 +187,7 @@ export function InvestmentFormDialog({
                               value={field.value || null}
                               exclude={[]}
                               preferredCurrencies={preferredCurrencies}
+                              codes={supportedCurrencies}
                               disabled={currencyLocked}
                               placeholder={t('form.currency.placeholder')}
                               searchPlaceholder={t('form.currency.searchPlaceholder')}
