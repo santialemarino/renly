@@ -7,6 +7,7 @@ import { siteConfig } from '@/config/site';
 // the install splash). Icons cover the "any" purpose plus a full-bleed maskable for Android.
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: '/',
     name: siteConfig.name,
     short_name: siteConfig.name,
     description: siteConfig.description,

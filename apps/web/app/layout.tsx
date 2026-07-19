@@ -11,7 +11,9 @@ import { CookieConsent } from '@/components/cookie-consent';
 import { siteConfig } from '@/config/site';
 
 // Absolute base for resolving the favicon / Open Graph image URLs; falls back to localhost in dev.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+// `||` (not `??`) so an empty NEXT_PUBLIC_SITE_URL="" also falls back — new URL('') would throw here
+// in the root layout and take down every page.
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
