@@ -24,21 +24,22 @@ All environment variables used by the Renly backend and frontend, with defaults 
 
 ## Frontend (`apps/web/.env`)
 
-| Variable                                  | Required | Default | Description                                                                                           |
-| ----------------------------------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| `NEXTAUTH_SECRET`                         | Yes      | —       | NextAuth.js signing secret. Must match `JWT_SECRET` on the backend                                    |
-| `NEXTAUTH_URL`                            | Yes      | —       | Canonical URL of the web app (e.g. `http://localhost:3000`)                                           |
-| `NEXT_PUBLIC_API_URL`                     | Yes      | —       | Base URL for client-side API requests (e.g. `http://localhost:8000`)                                  |
-| `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY`   | No       | `ARS`   | Default primary currency when no user settings exist. Also pinned in currency combobox                |
-| `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` | No       | `USD`   | Default secondary currency when no user settings exist. Also pinned in currency combobox              |
-| `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`        | No       | `mep`   | Default dollar rate preference (`oficial`, `mep`, or `blue`)                                          |
-| `NEXT_PUBLIC_PREFERRED_CURRENCIES`        | No       | —       | Comma-separated currencies shown in a "Preferred" group in the currency combobox (e.g. `BRL,EUR,GBP`) |
-| `NEXT_PUBLIC_PERIOD_PRESET_1`             | No       | `1M`    | First dashboard period preset button                                                                  |
-| `NEXT_PUBLIC_PERIOD_PRESET_2`             | No       | `3M`    | Second dashboard period preset button                                                                 |
-| `NEXT_PUBLIC_PERIOD_PRESET_3`             | No       | `6M`    | Third dashboard period preset button                                                                  |
-| `NEXT_PUBLIC_PERIOD_PRESET_4`             | No       | `YTD`   | Fourth dashboard period preset button                                                                 |
-| `NEXT_PUBLIC_MAX_GROUPS`                  | No       | `50`    | Maximum investment groups per user (soft limit)                                                       |
-| `NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT`     | No       | —       | Percentage of max groups at which an approaching-limit warning appears. No warning if omitted         |
+| Variable                                  | Required | Default                 | Description                                                                                                                                                                    |
+| ----------------------------------------- | -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NEXTAUTH_SECRET`                         | Yes      | —                       | NextAuth.js signing secret. Must match `JWT_SECRET` on the backend                                                                                                             |
+| `NEXTAUTH_URL`                            | Yes      | —                       | Canonical URL of the web app (e.g. `http://localhost:3000`)                                                                                                                    |
+| `NEXT_PUBLIC_API_URL`                     | Yes      | —                       | Base URL for client-side API requests (e.g. `http://localhost:8000`)                                                                                                           |
+| `NEXT_PUBLIC_SITE_URL`                    | No       | `http://localhost:3000` | Canonical public origin of the web app; used as the Next `metadataBase` so the favicon and Open Graph image resolve to absolute URLs. Set to the deployed domain in production |
+| `NEXT_PUBLIC_FALLBACK_PRIMARY_CURRENCY`   | No       | `ARS`                   | Default primary currency when no user settings exist. Also pinned in currency combobox                                                                                         |
+| `NEXT_PUBLIC_FALLBACK_SECONDARY_CURRENCY` | No       | `USD`                   | Default secondary currency when no user settings exist. Also pinned in currency combobox                                                                                       |
+| `NEXT_PUBLIC_FALLBACK_DOLLAR_RATE`        | No       | `mep`                   | Default dollar rate preference (`oficial`, `mep`, or `blue`)                                                                                                                   |
+| `NEXT_PUBLIC_PREFERRED_CURRENCIES`        | No       | —                       | Comma-separated currencies shown in a "Preferred" group in the currency combobox (e.g. `BRL,EUR,GBP`)                                                                          |
+| `NEXT_PUBLIC_PERIOD_PRESET_1`             | No       | `1M`                    | First dashboard period preset button                                                                                                                                           |
+| `NEXT_PUBLIC_PERIOD_PRESET_2`             | No       | `3M`                    | Second dashboard period preset button                                                                                                                                          |
+| `NEXT_PUBLIC_PERIOD_PRESET_3`             | No       | `6M`                    | Third dashboard period preset button                                                                                                                                           |
+| `NEXT_PUBLIC_PERIOD_PRESET_4`             | No       | `YTD`                   | Fourth dashboard period preset button                                                                                                                                          |
+| `NEXT_PUBLIC_MAX_GROUPS`                  | No       | `50`                    | Maximum investment groups per user (soft limit)                                                                                                                                |
+| `NEXT_PUBLIC_GROUP_LIMIT_WARNING_PCT`     | No       | —                       | Percentage of max groups at which an approaching-limit warning appears. No warning if omitted                                                                                  |
 
 **Period preset format:** `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If all four are omitted, only "All" is shown.
 
