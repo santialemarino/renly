@@ -3,6 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { ImageResponse } from 'next/og';
 
 import { siteConfig } from '@/config/site';
+import {
+  BRAND_BLUE,
+  BRAND_BLUE_GRADIENT_FROM,
+  BRAND_BLUE_GRADIENT_TO,
+  BRAND_SURFACE,
+} from '@/lib/constants/brand';
 
 // Social share card (og:image + twitter fallback) rendered on demand by next/og. Mirrors the app
 // brand: the gradient R monogram over the blue-800 wordmark and the product tagline, on white.
@@ -32,8 +38,8 @@ export default async function OpengraphImage() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: '#ffffff',
-        backgroundImage: 'linear-gradient(160deg, #ffffff 55%, #eef2ff 100%)',
+        backgroundColor: BRAND_SURFACE,
+        backgroundImage: `linear-gradient(160deg, ${BRAND_SURFACE} 55%, #eef2ff 100%)`,
         fontFamily: 'Jakarta',
       }}
     >
@@ -45,8 +51,8 @@ export default async function OpengraphImage() {
           width: 208,
           height: 208,
           borderRadius: 48,
-          backgroundImage: 'linear-gradient(135deg, #1d4ed8 0%, #1e3a8a 100%)',
-          boxShadow: '0 24px 60px -18px rgba(30, 64, 175, 0.55)',
+          backgroundImage: `linear-gradient(135deg, ${BRAND_BLUE_GRADIENT_FROM} 0%, ${BRAND_BLUE_GRADIENT_TO} 100%)`,
+          boxShadow: '0 24px 60px -18px rgba(30, 64, 175, 0.55)', // brand blue at 55%.
         }}
       >
         <div style={{ display: 'flex', fontSize: 150, fontWeight: 600, color: '#ffffff' }}>R</div>
@@ -58,7 +64,7 @@ export default async function OpengraphImage() {
           fontSize: 92,
           fontWeight: 600,
           letterSpacing: -1,
-          color: '#1e40af',
+          color: BRAND_BLUE,
         }}
       >
         {siteConfig.name}
