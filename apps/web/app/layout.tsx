@@ -9,7 +9,7 @@ import { Toaster } from 'sonner';
 import { cn } from '@repo/ui/lib';
 import { CookieConsent } from '@/components/cookie-consent';
 import { siteConfig } from '@/config/site';
-import { BRAND_BLUE } from '@/lib/constants/brand';
+import { BRAND_SURFACE } from '@/lib/constants/brand';
 
 // Absolute base for resolving the favicon / Open Graph image URLs. Reuses NEXTAUTH_URL, the app's
 // canonical web origin (see docs/technical/env-vars.md) — a runtime env, so it carries the real
@@ -36,9 +36,12 @@ export const metadata: Metadata = {
   },
 };
 
-// Brand-blue browser/PWA chrome tint (blue-800, the wordmark color).
+// Browser/PWA chrome tint = the app's white surface, not the brand blue: iOS Safari ignores a custom
+// theme-color (it tints from the page background) and an iOS home-screen app's status bar has no
+// custom-color option — so white is what most users actually see. Keeps the chrome consistent
+// instead of a blue bar that only Android would render.
 export const viewport: Viewport = {
-  themeColor: BRAND_BLUE,
+  themeColor: BRAND_SURFACE,
 };
 
 const plusJakartaSans = Plus_Jakarta_Sans({
