@@ -20,7 +20,7 @@ class AccountType(StrEnum):
 
 # User-owned cash / bank account. The running balance is derived at query time (opening_balance plus
 # linked income minus linked expenses/settlements plus/minus transfers), never stored. One currency
-# per account; opening_date anchors the historical balance series. Soft-deleted via is_active.
+# per account; opening_date anchors the historical balance series. Archived (not deleted) via is_active.
 class Account(SQLModel, table=True):
     __tablename__ = "accounts"
 
