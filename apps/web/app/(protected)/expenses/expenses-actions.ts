@@ -17,6 +17,7 @@ interface ExpenseRaw {
   notes: string | null;
   payment_method: string | null;
   credit_card_id: number | null;
+  account_id: number | null;
   source: string;
   payment_obligation_id: number | null;
   subscription_id: number | null;
@@ -98,6 +99,7 @@ export async function getExpenseById(id: number): Promise<Expense> {
     notes: raw.notes,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
+    accountId: raw.account_id,
     source: raw.source,
     paymentObligationId: raw.payment_obligation_id,
     subscriptionId: raw.subscription_id,
@@ -132,6 +134,7 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
   const {
     paymentMethod,
     creditCardId,
+    accountId,
     paymentObligationId,
     subscriptionId,
     installmentId,
@@ -149,6 +152,7 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
       ...rest,
       payment_method: paymentMethod,
       credit_card_id: paymentMethod === 'credit_card' ? (creditCardId ?? null) : null,
+      account_id: paymentMethod === 'credit_card' ? null : (accountId ?? null),
       payment_obligation_id: paymentObligationId ?? null,
       subscription_id: subscriptionId ?? null,
       installment_id: installmentId ?? null,
@@ -184,6 +188,7 @@ export async function updateExpense(
       notes: values.notes,
       payment_method: values.paymentMethod,
       credit_card_id: values.paymentMethod === 'credit_card' ? (values.creditCardId ?? null) : null,
+      account_id: values.paymentMethod === 'credit_card' ? null : (values.accountId ?? null),
       payment_obligation_id: values.paymentObligationId ?? null,
       subscription_id: values.subscriptionId ?? null,
       installment_id: values.installmentId ?? null,

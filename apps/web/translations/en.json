@@ -193,6 +193,11 @@
       "label": "Export",
       "loading": "Preparing…",
       "success": "Your data export has been downloaded."
+    },
+    "accountField": {
+      "placeholder": "Select an account",
+      "none": "None",
+      "noneForCurrency": "No {currency} accounts"
     }
   },
   "login": {
@@ -533,7 +538,10 @@
       },
       "createSuccess": "Income entry created.",
       "updateSuccess": "Income entry updated.",
-      "saveError": "Failed to save income entry."
+      "saveError": "Failed to save income entry.",
+      "account": {
+        "label": "Deposited to"
+      }
     },
     "delete": {
       "title": "Delete income entry",
@@ -670,6 +678,9 @@
         "subscription": "{planName}'s next billing date moved back to {newCursor}.",
         "installment": "{planName}: {paidCount} of {totalCount} installments paid.",
         "installmentReactivated": "{planName} re-activated."
+      },
+      "account": {
+        "label": "Paid from"
       }
     },
     "delete": {

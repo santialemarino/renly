@@ -193,6 +193,11 @@
       "label": "Exportar",
       "loading": "Preparando…",
       "success": "Tu exportación de datos fue descargada."
+    },
+    "accountField": {
+      "placeholder": "Seleccioná una cuenta",
+      "none": "Ninguna",
+      "noneForCurrency": "Sin cuentas en {currency}"
     }
   },
   "login": {
@@ -533,7 +538,10 @@
       },
       "createSuccess": "Ingreso creado.",
       "updateSuccess": "Ingreso actualizado.",
-      "saveError": "No se pudo guardar el ingreso."
+      "saveError": "No se pudo guardar el ingreso.",
+      "account": {
+        "label": "Depositado en"
+      }
     },
     "delete": {
       "title": "Eliminar ingreso",
@@ -670,6 +678,9 @@
         "subscription": "Próximo cobro de {planName} retrocedió a {newCursor}.",
         "installment": "{planName}: {paidCount} de {totalCount} cuotas pagadas.",
         "installmentReactivated": "{planName} reactivada."
+      },
+      "account": {
+        "label": "Pagado desde"
       }
     },
     "delete": {

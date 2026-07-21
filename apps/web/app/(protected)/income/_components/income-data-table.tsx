@@ -26,6 +26,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -34,11 +35,13 @@ function RowActions({
   income,
   preferredCurrencies,
   supportedCurrencies,
+  accounts,
   onSuccess,
 }: {
   income: IncomeEntry;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
+  accounts?: Account[];
   onSuccess: () => void;
 }) {
   const t = useTranslations('income');
@@ -75,6 +78,7 @@ function RowActions({
         income={income}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
+        accounts={accounts}
         onSuccess={onSuccess}
       />
 
@@ -92,12 +96,14 @@ export function IncomeDataTable({
   data,
   preferredCurrencies,
   supportedCurrencies,
+  accounts,
   activeCurrency,
   firstRun,
 }: {
   data: IncomeListResponse;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }) {
@@ -177,6 +183,7 @@ export function IncomeDataTable({
                       income={entry}
                       preferredCurrencies={preferredCurrencies}
                       supportedCurrencies={supportedCurrencies}
+                      accounts={accounts}
                       onSuccess={() => router.refresh()}
                     />
                   </TableCell>

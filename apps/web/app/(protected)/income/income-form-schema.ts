@@ -10,6 +10,7 @@ export function buildIncomeFormSchema(requiredMsg: string) {
     currency: z.string().min(1, { message: requiredMsg }),
     category: z.enum(INCOME_CATEGORIES).optional(),
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
+    accountId: z.number().optional(),
   });
 }
 
