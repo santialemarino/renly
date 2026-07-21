@@ -141,6 +141,21 @@ async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Monthly income totals linked to each account, grouped by account_id, year, month (the account's
+# currency is fixed, so no currency dimension). Returns a list of (account_id, year, month, total).
+async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
+    if not account_ids:
+        return []
+    year_col = func.extract("year", IncomeEntry.date).label("year")
+    month_col = func.extract("month", IncomeEntry.date).label("month")
+    result = await session.execute(
+        select(IncomeEntry.account_id, year_col, month_col, func.coalesce(func.sum(IncomeEntry.amount), 0))
+        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id)
+        .group_by(IncomeEntry.account_id, year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
+
+
 # Monthly income totals for a user grouped by currency.
 # Returns a list of (year, month, currency, total) tuples.
 async def sum_by_user_monthly(
@@ -211,6 +226,7 @@ class IncomeRepository:
     list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

@@ -5,11 +5,17 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain import CardBucketBalance
+from app.models.account import Account, AccountType
 from app.models.credit_card import CreditCard
 from app.models.investment import InvestmentCategory
 from app.schemas.metrics import AllocationItem, AllocationResponse, SkippedInvestment
 from app.services import dashboard_service, exchange_rate_service, settings_service
-from app.services.dashboard_service import compute_monthly_card_balances, forward_fill_card_balances
+from app.services.dashboard_service import (
+    compute_cash_total,
+    compute_monthly_card_balances,
+    compute_monthly_cash_balances,
+    forward_fill_card_balances,
+)
 
 # Rate map: 1 USD = 1200 ARS.
 RATE_MAP = {
@@ -236,6 +242,8 @@ class TestCompositionPercentages:
             "get_card_balances",
             AsyncMock(return_value={1: [CardBucketBalance(currency="ARS", balance=balance)]}),
         )
+        # No accounts → cash total is 0 (these tests assert the card/asset percentages only).
+        monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=[]))
 
     @pytest.mark.asyncio
     async def test_negative_card_balance_excluded_from_base(self, monkeypatch):
@@ -270,9 +278,70 @@ class TestCompositionPercentages:
         )
         monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=allocation))
         monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(settings_service, "get_request_settings", AsyncMock(return_value=settings_service.RequestSettings("mep", None, 50)))
         monkeypatch.setattr(exchange_rate_service, "build_rate_lookup", AsyncMock(return_value=_FixedLookup(RATE_MAP)))
 
         result = await dashboard_service.get_composition(AsyncMock(), 1, currency="USD")
 
         assert "BRL" in result.skipped_currencies
+
+
+# --- Cash helpers (Bucket 3 #1, PR 3) ---
+
+
+def _acct(account_id: int, currency: str, opening: str = "0", opening_date: date_type = date_type(2026, 1, 1)) -> Account:
+    return Account(
+        id=account_id,
+        user_id=1,
+        name=f"Acc {account_id}",
+        type=AccountType.bank,
+        currency=currency,
+        opening_balance=Decimal(opening),
+        opening_date=opening_date,
+    )
+
+
+class TestComputeCashTotal:
+    def test_converts_and_sums_at_today_rate(self):
+        accounts = [_acct(1, "ARS"), _acct(2, "USD")]
+        balances = {1: Decimal("1000"), 2: Decimal("10")}
+        # Display ARS: 1000 + (10 USD -> 12000 ARS) = 13000.
+        total, skipped = compute_cash_total(accounts, balances, "ARS", RATE_MAP)
+        assert total == Decimal("13000")
+        assert skipped == set()
+
+    def test_unconvertible_currency_skipped(self):
+        accounts = [_acct(1, "ARS"), _acct(2, "EUR")]
+        balances = {1: Decimal("1000"), 2: Decimal("5")}
+        total, skipped = compute_cash_total(accounts, balances, "ARS", RATE_MAP)
+        assert total == Decimal("1000")
+        assert skipped == {"EUR"}
+
+    def test_zero_balance_never_flags_currency(self):
+        accounts = [_acct(1, "EUR")]
+        total, skipped = compute_cash_total(accounts, {1: Decimal("0")}, "ARS", RATE_MAP)
+        assert total == Decimal("0")
+        assert skipped == set()
+
+    def test_no_conversion_when_currency_none(self):
+        accounts = [_acct(1, "ARS"), _acct(2, "USD")]
+        balances = {1: Decimal("1000"), 2: Decimal("10")}
+        total, skipped = compute_cash_total(accounts, balances, None, None)
+        assert total == Decimal("1010")
+        assert skipped == set()
+
+
+class TestComputeMonthlyCashBalances:
+    def test_accumulates_opening_income_and_expenses(self):
+        accounts = [_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 15))]
+        income = [(1, 2026, 2, Decimal("500"))]
+        expense = [(1, 2026, 3, Decimal("200"))]
+        result, skipped = compute_monthly_cash_balances(accounts, income, expense, [], None, None)
+        assert result == {(2026, 1): Decimal("1000"), (2026, 2): Decimal("1500"), (2026, 3): Decimal("1300")}
+        assert skipped == []
+
+    def test_settlements_reduce_balance(self):
+        accounts = [_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 1))]
+        result, _ = compute_monthly_cash_balances(accounts, [], [], [(1, 2026, 2, Decimal("300"))], None, None)
+        assert result == {(2026, 1): Decimal("1000"), (2026, 2): Decimal("700")}

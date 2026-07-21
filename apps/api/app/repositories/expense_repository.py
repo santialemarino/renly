@@ -142,6 +142,21 @@ async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Monthly expense totals linked to each account, grouped by account_id, year, month (the account's
+# currency is fixed, so no currency dimension). Returns a list of (account_id, year, month, total).
+async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
+    if not account_ids:
+        return []
+    year_col = func.extract("year", ExpenseEntry.date).label("year")
+    month_col = func.extract("month", ExpenseEntry.date).label("month")
+    result = await session.execute(
+        select(ExpenseEntry.account_id, year_col, month_col, func.coalesce(func.sum(ExpenseEntry.amount), 0))
+        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id)
+        .group_by(ExpenseEntry.account_id, year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
+
+
 # Sum of expenses grouped by credit card id and currency. Returns {card_id: {currency: total}}.
 async def sum_by_credit_card_ids_grouped(
     session: AsyncSession,
@@ -473,6 +488,7 @@ class ExpenseRepository:
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)

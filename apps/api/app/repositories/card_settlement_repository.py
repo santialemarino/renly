@@ -51,6 +51,21 @@ async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Monthly settlement totals drawn from each account, grouped by account_id, year, month (the
+# account's currency is fixed). Returns a list of (account_id, year, month, total).
+async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
+    if not account_ids:
+        return []
+    year_col = func.extract("year", CardSettlement.date).label("year")
+    month_col = func.extract("month", CardSettlement.date).label("month")
+    result = await session.execute(
+        select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(CardSettlement.amount), 0))
+        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id)
+        .group_by(CardSettlement.account_id, year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
+
+
 # Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
 # Replaces the flat sum_by_card_ids — bucket balances need per-currency totals.
 async def sum_by_card_ids_grouped(
@@ -106,6 +121,7 @@ class CardSettlementRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)
     sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)
 
