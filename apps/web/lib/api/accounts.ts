@@ -16,6 +16,7 @@ interface AccountRaw {
   balance: string;
   is_active: boolean;
   notes: string | null;
+  has_links: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -32,6 +33,7 @@ export interface Account {
   balance: string;
   isActive: boolean;
   notes: string | null;
+  hasLinks: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,6 +51,7 @@ function mapAccount(raw: AccountRaw): Account {
     balance: raw.balance,
     isActive: raw.is_active,
     notes: raw.notes,
+    hasLinks: raw.has_links,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
