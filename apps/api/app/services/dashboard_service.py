@@ -41,7 +41,7 @@ from app.utils.liquidity import (
     compute_fixed_monthly_commitments,
     compute_monthly_income,
 )
-from app.utils.metrics import RateLookup, convert_value
+from app.utils.metrics import RateLookup, convert_value, month_over_month
 
 ZERO = Decimal("0")
 
@@ -136,9 +136,9 @@ def forward_fill_card_balances(
 # balance in target currency}, sorted skipped currency codes).
 def compute_monthly_cash_balances(
     accounts: list,
-    income_monthly: list[tuple[int, int, int, float]],
-    expense_monthly: list[tuple[int, int, int, float]],
-    settlement_monthly: list[tuple[int, int, int, float]],
+    income_monthly: list[tuple[int, int, int, Decimal]],
+    expense_monthly: list[tuple[int, int, int, Decimal]],
+    settlement_monthly: list[tuple[int, int, int, Decimal]],
     target_currency: str | None,
     lookup: RateLookup | None,
 ) -> tuple[dict[tuple[int, int], Decimal], list[str]]:
@@ -259,13 +259,20 @@ async def get_overview(
 
     net_worth = portfolio.total_value + cash_total - finance.credit_card_balance
 
-    # Net worth month-over-month change (approximated from portfolio change).
-    net_worth_change = portfolio.month_change
+    # Net worth month-over-month: the latest vs prior month of the SAME monthly net-worth series the
+    # evolution chart uses (investment + cash − card per month), so the delta reflects cash and card
+    # movements, not investments alone — e.g. funding a new account this month now shows up. Full
+    # history (unwindowed): net worth is a point-in-time snapshot, unlike the period-scoped income
+    # /expense totals. (investment_month_change below stays investment-only for the Investment card.)
+    nw_points, _ = await compute_net_worth_evolution(session, user_id, currency=currency, lookup=lookup, today=today)
+    net_worth_change: Decimal | None = None
     net_worth_change_pct: Decimal | None = None
-    if net_worth_change is not None:
-        prev = net_worth - net_worth_change
-        if prev != ZERO:
-            net_worth_change_pct = net_worth_change / prev
+    nw_mom = month_over_month([(p.date, p.net_worth) for p in nw_points])
+    if nw_mom is not None:
+        prev_nw, curr_nw = nw_mom
+        net_worth_change = curr_nw - prev_nw
+        if prev_nw != ZERO:
+            net_worth_change_pct = net_worth_change / prev_nw
 
     savings_rate: Decimal | None = None
     if finance.total_income != ZERO:
@@ -298,17 +305,20 @@ async def get_overview(
     )
 
 
-# Computes monthly net worth series (investment value - cumulative card balance).
-async def get_evolution(
+# Builds the monthly net-worth series (investment value + cumulative cash − cumulative card per month,
+# forward-filled), shared by the evolution chart and the overview's month-over-month delta. Cash and
+# card include archived rows (their balances stay in net worth; archive is a UI filter). Returns
+# (points, sorted skipped-currency codes).
+async def compute_net_worth_evolution(
     session: AsyncSession,
     user_id: int,
     *,
-    currency: str | None = None,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> DashboardEvolutionResponse:
-    # One rate lookup per request — shared by the portfolio evolution and card-balance series.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
+) -> tuple[list[NetWorthEvolutionPoint], list[str]]:
     portfolio_evo = await metrics_service.get_portfolio_evolution(
         session,
         user_id,
@@ -317,9 +327,8 @@ async def get_evolution(
         start_date=date_from,
         end_date=date_to,
     )
-
     if not portfolio_evo.points:
-        return DashboardEvolutionResponse(points=[], currency=currency, skipped_currencies=[])
+        return [], []
 
     # Build monthly card balance series. Includes archived cards — their history and any
     # outstanding balance remain part of net worth (archive is a UI filter).
@@ -361,23 +370,49 @@ async def get_evolution(
         )
         skipped.update(cash_skipped)
 
-    # Merge: each portfolio point carries the cumulative card + cash balances at-or-before its month
-    # (proper forward-fill — includes balance built up before the portfolio window starts).
-    point_months = [(p.date.year, p.date.month) for p in portfolio_evo.points]
-    card_balances = forward_fill_card_balances(point_months, card_balance_by_month)
-    cash_balances = forward_fill_card_balances(point_months, cash_balance_by_month)
+    # Merge onto a month grid = the portfolio points' months plus the CURRENT month when it's beyond
+    # the last snapshot, so cash/card movements that post-date the latest investment snapshot still
+    # advance net worth (e.g. funding an account this month). Every series forward-fills at-or-before
+    # each month: investments carry the latest snapshot value into the trailing current month; card
+    # and cash carry their cumulative balances (including any built up before the window starts).
+    investment_by_month = {(p.date.year, p.date.month): p.total_value for p in portfolio_evo.points}
+    months = [(p.date.year, p.date.month) for p in portfolio_evo.points]
+    if today is not None and (today.year, today.month) > months[-1]:
+        months.append((today.year, today.month))
+    investment_balances = forward_fill_card_balances(months, investment_by_month)
+    card_balances = forward_fill_card_balances(months, card_balance_by_month)
+    cash_balances = forward_fill_card_balances(months, cash_balance_by_month)
     points = [
         NetWorthEvolutionPoint(
-            date=p.date,
-            investment_value=p.total_value,
+            date=date_type(year, month, 1),
+            investment_value=investment,
             cash_balance=cash,
             card_balance=card,
-            net_worth=p.total_value + cash - card,
+            net_worth=investment + cash - card,
         )
-        for p, card, cash in zip(portfolio_evo.points, card_balances, cash_balances)
+        for (year, month), investment, card, cash in zip(months, investment_balances, card_balances, cash_balances)
     ]
+    return points, sorted(skipped)
 
-    return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=sorted(skipped))
+
+# Computes the monthly net worth series (investment + cash − card per point) for the evolution chart.
+async def get_evolution(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> DashboardEvolutionResponse:
+    # One settings read + rate lookup per request (matches get_overview): the dollar preference builds
+    # the lookup, and the timezone anchors "today" so the series extends to the current month.
+    rs = await settings_service.get_request_settings(session, user_id) if currency else None
+    lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
+    today = settings_service.today_for_timezone(rs.timezone) if rs else None
+    points, skipped = await compute_net_worth_evolution(
+        session, user_id, currency=currency, lookup=lookup, today=today, date_from=date_from, date_to=date_to
+    )
+    return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=skipped)
 
 
 # Computes investment allocation by category plus a liabilities segment.

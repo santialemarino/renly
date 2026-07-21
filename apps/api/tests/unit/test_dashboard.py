@@ -8,7 +8,7 @@ from app.domain import CardBucketBalance
 from app.models.account import Account, AccountType
 from app.models.credit_card import CreditCard
 from app.models.investment import InvestmentCategory
-from app.schemas.metrics import AllocationItem, AllocationResponse, SkippedInvestment
+from app.schemas.metrics import AllocationItem, AllocationResponse, EvolutionPoint, PortfolioEvolutionResponse, SkippedInvestment
 from app.services import dashboard_service, exchange_rate_service, settings_service
 from app.services.dashboard_service import (
     compute_cash_total,
@@ -331,6 +331,14 @@ class TestComputeCashTotal:
         assert total == Decimal("1010")
         assert skipped == set()
 
+    def test_negative_balance_reduces_total(self):
+        accounts = [_acct(1, "ARS"), _acct(2, "USD")]
+        # −500 ARS + (−10 USD → −12,000 ARS) = −12,500 ARS. An overdraft reduces the cash total (and
+        # thus net worth); a negative balance is a real signed value, never flagged skipped.
+        total, skipped = compute_cash_total(accounts, {1: Decimal("-500"), 2: Decimal("-10")}, "ARS", RATE_MAP)
+        assert total == Decimal("-12500")
+        assert skipped == set()
+
 
 class TestComputeMonthlyCashBalances:
     def test_accumulates_opening_income_and_expenses(self):
@@ -345,3 +353,52 @@ class TestComputeMonthlyCashBalances:
         accounts = [_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 1))]
         result, _ = compute_monthly_cash_balances(accounts, [], [], [(1, 2026, 2, Decimal("300"))], None, None)
         assert result == {(2026, 1): Decimal("1000"), (2026, 2): Decimal("700")}
+
+    def test_unconvertible_currency_is_dropped_and_reported(self):
+        # EUR can't reach ARS via RATE_MAP, so its movements are dropped from the series AND its code
+        # is flagged (fail-loud, like the card equivalent); the ARS account still accumulates.
+        accounts = [
+            _acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 1)),
+            _acct(2, "EUR", opening="50", opening_date=date_type(2026, 1, 1)),
+        ]
+        result, skipped = compute_monthly_cash_balances(accounts, [], [], [], "ARS", FIXED_LOOKUP)
+        assert result == {(2026, 1): Decimal("1000")}
+        assert skipped == ["EUR"]
+
+
+class TestNetWorthEvolutionCurrentMonth:
+    # The series extends to the current month (forward-filling investments), so cash/card activity
+    # that post-dates the latest investment snapshot still advances net worth (and the MoM delta).
+    @pytest.mark.asyncio
+    async def test_appends_current_month_with_cash_beyond_last_snapshot(self, monkeypatch):
+        evo = PortfolioEvolutionResponse(points=[EvolutionPoint(date=date_type(2026, 6, 1), total_value=Decimal("5000"))])
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_portfolio_evolution", AsyncMock(return_value=evo))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(
+            dashboard_service.account_repository,
+            "list_by_user",
+            AsyncMock(return_value=[_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 7, 1))]),
+        )
+        monkeypatch.setattr(dashboard_service.income_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.expense_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.card_settlement_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
+
+        points, _ = await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))
+
+        # A July point is appended: investment forward-filled from June (5000), cash 1000 → net worth 6000.
+        assert [(p.date, p.cash_balance, p.net_worth) for p in points] == [
+            (date_type(2026, 6, 1), Decimal("0"), Decimal("5000")),
+            (date_type(2026, 7, 1), Decimal("1000"), Decimal("6000")),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_no_current_month_appended_when_snapshot_is_already_current(self, monkeypatch):
+        evo = PortfolioEvolutionResponse(points=[EvolutionPoint(date=date_type(2026, 7, 1), total_value=Decimal("5000"))])
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_portfolio_evolution", AsyncMock(return_value=evo))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=[]))
+
+        points, _ = await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))
+
+        # The current month already has a point, so none is appended.
+        assert [p.date for p in points] == [date_type(2026, 7, 1)]
