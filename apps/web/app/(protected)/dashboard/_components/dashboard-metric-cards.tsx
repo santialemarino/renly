@@ -19,7 +19,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
 
   return (
     <div
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
       data-testid="dashboard-metrics"
     >
       {/* Net Worth */}
