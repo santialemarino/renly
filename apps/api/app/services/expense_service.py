@@ -4,7 +4,15 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, CycleAdvanceDecision, NotFoundError, PaymentMethod, PaymentPairingError, ReverseResult
+from app.domain import (
+    AccountCardExclusivityError,
+    AdvanceResult,
+    CycleAdvanceDecision,
+    NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
+    ReverseResult,
+)
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import (
@@ -442,9 +450,13 @@ async def update_expense(
         installment_id=new_installment_id if new_installment_id != old_installment_id else None,
     )
 
-    # Effective account link (request field over stored) must be owned + currency-matched.
+    # Effective account link (request field over stored) must be owned + currency-matched, and a
+    # credit-card expense never draws an account directly. The schema validator only sees same-request
+    # pairs, so enforce the effective account rule here too (mirrors the card-pairing guard above).
     new_account_id = fields["account_id"] if "account_id" in fields else entry.account_id
     new_currency = fields["currency"] if "currency" in fields else entry.currency
+    if new_account_id is not None and new_payment_method == PaymentMethod.credit_card:
+        raise AccountCardExclusivityError()
     await account_service.validate_account_link(session, user, new_account_id, new_currency)
 
     for key, value in fields.items():

@@ -52,6 +52,12 @@ async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
     return result.first() is not None
 
 
+# Returns whether any income links this account (used to lock the account's currency once linked).
+async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: int) -> bool:
+    result = await session.execute(select(IncomeEntry.id).where(IncomeEntry.account_id == account_id, IncomeEntry.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Returns the user's income dedup tuples (date, amount, currency, category, notes), used to flag
 # duplicates on import. Column order matches INCOME_SPEC.dedup_fields.
 async def list_dedup_keys_by_user(
@@ -204,6 +210,7 @@ class IncomeRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    exists_by_account_id = staticmethod(exists_by_account_id)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
     get_first_income_date = staticmethod(get_first_income_date)

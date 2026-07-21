@@ -35,8 +35,8 @@ class AccountUpdate(RequestBase):
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
-# Response for GET list and GET one, POST and PUT. `balance` is derived (opening_balance in this PR;
-# extended with linked movements in a later PR), in the account's own currency.
+# Response for GET list and GET one, POST and PUT. `balance` is derived at query time
+# (opening_balance + linked income − linked expenses − settlements paid from it), in the account's own currency.
 class AccountResponse(BaseModel):
     id: int = Field(description="Account id.")
     name: str = Field(description="Account label.")
@@ -47,6 +47,7 @@ class AccountResponse(BaseModel):
     balance: Decimal = Field(description="Current derived balance in the account's currency.")
     is_active: bool = Field(description="Whether the account is active.")
     notes: str | None = Field(default=None, description="Optional notes.")
+    has_links: bool = Field(default=False, description="Whether any expense/income/settlement links this account (locks its currency).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

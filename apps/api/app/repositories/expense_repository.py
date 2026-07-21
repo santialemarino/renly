@@ -56,6 +56,12 @@ async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
     return result.first() is not None
 
 
+# Returns whether any expense links this account (used to lock the account's currency once linked).
+async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: int) -> bool:
+    result = await session.execute(select(ExpenseEntry.id).where(ExpenseEntry.account_id == account_id, ExpenseEntry.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Returns the user's expense dedup tuples (date, amount, currency, category, notes), used to flag
 # duplicates on import. Column order matches EXPENSES_SPEC.dedup_fields.
 async def list_dedup_keys_by_user(
@@ -459,6 +465,7 @@ class ExpenseRepository:
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    exists_by_account_id = staticmethod(exists_by_account_id)
     exists_by_user = staticmethod(exists_by_user)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
