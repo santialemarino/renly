@@ -43,14 +43,17 @@ class TestGetAccount:
 
 class TestBalances:
     @pytest.mark.asyncio
-    async def test_balance_is_opening_balance(self):
+    async def test_balance_falls_back_to_opening_when_no_links(self, monkeypatch):
+        monkeypatch.setattr(account_service.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         accounts = [_account(id=1, opening_balance=Decimal("100")), _account(id=2, opening_balance=Decimal("-40"))]
-        balances = await account_service.get_account_balances(accounts)
+        balances = await account_service.get_account_balances(AsyncMock(), accounts, 1)
         assert balances == {1: Decimal("100"), 2: Decimal("-40")}
 
     @pytest.mark.asyncio
     async def test_empty_accounts_yields_empty_map(self):
-        assert await account_service.get_account_balances([]) == {}
+        assert await account_service.get_account_balances(AsyncMock(), [], 1) == {}
 
 
 class TestMutations:

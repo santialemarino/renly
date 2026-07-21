@@ -195,6 +195,7 @@ async def create_expense(
             notes=body.notes,
             payment_method=body.payment_method,
             credit_card_id=body.credit_card_id,
+            account_id=body.account_id,
             source=body.source,
             payment_obligation_id=body.payment_obligation_id,
             subscription_id=body.subscription_id,

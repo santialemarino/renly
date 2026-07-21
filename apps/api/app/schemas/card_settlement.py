@@ -14,6 +14,7 @@ class CardSettlementCreate(RequestBase):
     date: date_type = Field(description="Settlement date.")
     amount: Decimal = Field(description="Amount paid.", gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
+    account_id: int | None = Field(default=None, description="Cash/bank account the payment was drawn from (optional).")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
 
@@ -24,6 +25,7 @@ class CardSettlementResponse(BaseModel):
     date: date_type = Field(description="Settlement date.")
     amount: Decimal = Field(description="Amount paid.", max_digits=18, decimal_places=2)
     currency: str = Field(description="Currency (ISO 4217).")
+    account_id: int | None = Field(default=None, description="Cash/bank account the payment was drawn from.")
     notes: str | None = Field(default=None, description="Optional notes.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

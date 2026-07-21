@@ -18,6 +18,7 @@ from app.domain.cycle_advance import (
     subscription_link_advanced_cursor,
 )
 from app.domain.errors import (
+    AccountCurrencyMismatchError,
     CurrencyChangeBlockedError,
     DomainError,
     EmailNotVerifiedError,
@@ -41,6 +42,7 @@ from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
 
 __all__ = [
+    "AccountCurrencyMismatchError",
     "AdvanceResult",
     "CalendarItem",
     "CardBucketBalance",

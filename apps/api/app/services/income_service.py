@@ -8,7 +8,7 @@ from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import income_repository
 from app.schemas.income import IncomeListResponse, IncomeResponse
-from app.services import exchange_rate_service, settings_service
+from app.services import account_service, exchange_rate_service, settings_service
 from app.utils.metrics import RateLookup, convert_optional
 
 
@@ -94,8 +94,10 @@ async def create_income(
     currency: str,
     category: IncomeCategory | None = None,
     notes: str | None = None,
+    account_id: int | None = None,
     source: str = "manual",
 ) -> IncomeEntry:
+    await account_service.validate_account_link(session, user, account_id, currency)
     entry = IncomeEntry(
         user_id=user.id,
         date=date,
@@ -103,6 +105,7 @@ async def create_income(
         currency=currency,
         category=category,
         notes=notes,
+        account_id=account_id,
         source=source,
     )
     entry = await income_repository.create(session, entry)
@@ -120,6 +123,10 @@ async def update_income(
     **fields: object,
 ) -> IncomeEntry:
     entry = await get_income(session, income_id, user)
+    # Effective account link (request field over stored) must be owned + currency-matched.
+    new_account_id = fields["account_id"] if "account_id" in fields else entry.account_id
+    new_currency = fields["currency"] if "currency" in fields else entry.currency
+    await account_service.validate_account_link(session, user, new_account_id, new_currency)
     for key, value in fields.items():
         setattr(entry, key, value)
     await income_repository.save(session, entry)

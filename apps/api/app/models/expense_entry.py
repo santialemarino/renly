@@ -53,6 +53,9 @@ class ExpenseEntry(SQLModel, table=True):
     credit_card_id: int | None = Field(
         default=None, foreign_key="credit_cards.id", description="Credit card used (when payment_method = credit_card)."
     )
+    account_id: int | None = Field(
+        default=None, foreign_key="accounts.id", description="Cash/bank account this expense was paid from (optional; not for card expenses)."
+    )
     source: str = Field(
         default="manual",
         max_length=20,

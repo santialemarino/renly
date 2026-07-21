@@ -35,7 +35,7 @@ async def list_accounts(
         sort_order=sort_order,
         active_only=not show_archived,
     )
-    balances = await account_service.get_account_balances(accounts)
+    balances = await account_service.get_account_balances(session, accounts, current_user.id)
     return [_to_response(account, balances.get(account.id)) for account in accounts]
 
 
@@ -47,7 +47,7 @@ async def get_account(
     session: SessionDep,
 ) -> AccountResponse:
     account = await account_service.get_account(session, account_id, current_user)
-    balances = await account_service.get_account_balances([account])
+    balances = await account_service.get_account_balances(session, [account], current_user.id)
     return _to_response(account, balances.get(account.id))
 
 
@@ -81,7 +81,7 @@ async def update_account(
 ) -> AccountResponse:
     payload = body.model_dump(exclude_unset=True)
     account = await account_service.update_account(session, account_id, current_user, **payload)
-    balances = await account_service.get_account_balances([account])
+    balances = await account_service.get_account_balances(session, [account], current_user.id)
     return _to_response(account, balances.get(account.id))
 
 
@@ -103,7 +103,7 @@ async def archive_account(
     session: SessionDep,
 ) -> AccountResponse:
     account = await account_service.archive_account(session, account_id, current_user)
-    balances = await account_service.get_account_balances([account])
+    balances = await account_service.get_account_balances(session, [account], current_user.id)
     return _to_response(account, balances.get(account.id))
 
 
@@ -115,5 +115,5 @@ async def unarchive_account(
     session: SessionDep,
 ) -> AccountResponse:
     account = await account_service.unarchive_account(session, account_id, current_user)
-    balances = await account_service.get_account_balances([account])
+    balances = await account_service.get_account_balances(session, [account], current_user.id)
     return _to_response(account, balances.get(account.id))

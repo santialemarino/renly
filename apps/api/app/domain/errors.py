@@ -25,6 +25,19 @@ class DomainError(Exception):
         return {}
 
 
+# A money entry (expense / income / settlement) links to an account whose currency differs from the
+# entry's. A cash balance must stay exact, so the link currencies must match. Mapped to 400 by the API.
+class AccountCurrencyMismatchError(DomainError):
+    code = "account_currency_mismatch"
+    status_code = 400
+
+    def __init__(self, entry_currency: str, account_currency: str) -> None:
+        self.entry_currency = entry_currency
+        self.account_currency = account_currency
+        self.message = f"Currency {entry_currency} does not match the account's currency ({account_currency})."
+        super().__init__(self.message)
+
+
 # Investment currency cannot be changed because snapshots exist. Mapped to 409 by the API.
 class CurrencyChangeBlockedError(DomainError):
     code = "currency_change_blocked"

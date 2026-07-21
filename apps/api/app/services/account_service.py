@@ -3,10 +3,17 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import AccountCurrencyMismatchError, NotFoundError
 from app.models.account import Account, AccountType
 from app.models.user import User
-from app.repositories import account_repository
+from app.repositories import (
+    account_repository,
+    card_settlement_repository,
+    expense_repository,
+    income_repository,
+)
+
+ZERO = Decimal(0)
 
 
 # List accounts for a user with optional search, sorting, and archive filtering.
@@ -37,11 +44,36 @@ async def get_account(session: AsyncSession, account_id: int, user: User) -> Acc
     return account
 
 
-# Returns {account_id: balance} for the given accounts. In this PR the balance is just the
-# opening_balance; PR 2 (money-linking) extends this to add linked income minus linked
-# expenses/settlements plus/minus transfers, computed at query time.
-async def get_account_balances(accounts: list[Account]) -> dict[int, Decimal]:
-    return {a.id: a.opening_balance for a in accounts if a.id is not None}
+# Validates that an account link (from an expense / income / settlement) is legal: the account must
+# exist and belong to the user (SEC-4), and its currency must match the entry's — a cash balance
+# stays exact, so mismatched-currency links are rejected (mirrors the investment base-currency lock).
+# A None account_id is a no-op (unlinked entries are allowed and untouched).
+async def validate_account_link(session: AsyncSession, user: User, account_id: int | None, currency: str) -> None:
+    if account_id is None:
+        return
+    account = await account_repository.get_by_id(session, account_id, user.id)
+    if account is None:
+        raise NotFoundError("Account not found.")
+    if account.currency != currency:
+        raise AccountCurrencyMismatchError(currency, account.currency)
+
+
+# Returns {account_id: balance} for the given accounts, derived at query time:
+# opening_balance + linked income − linked expenses − settlements paid from the account.
+# Every linked row is in the account's currency (validate_account_link enforces it), so the sums
+# need no per-currency conversion. Transfers are added in a later PR. One batch query per source.
+async def get_account_balances(session: AsyncSession, accounts: list[Account], user_id: int) -> dict[int, Decimal]:
+    account_ids = [a.id for a in accounts if a.id is not None]
+    if not account_ids:
+        return {}
+    income = await income_repository.sum_by_account_ids(session, account_ids, user_id)
+    expenses = await expense_repository.sum_by_account_ids(session, account_ids, user_id)
+    settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
+    return {
+        a.id: a.opening_balance + income.get(a.id, ZERO) - expenses.get(a.id, ZERO) - settlements.get(a.id, ZERO)
+        for a in accounts
+        if a.id is not None
+    }
 
 
 # Create a new account.

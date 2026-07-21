@@ -15,7 +15,7 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
-from app.services import card_reconciliation_service
+from app.services import account_service, card_reconciliation_service
 
 # --- Credit cards ---
 
@@ -192,15 +192,18 @@ async def create_settlement(
     date: date_type,
     amount: Decimal,
     currency: str,
+    account_id: int | None = None,
     notes: str | None = None,
 ) -> CardSettlement:
     await get_card(session, card_id, user)
+    await account_service.validate_account_link(session, user, account_id, currency)
     settlement = CardSettlement(
         credit_card_id=card_id,
         user_id=user.id,
         date=date,
         amount=amount,
         currency=currency,
+        account_id=account_id,
         notes=notes,
     )
     settlement = await card_settlement_repository.create(session, settlement)

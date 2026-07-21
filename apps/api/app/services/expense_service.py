@@ -16,6 +16,7 @@ from app.repositories import (
 )
 from app.schemas.expense import ExpenseListResponse, ExpenseResponse
 from app.services import (
+    account_service,
     card_reconciliation_service,
     exchange_rate_service,
     installment_service,
@@ -139,6 +140,7 @@ async def _insert_expense_row(
     notes: str | None = None,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
+    account_id: int | None = None,
     source: str = "manual",
     payment_obligation_id: int | None = None,
     subscription_id: int | None = None,
@@ -153,6 +155,7 @@ async def _insert_expense_row(
         notes=notes,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
+        account_id=account_id,
         source=source,
         payment_obligation_id=payment_obligation_id,
         subscription_id=subscription_id,
@@ -203,6 +206,7 @@ async def create_expense(
     notes: str | None = None,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
+    account_id: int | None = None,
     source: str = "manual",
     payment_obligation_id: int | None = None,
     subscription_id: int | None = None,
@@ -216,6 +220,7 @@ async def create_expense(
         subscription_id=subscription_id,
         installment_id=installment_id,
     )
+    await account_service.validate_account_link(session, user, account_id, currency)
     entry = await _insert_expense_row(
         session,
         user,
@@ -226,6 +231,7 @@ async def create_expense(
         notes=notes,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
+        account_id=account_id,
         source=source,
         payment_obligation_id=payment_obligation_id,
         subscription_id=subscription_id,
@@ -435,6 +441,11 @@ async def update_expense(
         subscription_id=new_subscription_id if new_subscription_id != old_subscription_id else None,
         installment_id=new_installment_id if new_installment_id != old_installment_id else None,
     )
+
+    # Effective account link (request field over stored) must be owned + currency-matched.
+    new_account_id = fields["account_id"] if "account_id" in fields else entry.account_id
+    new_currency = fields["currency"] if "currency" in fields else entry.currency
+    await account_service.validate_account_link(session, user, new_account_id, new_currency)
 
     for key, value in fields.items():
         setattr(entry, key, value)

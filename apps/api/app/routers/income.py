@@ -64,6 +64,7 @@ async def create_income(
         currency=body.currency,
         category=body.category,
         notes=body.notes,
+        account_id=body.account_id,
     )
     return IncomeResponse.model_validate(entry)
 

@@ -176,6 +176,7 @@ async def create_settlement(
         date=body.date,
         amount=body.amount,
         currency=body.currency,
+        account_id=body.account_id,
         notes=body.notes,
     )
     return CardSettlementResponse.model_validate(settlement)

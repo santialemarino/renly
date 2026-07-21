@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -34,6 +36,19 @@ async def create(session: AsyncSession, settlement: CardSettlement) -> CardSettl
 # Delete a settlement.
 async def delete(session: AsyncSession, settlement: CardSettlement) -> None:
     await session.delete(settlement)
+
+
+# Sum of settlements drawn from each account, grouped by account_id. Returns {account_id: total}.
+# Every linked settlement is in the account's currency (enforced at link time), so no currency split.
+async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+    if not account_ids:
+        return {}
+    result = await session.execute(
+        select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0))
+        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id)
+        .group_by(CardSettlement.account_id)
+    )
+    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
 # Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
@@ -90,6 +105,7 @@ class CardSettlementRepository:
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)
     sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)
 

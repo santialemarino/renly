@@ -128,6 +128,19 @@ async def sum_by_user(
     return {row[0]: row[1] for row in result.all()}
 
 
+# Sum of income linked to each account, grouped by account_id. Returns {account_id: total}.
+# Every linked row is in the account's currency (enforced at link time), so no currency split.
+async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+    if not account_ids:
+        return {}
+    result = await session.execute(
+        select(IncomeEntry.account_id, func.coalesce(func.sum(IncomeEntry.amount), 0))
+        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id)
+        .group_by(IncomeEntry.account_id)
+    )
+    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
+
+
 # Monthly income totals for a user grouped by currency.
 # Returns a list of (year, month, currency, total) tuples.
 async def sum_by_user_monthly(
@@ -197,6 +210,7 @@ class IncomeRepository:
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     save = staticmethod(save)
+    sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)
