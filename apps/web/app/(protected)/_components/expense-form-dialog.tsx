@@ -687,7 +687,7 @@ export function ExpenseFormDialog({
               {accounts && accounts.length > 0 && watchedPaymentMethod !== 'credit_card' && (
                 <AccountField
                   control={form.control}
-                  name="accountId"
+                  setValue={form.setValue}
                   accounts={accounts}
                   currency={watchedCurrency || undefined}
                   label={t('form.account.label')}

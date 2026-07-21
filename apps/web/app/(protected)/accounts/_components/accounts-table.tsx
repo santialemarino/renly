@@ -116,7 +116,7 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
                   <TableCell className="text-muted-foreground">{t(`types.${a.type}`)}</TableCell>
                   <TableCell className="text-muted-foreground">{a.currency}</TableCell>
                   <TableCell className="text-right text-paragraph-sm tabular-nums">
-                    {fmt.amount(a.balance, a.currency)} {a.currency}
+                    {fmt.amount(a.balance, a.currency)}
                   </TableCell>
                   <TableCell>{fmt.date(a.openingDate)}</TableCell>
                   <TableCell className="text-center">

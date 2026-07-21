@@ -25,6 +25,28 @@ class DomainError(Exception):
         return {}
 
 
+# A credit-card expense also links a cash/bank account. A card expense increases the card liability
+# now and only draws cash later at settlement, so it never links an account directly. Mapped to 400.
+class AccountCardExclusivityError(DomainError):
+    code = "account_card_exclusivity"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A credit-card expense cannot also be paid from an account."
+        super().__init__(self.message)
+
+
+# An account's currency cannot be changed because money entries link to it — a cash balance must stay
+# exact, and changing the currency would silently mix currencies in the derived balance. Mapped to 409.
+class AccountCurrencyChangeBlockedError(DomainError):
+    code = "account_currency_change_blocked"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "Currency cannot be changed because this account has linked entries."
+        super().__init__(self.message)
+
+
 # A money entry (expense / income / settlement) links to an account whose currency differs from the
 # entry's. A cash balance must stay exact, so the link currencies must match. Mapped to 400 by the API.
 class AccountCurrencyMismatchError(DomainError):
@@ -36,6 +58,10 @@ class AccountCurrencyMismatchError(DomainError):
         self.account_currency = account_currency
         self.message = f"Currency {entry_currency} does not match the account's currency ({account_currency})."
         super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"entry_currency": self.entry_currency, "account_currency": self.account_currency}
 
 
 # Investment currency cannot be changed because snapshots exist. Mapped to 409 by the API.

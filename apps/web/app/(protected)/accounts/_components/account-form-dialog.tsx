@@ -14,6 +14,9 @@ import {
   DialogTitle,
   Input,
   Textarea,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import { createAccount, updateAccount } from '@/app/(protected)/accounts/account-actions';
@@ -62,6 +65,9 @@ export function AccountFormDialog({
   });
 
   const isEdit = !!account;
+  // Currency is locked once money links to the account — changing it would mix currencies in the
+  // derived balance (mirrors the investment base-currency lock). The API is the backstop (409).
+  const currencyLocked = isEdit && (account?.hasLinks ?? false);
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
   const { submitWithLifecycle } = useEntityFormDialog({
@@ -146,16 +152,26 @@ export function AccountFormDialog({
                   <FormItem required className="flex-1 min-w-0">
                     <FormLabel>{t('form.currency.label')}</FormLabel>
                     <FormControl>
-                      <CurrencyCombobox
-                        compact
-                        value={field.value || null}
-                        exclude={[]}
-                        preferredCurrencies={preferredCurrencies}
-                        placeholder={t('form.currency.placeholder')}
-                        searchPlaceholder={t('form.currency.searchPlaceholder')}
-                        noResults={t('form.currency.noResults')}
-                        onChange={field.onChange}
-                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <CurrencyCombobox
+                              compact
+                              value={field.value || null}
+                              exclude={[]}
+                              preferredCurrencies={preferredCurrencies}
+                              disabled={currencyLocked}
+                              placeholder={t('form.currency.placeholder')}
+                              searchPlaceholder={t('form.currency.searchPlaceholder')}
+                              noResults={t('form.currency.noResults')}
+                              onChange={field.onChange}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {currencyLocked && (
+                          <TooltipContent>{t('form.currency.locked')}</TooltipContent>
+                        )}
+                      </Tooltip>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

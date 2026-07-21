@@ -51,6 +51,14 @@ async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Returns whether any settlement draws from this account (used to lock the account's currency once linked).
+async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: int) -> bool:
+    result = await session.execute(
+        select(CardSettlement.id).where(CardSettlement.account_id == account_id, CardSettlement.user_id == user_id).limit(1)
+    )
+    return result.first() is not None
+
+
 # Monthly settlement totals drawn from each account, grouped by account_id, year, month (the
 # account's currency is fixed). Returns a list of (account_id, year, month, total).
 async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
@@ -120,6 +128,7 @@ class CardSettlementRepository:
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    exists_by_account_id = staticmethod(exists_by_account_id)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)

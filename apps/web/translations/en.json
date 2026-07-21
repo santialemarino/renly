@@ -925,7 +925,8 @@
         "label": "Currency",
         "placeholder": "Select a currency",
         "searchPlaceholder": "Search currencies...",
-        "noResults": "No currencies found."
+        "noResults": "No currencies found.",
+        "locked": "Currency can't be changed because this account has linked entries."
       },
       "openingBalance": {
         "label": "Opening balance",
@@ -2463,6 +2464,9 @@
     }
   },
   "apiErrors": {
+    "account_card_exclusivity": "A credit-card expense can't also be paid from an account.",
+    "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
+    "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "invalid_credentials": "The credentials you entered are incorrect.",
     "invalid_auth_token": "Your session is invalid or has expired. Please log in again.",
     "email_not_verified": "Please verify your email address before logging in.",
