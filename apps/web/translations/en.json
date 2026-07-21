@@ -279,6 +279,7 @@
       "income": "Income",
       "expenses": "Expenses",
       "creditCards": "Credit Cards",
+      "accounts": "Accounts",
       "subscriptions": "Subscriptions",
       "installments": "Installments",
       "paymentObligations": "Payment Obligations",
@@ -854,6 +855,92 @@
         "error": "Failed to delete reconciliation.",
         "tooltip": "Delete reconciliation"
       }
+    }
+  },
+  "accounts": {
+    "metadata": {
+      "title": "Accounts",
+      "description": "Manage your cash and bank accounts"
+    },
+    "title": "Accounts",
+    "subtitle": "Track your cash, bank, and wallet balances — the foundation of your net worth.",
+    "toolbar": {
+      "searchPlaceholder": "Search accounts...",
+      "add": "Add account",
+      "showArchived": "Show archived"
+    },
+    "table": {
+      "name": "Name",
+      "type": "Type",
+      "currency": "Currency",
+      "balance": "Balance",
+      "openingDate": "Opening date",
+      "actions": "Actions",
+      "empty": "No accounts found.",
+      "emptyTitle": "Add your first account",
+      "emptyDescription": "Track your cash, bank, and wallet balances so your net worth reflects the money you actually hold."
+    },
+    "types": {
+      "cash": "Cash",
+      "bank": "Bank",
+      "wallet": "Wallet",
+      "other": "Other"
+    },
+    "actions": {
+      "edit": "Edit",
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archiveSuccess": "Account archived.",
+      "archiveError": "Failed to archive account.",
+      "unarchiveSuccess": "Account unarchived.",
+      "unarchiveError": "Failed to unarchive account."
+    },
+    "form": {
+      "titleCreate": "Add account",
+      "titleEdit": "Edit account",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the account name"
+      },
+      "type": {
+        "label": "Type",
+        "placeholder": "Select a type"
+      },
+      "currency": {
+        "label": "Currency",
+        "placeholder": "Select a currency",
+        "searchPlaceholder": "Search currencies...",
+        "noResults": "No currencies found."
+      },
+      "openingBalance": {
+        "label": "Opening balance",
+        "placeholder": "0.00"
+      },
+      "openingDate": {
+        "label": "Opening date",
+        "placeholder": "Select a date"
+      },
+      "notes": {
+        "label": "Notes",
+        "placeholder": "Optional notes..."
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Account created.",
+      "updateSuccess": "Account updated.",
+      "saveError": "Failed to save account."
+    },
+    "delete": {
+      "title": "Delete account",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Account deleted.",
+      "error": "Failed to delete account."
     }
   },
   "subscriptions": {

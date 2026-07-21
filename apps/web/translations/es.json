@@ -279,6 +279,7 @@
       "income": "Ingresos",
       "expenses": "Gastos",
       "creditCards": "Tarjetas de crédito",
+      "accounts": "Cuentas",
       "subscriptions": "Suscripciones",
       "installments": "Cuotas",
       "paymentObligations": "Obligaciones de pago",
@@ -854,6 +855,92 @@
         "error": "No se pudo eliminar la conciliación.",
         "tooltip": "Eliminar conciliación"
       }
+    }
+  },
+  "accounts": {
+    "metadata": {
+      "title": "Cuentas",
+      "description": "Gestioná tus cuentas de efectivo y bancarias"
+    },
+    "title": "Cuentas",
+    "subtitle": "Seguí tus saldos de efectivo, banco y billeteras — la base de tu patrimonio.",
+    "toolbar": {
+      "searchPlaceholder": "Buscar cuentas...",
+      "add": "Agregar cuenta",
+      "showArchived": "Mostrar archivadas"
+    },
+    "table": {
+      "name": "Nombre",
+      "type": "Tipo",
+      "currency": "Moneda",
+      "balance": "Saldo",
+      "openingDate": "Fecha de apertura",
+      "actions": "Acciones",
+      "empty": "No se encontraron cuentas.",
+      "emptyTitle": "Agregá tu primera cuenta",
+      "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés."
+    },
+    "types": {
+      "cash": "Efectivo",
+      "bank": "Banco",
+      "wallet": "Billetera",
+      "other": "Otra"
+    },
+    "actions": {
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "archive": "Archivar",
+      "unarchive": "Desarchivar",
+      "archiveSuccess": "Cuenta archivada.",
+      "archiveError": "No se pudo archivar la cuenta.",
+      "unarchiveSuccess": "Cuenta desarchivada.",
+      "unarchiveError": "No se pudo desarchivar la cuenta."
+    },
+    "form": {
+      "titleCreate": "Agregar cuenta",
+      "titleEdit": "Editar cuenta",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre de la cuenta"
+      },
+      "type": {
+        "label": "Tipo",
+        "placeholder": "Seleccioná un tipo"
+      },
+      "currency": {
+        "label": "Moneda",
+        "placeholder": "Seleccioná una moneda",
+        "searchPlaceholder": "Buscar monedas...",
+        "noResults": "No se encontraron monedas."
+      },
+      "openingBalance": {
+        "label": "Saldo inicial",
+        "placeholder": "0.00"
+      },
+      "openingDate": {
+        "label": "Fecha de apertura",
+        "placeholder": "Seleccioná una fecha"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Cuenta creada.",
+      "updateSuccess": "Cuenta actualizada.",
+      "saveError": "No se pudo guardar la cuenta."
+    },
+    "delete": {
+      "title": "Eliminar cuenta",
+      "confirm": "¿Seguro que querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Cuenta eliminada.",
+      "error": "No se pudo eliminar la cuenta."
     }
   },
   "subscriptions": {
