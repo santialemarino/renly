@@ -128,6 +128,14 @@ Reconciliations are scoped to `(card, currency, period_start, period_end)`. Re-r
 
 Two dedicated category enum values exist for the adjustments so they're cleanly excluded from regular spending breakdowns: `expense_category.card_fees_and_taxes` and `income_category.card_credits_and_refunds`.
 
+### Accounts
+
+An account is a cash, bank, or wallet balance -- the asset side of net worth, the mirror of a credit-card liability. Each account has a name, a type (`cash`, `bank`, `wallet`, `other`), a single currency, an opening balance, and the date that opening balance is measured at (which anchors the historical series). Accounts can be archived to hide them from active selection while preserving their history.
+
+The balance is **derived at query time**, never stored -- the same principle as credit-card balances. In this release the balance equals the opening balance; a later release links expenses, income, and settlements to an account (an optional `account_id`) and adds account-to-account transfers, at which point the balance becomes `opening_balance + linked income − linked expenses − settlements paid from the account ± transfers`. Balances may be negative (a real overdraft).
+
+Deleting an account never destroys history: linked entries are un-attributed (their `account_id` clears), not deleted.
+
 ### Subscriptions
 
 A subscription represents a recurring charge (e.g. Netflix, Spotify, gym). Each subscription has a name, amount, currency, billing cycle (`monthly`, `annual`, `quarterly`, `biweekly`, `weekly`), an active flag, and the date of its next billing event. It optionally links to a payment method and credit card.

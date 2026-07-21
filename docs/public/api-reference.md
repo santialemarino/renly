@@ -319,6 +319,26 @@ Per-bucket, per-statement true-up against the bank. Captures fees / FX / taxes /
 
 ---
 
+## Accounts
+
+Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time; in this release it equals the opening balance (linking expenses, income, settlements, and transfers to an account arrives in a later release).
+
+| Method   | Path                       | Description                                                     |
+| -------- | -------------------------- | --------------------------------------------------------------- |
+| `GET`    | `/accounts`                | List accounts with search, sorting, and balances.               |
+| `POST`   | `/accounts`                | Create a new account.                                           |
+| `GET`    | `/accounts/{id}`           | Get a single account with its current balance.                  |
+| `PUT`    | `/accounts/{id}`           | Update an account. Only provided fields are changed.            |
+| `DELETE` | `/accounts/{id}`           | Delete an account (linked entries are un-attributed, not lost). |
+| `POST`   | `/accounts/{id}/archive`   | Archive an account (hide from active selection).                |
+| `POST`   | `/accounts/{id}/unarchive` | Restore an archived account.                                    |
+
+**List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
+
+**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency).
+
+---
+
 ## Subscriptions
 
 Recurring charges (e.g. Netflix, Spotify, gym). The daily scheduler auto-generates one expense entry per billing cycle, advances `next_billing_date`, and back-fills missed cycles for subscriptions registered with a past `next_billing_date`.
