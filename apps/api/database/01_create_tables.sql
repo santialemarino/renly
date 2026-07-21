@@ -294,7 +294,7 @@ CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
 -- Cash / bank accounts (asset accounts; Deferred Bucket 3 #1).
 -- The running balance is DERIVED at query time (opening_balance plus linked income minus linked
 -- expenses/settlements plus/minus transfers), never stored. One currency per account; opening_date
--- anchors the historical balance series. Soft-deleted via is_active = false.
+-- anchors the historical balance series. Archived (not deleted) via is_active = false.
 CREATE TABLE accounts (
   id              BIGSERIAL PRIMARY KEY,
   user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
