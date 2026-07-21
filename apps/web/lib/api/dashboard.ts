@@ -6,6 +6,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface DashboardOverviewRaw {
   net_worth: string;
+  cash_total: string;
   net_worth_change: string | null;
   net_worth_change_pct: string | null;
   investment_total: string;
@@ -24,6 +25,7 @@ interface DashboardOverviewRaw {
 interface NetWorthEvolutionPointRaw {
   date: string;
   investment_value: string;
+  cash_balance: string;
   card_balance: string;
   net_worth: string;
 }
@@ -68,6 +70,7 @@ interface DashboardLiquidityRaw {
 
 export interface DashboardOverview {
   netWorth: number;
+  cashTotal: number;
   netWorthChange: number | null;
   netWorthChangePct: number | null;
   investmentTotal: number;
@@ -86,6 +89,7 @@ export interface DashboardOverview {
 export interface NetWorthEvolutionPoint {
   date: string;
   investmentValue: number;
+  cashBalance: number;
   cardBalance: number;
   netWorth: number;
 }
@@ -133,6 +137,7 @@ export interface DashboardLiquidity {
 function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
   return {
     netWorth: Number(raw.net_worth),
+    cashTotal: Number(raw.cash_total),
     netWorthChange: raw.net_worth_change !== null ? Number(raw.net_worth_change) : null,
     netWorthChangePct: raw.net_worth_change_pct !== null ? Number(raw.net_worth_change_pct) : null,
     investmentTotal: Number(raw.investment_total),
@@ -155,6 +160,7 @@ function mapEvolutionPoint(raw: NetWorthEvolutionPointRaw): NetWorthEvolutionPoi
   return {
     date: raw.date,
     investmentValue: Number(raw.investment_value),
+    cashBalance: Number(raw.cash_balance),
     cardBalance: Number(raw.card_balance),
     netWorth: Number(raw.net_worth),
   };

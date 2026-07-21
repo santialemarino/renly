@@ -1,6 +1,6 @@
 'use client';
 
-import { CreditCard, TrendingDown, TrendingUp } from 'lucide-react';
+import { CreditCard, Landmark, TrendingDown, TrendingUp } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
@@ -19,7 +19,7 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
 
   return (
     <div
-      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5"
       data-testid="dashboard-metrics"
     >
       {/* Net Worth */}
@@ -36,6 +36,16 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
           </span>
         )}
         <span className="text-paragraph-mini text-muted-foreground">{t('cards.netWorthHint')}</span>
+      </Card>
+
+      {/* Cash / bank balance */}
+      <Card compact>
+        <span className="text-paragraph-sm text-muted-foreground">{t('cards.cash')}</span>
+        <div className="flex items-center gap-x-2">
+          <p className="text-heading-3">{fmt.value(overview.cashTotal)}</p>
+          {overview.cashTotal !== 0 && <Landmark className="size-5 text-emerald-600" />}
+        </div>
+        <span className="text-paragraph-mini text-muted-foreground">{t('cards.cashHint')}</span>
       </Card>
 
       {/* Investment Value + gain subtext */}
