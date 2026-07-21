@@ -22,6 +22,7 @@ from app.services import (
     settings_service,
     snapshot_grid_service,
     subscription_service,
+    user_account_service,
 )
 
 __all__ = [
@@ -46,4 +47,5 @@ __all__ = [
     "settings_service",
     "snapshot_grid_service",
     "subscription_service",
+    "user_account_service",
 ]

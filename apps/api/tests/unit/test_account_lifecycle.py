@@ -9,7 +9,7 @@ from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreac
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
-from app.services import account_service, auth_service, settings_service
+from app.services import auth_service, settings_service, user_account_service
 
 # Coverage for the M2 account-lifecycle service flows: email verification (AUTH-1), password reset
 # (AUTH-2), change password/email (AUTH-8), account deletion + export (AUTH-6), and the uniform
@@ -133,8 +133,8 @@ def wired(monkeypatch):
     monkeypatch.setattr(auth_service, "auth_token_repository", tokens)
     monkeypatch.setattr(auth_service, "get_email_service", lambda: email)
     monkeypatch.setattr(auth_service, "is_password_breached", _not_breached)
-    monkeypatch.setattr(account_service, "user_repository", users)
-    monkeypatch.setattr(account_service, "invite_repository", FakeInviteRepo())
+    monkeypatch.setattr(user_account_service, "user_repository", users)
+    monkeypatch.setattr(user_account_service, "invite_repository", FakeInviteRepo())
     monkeypatch.setattr(settings_service, "get_user_language", _stub_get_language)
     monkeypatch.setattr(settings_service, "seed_language", _stub_seed_language)
     # These flows cover open registration + the lifecycle; the invite-only gate is orthogonal and
@@ -306,7 +306,7 @@ class TestChangeEmail:
         users, tokens, email = wired
         user = await users.create(None, User(name="S", email="old@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
 
-        await account_service.change_email(FakeSession(), user, _PASSWORD, "fresh@example.com")
+        await user_account_service.change_email(FakeSession(), user, _PASSWORD, "fresh@example.com")
 
         assert email.sent[0].to == "fresh@example.com"
         token = tokens.tokens[0]
@@ -327,7 +327,7 @@ class TestChangeEmail:
                 session_epoch=1,
             ),
         )
-        await account_service.change_email(FakeSession(), user, _PASSWORD, "fresh@example.com")
+        await user_account_service.change_email(FakeSession(), user, _PASSWORD, "fresh@example.com")
         raw = _token_from(email.sent[0])
 
         token_type = await auth_service.confirm_email_token(FakeSession(), raw)
@@ -342,7 +342,7 @@ class TestChangeEmail:
         await users.create(None, User(name="Other", email="taken@example.com", password_hash="h"))
         user = await users.create(None, User(name="S", email="old@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
 
-        await account_service.change_email(FakeSession(), user, _PASSWORD, "taken@example.com")
+        await user_account_service.change_email(FakeSession(), user, _PASSWORD, "taken@example.com")
 
         assert tokens.tokens == []  # no change token issued for a taken address
         assert email.sent[0].to == "taken@example.com"
@@ -353,7 +353,7 @@ class TestChangeEmail:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="old@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.change_email(FakeSession(), user, "wrong-password", "fresh@example.com")
+            await user_account_service.change_email(FakeSession(), user, "wrong-password", "fresh@example.com")
 
 
 # --- Change password (AUTH-8) ---
@@ -367,7 +367,7 @@ class TestChangePassword:
             None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD), session_epoch=0)
         )
 
-        await account_service.change_password(FakeSession(), user, _PASSWORD, _NEW_PASSWORD)
+        await user_account_service.change_password(FakeSession(), user, _PASSWORD, _NEW_PASSWORD)
 
         assert await auth_service.verify_password(_NEW_PASSWORD, user.password_hash)
         assert user.session_epoch == 1
@@ -377,7 +377,7 @@ class TestChangePassword:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.change_password(FakeSession(), user, "wrong-password", _NEW_PASSWORD)
+            await user_account_service.change_password(FakeSession(), user, "wrong-password", _NEW_PASSWORD)
 
 
 # --- Account deletion (AUTH-6) ---
@@ -389,7 +389,7 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
 
-        await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "U@Example.com")
+        await user_account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "U@Example.com")
 
         assert user.id in users.deleted
 
@@ -398,7 +398,7 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.delete_account(FakeSession(), FakeSession(), user, "wrong", "u@example.com")
+            await user_account_service.delete_account(FakeSession(), FakeSession(), user, "wrong", "u@example.com")
         assert users.deleted == []
 
     @pytest.mark.asyncio
@@ -406,18 +406,18 @@ class TestDeleteAccount:
         users, _tokens, _email = wired
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
         with pytest.raises(InvalidCredentialsError):
-            await account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "not-the-email")
+            await user_account_service.delete_account(FakeSession(), FakeSession(), user, _PASSWORD, "not-the-email")
         assert users.deleted == []
 
     @pytest.mark.asyncio
     async def test_delete_clears_the_invite_that_created_the_account(self, wired, monkeypatch):
         users, _tokens, _email = wired
         invites = FakeInviteRepo(emails=["u@example.com"])
-        monkeypatch.setattr(account_service, "invite_repository", invites)
+        monkeypatch.setattr(user_account_service, "invite_repository", invites)
         user = await users.create(None, User(name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD)))
         request_session, admin_session = FakeSession(), FakeSession()
 
-        await account_service.delete_account(request_session, admin_session, user, _PASSWORD, "u@example.com")
+        await user_account_service.delete_account(request_session, admin_session, user, _PASSWORD, "u@example.com")
 
         assert user.id in users.deleted
         assert invites.deleted == ["u@example.com"]
@@ -435,10 +435,10 @@ class TestExport:
         async def fake_dump(session, user_id):
             return {"api_keys": [], "investments": []}
 
-        monkeypatch.setattr(account_service.export_repository, "dump_user_data", fake_dump)
+        monkeypatch.setattr(user_account_service.export_repository, "dump_user_data", fake_dump)
         user = User(id=7, name="S", email="u@example.com", password_hash="secret-hash")
 
-        data = await account_service.export_user_data(FakeSession(), user)
+        data = await user_account_service.export_user_data(FakeSession(), user)
 
         assert data["user"]["email"] == "u@example.com"
         assert "password_hash" not in data["user"]

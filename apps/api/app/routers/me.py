@@ -5,9 +5,9 @@ from fastapi import APIRouter, Request, Response, status
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.rate_limit import CHANGE_EMAIL_LIMIT, limiter
-from app.schemas.account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest
 from app.schemas.auth import MessageResponse
-from app.services import account_service
+from app.schemas.user_account import ChangeEmailRequest, ChangePasswordRequest, DeleteAccountRequest
+from app.services import user_account_service
 
 router = APIRouter(prefix="/me", tags=["account"])
 
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/me", tags=["account"])
 # Returns 401 on a wrong current password, 400 if the new password is breached (AUTH-8).
 @router.post("/change-password", response_model=MessageResponse)
 async def change_password(body: ChangePasswordRequest, current_user: CurrentUser, session: SessionDep) -> MessageResponse:
-    await account_service.change_password(session, current_user, body.current_password, body.new_password)
+    await user_account_service.change_password(session, current_user, body.current_password, body.new_password)
     return MessageResponse(detail="Your password has been changed.")
 
 
@@ -32,7 +32,7 @@ async def change_email(
     current_user: CurrentUser,
     admin_session: AdminSessionDep,
 ) -> MessageResponse:
-    await account_service.change_email(admin_session, current_user, body.current_password, body.new_email)
+    await user_account_service.change_email(admin_session, current_user, body.current_password, body.new_email)
     return MessageResponse(detail="If that address is available, we've sent it a confirmation link.")
 
 
@@ -40,7 +40,7 @@ async def change_email(
 # password hash and api-key secrets.
 @router.get("/export")
 async def export_data(current_user: CurrentUser, session: SessionDep, response: Response) -> dict[str, Any]:
-    data = await account_service.export_user_data(session, current_user)
+    data = await user_account_service.export_user_data(session, current_user)
     response.headers["Content-Disposition"] = 'attachment; filename="renly-export.json"'
     return data
 
@@ -50,4 +50,4 @@ async def export_data(current_user: CurrentUser, session: SessionDep, response: 
 # account is cleared on the privileged session (RLS hides it from the user's own session).
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(body: DeleteAccountRequest, current_user: CurrentUser, session: SessionDep, admin_session: AdminSessionDep) -> None:
-    await account_service.delete_account(session, admin_session, current_user, body.password, body.confirmation)
+    await user_account_service.delete_account(session, admin_session, current_user, body.password, body.confirmation)

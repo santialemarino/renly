@@ -16,6 +16,7 @@ from app.middleware import BodySizeLimitMiddleware
 from app.observability import init_sentry
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import (
+    accounts,
     admin,
     api_keys,
     asset_prices,
@@ -113,6 +114,7 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
 
 
 _ROUTERS = (
+    accounts.router,
     admin.router,
     api_keys.router,
     asset_prices.router,

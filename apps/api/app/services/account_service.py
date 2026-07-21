@@ -1,84 +1,114 @@
-# Authenticated account self-service (AUTH-8 / AUTH-6): change password, change email, export data,
-# and delete the account. Each sensitive action re-verifies the current password.
-
-from typing import Any
+from datetime import date as date_type
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import InvalidCredentialsError, PasswordBreachedError
+from app.domain import NotFoundError
+from app.models.account import Account, AccountType
 from app.models.user import User
-from app.models.utils import utcnow
-from app.repositories import export_repository, invite_repository, user_repository
-from app.services import auth_service
+from app.repositories import account_repository
 
 
-# Changes the password after re-verifying the current one (AUTH-8). Rejects breached passwords
-# (AUTH-3) and bumps session_epoch so every other existing session is logged out.
-async def change_password(session: AsyncSession, user: User, current_password: str, new_password: str) -> None:
-    if not await auth_service.verify_password(current_password, user.password_hash):
-        raise InvalidCredentialsError()
-    if await auth_service.is_password_breached(new_password):
-        raise PasswordBreachedError()
-    user.password_hash = await auth_service.hash_password(new_password)
-    user.session_epoch += 1
-    await user_repository.save(session, user)
+# List accounts for a user with optional search, sorting, and archive filtering.
+async def list_accounts(
+    session: AsyncSession,
+    user: User,
+    *,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+    active_only: bool = True,
+) -> list[Account]:
+    return await account_repository.list_by_user(
+        session,
+        user.id,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+    )
+
+
+# Get a single account by id. Raises NotFoundError if not found.
+async def get_account(session: AsyncSession, account_id: int, user: User) -> Account:
+    account = await account_repository.get_by_id(session, account_id, user.id)
+    if account is None:
+        raise NotFoundError("Account not found.")
+    return account
+
+
+# Returns {account_id: balance} for the given accounts. In this PR the balance is just the
+# opening_balance; PR 2 (money-linking) extends this to add linked income minus linked
+# expenses/settlements plus/minus transfers, computed at query time.
+async def get_account_balances(accounts: list[Account]) -> dict[int, Decimal]:
+    return {a.id: a.opening_balance for a in accounts if a.id is not None}
+
+
+# Create a new account.
+async def create_account(
+    session: AsyncSession,
+    user: User,
+    *,
+    name: str,
+    type: AccountType,
+    currency: str,
+    opening_balance: Decimal,
+    opening_date: date_type,
+    notes: str | None = None,
+) -> Account:
+    account = Account(
+        user_id=user.id,
+        name=name,
+        type=type,
+        currency=currency,
+        opening_balance=opening_balance,
+        opening_date=opening_date,
+        notes=notes,
+    )
+    account = await account_repository.create(session, account)
+    await session.commit()
+    return account
+
+
+# Update an existing account. Only provided fields are changed.
+async def update_account(
+    session: AsyncSession,
+    account_id: int,
+    user: User,
+    **fields: object,
+) -> Account:
+    account = await get_account(session, account_id, user)
+    for key, value in fields.items():
+        setattr(account, key, value)
+    await account_repository.save(session, account)
+    await session.commit()
+    await session.refresh(account)
+    return account
+
+
+# Delete an account. Linked expenses/income/settlements are un-attributed via ON DELETE SET NULL
+# (their history is preserved); no linked rows exist yet in this PR.
+async def delete_account(session: AsyncSession, account_id: int, user: User) -> None:
+    account = await get_account(session, account_id, user)
+    await account_repository.delete(session, account)
     await session.commit()
 
 
-# Starts an email change after re-verifying the current password (AUTH-8); the address only switches
-# once the new one is confirmed via the emailed link. Runs the change request on the privileged
-# session so the target-address availability check can see every account (bypasses RLS).
-async def change_email(session: AsyncSession, user: User, current_password: str, new_email: str) -> None:
-    if not await auth_service.verify_password(current_password, user.password_hash):
-        raise InvalidCredentialsError()
-    await auth_service.request_email_change(session, user, new_email)
-
-
-# Builds the user's full data export as a JSON-serializable dict (AUTH-6). Excludes secrets: the
-# user's password hash and the api-key hashes/prefixes never leave the system.
-async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
-    raw = await export_repository.dump_user_data(session, user.id)
-    api_keys = [
-        {
-            "id": key.id,
-            "name": key.name,
-            "created_at": key.created_at,
-            "last_used_at": key.last_used_at,
-            "is_active": key.is_active,
-        }
-        for key in raw.pop("api_keys", [])
-    ]
-    return {
-        "exported_at": utcnow(),
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "plan": user.plan,
-            "email_verified_at": user.email_verified_at,
-            "created_at": user.created_at,
-            "updated_at": user.updated_at,
-        },
-        "api_keys": api_keys,
-        **raw,
-    }
-
-
-# Permanently deletes the account after re-verifying the password and a typed email confirmation
-# (AUTH-6). FK ON DELETE CASCADE removes every owned row. Also clears the invite that created this
-# account (if any) so deletion leaves no orphaned "accepted" invite — the invite belongs to the
-# inviting admin, so it's only reachable on the privileged session (RLS scopes `session` to the user).
-async def delete_account(session: AsyncSession, admin_session: AsyncSession, user: User, password: str, confirmation: str) -> None:
-    if not await auth_service.verify_password(password, user.password_hash):
-        raise InvalidCredentialsError()
-    if confirmation.strip().lower() != user.email.lower():
-        raise InvalidCredentialsError("Confirmation does not match your email.")
-    # Clear the invite first, on its own (privileged) transaction. The two deletes span two
-    # connections so they can't be atomic; ordering invite-first makes the only partial-failure
-    # state benign — an invite with no account self-heals on re-invite, whereas deleting the user
-    # first and then failing the invite delete would leave exactly the orphan this guards against.
-    email = user.email
-    await invite_repository.delete_by_email(admin_session, email)
-    await admin_session.commit()
-    await user_repository.delete(session, user)
+# Archive an account (set is_active = false).
+async def archive_account(session: AsyncSession, account_id: int, user: User) -> Account:
+    account = await get_account(session, account_id, user)
+    account.is_active = False
+    await account_repository.save(session, account)
     await session.commit()
+    await session.refresh(account)
+    return account
+
+
+# Unarchive an account (set is_active = true).
+async def unarchive_account(session: AsyncSession, account_id: int, user: User) -> Account:
+    account = await get_account(session, account_id, user)
+    account.is_active = True
+    await account_repository.save(session, account)
+    await session.commit()
+    await session.refresh(account)
+    return account

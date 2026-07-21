@@ -1,24 +1,53 @@
-# Request schemas for authenticated account self-service (AUTH-8 / AUTH-6).
+# Request/response schemas for account endpoints.
 
-from pydantic import Field
+from datetime import date as date_type
+from datetime import datetime
+from decimal import Decimal
 
-from app.schemas.auth import MIN_PASSWORD_LENGTH, NormalizedEmail
-from app.schemas.base import RequestBase
+from pydantic import BaseModel, Field, field_validator
 
-
-# Body for POST /me/change-password. Re-verifies the current password before setting a new one.
-class ChangePasswordRequest(RequestBase):
-    current_password: str = Field(description="Current plain password (re-authentication).")
-    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, description="New plain password (will be hashed); minimum 12 characters.")
+from app.models.account import AccountType
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
-# Body for POST /me/change-email. Re-verifies the password and starts verification of the new address.
-class ChangeEmailRequest(RequestBase):
-    current_password: str = Field(description="Current plain password (re-authentication).")
-    new_email: NormalizedEmail = Field(description="New email address (normalized to lowercase).")
+# Body for POST /accounts.
+class AccountCreate(RequestBase):
+    name: str = Field(description="Account label (e.g. Caja de ahorro $).", max_length=255)
+    type: AccountType = Field(description="Account type (cash, bank, wallet, other).")
+    currency: str = Field(description="Account currency (ISO 4217).", max_length=3)
+    opening_balance: Decimal = Field(default=Decimal(0), description="Balance at opening_date.", max_digits=18, decimal_places=2)
+    opening_date: date_type = Field(description="Date the opening_balance is measured at.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
-# Body for DELETE /me. Requires the password plus a typed confirmation matching the account email.
-class DeleteAccountRequest(RequestBase):
-    password: str = Field(description="Current plain password (re-authentication).")
-    confirmation: str = Field(description="Must equal the account email to confirm deletion.")
+# Body for PUT /accounts/{id}. Partial update; only provided fields are updated.
+class AccountUpdate(RequestBase):
+    name: str | None = Field(default=None, description="Account label.", max_length=255)
+    type: AccountType | None = Field(default=None, description="Account type (cash, bank, wallet, other).")
+    currency: str | None = Field(default=None, description="Account currency (ISO 4217).", max_length=3)
+    opening_balance: Decimal | None = Field(default=None, description="Balance at opening_date.", max_digits=18, decimal_places=2)
+    opening_date: date_type | None = Field(default=None, description="Date the opening_balance is measured at.")
+    is_active: bool | None = Field(default=None, description="Whether the account is active.")
+    notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
+
+# Response for GET list and GET one, POST and PUT. `balance` is derived (opening_balance in this PR;
+# extended with linked movements in a later PR), in the account's own currency.
+class AccountResponse(BaseModel):
+    id: int = Field(description="Account id.")
+    name: str = Field(description="Account label.")
+    type: AccountType = Field(description="Account type.")
+    currency: str = Field(description="Account currency (ISO 4217).")
+    opening_balance: Decimal = Field(description="Balance at opening_date.")
+    opening_date: date_type = Field(description="Date the opening_balance is measured at.")
+    balance: Decimal = Field(description="Current derived balance in the account's currency.")
+    is_active: bool = Field(description="Whether the account is active.")
+    notes: str | None = Field(default=None, description="Optional notes.")
+    created_at: datetime = Field(description="Creation timestamp.")
+    updated_at: datetime = Field(description="Last update timestamp.")
+
+    model_config = {"from_attributes": True}
