@@ -30,6 +30,7 @@ import type { Account } from '@/lib/api/accounts';
 import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api/income';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { isReconciliationOwned } from '@/lib/reconciliation';
 
 function RowActions({
   income,
@@ -51,15 +52,18 @@ function RowActions({
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        <RowActionButton
-          icon={Pencil}
-          tooltip={t('actions.edit')}
-          ariaLabel="Edit"
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditOpen(true);
-          }}
-        />
+        {/* A reconciliation's adjustment is derived, not authored — see isReconciliationOwned. */}
+        {!isReconciliationOwned(income) && (
+          <RowActionButton
+            icon={Pencil}
+            tooltip={t('actions.edit')}
+            ariaLabel="Edit"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditOpen(true);
+            }}
+          />
+        )}
         <RowActionButton
           icon={Trash2}
           tooltip={t('actions.delete')}
