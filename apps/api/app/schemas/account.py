@@ -48,6 +48,7 @@ class AccountResponse(BaseModel):
     is_active: bool = Field(description="Whether the account is active.")
     notes: str | None = Field(default=None, description="Optional notes.")
     has_links: bool = Field(default=False, description="Whether any expense/income/settlement links this account (locks its currency).")
+    last_reconciled_date: date_type | None = Field(default=None, description="as_of_date of the most recent reconciliation, if any.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

@@ -7,6 +7,7 @@ import {
   blockScientificKeys,
   blockSecondDecimal,
   blockSignKeys,
+  blockSignKeysUnlessLeadingMinus,
   blockWrongLocaleDecimal,
   composeKeyHandlers,
   formatAmountForInput,
@@ -139,6 +140,47 @@ describe('sanitizeDecimalChars', () => {
     expect(sanitizeDecimalChars('1.2.3', 'en')).toBe('1.23');
     expect(sanitizeDecimalChars('1,2,3', 'es')).toBe('1,23');
   });
+
+  it('strips a minus unless allowNegative, and then only a leading one', () => {
+    expect(sanitizeDecimalChars('-4500.50', 'en')).toBe('4500.50');
+    expect(sanitizeDecimalChars('-4500.50', 'en', true)).toBe('-4500.50');
+    expect(sanitizeDecimalChars('-4500,50', 'es', true)).toBe('-4500,50');
+    // A minus that isn't leading is dropped even when negatives are allowed.
+    expect(sanitizeDecimalChars('45-00', 'en', true)).toBe('4500');
+    // A lone minus survives as a mid-typing state (same as a lone separator does).
+    expect(sanitizeDecimalChars('-', 'en', true)).toBe('-');
+  });
+});
+
+describe('signed values through the display pipeline', () => {
+  it('groups and round-trips a negative canonical value in both locales', () => {
+    // groupIntegerDigits must not insert a separator at the `-`/digit seam (that position is a \b).
+    expect(groupIntegerDigits('-1234', ',')).toBe('-1,234');
+    expect(formatAmountForInput('-1234567.89', 'en')).toBe('-1,234,567.89');
+    expect(formatAmountForInput('-1234567.89', 'es')).toBe('-1.234.567,89');
+    expect(normalizeAmountFromInput('-1.234.567,89', 'es')).toBe('-1234567.89');
+    expect(normalizeAmountFromInput('-1,234,567.89', 'en')).toBe('-1234567.89');
+    // Short negatives take the <=3-digit early return unchanged.
+    expect(formatAmountForInput('-123', 'en')).toBe('-123');
+  });
+
+  it('keeps the caret after a just-typed minus', () => {
+    // The minus counts as significant, so caret 1 in '-' maps to 1 (AFTER the sign) rather than 0.
+    // At 0 the next digit would land before the minus and the sanitizer would then drop it.
+    expect(mapCaretAfterRegroup('-', 1, '-', '.')).toBe(1);
+    // And it keeps counting correctly once digits regroup around it.
+    expect(mapCaretAfterRegroup('-1234', 5, '-1,234', '.')).toBe(6);
+  });
+
+  it('preserves a pasted negative only when allowNegative', () => {
+    expect(sanitizeDecimalPaste('-1,234.56', 'en')).toBe('1234.56');
+    expect(sanitizeDecimalPaste('-1,234.56', 'en', true)).toBe('-1234.56');
+    expect(sanitizeDecimalPaste('-1.234,56', 'es', true)).toBe('-1234,56');
+    // No separator at all still keeps the sign.
+    expect(sanitizeDecimalPaste('-4500', 'en', true)).toBe('-4500');
+    // A signed bare separator is no more numeric than an unsigned one.
+    expect(sanitizeDecimalPaste('-,', 'en', true)).toBe('');
+  });
 });
 
 describe('composeKeyHandlers', () => {
@@ -169,6 +211,33 @@ describe('keystroke rules', () => {
     const digit = keyEvent('5');
     blockSignKeys(digit);
     expect(digit.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('blockSignKeysUnlessLeadingMinus allows a leading minus but never a trailing one', () => {
+    // Caret at 0 on an empty field — the only position a minus can legitimately go.
+    const leading = keyEvent('-', { selectionStart: 0, selectionEnd: 0, value: '' });
+    blockSignKeysUnlessLeadingMinus('')(leading);
+    expect(leading.preventDefault).not.toHaveBeenCalled();
+
+    // Mid-string minus would canonicalize to NaN.
+    const midway = keyEvent('-', { selectionStart: 2, selectionEnd: 2, value: '12' });
+    blockSignKeysUnlessLeadingMinus('12')(midway);
+    expect(midway.preventDefault).toHaveBeenCalled();
+
+    // A second minus when one is already there.
+    const duplicate = keyEvent('-', { selectionStart: 0, selectionEnd: 0, value: '-12' });
+    blockSignKeysUnlessLeadingMinus('-12')(duplicate);
+    expect(duplicate.preventDefault).toHaveBeenCalled();
+
+    // ...unless the selection covers the existing minus, in which case it's a replacement.
+    const replaces = keyEvent('-', { selectionStart: 0, selectionEnd: 3, value: '-12' });
+    blockSignKeysUnlessLeadingMinus('-12')(replaces);
+    expect(replaces.preventDefault).not.toHaveBeenCalled();
+
+    // `+` is still blocked outright.
+    const plus = keyEvent('+', { selectionStart: 0, selectionEnd: 0, value: '' });
+    blockSignKeysUnlessLeadingMinus('')(plus);
+    expect(plus.preventDefault).toHaveBeenCalled();
   });
 
   it('blockScientificKeys blocks e/E', () => {

@@ -4,6 +4,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.account_reconciliation import AccountReconciliation
 from app.models.api_key import ApiKey
 from app.models.card_reconciliation import CardReconciliation
 from app.models.card_settlement import CardSettlement
@@ -32,6 +33,7 @@ _USER_ID_MODELS = {
     "installments": Installment,
     "expense_entries": ExpenseEntry,
     "card_reconciliations": CardReconciliation,
+    "account_reconciliations": AccountReconciliation,
     "payment_obligations": PaymentObligation,
     "api_keys": ApiKey,
     "user_settings": UserSettings,

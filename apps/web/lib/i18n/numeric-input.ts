@@ -40,6 +40,13 @@ export function groupIntegerDigits(integer: string, groupSep: string): string {
  * stripped), then places the caret after that many significant chars in the new
  * string. Counting the decimal separator keeps the caret after a just-typed
  * trailing separator (`1234,` → `1.234,`, caret stays after the comma).
+ *
+ * A leading `-` counts as significant too (signed fields only — see
+ * `blockSignKeysUnlessLeadingMinus`). Without it, typing `-` into an empty field
+ * would map the caret to 0, i.e. BEFORE the minus, so the next digit would land
+ * at index 0 and the sanitizer would then drop the no-longer-leading minus —
+ * silently discarding the sign. A no-op for unsigned fields, where a `-` can
+ * never reach the display in the first place.
  */
 export function mapCaretAfterRegroup(
   oldDisplay: string,
@@ -48,7 +55,7 @@ export function mapCaretAfterRegroup(
   decimalSep: string,
 ): number {
   const isSignificant = (ch: string | undefined) =>
-    ch !== undefined && ((ch >= '0' && ch <= '9') || ch === decimalSep);
+    ch !== undefined && ((ch >= '0' && ch <= '9') || ch === decimalSep || ch === '-');
   let significant = 0;
   for (let i = 0; i < oldCaret && i < oldDisplay.length; i++) {
     if (isSignificant(oldDisplay[i])) significant++;
@@ -115,6 +122,29 @@ export function blockSignKeys(e: KeyboardEvent<HTMLInputElement>): void {
   if (e.key === '-' || e.key === '+') {
     e.preventDefault();
   }
+}
+
+/*
+ * Signed-field variant of `blockSignKeys`: `+` is always blocked, and `-` only passes as a LEADING
+ * minus — caret at 0 and none already present (unless the selection would replace it). Anything else
+ * would canonicalize to NaN. Used for genuinely signed figures (an account's real balance can be
+ * negative when overdrawn), never for amounts.
+ */
+export function blockSignKeysUnlessLeadingMinus(currentValue: string): KeyRule {
+  return (e) => {
+    if (e.key === '+') {
+      e.preventDefault();
+      return;
+    }
+    if (e.key !== '-') return;
+    const input = e.currentTarget;
+    const start = input.selectionStart ?? input.value.length;
+    const end = input.selectionEnd ?? input.value.length;
+    const replacesExistingMinus = currentValue.startsWith('-') && start === 0 && end > 0;
+    if (start !== 0 || (currentValue.startsWith('-') && !replacesExistingMinus)) {
+      e.preventDefault();
+    }
+  };
 }
 
 /*
@@ -215,20 +245,26 @@ export function limitDecimalsInString(
  * non-keystroke paths (IME, autofill, drag-drop, programmatic input) — which
  * bypass the second-decimal keystroke block — can't leak a multi-decimal string
  * that would canonicalize to NaN.
+ *
+ * `allowNegative` keeps a single LEADING minus (signed fields only); every other
+ * `-` is still stripped, so a mid-string or duplicated sign can't survive any
+ * input path.
  */
-export function sanitizeDecimalChars(text: string, locale?: string): string {
+export function sanitizeDecimalChars(text: string, locale?: string, allowNegative = false): string {
   const decimal = getDecimalSeparator(locale);
+  const negative = allowNegative && text.startsWith('-');
   const allowed = decimal === '.' ? /[^0-9.]/g : /[^0-9,]/g;
   const cleaned = text.replace(allowed, '');
   const firstIdx = cleaned.indexOf(decimal);
-  if (firstIdx === -1) return cleaned;
-  return (
-    cleaned.slice(0, firstIdx + 1) +
-    cleaned
-      .slice(firstIdx + 1)
-      .split(decimal)
-      .join('')
-  );
+  const collapsed =
+    firstIdx === -1
+      ? cleaned
+      : cleaned.slice(0, firstIdx + 1) +
+        cleaned
+          .slice(firstIdx + 1)
+          .split(decimal)
+          .join('');
+  return negative ? `-${collapsed}` : collapsed;
 }
 
 /*
@@ -238,8 +274,13 @@ export function sanitizeDecimalChars(text: string, locale?: string): string {
  * for both `1,234.56` (en-US) and `1.234,56` (es-AR) regardless of the
  * active locale. The returned string uses the locale's decimal separator
  * so it round-trips through `normalizeAmountFromInput` cleanly.
+ *
+ * `allowNegative` preserves a leading minus on the pasted text (signed fields
+ * only), so pasting a bank statement's `-4,500.00` keeps its sign.
  */
-export function sanitizeDecimalPaste(text: string, locale?: string): string {
+export function sanitizeDecimalPaste(text: string, locale?: string, allowNegative = false): string {
+  const negative = allowNegative && text.trimStart().startsWith('-');
+  const sign = negative ? '-' : '';
   const cleaned = text.replace(/[^0-9.,]/g, '');
   if (!cleaned) return '';
 
@@ -251,15 +292,16 @@ export function sanitizeDecimalPaste(text: string, locale?: string): string {
       break;
     }
   }
-  if (lastSepIdx === -1) return cleaned;
+  if (lastSepIdx === -1) return `${sign}${cleaned}`;
 
   const decimal = getDecimalSeparator(locale);
   const integerPart = cleaned.slice(0, lastSepIdx).replace(/[.,]/g, '');
   const fractionPart = cleaned.slice(lastSepIdx + 1).replace(/[.,]/g, '');
   // A bare separator (e.g. pasting just `,`) would yield a lone decimal char
-  // whose canonical form is `.` — `Number('.')` is NaN. Drop it instead.
+  // whose canonical form is `.` — `Number('.')` is NaN. Drop it instead (sign included:
+  // a lone `-,` is no more numeric than a lone `,`).
   if (!integerPart && !fractionPart) return '';
-  return `${integerPart}${decimal}${fractionPart}`;
+  return `${sign}${integerPart}${decimal}${fractionPart}`;
 }
 
 // Sanitize pasted text for integer-mode inputs. Digit-only output.

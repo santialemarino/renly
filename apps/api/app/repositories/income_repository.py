@@ -136,14 +136,22 @@ async def sum_by_user(
 
 # Sum of income linked to each account, grouped by account_id. Returns {account_id: total}.
 # Every linked row is in the account's currency (enforced at link time), so no currency split.
-async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+# as_of_date bounds the sum to rows dated on or before it (used by reconciliation's point-in-time balance).
+async def sum_by_account_ids(
+    session: AsyncSession,
+    account_ids: list[int],
+    user_id: int,
+    *,
+    as_of_date: date_type | None = None,
+) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    result = await session.execute(
-        select(IncomeEntry.account_id, func.coalesce(func.sum(IncomeEntry.amount), 0))
-        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id)
-        .group_by(IncomeEntry.account_id)
+    stmt = select(IncomeEntry.account_id, func.coalesce(func.sum(IncomeEntry.amount), 0)).where(
+        IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id
     )
+    if as_of_date is not None:
+        stmt = stmt.where(IncomeEntry.date <= as_of_date)
+    result = await session.execute(stmt.group_by(IncomeEntry.account_id))
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 

@@ -136,6 +136,18 @@ The balance is **derived at query time**, never stored -- the same principle as 
 
 Deleting an account never destroys history: linked entries are un-attributed (their `account_id` clears), not deleted.
 
+### Account Reconciliations
+
+The cash-side counterpart of a card reconciliation, and the mechanism that makes optional linking workable. Because linking every movement is never required, a derived balance drifts from the real one — cash spent without an entry, bank fees, interest, taxes, FX spread. Rather than demanding the user back-fill history, reconciliation lets them state the truth: enter the balance the account actually shows on a date, and the app records it and posts one adjustment for the gap.
+
+It is deliberately simpler than the card version. An account is single-currency and its balance is a point-in-time figure, so there is no statement **period** and no currency bucket — just `as_of_date`, `statement_balance`, the `computed_balance` at that date, and their `difference`. There is no `stale` flag either: a later reconciliation just appends and supersedes the earlier one by date, so there is no replace step. Re-running the same date is self-correcting, because the first adjustment is already part of the computed balance and the second difference comes out zero.
+
+That "supersedes by date" property only holds **forward**, so reconciliation is forward-only by rule: a date earlier than the account's most recent reconciliation is rejected, and only the most recent reconciliation can be deleted. Both guards exist for the same reason — a reconciliation's `computed_balance` is bounded to its own date, so it cannot see an adjustment inserted behind it, and it would silently stop matching the balance the user attested to. Revising an older date means deleting the newer reconciliation first.
+
+`difference = statement_balance − computed_balance`. A positive difference (the account holds more than the app knew) creates an **income**; a negative one creates an **expense**; zero creates nothing. The adjustment is dated on `as_of_date`, linked to the account so it enters the running balance from there forward, tagged `source = 'reconciliation'`, and pointed back at its reconciliation via `account_reconciliation_id`. One dedicated enum value on each side makes true-ups identifiable and separable from itemised spending: `expense_category.account_adjustment` and `income_category.account_adjustment`. They label the row rather than exclude it — an adjustment still counts toward income and expense totals and appears in the category breakdown, because the money it accounts for really did move. The card reconciliation categories work the same way.
+
+Deleting a reconciliation cascades to its adjustment, returning the balance to what it was before the true-up. Deleting the **account** does the same to all of its reconciliations and their adjustments — the one place where deleting an account removes entries rather than un-attributing them, because a true-up exists only to make that account's balance right and is meaningless once the account is gone. Entries you created yourself are still only un-attributed, never deleted.
+
 ### Subscriptions
 
 A subscription represents a recurring charge (e.g. Netflix, Spotify, gym). Each subscription has a name, amount, currency, billing cycle (`monthly`, `annual`, `quarterly`, `biweekly`, `weekly`), an active flag, and the date of its next billing event. It optionally links to a payment method and credit card.
@@ -196,21 +208,36 @@ User
  |
  |-- has many --> Income Entries
  |                (salary, freelance, dividends, etc.)
+ |                  |
+ |                  |-- optionally linked to --> Account
+ |                                              (the account it was deposited to)
  |
  |-- has many --> Expense Entries
  |                (food, transport, rent, etc.)
  |                  |
  |                  |-- optionally linked to --> Credit Card
- |                                              (when payment_method = credit_card)
+ |                  |                           (when payment_method = credit_card)
+ |                  |
+ |                  |-- optionally linked to --> Account
+ |                                              (the account it was paid from;
+ |                                               never both a card and an account)
  |
  |-- has many --> Credit Cards
  |                (liability accounts)
  |                  |
  |                  |-- has many --> Card Settlements
- |                  |                (payments that reduce the card balance)
+ |                  |                (payments that reduce the card balance;
+ |                  |                 optionally drawn from an Account)
  |                  |
  |                  |-- has many --> Card Reconciliations
  |                                  (per-bucket statement true-ups against the bank;
+ |                                   each owns an adjustment expense or income)
+ |
+ |-- has many --> Accounts
+ |                (cash / bank / wallet balances — the asset side of net worth)
+ |                  |
+ |                  |-- has many --> Account Reconciliations
+ |                                  (point-in-time true-ups against the real balance;
  |                                   each owns an adjustment expense or income)
  |
  |-- has many --> Subscriptions

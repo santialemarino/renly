@@ -4,6 +4,7 @@ import { forwardRef } from 'react';
 import { format, parse } from 'date-fns';
 import { CalendarDays } from 'lucide-react';
 import { useLocale } from 'next-intl';
+import type { Matcher } from 'react-day-picker';
 
 import { Button, Calendar, Popover, PopoverContent, PopoverTrigger } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -19,6 +20,10 @@ interface DatePickerInputProps {
   disabled?: boolean;
   surface?: boolean;
   className?: string;
+  // Earliest selectable day, as YYYY-MM-DD. Days before it are greyed out and unclickable.
+  minDate?: string;
+  // Latest selectable day, as YYYY-MM-DD (e.g. today, for a field that can't be in the future).
+  maxDate?: string;
   'aria-invalid'?: boolean | 'true' | 'false';
 }
 
@@ -32,6 +37,8 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       disabled,
       surface = false,
       className,
+      minDate,
+      maxDate,
       'aria-invalid': ariaInvalid,
     },
     ref,
@@ -40,6 +47,16 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
     const dateFnsLocale = getDateFnsLocale(locale);
     const date = value ? parse(value, DATE_FORMAT_VALUE, new Date()) : undefined;
     const isValidDate = date && !isNaN(date.getTime());
+    /*
+     * react-day-picker matchers for the bounds that were passed — a LIST rather than one
+     * `{ before, after }` object, because that shape reads as a DateInterval (match dates
+     * *between* the two) whereas a day is disabled when it matches ANY entry, which is the
+     * intent here. Parsed at local midnight, the same anchor the value strings use, so a
+     * boundary day stays selectable instead of being excluded by a stray time component.
+     */
+    const disabledDays: Matcher[] = [];
+    if (minDate) disabledDays.push({ before: parse(minDate, DATE_FORMAT_VALUE, new Date()) });
+    if (maxDate) disabledDays.push({ after: parse(maxDate, DATE_FORMAT_VALUE, new Date()) });
 
     function handleSelect(selected: Date | undefined) {
       if (selected) {
@@ -84,6 +101,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             selected={isValidDate ? date : undefined}
             onSelect={handleSelect}
             locale={dateFnsLocale}
+            disabled={disabledDays}
           />
         </PopoverContent>
       </Popover>

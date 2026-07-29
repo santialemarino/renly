@@ -12,6 +12,7 @@ from app.models.utils import utcnow
 
 # Income category (salary, freelance, investment_returns, etc.).
 class IncomeCategory(StrEnum):
+    account_adjustment = "account_adjustment"
     bonus = "bonus"
     card_credits_and_refunds = "card_credits_and_refunds"
     dividends = "dividends"
@@ -43,7 +44,12 @@ class IncomeEntry(SQLModel, table=True):
     reconciliation_id: int | None = Field(
         default=None,
         foreign_key="card_reconciliations.id",
-        description="Owning reconciliation when this row is the adjustment income from the reconciliation flow.",
+        description="Owning card reconciliation when this row is the adjustment income from the card reconciliation flow.",
+    )
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        foreign_key="account_reconciliations.id",
+        description="Owning account reconciliation when this row is the adjustment income from the account reconciliation flow.",
     )
     account_id: int | None = Field(default=None, foreign_key="accounts.id", description="Cash/bank account this income was deposited to (optional).")
     created_at: datetime = Field(default_factory=utcnow)

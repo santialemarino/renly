@@ -49,6 +49,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
         accounts={accounts}
         preferredCurrencies={preferredCurrencies}
         firstRun={firstRun}
+        timeZone={settings?.timezone ?? undefined}
       />
     </div>
   );

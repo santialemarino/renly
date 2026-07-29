@@ -137,14 +137,22 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
 
 # Sum of expenses linked to each account, grouped by account_id. Returns {account_id: total}.
 # Every linked row is in the account's currency (enforced at link time), so no currency split.
-async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+# as_of_date bounds the sum to rows dated on or before it (used by reconciliation's point-in-time balance).
+async def sum_by_account_ids(
+    session: AsyncSession,
+    account_ids: list[int],
+    user_id: int,
+    *,
+    as_of_date: date_type | None = None,
+) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    result = await session.execute(
-        select(ExpenseEntry.account_id, func.coalesce(func.sum(ExpenseEntry.amount), 0))
-        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id)
-        .group_by(ExpenseEntry.account_id)
+    stmt = select(ExpenseEntry.account_id, func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(
+        ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id
     )
+    if as_of_date is not None:
+        stmt = stmt.where(ExpenseEntry.date <= as_of_date)
+    result = await session.execute(stmt.group_by(ExpenseEntry.account_id))
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
