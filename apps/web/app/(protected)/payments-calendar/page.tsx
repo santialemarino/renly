@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PaymentsCalendarHeader } from '@/app/(protected)/payments-calendar/_components/payments-calendar-header';
 import { PaymentsCalendarList } from '@/app/(protected)/payments-calendar/_components/payments-calendar-list';
+import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getInstallments } from '@/lib/api/installments';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
@@ -31,11 +32,14 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies] = await Promise.all([
+  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
     getPageSettings(),
     // The linked-expense edit dialog restricts its currency picker to the convertible set; on a
     // fetch error the picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
+    // Active accounts for the optional "paid from" link on a non-card linked expense
+    // (empty on error → field hidden).
+    getAccounts().catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -92,6 +96,7 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}

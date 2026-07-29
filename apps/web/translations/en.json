@@ -814,6 +814,7 @@
         "currency": "Currency",
         "bucket": "Bucket",
         "bucketPlaceholder": "Select bucket currency",
+        "account": "Paid from",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }
@@ -879,6 +880,7 @@
     },
     "title": "Accounts",
     "subtitle": "Track your cash, bank, and wallet balances — the foundation of your net worth.",
+    "reconcileHint": "Renly reflects what you enter — reconcile an account any time to match what it actually shows.",
     "toolbar": {
       "searchPlaceholder": "Search accounts...",
       "add": "Add account",

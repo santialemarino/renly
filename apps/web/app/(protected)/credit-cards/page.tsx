@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { CreditCardsTable } from '@/app/(protected)/credit-cards/_components/credit-cards-table';
 import { CreditCardsToolbar } from '@/app/(protected)/credit-cards/_components/credit-cards-toolbar';
+import { getAccounts } from '@/lib/api/accounts';
 import { getCreditCards } from '@/lib/api/credit-cards';
 import { getSettings } from '@/lib/api/settings';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -25,7 +26,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
   const t = await getTranslations('creditCards');
   const params = await searchParams;
 
-  const [cards, settings] = await Promise.all([
+  const [cards, settings, accounts] = await Promise.all([
     getCreditCards({
       search: params.search,
       sortBy: params.sort_by as 'name' | 'closing_day' | 'due_day' | 'currency' | undefined,
@@ -33,6 +34,8 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
       showArchived: params.show_archived === 'true',
     }),
     getSettings().catch(() => null),
+    // Active accounts for the optional "paid from" link on a settlement (empty on error → field hidden).
+    getAccounts().catch(() => []),
   ]);
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -49,6 +52,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
       <CreditCardsTable
         cards={cards}
         preferredCurrencies={preferredCurrencies}
+        accounts={accounts}
         firstRun={firstRun}
       />
     </div>

@@ -814,6 +814,7 @@
         "currency": "Moneda",
         "bucket": "Saldo",
         "bucketPlaceholder": "Elegí la moneda del saldo",
+        "account": "Pagado desde",
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
       }
@@ -879,6 +880,7 @@
     },
     "title": "Cuentas",
     "subtitle": "Seguí tus saldos de efectivo, banco y billeteras — la base de tu patrimonio.",
+    "reconcileHint": "Renly refleja lo que cargás: conciliá una cuenta cuando quieras para que coincida con lo que muestra de verdad.",
     "toolbar": {
       "searchPlaceholder": "Buscar cuentas...",
       "add": "Agregar cuenta",
