@@ -32,8 +32,12 @@ class CardReconciliationResponse(BaseModel):
     statement_balance: Decimal = Field(description="Bank's actual statement balance.", max_digits=18, decimal_places=2)
     computed_balance: Decimal = Field(description="Running balance at period_end at reconciliation time.", max_digits=18, decimal_places=2)
     difference: Decimal = Field(description="statement_balance - computed_balance.", max_digits=18, decimal_places=2)
-    adjustment_expense_id: int | None = Field(default=None, description="Adjustment expense id (set when difference > 0).")
-    adjustment_income_id: int | None = Field(default=None, description="Adjustment income id (set when difference < 0).")
+    adjustment_expense_id: int | None = Field(
+        default=None, description="Signed adjustment expense id (positive for a fee/tax, negative for a credit)."
+    )
+    adjustment_income_id: int | None = Field(
+        default=None, description="Legacy adjustment income id; no longer written (credits are signed expenses)."
+    )
     is_stale: bool = Field(description="True when a relevant edit inside the period happened after reconciliation.")
     reconciled_at: datetime = Field(description="When the user ran the reconciliation.")
     created_at: datetime = Field(description="Creation timestamp.")

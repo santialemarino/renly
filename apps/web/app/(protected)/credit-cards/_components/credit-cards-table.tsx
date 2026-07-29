@@ -43,6 +43,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
@@ -55,10 +56,12 @@ const SETTLEMENTS_DISPLAY_DELAY_MS = 500;
 function SettlementsSection({
   cardId,
   bucketCurrencies,
+  accounts,
   expanded,
 }: {
   cardId: number;
   bucketCurrencies: string[];
+  accounts?: Account[];
   expanded: boolean;
 }) {
   const fmt = useFormatters();
@@ -197,6 +200,7 @@ function SettlementsSection({
                   onOpenChange={setAddOpen}
                   cardId={cardId}
                   bucketCurrencies={bucketCurrencies}
+                  accounts={accounts}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -235,10 +239,12 @@ function SettlementsSection({
 export function CreditCardsTable({
   cards,
   preferredCurrencies,
+  accounts,
   firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
+  accounts?: Account[];
   firstRun?: boolean;
 }) {
   const fmt = useFormatters();
@@ -392,6 +398,7 @@ export function CreditCardsTable({
                       key={`settlements-${card.id}`}
                       cardId={card.id}
                       bucketCurrencies={card.balances.map((b) => b.currency)}
+                      accounts={accounts}
                       expanded={isExpanded}
                     />
                   </Fragment>

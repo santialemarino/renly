@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import { getExpenseById } from '@/app/(protected)/expenses/expenses-actions';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
 import type { Installment } from '@/lib/api/installments';
@@ -18,6 +19,7 @@ interface LinkedExpenseEditTriggerProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -37,6 +39,7 @@ export function LinkedExpenseEditTrigger({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -83,6 +86,7 @@ export function LinkedExpenseEditTrigger({
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}

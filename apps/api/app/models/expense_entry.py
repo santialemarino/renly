@@ -13,6 +13,7 @@ from app.models.utils import utcnow
 # Expense category (food, transport, entertainment, etc.).
 class ExpenseCategory(StrEnum):
     account_adjustment = "account_adjustment"
+    card_credits_and_refunds = "card_credits_and_refunds"
     card_fees_and_taxes = "card_fees_and_taxes"
     clothing = "clothing"
     dining = "dining"

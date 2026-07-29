@@ -814,6 +814,7 @@
         "currency": "Currency",
         "bucket": "Bucket",
         "bucketPlaceholder": "Select bucket currency",
+        "account": "Paid from",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }
@@ -848,8 +849,8 @@
         "computedBalance": "App-computed balance",
         "computedBalanceHint": "What the app thinks you owed at the closing date.",
         "difference": "Difference",
-        "differenceExpensePreview": "Will create an expense of {amount} {currency} for fees / taxes.",
-        "differenceIncomePreview": "Will create an income of {amount} {currency} for credits / refunds.",
+        "differenceChargePreview": "Will add a charge of {amount} {currency} for fees / taxes, raising this card’s balance.",
+        "differenceCreditPreview": "Will record a credit of {amount} {currency}, lowering this card’s balance.",
         "differenceZeroPreview": "No adjustment will be created — balances match.",
         "replaceBanner": "Reconciled on {date} — saving will replace this entry.",
         "staleBanner": "This statement was modified after the last reconciliation. Re-reconcile to refresh.",
@@ -879,6 +880,7 @@
     },
     "title": "Accounts",
     "subtitle": "Track your cash, bank, and wallet balances — the foundation of your net worth.",
+    "reconcileHint": "Renly reflects what you enter — reconcile an account any time to match what it actually shows.",
     "toolbar": {
       "searchPlaceholder": "Search accounts...",
       "add": "Add account",

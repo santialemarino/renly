@@ -80,8 +80,10 @@ export function ReconciliationFormDialog({
   const computed = statement ? Number(statement.computedBalance) : 0;
   const entered = Number(statementBalanceRaw || '0');
   const diff = Number.isFinite(entered) ? entered - computed : 0;
-  const diffSide: 'expense' | 'income' | 'zero' =
-    diff > 0 ? 'expense' : diff < 0 ? 'income' : 'zero';
+  // Both directions post one SIGNED, card-linked adjustment expense — a bucket balance only moves on
+  // expenses and settlements, so a credit is a negative expense, never an income. Named for what the
+  // user sees (the bank charged more / credited some back), not for the row type.
+  const diffSide: 'charge' | 'credit' | 'zero' = diff > 0 ? 'charge' : diff < 0 ? 'credit' : 'zero';
 
   async function onSubmit(values: ReconciliationFormValues) {
     if (!statement) return;
@@ -170,13 +172,13 @@ export function ReconciliationFormDialog({
                   </span>
                 </span>
                 <span className="text-paragraph-xs text-muted-foreground">
-                  {diffSide === 'expense' &&
-                    t('form.differenceExpensePreview', {
+                  {diffSide === 'charge' &&
+                    t('form.differenceChargePreview', {
                       amount: fmt.amount(String(Math.abs(diff)), statement.currency),
                       currency: statement.currency,
                     })}
-                  {diffSide === 'income' &&
-                    t('form.differenceIncomePreview', {
+                  {diffSide === 'credit' &&
+                    t('form.differenceCreditPreview', {
                       amount: fmt.amount(String(Math.abs(diff)), statement.currency),
                       currency: statement.currency,
                     })}

@@ -8,13 +8,21 @@ import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/comp
 import { FormCombobox } from '@/components/form-combobox';
 import type { Account } from '@/lib/api/accounts';
 
-// Form-internal sentinel for "no account" — the API stores null, but a combobox can't bind to
-// undefined cleanly, so we round-trip through this value and map it back to undefined.
+/*
+ * Form-internal sentinel for "no account" — the API stores null, but a combobox can't bind to a
+ * nullish value cleanly, so we round-trip through this value and map it back to `null`.
+ *
+ * Clearing MUST write `null`, never `undefined`: react-hook-form falls back to `defaultValues`
+ * whenever a field's value is `undefined`, so an `undefined` write left the trigger displaying the
+ * originally-loaded account while form state was actually empty — the field looked unchanged while
+ * submitting a cleared link.
+ */
 const NONE_ACCOUNT = 'none';
 
-// Minimal form shape this component operates on. Every embedding form schema must declare `accountId`.
+// Minimal form shape this component operates on. Every embedding form schema must declare `accountId`
+// as nullable (`z.number().nullable().optional()`) so clearing can round-trip through `null`.
 export type AccountFieldFormValues = {
-  accountId?: number;
+  accountId?: number | null;
 };
 
 interface AccountFieldProps<T extends AccountFieldFormValues & FieldValues> {
@@ -56,7 +64,7 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
   // from the active list — is left untouched so editing an entry never silently drops its link.
   useEffect(() => {
     if (selected && currency && selected.currency !== currency) {
-      setValue('accountId', undefined);
+      setValue('accountId', null);
     }
   }, [selected, currency, setValue]);
 
@@ -70,15 +78,22 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
           <FormControl>
             <FormCombobox
               value={field.value != null ? String(field.value) : NONE_ACCOUNT}
-              onValueChange={(v) => field.onChange(v === NONE_ACCOUNT ? undefined : Number(v))}
+              onValueChange={(v) => field.onChange(v === NONE_ACCOUNT ? null : Number(v))}
               disabled={matching.length === 0}
-              placeholder={
-                matching.length === 0 && currency
-                  ? t('accountField.noneForCurrency', { currency })
-                  : t('accountField.placeholder')
-              }
               options={[
-                { value: NONE_ACCOUNT, label: t('accountField.none') },
+                {
+                  value: NONE_ACCOUNT,
+                  /*
+                   * The sentinel is always selected when nothing is picked, so `placeholder` can
+                   * never render — the reason there is nothing to pick has to live on this label
+                   * instead. Naming the currency turns a dead-end disabled field into an
+                   * explanation ("No ARS accounts" rather than a greyed-out "None").
+                   */
+                  label:
+                    matching.length === 0 && currency
+                      ? t('accountField.noneForCurrency', { currency })
+                      : t('accountField.none'),
+                },
                 ...matching.map((a) => ({ value: String(a.id), label: a.name })),
               ]}
             />

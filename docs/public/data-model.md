@@ -84,7 +84,9 @@ CEDEARs have a conversion ratio to their underlying stock. For example, 10 CEDEA
 
 An income entry records money coming in -- your salary, freelance work, dividends, refunds, or any other source. Each entry has a date, amount, currency, and optional category and notes.
 
-Income categories are fixed: `salary`, `freelance`, `bonus`, `investment_returns`, `dividends`, `rental_income`, `sales`, `refunds`, `gifts`, `card_credits_and_refunds`, `other`. The `card_credits_and_refunds` value is reserved for the negative-direction reconciliation adjustment (when the bank credited more than the app computed). Income entries also carry `reconciliation_id` (nullable, cascade-deletes) when created by the reconciliation flow.
+Income categories are fixed: `salary`, `freelance`, `bonus`, `investment_returns`, `dividends`, `rental_income`, `sales`, `refunds`, `gifts`, `card_credits_and_refunds`, `account_adjustment`, `other`. Two of those are system-generated rather than user-picked: `account_adjustment` is the surplus-direction account-reconciliation adjustment, and `card_credits_and_refunds` is **legacy** — card credits used to be recorded as income, but a card bucket only moves on expenses and settlements, so they are now signed expenses instead (see [Credit Card Reconciliations](#credit-card-reconciliations)). The value remains declared but nothing writes it.
+
+Income entries carry `account_reconciliation_id` (nullable, cascade-deletes) when created by the account-reconciliation flow, and a legacy `reconciliation_id` pointing at a card reconciliation, which no longer produces income rows.
 
 ### Expense Entries
 
@@ -96,7 +98,7 @@ Expenses also carry an optional `payment_obligation_id` back-pointer when they w
 
 At most one of `payment_obligation_id`, `subscription_id`, `installment_id` is set on the same row — an expense pays exactly one commitment-type.
 
-Expense categories are fixed: `food`, `dining`, `transport`, `rent`, `utilities`, `health`, `entertainment`, `sports`, `subscriptions`, `clothing`, `education`, `personal_care`, `home_maintenance`, `gifts`, `travel`, `taxes`, `insurance`, `kids`, `pets`, `card_fees_and_taxes`, `other`. The `card_fees_and_taxes` value is reserved for the positive-direction reconciliation adjustment.
+Expense categories are fixed: `food`, `dining`, `transport`, `rent`, `utilities`, `health`, `entertainment`, `sports`, `subscriptions`, `clothing`, `education`, `personal_care`, `home_maintenance`, `gifts`, `travel`, `taxes`, `insurance`, `kids`, `pets`, `card_fees_and_taxes`, `card_credits_and_refunds`, `account_adjustment`, `other`. The last three are system-generated rather than user-picked, and are not offered in the category picker: `card_fees_and_taxes` is the charged-more direction of a card reconciliation, `card_credits_and_refunds` is the credit direction (a **negative** amount, so it reduces the card bucket), and `account_adjustment` is either direction of an account reconciliation.
 
 Payment methods: `cash`, `debit`, `transfer`, `credit_card`. When the payment method is `credit_card`, the entry links to a specific credit card -- increasing that card's liability balance.
 
@@ -122,11 +124,13 @@ For the full accounting model (how expenses create liabilities, how settlements 
 
 A reconciliation is a per-bucket, per-statement true-up against the bank. Even with correct currency conversion and accurate settlements, the bank's actual statement balance rarely equals what the app computes — Argentina's 30% Ganancias perception, Visa / Mastercard FX fees, IVA on digital services, provincial sellos, refunds, and network rounding all sit outside the model.
 
-When the user clicks "Reconcile" on a bucket for a closed statement period, they enter the bank's real statement balance. The app computes `difference = statement_balance − computed_balance` and creates a single adjustment — either an expense (when the bank charged more than expected) or income (when the bank credited more than expected) — tagged `source = 'reconciliation'` and linked to the reconciliation row via `reconciliation_id`. The adjustment is dated on the period's closing date, so it flows into the next period's running balance naturally. After reconciliation the bucket matches the bank to the cent.
+When the user clicks "Reconcile" on a bucket for a closed statement period, they enter the bank's real statement balance. The app computes `difference = statement_balance − computed_balance` and creates a single **signed, card-linked adjustment expense** — positive when the bank charged more than expected, negative when a credit posted — tagged `source = 'reconciliation'` and linked to the reconciliation row via `reconciliation_id`. The adjustment is dated on the period's closing date, so it flows into the next period's running balance naturally. After reconciliation the bucket matches the bank to the cent.
 
 Reconciliations are scoped to `(card, currency, period_start, period_end)`. Re-running for the same scope replaces (the prior row deletes, the cascade drops the prior adjustment, a fresh pair is written). If the user retroactively edits an expense or settlement whose date falls inside a reconciled period, the reconciliation is flagged `stale` and a soft-confirmation dialog suggests re-reconciling.
 
-Two dedicated category enum values exist for the adjustments so they're cleanly excluded from regular spending breakdowns: `expense_category.card_fees_and_taxes` and `income_category.card_credits_and_refunds`.
+Both directions create **one signed, card-linked adjustment expense** — positive for a fee or tax, negative for a credit. That signedness is not cosmetic: a bucket balance is `Σ expenses − Σ settlements`, so an expense is the only row type that can move it, and a credit recorded any other way would leave the card overstated. Two dedicated category values keep adjustments out of regular spending breakdowns: `expense_category.card_fees_and_taxes` and `expense_category.card_credits_and_refunds`. Because a category can therefore total below zero, the expense breakdown keeps the negative in its total (net spending is the honest figure) but computes percentages against the positive categories only, and the distribution chart omits it — a pie slice cannot represent a negative.
+
+**A credit is not a deposit.** A refund credited to the card clears card debt and moves no cash, so the adjustment is never account-linked; linking it would both clear the debt and add cash for a single event. A refund paid back to your bank account instead never changes the card statement, so it produces no adjustment here at all — record it as ordinary income deposited to that account.
 
 ### Accounts
 
@@ -231,7 +235,7 @@ User
  |                  |
  |                  |-- has many --> Card Reconciliations
  |                                  (per-bucket statement true-ups against the bank;
- |                                   each owns an adjustment expense or income)
+ |                                   each owns one signed adjustment expense)
  |
  |-- has many --> Accounts
  |                (cash / bank / wallet balances — the asset side of net worth)

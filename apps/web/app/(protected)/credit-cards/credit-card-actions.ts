@@ -76,9 +76,10 @@ export async function createSettlement(
   cardId: number,
   values: SettlementFormValues,
 ): Promise<void> {
+  const { accountId, ...rest } = values;
   const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, {
     method: 'POST',
-    body: values,
+    body: { ...rest, account_id: accountId ?? null },
   });
   if (!res.ok) throw new Error('Failed to create settlement');
 }

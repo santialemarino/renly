@@ -37,6 +37,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation, PaymentObligationSortField } from '@/lib/api/payment-obligations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
@@ -47,6 +48,7 @@ interface PaymentObligationsTableProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }
@@ -56,6 +58,7 @@ export function PaymentObligationsTable({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeCurrency,
   firstRun,
 }: PaymentObligationsTableProps) {
@@ -317,6 +320,7 @@ export function PaymentObligationsTable({
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeObligations={obligations.filter((o) => o.isActive)}
         onLinkedPlanSave={handleLinkedPlanSave}
         onSuccess={() => {

@@ -10,10 +10,12 @@ from app.models.utils import utcnow
 # Per-bucket statement true-up against the bank (Phase 3, Step 5 — Option F).
 # One row per (card_id, currency, period_start, period_end) — uniqueness enforced at the DB.
 # computed_balance is the bucket's running balance at period_end at the time of reconciliation.
-# difference = statement_balance - computed_balance. A positive difference creates an adjustment
-# expense; a negative one creates an adjustment income; zero creates nothing.
-# adjustment_expense_id / adjustment_income_id back-reference the adjustment row; the corresponding
-# expense_entries.reconciliation_id / income_entries.reconciliation_id close the loop with ON DELETE CASCADE.
+# difference = statement_balance - computed_balance. Both non-zero directions create ONE signed,
+# card-linked adjustment EXPENSE — positive for a fee/tax, negative for a credit — because a bucket
+# balance is `sum(expenses) - sum(settlements)` and an income row could never move it. Zero creates
+# nothing. adjustment_income_id is retained for the historical shape but is no longer written.
+# adjustment_expense_id back-references the adjustment row; expense_entries.reconciliation_id closes
+# the loop with ON DELETE CASCADE.
 # is_stale flips to true when an expense or settlement inside the period is created / updated / deleted
 # after this reconciliation was written. Re-reconciling replaces (delete + cascade + insert).
 class CardReconciliation(SQLModel, table=True):
@@ -36,7 +38,7 @@ class CardReconciliation(SQLModel, table=True):
     adjustment_income_id: int | None = Field(
         default=None,
         foreign_key="income_entries.id",
-        description="Back-pointer to the adjustment income (set when difference < 0).",
+        description="Legacy back-pointer to an adjustment income; no longer written (credits are signed expenses).",
     )
     is_stale: bool = Field(default=False, description="True when a relevant edit inside the period happened after reconciliation.")
     reconciled_at: datetime = Field(default_factory=utcnow, description="When the user ran the reconciliation.")

@@ -44,17 +44,16 @@ export function FinanceDashboardDistribution({
 
   const isExpenseMode = mode === 'expense';
 
-  const chartData = isExpenseMode
-    ? expenseBreakdown.items.map((item) => ({
-        name: tCommon(`categories.${item.category}`),
-        value: item.value,
-        percentage: item.percentage,
-      }))
-    : incomeBreakdown.items.map((item) => ({
-        name: tCommon(`categories.${item.category}`),
-        value: item.value,
-        percentage: item.percentage,
-      }));
+  // A category can be negative (a card credit posts a negative reconciliation adjustment). A pie
+  // slice cannot represent one, and the API already zeroes its percentage, so drop it from the
+  // chart — the headline totals elsewhere still carry it, so no money disappears from the page.
+  const chartData = (isExpenseMode ? expenseBreakdown.items : incomeBreakdown.items)
+    .filter((item) => item.value > 0)
+    .map((item) => ({
+      name: tCommon(`categories.${item.category}`),
+      value: item.value,
+      percentage: item.percentage,
+    }));
 
   const hasData = chartData.length > 0;
 

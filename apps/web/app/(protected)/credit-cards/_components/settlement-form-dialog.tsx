@@ -20,10 +20,12 @@ import {
   buildSettlementFormSchema,
   type SettlementFormValues,
 } from '@/app/(protected)/credit-cards/settlement-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import type { Account } from '@/lib/api/accounts';
 
 interface SettlementFormDialogProps {
   open: boolean;
@@ -32,6 +34,9 @@ interface SettlementFormDialogProps {
   // Primary currency first, then any other currencies with activity on this card.
   // Length 1 = single-bucket card (picker hidden). Length > 1 = multi-bucket (picker shown).
   bucketCurrencies: string[];
+  // Accounts the payment can be drawn from. Filtered to the settled bucket's currency by AccountField;
+  // omitted or empty hides the field entirely (cash-less users see no change).
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -40,6 +45,7 @@ export function SettlementFormDialog({
   onOpenChange,
   cardId,
   bucketCurrencies,
+  accounts,
   onSuccess,
 }: SettlementFormDialogProps) {
   const t = useTranslations('creditCards');
@@ -59,6 +65,7 @@ export function SettlementFormDialog({
       date: '',
       amount: '',
       currency: defaultCurrency,
+      accountId: undefined,
       notes: '',
     },
   });
@@ -68,7 +75,13 @@ export function SettlementFormDialog({
   // Reset form when dialog opens — re-anchor currency to the card's primary bucket.
   useEffect(() => {
     if (open) {
-      form.reset({ date: '', amount: '', currency: defaultCurrency, notes: '' });
+      form.reset({
+        date: '',
+        amount: '',
+        currency: defaultCurrency,
+        accountId: undefined,
+        notes: '',
+      });
     }
   }, [open, form, defaultCurrency]);
 
@@ -153,6 +166,16 @@ export function SettlementFormDialog({
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+            )}
+
+            {accounts && accounts.length > 0 && (
+              <AccountField
+                control={form.control}
+                setValue={form.setValue}
+                accounts={accounts}
+                currency={watchedCurrency || undefined}
+                label={t('settlements.form.account')}
               />
             )}
 

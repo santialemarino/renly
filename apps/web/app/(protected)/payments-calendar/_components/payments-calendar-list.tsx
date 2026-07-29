@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { Badge } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { LinkedExpenseEditTrigger } from '@/app/(protected)/payments-calendar/_components/linked-expense-edit-trigger';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
@@ -18,6 +19,7 @@ interface PaymentsCalendarListProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -43,6 +45,7 @@ export async function PaymentsCalendarList({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -156,6 +159,7 @@ export async function PaymentsCalendarList({
                       preferredCurrencies={preferredCurrencies}
                       supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
+                      accounts={accounts}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}
                       activeInstallments={activeInstallments}

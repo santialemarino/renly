@@ -120,3 +120,42 @@ class TestUncategorizedSlice:
             ("uncategorized", Decimal("3000"), Decimal("75")),
             ("food", Decimal("1000"), Decimal("25")),
         ]
+
+
+# A card credit posts a negative reconciliation adjustment, so a category can total below zero. The
+# headline total keeps it (net spending is the honest figure), but percentages are computed against
+# the positive categories only — a share of a mixed-sign total is meaningless, and the donut this
+# feeds cannot draw a negative slice.
+class TestNegativeCategoryInBreakdown:
+    @pytest.mark.asyncio
+    async def test_negative_category_is_kept_in_the_total_but_scored_zero_percent(self, monkeypatch):
+        # 1000 food + 3000 rent - 200 card credit = 3800 net; shares are of the 4000 positive side.
+        rows = [
+            ("food", "ARS", Decimal("1000")),
+            ("rent", "ARS", Decimal("3000")),
+            ("card_credits_and_refunds", "ARS", Decimal("-200")),
+        ]
+        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
+
+        result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)
+
+        assert result.total_expenses == Decimal("3800")
+        assert [(i.category, i.value, i.percentage) for i in result.items] == [
+            ("rent", Decimal("3000"), Decimal("75")),
+            ("food", Decimal("1000"), Decimal("25")),
+            ("card_credits_and_refunds", Decimal("-200"), Decimal("0")),
+        ]
+        # Positive shares still sum to 100 — the negative row never distorts them.
+        assert sum(i.percentage for i in result.items) == Decimal("100")
+
+    @pytest.mark.asyncio
+    async def test_all_negative_categories_yield_zero_percentages_without_dividing_by_zero(self, monkeypatch):
+        rows = [("card_credits_and_refunds", "ARS", Decimal("-200"))]
+        monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
+
+        result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)
+
+        assert result.total_expenses == Decimal("-200")
+        assert [(i.category, i.percentage) for i in result.items] == [("card_credits_and_refunds", Decimal("0"))]
