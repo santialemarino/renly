@@ -50,7 +50,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
        * it points at reconciliation (the intended mechanism), never at "you should link more".
        * Shown only once there is an account to reconcile.
        */}
-      <DismissableHint storageKey="accounts-reconcile-hint" show={accounts.length > 0}>
+      <DismissableHint storageKey="accounts-reconcile-hint-dismissed" show={accounts.length > 0}>
         {t('reconcileHint')}
       </DismissableHint>
       <AccountsToolbar preferredCurrencies={preferredCurrencies} />

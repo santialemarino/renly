@@ -122,12 +122,11 @@ class TestUncategorizedSlice:
         ]
 
 
+# A card credit posts a negative reconciliation adjustment, so a category can total below zero. The
+# headline total keeps it (net spending is the honest figure), but percentages are computed against
+# the positive categories only — a share of a mixed-sign total is meaningless, and the donut this
+# feeds cannot draw a negative slice.
 class TestNegativeCategoryInBreakdown:
-    """A card credit posts a negative reconciliation adjustment, so a category can total below zero.
-    The headline total keeps it (net spending is the honest figure), but percentages are computed
-    against the positive categories only — a share of a mixed-sign total is meaningless, and the
-    donut this feeds cannot draw a negative slice."""
-
     @pytest.mark.asyncio
     async def test_negative_category_is_kept_in_the_total_but_scored_zero_percent(self, monkeypatch):
         # 1000 food + 3000 rent - 200 card credit = 3800 net; shares are of the 4000 positive side.

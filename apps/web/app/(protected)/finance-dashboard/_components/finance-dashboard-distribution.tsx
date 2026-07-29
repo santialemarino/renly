@@ -48,7 +48,7 @@ export function FinanceDashboardDistribution({
   // slice cannot represent one, and the API already zeroes its percentage, so drop it from the
   // chart — the headline totals elsewhere still carry it, so no money disappears from the page.
   const chartData = (isExpenseMode ? expenseBreakdown.items : incomeBreakdown.items)
-    .filter((item) => Number(item.value) > 0)
+    .filter((item) => item.value > 0)
     .map((item) => ({
       name: tCommon(`categories.${item.category}`),
       value: item.value,
