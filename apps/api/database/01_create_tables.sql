@@ -482,10 +482,12 @@ CREATE UNIQUE INDEX idx_expense_entries_installment_date
 -- statement_balance is the user-entered figure from the bank's resumen.
 -- computed_balance is the bucket's running balance at period_end (= sum of expenses dated <= period_end
 --   minus sum of settlements dated <= period_end). difference = statement_balance - computed_balance.
--- adjustment_expense_id / adjustment_income_id back-reference the single expense or income row created
---   to capture the difference (positive -> expense in card_fees_and_taxes; negative -> income in
---   card_credits_and_refunds; zero -> no adjustment). ON DELETE SET NULL keeps the reconciliation
---   record if the adjustment is deleted via the normal entry flow.
+-- adjustment_expense_id back-references the single SIGNED expense row created to capture the difference
+--   (positive -> card_fees_and_taxes; negative -> card_credits_and_refunds; zero -> no adjustment). Both
+--   directions are expenses because a bucket balance is `sum(expenses) - sum(settlements)`, so only an
+--   expense can move it — an income row would leave the card overstated. ON DELETE SET NULL keeps the
+--   reconciliation record if the adjustment is deleted via the normal entry flow.
+-- adjustment_income_id is retained for the historical shape but is no longer written.
 -- is_stale flips to true when an expense_entries or card_settlements row inside the period is created
 --   / updated / deleted after this reconciliation was written. UI surfaces a re-reconcile prompt.
 -- Re-reconciliation is delete-and-replace via the UNIQUE constraint and the cascade from

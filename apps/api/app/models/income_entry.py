@@ -44,7 +44,7 @@ class IncomeEntry(SQLModel, table=True):
     reconciliation_id: int | None = Field(
         default=None,
         foreign_key="card_reconciliations.id",
-        description="Owning card reconciliation when this row is the adjustment income from the card reconciliation flow.",
+        description="Legacy link to a card reconciliation; no longer written (card credits are signed expenses).",
     )
     account_reconciliation_id: int | None = Field(
         default=None,
