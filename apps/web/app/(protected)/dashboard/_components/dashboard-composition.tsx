@@ -9,6 +9,7 @@ import {
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
   CHART_COLOR_NEGATIVE,
+  CHART_COLOR_POSITIVE,
   DONUT_COLORS,
   DONUT_HEIGHT,
   DONUT_INNER_RADIUS,
@@ -24,6 +25,7 @@ import {
 import { useFormatters } from '@/lib/i18n/formatters';
 
 const LIABILITIES_COLOR = CHART_COLOR_NEGATIVE;
+const CASH_COLOR = CHART_COLOR_POSITIVE;
 
 interface DashboardCompositionProps {
   composition: CompositionItem[];
@@ -36,16 +38,29 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
 
   const hasData = composition.length > 0;
 
-  // Separate investment items from liabilities for color indexing.
+  // Cash (asset) and liabilities get fixed colors; investment categories cycle DONUT_COLORS.
+  function segmentName(label: string): string {
+    if (label === 'liabilities') return t('composition.liabilities');
+    if (label === 'cash') return t('composition.cash');
+    return tCommon(`categories.${label}`);
+  }
   const chartData = composition.map((item) => ({
-    name:
-      item.label === 'liabilities'
-        ? t('composition.liabilities')
-        : tCommon(`categories.${item.label}`),
+    name: segmentName(item.label),
     value: item.value,
     percentage: item.percentage,
     isLiability: item.label === 'liabilities',
+    isCash: item.label === 'cash',
   }));
+
+  // Picks a segment's color: fixed for cash/liabilities, cycled DONUT_COLORS for investments.
+  function segmentColor(
+    entry: { isLiability: boolean; isCash: boolean },
+    investmentIdx: () => number,
+  ) {
+    if (entry.isLiability) return LIABILITIES_COLOR;
+    if (entry.isCash) return CASH_COLOR;
+    return DONUT_COLORS[investmentIdx() % DONUT_COLORS.length];
+  }
 
   let investmentIndex = 0;
 
@@ -64,9 +79,7 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
               <div className="w-full lg:flex-1 lg:min-w-0">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 lg:flex lg:flex-col lg:gap-x-0">
                   {chartData.map((entry) => {
-                    const color = entry.isLiability
-                      ? LIABILITIES_COLOR
-                      : DONUT_COLORS[investmentIndex++ % DONUT_COLORS.length];
+                    const color = segmentColor(entry, () => investmentIndex++);
                     return (
                       <div key={entry.name} className="flex items-center gap-x-2">
                         <div
@@ -101,12 +114,9 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
                     >
                       {(() => {
                         let idx = 0;
-                        return chartData.map((entry) => {
-                          const fill = entry.isLiability
-                            ? LIABILITIES_COLOR
-                            : DONUT_COLORS[idx++ % DONUT_COLORS.length];
-                          return <Cell key={entry.name} fill={fill} />;
-                        });
+                        return chartData.map((entry) => (
+                          <Cell key={entry.name} fill={segmentColor(entry, () => idx++)} />
+                        ));
                       })()}
                     </Pie>
                     <Tooltip

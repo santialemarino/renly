@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 
 # Net worth and aggregated KPIs for the dashboard overview cards.
 class DashboardOverviewResponse(BaseModel):
-    net_worth: Decimal = Field(description="Investment total value minus credit card balance.")
+    net_worth: Decimal = Field(description="Investment total value plus cash minus credit card balance.")
+    cash_total: Decimal = Field(default=Decimal(0), description="Total cash/bank account balance in the display currency.")
     net_worth_change: Decimal | None = Field(default=None, description="Absolute net worth change vs previous month.")
     net_worth_change_pct: Decimal | None = Field(default=None, description="Percentage net worth change vs previous month.")
     investment_total: Decimal = Field(description="Sum of latest investment snapshot values.")
@@ -32,8 +33,9 @@ class DashboardOverviewResponse(BaseModel):
 class NetWorthEvolutionPoint(BaseModel):
     date: date_type = Field(description="First day of the month.")
     investment_value: Decimal = Field(description="Aggregated investment portfolio value.")
+    cash_balance: Decimal = Field(default=Decimal(0), description="Cumulative cash/bank balance at this month.")
     card_balance: Decimal = Field(description="Cumulative credit card balance at this month.")
-    net_worth: Decimal = Field(description="investment_value minus card_balance.")
+    net_worth: Decimal = Field(description="investment_value plus cash_balance minus card_balance.")
 
 
 # Monthly net worth series for the evolution chart.
@@ -46,17 +48,17 @@ class DashboardEvolutionResponse(BaseModel):
     )
 
 
-# One slice of the composition donut (investment category or liabilities).
+# One slice of the composition donut (investment category, 'cash', or 'liabilities').
 class CompositionItem(BaseModel):
-    label: str = Field(description="Segment label (investment category name or 'liabilities').")
+    label: str = Field(description="Segment label (investment category name, 'cash', or 'liabilities').")
     value: Decimal = Field(description="Absolute value for this segment.")
     percentage: Decimal = Field(description="Percentage of the summed item values (asset categories plus the liabilities item when present).")
 
 
-# Investment allocation by category plus a liabilities segment.
+# Investment allocation by category plus a cash segment and a liabilities segment.
 class DashboardCompositionResponse(BaseModel):
-    items: list[CompositionItem] = Field(description="Composition segments (investment categories + liabilities).")
-    total_assets: Decimal = Field(description="Total investment portfolio value.")
+    items: list[CompositionItem] = Field(description="Composition segments (investment categories + cash + liabilities).")
+    total_assets: Decimal = Field(description="Total investment portfolio value plus cash.")
     total_liabilities: Decimal = Field(description="Total credit card balance, including archived cards.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
     skipped_currencies: list[str] = Field(

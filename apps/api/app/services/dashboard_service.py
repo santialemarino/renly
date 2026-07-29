@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.account_repository import account_repository
 from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.expense_repository import expense_repository
@@ -23,7 +24,14 @@ from app.schemas.dashboard import (
     NetWorthEvolutionPoint,
     SkippedLiquidityEntity,
 )
-from app.services import credit_card_service, exchange_rate_service, finance_metrics_service, metrics_service, settings_service
+from app.services import (
+    account_service,
+    credit_card_service,
+    exchange_rate_service,
+    finance_metrics_service,
+    metrics_service,
+    settings_service,
+)
 from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.liquidity import (
     LIQUIDITY_INCOME_MIN_HISTORY_DAYS,
@@ -33,7 +41,7 @@ from app.utils.liquidity import (
     compute_fixed_monthly_commitments,
     compute_monthly_income,
 )
-from app.utils.metrics import RateLookup, convert_value
+from app.utils.metrics import RateLookup, convert_value, month_over_month
 
 ZERO = Decimal("0")
 
@@ -120,6 +128,98 @@ def forward_fill_card_balances(
     return result
 
 
+# Pure computation: cumulative cash balance (in the display currency) at each month with activity.
+# Mirrors compute_monthly_card_balances: each signed movement converts at its OWN month-end rate,
+# then accumulates. Movements = each account's opening balance (a positive delta in its opening
+# month) + linked income (+) − linked expenses (−) − settlements (−), all in the account's own
+# currency. An unconvertible currency is skipped and reported. Returns ({(year, month): cumulative
+# balance in target currency}, sorted skipped currency codes).
+def compute_monthly_cash_balances(
+    accounts: list,
+    income_monthly: list[tuple[int, int, int, Decimal]],
+    expense_monthly: list[tuple[int, int, int, Decimal]],
+    settlement_monthly: list[tuple[int, int, int, Decimal]],
+    target_currency: str | None,
+    lookup: RateLookup | None,
+) -> tuple[dict[tuple[int, int], Decimal], list[str]]:
+    def _convert_at_month(val: Decimal, currency: str, year: int, month: int) -> Decimal | None:
+        if not (target_currency and lookup) or currency == target_currency:
+            return val
+        rate_map = lookup.get_rate_map_at(_month_end(year, month))
+        if rate_map is None:
+            return None
+        return convert_value(val, currency, target_currency, rate_map)
+
+    currency_by_account = {a.id: a.currency for a in accounts}
+    skipped: set[str] = set()
+    month_delta: dict[tuple[int, int], Decimal] = {}
+
+    def _add(account_id: int, year: int, month: int, amount: Decimal) -> None:
+        currency = currency_by_account.get(account_id)
+        if currency is None or amount == ZERO:
+            return
+        val = _convert_at_month(amount, currency, year, month)
+        if val is None:
+            skipped.add(currency)
+            return
+        month_delta[(year, month)] = month_delta.get((year, month), ZERO) + val
+
+    # Opening balances enter as a positive delta in each account's opening month.
+    for account in accounts:
+        _add(account.id, account.opening_date.year, account.opening_date.month, account.opening_balance)
+    for account_id, year, month, total in income_monthly:
+        _add(account_id, year, month, Decimal(str(total)))
+    for account_id, year, month, total in expense_monthly:
+        _add(account_id, year, month, -Decimal(str(total)))
+    for account_id, year, month, total in settlement_monthly:
+        _add(account_id, year, month, -Decimal(str(total)))
+
+    running = ZERO
+    result: dict[tuple[int, int], Decimal] = {}
+    for ym in sorted(month_delta):
+        running += month_delta[ym]
+        result[ym] = running
+    return result, sorted(skipped)
+
+
+# Pure computation: total cash across accounts in the display currency. Each account's balance (in
+# its own currency) converts at the given rate map (today's rate); a zero balance contributes
+# nothing (so its currency is never flagged skipped); an unconvertible currency is skipped and
+# reported. When target_currency is None nothing converts (balances sum raw, "original" mode).
+# Mirrors the per-bucket card-balance conversion. Returns (total, skipped currency codes).
+def compute_cash_total(
+    accounts: list,
+    account_balances: dict[int, Decimal],
+    target_currency: str | None,
+    rate_map: dict[str, Decimal] | None,
+) -> tuple[Decimal, set[str]]:
+    total = ZERO
+    skipped: set[str] = set()
+    for account in accounts:
+        val = account_balances.get(account.id, ZERO)
+        if val and target_currency and account.currency != target_currency:
+            converted = convert_value(val, account.currency, target_currency, rate_map) if rate_map else None
+            if converted is None:
+                skipped.add(account.currency)
+                continue
+            val = converted
+        total += val
+    return total, skipped
+
+
+# Loads accounts (including archived — like cards, they stay in net worth) plus their current
+# derived balances, then converts to the display currency. Returns (total, skipped, accounts).
+async def _load_cash_total(
+    session: AsyncSession,
+    user_id: int,
+    currency: str | None,
+    rate_map: dict[str, Decimal] | None,
+) -> tuple[Decimal, set[str]]:
+    accounts = await account_repository.list_by_user(session, user_id, active_only=False)
+    account_balances = await account_service.get_account_balances(session, accounts, user_id)
+    return compute_cash_total(accounts, account_balances, currency, rate_map)
+
+
 # Aggregates investment portfolio metrics and finance overview into a single dashboard response.
 async def get_overview(
     session: AsyncSession,
@@ -153,15 +253,26 @@ async def get_overview(
         date_to=date_to,
     )
 
-    net_worth = portfolio.total_value - finance.credit_card_balance
+    # Cash across all accounts, converted to the display currency at today's rate (fail-loud).
+    rate_map_today = lookup.get_rate_map_at(today) if (lookup and today) else None
+    cash_total, cash_skipped = await _load_cash_total(session, user_id, currency, rate_map_today)
 
-    # Net worth month-over-month change (approximated from portfolio change).
-    net_worth_change = portfolio.month_change
+    net_worth = portfolio.total_value + cash_total - finance.credit_card_balance
+
+    # Net worth month-over-month: the latest vs prior month of the SAME monthly net-worth series the
+    # evolution chart uses (investment + cash − card per month), so the delta reflects cash and card
+    # movements, not investments alone — e.g. funding a new account this month now shows up. Full
+    # history (unwindowed): net worth is a point-in-time snapshot, unlike the period-scoped income
+    # /expense totals. (investment_month_change below stays investment-only for the Investment card.)
+    nw_points, _ = await compute_net_worth_evolution(session, user_id, currency=currency, lookup=lookup, today=today)
+    net_worth_change: Decimal | None = None
     net_worth_change_pct: Decimal | None = None
-    if net_worth_change is not None:
-        prev = net_worth - net_worth_change
-        if prev != ZERO:
-            net_worth_change_pct = net_worth_change / prev
+    nw_mom = month_over_month([(p.date, p.net_worth) for p in nw_points])
+    if nw_mom is not None:
+        prev_nw, curr_nw = nw_mom
+        net_worth_change = curr_nw - prev_nw
+        if prev_nw != ZERO:
+            net_worth_change_pct = net_worth_change / prev_nw
 
     savings_rate: Decimal | None = None
     if finance.total_income != ZERO:
@@ -173,6 +284,7 @@ async def get_overview(
 
     return DashboardOverviewResponse(
         net_worth=net_worth,
+        cash_total=cash_total,
         net_worth_change=net_worth_change,
         net_worth_change_pct=net_worth_change_pct,
         investment_total=portfolio.total_value,
@@ -186,24 +298,27 @@ async def get_overview(
         savings_rate=savings_rate,
         income_expense_ratio=income_expense_ratio,
         currency=currency,
-        # Fail-loud: surface BOTH sides' inconvertible currencies (finance/liability skips plus any
-        # investment base currency that couldn't reach the display currency), so the summary flags
-        # everything its totals had to exclude — not just the liability half.
-        skipped_currencies=sorted(set(finance.skipped_currencies) | {s.base_currency for s in portfolio.skipped_investments}),
+        # Fail-loud: surface every side's inconvertible currencies (finance/liability skips, any
+        # investment base currency that couldn't reach the display currency, plus any account
+        # currency the cash total had to exclude), so the summary flags everything its totals dropped.
+        skipped_currencies=sorted(set(finance.skipped_currencies) | {s.base_currency for s in portfolio.skipped_investments} | cash_skipped),
     )
 
 
-# Computes monthly net worth series (investment value - cumulative card balance).
-async def get_evolution(
+# Builds the monthly net-worth series (investment value + cumulative cash − cumulative card per month,
+# forward-filled), shared by the evolution chart and the overview's month-over-month delta. Cash and
+# card include archived rows (their balances stay in net worth; archive is a UI filter). Returns
+# (points, sorted skipped-currency codes).
+async def compute_net_worth_evolution(
     session: AsyncSession,
     user_id: int,
     *,
-    currency: str | None = None,
+    currency: str | None,
+    lookup: RateLookup | None,
+    today: date_type | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
-) -> DashboardEvolutionResponse:
-    # One rate lookup per request — shared by the portfolio evolution and card-balance series.
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user_id) if currency else None
+) -> tuple[list[NetWorthEvolutionPoint], list[str]]:
     portfolio_evo = await metrics_service.get_portfolio_evolution(
         session,
         user_id,
@@ -212,9 +327,8 @@ async def get_evolution(
         start_date=date_from,
         end_date=date_to,
     )
-
     if not portfolio_evo.points:
-        return DashboardEvolutionResponse(points=[], currency=currency, skipped_currencies=[])
+        return [], []
 
     # Build monthly card balance series. Includes archived cards — their history and any
     # outstanding balance remain part of net worth (archive is a UI filter).
@@ -223,33 +337,82 @@ async def get_evolution(
     card_currencies = {c.id: c.currency for c in cards if c.id is not None}
 
     card_balance_by_month: dict[tuple[int, int], Decimal] = {}
-    skipped_currencies: list[str] = []
+    skipped: set[str] = set()
     if card_ids:
         expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids, user_id)
         settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
-        card_balance_by_month, skipped_currencies = compute_monthly_card_balances(
+        card_balance_by_month, card_skipped = compute_monthly_card_balances(
             expense_monthly,
             settlement_monthly,
             card_currencies,
             currency,
             lookup,
         )
+        skipped.update(card_skipped)
 
-    # Merge: each portfolio point carries the cumulative card balance at-or-before its month
-    # (proper forward-fill — includes balance built up before the portfolio window starts).
-    point_months = [(p.date.year, p.date.month) for p in portfolio_evo.points]
-    balances = forward_fill_card_balances(point_months, card_balance_by_month)
+    # Build the monthly cash series the same way (opening balances + linked income/expenses/
+    # settlements accumulated, each converted at its own month-end). Includes archived accounts —
+    # their balance stays in net worth (archive is a UI filter, like cards).
+    accounts = await account_repository.list_by_user(session, user_id, active_only=False)
+    account_ids = [a.id for a in accounts if a.id is not None]
+    cash_balance_by_month: dict[tuple[int, int], Decimal] = {}
+    if account_ids:
+        cash_income = await income_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
+        cash_expense = await expense_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
+        cash_settlement = await card_settlement_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
+        cash_balance_by_month, cash_skipped = compute_monthly_cash_balances(
+            accounts,
+            cash_income,
+            cash_expense,
+            cash_settlement,
+            currency,
+            lookup,
+        )
+        skipped.update(cash_skipped)
+
+    # Merge onto a month grid = the portfolio points' months plus the CURRENT month when it's beyond
+    # the last snapshot, so cash/card movements that post-date the latest investment snapshot still
+    # advance net worth (e.g. funding an account this month). Every series forward-fills at-or-before
+    # each month: investments carry the latest snapshot value into the trailing current month; card
+    # and cash carry their cumulative balances (including any built up before the window starts).
+    investment_by_month = {(p.date.year, p.date.month): p.total_value for p in portfolio_evo.points}
+    months = [(p.date.year, p.date.month) for p in portfolio_evo.points]
+    if today is not None and (today.year, today.month) > months[-1]:
+        months.append((today.year, today.month))
+    investment_balances = forward_fill_card_balances(months, investment_by_month)
+    card_balances = forward_fill_card_balances(months, card_balance_by_month)
+    cash_balances = forward_fill_card_balances(months, cash_balance_by_month)
     points = [
         NetWorthEvolutionPoint(
-            date=p.date,
-            investment_value=p.total_value,
-            card_balance=balance,
-            net_worth=p.total_value - balance,
+            date=date_type(year, month, 1),
+            investment_value=investment,
+            cash_balance=cash,
+            card_balance=card,
+            net_worth=investment + cash - card,
         )
-        for p, balance in zip(portfolio_evo.points, balances)
+        for (year, month), investment, card, cash in zip(months, investment_balances, card_balances, cash_balances)
     ]
+    return points, sorted(skipped)
 
-    return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=skipped_currencies)
+
+# Computes the monthly net worth series (investment + cash − card per point) for the evolution chart.
+async def get_evolution(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    currency: str | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> DashboardEvolutionResponse:
+    # One settings read + rate lookup per request (matches get_overview): the dollar preference builds
+    # the lookup, and the timezone anchors "today" so the series extends to the current month.
+    rs = await settings_service.get_request_settings(session, user_id) if currency else None
+    lookup = await exchange_rate_service.build_rate_lookup(session, rs.dollar_preference) if rs else None
+    today = settings_service.today_for_timezone(rs.timezone) if rs else None
+    points, skipped = await compute_net_worth_evolution(
+        session, user_id, currency=currency, lookup=lookup, today=today, date_from=date_from, date_to=date_to
+    )
+    return DashboardEvolutionResponse(points=points, currency=currency, skipped_currencies=skipped)
 
 
 # Computes investment allocation by category plus a liabilities segment.
@@ -273,6 +436,7 @@ async def get_composition(
     # Compute total card liability, converting each bucket's balance to display currency at TODAY's
     # rate (the composition view is a snapshot of the current state, not a historical one).
     # Includes archived cards — their outstanding balance stays a liability (UI filter only).
+    rate_map = lookup.get_rate_map_at(settings_service.today_for_timezone(rs.timezone)) if lookup else None
     cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
     card_balance = ZERO
@@ -280,7 +444,6 @@ async def get_composition(
     if card_ids:
         card_currencies = {c.id: c.currency for c in cards if c.id is not None}
         balances = await credit_card_service.get_card_balances(session, card_ids, card_currencies, user_id)
-        rate_map = lookup.get_rate_map_at(settings_service.today_for_timezone(rs.timezone)) if lookup else None
         for buckets in balances.values():
             for bucket in buckets:
                 val = bucket.balance
@@ -295,17 +458,26 @@ async def get_composition(
                     val = converted
                 card_balance += val
 
-    total_assets = allocation.total_value
-    # Percentage base = sum of the item values actually returned (asset categories plus the
+    # Cash across accounts (asset side), converted at today's rate. A net-negative cash total
+    # (overdrafts) can't be a donut slice, so it's excluded from the items/base like a net-credit
+    # card balance is — the overview net-worth still reflects the true (signed) cash total.
+    cash_total, cash_skipped = await _load_cash_total(session, user_id, currency, rate_map)
+    cash_asset = cash_total if cash_total > ZERO else ZERO
+
+    total_assets = allocation.total_value + cash_asset
+    # Percentage base = sum of the item values actually returned (asset categories + cash + the
     # liabilities item when shown). Keeps legend percentages consistent with the donut's
-    # value-proportional slices; a negative aggregate card balance (net credit) is excluded
-    # from both the items and the base, so asset percentages always sum to 100.
+    # value-proportional slices; net-negative aggregates are excluded so asset percentages sum to 100.
     items_total = total_assets + (card_balance if card_balance > ZERO else ZERO)
 
     items: list[CompositionItem] = []
     for item in allocation.items:
         pct = (item.value / items_total * 100) if items_total != ZERO else ZERO
         items.append(CompositionItem(label=item.category, value=item.value, percentage=pct))
+
+    if cash_asset > ZERO:
+        pct = (cash_asset / items_total * 100) if items_total != ZERO else ZERO
+        items.append(CompositionItem(label="cash", value=cash_asset, percentage=pct))
 
     if card_balance > ZERO:
         pct = (card_balance / items_total * 100) if items_total != ZERO else ZERO
@@ -316,9 +488,9 @@ async def get_composition(
         total_assets=total_assets,
         total_liabilities=card_balance,
         currency=currency,
-        # Fail-loud: include both the liability-bucket skips and any investment base currency the
-        # allocation couldn't convert, so the donut flags every currency excluded from either side.
-        skipped_currencies=sorted(skipped | {s.base_currency for s in allocation.skipped_investments}),
+        # Fail-loud: include the liability-bucket skips, any investment base currency the allocation
+        # couldn't convert, and any account currency the cash total dropped.
+        skipped_currencies=sorted(skipped | {s.base_currency for s in allocation.skipped_investments} | cash_skipped),
     )
 
 

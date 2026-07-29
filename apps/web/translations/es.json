@@ -400,7 +400,9 @@
       "netCashFlow": "Flujo Neto",
       "creditCardBalance": "Saldo Tarjetas",
       "vsLastMonth": "vs mes anterior",
-      "netWorthHint": "No incluye cuentas bancarias (próximamente)"
+      "netWorthHint": "Inversiones + efectivo − pasivos",
+      "cash": "Efectivo",
+      "cashHint": "Saldos de efectivo y banco"
     },
     "period": {
       "ytd": "YTD",
@@ -415,7 +417,8 @@
     },
     "composition": {
       "title": "Composición",
-      "liabilities": "Pasivos"
+      "liabilities": "Pasivos",
+      "cash": "Efectivo y banco"
     },
     "health": {
       "savingsRate": "Tasa de Ahorro",
