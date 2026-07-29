@@ -126,7 +126,9 @@ When the user clicks "Reconcile" on a bucket for a closed statement period, they
 
 Reconciliations are scoped to `(card, currency, period_start, period_end)`. Re-running for the same scope replaces (the prior row deletes, the cascade drops the prior adjustment, a fresh pair is written). If the user retroactively edits an expense or settlement whose date falls inside a reconciled period, the reconciliation is flagged `stale` and a soft-confirmation dialog suggests re-reconciling.
 
-Two dedicated category enum values exist for the adjustments so they're cleanly excluded from regular spending breakdowns: `expense_category.card_fees_and_taxes` and `income_category.card_credits_and_refunds`.
+Both directions create **one signed, card-linked adjustment expense** — positive for a fee or tax, negative for a credit. That signedness is not cosmetic: a bucket balance is `Σ expenses − Σ settlements`, so an expense is the only row type that can move it, and a credit recorded any other way would leave the card overstated. Two dedicated category values keep adjustments out of regular spending breakdowns: `expense_category.card_fees_and_taxes` and `expense_category.card_credits_and_refunds`. Because a category can therefore total below zero, the expense breakdown keeps the negative in its total (net spending is the honest figure) but computes percentages against the positive categories only, and the distribution chart omits it — a pie slice cannot represent a negative.
+
+**A credit is not a deposit.** A refund credited to the card clears card debt and moves no cash, so the adjustment is never account-linked; linking it would both clear the debt and add cash for a single event. A refund paid back to your bank account instead never changes the card statement, so it produces no adjustment here at all — record it as ordinary income deposited to that account.
 
 ### Accounts
 
