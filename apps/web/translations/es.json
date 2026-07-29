@@ -51,6 +51,7 @@
       }
     },
     "categories": {
+      "account_adjustment": "Ajuste de Cuenta",
       "bonus": "Bonificaciones",
       "card_credits_and_refunds": "Créditos y Reintegros de Tarjeta",
       "card_fees_and_taxes": "Comisiones e Impuestos de Tarjeta",
@@ -889,6 +890,8 @@
       "currency": "Moneda",
       "balance": "Saldo",
       "openingDate": "Fecha de apertura",
+      "lastReconciled": "Última conciliación",
+      "neverReconciled": "Nunca",
       "actions": "Acciones",
       "empty": "No se encontraron cuentas.",
       "emptyTitle": "Agregá tu primera cuenta",
@@ -901,6 +904,7 @@
       "other": "Otra"
     },
     "actions": {
+      "reconcile": "Conciliar",
       "edit": "Editar",
       "delete": "Eliminar",
       "archive": "Archivar",
@@ -956,6 +960,55 @@
       "deleting": "Eliminando...",
       "success": "Cuenta eliminada.",
       "error": "No se pudo eliminar la cuenta."
+    },
+    "reconciliations": {
+      "title": "Conciliaciones",
+      "subtitle": "Ingresá el saldo real que muestra tu banco o billetera y Renly agrega un ajuste para igualarlo.",
+      "reconcileButton": "Conciliar",
+      "loading": "Cargando conciliaciones...",
+      "empty": "Todavía no conciliaste esta cuenta.",
+      "table": {
+        "date": "Fecha",
+        "realBalance": "Saldo real",
+        "computedBalance": "Saldo de Renly",
+        "adjustment": "Ajuste",
+        "actions": "Acciones",
+        "noAdjustment": "Sin ajuste necesario",
+        "addedAsIncome": "Se agregó {amount} como ingreso",
+        "addedAsExpense": "Se agregó {amount} como gasto"
+      },
+      "form": {
+        "title": "Conciliar {name}",
+        "description": "Ingresá el saldo real que muestra la cuenta. Renly agrega un único ajuste en esa fecha para que el saldo quede correcto desde ahí en adelante.",
+        "asOfDate": {
+          "label": "Al día",
+          "placeholder": "Elegí una fecha"
+        },
+        "computedBalance": "Saldo de Renly",
+        "computedBalanceLoading": "Calculando...",
+        "computedBalanceHint": "Lo que suma esta cuenta a esa fecha según lo que cargaste.",
+        "realBalance": {
+          "label": "Saldo real",
+          "placeholder": "0,00"
+        },
+        "difference": "Diferencia",
+        "differenceIncomePreview": "Renly va a agregar {amount} {currency} como ingreso para cerrar la diferencia.",
+        "differenceExpensePreview": "Renly va a agregar {amount} {currency} como gasto para cerrar la diferencia.",
+        "differenceZeroPreview": "Ya coinciden: no se va a agregar nada.",
+        "saveLabel": "Conciliar",
+        "saveLoading": "Conciliando...",
+        "success": "Cuenta conciliada.",
+        "saveError": "No se pudo conciliar la cuenta."
+      },
+      "delete": {
+        "tooltip": "Eliminar conciliación",
+        "title": "Eliminar conciliación",
+        "confirm": "Se elimina la conciliación y el ajuste que creó, así que el saldo vuelve a como estaba antes. Esta acción no se puede deshacer.",
+        "confirmButton": "Eliminar",
+        "deleting": "Eliminando...",
+        "success": "Conciliación eliminada.",
+        "error": "No se pudo eliminar la conciliación."
+      }
     }
   },
   "subscriptions": {
@@ -2467,6 +2520,8 @@
     "account_card_exclusivity": "Un gasto con tarjeta de crédito no puede además pagarse desde una cuenta.",
     "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
+    "account_reconciliation_before_opening": "La fecha de conciliación debe ser igual o posterior a la fecha de apertura de la cuenta ({opening_date}).",
+    "account_reconciliation_future_date": "La fecha de conciliación no puede ser futura.",
     "invalid_credentials": "Los datos que ingresaste son incorrectos.",
     "invalid_auth_token": "Tu sesión no es válida o expiró. Iniciá sesión de nuevo.",
     "email_not_verified": "Verificá tu correo antes de iniciar sesión.",

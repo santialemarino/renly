@@ -51,6 +51,7 @@
       }
     },
     "categories": {
+      "account_adjustment": "Account Adjustment",
       "bonus": "Bonuses",
       "card_credits_and_refunds": "Card Credits & Refunds",
       "card_fees_and_taxes": "Card Fees & Taxes",
@@ -889,6 +890,8 @@
       "currency": "Currency",
       "balance": "Balance",
       "openingDate": "Opening date",
+      "lastReconciled": "Last reconciled",
+      "neverReconciled": "Never",
       "actions": "Actions",
       "empty": "No accounts found.",
       "emptyTitle": "Add your first account",
@@ -901,6 +904,7 @@
       "other": "Other"
     },
     "actions": {
+      "reconcile": "Reconcile",
       "edit": "Edit",
       "delete": "Delete",
       "archive": "Archive",
@@ -956,6 +960,55 @@
       "deleting": "Deleting...",
       "success": "Account deleted.",
       "error": "Failed to delete account."
+    },
+    "reconciliations": {
+      "title": "Reconciliations",
+      "subtitle": "Enter the balance your bank or wallet actually shows and Renly posts one adjustment to match it.",
+      "reconcileButton": "Reconcile",
+      "loading": "Loading reconciliations...",
+      "empty": "This account hasn't been reconciled yet.",
+      "table": {
+        "date": "Date",
+        "realBalance": "Real balance",
+        "computedBalance": "Renly's balance",
+        "adjustment": "Adjustment",
+        "actions": "Actions",
+        "noAdjustment": "No adjustment needed",
+        "addedAsIncome": "Added {amount} as income",
+        "addedAsExpense": "Added {amount} as an expense"
+      },
+      "form": {
+        "title": "Reconcile {name}",
+        "description": "Enter the balance the account actually shows. Renly posts a single adjustment on that date so the balance is right from there on.",
+        "asOfDate": {
+          "label": "As of",
+          "placeholder": "Select a date"
+        },
+        "computedBalance": "Renly's balance",
+        "computedBalanceLoading": "Calculating...",
+        "computedBalanceHint": "What this account adds up to on that date from what you've entered.",
+        "realBalance": {
+          "label": "Real balance",
+          "placeholder": "0.00"
+        },
+        "difference": "Difference",
+        "differenceIncomePreview": "Renly will add {amount} {currency} as income to close the gap.",
+        "differenceExpensePreview": "Renly will add {amount} {currency} as an expense to close the gap.",
+        "differenceZeroPreview": "Already matching — nothing will be added.",
+        "saveLabel": "Reconcile",
+        "saveLoading": "Reconciling...",
+        "success": "Account reconciled.",
+        "saveError": "Failed to reconcile the account."
+      },
+      "delete": {
+        "tooltip": "Delete reconciliation",
+        "title": "Delete reconciliation",
+        "confirm": "This removes the reconciliation and the adjustment it created, so the balance goes back to what it was before. This action cannot be undone.",
+        "confirmButton": "Delete",
+        "deleting": "Deleting...",
+        "success": "Reconciliation deleted.",
+        "error": "Failed to delete the reconciliation."
+      }
     }
   },
   "subscriptions": {
@@ -2467,6 +2520,8 @@
     "account_card_exclusivity": "A credit-card expense can't also be paid from an account.",
     "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
+    "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",
+    "account_reconciliation_future_date": "The reconciliation date can't be in the future.",
     "invalid_credentials": "The credentials you entered are incorrect.",
     "invalid_auth_token": "Your session is invalid or has expired. Please log in again.",
     "email_not_verified": "Please verify your email address before logging in.",

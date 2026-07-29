@@ -1,22 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Archive, ArchiveRestore, Landmark, Pencil, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ChevronRight,
+  Landmark,
+  Pencil,
+  Scale,
+  Trash2,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import { cn } from '@repo/ui/lib';
 import { AccountDeleteDialog } from '@/app/(protected)/accounts/_components/account-delete-dialog';
 import { AccountFormDialog } from '@/app/(protected)/accounts/_components/account-form-dialog';
+import { AccountReconcileDialog } from '@/app/(protected)/accounts/_components/account-reconcile-dialog';
+import { AccountReconciliationsSection } from '@/app/(protected)/accounts/_components/account-reconciliations-section';
 import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/account-actions';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { Account, AccountSortField } from '@/lib/api/accounts';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
+
+const COLUMN_COUNT = 8;
 
 interface AccountsTableProps {
   accounts: Account[];
@@ -33,7 +48,11 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
   );
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [deleteState, setDeleteState] = useState<Account | null>(null);
+  const [reconcileAccount, setReconcileAccount] = useState<Account | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Bumped after a reconciliation lands so an already-open row re-reads its history.
+  const [reloadToken, setReloadToken] = useState(0);
 
   async function handleArchive(account: Account) {
     setArchivingId(account.id);
@@ -67,6 +86,7 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8" />
               <SortableTableHead
                 label={t('table.name')}
                 column="name"
@@ -96,13 +116,14 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
               />
-              <TableHead className="w-28 text-center">{t('table.actions')}</TableHead>
+              <TableHead>{t('table.lastReconciled')}</TableHead>
+              <TableHead className="w-36 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {accounts.length === 0 ? (
               <TableEmptyRow
-                colSpan={6}
+                colSpan={COLUMN_COUNT}
                 firstRun={firstRun}
                 icon={Landmark}
                 title={t('table.emptyTitle')}
@@ -110,61 +131,116 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
                 plain={t('table.empty')}
               />
             ) : (
-              accounts.map((a) => (
-                <TableRow key={a.id} className={!a.isActive ? 'opacity-60' : undefined}>
-                  <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{t(`types.${a.type}`)}</TableCell>
-                  <TableCell className="text-muted-foreground">{a.currency}</TableCell>
-                  <TableCell className="text-right text-paragraph-sm tabular-nums">
-                    {fmt.amount(a.balance, a.currency)}
-                  </TableCell>
-                  <TableCell>{fmt.date(a.openingDate)}</TableCell>
-                  <TableCell className="text-center">
-                    {!a.isActive ? (
-                      <div className="flex items-center justify-center gap-x-1">
-                        <RowActionButton
-                          icon={ArchiveRestore}
-                          tooltip={t('actions.unarchive')}
-                          ariaLabel="Unarchive"
-                          onClick={() => handleUnarchive(a)}
-                          disabled={archivingId === a.id}
+              accounts.map((a) => {
+                const isExpanded = expandedId === a.id;
+                return (
+                  <Fragment key={a.id}>
+                    <TableRow
+                      className={cn('cursor-pointer', !a.isActive && 'opacity-60')}
+                      onClick={() => setExpandedId(isExpanded ? null : a.id)}
+                    >
+                      <TableCell>
+                        <ChevronRight
+                          className={cn(
+                            'size-4 transition-transform duration-200',
+                            isExpanded && 'rotate-90',
+                          )}
                         />
-                        <RowActionButton
-                          icon={Trash2}
-                          tooltip={t('actions.delete')}
-                          ariaLabel="Delete"
-                          variant="destructive"
-                          onClick={() => setDeleteState(a)}
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center gap-x-1">
-                        <RowActionButton
-                          icon={Pencil}
-                          tooltip={t('actions.edit')}
-                          ariaLabel="Edit"
-                          onClick={() => setEditAccount(a)}
-                        />
-                        <RowActionButton
-                          icon={Archive}
-                          tooltip={t('actions.archive')}
-                          ariaLabel="Archive"
-                          variant="muted"
-                          onClick={() => handleArchive(a)}
-                          disabled={archivingId === a.id}
-                        />
-                        <RowActionButton
-                          icon={Trash2}
-                          tooltip={t('actions.delete')}
-                          ariaLabel="Delete"
-                          variant="destructive"
-                          onClick={() => setDeleteState(a)}
-                        />
-                      </div>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
+                      </TableCell>
+                      <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {t(`types.${a.type}`)}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{a.currency}</TableCell>
+                      <TableCell className="text-right text-paragraph-sm tabular-nums">
+                        {fmt.amount(a.balance, a.currency)}
+                      </TableCell>
+                      <TableCell>{fmt.date(a.openingDate)}</TableCell>
+                      <TableCell className="text-paragraph-sm text-muted-foreground">
+                        {a.lastReconciledDate
+                          ? fmt.date(a.lastReconciledDate)
+                          : t('table.neverReconciled')}
+                      </TableCell>
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                        {!a.isActive ? (
+                          <div className="flex items-center justify-center gap-x-1">
+                            <RowActionButton
+                              icon={ArchiveRestore}
+                              tooltip={t('actions.unarchive')}
+                              ariaLabel="Unarchive"
+                              onClick={() => handleUnarchive(a)}
+                              disabled={archivingId === a.id}
+                            />
+                            <RowActionButton
+                              icon={Trash2}
+                              tooltip={t('actions.delete')}
+                              ariaLabel="Delete"
+                              variant="destructive"
+                              onClick={() => setDeleteState(a)}
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-center gap-x-1">
+                            <RowActionButton
+                              icon={Scale}
+                              tooltip={t('actions.reconcile')}
+                              ariaLabel="Reconcile"
+                              onClick={() => setReconcileAccount(a)}
+                            />
+                            <RowActionButton
+                              icon={Pencil}
+                              tooltip={t('actions.edit')}
+                              ariaLabel="Edit"
+                              onClick={() => setEditAccount(a)}
+                            />
+                            <RowActionButton
+                              icon={Archive}
+                              tooltip={t('actions.archive')}
+                              ariaLabel="Archive"
+                              variant="muted"
+                              onClick={() => handleArchive(a)}
+                              disabled={archivingId === a.id}
+                            />
+                            <RowActionButton
+                              icon={Trash2}
+                              tooltip={t('actions.delete')}
+                              ariaLabel="Delete"
+                              variant="destructive"
+                              onClick={() => setDeleteState(a)}
+                            />
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <TableRow>
+                          <TableCell colSpan={COLUMN_COUNT} className="p-0">
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
+                              className="overflow-hidden"
+                            >
+                              <div className="px-8 py-4 bg-muted/30">
+                                <AccountReconciliationsSection
+                                  account={a}
+                                  expanded={isExpanded}
+                                  reloadToken={reloadToken}
+                                  onReconcile={() => setReconcileAccount(a)}
+                                  onChanged={() => router.refresh()}
+                                />
+                              </div>
+                            </motion.div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </AnimatePresence>
+                  </Fragment>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -178,6 +254,18 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
         account={editAccount ?? undefined}
         preferredCurrencies={preferredCurrencies}
         onSuccess={() => router.refresh()}
+      />
+
+      <AccountReconcileDialog
+        open={!!reconcileAccount}
+        onOpenChange={(open) => {
+          if (!open) setReconcileAccount(null);
+        }}
+        account={reconcileAccount}
+        onSuccess={() => {
+          setReloadToken((token) => token + 1);
+          router.refresh();
+        }}
       />
 
       <AccountDeleteDialog
