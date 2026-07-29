@@ -191,6 +191,9 @@ export function AccountFormDialog({
                         {...field}
                         currency={watchedCurrency || undefined}
                         placeholder={t('form.openingBalance.placeholder')}
+                        // An account can be opened already overdrawn, and the API has always
+                        // accepted a negative opening balance.
+                        allowNegative
                       />
                     </FormControl>
                     <FormMessage />

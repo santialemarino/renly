@@ -13,12 +13,14 @@ function Harness({
   currency,
   maxDecimals,
   initialValue = '',
+  allowNegative,
   onValue,
 }: {
   locale?: string;
   currency?: string;
   maxDecimals?: number;
   initialValue?: string;
+  allowNegative?: boolean;
   onValue?: (v: string) => void;
 }) {
   const [value, setValue] = useState(initialValue);
@@ -32,6 +34,7 @@ function Harness({
         }}
         currency={currency}
         maxDecimals={maxDecimals}
+        allowNegative={allowNegative}
         aria-label="amount"
       />
     </NextIntlClientProvider>
@@ -199,6 +202,37 @@ describe('LocaleAmountInput — effects', () => {
     rerender(<Harness locale="en" />);
     // Guard: the display keeps the trailing separator instead of resyncing mid-typing.
     expect(input.value).toBe('1.234,');
+  });
+});
+
+describe('LocaleAmountInput — allowNegative', () => {
+  it('accepts a leading minus and emits a negative canonical value', async () => {
+    const user = userEvent.setup();
+    const onValue = vi.fn();
+    const { container } = render(<Harness locale="es" allowNegative onValue={onValue} />);
+    const input = getInput(container);
+    await user.type(input, '-4500,5');
+    expect(input.value).toBe('-4.500,5');
+    expect(onValue).toHaveBeenLastCalledWith('-4500.5');
+  });
+
+  it('is off by default, so amount fields stay non-negative', async () => {
+    const user = userEvent.setup();
+    const onValue = vi.fn();
+    const { container } = render(<Harness locale="es" onValue={onValue} />);
+    const input = getInput(container);
+    await user.type(input, '-4500');
+    expect(input.value).toBe('4.500');
+    expect(onValue).toHaveBeenLastCalledWith('4500');
+  });
+
+  it('resyncs an externally-set negative value for display', () => {
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={{}} timeZone="UTC">
+        <LocaleAmountInput value="-1234.5" allowNegative aria-label="amount" />
+      </NextIntlClientProvider>,
+    );
+    expect(getInput(container).value).toBe('-1,234.5');
   });
 });
 
