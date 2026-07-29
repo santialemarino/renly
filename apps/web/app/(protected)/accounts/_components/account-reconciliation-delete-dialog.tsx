@@ -31,7 +31,11 @@ export function AccountReconciliationDeleteDialog({
     if (!reconciliation) return;
     setDeleting(true);
     try {
-      await deleteAccountReconciliation(accountId, reconciliation.id);
+      const result = await deleteAccountReconciliation(accountId, reconciliation.id);
+      if (!result.ok) {
+        toast.error(result.error || t('delete.error'));
+        return;
+      }
       toast.success(t('delete.success'));
       onSuccess();
       onOpenChange(false);

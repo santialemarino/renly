@@ -5,11 +5,13 @@ import { getTranslations } from 'next-intl/server';
 import type { AccountFormValues } from '@/app/(protected)/accounts/account-form-schema';
 import type { AccountReconcileFormValues } from '@/app/(protected)/accounts/account-reconcile-form-schema';
 import {
+  mapAccountComputedBalance,
   mapAccountReconciliation,
   type AccountReconciliation,
 } from '@/lib/api/account-reconciliations';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { parseApiError, resolveApiError, type ApiError } from '@/lib/i18n/api-errors';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 
 function toBody(values: AccountFormValues) {
   const { openingBalance, openingDate, notes, ...rest } = values;
@@ -66,12 +68,34 @@ export async function fetchAccountComputedBalance(
     { method: 'GET' },
   );
   if (!res.ok) throw new Error('Failed to fetch computed balance');
-  const raw = await res.json();
-  return raw.balance as string;
+  return mapAccountComputedBalance(await res.json()).balance;
+}
+
+/*
+ * The reconciliation errors carry dates as ISO strings (the API is locale-agnostic by contract), so
+ * format them before interpolation — otherwise the message reads "…up to 2026-07-20" next to a page
+ * that renders every other date as "Jul 20, 2026". Scoped here because these are the only mapped
+ * `apiErrors` codes with a date param; if others gain one, move this into `lib/i18n/api-errors`.
+ */
+async function localizeDateParams(error: ApiError): Promise<ApiError> {
+  const fmt = await getFormatters();
+  const params = Object.fromEntries(
+    Object.entries(error.params).map(([key, value]) =>
+      key.endsWith('_date') && typeof value === 'string' ? [key, fmt.date(value)] : [key, value],
+    ),
+  );
+  return { ...error, params };
+}
+
+// Resolves a failed reconciliation response to a localized message for the dialog / toast.
+async function reconciliationError(res: Response): Promise<string> {
+  const t = await getTranslations('apiErrors');
+  return resolveApiError(t, await localizeDateParams(await parseApiError(res)), '');
 }
 
 // Reconcile an account against its real balance. Returns the localized message on a rejected date
-// (in the future, or before the account opened) so the dialog can surface it inline.
+// (in the future, before the account opened, or older than the account's latest reconciliation) so
+// the dialog can surface it inline.
 export async function reconcileAccount(
   accountId: number,
   values: AccountReconcileFormValues,
@@ -83,20 +107,20 @@ export async function reconcileAccount(
       statement_balance: Number(values.statementBalance),
     },
   });
-  if (!res.ok) {
-    const t = await getTranslations('apiErrors');
-    return { ok: false, error: resolveApiError(t, await parseApiError(res), '') };
-  }
+  if (!res.ok) return { ok: false, error: await reconciliationError(res) };
   return { ok: true };
 }
 
+// Delete a reconciliation. Returns the localized message when the API refuses (only the account's
+// most recent reconciliation may be deleted), so the dialog can report the reason.
 export async function deleteAccountReconciliation(
   accountId: number,
   reconciliationId: number,
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const res = await authenticatedFetch(
     `/accounts/${accountId}/reconciliations/${reconciliationId}`,
     { method: 'DELETE' },
   );
-  if (!res.ok) throw new Error('Failed to delete reconciliation');
+  if (!res.ok) return { ok: false, error: await reconciliationError(res) };
+  return { ok: true };
 }

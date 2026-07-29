@@ -16,8 +16,10 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
+    AccountReconciliationBeforeLastError,
     AccountReconciliationBeforeOpeningError,
     AccountReconciliationFutureDateError,
+    AccountReconciliationNotLatestError,
     NotFoundError,
 )
 from app.models.account import Account
@@ -77,6 +79,13 @@ async def get_latest_reconciled_dates(session: AsyncSession, accounts: list[Acco
     return await account_reconciliation_repository.get_latest_dates_by_account_ids(session, account_ids, user_id)
 
 
+# Latest reconciled date for one account, or None when it has never been reconciled. Reuses the
+# batch query with a single id, the same way compute_account_balance_at reuses the batch sums.
+async def get_latest_reconciled_date(session: AsyncSession, account_id: int, user_id: int) -> date_type | None:
+    latest = await account_reconciliation_repository.get_latest_dates_by_account_ids(session, [account_id], user_id)
+    return latest.get(account_id)
+
+
 # List an account's reconciliations, newest first (verifies account ownership).
 async def list_reconciliations(session: AsyncSession, account_id: int, user: User) -> list[AccountReconciliation]:
     await account_service.get_account(session, account_id, user)
@@ -101,11 +110,17 @@ async def get_reconciliation(
 #   1. Compute the derived balance at as_of_date.
 #   2. Compute the difference; write the reconciliation row.
 #   3. Create the matching adjustment entry (dated on as_of_date, linked to the account so it enters
-#      the running balance, tagged source='reconciliation' and category account_adjustment so it stays
-#      out of real spending analytics) when the difference is non-zero, and patch the back-pointer.
+#      the running balance, tagged source='reconciliation' and category account_adjustment so true-ups
+#      are identifiable and separable from real spending) when the difference is non-zero, and patch
+#      the back-pointer. NOTE: the category labels the row, it does not exclude it — adjustments still
+#      count toward income/expense totals and the category breakdown, exactly like the card
+#      reconciliation categories. That is deliberate: money the reconciliation accounts for really did
+#      move, it just was not itemised.
 # Unlike card reconciliation there is no replace step: a later reconciliation of the same account
 # simply appends. Re-running the same date is self-correcting — the earlier adjustment is already in
-# the computed balance, so the new difference is zero and no second adjustment is posted.
+# the computed balance, so the new difference is zero and no second adjustment is posted. That only
+# holds forward, which is why an out-of-order (older) date is rejected: its adjustment would land
+# underneath the newer reconciliation, whose date bound cannot see it, skewing the newer balance.
 async def create_reconciliation(
     session: AsyncSession,
     account_id: int,
@@ -120,6 +135,9 @@ async def create_reconciliation(
         raise AccountReconciliationFutureDateError()
     if as_of_date < account.opening_date:
         raise AccountReconciliationBeforeOpeningError(account.opening_date)
+    last_reconciled = await get_latest_reconciled_date(session, account_id, user.id)
+    if last_reconciled is not None and as_of_date < last_reconciled:
+        raise AccountReconciliationBeforeLastError(last_reconciled)
 
     computed = await compute_account_balance_at(session, account, as_of_date)
     difference = compute_reconciliation_difference(statement_balance, computed)
@@ -172,7 +190,9 @@ async def create_reconciliation(
 
 # Delete a reconciliation. Its adjustment entry is cascade-dropped via
 # expense_entries / income_entries.account_reconciliation_id, so the balance returns to what it was
-# before the true-up — the escape hatch for a mistyped balance.
+# before the true-up — the escape hatch for a mistyped balance. Only the account's most recent
+# reconciliation can be deleted: an older one's adjustment is already inside every later
+# reconciliation's recorded computed_balance, so removing it would silently skew those.
 async def delete_reconciliation(
     session: AsyncSession,
     account_id: int,
@@ -180,5 +200,8 @@ async def delete_reconciliation(
     user: User,
 ) -> None:
     reconciliation = await get_reconciliation(session, account_id, reconciliation_id, user)
+    last_reconciled = await get_latest_reconciled_date(session, account_id, user.id)
+    if last_reconciled is not None and reconciliation.as_of_date < last_reconciled:
+        raise AccountReconciliationNotLatestError(last_reconciled)
     await account_reconciliation_repository.delete(session, reconciliation)
     await session.commit()

@@ -1002,6 +1002,7 @@
       },
       "delete": {
         "tooltip": "Eliminar conciliación",
+        "notLatestTooltip": "Solo se puede eliminar la conciliación más reciente — las posteriores se apoyan en esta.",
         "title": "Eliminar conciliación",
         "confirm": "Se elimina la conciliación y el ajuste que creó, así que el saldo vuelve a como estaba antes. Esta acción no se puede deshacer.",
         "confirmButton": "Eliminar",
@@ -2123,7 +2124,8 @@
         "api_keys": "Claves API",
         "user_settings": "Configuración",
         "card_settlements": "Pagos de tarjeta",
-        "card_reconciliations": "Conciliaciones de tarjeta"
+        "card_reconciliations": "Conciliaciones de tarjeta",
+        "account_reconciliations": "Conciliaciones de cuenta"
       },
       "notRestored": "No restaurado por esta herramienta: {entities}.",
       "back": "Elegir otro archivo",
@@ -2520,8 +2522,10 @@
     "account_card_exclusivity": "Un gasto con tarjeta de crédito no puede además pagarse desde una cuenta.",
     "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
+    "account_reconciliation_before_last": "Esta cuenta ya está conciliada hasta el {last_reconciled_date}. Elegí esa fecha o una posterior, o eliminá primero la conciliación posterior.",
     "account_reconciliation_before_opening": "La fecha de conciliación debe ser igual o posterior a la fecha de apertura de la cuenta ({opening_date}).",
     "account_reconciliation_future_date": "La fecha de conciliación no puede ser futura.",
+    "account_reconciliation_not_latest": "Eliminá primero la conciliación del {last_reconciled_date} — las conciliaciones posteriores se apoyan en esta.",
     "invalid_credentials": "Los datos que ingresaste son incorrectos.",
     "invalid_auth_token": "Tu sesión no es válida o expiró. Iniciá sesión de nuevo.",
     "email_not_verified": "Verificá tu correo antes de iniciar sesión.",
