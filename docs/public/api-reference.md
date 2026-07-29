@@ -335,7 +335,30 @@ Cash / bank / wallet accounts — the asset side of net worth (the mirror of cre
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
 
-**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked).
+**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
+
+### Account reconciliation
+
+Linking every movement to an account is optional, so a derived balance drifts from the real one. Reconciliation is how you snap it back: enter the balance the account **actually** shows on a date, and Renly records that figure and posts a **single adjustment entry** on that date for the difference — no back-filling history required.
+
+The adjustment is an income when the account really holds more than Renly computed, an expense when it holds less, and nothing at all when the two already agree. It is dated on `as_of_date`, linked to the account (so it enters the running balance from there forward), and categorised `account_adjustment` so true-ups stay out of your real spending breakdowns. This is also the general catch-all for bank fees, interest, FX spread, and taxes — anything that moved the real balance without a matching entry lands in the difference, with no per-fee bookkeeping.
+
+Reconciling is repeatable: a later reconciliation simply appends, and the most recent one wins. Re-running the same date is self-correcting — the earlier adjustment is already part of the computed balance, so the difference comes out zero and nothing new is posted.
+
+| Method   | Path                                   | Description                                                              |
+| -------- | -------------------------------------- | ------------------------------------------------------------------------ |
+| `GET`    | `/accounts/{id}/computed-balance`      | The account's derived balance at a date (drives the difference preview). |
+| `GET`    | `/accounts/{id}/reconciliations`       | List an account's reconciliations, newest first.                         |
+| `POST`   | `/accounts/{id}/reconciliations`       | Reconcile the account against its real balance.                          |
+| `DELETE` | `/accounts/{id}/reconciliations/{rid}` | Delete a reconciliation (also removes the adjustment it created).        |
+
+**Computed-balance query parameters:** `as_of_date` (required) — the date to compute at.
+
+**Reconciliation request fields:** `as_of_date` (the date the real balance was read — today or earlier, and not before the account's `opening_date`; both rejected with 400) and `statement_balance` (Decimal; may be negative for an overdraft).
+
+**Reconciliation fields:** `as_of_date`, `statement_balance`, `computed_balance` (what Renly derived at that date, recorded at the time), `difference` (`statement_balance - computed_balance`), `adjustment_expense_id` / `adjustment_income_id` (whichever entry was created, if any), `reconciled_at`.
+
+Deleting a reconciliation cascades to its adjustment entry, so the balance returns to what it was before the true-up — the escape hatch for a mistyped figure.
 
 ---
 
@@ -485,17 +508,17 @@ Aggregated endpoints combining investment portfolio and finance data for the hom
 
 **Query parameters (composition + liquidity):** `currency` only (no date filtering — shows current snapshot).
 
-**Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses).
+**Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses). `net_worth_change` covers investments, cash, and card debt together; `investment_month_change` stays investment-only.
 
-**Evolution response:** `points[]` with `date`, `investment_value`, `card_balance`, `net_worth` per month.
+**Evolution response:** `points[]` with `date`, `investment_value`, `cash_balance`, `card_balance`, `net_worth` per month. The series runs through the current calendar month, forward-filling investments, so cash and card activity newer than your latest investment snapshot still shows.
 
-**Composition response:** `items[]` with `label` (category name or "liabilities"), `value`, `percentage`. Plus `total_assets`, `total_liabilities`.
+**Composition response:** `items[]` with `label` (category name, "cash", or "liabilities"), `value`, `percentage`. Plus `total_assets`, `total_liabilities`. A net-negative cash total is left out of the asset breakdown (the same treatment as a card in net credit).
 
 **Liquidity response:** `ratio` (null when income is zero or history too short), `state` (`healthy` / `caution` / `at_risk` / `unknown`), `fixed_monthly_commitments`, `monthly_income`, `threshold` (integer percent), `income_window_days` (target = 90), `actual_window_days` (smaller during early app life), `currency`, `skipped_entities` (defensive diagnostic listing any commitment whose currency couldn't be converted — always empty in practice today). Commitments amortise subscriptions / installments / recurring obligations to a monthly base, plus any credit card with `monthly_payment` set (revolving-debt users); income is the user's last 90 days (or actual elapsed days, minimum 7) normalised to 30. Configure the threshold via `liquidity_threshold_pct` on settings.
 
 **Classification bands:** `healthy` when `ratio × 100 < threshold`; `caution` when `threshold ≤ ratio × 100 < threshold + 10`; `at_risk` when `ratio × 100 ≥ threshold + 10`; `unknown` when income is zero or the user has fewer than 7 days of income history. The +10pp caution band is hardcoded.
 
-**Net worth formula:** `investment_total - credit_card_balance`. Cash accounts deferred — net worth currently excludes liquid cash.
+**Net worth formula:** `investment_total + cash_total - credit_card_balance`. Cash comes from your accounts (see [Accounts](#accounts)); each account balance is converted to the display currency at today's rate for current figures and at each month-end for the historical series.
 
 ---
 
