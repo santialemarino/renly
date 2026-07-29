@@ -19,6 +19,12 @@ interface AccountReconciliationRaw {
   updated_at: string;
 }
 
+interface AccountComputedBalanceRaw {
+  account_id: number;
+  as_of_date: string;
+  balance: string;
+}
+
 // --- Frontend types (camelCase) ---
 
 export interface AccountReconciliation {
@@ -35,7 +41,21 @@ export interface AccountReconciliation {
   updatedAt: string;
 }
 
+export interface AccountComputedBalance {
+  accountId: number;
+  asOfDate: string;
+  balance: string;
+}
+
 // --- Mappers ---
+
+export function mapAccountComputedBalance(raw: AccountComputedBalanceRaw): AccountComputedBalance {
+  return {
+    accountId: raw.account_id,
+    asOfDate: raw.as_of_date,
+    balance: raw.balance,
+  };
+}
 
 export function mapAccountReconciliation(raw: AccountReconciliationRaw): AccountReconciliation {
   return {

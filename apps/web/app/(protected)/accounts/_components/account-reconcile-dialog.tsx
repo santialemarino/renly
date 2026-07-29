@@ -29,27 +29,23 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
 import type { Account } from '@/lib/api/accounts';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { todayInTimezone } from '@/lib/utils/dates';
 
 interface AccountReconcileDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account: Account | null;
+  // The user's settings timezone — the same zone the API's future-date guard resolves "today" in, so
+  // the pre-filled default can never be a date the API rejects.
+  timeZone?: string;
   onSuccess: () => void;
-}
-
-// Today in the user's own calendar, as the YYYY-MM-DD the date input and the API both expect.
-// Built from local parts (not toISOString, which shifts a negative-UTC-offset user to yesterday).
-function todayIsoDate(): string {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
 }
 
 export function AccountReconcileDialog({
   open,
   onOpenChange,
   account,
+  timeZone,
   onSuccess,
 }: AccountReconcileDialogProps) {
   const fmt = useFormatters();
@@ -74,13 +70,38 @@ export function AccountReconcileDialog({
   const asOfDate = useWatch({ control: form.control, name: 'asOfDate' });
   const statementBalanceRaw = useWatch({ control: form.control, name: 'statementBalance' });
 
-  // Re-seed on open: the date defaults to today, which is the overwhelmingly common case.
+  const today = todayInTimezone(timeZone);
+  /*
+   * The picker offers exactly the range the API accepts, so a rejected date is unreachable rather
+   * than reported after the fact: not in the future, not before the account opened, and not before
+   * its latest reconciliation (an older one would post underneath the newer, skewing it). ISO
+   * date strings compare lexicographically, so `>` is a real date comparison here.
+   */
+  const earliestDate =
+    account?.lastReconciledDate && account.lastReconciledDate > account.openingDate
+      ? account.lastReconciledDate
+      : account?.openingDate;
+
+  /*
+   * Re-seed on open: the date defaults to today, which is the overwhelmingly common case. The
+   * previously-loaded balance is cleared too — without that, reopening for a different account
+   * would render the previous account's balance until the refetch resolves.
+   */
   useEffect(() => {
     if (open) {
-      form.reset({ asOfDate: todayIsoDate(), statementBalance: '' });
+      form.reset({ asOfDate: today, statementBalance: '' });
+      setComputedBalance(null);
       setSubmitError(null);
     }
+    // `today` is intentionally not a dep: it changes identity on every render but only matters at open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, form]);
+
+  // Drop a server-side date rejection as soon as either field moves, so it can't linger against a
+  // value the user has already corrected.
+  useEffect(() => {
+    setSubmitError(null);
+  }, [asOfDate, statementBalanceRaw]);
 
   // The balance being trued up depends on the chosen date, so re-read it whenever that date moves.
   useEffect(() => {
@@ -160,6 +181,8 @@ export function AccountReconcileDialog({
                       value={field.value || undefined}
                       onChange={field.onChange}
                       placeholder={t('form.asOfDate.placeholder')}
+                      minDate={earliestDate}
+                      maxDate={today}
                     />
                   </FormControl>
                   <FormMessage />
@@ -197,6 +220,9 @@ export function AccountReconcileDialog({
                       {...field}
                       currency={account.currency}
                       placeholder={t('form.realBalance.placeholder')}
+                      // A statement balance is a signed figure, not an amount — an overdrawn
+                      // account really does read negative.
+                      allowNegative
                     />
                   </FormControl>
                   <FormMessage />
