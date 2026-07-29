@@ -12,6 +12,7 @@ from app.models.utils import utcnow
 
 # Expense category (food, transport, entertainment, etc.).
 class ExpenseCategory(StrEnum):
+    account_adjustment = "account_adjustment"
     card_fees_and_taxes = "card_fees_and_taxes"
     clothing = "clothing"
     dining = "dining"
@@ -70,7 +71,12 @@ class ExpenseEntry(SQLModel, table=True):
     reconciliation_id: int | None = Field(
         default=None,
         foreign_key="card_reconciliations.id",
-        description="Owning reconciliation when this row is the adjustment expense from the reconciliation flow.",
+        description="Owning card reconciliation when this row is the adjustment expense from the card reconciliation flow.",
+    )
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        foreign_key="account_reconciliations.id",
+        description="Owning account reconciliation when this row is the adjustment expense from the account reconciliation flow.",
     )
     payment_obligation_id: int | None = Field(
         default=None,

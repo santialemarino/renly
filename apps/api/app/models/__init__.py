@@ -1,6 +1,7 @@
 # Data models.
 
 from app.models.account import Account, AccountType
+from app.models.account_reconciliation import AccountReconciliation
 from app.models.api_key import ApiKey
 from app.models.asset_price import AssetPrice
 from app.models.auth_token import AuthToken, AuthTokenType
@@ -26,6 +27,7 @@ from app.models.user_settings import UserSettings
 
 __all__ = [
     "Account",
+    "AccountReconciliation",
     "AccountType",
     "ApiKey",
     "AssetPrice",

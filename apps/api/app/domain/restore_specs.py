@@ -11,10 +11,14 @@
 #     with the target's existing rows on a unique constraint (snapshots' UNIQUE(investment_id, date), the
 #     group-members composite PK). Restore is therefore additive but NOT idempotent: re-restoring the same
 #     file adds everything again, so restore into a fresh account (see docs/public/api-reference.md).
-#   - The circular reconciliation/settlement cluster (card_reconciliations ↔ expense/income) and
-#     preference/secret rows are out of scope; see SKIPPED_ENTITIES. Expense/income reconciliation and
-#     scheduler links are nulled so restored rows are plain historical entries with no dangling FK and
-#     no risk of tripping the scheduler's partial-unique (subscription_id, date)/(installment_id, date).
+#   - The circular reconciliation/settlement cluster (card_reconciliations and account_reconciliations,
+#     both ↔ expense/income) and preference/secret rows are out of scope; see SKIPPED_ENTITIES.
+#     Expense/income reconciliation and scheduler links are nulled so restored rows are plain historical
+#     entries with no dangling FK and no risk of tripping the scheduler's partial-unique
+#     (subscription_id, date)/(installment_id, date).
+#   - account_id is nulled for the same reason: accounts are not part of the export, so an exported
+#     account_id points at a row the target does not have. Restored entries are unattributed, matching
+#     how imported history behaves; the account's balance is then trued up by reconciling it.
 
 from dataclasses import dataclass
 
@@ -33,8 +37,9 @@ from app.models.transaction import Transaction
 
 # Exported sections the restore flow deliberately does not write, reported to the user for transparency.
 # api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
-# overwriting the target's settings); card_settlements/card_reconciliations are the circular-FK cluster.
-SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations")
+# overwriting the target's settings); card_settlements and the two reconciliation tables are the
+# circular-FK cluster.
+SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations")
 
 
 # A foreign key on the model that points at another restored entity and must be remapped to the new id.
@@ -97,11 +102,11 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         "expense_entries",
         ExpenseEntry,
         fks=(FkRef("credit_card_id", "credit_cards", False), FkRef("payment_obligation_id", "payment_obligations", False)),
-        null_fields=("subscription_id", "installment_id", "reconciliation_id"),
+        null_fields=("subscription_id", "installment_id", "reconciliation_id", "account_reconciliation_id", "account_id"),
     ),
     RestoreSpec(
         "income_entries",
         IncomeEntry,
-        null_fields=("reconciliation_id",),
+        null_fields=("reconciliation_id", "account_reconciliation_id", "account_id"),
     ),
 )

@@ -11,6 +11,8 @@
 # `self.message`, then calls `super().__init__(self.message)`; errors carrying structured data
 # override the `extra` property.
 
+from datetime import date as date_type
+
 
 # Base for every service-raised error. Subclasses set `code` + `status_code` and assign `self.message`.
 class DomainError(Exception):
@@ -62,6 +64,33 @@ class AccountCurrencyMismatchError(DomainError):
     @property
     def extra(self) -> dict:
         return {"entry_currency": self.entry_currency, "account_currency": self.account_currency}
+
+
+# An account reconciliation is dated before the account's opening_date — the account did not exist
+# yet, so there is no balance to true up against. Mapped to 400.
+class AccountReconciliationBeforeOpeningError(DomainError):
+    code = "account_reconciliation_before_opening"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"Reconciliation date must be on or after the account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# An account reconciliation is dated in the future. A reconciliation records a balance the user has
+# actually read, which can only be today or earlier. Mapped to 400.
+class AccountReconciliationFutureDateError(DomainError):
+    code = "account_reconciliation_future_date"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Reconciliation date cannot be in the future."
+        super().__init__(self.message)
 
 
 # Investment currency cannot be changed because snapshots exist. Mapped to 409 by the API.

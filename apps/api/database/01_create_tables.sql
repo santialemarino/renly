@@ -63,6 +63,7 @@ CREATE TYPE expense_category AS ENUM (
   'kids',
   'pets',
   'card_fees_and_taxes',
+  'account_adjustment',
   'other'
 );
 
@@ -77,6 +78,7 @@ CREATE TYPE income_category AS ENUM (
   'refunds',
   'gifts',
   'card_credits_and_refunds',
+  'account_adjustment',
   'other'
 );
 
@@ -314,29 +316,34 @@ CREATE INDEX idx_accounts_user_active ON accounts(user_id, is_active);
 
 -- Income entries (daily income tracking).
 -- source tracks origin: 'manual', 'shortcut', 'auto', 'reconciliation'.
--- reconciliation_id links the adjustment income created by the reconciliation flow (Phase 3, Step 5).
--- FK constraint is added via ALTER TABLE after card_reconciliations exists (circular dependency).
+-- reconciliation_id links the adjustment income created by the card reconciliation flow (Phase 3, Step 5).
+-- account_reconciliation_id is its cash/bank sibling (Bucket 3 #1, PR 4) — the adjustment income created
+--   when an account's real balance is above what Renly computed.
+-- Both FK constraints are added via ALTER TABLE after their reconciliation tables exist (circular dependency).
 CREATE TABLE income_entries (
-  id                BIGSERIAL PRIMARY KEY,
-  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date              DATE NOT NULL,
-  amount            NUMERIC(18, 2) NOT NULL,
-  currency          VARCHAR(3) NOT NULL,
-  category          income_category,
-  notes             TEXT,
-  source            VARCHAR(20) NOT NULL DEFAULT 'manual',
-  reconciliation_id BIGINT,
+  id                        BIGSERIAL PRIMARY KEY,
+  user_id                   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date                      DATE NOT NULL,
+  amount                    NUMERIC(18, 2) NOT NULL,
+  currency                  VARCHAR(3) NOT NULL,
+  category                  income_category,
+  notes                     TEXT,
+  source                    VARCHAR(20) NOT NULL DEFAULT 'manual',
+  reconciliation_id         BIGINT,
+  account_reconciliation_id BIGINT,
   -- Optional cash/bank account this income was deposited to (Bucket 3 #1, PR 2).
   -- ON DELETE SET NULL: deleting an account un-attributes the entry, preserving its history.
-  account_id        BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  account_id                BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_income_entries_user_id ON income_entries(user_id);
 CREATE INDEX idx_income_entries_user_date ON income_entries(user_id, date DESC);
 CREATE INDEX idx_income_entries_reconciliation_id
   ON income_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
+CREATE INDEX idx_income_entries_account_reconciliation_id
+  ON income_entries(account_reconciliation_id) WHERE account_reconciliation_id IS NOT NULL;
 CREATE INDEX idx_income_entries_account_id
   ON income_entries(account_id) WHERE account_id IS NOT NULL;
 
@@ -420,8 +427,10 @@ CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
 -- source tracks origin: 'manual', 'shortcut', 'auto', 'email_parsed', 'subscription', 'installment', 'reconciliation'.
 -- subscription_id / installment_id link auto-generated entries to their source plan (Phase 3, Step 3 scheduler).
 -- Both FKs use ON DELETE SET NULL so deleting a plan keeps historical expenses.
--- reconciliation_id links the adjustment expense created by the reconciliation flow (Phase 3, Step 5).
--- FK constraint on reconciliation_id is added via ALTER TABLE after card_reconciliations exists (circular dependency).
+-- reconciliation_id links the adjustment expense created by the card reconciliation flow (Phase 3, Step 5).
+-- account_reconciliation_id is its cash/bank sibling (Bucket 3 #1, PR 4) — the adjustment expense created
+--   when an account's real balance is below what Renly computed.
+-- Both FK constraints are added via ALTER TABLE after their reconciliation tables exist (circular dependency).
 -- payment_obligation_id back-points to the payment_obligations row this expense was created to pay (Phase 3, Step E).
 -- FK constraint on payment_obligation_id is added via ALTER TABLE after payment_obligations exists (declaration-order dependency).
 -- Defined after subscriptions and installments because of these FK references.
@@ -442,6 +451,7 @@ CREATE TABLE expense_entries (
   subscription_id        BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
   installment_id         BIGINT REFERENCES installments(id) ON DELETE SET NULL,
   reconciliation_id      BIGINT,
+  account_reconciliation_id BIGINT,
   payment_obligation_id  BIGINT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -454,6 +464,8 @@ CREATE INDEX idx_expense_entries_account_id
   ON expense_entries(account_id) WHERE account_id IS NOT NULL;
 CREATE INDEX idx_expense_entries_reconciliation_id
   ON expense_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
+CREATE INDEX idx_expense_entries_account_reconciliation_id
+  ON expense_entries(account_reconciliation_id) WHERE account_reconciliation_id IS NOT NULL;
 CREATE INDEX idx_expense_entries_payment_obligation_id
   ON expense_entries(payment_obligation_id) WHERE payment_obligation_id IS NOT NULL;
 
@@ -510,6 +522,47 @@ ALTER TABLE expense_entries
 ALTER TABLE income_entries
   ADD CONSTRAINT income_entries_reconciliation_fkey
   FOREIGN KEY (reconciliation_id) REFERENCES card_reconciliations(id) ON DELETE CASCADE;
+
+-- Point-in-time account true-up against the real balance (Bucket 3 #1, PR 4 — Option F, simplified).
+-- The cash/bank sibling of card_reconciliations, and deliberately simpler: an account is
+-- single-currency and its balance is a point-in-time figure, so there is no statement PERIOD and no
+-- currency bucket — just a balance as of a date. There is also no is_stale flag: re-reconciling
+-- simply appends a newer row (a later true-up supersedes an earlier one by date), so no UNIQUE
+-- constraint and no delete-and-replace.
+-- difference = statement_balance - computed_balance. Positive means the account really holds more
+--   than Renly knew, so the adjustment is an INCOME; negative creates an expense; zero creates nothing.
+-- adjustment_expense_id / adjustment_income_id back-reference the adjustment row (SET NULL so deleting
+--   the adjustment through the normal entry flow leaves the reconciliation record intact); the matching
+--   expense_entries / income_entries.account_reconciliation_id closes the loop with ON DELETE CASCADE, so
+--   deleting a reconciliation always removes the adjustment it created.
+CREATE TABLE account_reconciliations (
+  id                    BIGSERIAL PRIMARY KEY,
+  user_id               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_id            BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  as_of_date            DATE NOT NULL,
+  statement_balance     NUMERIC(18, 2) NOT NULL,
+  computed_balance      NUMERIC(18, 2) NOT NULL,
+  difference            NUMERIC(18, 2) NOT NULL,
+  adjustment_expense_id BIGINT REFERENCES expense_entries(id) ON DELETE SET NULL,
+  adjustment_income_id  BIGINT REFERENCES income_entries(id) ON DELETE SET NULL,
+  reconciled_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_account_reconciliations_user_id ON account_reconciliations(user_id);
+CREATE INDEX idx_account_reconciliations_account_date
+  ON account_reconciliations(account_id, as_of_date DESC);
+
+-- Forward FKs from expense_entries / income_entries to account_reconciliations, mirroring the
+-- card_reconciliations pair above. Declared via ALTER TABLE for the same circular-dependency reason.
+ALTER TABLE expense_entries
+  ADD CONSTRAINT expense_entries_account_reconciliation_fkey
+  FOREIGN KEY (account_reconciliation_id) REFERENCES account_reconciliations(id) ON DELETE CASCADE;
+
+ALTER TABLE income_entries
+  ADD CONSTRAINT income_entries_account_reconciliation_fkey
+  FOREIGN KEY (account_reconciliation_id) REFERENCES account_reconciliations(id) ON DELETE CASCADE;
 
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
@@ -739,6 +792,10 @@ CREATE TRIGGER trg_card_reconciliations_updated_at
   BEFORE UPDATE ON card_reconciliations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_account_reconciliations_updated_at
+  BEFORE UPDATE ON account_reconciliations
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (SEC-15) — database-enforced per-user isolation
 --
@@ -834,6 +891,10 @@ CREATE POLICY expense_entries_user_isolation ON expense_entries
 
 ALTER TABLE card_reconciliations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY card_reconciliations_user_isolation ON card_reconciliations
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY account_reconciliations_user_isolation ON account_reconciliations
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE payment_obligations ENABLE ROW LEVEL SECURITY;

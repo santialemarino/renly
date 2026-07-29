@@ -1,3 +1,4 @@
+from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -40,14 +41,22 @@ async def delete(session: AsyncSession, settlement: CardSettlement) -> None:
 
 # Sum of settlements drawn from each account, grouped by account_id. Returns {account_id: total}.
 # Every linked settlement is in the account's currency (enforced at link time), so no currency split.
-async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+# as_of_date bounds the sum to rows dated on or before it (used by reconciliation's point-in-time balance).
+async def sum_by_account_ids(
+    session: AsyncSession,
+    account_ids: list[int],
+    user_id: int,
+    *,
+    as_of_date: date_type | None = None,
+) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    result = await session.execute(
-        select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0))
-        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id)
-        .group_by(CardSettlement.account_id)
+    stmt = select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0)).where(
+        CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id
     )
+    if as_of_date is not None:
+        stmt = stmt.where(CardSettlement.date <= as_of_date)
+    result = await session.execute(stmt.group_by(CardSettlement.account_id))
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
