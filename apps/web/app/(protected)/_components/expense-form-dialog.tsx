@@ -41,6 +41,7 @@ import {
   MAX_CYCLES_TO_ADVANCE,
   type ExpenseFormValues,
 } from '@/app/(protected)/expenses/expenses-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
@@ -48,6 +49,7 @@ import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
 import { StyledHint } from '@/components/styled-hint';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
 import type { Installment } from '@/lib/api/installments';
@@ -81,6 +83,7 @@ interface ExpenseFormDialogProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -164,6 +167,7 @@ export function ExpenseFormDialog({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -193,6 +197,7 @@ export function ExpenseFormDialog({
       notes: '',
       paymentMethod: undefined,
       creditCardId: undefined,
+      accountId: undefined,
       paymentObligationId: undefined,
       subscriptionId: undefined,
       installmentId: undefined,
@@ -295,6 +300,7 @@ export function ExpenseFormDialog({
           notes: expense.notes ?? '',
           paymentMethod: (expense.paymentMethod ?? undefined) as ExpenseFormValues['paymentMethod'],
           creditCardId: expense.creditCardId ?? undefined,
+          accountId: expense.accountId ?? undefined,
           paymentObligationId: expense.paymentObligationId ?? undefined,
           subscriptionId: expense.subscriptionId ?? undefined,
           installmentId: expense.installmentId ?? undefined,
@@ -309,6 +315,7 @@ export function ExpenseFormDialog({
           notes: '',
           paymentMethod: prefillFromObligation.paymentMethod,
           creditCardId: prefillFromObligation.creditCardId,
+          accountId: undefined,
           paymentObligationId: prefillFromObligation.paymentObligationId,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -323,6 +330,7 @@ export function ExpenseFormDialog({
           notes: '',
           paymentMethod: undefined,
           creditCardId: undefined,
+          accountId: undefined,
           paymentObligationId: undefined,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -675,6 +683,16 @@ export function ExpenseFormDialog({
                 creditCards={creditCards}
                 preferredCurrencies={preferredCurrencies}
               />
+
+              {accounts && accounts.length > 0 && watchedPaymentMethod !== 'credit_card' && (
+                <AccountField
+                  control={form.control}
+                  setValue={form.setValue}
+                  accounts={accounts}
+                  currency={watchedCurrency || undefined}
+                  label={t('form.account.label')}
+                />
+              )}
 
               {showLinkedObligation && activeObligations && (
                 <FormField

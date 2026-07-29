@@ -13,6 +13,7 @@ import { ExpenseCategorySelect } from '@/app/(protected)/expenses/_components/ex
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
@@ -24,6 +25,7 @@ export function ExpensesToolbar({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -31,6 +33,7 @@ export function ExpensesToolbar({
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -82,6 +85,7 @@ export function ExpensesToolbar({
       }
     >
       <ExpenseFormDialog
+        accounts={accounts}
         open={createOpen}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}

@@ -8,15 +8,18 @@ import { IncomeCategorySelect } from '@/app/(protected)/income/_components/incom
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 export function IncomeToolbar({
   preferredCurrencies,
   supportedCurrencies,
+  accounts,
 }: {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
+  accounts?: Account[];
 }) {
   const t = useTranslations('income');
   const router = useRouter();
@@ -52,6 +55,7 @@ export function IncomeToolbar({
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>

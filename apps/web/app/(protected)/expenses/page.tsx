@@ -6,6 +6,7 @@ import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expens
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getExpenses } from '@/lib/api/expenses';
 import { getInstallments } from '@/lib/api/installments';
@@ -40,11 +41,13 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies] = await Promise.all([
+  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
     getPageSettings(),
     // Entry forms restrict their currency picker to the convertible set; on a fetch error the
     // picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
+    // Active accounts for the optional "paid from" link on non-card expenses (empty on error → field hidden).
+    getAccounts().catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -117,6 +120,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
@@ -129,6 +133,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
           preferredCurrencies={preferredCurrencies}
           supportedCurrencies={supportedCurrencies}
           creditCards={creditCards}
+          accounts={accounts}
           activeObligations={activeObligations}
           activeSubscriptions={activeSubscriptions}
           activeInstallments={activeInstallments}

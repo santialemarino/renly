@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
+from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase, validate_supported_currency
 
@@ -20,6 +20,9 @@ class ExpenseCreate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+    account_id: int | None = Field(
+        default=None, description="Cash/bank account this expense was paid from (optional; not allowed for credit_card expenses)."
+    )
     source: str = Field(default="manual", description="Entry origin (manual, shortcut, auto, email_parsed).", max_length=20)
     payment_obligation_id: int | None = Field(
         default=None,
@@ -72,6 +75,7 @@ class ExpenseCreate(RequestBase):
     @model_validator(mode="after")
     def validate_payment_pairing(self) -> "ExpenseCreate":
         ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        ensure_account_pairing(self.payment_method, self.account_id)
         return self
 
 
@@ -89,6 +93,10 @@ class ExpenseUpdate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    account_id: int | None = Field(
+        default=None,
+        description="Cash/bank account id. Omit to leave unchanged; send null to clear. Not allowed for credit_card expenses.",
+    )
     payment_obligation_id: int | None = Field(
         default=None,
         description="Linked payment obligation id. Omit to leave unchanged; send null to clear (Phase 3, follow-up Item 10).",
@@ -130,6 +138,8 @@ class ExpenseUpdate(RequestBase):
         provided = self.model_fields_set
         if "payment_method" in provided and "credit_card_id" in provided:
             ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        if "payment_method" in provided and "account_id" in provided:
+            ensure_account_pairing(self.payment_method, self.account_id)
         return self
 
 
@@ -173,6 +183,7 @@ class ExpenseResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     payment_method: str | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    account_id: int | None = Field(default=None, description="Cash/bank account this expense was paid from.")
     source: str = Field(description="Entry origin (manual, shortcut, auto, email_parsed).")
     payment_obligation_id: int | None = Field(default=None, description="Linked payment obligation id (Phase 3, Step E).")
     subscription_id: int | None = Field(default=None, description="Linked subscription id (Phase 3, follow-up 3a).")

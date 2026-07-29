@@ -193,6 +193,11 @@
       "label": "Exportar",
       "loading": "Preparando…",
       "success": "Tu exportación de datos fue descargada."
+    },
+    "accountField": {
+      "placeholder": "Seleccioná una cuenta",
+      "none": "Ninguna",
+      "noneForCurrency": "Sin cuentas en {currency}"
     }
   },
   "login": {
@@ -533,7 +538,10 @@
       },
       "createSuccess": "Ingreso creado.",
       "updateSuccess": "Ingreso actualizado.",
-      "saveError": "No se pudo guardar el ingreso."
+      "saveError": "No se pudo guardar el ingreso.",
+      "account": {
+        "label": "Depositado en"
+      }
     },
     "delete": {
       "title": "Eliminar ingreso",
@@ -670,6 +678,9 @@
         "subscription": "Próximo cobro de {planName} retrocedió a {newCursor}.",
         "installment": "{planName}: {paidCount} de {totalCount} cuotas pagadas.",
         "installmentReactivated": "{planName} reactivada."
+      },
+      "account": {
+        "label": "Pagado desde"
       }
     },
     "delete": {
@@ -911,7 +922,8 @@
         "label": "Moneda",
         "placeholder": "Seleccioná una moneda",
         "searchPlaceholder": "Buscar monedas...",
-        "noResults": "No se encontraron monedas."
+        "noResults": "No se encontraron monedas.",
+        "locked": "No se puede cambiar la moneda porque esta cuenta tiene entradas asociadas."
       },
       "openingBalance": {
         "label": "Saldo inicial",
@@ -2449,6 +2461,9 @@
     }
   },
   "apiErrors": {
+    "account_card_exclusivity": "Un gasto con tarjeta de crédito no puede además pagarse desde una cuenta.",
+    "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
+    "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
     "invalid_credentials": "Los datos que ingresaste son incorrectos.",
     "invalid_auth_token": "Tu sesión no es válida o expiró. Iniciá sesión de nuevo.",
     "email_not_verified": "Verificá tu correo antes de iniciar sesión.",

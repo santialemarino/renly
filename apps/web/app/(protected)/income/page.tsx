@@ -6,6 +6,7 @@ import { IncomeDataTable } from '@/app/(protected)/income/_components/income-dat
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
 import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
@@ -42,6 +43,8 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   // Entry forms restrict their currency picker to the convertible set; on a fetch error the
   // picker degrades to the full list and the API's 422 still guards.
   const supportedCurrencies = await getSupportedCurrencies().catch(() => undefined);
+  // Active accounts for the optional "deposited to" link on the income form (empty on error → field hidden).
+  const accounts = await getAccounts().catch(() => []);
 
   const currency = resolveActiveCurrency(cookieStore, primary);
 
@@ -76,6 +79,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
       <IncomeToolbar
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
+        accounts={accounts}
       />
       {showSample ? (
         <SampleIncomeTable />
@@ -84,6 +88,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
           data={data}
           preferredCurrencies={preferredCurrencies}
           supportedCurrencies={supportedCurrencies}
+          accounts={accounts}
           activeCurrency={currency}
           firstRun={firstRun}
         />

@@ -19,3 +19,11 @@ class PaymentMethod(StrEnum):
 def ensure_payment_pairing(payment_method: str | None, credit_card_id: int | None) -> None:
     if credit_card_id is not None and payment_method != PaymentMethod.credit_card:
         raise ValueError("credit_card_id requires payment_method to be 'credit_card'.")
+
+
+# Raises ValueError when a cash/bank account is paired with a credit_card expense. A card expense
+# increases the card liability now and only draws cash later at settlement, so it never links an
+# account directly. Used by the expense request-schema validators.
+def ensure_account_pairing(payment_method: str | None, account_id: int | None) -> None:
+    if account_id is not None and payment_method == PaymentMethod.credit_card:
+        raise ValueError("A credit-card expense cannot also be paid from an account.")

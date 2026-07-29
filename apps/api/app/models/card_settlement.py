@@ -17,6 +17,7 @@ class CardSettlement(SQLModel, table=True):
     date: date_type = Field(description="Settlement date.")
     amount: Decimal = Field(max_digits=18, decimal_places=2, description="Amount paid.")
     currency: str = Field(max_length=3, description="Currency (ISO 4217).")
+    account_id: int | None = Field(default=None, foreign_key="accounts.id", description="Cash/bank account the payment was drawn from (optional).")
     notes: str | None = Field(default=None, description="Optional notes.")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

@@ -326,6 +326,9 @@ CREATE TABLE income_entries (
   notes             TEXT,
   source            VARCHAR(20) NOT NULL DEFAULT 'manual',
   reconciliation_id BIGINT,
+  -- Optional cash/bank account this income was deposited to (Bucket 3 #1, PR 2).
+  -- ON DELETE SET NULL: deleting an account un-attributes the entry, preserving its history.
+  account_id        BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -334,6 +337,8 @@ CREATE INDEX idx_income_entries_user_id ON income_entries(user_id);
 CREATE INDEX idx_income_entries_user_date ON income_entries(user_id, date DESC);
 CREATE INDEX idx_income_entries_reconciliation_id
   ON income_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
+CREATE INDEX idx_income_entries_account_id
+  ON income_entries(account_id) WHERE account_id IS NOT NULL;
 
 -- Card settlements (credit card payments — not expenses).
 -- Reduces card liability and bank balance simultaneously (net-zero on patrimony).
@@ -345,6 +350,8 @@ CREATE TABLE card_settlements (
   date            DATE NOT NULL,
   amount          NUMERIC(18, 2) NOT NULL,
   currency        VARCHAR(3) NOT NULL,
+  -- Optional cash/bank account the payment was drawn from (Bucket 3 #1, PR 2).
+  account_id      BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   notes           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -352,6 +359,8 @@ CREATE TABLE card_settlements (
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);
 CREATE INDEX idx_card_settlements_user_id ON card_settlements(user_id);
+CREATE INDEX idx_card_settlements_account_id
+  ON card_settlements(account_id) WHERE account_id IS NOT NULL;
 
 -- Subscriptions (recurring charges; e.g. Netflix, Spotify, gym).
 -- Auto-generates monthly expense_entries via the scheduler (Phase 3, Step 3).
@@ -426,6 +435,9 @@ CREATE TABLE expense_entries (
   notes                  TEXT,
   payment_method         VARCHAR(20),
   credit_card_id         BIGINT REFERENCES credit_cards(id),
+  -- Optional cash/bank account this expense was paid from (Bucket 3 #1, PR 2).
+  -- Not set for credit_card expenses (those hit the card, then draw cash at settlement).
+  account_id             BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   source                 VARCHAR(20) NOT NULL DEFAULT 'manual',
   subscription_id        BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
   installment_id         BIGINT REFERENCES installments(id) ON DELETE SET NULL,
@@ -438,6 +450,8 @@ CREATE TABLE expense_entries (
 CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);
 CREATE INDEX idx_expense_entries_user_date ON expense_entries(user_id, date DESC);
 CREATE INDEX idx_expense_entries_credit_card ON expense_entries(credit_card_id);
+CREATE INDEX idx_expense_entries_account_id
+  ON expense_entries(account_id) WHERE account_id IS NOT NULL;
 CREATE INDEX idx_expense_entries_reconciliation_id
   ON expense_entries(reconciliation_id) WHERE reconciliation_id IS NOT NULL;
 CREATE INDEX idx_expense_entries_payment_obligation_id

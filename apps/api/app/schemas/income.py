@@ -17,6 +17,7 @@ class IncomeCreate(RequestBase):
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+    account_id: int | None = Field(default=None, description="Cash/bank account this income was deposited to (optional).")
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
@@ -29,6 +30,7 @@ class IncomeUpdate(RequestBase):
     currency: str | None = Field(default=None, description="Currency (ISO 4217).", max_length=3)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+    account_id: int | None = Field(default=None, description="Cash/bank account id. Omit to leave unchanged; send null to clear.")
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
@@ -43,6 +45,7 @@ class IncomeResponse(BaseModel):
     converted_amount: Decimal | None = Field(default=None, description="Amount in the requested display currency.", max_digits=18, decimal_places=2)
     category: IncomeCategory | None = Field(default=None, description="Income category.")
     notes: str | None = Field(default=None, description="Optional notes.")
+    account_id: int | None = Field(default=None, description="Cash/bank account this income was deposited to.")
     source: str = Field(description="Entry origin (manual, shortcut, auto).")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

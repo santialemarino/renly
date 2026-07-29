@@ -18,6 +18,9 @@ from app.domain.cycle_advance import (
     subscription_link_advanced_cursor,
 )
 from app.domain.errors import (
+    AccountCardExclusivityError,
+    AccountCurrencyChangeBlockedError,
+    AccountCurrencyMismatchError,
     CurrencyChangeBlockedError,
     DomainError,
     EmailNotVerifiedError,
@@ -37,10 +40,13 @@ from app.domain.errors import (
     PlanRequiredError,
     ReconciliationPeriodMismatchError,
 )
-from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
+from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
 
 __all__ = [
+    "AccountCardExclusivityError",
+    "AccountCurrencyChangeBlockedError",
+    "AccountCurrencyMismatchError",
     "AdvanceResult",
     "CalendarItem",
     "CardBucketBalance",
@@ -70,6 +76,7 @@ __all__ = [
     "claimed_subscription_cycles",
     "closest_installment_cuota",
     "closest_subscription_cycle",
+    "ensure_account_pairing",
     "ensure_payment_pairing",
     "get_ars_pair",
     "installment_link_advanced_cursor",

@@ -20,10 +20,12 @@ import {
   buildIncomeFormSchema,
   type IncomeFormValues,
 } from '@/app/(protected)/income/income-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import type { Account } from '@/lib/api/accounts';
 import type { IncomeEntry } from '@/lib/api/income';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
@@ -34,6 +36,7 @@ interface IncomeFormDialogProps {
   income?: IncomeEntry;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -43,6 +46,7 @@ export function IncomeFormDialog({
   income,
   preferredCurrencies,
   supportedCurrencies,
+  accounts,
   onSuccess,
 }: IncomeFormDialogProps) {
   const locale = useLocale();
@@ -59,6 +63,7 @@ export function IncomeFormDialog({
       currency: '',
       category: undefined,
       notes: '',
+      accountId: undefined,
     },
   });
 
@@ -78,6 +83,7 @@ export function IncomeFormDialog({
       currency: i?.currency ?? '',
       category: (i?.category ?? undefined) as IncomeFormValues['category'],
       notes: i?.notes ?? '',
+      accountId: i?.accountId ?? undefined,
     }),
     onSuccess,
   });
@@ -187,6 +193,16 @@ export function IncomeFormDialog({
                 </FormItem>
               )}
             />
+
+            {accounts && accounts.length > 0 && (
+              <AccountField
+                control={form.control}
+                setValue={form.setValue}
+                accounts={accounts}
+                currency={watchedCurrency || undefined}
+                label={t('form.account.label')}
+              />
+            )}
 
             <FormField
               control={form.control}

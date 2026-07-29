@@ -45,5 +45,6 @@ class IncomeEntry(SQLModel, table=True):
         foreign_key="card_reconciliations.id",
         description="Owning reconciliation when this row is the adjustment income from the reconciliation flow.",
     )
+    account_id: int | None = Field(default=None, foreign_key="accounts.id", description="Cash/bank account this income was deposited to (optional).")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

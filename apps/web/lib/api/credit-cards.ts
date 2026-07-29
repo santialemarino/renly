@@ -30,6 +30,7 @@ interface CardSettlementRaw {
   date: string;
   amount: string;
   currency: string;
+  account_id: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -62,6 +63,7 @@ export interface CardSettlement {
   date: string;
   amount: string;
   currency: string;
+  accountId: number | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -92,6 +94,7 @@ function mapSettlement(raw: CardSettlementRaw): CardSettlement {
     date: raw.date,
     amount: raw.amount,
     currency: raw.currency,
+    accountId: raw.account_id,
     notes: raw.notes,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

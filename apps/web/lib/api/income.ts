@@ -13,6 +13,7 @@ interface IncomeEntryRaw {
   converted_amount: string | null;
   category: string | null;
   notes: string | null;
+  account_id: number | null;
   source: string;
   created_at: string;
   updated_at: string;
@@ -36,6 +37,7 @@ export interface IncomeEntry {
   convertedAmount: string | null;
   category: string | null;
   notes: string | null;
+  accountId: number | null;
   source: string;
   createdAt: string;
   updatedAt: string;
@@ -74,6 +76,7 @@ function mapIncomeEntry(raw: IncomeEntryRaw): IncomeEntry {
     convertedAmount: raw.converted_amount,
     category: raw.category,
     notes: raw.notes,
+    accountId: raw.account_id,
     source: raw.source,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

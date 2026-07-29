@@ -56,6 +56,12 @@ async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
     return result.first() is not None
 
 
+# Returns whether any expense links this account (used to lock the account's currency once linked).
+async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: int) -> bool:
+    result = await session.execute(select(ExpenseEntry.id).where(ExpenseEntry.account_id == account_id, ExpenseEntry.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Returns the user's expense dedup tuples (date, amount, currency, category, notes), used to flag
 # duplicates on import. Column order matches EXPENSES_SPEC.dedup_fields.
 async def list_dedup_keys_by_user(
@@ -127,6 +133,19 @@ async def count_by_credit_card_ids(session: AsyncSession, credit_card_ids: list[
         .group_by(ExpenseEntry.credit_card_id)
     )
     return {row[0]: int(row[1]) for row in result.all()}
+
+
+# Sum of expenses linked to each account, grouped by account_id. Returns {account_id: total}.
+# Every linked row is in the account's currency (enforced at link time), so no currency split.
+async def sum_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, Decimal]:
+    if not account_ids:
+        return {}
+    result = await session.execute(
+        select(ExpenseEntry.account_id, func.coalesce(func.sum(ExpenseEntry.amount), 0))
+        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id)
+        .group_by(ExpenseEntry.account_id)
+    )
+    return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
 # Sum of expenses grouped by credit card id and currency. Returns {card_id: {currency: total}}.
@@ -446,6 +465,7 @@ class ExpenseRepository:
     count_by_credit_card_ids = staticmethod(count_by_credit_card_ids)
     create = staticmethod(create)
     delete = staticmethod(delete)
+    exists_by_account_id = staticmethod(exists_by_account_id)
     exists_by_user = staticmethod(exists_by_user)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)
@@ -459,6 +479,7 @@ class ExpenseRepository:
     list_linked_subscription_expenses = staticmethod(list_linked_subscription_expenses)
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)
+    sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)

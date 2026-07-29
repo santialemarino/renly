@@ -321,7 +321,7 @@ Per-bucket, per-statement true-up against the bank. Captures fees / FX / taxes /
 
 ## Accounts
 
-Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time; in this release it equals the opening balance (linking expenses, income, settlements, and transfers to an account arrives in a later release).
+Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time: `opening_balance + linked income − linked expenses − settlements paid from the account`. Expenses, income, and settlements each carry an optional `account_id` linking them to an account (a NULL link is unattributed and affects no balance); account-to-account transfers arrive in a later release. An account's currency is fixed once entries link to it (a change is rejected with 409), so the balance never mixes currencies.
 
 | Method   | Path                       | Description                                                     |
 | -------- | -------------------------- | --------------------------------------------------------------- |
@@ -335,7 +335,7 @@ Cash / bank / wallet accounts — the asset side of net worth (the mirror of cre
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
 
-**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency).
+**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked).
 
 ---
 

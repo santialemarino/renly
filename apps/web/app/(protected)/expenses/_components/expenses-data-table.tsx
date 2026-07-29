@@ -30,6 +30,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense, ExpenseListResponse, ExpenseSortField } from '@/lib/api/expenses';
 import type { Installment } from '@/lib/api/installments';
@@ -43,6 +44,7 @@ function RowActions({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -53,6 +55,7 @@ function RowActions({
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -94,6 +97,7 @@ function RowActions({
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
@@ -125,6 +129,7 @@ export function ExpensesDataTable({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeObligations,
   activeSubscriptions,
   activeInstallments,
@@ -135,6 +140,7 @@ export function ExpensesDataTable({
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  accounts?: Account[];
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
@@ -232,6 +238,7 @@ export function ExpensesDataTable({
                       preferredCurrencies={preferredCurrencies}
                       supportedCurrencies={supportedCurrencies}
                       creditCards={creditCards}
+                      accounts={accounts}
                       activeObligations={activeObligations}
                       activeSubscriptions={activeSubscriptions}
                       activeInstallments={activeInstallments}

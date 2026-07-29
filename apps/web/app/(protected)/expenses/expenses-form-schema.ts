@@ -25,6 +25,7 @@ export function buildExpenseFormSchema({
       notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
       paymentMethod: z.enum(PAYMENT_METHODS).optional(),
       creditCardId: z.number().optional(),
+      accountId: z.number().optional(),
       paymentObligationId: z.number().optional(),
       subscriptionId: z.number().optional(),
       installmentId: z.number().optional(),
