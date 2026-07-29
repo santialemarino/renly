@@ -8,7 +8,7 @@ export function buildSettlementFormSchema(requiredMsg: string) {
     amount: z.string().min(1, { message: requiredMsg }),
     currency: z.string().min(1, { message: requiredMsg }),
     // Optional cash/bank account the payment is drawn from — paying a card is a real cash outflow.
-    accountId: z.number().optional(),
+    accountId: z.number().nullable().optional(),
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }
