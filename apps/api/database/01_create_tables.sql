@@ -104,6 +104,13 @@ CREATE TYPE feedback_category AS ENUM (
   'other'
 );
 
+CREATE TYPE account_type AS ENUM (
+  'cash',
+  'bank',
+  'wallet',
+  'other'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -283,6 +290,27 @@ CREATE TABLE credit_cards (
 );
 
 CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
+
+-- Cash / bank accounts (asset accounts; Deferred Bucket 3 #1).
+-- The running balance is DERIVED at query time (opening_balance plus linked income minus linked
+-- expenses/settlements plus/minus transfers), never stored. One currency per account; opening_date
+-- anchors the historical balance series. Archived (not deleted) via is_active = false.
+CREATE TABLE accounts (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name            VARCHAR(255) NOT NULL,
+  type            account_type NOT NULL,
+  currency        VARCHAR(3) NOT NULL,
+  opening_balance NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  opening_date    DATE NOT NULL,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX idx_accounts_user_active ON accounts(user_id, is_active);
 
 -- Income entries (daily income tracking).
 -- source tracks origin: 'manual', 'shortcut', 'auto', 'reconciliation'.
@@ -665,6 +693,10 @@ CREATE TRIGGER trg_credit_cards_updated_at
   BEFORE UPDATE ON credit_cards
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_accounts_updated_at
+  BEFORE UPDATE ON accounts
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER trg_expense_entries_updated_at
   BEFORE UPDATE ON expense_entries
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
@@ -760,6 +792,10 @@ CREATE POLICY investment_groups_user_isolation ON investment_groups
 
 ALTER TABLE credit_cards ENABLE ROW LEVEL SECURITY;
 CREATE POLICY credit_cards_user_isolation ON credit_cards
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY accounts_user_isolation ON accounts
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE income_entries ENABLE ROW LEVEL SECURITY;

@@ -18,6 +18,7 @@ import {
   Globe,
   HelpCircle,
   Inbox,
+  Landmark,
   LayoutDashboard,
   LifeBuoy,
   ListChecks,
@@ -74,6 +75,7 @@ const FINANCES_GROUP = [
   { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
   { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
   { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
+  { key: 'accounts', href: ROUTES.accounts, icon: Landmark },
 ] as const;
 
 const COMMITMENTS_GROUP = [

@@ -17,6 +17,7 @@ export const ROUTES = {
   income: '/income',
   expenses: '/expenses',
   creditCards: '/credit-cards',
+  accounts: '/accounts',
   subscriptions: '/subscriptions',
   installments: '/installments',
   paymentObligations: '/payment-obligations',
