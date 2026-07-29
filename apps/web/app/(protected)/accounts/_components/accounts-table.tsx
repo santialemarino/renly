@@ -11,7 +11,6 @@ import {
   Scale,
   Trash2,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -27,7 +26,6 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { Account, AccountSortField } from '@/lib/api/accounts';
-import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -37,9 +35,16 @@ interface AccountsTableProps {
   accounts: Account[];
   preferredCurrencies?: string[];
   firstRun?: boolean;
+  // The user's settings timezone, so "today" in the reconcile dialog matches the API's date guards.
+  timeZone?: string;
 }
 
-export function AccountsTable({ accounts, preferredCurrencies, firstRun }: AccountsTableProps) {
+export function AccountsTable({
+  accounts,
+  preferredCurrencies,
+  firstRun,
+  timeZone,
+}: AccountsTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('accounts');
   const router = useRouter();
@@ -213,31 +218,15 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
                       </TableCell>
                     </TableRow>
 
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <TableRow>
-                          <TableCell colSpan={COLUMN_COUNT} className="p-0">
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
-                              className="overflow-hidden"
-                            >
-                              <div className="px-8 py-4 bg-muted/30">
-                                <AccountReconciliationsSection
-                                  account={a}
-                                  expanded={isExpanded}
-                                  reloadToken={reloadToken}
-                                  onReconcile={() => setReconcileAccount(a)}
-                                  onChanged={() => router.refresh()}
-                                />
-                              </div>
-                            </motion.div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </AnimatePresence>
+                    <AccountReconciliationsSection
+                      key={`reconciliations-${a.id}`}
+                      account={a}
+                      expanded={isExpanded}
+                      colSpan={COLUMN_COUNT}
+                      reloadToken={reloadToken}
+                      onReconcile={() => setReconcileAccount(a)}
+                      onChanged={() => router.refresh()}
+                    />
                   </Fragment>
                 );
               })
@@ -262,6 +251,7 @@ export function AccountsTable({ accounts, preferredCurrencies, firstRun }: Accou
           if (!open) setReconcileAccount(null);
         }}
         account={reconcileAccount}
+        timeZone={timeZone}
         onSuccess={() => {
           setReloadToken((token) => token + 1);
           router.refresh();

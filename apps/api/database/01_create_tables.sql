@@ -436,26 +436,26 @@ CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
 -- FK constraint on payment_obligation_id is added via ALTER TABLE after payment_obligations exists (declaration-order dependency).
 -- Defined after subscriptions and installments because of these FK references.
 CREATE TABLE expense_entries (
-  id                     BIGSERIAL PRIMARY KEY,
-  user_id                BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  date                   DATE NOT NULL,
-  amount                 NUMERIC(18, 2) NOT NULL,
-  currency               VARCHAR(3) NOT NULL,
-  category               expense_category,
-  notes                  TEXT,
-  payment_method         VARCHAR(20),
-  credit_card_id         BIGINT REFERENCES credit_cards(id),
+  id                        BIGSERIAL PRIMARY KEY,
+  user_id                   BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  date                      DATE NOT NULL,
+  amount                    NUMERIC(18, 2) NOT NULL,
+  currency                  VARCHAR(3) NOT NULL,
+  category                  expense_category,
+  notes                     TEXT,
+  payment_method            VARCHAR(20),
+  credit_card_id            BIGINT REFERENCES credit_cards(id),
   -- Optional cash/bank account this expense was paid from (Bucket 3 #1, PR 2).
   -- Not set for credit_card expenses (those hit the card, then draw cash at settlement).
-  account_id             BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
-  source                 VARCHAR(20) NOT NULL DEFAULT 'manual',
-  subscription_id        BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
-  installment_id         BIGINT REFERENCES installments(id) ON DELETE SET NULL,
-  reconciliation_id      BIGINT,
+  account_id                BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  source                    VARCHAR(20) NOT NULL DEFAULT 'manual',
+  subscription_id           BIGINT REFERENCES subscriptions(id) ON DELETE SET NULL,
+  installment_id            BIGINT REFERENCES installments(id) ON DELETE SET NULL,
+  reconciliation_id         BIGINT,
   account_reconciliation_id BIGINT,
-  payment_obligation_id  BIGINT,
-  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  payment_obligation_id     BIGINT,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_expense_entries_user_id ON expense_entries(user_id);

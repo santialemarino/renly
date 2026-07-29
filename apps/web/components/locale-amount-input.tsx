@@ -10,6 +10,7 @@ import {
   blockScientificKeys,
   blockSecondDecimal,
   blockSignKeys,
+  blockSignKeysUnlessLeadingMinus,
   blockWrongLocaleDecimal,
   composeKeyHandlers,
   formatAmountForInput,
@@ -37,6 +38,8 @@ interface LocaleAmountInputProps {
   currency?: string;
   // Explicit override for max fraction digits — takes priority over `currency`. Use `0` to forbid decimals entirely (rare; consider IntegerInput instead). Omit both this and `currency` to allow unlimited decimals (e.g. fractional share quantities).
   maxDecimals?: number;
+  // Opt in to a leading minus, for genuinely SIGNED figures (an account's real balance reads negative when overdrawn). Off by default: amounts, quantities, and counts stay non-negative.
+  allowNegative?: boolean;
   'aria-invalid'?: boolean | 'true' | 'false';
 }
 
@@ -58,7 +61,10 @@ interface LocaleAmountInputProps {
  * "last separator wins" so `"1.234,56"` and `"1,234.56"` both yield 1234.56.
  */
 const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
-  ({ value = '', onChange, onBlur, name, currency, maxDecimals, ...rest }, ref) => {
+  (
+    { value = '', onChange, onBlur, name, currency, maxDecimals, allowNegative = false, ...rest },
+    ref,
+  ) => {
     const locale = useLocale();
     const decimal = getDecimalSeparator(locale);
     const group = getGroupSeparator(locale);
@@ -143,7 +149,7 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
      * freshly grouped string.
      */
     function applyRawWithCaret(rawDisplay: string, rawCaret: number) {
-      const sanitized = sanitizeDecimalChars(rawDisplay, locale);
+      const sanitized = sanitizeDecimalChars(rawDisplay, locale, allowNegative);
       const canonical = limitDecimalsInString(
         normalizeAmountFromInput(sanitized, locale),
         '.',
@@ -169,13 +175,17 @@ const LocaleAmountInput = forwardRef<HTMLInputElement, LocaleAmountInputProps>(
       const input = e.currentTarget;
       const start = input.selectionStart ?? input.value.length;
       const end = input.selectionEnd ?? input.value.length;
-      const sanitized = sanitizeDecimalPaste(e.clipboardData.getData('text/plain'), locale);
+      const sanitized = sanitizeDecimalPaste(
+        e.clipboardData.getData('text/plain'),
+        locale,
+        allowNegative,
+      );
       const rawDisplay = input.value.slice(0, start) + sanitized + input.value.slice(end);
       applyRawWithCaret(rawDisplay, start + sanitized.length);
     }
 
     const runKeyRules = composeKeyHandlers(
-      blockSignKeys,
+      allowNegative ? blockSignKeysUnlessLeadingMinus(displayValue) : blockSignKeys,
       blockScientificKeys,
       blockWrongLocaleDecimal(locale),
       blockSecondDecimal(locale, displayValue),
