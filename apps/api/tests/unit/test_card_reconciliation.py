@@ -5,8 +5,38 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.models.credit_card import CreditCard
+from app.models.expense_entry import ExpenseCategory
+from app.models.user import User
 from app.services import card_reconciliation_service
 from app.services.card_reconciliation_service import compute_reconciliation_difference, cumulative_balances_at
+
+USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
+
+
+# Wires create_or_replace's dependencies: an owned card, a fixed computed balance, and a
+# capture-and-assign-id fake for the adjustment row the service writes.
+def _wire_create(monkeypatch, *, computed):
+    captured: dict = {}
+    card = CreditCard(id=7, user_id=1, name="Visa", closing_day=20, due_day=28, currency="ARS")
+    monkeypatch.setattr(card_reconciliation_service, "_get_card_or_404", AsyncMock(return_value=card))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "get_by_period", AsyncMock(return_value=None))
+    monkeypatch.setattr(card_reconciliation_service, "compute_bucket_balance_at", AsyncMock(return_value=computed))
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "save", AsyncMock())
+
+    async def fake_create_reconciliation(_session, reconciliation):
+        reconciliation.id = 42
+        captured["reconciliation"] = reconciliation
+        return reconciliation
+
+    async def fake_create_expense(_session, entry):
+        entry.id = 91
+        captured["expense"] = entry
+        return entry
+
+    monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "create", fake_create_reconciliation)
+    monkeypatch.setattr(card_reconciliation_service.expense_repository, "create", fake_create_expense)
+    return captured
+
 
 # --- compute_reconciliation_difference ---
 
@@ -104,3 +134,83 @@ class TestListRecentStatementsUserToday:
         statements = await card_reconciliation_service.list_recent_statements(None, card, "ARS")
         assert len(statements) == 1
         assert statements[0]["period_end"] == date(2026, 6, 15)
+
+
+# --- Signed adjustment (the credit fix) ---
+
+
+class TestSignedAdjustment:
+    """A card bucket is `sum(expenses) - sum(settlements)`, so ONLY an expense can move it. Both
+    reconciliation directions therefore create one signed, card-linked expense; an income row (the
+    previous shape for a credit) left the card overstated because income never enters the bucket."""
+
+    @pytest.mark.asyncio
+    async def test_credit_creates_a_negative_card_linked_expense(self, monkeypatch):
+        captured = _wire_create(monkeypatch, computed=Decimal("1000"))
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 6, 21),
+            period_end=date(2026, 7, 20),
+            statement_balance=Decimal("800"),
+        )
+
+        expense = captured["expense"]
+        assert expense.amount == Decimal("-200")
+        assert expense.category == ExpenseCategory.card_credits_and_refunds
+        assert expense.credit_card_id == 7
+        assert expense.payment_method == "credit_card"
+        # A credit clears card debt; it does not deposit cash. Linking an account here would add the
+        # amount to a balance as well, double-counting one event.
+        assert expense.account_id is None
+        assert "income" not in captured
+
+    @pytest.mark.asyncio
+    async def test_shortfall_still_creates_a_positive_fee_expense(self, monkeypatch):
+        captured = _wire_create(monkeypatch, computed=Decimal("1000"))
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 6, 21),
+            period_end=date(2026, 7, 20),
+            statement_balance=Decimal("1500"),
+        )
+
+        expense = captured["expense"]
+        assert expense.amount == Decimal("500")
+        assert expense.category == ExpenseCategory.card_fees_and_taxes
+
+    @pytest.mark.asyncio
+    async def test_matching_statement_creates_no_adjustment(self, monkeypatch):
+        captured = _wire_create(monkeypatch, computed=Decimal("1000"))
+
+        reconciliation = await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 6, 21),
+            period_end=date(2026, 7, 20),
+            statement_balance=Decimal("1000"),
+        )
+
+        assert "expense" not in captured
+        assert reconciliation.adjustment_expense_id is None
+        assert reconciliation.adjustment_income_id is None
+
+    def test_a_credit_nets_out_of_the_bucket_sum(self):
+        # The end-to-end property the fix exists for: a 1000 expense plus a -200 credit leaves the
+        # bucket at 800, matching the statement. cumulative_balances_at is the same arithmetic the
+        # live bucket balance uses.
+        balances = cumulative_balances_at(
+            [date(2026, 7, 20)],
+            [(date(2026, 7, 10), Decimal("1000")), (date(2026, 7, 20), Decimal("-200"))],
+            [],
+        )
+        assert balances[date(2026, 7, 20)] == Decimal("800")

@@ -2,7 +2,7 @@
 # Implements:
 #   - compute_bucket_balance_at(): running-balance snapshot at a date (shared with Payments Calendar).
 #   - create_or_replace(): atomic delete-old + insert-new for a (card, currency, period) reconciliation,
-#     including the matching adjustment expense or income.
+#     including the matching signed adjustment expense.
 #   - mark_stale_for_date(): stale-detection hook called from expense/settlement create/update/delete.
 #   - list_recent_statements(): drives the Reconciliations sub-section UI per bucket.
 
@@ -15,13 +15,11 @@ from app.domain import NotFoundError, ReconciliationPeriodMismatchError
 from app.models.card_reconciliation import CardReconciliation
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
-from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import (
     card_reconciliation_repository,
     credit_card_repository,
     expense_repository,
-    income_repository,
 )
 from app.services import settings_service
 from app.utils.dates import compute_statement_period, resolve_day_in_month
@@ -33,8 +31,10 @@ RECENT_STATEMENTS_LIMIT = 12
 # --- Pure helpers ---
 
 
-# Pure computation: bucket-currency adjustment from the bank's statement balance and the app's computed running balance.
-# Positive => create an expense (fees / taxes / FX); negative => create an income (credit / refund); zero => no adjustment.
+# Pure computation: bucket-currency adjustment from the bank's statement balance and the app's computed
+# running balance. Positive => the bank charged more than Renly knew (fees / taxes / FX); negative => a
+# credit or refund posted to the card; zero => no adjustment. Both non-zero cases become one signed
+# card-linked expense, because a bucket balance only moves on expenses and settlements.
 def compute_reconciliation_difference(statement_balance: Decimal, computed_balance: Decimal) -> Decimal:
     return statement_balance - computed_balance
 
@@ -189,7 +189,7 @@ async def get_reconciliation(
 # Create-or-replace a reconciliation for (card, currency, period). Atomic:
 #   1. If a reconciliation already exists for the period, delete it (cascade drops its adjustment).
 #   2. Compute the running-balance snapshot at period_end.
-#   3. Compute the difference; create the matching adjustment expense or income (dated on period_end,
+#   3. Compute the difference; create the matching signed adjustment expense (dated on period_end,
 #      tagged source='reconciliation', linked via reconciliation_id) when difference != 0.
 #   4. Write the reconciliation row and patch its back-pointer to the adjustment id.
 # Returns the fresh reconciliation row.
@@ -232,13 +232,21 @@ async def create_or_replace(
     )
     reconciliation = await card_reconciliation_repository.create(session, reconciliation)
 
-    if difference > 0:
+    # One signed, card-linked adjustment in both directions. A bucket balance is
+    # `sum(expenses) - sum(settlements)`, so ONLY an expense can move it — an income row would leave
+    # the card overstated no matter its amount. A positive difference (the bank charged more than
+    # Renly knew) is a fee/tax; a negative one is a credit and carries a negative amount, which the
+    # bucket sum subtracts correctly. The credit is NOT account-linked: it cleared card debt, it did
+    # not deposit cash. A refund paid to a bank account instead never moves the card statement, so it
+    # produces no adjustment here and is recorded as ordinary account-linked income.
+    if difference != 0:
+        is_credit = difference < 0
         adjustment_expense = ExpenseEntry(
             user_id=user.id,
             date=period_end,
             amount=difference,
             currency=currency,
-            category=ExpenseCategory.card_fees_and_taxes,
+            category=ExpenseCategory.card_credits_and_refunds if is_credit else ExpenseCategory.card_fees_and_taxes,
             payment_method="credit_card",
             credit_card_id=card_id,
             source="reconciliation",
@@ -246,19 +254,6 @@ async def create_or_replace(
         )
         adjustment_expense = await expense_repository.create(session, adjustment_expense)
         reconciliation.adjustment_expense_id = adjustment_expense.id
-        await card_reconciliation_repository.save(session, reconciliation)
-    elif difference < 0:
-        adjustment_income = IncomeEntry(
-            user_id=user.id,
-            date=period_end,
-            amount=-difference,
-            currency=currency,
-            category=IncomeCategory.card_credits_and_refunds,
-            source="reconciliation",
-            reconciliation_id=reconciliation.id,
-        )
-        adjustment_income = await income_repository.create(session, adjustment_income)
-        reconciliation.adjustment_income_id = adjustment_income.id
         await card_reconciliation_repository.save(session, reconciliation)
 
     # Card metadata isn't actually mutated; this line silences the unused-variable lint
@@ -270,7 +265,7 @@ async def create_or_replace(
     return reconciliation
 
 
-# Delete a reconciliation (and cascade-drop its adjustment expense or income).
+# Delete a reconciliation (and cascade-drop its adjustment expense).
 async def delete_reconciliation(
     session: AsyncSession,
     card_id: int,

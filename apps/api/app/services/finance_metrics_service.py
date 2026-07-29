@@ -263,9 +263,16 @@ async def get_expense_breakdown(
 
     total_expenses = sum(cat_values.values(), ZERO)
 
+    # A category can total NEGATIVE — a card credit posts a negative reconciliation adjustment, which
+    # correctly reduces spending. The headline total keeps it (net spending is the honest figure), but
+    # percentages are computed against the positive categories only: a share of a mixed-sign total is
+    # meaningless, and the donut this feeds cannot render a negative slice. Same clamp the general
+    # dashboard's composition already applies to a negative cash total / a net-credit card.
+    positive_total = sum((v for v in cat_values.values() if v > ZERO), ZERO)
+
     items = []
     for category, value in sorted(cat_values.items(), key=lambda x: x[1], reverse=True):
-        pct = (value / total_expenses * 100) if total_expenses != ZERO else ZERO
+        pct = (value / positive_total * 100) if (value > ZERO and positive_total != ZERO) else ZERO
         items.append(ExpenseCategoryItem(category=category, value=value, percentage=pct))
 
     return ExpenseBreakdownResponse(

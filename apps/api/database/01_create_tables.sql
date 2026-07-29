@@ -63,6 +63,7 @@ CREATE TYPE expense_category AS ENUM (
   'kids',
   'pets',
   'card_fees_and_taxes',
+  'card_credits_and_refunds',
   'account_adjustment',
   'other'
 );
