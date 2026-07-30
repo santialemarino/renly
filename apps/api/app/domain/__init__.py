@@ -42,10 +42,12 @@ from app.domain.errors import (
     PasswordBreachedError,
     PaymentPairingError,
     PlanRequiredError,
+    ReconciliationOwnedEntryError,
     ReconciliationPeriodMismatchError,
 )
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
+from app.domain.reconciliation import ensure_not_reconciliation_owned
 
 __all__ = [
     "AccountCardExclusivityError",
@@ -77,6 +79,7 @@ __all__ = [
     "PaymentMethod",
     "PaymentPairingError",
     "PlanRequiredError",
+    "ReconciliationOwnedEntryError",
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
     "SUPPORTED_CURRENCIES",
@@ -85,6 +88,7 @@ __all__ = [
     "closest_installment_cuota",
     "closest_subscription_cycle",
     "ensure_account_pairing",
+    "ensure_not_reconciliation_owned",
     "ensure_payment_pairing",
     "get_ars_pair",
     "installment_link_advanced_cursor",

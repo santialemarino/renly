@@ -47,6 +47,20 @@ class IncomeResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     account_id: int | None = Field(default=None, description="Cash/bank account this income was deposited to.")
     source: str = Field(description="Entry origin (manual, shortcut, auto).")
+    reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Legacy link to a card reconciliation; no longer written (card credits are signed expenses). "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning account reconciliation when this row is that reconciliation's adjustment income. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

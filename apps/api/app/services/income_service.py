@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError
+from app.domain import NotFoundError, ensure_not_reconciliation_owned
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import income_repository
@@ -115,7 +115,8 @@ async def create_income(
     return entry
 
 
-# Update an existing income entry. Only provided fields are changed.
+# Update an existing income entry. Only provided fields are changed. Rejects a reconciliation's
+# adjustment row with ReconciliationOwnedEntryError (409) — change it via its reconciliation.
 async def update_income(
     session: AsyncSession,
     income_id: int,
@@ -123,6 +124,9 @@ async def update_income(
     **fields: object,
 ) -> IncomeEntry:
     entry = await get_income(session, income_id, user)
+    # A reconciliation's adjustment is derived — its amount IS the recorded difference. Refuse before
+    # anything is read or mutated, so a rejected request writes nothing.
+    ensure_not_reconciliation_owned(entry.reconciliation_id, entry.account_reconciliation_id)
     # Effective account link (request field over stored) must be owned + currency-matched.
     new_account_id = fields["account_id"] if "account_id" in fields else entry.account_id
     new_currency = fields["currency"] if "currency" in fields else entry.currency
@@ -135,8 +139,13 @@ async def update_income(
     return entry
 
 
-# Delete an income entry.
+# Delete an income entry. Rejects a reconciliation's adjustment row with
+# ReconciliationOwnedEntryError (409) — delete the reconciliation to drop its adjustment.
 async def delete_income(session: AsyncSession, income_id: int, user: User) -> None:
     entry = await get_income(session, income_id, user)
+    # Deleting the adjustment would orphan its reconciliation: the reverse pointer is ON DELETE SET
+    # NULL, so the reconciliation survives still claiming a difference it no longer applies while the
+    # balance snaps back. Only deleting the reconciliation cascades cleanly.
+    ensure_not_reconciliation_owned(entry.reconciliation_id, entry.account_reconciliation_id)
     await income_repository.delete(session, entry)
     await session.commit()

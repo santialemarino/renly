@@ -187,7 +187,24 @@ class ExpenseResponse(BaseModel):
     source: str = Field(description="Entry origin (manual, shortcut, auto, email_parsed).")
     payment_obligation_id: int | None = Field(default=None, description="Linked payment obligation id (Phase 3, Step E).")
     subscription_id: int | None = Field(default=None, description="Linked subscription id (Phase 3, follow-up 3a).")
-    installment_id: int | None = Field(default=None, description="Linked installment plan id (Phase 3, follow-up 3a).")
+    installment_id: int | None = Field(
+        default=None,
+        description="Linked installment plan id (Phase 3, follow-up 3a).",
+    )
+    reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning card reconciliation when this row is that reconciliation's adjustment expense. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning account reconciliation when this row is that reconciliation's adjustment expense. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
     advance_change: PlanCursorChange | None = Field(

@@ -311,6 +311,21 @@ class PlanRequiredError(DomainError):
         super().__init__(self.message)
 
 
+# A direct edit or delete was attempted on an expense / income row a reconciliation created. The row is
+# derived, not authored: its amount IS the reconciliation's recorded difference, so mutating it leaves
+# the reconciliation intact and lying — the reverse pointer (adjustment_expense_id / adjustment_income_id)
+# is ON DELETE SET NULL, so deleting the entry orphans the reconciliation instead of cleaning it up. The
+# supported change is to re-run or delete the reconciliation itself, which recomputes or cascade-drops
+# its adjustment. Mapped to 409 by the API — the request is well-formed, it conflicts with the row's state.
+class ReconciliationOwnedEntryError(DomainError):
+    code = "reconciliation_owned_entry"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This entry is a reconciliation's adjustment. Re-run or delete that reconciliation instead of editing the entry."
+        super().__init__(self.message)
+
+
 # Reconciliation period bounds are inconsistent (e.g. period_start > period_end). Mapped to 400 by the API.
 class ReconciliationPeriodMismatchError(DomainError):
     code = "reconciliation_period_mismatch"
