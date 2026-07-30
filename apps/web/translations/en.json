@@ -200,8 +200,9 @@
       "none": "None",
       "noneForCurrency": "No {currency} accounts"
     },
-    "reconciliationOwned": {
-      "tooltip": "Created by a reconciliation. Re-run or delete it from the account or credit card."
+    "lockedRow": {
+      "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
+      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
     }
   },
   "login": {

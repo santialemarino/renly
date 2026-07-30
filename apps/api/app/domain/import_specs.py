@@ -80,10 +80,6 @@ _INVESTMENT_CATEGORY_ALIASES: dict[str, InvestmentCategory] = {
 
 # Expense category labels (EN/ES + each enum value) → ExpenseCategory.
 _EXPENSE_CATEGORY_ALIASES: dict[str, ExpenseCategory] = {
-    "card_fees_and_taxes": ExpenseCategory.card_fees_and_taxes,
-    "card fees and taxes": ExpenseCategory.card_fees_and_taxes,
-    "card fees": ExpenseCategory.card_fees_and_taxes,
-    "comisiones y impuestos de tarjeta": ExpenseCategory.card_fees_and_taxes,
     "clothing": ExpenseCategory.clothing,
     "clothes": ExpenseCategory.clothing,
     "ropa": ExpenseCategory.clothing,
@@ -169,10 +165,6 @@ _INCOME_CATEGORY_ALIASES: dict[str, IncomeCategory] = {
     "bonificación": IncomeCategory.bonus,
     "bonificacion": IncomeCategory.bonus,
     "aguinaldo": IncomeCategory.bonus,
-    "card_credits_and_refunds": IncomeCategory.card_credits_and_refunds,
-    "card credits and refunds": IncomeCategory.card_credits_and_refunds,
-    "card credits": IncomeCategory.card_credits_and_refunds,
-    "reintegros de tarjeta": IncomeCategory.card_credits_and_refunds,
     "dividends": IncomeCategory.dividends,
     "dividend": IncomeCategory.dividends,
     "dividendos": IncomeCategory.dividends,
@@ -267,10 +259,15 @@ _PAYMENT_METHOD_ALIASES: dict[str, PaymentMethod] = {
 
 # Builds a coercer mapping a label to an enum member (category, transaction type). Raises on unknown.
 def _enum_coercer[T: StrEnum](enum_cls: type[T], aliases: dict[str, T], noun: str = "category") -> Callable[[str], T]:
+    # Lists what the aliases can actually produce rather than every member of enum_cls. Some values are
+    # reserved for the system (the reconciliation categories) and deliberately have no alias, so naming
+    # the whole enum would tell the user to retry with a value this coercer also rejects. enum_cls is
+    # kept for the type binding.
+    valid = ", ".join(sorted({member.value for member in aliases.values()}))
+
     def coerce(raw: str) -> T:
         member = aliases.get(raw.strip().lower())
         if member is None:
-            valid = ", ".join(value.value for value in enum_cls)
             raise ValueError(f"Unknown {noun} '{raw.strip()}'. Use one of: {valid}.")
         return member
 

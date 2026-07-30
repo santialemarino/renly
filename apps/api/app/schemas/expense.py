@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
 
 
 # Body for POST /expenses.
@@ -53,6 +53,9 @@ class ExpenseCreate(RequestBase):
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_expense_category)
 
     # An expense pays at most one commitment-type. Three nullable FKs (payment_obligation_id /
     # subscription_id / installment_id) coexist on the row, but only one may be set on the
@@ -118,6 +121,9 @@ class ExpenseUpdate(RequestBase):
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_expense_category)
 
     # Mirrors ExpenseCreate's validator: an expense pays at most one commitment-type.
     # Only validates the fields the client actually set (omitted FKs don't count).
@@ -187,10 +193,7 @@ class ExpenseResponse(BaseModel):
     source: str = Field(description="Entry origin (manual, shortcut, auto, email_parsed).")
     payment_obligation_id: int | None = Field(default=None, description="Linked payment obligation id (Phase 3, Step E).")
     subscription_id: int | None = Field(default=None, description="Linked subscription id (Phase 3, follow-up 3a).")
-    installment_id: int | None = Field(
-        default=None,
-        description="Linked installment plan id (Phase 3, follow-up 3a).",
-    )
+    installment_id: int | None = Field(default=None, description="Linked installment plan id (Phase 3, follow-up 3a).")
     reconciliation_id: int | None = Field(
         default=None,
         description=(

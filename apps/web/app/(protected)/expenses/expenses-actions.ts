@@ -44,6 +44,12 @@ export type ExpenseMutationResult =
   | { ok: true; outcome: ExpenseMutationOutcome }
   | { ok: false; conflictDetail: string };
 
+// Same discriminated shape for delete, which carries the reverse cursor change on success. A delete
+// can conflict too: an expense a reconciliation owns is refused with 409 reconciliation_owned_entry.
+export type DeleteExpenseResult =
+  | { ok: true; reverse: PlanCursorChange | null }
+  | { ok: false; conflictDetail: string };
+
 interface PlanCursorChangeRaw {
   plan_type: 'obligation' | 'subscription' | 'installment';
   plan_id: number;
@@ -169,11 +175,17 @@ export async function updateExpense(
   return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
-export async function deleteExpense(id: number): Promise<PlanCursorChange | null> {
+export async function deleteExpense(id: number): Promise<DeleteExpenseResult> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) return { ok: false, conflictDetail: detail };
+    }
+    throw new Error('Failed to delete expense');
+  }
   const raw: { reverse_change: PlanCursorChangeRaw | null } = await res.json();
-  return mapCursorChange(raw.reverse_change);
+  return { ok: true, reverse: mapCursorChange(raw.reverse_change) };
 }
 
 // Result of a manual-dupe expense lookup (Phase 3, Step D).

@@ -70,19 +70,22 @@ function RowActions({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   /*
-   * Two independent reasons a row action is withheld. A reconciliation's adjustment is derived, so the
-   * API refuses BOTH PUT and DELETE on it (409) — offering either would only dead-end or orphan. A
-   * system category is narrower: it means the form cannot round-trip the row (no matching combobox
-   * option, and the schema's z.enum rejects the stored value), which withholds Edit but leaves Delete
-   * legitimate for a row nothing owns — a restored adjustment, whose reconciliation links restore nulls.
+   * Two independent reasons a row action is withheld, each with its own explanation. A reconciliation's
+   * adjustment is derived, so the API refuses BOTH PUT and DELETE on it (409) — offering either would
+   * only dead-end or orphan. A system category is narrower: it means the form cannot round-trip the row
+   * (no matching combobox option, and the schema's z.enum rejects the stored value), so it withholds
+   * Edit while Delete stays legitimate for a row nothing owns — a restored adjustment, whose
+   * reconciliation links restore nulls while its category survives. Either way the row explains itself:
+   * an action that silently vanishes is the thing this gate exists to avoid.
    */
   const reconciliationOwned = isReconciliationOwned(expense);
-  const canEdit = !reconciliationOwned && !isSystemExpenseCategory(expense.category);
+  const systemCategory = isSystemExpenseCategory(expense.category);
+  const canEdit = !reconciliationOwned && !systemCategory;
 
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        {canEdit && (
+        {canEdit ? (
           <RowActionButton
             icon={Pencil}
             tooltip={t('actions.edit')}
@@ -92,14 +95,18 @@ function RowActions({
               setEditOpen(true);
             }}
           />
-        )}
-        {reconciliationOwned ? (
+        ) : (
           <RowLockedIndicator
             icon={Lock}
-            tooltip={tCommon('reconciliationOwned.tooltip')}
-            ariaLabel="Managed by a reconciliation"
+            tooltip={tCommon(
+              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
+            )}
+            ariaLabel={
+              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
+            }
           />
-        ) : (
+        )}
+        {!reconciliationOwned && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('actions.delete')}

@@ -52,14 +52,16 @@ function RowActions({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   // Mirrors the expenses table: reconciliation ownership withholds both actions (the API refuses
-  // both), a system category withholds Edit only (the form cannot round-trip the row).
+  // both), a system category withholds Edit only (the form cannot round-trip the row). Each reason
+  // gets its own explanation rather than an action that silently disappears.
   const reconciliationOwned = isReconciliationOwned(income);
-  const canEdit = !reconciliationOwned && !isSystemIncomeCategory(income.category);
+  const systemCategory = isSystemIncomeCategory(income.category);
+  const canEdit = !reconciliationOwned && !systemCategory;
 
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        {canEdit && (
+        {canEdit ? (
           <RowActionButton
             icon={Pencil}
             tooltip={t('actions.edit')}
@@ -69,14 +71,18 @@ function RowActions({
               setEditOpen(true);
             }}
           />
-        )}
-        {reconciliationOwned ? (
+        ) : (
           <RowLockedIndicator
             icon={Lock}
-            tooltip={tCommon('reconciliationOwned.tooltip')}
-            ariaLabel="Managed by a reconciliation"
+            tooltip={tCommon(
+              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
+            )}
+            ariaLabel={
+              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
+            }
           />
-        ) : (
+        )}
+        {!reconciliationOwned && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('actions.delete')}

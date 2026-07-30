@@ -200,8 +200,9 @@
       "none": "Ninguna",
       "noneForCurrency": "Sin cuentas en {currency}"
     },
-    "reconciliationOwned": {
-      "tooltip": "Creada por una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito."
+    "lockedRow": {
+      "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
+      "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
     }
   },
   "login": {

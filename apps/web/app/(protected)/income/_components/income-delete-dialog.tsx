@@ -29,7 +29,11 @@ export function IncomeDeleteDialog({
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteIncome(income.id);
+      const result = await deleteIncome(income.id);
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
       toast.success(t('delete.success'));
       onOpenChange(false);
       onSuccess();

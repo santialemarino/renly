@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Lock, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
@@ -19,6 +19,7 @@ import {
 } from '@repo/ui/components';
 import { AccountReconciliationDeleteDialog } from '@/app/(protected)/accounts/_components/account-reconciliation-delete-dialog';
 import { fetchAccountReconciliations } from '@/app/(protected)/accounts/account-actions';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import type { AccountReconciliation } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
@@ -187,25 +188,36 @@ export function AccountReconciliationsSection({
                                   {adjustmentLabel(reconciliation)}
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="size-7 text-muted-foreground hover:text-destructive"
-                                        onClick={() => setDeleteTarget(reconciliation)}
-                                        disabled={!isLatest}
-                                        aria-label="Delete reconciliation"
-                                      >
-                                        <Trash2 className="size-3.5" />
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      {isLatest
-                                        ? t('delete.tooltip')
-                                        : t('delete.notLatestTooltip')}
-                                    </TooltipContent>
-                                  </Tooltip>
+                                  {/*
+                                   * Withhold rather than disable: a Radix tooltip never fires on a
+                                   * disabled trigger, so notLatestTooltip could never actually explain
+                                   * why an older reconciliation can't be deleted. Reconciliation is
+                                   * forward-only — delete newest-first.
+                                   */}
+                                  {isLatest ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="size-7 text-muted-foreground hover:text-destructive"
+                                          onClick={() => setDeleteTarget(reconciliation)}
+                                          aria-label="Delete reconciliation"
+                                        >
+                                          <Trash2 className="size-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>{t('delete.tooltip')}</TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <RowLockedIndicator
+                                      icon={Lock}
+                                      tooltip={t('delete.notLatestTooltip')}
+                                      ariaLabel="Only the latest reconciliation can be deleted"
+                                      className="size-7"
+                                      iconClassName="size-3.5"
+                                    />
+                                  )}
                                 </TableCell>
                               </TableRow>
                             );

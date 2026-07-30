@@ -3,12 +3,24 @@ from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
+from app.config import Settings
+from app.db import get_admin_session, get_session
+from app.deps.auth import get_current_user
 from app.domain import ReconciliationOwnedEntryError
-from app.domain.reconciliation import ensure_not_reconciliation_owned
+from app.domain.import_specs import _EXPENSE_CATEGORY_ALIASES, _INCOME_CATEGORY_ALIASES
+from app.domain.reconciliation import SYSTEM_EXPENSE_CATEGORIES, SYSTEM_INCOME_CATEGORIES, ensure_not_reconciliation_owned
+from app.domain.restore_specs import RESTORE_SPECS
+from app.main import create_app
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
+from app.rate_limit import limiter
+from app.schemas.expense import ExpenseCreate, ExpenseUpdate
+from app.schemas.income import IncomeCreate, IncomeUpdate
+from app.schemas.payment_obligation import PaymentObligationCreate, PaymentObligationUpdate
 from app.services import expense_service, income_service
 
 # Both reconciliation features post their difference as an ordinary expense / income row linked back
@@ -312,12 +324,145 @@ class TestTheGuardDoesNotOverReach:
         session.commit.assert_awaited_once()
 
 
+# Router wiring over a TestClient — the deliverable is an HTTP contract (409 + a stable code), and
+# only an in-process request exercises router -> domain_error_handler end to end.
+def _client() -> TestClient:
+    app = create_app(Settings(database_url="postgresql+asyncpg://u:p@localhost:5432/renly", jwt_secret="x" * 32))
+
+    async def _fake_session():
+        yield AsyncMock()
+
+    app.dependency_overrides[get_session] = _fake_session
+    app.dependency_overrides[get_admin_session] = _fake_session
+    app.dependency_overrides[get_current_user] = lambda: USER
+    return TestClient(app, raise_server_exceptions=False)
+
+
+class TestTheEndpointsReturn409:
+    @pytest.fixture(autouse=True)
+    def _reset_limiter(self):
+        limiter.reset()
+        yield
+        limiter.reset()
+
+    def test_put_expenses_returns_409_with_the_stable_code(self, monkeypatch):
+        _wire_expense(monkeypatch, _expense(reconciliation_id=3))
+        response = _client().put("/expenses/5", json={"amount": "9999.00"})
+        assert response.status_code == 409
+        assert response.json()["code"] == "reconciliation_owned_entry"
+
+    def test_delete_expenses_returns_409_with_the_stable_code(self, monkeypatch):
+        _wire_expense(monkeypatch, _expense(reconciliation_id=3))
+        response = _client().delete("/expenses/5")
+        assert response.status_code == 409
+        assert response.json()["code"] == "reconciliation_owned_entry"
+
+    def test_put_income_returns_409_with_the_stable_code(self, monkeypatch):
+        _wire_income(monkeypatch, _income(account_reconciliation_id=4))
+        response = _client().put("/income/9", json={"amount": "9999.00"})
+        assert response.status_code == 409
+        assert response.json()["code"] == "reconciliation_owned_entry"
+
+    def test_delete_income_returns_409_with_the_stable_code(self, monkeypatch):
+        _wire_income(monkeypatch, _income(account_reconciliation_id=4))
+        response = _client().delete("/income/9")
+        assert response.status_code == 409
+        assert response.json()["code"] == "reconciliation_owned_entry"
+
+    def test_the_response_carries_an_english_detail_for_api_consumers(self, monkeypatch):
+        # The backend stays locale-agnostic: the frontend maps `code`, a direct API consumer reads `detail`.
+        _wire_expense(monkeypatch, _expense(account_reconciliation_id=4))
+        body = _client().delete("/expenses/5").json()
+        assert body["detail"] == ReconciliationOwnedEntryError().message
+
+    def test_a_plain_expense_delete_still_returns_200(self, monkeypatch):
+        # Guards the contract in the other direction — the 409 must not leak onto ordinary entries.
+        _wire_expense(monkeypatch, _expense(category=ExpenseCategory.food, source="manual"))
+        response = _client().delete("/expenses/5")
+        assert response.status_code == 200
+
+    def test_a_plain_income_delete_still_returns_204(self, monkeypatch):
+        _wire_income(monkeypatch, _income(category=IncomeCategory.salary, source="manual"))
+        response = _client().delete("/income/9")
+        assert response.status_code == 204
+
+
+class TestSystemCategoriesAreNotUserWritable:
+    # The reconciliation categories LABEL a true-up, which is what lets the app tell a balance
+    # correction apart from real spending. A user-supplied value would be a fake true-up, and it would
+    # also produce a row the entry form cannot round-trip (no picker option) with nothing owning it.
+    @pytest.mark.parametrize("category", sorted(c.value for c in SYSTEM_EXPENSE_CATEGORIES))
+    def test_expense_create_rejects_a_system_category(self, category):
+        with pytest.raises(ValidationError) as exc:
+            ExpenseCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS", category=category)
+        assert "system-generated" in str(exc.value)
+
+    @pytest.mark.parametrize("category", sorted(c.value for c in SYSTEM_EXPENSE_CATEGORIES))
+    def test_expense_update_rejects_a_system_category(self, category):
+        with pytest.raises(ValidationError):
+            ExpenseUpdate(category=category)
+
+    @pytest.mark.parametrize("category", sorted(c.value for c in SYSTEM_INCOME_CATEGORIES))
+    def test_income_create_rejects_a_system_category(self, category):
+        with pytest.raises(ValidationError):
+            IncomeCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS", category=category)
+
+    @pytest.mark.parametrize("category", sorted(c.value for c in SYSTEM_INCOME_CATEGORIES))
+    def test_income_update_rejects_a_system_category(self, category):
+        with pytest.raises(ValidationError):
+            IncomeUpdate(category=category)
+
+    def test_obligation_schemas_reject_a_system_expense_category(self):
+        # Mark Paid copies expense_category onto the expense it creates, so an unguarded obligation
+        # would author the same fake true-up one step later.
+        with pytest.raises(ValidationError):
+            PaymentObligationCreate(
+                name="Rent",
+                amount=Decimal("10"),
+                currency="ARS",
+                next_due_date=ENTRY_DATE,
+                expense_category=ExpenseCategory.account_adjustment.value,
+            )
+        with pytest.raises(ValidationError):
+            PaymentObligationUpdate(expense_category=ExpenseCategory.account_adjustment.value)
+
+    def test_ordinary_categories_are_still_accepted(self):
+        assert ExpenseCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS", category="food").category == ExpenseCategory.food
+        assert ExpenseUpdate(category="other").category == ExpenseCategory.other
+        assert IncomeCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS", category="salary").category == IncomeCategory.salary
+        assert IncomeUpdate(category="other").category == IncomeCategory.other
+
+    def test_omitting_the_category_is_still_allowed(self):
+        assert ExpenseCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS").category is None
+        assert IncomeUpdate().category is None
+
+    def test_the_rejection_message_never_advertises_a_reserved_value(self):
+        # A message listing the whole enum would tell the user to retry with a value that also fails.
+        with pytest.raises(ValidationError) as exc:
+            ExpenseCreate(date=ENTRY_DATE, amount=Decimal("10"), currency="ARS", category="account_adjustment")
+        message = str(exc.value)
+        assert "food" in message
+        for reserved in SYSTEM_EXPENSE_CATEGORIES:
+            assert f" {reserved.value}," not in message and not message.endswith(f" {reserved.value}.")
+
+    def test_the_importers_no_longer_alias_a_system_category(self):
+        # A bank statement never says "account adjustment"; aliasing these let a CSV author a row that
+        # looked like a computed true-up.
+        for aliases, reserved in ((_EXPENSE_CATEGORY_ALIASES, SYSTEM_EXPENSE_CATEGORIES), (_INCOME_CATEGORY_ALIASES, SYSTEM_INCOME_CATEGORIES)):
+            assert not (set(aliases.values()) & set(reserved))
+
+    def test_the_reconciliation_services_can_still_write_them(self):
+        # The guard is at the request boundary only. Both services build their adjustment rows as models
+        # straight through the repositories, so they are unaffected — this is the whole reason the rule
+        # can be this strict.
+        assert ExpenseEntry(user_id=1, date=ENTRY_DATE, amount=Decimal("-200"), currency="ARS", category=ExpenseCategory.card_credits_and_refunds)
+        assert IncomeEntry(user_id=1, date=ENTRY_DATE, amount=Decimal("700"), currency="ARS", category=IncomeCategory.account_adjustment)
+
+
 class TestRestoreKeepsAdjustmentsMutable:
     def test_both_reconciliation_links_are_nulled_on_restore(self):
         # The frontend gate and the backend guard both read these links, so restore nulling them is
         # what makes a restored adjustment a plain entry rather than a permanently frozen row.
-        from app.domain.restore_specs import RESTORE_SPECS
-
         specs = {spec.key: spec for spec in RESTORE_SPECS}
         for key in ("expense_entries", "income_entries"):
             assert "reconciliation_id" in specs[key].null_fields, key

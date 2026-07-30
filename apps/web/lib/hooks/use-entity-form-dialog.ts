@@ -37,14 +37,28 @@ export function useEntityFormDialog<TValues extends FieldValues, TEntity>({
     if (open) form.reset(toValuesRef.current(entity));
   }, [open, entity, form]);
 
-  // Wraps the entity-specific save call with the shared toast/refresh/close sequence.
+  /*
+   * Wraps the entity-specific save call with the shared toast/refresh/close sequence.
+   *
+   * A save may return a conflict instead of throwing: the actions return the backend's 409 detail as
+   * DATA, because the Server Action boundary strips prototype chains and a thrown class instance
+   * arrives client-side as a plain Error. Returning `{ ok: false, conflictDetail }` surfaces the
+   * localized reason (e.g. an entry a reconciliation owns) instead of the generic errorMessage, which
+   * stays the fallback for a genuine failure — network, 500, an unmapped status. A save that returns
+   * nothing (most of them) is treated as success, so existing callers are unaffected.
+   */
   async function submitWithLifecycle(
-    save: () => Promise<unknown>,
+    save: () => Promise<{ ok: boolean; conflictDetail?: string } | unknown>,
     successMessage: string,
     errorMessage: string,
   ) {
     try {
-      await save();
+      const result = await save();
+      if (result && typeof result === 'object' && 'ok' in result && result.ok === false) {
+        const { conflictDetail } = result as { conflictDetail?: string };
+        toast.error(conflictDetail || errorMessage);
+        return;
+      }
       toast.success(successMessage);
       onSuccess();
       onOpenChange(false);

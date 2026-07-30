@@ -485,8 +485,11 @@ CREATE UNIQUE INDEX idx_expense_entries_installment_date
 -- adjustment_expense_id back-references the single SIGNED expense row created to capture the difference
 --   (positive -> card_fees_and_taxes; negative -> card_credits_and_refunds; zero -> no adjustment). Both
 --   directions are expenses because a bucket balance is `sum(expenses) - sum(settlements)`, so only an
---   expense can move it — an income row would leave the card overstated. ON DELETE SET NULL keeps the
---   reconciliation record if the adjustment is deleted via the normal entry flow.
+--   expense can move it — an income row would leave the card overstated. ON DELETE SET NULL is only a
+--   safety net for an out-of-band delete: the entry endpoints REFUSE a direct PUT / DELETE on an
+--   adjustment (409 reconciliation_owned_entry), because clearing this pointer would leave the
+--   reconciliation claiming a difference it no longer applies. Delete the reconciliation instead — the
+--   expense_entries.reconciliation_id side is ON DELETE CASCADE and drops the adjustment with it.
 -- adjustment_income_id is retained for the historical shape but is no longer written.
 -- is_stale flips to true when an expense_entries or card_settlements row inside the period is created
 --   / updated / deleted after this reconciliation was written. UI surfaces a re-reconcile prompt.
@@ -534,10 +537,13 @@ ALTER TABLE income_entries
 -- constraint and no delete-and-replace.
 -- difference = statement_balance - computed_balance. Positive means the account really holds more
 --   than Renly knew, so the adjustment is an INCOME; negative creates an expense; zero creates nothing.
--- adjustment_expense_id / adjustment_income_id back-reference the adjustment row (SET NULL so deleting
---   the adjustment through the normal entry flow leaves the reconciliation record intact); the matching
---   expense_entries / income_entries.account_reconciliation_id closes the loop with ON DELETE CASCADE, so
---   deleting a reconciliation always removes the adjustment it created.
+-- adjustment_expense_id / adjustment_income_id back-reference the adjustment row. SET NULL is only a
+--   safety net for an out-of-band delete: the entry endpoints REFUSE a direct PUT / DELETE on an
+--   adjustment (409 reconciliation_owned_entry), because clearing this pointer would leave the
+--   reconciliation claiming a difference it no longer applies while the balance snapped back. The
+--   matching expense_entries / income_entries.account_reconciliation_id closes the loop with ON DELETE
+--   CASCADE, so deleting a reconciliation always removes the adjustment it created — that is the
+--   supported way to revise one.
 CREATE TABLE account_reconciliations (
   id                    BIGSERIAL PRIMARY KEY,
   user_id               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

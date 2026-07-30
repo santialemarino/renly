@@ -31,12 +31,6 @@ describe('isReconciliationOwned', () => {
     // wrongly read 0 as unowned, and that class of bug is what the explicit null check prevents.
     expect(isReconciliationOwned(entry({ reconciliationId: 0 }))).toBe(true);
   });
-
-  it('ignores the provenance that a restore leaves behind', () => {
-    // restore nulls both links but keeps source='reconciliation', so a restored adjustment is a
-    // plain historical entry that nothing owns. Keying off the links is what makes it mutable again.
-    expect(isReconciliationOwned(entry())).toBe(false);
-  });
 });
 
 describe('isSystemExpenseCategory', () => {

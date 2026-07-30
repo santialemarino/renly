@@ -7,7 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.income_entry import IncomeCategory
-from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_income_category
 
 
 # Body for POST /income.
@@ -22,6 +22,9 @@ class IncomeCreate(RequestBase):
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_income_category)
+
 
 # Body for PUT /income/{id}. Partial update.
 class IncomeUpdate(RequestBase):
@@ -34,6 +37,9 @@ class IncomeUpdate(RequestBase):
 
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_income_category)
 
 
 # Response for a single income entry.
