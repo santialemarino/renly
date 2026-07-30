@@ -199,6 +199,9 @@
       "placeholder": "Seleccioná una cuenta",
       "none": "Ninguna",
       "noneForCurrency": "Sin cuentas en {currency}"
+    },
+    "reconciliationOwned": {
+      "tooltip": "Creada por una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito."
     }
   },
   "login": {
@@ -2544,6 +2547,7 @@
     "payment_pairing": "Solo se puede asignar una tarjeta de crédito cuando el método de pago es tarjeta de crédito.",
     "plan_required": "Esta función requiere un plan Pro.",
     "exchange_rate_unavailable": "No hay cotizaciones disponibles, así que no se pueden convertir los valores a {currency}.",
+    "reconciliation_owned_entry": "Esta entrada fue creada por una conciliación, así que no se puede editar ni eliminar directamente. Volvé a ejecutar esa conciliación o eliminala.",
     "reconciliation_period_mismatch": "El período de conciliación no es válido.",
     "invalid_import_file": "No se pudo leer el archivo. Subí un .csv, .tsv o .xlsx válido.",
     "request_too_large": "La solicitud es demasiado grande. Reducí la cantidad de datos e intentá de nuevo.",

@@ -3,28 +3,10 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
-import type { Expense } from '@/lib/api/expenses';
+import type { Expense, ExpenseRaw } from '@/lib/api/expenses';
+import { mapExpense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
-
-interface ExpenseRaw {
-  id: number;
-  date: string;
-  amount: string;
-  currency: string;
-  converted_amount: string | null;
-  category: string | null;
-  notes: string | null;
-  payment_method: string | null;
-  credit_card_id: number | null;
-  account_id: number | null;
-  source: string;
-  payment_obligation_id: number | null;
-  subscription_id: number | null;
-  installment_id: number | null;
-  created_at: string;
-  updated_at: string;
-}
 
 // Cursor change emitted by a linked plan on create / update / delete (Phase 3,
 // follow-up Item 7). The form composes a follow-up toast line — "Netflix's next
@@ -89,24 +71,7 @@ export async function getExpenseById(id: number): Promise<Expense> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch expense');
   const raw: ExpenseRaw = await res.json();
-  return {
-    id: raw.id,
-    date: raw.date,
-    amount: raw.amount,
-    currency: raw.currency,
-    convertedAmount: raw.converted_amount,
-    category: raw.category,
-    notes: raw.notes,
-    paymentMethod: raw.payment_method,
-    creditCardId: raw.credit_card_id,
-    accountId: raw.account_id,
-    source: raw.source,
-    paymentObligationId: raw.payment_obligation_id,
-    subscriptionId: raw.subscription_id,
-    installmentId: raw.installment_id,
-    createdAt: raw.created_at,
-    updatedAt: raw.updated_at,
-  };
+  return mapExpense(raw);
 }
 
 type ExpenseMutationRaw = ExpenseRaw & {
