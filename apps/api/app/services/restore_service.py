@@ -6,13 +6,14 @@
 # the whole plan server-side — it never trusts client-supplied counts.
 
 import json
+import logging
+from datetime import UTC, datetime
 from datetime import date as date_type
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from sqlalchemy import Date, DateTime, Enum, Numeric
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import SQLModel
 
@@ -21,6 +22,8 @@ from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES, RestoreSpe
 from app.models.user import User
 from app.repositories import restore_repository
 from app.schemas.restore import RestoreEntityStat, RestorePreviewResponse, RestoreResultResponse
+
+logger = logging.getLogger(__name__)
 
 
 # Parses the upload into the export object: a Renly export is a JSON object with known top-level keys.
@@ -59,11 +62,22 @@ def _build_model(model_cls: type[SQLModel], values: dict[str, Any]) -> SQLModel:
                 value = value if isinstance(value, enum_cls) else enum_cls(value)
             elif isinstance(column_type, DateTime):
                 value = datetime.fromisoformat(value) if isinstance(value, str) else value
+                # The export serializes timestamps from timestamptz columns, so they carry a UTC
+                # offset, while the models declare a naive datetime (they default to utcnow(), which
+                # returns naive UTC). asyncpg binds strictly to the declared type and rejects a
+                # tz-aware value for a naive column, which failed every real export on the first
+                # entity. Convert to UTC, then drop the tzinfo so the instant is preserved.
+                if value.tzinfo is not None and not column_type.timezone:
+                    value = value.astimezone(UTC).replace(tzinfo=None)
             elif isinstance(column_type, Date):
                 value = date_type.fromisoformat(value) if isinstance(value, str) else value
             elif isinstance(column_type, Numeric):
                 value = value if isinstance(value, Decimal) else Decimal(str(value))
-        except (ValueError, InvalidOperation) as exc:
+        # AttributeError joins the coercion failures because the tz check above dereferences .tzinfo on
+        # whatever the file supplied — a JSON number or object for a timestamp column reaches it as an
+        # int/Decimal/dict. Without it the row escapes as a 500 from both /restore and its read-only
+        # preview, instead of being counted unresolved like every other value the file gets wrong.
+        except (AttributeError, ValueError, InvalidOperation) as exc:
             raise ValueError(f"Invalid value for '{name}'.") from exc
         kwargs[name] = value
     return model_cls(**kwargs)
@@ -168,15 +182,21 @@ async def preview_restore(session: AsyncSession, user: User, filename: str, cont
     )
 
 
-# Re-runs the plan server-side and inserts the restorable rows in one transaction. A constraint
-# violation from a malformed/tampered export rolls the whole transaction back (nothing is written) and
-# surfaces as a 400 rather than a 500.
+# Re-runs the plan server-side and inserts the restorable rows in one transaction. Any database-level
+# rejection from a malformed/tampered export rolls the whole transaction back (nothing is written) and
+# surfaces as a 400 rather than a 500 — the documented contract for a bad file. DBAPIError is the
+# widest wrapper on purpose: _build_model already rejects a value it can coerce (that row is counted
+# unresolved instead), so what still reaches the driver is a value only Postgres can refuse — an
+# over-length string, a non-numeric int — and asyncpg reports several of those as a plain DataError
+# that SQLAlchemy does not map to a more specific class. The trace is logged server-side so a genuine
+# infrastructure failure caught by the same net stays diagnosable.
 async def confirm_restore(session: AsyncSession, user: User, filename: str, content: bytes) -> RestoreResultResponse:
     data = _parse_export(filename, content)
     try:
         stats = await _run(session, user, data, apply=True)
         await session.commit()
-    except IntegrityError as exc:
+    except DBAPIError as exc:
+        logger.exception("Restore failed at the database layer", exc_info=exc)
         raise InvalidImportFileError("The export could not be restored; it may be incomplete or from an incompatible version.") from exc
     return RestoreResultResponse(
         restored=sum(stat.restore for stat in stats),
