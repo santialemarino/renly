@@ -161,7 +161,7 @@ Each transfer stores a source account, a destination account, a date, optional n
 - Within a single currency the two are equal, and the app fills the second in for you. They must match: a transfer that credited less than it debited would quietly destroy net worth, so a bank fee is recorded as its own expense rather than shrinking the transfer.
 - Across currencies -- buying or selling dollars -- you enter both sides, and the pair **is** the record of the rate you actually got, spread included. No stored exchange rate can reconstruct that, which is why it is asked for rather than inferred.
 
-The two accounts must be different (a transfer to the same account moves nothing), and both amounts must be positive. Deleting an account removes the transfers that reference it: leaving half a transfer behind would silently skew the surviving account's balance.
+The two accounts must be different (a transfer to the same account moves nothing), both amounts must be positive, and the date must fall on or after both accounts' opening dates — otherwise one leg would count and the other would not, which is the one thing a transfer must never do. For the same reason an account's `opening_date` is locked once anything links to it, exactly like its currency. Deleting an account removes the transfers that reference it: leaving half a transfer behind would silently skew the surviving account's balance.
 
 **Paying someone else is an expense, not a transfer.** A transfer is only ever between two of your own accounts.
 
