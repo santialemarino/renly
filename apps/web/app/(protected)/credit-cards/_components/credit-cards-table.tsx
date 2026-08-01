@@ -326,8 +326,11 @@ export function CreditCardsTable({
                 const isExpanded = expandedId === card.id;
                 return (
                   <Fragment key={card.id}>
+                    {/* Archived rows dim, matching the accounts table — archiving is presentational
+                        (the row keeps its balance and stays in net worth), so it reads as de-emphasis
+                        rather than absence. */}
                     <TableRow
-                      className="cursor-pointer"
+                      className={cn('cursor-pointer', !card.isActive && 'opacity-60')}
                       onClick={() => setExpandedId(isExpanded ? null : card.id)}
                     >
                       <TableCell>
