@@ -146,9 +146,24 @@ Both directions create **one signed, card-linked adjustment expense** — positi
 
 An account is a cash, bank, or wallet balance -- the asset side of net worth, the mirror of a credit-card liability. Each account has a name, a type (`cash`, `bank`, `wallet`, `other`), a single currency, an opening balance, and the date that opening balance is measured at (which anchors the historical series). Accounts can be archived to hide them from active selection while preserving their history.
 
-The balance is **derived at query time**, never stored -- the same principle as credit-card balances: `opening_balance + linked income − linked expenses − settlements paid from the account`. Expenses, income, and settlements each carry an optional `account_id` (a NULL link is unattributed and affects no balance); account-to-account transfers are added in a later release. Balances may be negative (a real overdraft). An account's currency is fixed once entries link to it, so the balance never mixes currencies.
+The balance is **derived at query time**, never stored -- the same principle as credit-card balances: `opening_balance + linked income − linked expenses − settlements paid from the account + transfers in − transfers out`. Expenses, income, and settlements each carry an optional `account_id` (a NULL link is unattributed and affects no balance). Balances may be negative (a real overdraft). An account's currency is fixed once entries link to it, so the balance never mixes currencies.
 
-Deleting an account never destroys history: linked entries are un-attributed (their `account_id` clears), not deleted.
+Every term is bounded by the account's own `opening_date`. `opening_balance` is by definition the balance **at** that date, so anything dated earlier is already inside it and is not counted again -- an entry back-dated before an account opened does not move that account's balance.
+
+Deleting an account preserves your entry history: linked entries are un-attributed (transfers are the one exception — see below, since half a transfer would skew the other account) (their `account_id` clears), not deleted.
+
+### Transfers
+
+A transfer records money moving between two accounts you own. It is the one movement that is neither income nor an expense, because **your net worth does not change** -- the money just leaves one pool and arrives in another. Without it, an ATM withdrawal or buying dollars would have to be faked as an expense plus an income, which would inflate both of your flow totals for something that was never spending or earning.
+
+Each transfer stores a source account, a destination account, a date, optional notes, and **two amounts**:
+
+- Within a single currency the two are equal, and the app fills the second in for you. They must match: a transfer that credited less than it debited would quietly destroy net worth, so a bank fee is recorded as its own expense rather than shrinking the transfer.
+- Across currencies -- buying or selling dollars -- you enter both sides, and the pair **is** the record of the rate you actually got, spread included. No stored exchange rate can reconstruct that, which is why it is asked for rather than inferred.
+
+The two accounts must be different (a transfer to the same account moves nothing), both amounts must be positive, and the date must fall on or after both accounts' opening dates — otherwise one leg would count and the other would not, which is the one thing a transfer must never do. For the same reason an account's `opening_date` is locked once anything links to it, exactly like its currency. Deleting an account removes the transfers that reference it: leaving half a transfer behind would silently skew the surviving account's balance.
+
+**Paying someone else is an expense, not a transfer.** A transfer is only ever between two of your own accounts.
 
 ### Account Reconciliations
 

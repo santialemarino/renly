@@ -61,6 +61,12 @@ class TestBalanceUnion:
         monkeypatch.setattr(account_service.income_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("500")}))
         monkeypatch.setattr(account_service.expense_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("200")}))
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("50")}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
 
         balances = await account_service.get_account_balances(AsyncMock(), [account], USER.id)
 
@@ -73,6 +79,12 @@ class TestBalanceUnion:
         monkeypatch.setattr(account_service.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
 
         balances = await account_service.get_account_balances(AsyncMock(), [account], USER.id)
 
@@ -84,15 +96,40 @@ class TestBalanceUnion:
         assert await account_service.get_account_balances(AsyncMock(), [], USER.id) == {}
 
     @pytest.mark.asyncio
-    async def test_summaries_report_has_links_from_the_sum_keys(self, monkeypatch):
-        # An account is "linked" iff it appears in any source's sum (a group exists only with rows).
+    async def test_linked_is_unbounded_not_derived_from_the_balance_sums(self, monkeypatch):
+        """The currency lock is about denomination, not about reaching the balance.
+
+        The sums are bounded below by opening_date, so an account whose only rows PREDATE its opening
+        contributes nothing to them — deriving `linked` from the sum keys would report it unlocked and
+        the UI would offer a currency change the API then refuses. `linked` therefore runs its own
+        unbounded queries: account 7 here has an expense that no sum sees, and is still linked.
+        """
         linked_account = _account(id=7)
         unlinked_account = _account(id=8)
-        monkeypatch.setattr(account_service.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(account_service.expense_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("10")}))
-        monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
+            monkeypatch.setattr(getattr(account_service, repo), "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value={7}))
+        monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
 
         _, linked = await account_service.get_account_summaries(AsyncMock(), [linked_account, unlinked_account], USER.id)
+
+        assert linked == {7}
+
+    @pytest.mark.asyncio
+    async def test_a_transfer_alone_locks_the_currency(self, monkeypatch):
+        # An account that has only ever sent or received money must still be currency-locked.
+        for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
+            monkeypatch.setattr(getattr(account_service, repo), "sum_by_account_ids", AsyncMock(return_value={}))
+            monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value={7}))
+
+        _, linked = await account_service.get_account_summaries(AsyncMock(), [_account(id=7)], USER.id)
 
         assert linked == {7}
 
@@ -168,6 +205,7 @@ class TestAccountHasLinks:
         income_mock = AsyncMock(return_value=False)
         monkeypatch.setattr(account_service.income_repository, "exists_by_account_id", income_mock)
         monkeypatch.setattr(account_service.card_settlement_repository, "exists_by_account_id", AsyncMock(return_value=False))
+        monkeypatch.setattr(account_service.transfer_repository, "exists_by_account_id", AsyncMock(return_value=False))
 
         assert await account_service.account_has_links(AsyncMock(), 7, 1) is True
         income_mock.assert_not_awaited()  # short-circuits once the expense check is True
@@ -177,6 +215,7 @@ class TestAccountHasLinks:
         monkeypatch.setattr(account_service.expense_repository, "exists_by_account_id", AsyncMock(return_value=False))
         monkeypatch.setattr(account_service.income_repository, "exists_by_account_id", AsyncMock(return_value=False))
         monkeypatch.setattr(account_service.card_settlement_repository, "exists_by_account_id", AsyncMock(return_value=False))
+        monkeypatch.setattr(account_service.transfer_repository, "exists_by_account_id", AsyncMock(return_value=False))
 
         assert await account_service.account_has_links(AsyncMock(), 7, 1) is False
 

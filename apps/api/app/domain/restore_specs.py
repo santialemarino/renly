@@ -38,8 +38,10 @@ from app.models.transaction import Transaction
 # Exported sections the restore flow deliberately does not write, reported to the user for transparency.
 # api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
 # overwriting the target's settings); card_settlements and the two reconciliation tables are the
-# circular-FK cluster.
-SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations")
+# circular-FK cluster. transfers reference two accounts on NOT NULL columns, and accounts are not yet
+# part of the export — a restored transfer would have nothing to point at, so it is exported for
+# completeness but not replayed until the accounts export lands.
+SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations", "transfers")
 
 
 # A foreign key on the model that points at another restored entity and must be remapped to the new id.

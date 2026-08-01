@@ -22,6 +22,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction, TransactionType
+from app.models.transfer import Transfer
 from app.models.user import User
 from app.models.user_settings import UserSettings
 
@@ -59,6 +60,7 @@ __all__ = [
     "Subscription",
     "Transaction",
     "TransactionType",
+    "Transfer",
     "User",
     "UserSettings",
 ]

@@ -20,7 +20,7 @@ router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
 # Builds an AccountResponse, injecting the derived balance (defaults to opening_balance), the
-# has-links flag (whether any money links the account — the frontend locks its currency when set),
+# has-links flag (whether any money — including a transfer on either leg — links the account — the frontend locks its currency when set),
 # and the date of the account's most recent reconciliation.
 def _to_response(
     account: Account,

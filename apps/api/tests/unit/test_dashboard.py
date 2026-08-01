@@ -345,13 +345,13 @@ class TestComputeMonthlyCashBalances:
         accounts = [_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 15))]
         income = [(1, 2026, 2, Decimal("500"))]
         expense = [(1, 2026, 3, Decimal("200"))]
-        result, skipped = compute_monthly_cash_balances(accounts, income, expense, [], None, None)
+        result, skipped = compute_monthly_cash_balances(accounts, income, expense, [], [], [], None, None)
         assert result == {(2026, 1): Decimal("1000"), (2026, 2): Decimal("1500"), (2026, 3): Decimal("1300")}
         assert skipped == []
 
     def test_settlements_reduce_balance(self):
         accounts = [_acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 1))]
-        result, _ = compute_monthly_cash_balances(accounts, [], [], [(1, 2026, 2, Decimal("300"))], None, None)
+        result, _ = compute_monthly_cash_balances(accounts, [], [], [(1, 2026, 2, Decimal("300"))], [], [], None, None)
         assert result == {(2026, 1): Decimal("1000"), (2026, 2): Decimal("700")}
 
     def test_unconvertible_currency_is_dropped_and_reported(self):
@@ -361,7 +361,7 @@ class TestComputeMonthlyCashBalances:
             _acct(1, "ARS", opening="1000", opening_date=date_type(2026, 1, 1)),
             _acct(2, "EUR", opening="50", opening_date=date_type(2026, 1, 1)),
         ]
-        result, skipped = compute_monthly_cash_balances(accounts, [], [], [], "ARS", FIXED_LOOKUP)
+        result, skipped = compute_monthly_cash_balances(accounts, [], [], [], [], [], "ARS", FIXED_LOOKUP)
         assert result == {(2026, 1): Decimal("1000")}
         assert skipped == ["EUR"]
 
@@ -382,6 +382,8 @@ class TestNetWorthEvolutionCurrentMonth:
         monkeypatch.setattr(dashboard_service.income_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(dashboard_service.expense_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(dashboard_service.card_settlement_repository, "sum_by_account_ids_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.transfer_repository, "sum_in_by_account_ids_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(dashboard_service.transfer_repository, "sum_out_by_account_ids_monthly", AsyncMock(return_value=[]))
 
         points, _ = await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))
 

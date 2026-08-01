@@ -36,6 +36,12 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
     sortOrder: params.sort_order as SortOrder | undefined,
     showArchived: params.show_archived === 'true',
   });
+  /*
+   * The transfer dialog's pickers need EVERY account, not the page's filtered view — searching
+   * "Galicia" must not make the destination list empty and the transfer uncreatable. Every other page
+   * that renders an account picker calls getAccounts() unfiltered for the same reason.
+   */
+  const allAccounts = await getAccounts();
 
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
@@ -56,6 +62,7 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       <AccountsToolbar preferredCurrencies={preferredCurrencies} />
       <AccountsTable
         accounts={accounts}
+        allAccounts={allAccounts}
         preferredCurrencies={preferredCurrencies}
         firstRun={firstRun}
         timeZone={settings?.timezone ?? undefined}

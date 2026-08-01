@@ -20,6 +20,8 @@ import { AccountDeleteDialog } from '@/app/(protected)/accounts/_components/acco
 import { AccountFormDialog } from '@/app/(protected)/accounts/_components/account-form-dialog';
 import { AccountReconcileDialog } from '@/app/(protected)/accounts/_components/account-reconcile-dialog';
 import { AccountReconciliationsSection } from '@/app/(protected)/accounts/_components/account-reconciliations-section';
+import { AccountTransfersSection } from '@/app/(protected)/accounts/_components/account-transfers-section';
+import { TransferFormDialog } from '@/app/(protected)/accounts/_components/transfer-form-dialog';
 import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/account-actions';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
@@ -33,6 +35,8 @@ const COLUMN_COUNT = 8;
 
 interface AccountsTableProps {
   accounts: Account[];
+  // Unfiltered, for the transfer dialog's pickers — the page's `accounts` is search/archive filtered.
+  allAccounts: Account[];
   preferredCurrencies?: string[];
   firstRun?: boolean;
   // The user's settings timezone, so "today" in the reconcile dialog matches the API's date guards.
@@ -41,6 +45,7 @@ interface AccountsTableProps {
 
 export function AccountsTable({
   accounts,
+  allAccounts,
   preferredCurrencies,
   firstRun,
   timeZone,
@@ -54,6 +59,7 @@ export function AccountsTable({
   const [editAccount, setEditAccount] = useState<Account | null>(null);
   const [deleteState, setDeleteState] = useState<Account | null>(null);
   const [reconcileAccount, setReconcileAccount] = useState<Account | null>(null);
+  const [transferAccount, setTransferAccount] = useState<Account | null>(null);
   const [archivingId, setArchivingId] = useState<number | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   // Bumped after a reconciliation lands so an already-open row re-reads its history.
@@ -227,6 +233,19 @@ export function AccountsTable({
                       onReconcile={() => setReconcileAccount(a)}
                       onChanged={() => router.refresh()}
                     />
+
+                    <AccountTransfersSection
+                      key={`transfers-${a.id}`}
+                      account={a}
+                      expanded={isExpanded}
+                      colSpan={COLUMN_COUNT}
+                      reloadToken={reloadToken}
+                      onTransfer={() => setTransferAccount(a)}
+                      onChanged={() => {
+                        setReloadToken((token) => token + 1);
+                        router.refresh();
+                      }}
+                    />
                   </Fragment>
                 );
               })
@@ -251,6 +270,20 @@ export function AccountsTable({
           if (!open) setReconcileAccount(null);
         }}
         account={reconcileAccount}
+        timeZone={timeZone}
+        onSuccess={() => {
+          setReloadToken((token) => token + 1);
+          router.refresh();
+        }}
+      />
+
+      <TransferFormDialog
+        open={!!transferAccount}
+        onOpenChange={(open) => {
+          if (!open) setTransferAccount(null);
+        }}
+        accounts={allAccounts}
+        defaultFromAccountId={transferAccount?.id}
         timeZone={timeZone}
         onSuccess={() => {
           setReloadToken((token) => token + 1);

@@ -66,6 +66,20 @@ class AccountCurrencyMismatchError(DomainError):
         return {"entry_currency": self.entry_currency, "account_currency": self.account_currency}
 
 
+# An account's opening_date cannot be changed because money entries link to it. opening_balance is
+# defined as "the balance AT opening_date", and every balance sum is bounded below by it — so moving the
+# date forward silently drops rows from the balance while opening_balance stays put, and money that left
+# one account would arrive nowhere. The pair cannot be recomputed (the app never knew the earlier
+# balance), so the date is locked, mirroring the currency lock. Mapped to 409.
+class AccountOpeningDateChangeBlockedError(DomainError):
+    code = "account_opening_date_change_blocked"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "Opening date cannot be changed because this account has linked entries."
+        super().__init__(self.message)
+
+
 # An account reconciliation is dated before the account's most recent one. Reconciliations are
 # point-in-time truths applied forward, so an older one entered afterwards would post its adjustment
 # *underneath* the newer one — which cannot see it — leaving the newer, authoritative balance wrong.
@@ -333,4 +347,63 @@ class ReconciliationPeriodMismatchError(DomainError):
 
     def __init__(self, message: str = "Reconciliation period is invalid.") -> None:
         self.message = message
+        super().__init__(self.message)
+
+
+# A transfer is dated before one of its accounts existed. The balance union bounds each leg by its own
+# account's opening_date (opening_balance already IS the balance at that date), so a transfer dated
+# before the later-opening account would be counted on one leg and dropped on the other — money would
+# leave one account and arrive nowhere, silently changing net worth. Mapped to 400 by the API.
+class TransferBeforeAccountOpenedError(DomainError):
+    code = "transfer_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A transfer must be dated on or after both accounts' opening dates (the later one is {opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# A cross-currency transfer did not record the amount credited. Within one currency the credited amount
+# mirrors the debited one, but across currencies only the user knows the rate actually used (the blue /
+# MEP spread), and inventing one would misstate the destination balance. Mapped to 400 by the API.
+class TransferAmountRequiredError(DomainError):
+    code = "transfer_amount_required"
+    status_code = 400
+
+    def __init__(self, from_currency: str, to_currency: str) -> None:
+        self.from_currency = from_currency
+        self.to_currency = to_currency
+        self.message = f"Moving {from_currency} to {to_currency} must record the amount credited, so the rate used is preserved."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"from_currency": self.from_currency, "to_currency": self.to_currency}
+
+
+# A single-currency transfer credited a different amount than it debited. Money moving between two of
+# your own accounts cannot change net worth, so the two sides must match — a bank fee is recorded as its
+# own expense rather than silently shrinking the transfer. Mapped to 400 by the API.
+class TransferAmountsMustMatchError(DomainError):
+    code = "transfer_amounts_must_match"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Within one currency a transfer must credit exactly what it debits. Record a fee as its own expense."
+        super().__init__(self.message)
+
+
+# A transfer names the same account on both legs. It would move nothing and the balance union counts each
+# leg separately, so the row would be added and subtracted on one account. Mapped to 400 by the API.
+class TransferSameAccountError(DomainError):
+    code = "transfer_same_account"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A transfer must move money between two different accounts."
         super().__init__(self.message)

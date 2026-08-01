@@ -40,6 +40,7 @@ from app.routers import (
     restore,
     snapshot_grid,
     subscriptions,
+    transfers,
 )
 from app.routers import settings as settings_router
 from app.scheduler import start_scheduler, stop_scheduler
@@ -139,6 +140,7 @@ _ROUTERS = (
     settings_router.router,
     snapshot_grid.router,
     subscriptions.router,
+    transfers.router,
 )
 
 _EXCEPTION_HANDLERS = {

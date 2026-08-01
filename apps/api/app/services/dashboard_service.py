@@ -15,6 +15,7 @@ from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.subscription_repository import subscription_repository
+from app.repositories.transfer_repository import transfer_repository
 from app.schemas.dashboard import (
     CompositionItem,
     DashboardCompositionResponse,
@@ -139,6 +140,8 @@ def compute_monthly_cash_balances(
     income_monthly: list[tuple[int, int, int, Decimal]],
     expense_monthly: list[tuple[int, int, int, Decimal]],
     settlement_monthly: list[tuple[int, int, int, Decimal]],
+    transfer_in_monthly: list[tuple[int, int, int, Decimal]],
+    transfer_out_monthly: list[tuple[int, int, int, Decimal]],
     target_currency: str | None,
     lookup: RateLookup | None,
 ) -> tuple[dict[tuple[int, int], Decimal], list[str]]:
@@ -172,6 +175,12 @@ def compute_monthly_cash_balances(
     for account_id, year, month, total in expense_monthly:
         _add(account_id, year, month, -Decimal(str(total)))
     for account_id, year, month, total in settlement_monthly:
+        _add(account_id, year, month, -Decimal(str(total)))
+    # Each transfer leg is added under its own account, in that account's currency, so a cross-currency
+    # move converts each side at its own month-end rate — the same way the headline balance does.
+    for account_id, year, month, total in transfer_in_monthly:
+        _add(account_id, year, month, Decimal(str(total)))
+    for account_id, year, month, total in transfer_out_monthly:
         _add(account_id, year, month, -Decimal(str(total)))
 
     running = ZERO
@@ -351,7 +360,7 @@ async def compute_net_worth_evolution(
         skipped.update(card_skipped)
 
     # Build the monthly cash series the same way (opening balances + linked income/expenses/
-    # settlements accumulated, each converted at its own month-end). Includes archived accounts —
+    # settlements + both transfer legs accumulated, each converted at its own month-end). Includes archived accounts —
     # their balance stays in net worth (archive is a UI filter, like cards).
     accounts = await account_repository.list_by_user(session, user_id, active_only=False)
     account_ids = [a.id for a in accounts if a.id is not None]
@@ -360,11 +369,15 @@ async def compute_net_worth_evolution(
         cash_income = await income_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
         cash_expense = await expense_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
         cash_settlement = await card_settlement_repository.sum_by_account_ids_monthly(session, account_ids, user_id)
+        cash_transfer_in = await transfer_repository.sum_in_by_account_ids_monthly(session, account_ids, user_id)
+        cash_transfer_out = await transfer_repository.sum_out_by_account_ids_monthly(session, account_ids, user_id)
         cash_balance_by_month, cash_skipped = compute_monthly_cash_balances(
             accounts,
             cash_income,
             cash_expense,
             cash_settlement,
+            cash_transfer_in,
+            cash_transfer_out,
             currency,
             lookup,
         )

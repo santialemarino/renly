@@ -573,6 +573,38 @@ ALTER TABLE income_entries
   ADD CONSTRAINT income_entries_account_reconciliation_fkey
   FOREIGN KEY (account_reconciliation_id) REFERENCES account_reconciliations(id) ON DELETE CASCADE;
 
+-- Account-to-account movement (Deferred Bucket 3 #1, PR 5). The one movement type that is neither
+-- income nor an expense: net worth does not change, the money just leaves one owned pool and arrives
+-- in another. Paying someone ELSE is an expense, not a transfer.
+-- Both amounts are stored so a cross-currency transfer (buy/sell USD) records the rate actually used:
+--   from_amount is in the source account's currency, to_amount in the destination's, and their ratio
+--   is the implied rate including the spread. Within one currency the two are equal — a bank fee is
+--   recorded as its own expense rather than shrinking the transfer, so "a transfer never changes net
+--   worth" stays a hard invariant rather than something the amounts happen to satisfy.
+-- Both account FKs CASCADE: a surviving half-transfer would silently skew the other account's derived
+--   balance, which is the opposite of what deleting an account should do.
+CREATE TABLE transfers (
+  id              BIGSERIAL PRIMARY KEY,
+  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  from_account_id BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  to_account_id   BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  date            DATE NOT NULL,
+  from_amount     NUMERIC(18,2) NOT NULL,
+  to_amount       NUMERIC(18,2) NOT NULL,
+  notes           TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- A same-account transfer is a no-op that would double-count: the balance union sums each leg
+  -- independently, so the row would be both added and subtracted on the same account.
+  CONSTRAINT transfers_distinct_accounts CHECK (from_account_id <> to_account_id),
+  CONSTRAINT transfers_positive_amounts CHECK (from_amount > 0 AND to_amount > 0)
+);
+CREATE INDEX idx_transfers_user_id ON transfers(user_id);
+-- The balance union filters one leg at a time by account and bounds by date, so each leg gets its own
+-- composite index rather than a bare FK index.
+CREATE INDEX idx_transfers_from_account_date ON transfers(from_account_id, date);
+CREATE INDEX idx_transfers_to_account_date ON transfers(to_account_id, date);
+
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
 -- next_due_date is the anchor for the next occurrence; recurring obligations project forward from it.
@@ -805,6 +837,10 @@ CREATE TRIGGER trg_account_reconciliations_updated_at
   BEFORE UPDATE ON account_reconciliations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_transfers_updated_at
+  BEFORE UPDATE ON transfers
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (SEC-15) — database-enforced per-user isolation
 --
@@ -904,6 +940,10 @@ CREATE POLICY card_reconciliations_user_isolation ON card_reconciliations
 
 ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY account_reconciliations_user_isolation ON account_reconciliations
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY transfers_user_isolation ON transfers
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE payment_obligations ENABLE ROW LEVEL SECURITY;

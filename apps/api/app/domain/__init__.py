@@ -21,6 +21,7 @@ from app.domain.errors import (
     AccountCardExclusivityError,
     AccountCurrencyChangeBlockedError,
     AccountCurrencyMismatchError,
+    AccountOpeningDateChangeBlockedError,
     AccountReconciliationBeforeLastError,
     AccountReconciliationBeforeOpeningError,
     AccountReconciliationFutureDateError,
@@ -44,6 +45,10 @@ from app.domain.errors import (
     PlanRequiredError,
     ReconciliationOwnedEntryError,
     ReconciliationPeriodMismatchError,
+    TransferAmountRequiredError,
+    TransferAmountsMustMatchError,
+    TransferBeforeAccountOpenedError,
+    TransferSameAccountError,
 )
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
@@ -53,6 +58,7 @@ __all__ = [
     "AccountCardExclusivityError",
     "AccountCurrencyChangeBlockedError",
     "AccountCurrencyMismatchError",
+    "AccountOpeningDateChangeBlockedError",
     "AccountReconciliationBeforeLastError",
     "AccountReconciliationBeforeOpeningError",
     "AccountReconciliationFutureDateError",
@@ -83,6 +89,10 @@ __all__ = [
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
     "SUPPORTED_CURRENCIES",
+    "TransferAmountRequiredError",
+    "TransferAmountsMustMatchError",
+    "TransferBeforeAccountOpenedError",
+    "TransferSameAccountError",
     "claimed_installment_cuotas",
     "claimed_subscription_cycles",
     "closest_installment_cuota",
