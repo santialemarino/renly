@@ -24,6 +24,7 @@ from app.repositories.restore_repository import restore_repository
 from app.repositories.snapshot_repository import snapshot_repository
 from app.repositories.subscription_repository import subscription_repository
 from app.repositories.transaction_repository import transaction_repository
+from app.repositories.transfer_repository import transfer_repository
 from app.repositories.user_repository import user_repository
 from app.repositories.user_settings_repository import user_settings_repository
 
@@ -52,6 +53,7 @@ __all__ = [
     "snapshot_repository",
     "subscription_repository",
     "transaction_repository",
+    "transfer_repository",
     "user_repository",
     "user_settings_repository",
 ]

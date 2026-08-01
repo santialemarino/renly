@@ -5,6 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 
 
@@ -42,6 +43,8 @@ async def delete(session: AsyncSession, settlement: CardSettlement) -> None:
 # Sum of settlements drawn from each account, grouped by account_id. Returns {account_id: total}.
 # Every linked settlement is in the account's currency (enforced at link time), so no currency split.
 # as_of_date bounds the sum to rows dated on or before it (used by reconciliation's point-in-time balance).
+# The join bounds it BELOW by the account's own opening_date: opening_balance is by definition the balance
+# AT that date, so an earlier row is already inside it and summing it again double-counts.
 async def sum_by_account_ids(
     session: AsyncSession,
     account_ids: list[int],
@@ -51,8 +54,10 @@ async def sum_by_account_ids(
 ) -> dict[int, Decimal]:
     if not account_ids:
         return {}
-    stmt = select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0)).where(
-        CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id
+    stmt = (
+        select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0))
+        .join(Account, Account.id == CardSettlement.account_id)
+        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
     )
     if as_of_date is not None:
         stmt = stmt.where(CardSettlement.date <= as_of_date)

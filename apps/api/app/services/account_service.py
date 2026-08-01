@@ -11,6 +11,7 @@ from app.repositories import (
     card_settlement_repository,
     expense_repository,
     income_repository,
+    transfer_repository,
 )
 
 ZERO = Decimal(0)
@@ -60,10 +61,13 @@ async def validate_account_link(session: AsyncSession, user: User, account_id: i
 
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,
 # derived at query time (one batch query per source): balance = opening_balance + linked income −
-# linked expenses − settlements paid from the account. Every linked row is in the account's currency
-# (validate_account_link enforces it), so the sums need no per-currency conversion. The linked set is
-# free from the same sums (a group is present only when it has rows) and drives the currency lock in
-# the response. Transfers are added in a later PR.
+# linked expenses − settlements paid from the account + transfers in − transfers out. Every linked row
+# is in the account's currency (validate_account_link enforces it) and each transfer leg is summed in
+# its own account's currency, so the sums need no per-currency conversion. Each sum is bounded below by
+# the account's opening_date inside the repository — opening_balance IS the balance at that date, so an
+# earlier row is already inside it. The linked set is free from the same sums (a group is present only
+# when it has rows) and drives the currency lock in the response; a transfer counts as a link on either
+# leg, so an account that has only ever sent or received money is still currency-locked.
 async def get_account_summaries(session: AsyncSession, accounts: list[Account], user_id: int) -> tuple[dict[int, Decimal], set[int]]:
     account_ids = [a.id for a in accounts if a.id is not None]
     if not account_ids:
@@ -71,12 +75,22 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
     income = await income_repository.sum_by_account_ids(session, account_ids, user_id)
     expenses = await expense_repository.sum_by_account_ids(session, account_ids, user_id)
     settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
+    transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, user_id)
+    transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, user_id)
+    transfer_linked = await transfer_repository.linked_account_ids(session, account_ids, user_id)
     balances = {
-        a.id: a.opening_balance + income.get(a.id, ZERO) - expenses.get(a.id, ZERO) - settlements.get(a.id, ZERO)
+        a.id: (
+            a.opening_balance
+            + income.get(a.id, ZERO)
+            - expenses.get(a.id, ZERO)
+            - settlements.get(a.id, ZERO)
+            + transfers_in.get(a.id, ZERO)
+            - transfers_out.get(a.id, ZERO)
+        )
         for a in accounts
         if a.id is not None
     }
-    linked = set(income) | set(expenses) | set(settlements)
+    linked = set(income) | set(expenses) | set(settlements) | transfer_linked
     return balances, linked
 
 
