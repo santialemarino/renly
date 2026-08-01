@@ -343,7 +343,34 @@ Cash / bank / wallet accounts — the asset side of net worth (the mirror of cre
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
 
-**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
+**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency: `opening_balance + linked income − linked expenses − settlements paid from it + transfers in − transfers out`, every term bounded below by `opening_date` because `opening_balance` already is the balance at that date), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
+
+### Transfers
+
+Money moving between two accounts you own. Neither income nor an expense — net worth does not change.
+
+| Method   | Path              | Description                                     |
+| -------- | ----------------- | ----------------------------------------------- |
+| `GET`    | `/transfers`      | List your transfers, newest first.              |
+| `POST`   | `/transfers`      | Record a transfer between two of your accounts. |
+| `GET`    | `/transfers/{id}` | Get a single transfer.                          |
+| `PUT`    | `/transfers/{id}` | Update a transfer. Only provided fields change. |
+| `DELETE` | `/transfers/{id}` | Delete a transfer; both balances recompute.     |
+
+**List query parameter:** `account_id` — only transfers touching that account, on **either** leg.
+
+**Request fields:** `from_account_id`, `to_account_id`, `date`, `from_amount` (> 0), optional `to_amount` (> 0) and `notes`.
+
+**The two amounts.** `from_amount` is in the source account's currency, `to_amount` in the destination's.
+
+- **Same currency:** omit `to_amount` and it mirrors `from_amount`. Sending a _different_ value is rejected (400 `transfer_amounts_must_match`) rather than silently overwritten — a transfer that credits less than it debits would destroy net worth, so record a bank fee as its own expense.
+- **Different currencies:** `to_amount` is **required** (400 `transfer_amount_required` otherwise). The pair is the record of the rate actually used, spread included; no stored rate can reconstruct it.
+
+Both accounts must be yours (404 otherwise) and must differ (400 `transfer_same_account`). On `PUT`, the currency rules are re-checked against the **effective** pair, so moving one leg to an account in another currency is validated as the new shape.
+
+**Response fields:** the request fields plus `from_account_name` / `to_account_name` and `from_currency` / `to_currency`, denormalized so a client renders a row without a second lookup. There is deliberately **no** implied-rate field: any single derived number has to pick a direction that only reads correctly one way (buying dollars wants "1200 ARS per USD", selling wants the reciprocal), so clients render the pair instead.
+
+Deleting an account deletes the transfers referencing it — a surviving half-transfer would skew the other account's balance.
 
 ### Account reconciliation
 
@@ -676,7 +703,7 @@ Every error response has a JSON body with a human-readable `detail` (English) an
 
 | Code  | Meaning                                                                                                                                                                                                                                                                                                                                                                       |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `400` | Bad request -- e.g., a snapshot/transaction `currency` that doesn't match its investment's `base_currency`.                                                                                                                                                                                                                                                                   |
+| `400` | Bad request -- e.g., a snapshot/transaction `currency` that doesn't match its investment's `base_currency`, or an invalid transfer (`transfer_same_account`, `transfer_amounts_must_match`, `transfer_amount_required`).                                                                                                                                                      |
 | `401` | Unauthorized -- missing or invalid token.                                                                                                                                                                                                                                                                                                                                     |
 | `404` | Not found -- the resource doesn't exist or doesn't belong to you.                                                                                                                                                                                                                                                                                                             |
 | `409` | Conflict -- e.g., trying to change an investment's currency when it already has snapshots, editing or deleting an expense/income row that a reconciliation owns (`reconciliation_owned_entry`), or a partial UNIQUE INDEX rejection on the expense entries table (manual entry duplicating a scheduler-emitted row for the same subscription / installment on the same date). |
