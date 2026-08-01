@@ -105,6 +105,15 @@ class TestBuildModel:
         model = restore_service._build_model(Investment, row)
         assert model.created_at == datetime(2026, 3, 28, 3, 59, 2, 625635)
 
+    # A tampered file can put a JSON number or object where a timestamp belongs. The tz check
+    # dereferences .tzinfo, so such a value has to fail as an invalid value like every other bad
+    # scalar — not as an AttributeError, which no caller catches.
+    @pytest.mark.parametrize("bad", [12345, 1.5, True, {"at": 1}, ["2026-03-28"]])
+    def test_a_non_timestamp_value_is_an_invalid_value(self, bad):
+        row = {"user_id": 1, "name": "Apple", "category": "stocks", "base_currency": "USD", "created_at": bad}
+        with pytest.raises(ValueError, match="Invalid value for 'created_at'"):
+            restore_service._build_model(Investment, row)
+
 
 class TestPreviewRestore:
     @pytest.mark.asyncio
@@ -129,6 +138,21 @@ class TestPreviewRestore:
         by_entity = {stat.entity: stat for stat in result.entities}
         assert by_entity["investments"].restore == 2
         assert (by_entity["investment_snapshots"].restore, by_entity["investment_snapshots"].skipped_unresolved) == (1, 1)
+
+    # The preview is a read-only dry run, so a row the file gets wrong must be reported as unresolved
+    # rather than crashing the whole request — including a timestamp that isn't one.
+    @pytest.mark.asyncio
+    async def test_counts_a_malformed_timestamp_as_unresolved(self, monkeypatch):
+        _mock_repo(monkeypatch)
+        content = _export(
+            investments=[
+                {"id": 10, "name": "Apple", "category": "stocks", "base_currency": "USD"},
+                {"id": 11, "name": "Bitcoin", "category": "crypto", "base_currency": "USD", "created_at": 12345},
+            ]
+        )
+        result = await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", content)
+        by_entity = {stat.entity: stat for stat in result.entities}
+        assert (by_entity["investments"].restore, by_entity["investments"].skipped_unresolved) == (1, 1)
 
     @pytest.mark.asyncio
     async def test_preview_does_not_write(self, monkeypatch):

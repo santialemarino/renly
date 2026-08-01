@@ -73,7 +73,11 @@ def _build_model(model_cls: type[SQLModel], values: dict[str, Any]) -> SQLModel:
                 value = date_type.fromisoformat(value) if isinstance(value, str) else value
             elif isinstance(column_type, Numeric):
                 value = value if isinstance(value, Decimal) else Decimal(str(value))
-        except (ValueError, InvalidOperation) as exc:
+        # AttributeError joins the coercion failures because the tz check above dereferences .tzinfo on
+        # whatever the file supplied — a JSON number or object for a timestamp column reaches it as an
+        # int/Decimal/dict. Without it the row escapes as a 500 from both /restore and its read-only
+        # preview, instead of being counted unresolved like every other value the file gets wrong.
+        except (AttributeError, ValueError, InvalidOperation) as exc:
             raise ValueError(f"Invalid value for '{name}'.") from exc
         kwargs[name] = value
     return model_cls(**kwargs)
