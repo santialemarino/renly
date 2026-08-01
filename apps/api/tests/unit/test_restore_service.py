@@ -1,10 +1,11 @@
 import json
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import DBAPIError
 
 from app.config import Settings
 from app.db import get_admin_session, get_session
@@ -82,6 +83,27 @@ class TestBuildModel:
         # InvestmentSnapshot.value is NOT NULL with no default → a truncated row is rejected.
         with pytest.raises(ValueError, match="Missing required field"):
             restore_service._build_model(InvestmentSnapshot, {"user_id": 1, "date": "2026-01-31", "currency": "USD", "investment_id": 3})
+
+    # Every real export carries a UTC offset on its timestamps (they are read from timestamptz
+    # columns), while the models declare a naive datetime. asyncpg binds strictly to the declared type
+    # and refused the tz-aware value, so restoring any real export died on the first entity.
+    def test_strips_the_utc_offset_the_export_writes(self):
+        row = {"user_id": 1, "name": "Apple", "category": "stocks", "base_currency": "USD", "created_at": "2026-03-28T03:59:02.625635Z"}
+        model = restore_service._build_model(Investment, row)
+        assert model.created_at.tzinfo is None
+        assert model.created_at == datetime(2026, 3, 28, 3, 59, 2, 625635)
+
+    def test_converts_a_non_utc_offset_rather_than_dropping_it(self):
+        # 00:30 at -03:00 is 03:30 UTC — discarding the offset instead of converting would shift the
+        # instant by three hours and silently move the row to the previous day.
+        row = {"user_id": 1, "name": "Apple", "category": "stocks", "base_currency": "USD", "created_at": "2026-03-28T00:30:00-03:00"}
+        model = restore_service._build_model(Investment, row)
+        assert model.created_at == datetime(2026, 3, 28, 3, 30, 0)
+
+    def test_leaves_an_already_naive_timestamp_untouched(self):
+        row = {"user_id": 1, "name": "Apple", "category": "stocks", "base_currency": "USD", "created_at": "2026-03-28T03:59:02.625635"}
+        model = restore_service._build_model(Investment, row)
+        assert model.created_at == datetime(2026, 3, 28, 3, 59, 2, 625635)
 
 
 class TestPreviewRestore:
@@ -277,6 +299,35 @@ def _restore_client() -> TestClient:
     app.dependency_overrides[get_admin_session] = _fake_session
     app.dependency_overrides[get_current_user] = lambda: USER
     return TestClient(app, raise_server_exceptions=False)
+
+
+class TestDatabaseRejectionIsABadFileNotACrash:
+    # The documented contract is that a file whose contents the database refuses returns 400. Only
+    # IntegrityError was caught, so anything asyncpg reports as a plain DataError (an over-length
+    # string, a non-numeric int) escaped as a 500 — the shape that made a real restore look like a
+    # server crash. _build_model already rejects what it can coerce, so this net only sees values
+    # Postgres alone can refuse.
+    @pytest.mark.asyncio
+    async def test_a_dbapi_error_becomes_a_domain_error(self, monkeypatch):
+        monkeypatch.setattr(
+            restore_service.restore_repository,
+            "bulk_insert",
+            AsyncMock(side_effect=DBAPIError("INSERT", {}, Exception("value too long for type character varying(255)"))),
+        )
+        content = _export(investments=[{"id": 10, "name": "X" * 500, "category": "stocks", "base_currency": "USD"}])
+        with pytest.raises(InvalidImportFileError):
+            await restore_service.confirm_restore(AsyncMock(), USER, "renly-export.json", content)
+
+    def test_the_endpoint_reports_it_as_400(self, monkeypatch):
+        monkeypatch.setattr(
+            restore_service.restore_repository,
+            "bulk_insert",
+            AsyncMock(side_effect=DBAPIError("INSERT", {}, Exception("value too long"))),
+        )
+        content = _export(investments=[{"id": 10, "name": "X" * 500, "category": "stocks", "base_currency": "USD"}])
+        response = _restore_client().post("/restore", files={"file": ("renly-export.json", content, "application/json")})
+        assert response.status_code == 400
+        assert "stack" not in response.text.lower() and "Traceback" not in response.text
 
 
 class TestRestoreEndpoints:
