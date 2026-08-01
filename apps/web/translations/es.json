@@ -1016,6 +1016,63 @@
         "success": "Conciliación eliminada.",
         "error": "No se pudo eliminar la conciliación."
       }
+    },
+    "transfers": {
+      "title": "Transferencias",
+      "subtitle": "Dinero movido entre esta cuenta y las demás.",
+      "transferButton": "Nueva transferencia",
+      "loading": "Cargando transferencias...",
+      "empty": "Todavía no hay transferencias.",
+      "table": {
+        "date": "Fecha",
+        "direction": "Movimiento",
+        "amount": "Monto",
+        "notes": "Notas",
+        "actions": "Acciones",
+        "sentTo": "Enviado a {account}",
+        "receivedFrom": "Recibido de {account}",
+        "crossCurrency": "{from} → {to}"
+      },
+      "form": {
+        "title": "Nueva transferencia",
+        "description": "Mové dinero entre dos cuentas tuyas. Tu patrimonio no cambia — pagarle a otra persona es un gasto, no una transferencia.",
+        "fromAccount": {
+          "label": "Desde",
+          "placeholder": "Seleccioná una cuenta"
+        },
+        "toAccount": {
+          "label": "Hacia",
+          "placeholder": "Seleccioná una cuenta"
+        },
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "fromAmount": {
+          "label": "Monto",
+          "labelWithCurrency": "Monto enviado ({currency})",
+          "placeholder": "Ingresá el monto"
+        },
+        "toAmount": {
+          "labelWithCurrency": "Monto recibido ({currency})",
+          "placeholder": "Ingresá el monto",
+          "hint": "Las dos cuentas tienen monedas distintas, así que ingresá lo que realmente entró — esa es la cotización que conseguiste."
+        },
+        "saveLabel": "Guardar transferencia",
+        "saveLoading": "Guardando...",
+        "saveError": "No se pudo guardar la transferencia.",
+        "success": "Transferencia guardada."
+      },
+      "delete": {
+        "tooltip": "Eliminar",
+        "title": "Eliminar transferencia",
+        "confirm": "¿Eliminar la transferencia de {amount} de {from} a {to}? Ambos saldos se recalculan.",
+        "confirmButton": "Eliminar",
+        "cancel": "Cancelar",
+        "deleting": "Eliminando...",
+        "success": "Transferencia eliminada.",
+        "error": "No se pudo eliminar la transferencia."
+      }
     }
   },
   "subscriptions": {
@@ -2557,6 +2614,9 @@
     "expense_cycle_invalid": "No se pudo programar el cobro. Revisá las fechas e intentá de nuevo.",
     "duplicate_subscription_charge": "Ya hay un cobro registrado para esta suscripción en esa fecha.",
     "duplicate_installment_charge": "Ya hay un cobro registrado para esta cuota en esa fecha.",
-    "integrity_conflict": "El cambio genera un conflicto con datos existentes."
+    "integrity_conflict": "El cambio genera un conflicto con datos existentes.",
+    "transfer_same_account": "Una transferencia tiene que mover dinero entre dos cuentas distintas.",
+    "transfer_amounts_must_match": "Dentro de una misma moneda, una transferencia tiene que acreditar exactamente lo que debita. Registrá una comisión como un gasto aparte.",
+    "transfer_amount_required": "Al mover {from_currency} a {to_currency} hay que registrar el monto recibido, para conservar la cotización que conseguiste."
   }
 }

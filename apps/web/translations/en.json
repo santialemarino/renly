@@ -1016,6 +1016,63 @@
         "success": "Reconciliation deleted.",
         "error": "Failed to delete the reconciliation."
       }
+    },
+    "transfers": {
+      "title": "Transfers",
+      "subtitle": "Money moved between this account and your others.",
+      "transferButton": "New transfer",
+      "loading": "Loading transfers...",
+      "empty": "No transfers yet.",
+      "table": {
+        "date": "Date",
+        "direction": "Movement",
+        "amount": "Amount",
+        "notes": "Notes",
+        "actions": "Actions",
+        "sentTo": "Sent to {account}",
+        "receivedFrom": "Received from {account}",
+        "crossCurrency": "{from} → {to}"
+      },
+      "form": {
+        "title": "New transfer",
+        "description": "Move money between two of your own accounts. Your net worth doesn't change — paying someone else is an expense, not a transfer.",
+        "fromAccount": {
+          "label": "From",
+          "placeholder": "Select an account"
+        },
+        "toAccount": {
+          "label": "To",
+          "placeholder": "Select an account"
+        },
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "fromAmount": {
+          "label": "Amount",
+          "labelWithCurrency": "Amount sent ({currency})",
+          "placeholder": "Enter the amount"
+        },
+        "toAmount": {
+          "labelWithCurrency": "Amount received ({currency})",
+          "placeholder": "Enter the amount",
+          "hint": "The two accounts hold different currencies, so enter what actually arrived — that's the rate you got."
+        },
+        "saveLabel": "Save transfer",
+        "saveLoading": "Saving...",
+        "saveError": "Couldn't save the transfer.",
+        "success": "Transfer saved."
+      },
+      "delete": {
+        "tooltip": "Delete",
+        "title": "Delete transfer",
+        "confirm": "Delete the transfer of {amount} from {from} to {to}? Both balances will recompute.",
+        "confirmButton": "Delete",
+        "cancel": "Cancel",
+        "deleting": "Deleting...",
+        "success": "Transfer deleted.",
+        "error": "Couldn't delete the transfer."
+      }
     }
   },
   "subscriptions": {
@@ -2557,6 +2614,9 @@
     "expense_cycle_invalid": "That charge couldn't be scheduled. Please check the dates and try again.",
     "duplicate_subscription_charge": "A charge is already recorded for this subscription on that date.",
     "duplicate_installment_charge": "A charge is already recorded for this installment on that date.",
-    "integrity_conflict": "That change conflicts with existing data."
+    "integrity_conflict": "That change conflicts with existing data.",
+    "transfer_same_account": "A transfer must move money between two different accounts.",
+    "transfer_amounts_must_match": "Within one currency a transfer must credit exactly what it debits. Record a fee as its own expense.",
+    "transfer_amount_required": "Moving {from_currency} to {to_currency} must record the amount received, so the rate you got is preserved."
   }
 }

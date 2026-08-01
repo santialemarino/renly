@@ -4,11 +4,13 @@ import { getTranslations } from 'next-intl/server';
 
 import type { AccountFormValues } from '@/app/(protected)/accounts/account-form-schema';
 import type { AccountReconcileFormValues } from '@/app/(protected)/accounts/account-reconcile-form-schema';
+import type { TransferFormValues } from '@/app/(protected)/accounts/transfer-form-schema';
 import {
   mapAccountComputedBalance,
   mapAccountReconciliation,
   type AccountReconciliation,
 } from '@/lib/api/account-reconciliations';
+import { mapTransferList, type Transfer } from '@/lib/api/transfers';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { parseApiError, resolveApiError, type ApiError } from '@/lib/i18n/api-errors';
 import { getFormatters } from '@/lib/i18n/formatters-server';
@@ -93,6 +95,13 @@ async function reconciliationError(res: Response): Promise<string> {
   return resolveApiError(t, await localizeDateParams(await parseApiError(res)), '');
 }
 
+// Resolves a refused transfer to its localized reason (same account, mismatched single-currency
+// amounts, or a missing cross-currency amount).
+async function transferError(res: Response): Promise<string> {
+  const t = await getTranslations('apiErrors');
+  return resolveApiError(t, await parseApiError(res), '');
+}
+
 // Reconcile an account against its real balance. Returns the localized message on a rejected date
 // (in the future, before the account opened, or older than the account's latest reconciliation) so
 // the dialog can surface it inline.
@@ -122,5 +131,49 @@ export async function deleteAccountReconciliation(
     { method: 'DELETE' },
   );
   if (!res.ok) return { ok: false, error: await reconciliationError(res) };
+  return { ok: true };
+}
+
+// --- Transfers ---
+
+// Transfers touching one account, on either leg — an account's history must show money arriving as
+// well as leaving.
+export async function fetchAccountTransfers(accountId: number): Promise<Transfer[]> {
+  const res = await authenticatedFetch(`/transfers?account_id=${accountId}`, { method: 'GET' });
+  if (!res.ok) throw new Error('Failed to fetch transfers');
+  return mapTransferList(await res.json());
+}
+
+/*
+ * Create a transfer between two of the user's accounts. Returns the localized message when the API
+ * refuses — the two accounts are the same, a single-currency transfer credits a different amount than
+ * it debits, or a cross-currency transfer omits the credited amount — so the dialog can surface it
+ * inline rather than as a generic failure. toAmount is sent only when the user supplied it; the API
+ * mirrors fromAmount within one currency and requires it across two.
+ */
+export async function createTransfer(
+  values: TransferFormValues,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await authenticatedFetch('/transfers', {
+    method: 'POST',
+    body: {
+      from_account_id: values.fromAccountId,
+      to_account_id: values.toAccountId,
+      date: values.date,
+      from_amount: Number(values.fromAmount),
+      to_amount: values.toAmount ? Number(values.toAmount) : null,
+      notes: values.notes || null,
+    },
+  });
+  if (!res.ok) return { ok: false, error: await transferError(res) };
+  return { ok: true };
+}
+
+// Delete a transfer. Both accounts' balances recompute from the remaining rows.
+export async function deleteTransfer(
+  transferId: number,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const res = await authenticatedFetch(`/transfers/${transferId}`, { method: 'DELETE' });
+  if (!res.ok) return { ok: false, error: await transferError(res) };
   return { ok: true };
 }
