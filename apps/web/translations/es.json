@@ -1058,6 +1058,10 @@
           "placeholder": "Ingresá el monto",
           "hint": "Las dos cuentas tienen monedas distintas, así que ingresá lo que realmente entró — esa es la cotización que conseguiste."
         },
+        "notes": {
+          "label": "Notas",
+          "placeholder": "Notas opcionales..."
+        },
         "saveLabel": "Guardar transferencia",
         "saveLoading": "Guardando...",
         "saveError": "No se pudo guardar la transferencia.",

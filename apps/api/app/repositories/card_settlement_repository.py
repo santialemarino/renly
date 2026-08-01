@@ -82,7 +82,8 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
     month_col = func.extract("month", CardSettlement.date).label("month")
     result = await session.execute(
         select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(CardSettlement.amount), 0))
-        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id)
+        .join(Account, Account.id == CardSettlement.account_id)
+        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
         .group_by(CardSettlement.account_id, year_col, month_col)
     )
     return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
@@ -136,6 +137,20 @@ async def sum_by_card_ids_monthly(
     return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
 
 
+# Which of the given accounts have any linked settlement row at all. Drives the currency lock, so unlike
+# sum_by_account_ids it is NOT bounded by opening_date: a pre-opening row contributes nothing to the
+# balance but is still denominated in the account's currency.
+async def linked_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> set[int]:
+    if not account_ids:
+        return set()
+    result = await session.execute(
+        select(CardSettlement.account_id)
+        .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id)
+        .group_by(CardSettlement.account_id)
+    )
+    return {row[0] for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. card_settlement_repository.list_by_card).
 class CardSettlementRepository:
     list_by_card = staticmethod(list_by_card)
@@ -143,6 +158,7 @@ class CardSettlementRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     exists_by_account_id = staticmethod(exists_by_account_id)
+    linked_account_ids = staticmethod(linked_account_ids)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)

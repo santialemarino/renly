@@ -66,6 +66,20 @@ class AccountCurrencyMismatchError(DomainError):
         return {"entry_currency": self.entry_currency, "account_currency": self.account_currency}
 
 
+# An account's opening_date cannot be changed because money entries link to it. opening_balance is
+# defined as "the balance AT opening_date", and every balance sum is bounded below by it — so moving the
+# date forward silently drops rows from the balance while opening_balance stays put, and money that left
+# one account would arrive nowhere. The pair cannot be recomputed (the app never knew the earlier
+# balance), so the date is locked, mirroring the currency lock. Mapped to 409.
+class AccountOpeningDateChangeBlockedError(DomainError):
+    code = "account_opening_date_change_blocked"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "Opening date cannot be changed because this account has linked entries."
+        super().__init__(self.message)
+
+
 # An account reconciliation is dated before the account's most recent one. Reconciliations are
 # point-in-time truths applied forward, so an older one entered afterwards would post its adjustment
 # *underneath* the newer one — which cannot see it — leaving the newer, authoritative balance wrong.
@@ -326,6 +340,34 @@ class ReconciliationOwnedEntryError(DomainError):
         super().__init__(self.message)
 
 
+# Reconciliation period bounds are inconsistent (e.g. period_start > period_end). Mapped to 400 by the API.
+class ReconciliationPeriodMismatchError(DomainError):
+    code = "reconciliation_period_mismatch"
+    status_code = 400
+
+    def __init__(self, message: str = "Reconciliation period is invalid.") -> None:
+        self.message = message
+        super().__init__(self.message)
+
+
+# A transfer is dated before one of its accounts existed. The balance union bounds each leg by its own
+# account's opening_date (opening_balance already IS the balance at that date), so a transfer dated
+# before the later-opening account would be counted on one leg and dropped on the other — money would
+# leave one account and arrive nowhere, silently changing net worth. Mapped to 400 by the API.
+class TransferBeforeAccountOpenedError(DomainError):
+    code = "transfer_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A transfer must be dated on or after both accounts' opening dates (the later one is {opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
 # A cross-currency transfer did not record the amount credited. Within one currency the credited amount
 # mirrors the debited one, but across currencies only the user knows the rate actually used (the blue /
 # MEP spread), and inventing one would misstate the destination balance. Mapped to 400 by the API.
@@ -364,14 +406,4 @@ class TransferSameAccountError(DomainError):
 
     def __init__(self) -> None:
         self.message = "A transfer must move money between two different accounts."
-        super().__init__(self.message)
-
-
-# Reconciliation period bounds are inconsistent (e.g. period_start > period_end). Mapped to 400 by the API.
-class ReconciliationPeriodMismatchError(DomainError):
-    code = "reconciliation_period_mismatch"
-    status_code = 400
-
-    def __init__(self, message: str = "Reconciliation period is invalid.") -> None:
-        self.message = message
         super().__init__(self.message)

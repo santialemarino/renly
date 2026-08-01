@@ -169,7 +169,8 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
     month_col = func.extract("month", IncomeEntry.date).label("month")
     result = await session.execute(
         select(IncomeEntry.account_id, year_col, month_col, func.coalesce(func.sum(IncomeEntry.amount), 0))
-        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id)
+        .join(Account, Account.id == IncomeEntry.account_id)
+        .where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id, IncomeEntry.date >= Account.opening_date)
         .group_by(IncomeEntry.account_id, year_col, month_col)
     )
     return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
@@ -233,12 +234,25 @@ async def sum_by_user_grouped_by_category(
     return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
 
 
+# Which of the given accounts have any linked income row at all. Drives the currency lock, so unlike
+# sum_by_account_ids it is NOT bounded by opening_date: a pre-opening row contributes nothing to the
+# balance but is still denominated in the account's currency.
+async def linked_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> set[int]:
+    if not account_ids:
+        return set()
+    result = await session.execute(
+        select(IncomeEntry.account_id).where(IncomeEntry.account_id.in_(account_ids), IncomeEntry.user_id == user_id).group_by(IncomeEntry.account_id)
+    )
+    return {row[0] for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. income_repository.list_by_user_filtered).
 class IncomeRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     delete = staticmethod(delete)
     exists_by_account_id = staticmethod(exists_by_account_id)
+    linked_account_ids = staticmethod(linked_account_ids)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
     get_first_income_date = staticmethod(get_first_income_date)

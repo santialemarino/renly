@@ -19,6 +19,7 @@ from app.domain import (
     NotFoundError,
     TransferAmountRequiredError,
     TransferAmountsMustMatchError,
+    TransferBeforeAccountOpenedError,
     TransferSameAccountError,
 )
 from app.models.account import Account
@@ -63,6 +64,15 @@ def _resolve_to_amount(source: Account, destination: Account, from_amount: Decim
     if to_amount is None:
         raise TransferAmountRequiredError(source.currency, destination.currency)
     return to_amount
+
+
+# Rejects a transfer dated before either account existed. The balance union bounds each leg by its own
+# account's opening_date, so such a transfer would be counted on one leg and dropped on the other —
+# money leaving one account and arriving nowhere, which is the one thing a transfer must never do.
+def _ensure_both_accounts_open(source: Account, destination: Account, date: date_type) -> None:
+    latest_opening = max(source.opening_date, destination.opening_date)
+    if date < latest_opening:
+        raise TransferBeforeAccountOpenedError(latest_opening)
 
 
 # Loads both accounts, verifying ownership (NotFoundError → 404) and that they differ. Returns
@@ -113,6 +123,7 @@ async def create_transfer(
     notes: str | None = None,
 ) -> TransferResponse:
     source, destination = await _load_pair(session, user, from_account_id, to_account_id)
+    _ensure_both_accounts_open(source, destination, date)
     resolved = _resolve_to_amount(source, destination, from_amount, to_amount)
     transfer = Transfer(
         user_id=user.id,
@@ -142,19 +153,23 @@ async def update_transfer(
     new_from_id = fields["from_account_id"] if "from_account_id" in fields else transfer.from_account_id
     new_to_id = fields["to_account_id"] if "to_account_id" in fields else transfer.to_account_id
     source, destination = await _load_pair(session, user, new_from_id, new_to_id)
+    _ensure_both_accounts_open(source, destination, fields["date"] if "date" in fields else transfer.date)
 
     new_from_amount = fields["from_amount"] if "from_amount" in fields else transfer.from_amount
-    # An omitted to_amount re-derives rather than holding the stored value: within one currency it must
-    # mirror a changed from_amount, and a leg moved across currencies must state the rate explicitly.
     new_to_amount = fields["to_amount"] if "to_amount" in fields else None
-    if (
-        new_to_amount is None
-        and source.currency != destination.currency
-        and transfer.from_account_id == new_from_id
-        and transfer.to_account_id == new_to_id
-    ):
-        # Currencies unchanged and the client didn't restate the credited amount — keep what was stored.
+    # An omitted to_amount is held only when the DESTINATION CURRENCY is unchanged — that is the only
+    # thing that can invalidate it, since to_amount is denominated in it. Re-pointing either leg at an
+    # account of the same currency leaves the recorded rate perfectly valid, so demanding it again would
+    # be busywork. Otherwise it is left None and _resolve_to_amount re-derives: within one currency it
+    # must mirror a changed from_amount, and a destination moved to a NEW currency has no rate to reuse.
+    previous_destination_currency = (
+        destination.currency
+        if transfer.to_account_id == new_to_id
+        else (await account_service.get_account(session, transfer.to_account_id, user)).currency
+    )
+    if new_to_amount is None and source.currency != destination.currency and previous_destination_currency == destination.currency:
         new_to_amount = transfer.to_amount
+
     resolved = _resolve_to_amount(source, destination, new_from_amount, new_to_amount)
 
     for key, value in fields.items():

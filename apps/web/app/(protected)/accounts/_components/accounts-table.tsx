@@ -35,6 +35,8 @@ const COLUMN_COUNT = 8;
 
 interface AccountsTableProps {
   accounts: Account[];
+  // Unfiltered, for the transfer dialog's pickers — the page's `accounts` is search/archive filtered.
+  allAccounts: Account[];
   preferredCurrencies?: string[];
   firstRun?: boolean;
   // The user's settings timezone, so "today" in the reconcile dialog matches the API's date guards.
@@ -43,6 +45,7 @@ interface AccountsTableProps {
 
 export function AccountsTable({
   accounts,
+  allAccounts,
   preferredCurrencies,
   firstRun,
   timeZone,
@@ -279,7 +282,7 @@ export function AccountsTable({
         onOpenChange={(open) => {
           if (!open) setTransferAccount(null);
         }}
-        accounts={accounts}
+        accounts={allAccounts}
         defaultFromAccountId={transferAccount?.id}
         timeZone={timeZone}
         onSuccess={() => {

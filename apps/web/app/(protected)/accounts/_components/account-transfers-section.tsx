@@ -21,6 +21,7 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import type { Account } from '@/lib/api/accounts';
 import type { Transfer } from '@/lib/api/transfers';
+import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 // Minimum time (ms) from fetch start before showing the result, so an instant resolve doesn't flash.
@@ -106,10 +107,10 @@ export function AccountTransfersSection({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              transition={{ duration: ANIMATION_DEFAULT, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              <div className="px-8 py-4 bg-muted/20">
+              <div className="px-8 py-4 bg-muted/30">
                 <div className="flex items-start justify-between gap-x-4">
                   <div className="flex flex-col gap-y-0.5">
                     <span className="text-paragraph-sm-medium">{t('title')}</span>
@@ -130,6 +131,7 @@ export function AccountTransfersSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="mt-3 text-paragraph-sm text-muted-foreground"
                     >
                       {t('loading')}
@@ -140,6 +142,7 @@ export function AccountTransfersSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="mt-3 text-paragraph-sm text-muted-foreground"
                     >
                       {t('empty')}
@@ -150,6 +153,7 @@ export function AccountTransfersSection({
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
+                      transition={{ duration: ANIMATION_FAST }}
                       className="mt-3"
                     >
                       <Table>
@@ -247,7 +251,7 @@ export function AccountTransfersSection({
         title={t('delete.title')}
         description={(transfer) =>
           t('delete.confirm', {
-            amount: fmt.amount(transfer.fromAmount, transfer.fromCurrency),
+            amount: `${fmt.amount(transfer.fromAmount, transfer.fromCurrency)} ${transfer.fromCurrency}`,
             from: transfer.fromAccountName,
             to: transfer.toAccountName,
           })

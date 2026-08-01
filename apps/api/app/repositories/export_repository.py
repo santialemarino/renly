@@ -18,6 +18,7 @@ from app.models.payment_obligation import PaymentObligation
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 from app.models.user_settings import UserSettings
 
 # User-owned tables carrying a direct user_id column, keyed by the export name they appear under.
@@ -34,6 +35,7 @@ _USER_ID_MODELS = {
     "expense_entries": ExpenseEntry,
     "card_reconciliations": CardReconciliation,
     "account_reconciliations": AccountReconciliation,
+    "transfers": Transfer,
     "payment_obligations": PaymentObligation,
     "api_keys": ApiKey,
     "user_settings": UserSettings,

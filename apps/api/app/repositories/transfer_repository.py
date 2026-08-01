@@ -26,6 +26,39 @@ async def get_by_id(session: AsyncSession, transfer_id: int, user_id: int) -> Tr
     return result.scalar_one_or_none()
 
 
+# Whether any transfer references this account on either leg (used to lock the account's currency once
+# linked). Deliberately NOT bounded by opening_date, unlike the balance sums: a pre-opening transfer
+# contributes nothing to the balance, but its amounts are still denominated in this account's currency,
+# and reinterpreting them under a new one is exactly what the lock exists to prevent.
+async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: int) -> bool:
+    result = await session.execute(
+        select(Transfer.id)
+        .where(
+            Transfer.user_id == user_id,
+            (Transfer.from_account_id == account_id) | (Transfer.to_account_id == account_id),
+        )
+        .limit(1)
+    )
+    return result.first() is not None
+
+
+# Insert a new transfer.
+async def create(session: AsyncSession, transfer: Transfer) -> Transfer:
+    session.add(transfer)
+    await session.flush()
+    return transfer
+
+
+# Stage a transfer for update (caller commits).
+async def save(session: AsyncSession, transfer: Transfer) -> None:
+    session.add(transfer)
+
+
+# Delete a transfer.
+async def delete(session: AsyncSession, transfer: Transfer) -> None:
+    await session.delete(transfer)
+
+
 # Sums one leg of the transfer table per account, for the account-balance union. Bounded BELOW by each
 # account's own opening_date via a join rather than a caller-supplied map: opening_balance is by
 # definition the balance AT opening_date, so anything earlier is already inside it and would otherwise
@@ -76,8 +109,41 @@ async def sum_in_by_account_ids(
     return await _sum_leg(session, Transfer.to_account_id, Transfer.to_amount, account_ids, user_id, as_of_date=as_of_date)
 
 
-# Whether any transfer references each account on either leg. Drives the currency lock, so a transfer
-# counts as a link exactly like an expense or income row does.
+# Monthly totals for one leg, grouped by (account_id, year, month), for the net-worth evolution chart's
+# cash series. Carries the same opening_date lower bound as the point-in-time sums, so the chart and the
+# headline balance agree. Returns a list of (account_id, year, month, total).
+async def _sum_leg_monthly(
+    session: AsyncSession,
+    leg: InstrumentedAttribute,
+    amount: InstrumentedAttribute,
+    account_ids: list[int],
+    user_id: int,
+) -> list[tuple[int, int, int, Decimal]]:
+    if not account_ids:
+        return []
+    year_col = func.extract("year", Transfer.date).label("year")
+    month_col = func.extract("month", Transfer.date).label("month")
+    result = await session.execute(
+        select(leg, year_col, month_col, func.coalesce(func.sum(amount), 0))
+        .join(Account, Account.id == leg)
+        .where(leg.in_(account_ids), Transfer.user_id == user_id, Transfer.date >= Account.opening_date)
+        .group_by(leg, year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
+
+
+# Monthly totals transferred OUT of each account.
+async def sum_out_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
+    return await _sum_leg_monthly(session, Transfer.from_account_id, Transfer.from_amount, account_ids, user_id)
+
+
+# Monthly totals transferred INTO each account.
+async def sum_in_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
+    return await _sum_leg_monthly(session, Transfer.to_account_id, Transfer.to_amount, account_ids, user_id)
+
+
+# Which of the given accounts any transfer references, on either leg. Same unbounded semantics as its
+# peers — see exists_by_account_id.
 async def linked_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> set[int]:
     if not account_ids:
         return set()
@@ -91,33 +157,19 @@ async def linked_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id for row in result.all() for account_id in row if account_id in wanted}
 
 
-# Insert a new transfer.
-async def create(session: AsyncSession, transfer: Transfer) -> Transfer:
-    session.add(transfer)
-    await session.flush()
-    return transfer
-
-
-# Stage a transfer for update (caller commits).
-async def save(session: AsyncSession, transfer: Transfer) -> None:
-    session.add(transfer)
-
-
-# Delete a transfer.
-async def delete(session: AsyncSession, transfer: Transfer) -> None:
-    await session.delete(transfer)
-
-
 # Namespace to call repository functions (e.g. transfer_repository.list_by_user).
 class TransferRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
-    sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
-    sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
+    exists_by_account_id = staticmethod(exists_by_account_id)
     linked_account_ids = staticmethod(linked_account_ids)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
+    sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
+    sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
+    sum_out_by_account_ids_monthly = staticmethod(sum_out_by_account_ids_monthly)
+    sum_in_by_account_ids_monthly = staticmethod(sum_in_by_account_ids_monthly)
 
 
 # Singleton used by services to access transfer persistence.

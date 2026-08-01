@@ -1058,6 +1058,10 @@
           "placeholder": "Enter the amount",
           "hint": "The two accounts hold different currencies, so enter what actually arrived — that's the rate you got."
         },
+        "notes": {
+          "label": "Notes",
+          "placeholder": "Optional notes..."
+        },
         "saveLabel": "Save transfer",
         "saveLoading": "Saving...",
         "saveError": "Couldn't save the transfer.",

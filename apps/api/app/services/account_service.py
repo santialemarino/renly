@@ -3,7 +3,12 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AccountCurrencyChangeBlockedError, AccountCurrencyMismatchError, NotFoundError
+from app.domain import (
+    AccountCurrencyChangeBlockedError,
+    AccountCurrencyMismatchError,
+    AccountOpeningDateChangeBlockedError,
+    NotFoundError,
+)
 from app.models.account import Account, AccountType
 from app.models.user import User
 from app.repositories import (
@@ -77,7 +82,15 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
     settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
     transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, user_id)
     transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, user_id)
-    transfer_linked = await transfer_repository.linked_account_ids(session, account_ids, user_id)
+    # `linked` is computed from its own UNBOUNDED queries, not from the sums above: those are bounded
+    # below by opening_date, so an account whose only rows predate its opening would read as unlinked
+    # and the UI would offer a currency change the API then refuses. The lock is about denomination.
+    linked = (
+        await income_repository.linked_account_ids(session, account_ids, user_id)
+        | await expense_repository.linked_account_ids(session, account_ids, user_id)
+        | await card_settlement_repository.linked_account_ids(session, account_ids, user_id)
+        | await transfer_repository.linked_account_ids(session, account_ids, user_id)
+    )
     balances = {
         a.id: (
             a.opening_balance
@@ -90,7 +103,6 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
         for a in accounts
         if a.id is not None
     }
-    linked = set(income) | set(expenses) | set(settlements) | transfer_linked
     return balances, linked
 
 
@@ -133,6 +145,7 @@ async def account_has_links(session: AsyncSession, account_id: int, user_id: int
         await expense_repository.exists_by_account_id(session, account_id, user_id)
         or await income_repository.exists_by_account_id(session, account_id, user_id)
         or await card_settlement_repository.exists_by_account_id(session, account_id, user_id)
+        or await transfer_repository.exists_by_account_id(session, account_id, user_id)
     )
 
 
@@ -147,8 +160,17 @@ async def update_account(
 ) -> Account:
     account = await get_account(session, account_id, user)
     new_currency = fields.get("currency")
-    if new_currency is not None and new_currency != account.currency and await account_has_links(session, account_id, user.id):
-        raise AccountCurrencyChangeBlockedError()
+    new_opening_date = fields.get("opening_date")
+    currency_moved = new_currency is not None and new_currency != account.currency
+    # opening_date is load-bearing for the balance: every sum is bounded below by it, while
+    # opening_balance ("the balance AT that date") cannot be recomputed. Moving it would drop rows from
+    # the balance with nothing to offset them — for a transfer, money would leave one account and arrive
+    # nowhere. Locked once linked, same as the currency.
+    opening_date_moved = new_opening_date is not None and new_opening_date != account.opening_date
+    if (currency_moved or opening_date_moved) and await account_has_links(session, account_id, user.id):
+        if currency_moved:
+            raise AccountCurrencyChangeBlockedError()
+        raise AccountOpeningDateChangeBlockedError()
     for key, value in fields.items():
         setattr(account, key, value)
     await account_repository.save(session, account)

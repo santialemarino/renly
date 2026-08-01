@@ -170,7 +170,8 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
     month_col = func.extract("month", ExpenseEntry.date).label("month")
     result = await session.execute(
         select(ExpenseEntry.account_id, year_col, month_col, func.coalesce(func.sum(ExpenseEntry.amount), 0))
-        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id)
+        .join(Account, Account.id == ExpenseEntry.account_id)
+        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id, ExpenseEntry.date >= Account.opening_date)
         .group_by(ExpenseEntry.account_id, year_col, month_col)
     )
     return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]
@@ -486,6 +487,20 @@ async def is_most_recent_linked_installment_expense(
     return newest_id == expense_id
 
 
+# Which of the given accounts have any linked expense row at all. Drives the currency lock, so unlike
+# sum_by_account_ids it is NOT bounded by opening_date: a pre-opening row contributes nothing to the
+# balance but is still denominated in the account's currency.
+async def linked_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> set[int]:
+    if not account_ids:
+        return set()
+    result = await session.execute(
+        select(ExpenseEntry.account_id)
+        .where(ExpenseEntry.account_id.in_(account_ids), ExpenseEntry.user_id == user_id)
+        .group_by(ExpenseEntry.account_id)
+    )
+    return {row[0] for row in result.all()}
+
+
 # Namespace to call repository functions (e.g. expense_repository.list_by_user_filtered).
 class ExpenseRepository:
     bulk_create = staticmethod(bulk_create)
@@ -494,6 +509,7 @@ class ExpenseRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     exists_by_account_id = staticmethod(exists_by_account_id)
+    linked_account_ids = staticmethod(linked_account_ids)
     exists_by_user = staticmethod(exists_by_user)
     find_auto_charge_match = staticmethod(find_auto_charge_match)
     get_by_id = staticmethod(get_by_id)

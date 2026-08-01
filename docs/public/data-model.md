@@ -150,7 +150,7 @@ The balance is **derived at query time**, never stored -- the same principle as 
 
 Every term is bounded by the account's own `opening_date`. `opening_balance` is by definition the balance **at** that date, so anything dated earlier is already inside it and is not counted again -- an entry back-dated before an account opened does not move that account's balance.
 
-Deleting an account never destroys history: linked entries are un-attributed (their `account_id` clears), not deleted.
+Deleting an account preserves your entry history: linked entries are un-attributed (transfers are the one exception — see below, since half a transfer would skew the other account) (their `account_id` clears), not deleted.
 
 ### Transfers
 

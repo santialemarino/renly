@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Input,
 } from '@repo/ui/components';
 import { createTransfer } from '@/app/(protected)/accounts/account-actions';
 import {
@@ -77,6 +78,18 @@ export function TransferFormDialog({
    * value the API would reject.
    */
   const crossCurrency = !!source && !!destination && source.currency !== destination.currency;
+  /*
+   * The picker offers exactly the range the API accepts, so a rejected date is unreachable rather than
+   * reported after the fact (the reconcile dialog does the same). A transfer dated before the
+   * later-opening account would be counted on one leg and dropped on the other, moving net worth.
+   * ISO date strings compare lexicographically, so `>` is a real date comparison.
+   */
+  const earliestDate =
+    source && destination
+      ? source.openingDate > destination.openingDate
+        ? source.openingDate
+        : destination.openingDate
+      : (source?.openingDate ?? destination?.openingDate);
 
   useEffect(() => {
     if (open) {
@@ -197,6 +210,7 @@ export function TransferFormDialog({
                       value={field.value || undefined}
                       onChange={field.onChange}
                       placeholder={t('form.date.placeholder')}
+                      minDate={earliestDate}
                       maxDate={today}
                     />
                   </FormControl>
@@ -251,6 +265,20 @@ export function TransferFormDialog({
                 )}
               />
             )}
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('form.notes.label')}</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder={t('form.notes.placeholder')} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </form>
         </Form>
 

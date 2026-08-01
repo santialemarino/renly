@@ -8,6 +8,7 @@ from app.domain import (
     NotFoundError,
     TransferAmountRequiredError,
     TransferAmountsMustMatchError,
+    TransferBeforeAccountOpenedError,
     TransferSameAccountError,
 )
 from app.models.account import Account, AccountType
@@ -148,11 +149,13 @@ class TestAccountRules:
 
     @pytest.mark.asyncio
     async def test_ownership_is_checked_before_anything_is_written(self, monkeypatch):
+        # The SOURCE leg, mirroring the destination case above — and asserting on the session actually
+        # passed in, so "nothing was committed" is a real claim rather than one about a spare mock.
         create = _wire(monkeypatch, {2: _account(2)})
         session = AsyncMock()
 
         with pytest.raises(NotFoundError):
-            await transfer_service.create_transfer(AsyncMock(), USER, from_account_id=404, to_account_id=2, date=TODAY, from_amount=Decimal("10"))
+            await transfer_service.create_transfer(session, USER, from_account_id=404, to_account_id=2, date=TODAY, from_amount=Decimal("10"))
 
         create.assert_not_awaited()
         session.commit.assert_not_awaited()
@@ -192,6 +195,30 @@ class TestUpdateRevalidatesTheEffectivePair:
         assert stored.from_amount == Decimal("1200") and stored.to_amount == Decimal("1")
 
     @pytest.mark.asyncio
+    async def test_repointing_the_source_keeps_a_cross_currency_rate(self, monkeypatch):
+        # to_amount is denominated in the DESTINATION's currency, so changing the source cannot
+        # invalidate it. Keying the hold on both legs forced the client to restate an unchanged rate.
+        _wire(monkeypatch, {1: _account(1, "ARS"), 2: _account(2, "USD"), 3: _account(3, "ARS")})
+        stored = Transfer(id=5, user_id=1, from_account_id=1, to_account_id=2, date=TODAY, from_amount=Decimal("1200"), to_amount=Decimal("1"))
+        monkeypatch.setattr(transfer_service.transfer_repository, "get_by_id", AsyncMock(return_value=stored))
+
+        await transfer_service.update_transfer(AsyncMock(), 5, USER, from_account_id=3)
+
+        assert stored.to_amount == Decimal("1")
+
+    @pytest.mark.asyncio
+    async def test_changing_only_the_debited_amount_keeps_a_cross_currency_rate(self, monkeypatch):
+        # Across currencies the two sides are independent — the credited amount IS the rate, not a
+        # mirror, so it must survive a change to the debited side.
+        _wire(monkeypatch, {1: _account(1, "ARS"), 2: _account(2, "USD")})
+        stored = Transfer(id=5, user_id=1, from_account_id=1, to_account_id=2, date=TODAY, from_amount=Decimal("1200"), to_amount=Decimal("1"))
+        monkeypatch.setattr(transfer_service.transfer_repository, "get_by_id", AsyncMock(return_value=stored))
+
+        await transfer_service.update_transfer(AsyncMock(), 5, USER, from_amount=Decimal("1300"))
+
+        assert stored.from_amount == Decimal("1300") and stored.to_amount == Decimal("1")
+
+    @pytest.mark.asyncio
     async def test_pointing_both_legs_at_one_account_is_refused(self, monkeypatch):
         _wire(monkeypatch, {1: _account(1), 2: _account(2)})
         stored = Transfer(id=5, user_id=1, from_account_id=1, to_account_id=2, date=TODAY, from_amount=Decimal("10"), to_amount=Decimal("10"))
@@ -212,6 +239,8 @@ class TestTransfersMoveTheBalance:
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={1: Decimal("2500")}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={2: Decimal("2500")}))
+        for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
+            monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value={1, 2}))
 
         balances, linked = await account_service.get_account_summaries(AsyncMock(), accounts, 1)
@@ -221,3 +250,63 @@ class TestTransfersMoveTheBalance:
         # A transfer counts as a link on either leg, so an account that has only ever sent or received
         # money is still currency-locked.
         assert linked == {1, 2}
+
+
+class TestBothAccountsMustExistOnTheDate:
+    # The balance union bounds each leg by its OWN account's opening_date, so a transfer dated before
+    # the later-opening account would be counted on one leg and dropped on the other — money leaving one
+    # account and arriving nowhere. That is the one thing a transfer must never do.
+    @pytest.mark.asyncio
+    async def test_a_transfer_before_the_later_opening_is_refused(self, monkeypatch):
+        create = _wire(
+            monkeypatch,
+            {1: _account(1, opening_date=date(2026, 1, 1)), 2: _account(2, opening_date=date(2026, 7, 1))},
+        )
+        session = AsyncMock()
+
+        with pytest.raises(TransferBeforeAccountOpenedError) as exc:
+            await transfer_service.create_transfer(
+                session, USER, from_account_id=1, to_account_id=2, date=date(2026, 6, 15), from_amount=Decimal("20000")
+            )
+
+        assert exc.value.extra == {"opening_date": "2026-07-01"}
+        create.assert_not_awaited()
+        session.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_later_opening_is_the_bound_whichever_leg_it_is_on(self, monkeypatch):
+        create = _wire(
+            monkeypatch,
+            {1: _account(1, opening_date=date(2026, 7, 1)), 2: _account(2, opening_date=date(2026, 1, 1))},
+        )
+
+        with pytest.raises(TransferBeforeAccountOpenedError):
+            await transfer_service.create_transfer(
+                AsyncMock(), USER, from_account_id=1, to_account_id=2, date=date(2026, 6, 15), from_amount=Decimal("100")
+            )
+
+        create.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_opening_date_itself_is_allowed(self, monkeypatch):
+        create = _wire(
+            monkeypatch,
+            {1: _account(1, opening_date=date(2026, 1, 1)), 2: _account(2, opening_date=date(2026, 7, 1))},
+        )
+
+        await transfer_service.create_transfer(
+            AsyncMock(), USER, from_account_id=1, to_account_id=2, date=date(2026, 7, 1), from_amount=Decimal("100")
+        )
+
+        create.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_moving_a_transfer_back_before_an_opening_is_refused(self, monkeypatch):
+        _wire(monkeypatch, {1: _account(1, opening_date=date(2026, 1, 1)), 2: _account(2, opening_date=date(2026, 7, 1))})
+        stored = Transfer(
+            id=5, user_id=1, from_account_id=1, to_account_id=2, date=date(2026, 8, 1), from_amount=Decimal("10"), to_amount=Decimal("10")
+        )
+        monkeypatch.setattr(transfer_service.transfer_repository, "get_by_id", AsyncMock(return_value=stored))
+
+        with pytest.raises(TransferBeforeAccountOpenedError):
+            await transfer_service.update_transfer(AsyncMock(), 5, USER, date=date(2026, 6, 15))

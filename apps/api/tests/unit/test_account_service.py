@@ -50,6 +50,9 @@ class TestBalances:
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
         accounts = [_account(id=1, opening_balance=Decimal("100")), _account(id=2, opening_balance=Decimal("-40"))]
         balances = await account_service.get_account_balances(AsyncMock(), accounts, 1)
         assert balances == {1: Decimal("100"), 2: Decimal("-40")}
