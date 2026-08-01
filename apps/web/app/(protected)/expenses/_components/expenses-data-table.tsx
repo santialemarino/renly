@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Receipt, Trash2 } from 'lucide-react';
+import { Lock, Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -27,6 +27,7 @@ import {
 } from '@/app/(protected)/_components/linked-plan-amount-mismatch-dialog';
 import { ExpenseDeleteDialog } from '@/app/(protected)/expenses/_components/expense-delete-dialog';
 import { RowActionButton } from '@/components/row-action-button';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -39,6 +40,7 @@ import type { Subscription } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { isReconciliationOwned } from '@/lib/reconciliation';
+import { isSystemExpenseCategory } from '@/lib/utils/categories';
 
 function RowActions({
   expense,
@@ -64,14 +66,26 @@ function RowActions({
   onSuccess: () => void;
 }) {
   const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  /*
+   * Two independent reasons a row action is withheld, each with its own explanation. A reconciliation's
+   * adjustment is derived, so the API refuses BOTH PUT and DELETE on it (409) — offering either would
+   * only dead-end or orphan. A system category is narrower: it means the form cannot round-trip the row
+   * (no matching combobox option, and the schema's z.enum rejects the stored value), so it withholds
+   * Edit while Delete stays legitimate for a row nothing owns — a restored adjustment, whose
+   * reconciliation links restore nulls while its category survives. Either way the row explains itself:
+   * an action that silently vanishes is the thing this gate exists to avoid.
+   */
+  const reconciliationOwned = isReconciliationOwned(expense);
+  const systemCategory = isSystemExpenseCategory(expense.category);
+  const canEdit = !reconciliationOwned && !systemCategory;
 
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        {/* A reconciliation's adjustment is derived, not authored — see isReconciliationOwned. */}
-        {!isReconciliationOwned(expense) && (
+        {canEdit ? (
           <RowActionButton
             icon={Pencil}
             tooltip={t('actions.edit')}
@@ -81,17 +95,29 @@ function RowActions({
               setEditOpen(true);
             }}
           />
+        ) : (
+          <RowLockedIndicator
+            icon={Lock}
+            tooltip={tCommon(
+              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
+            )}
+            ariaLabel={
+              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
+            }
+          />
         )}
-        <RowActionButton
-          icon={Trash2}
-          tooltip={t('actions.delete')}
-          ariaLabel="Delete"
-          variant="destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleteOpen(true);
-          }}
-        />
+        {!reconciliationOwned && (
+          <RowActionButton
+            icon={Trash2}
+            tooltip={t('actions.delete')}
+            ariaLabel="Delete"
+            variant="destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <ExpenseFormDialog

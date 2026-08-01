@@ -199,6 +199,10 @@
       "placeholder": "Select an account",
       "none": "None",
       "noneForCurrency": "No {currency} accounts"
+    },
+    "lockedRow": {
+      "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
+      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
     }
   },
   "login": {
@@ -2544,6 +2548,7 @@
     "payment_pairing": "A credit card can only be set when the payment method is credit card.",
     "plan_required": "This feature requires a Pro plan.",
     "exchange_rate_unavailable": "Exchange rates are unavailable, so values can't be converted to {currency}.",
+    "reconciliation_owned_entry": "This entry was created by a reconciliation, so it can't be edited or deleted directly. Re-run or delete that reconciliation instead.",
     "reconciliation_period_mismatch": "The reconciliation period is invalid.",
     "invalid_import_file": "The file couldn't be read. Upload a valid .csv, .tsv, or .xlsx file.",
     "request_too_large": "That request is too large. Please reduce the amount of data and try again.",

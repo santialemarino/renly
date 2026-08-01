@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
-from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
 
 
 # Body for POST /payment-obligations.
@@ -33,6 +33,10 @@ class PaymentObligationCreate(RequestBase):
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
+    # The Mark Paid flow copies expense_category onto the expense it creates, so a reconciliation-reserved
+    # value here would author a fake true-up one step later (422). See app/schemas/base.py.
+    _validate_expense_category = field_validator("expense_category")(validate_user_pickable_expense_category)
+
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
     # a card-less credit_card entry is allowed (zero-card users, imports).
     @model_validator(mode="after")
@@ -56,6 +60,10 @@ class PaymentObligationUpdate(RequestBase):
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
+
+    # The Mark Paid flow copies expense_category onto the expense it creates, so a reconciliation-reserved
+    # value here would author a fake true-up one step later (422). See app/schemas/base.py.
+    _validate_expense_category = field_validator("expense_category")(validate_user_pickable_expense_category)
 
     # Same-request pairing guard: only fires when BOTH keys were provided. The merged
     # effective check (request fields over the stored row) lives in the service.

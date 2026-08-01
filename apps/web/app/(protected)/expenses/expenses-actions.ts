@@ -3,28 +3,10 @@
 import { getTranslations } from 'next-intl/server';
 
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
-import type { Expense } from '@/lib/api/expenses';
+import type { Expense, ExpenseRaw } from '@/lib/api/expenses';
+import { mapExpense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
-
-interface ExpenseRaw {
-  id: number;
-  date: string;
-  amount: string;
-  currency: string;
-  converted_amount: string | null;
-  category: string | null;
-  notes: string | null;
-  payment_method: string | null;
-  credit_card_id: number | null;
-  account_id: number | null;
-  source: string;
-  payment_obligation_id: number | null;
-  subscription_id: number | null;
-  installment_id: number | null;
-  created_at: string;
-  updated_at: string;
-}
 
 // Cursor change emitted by a linked plan on create / update / delete (Phase 3,
 // follow-up Item 7). The form composes a follow-up toast line — "Netflix's next
@@ -62,6 +44,12 @@ export type ExpenseMutationResult =
   | { ok: true; outcome: ExpenseMutationOutcome }
   | { ok: false; conflictDetail: string };
 
+// Same discriminated shape for delete, which carries the reverse cursor change on success. A delete
+// can conflict too: an expense a reconciliation owns is refused with 409 reconciliation_owned_entry.
+export type DeleteExpenseResult =
+  | { ok: true; reverse: PlanCursorChange | null }
+  | { ok: false; conflictDetail: string };
+
 interface PlanCursorChangeRaw {
   plan_type: 'obligation' | 'subscription' | 'installment';
   plan_id: number;
@@ -89,24 +77,7 @@ export async function getExpenseById(id: number): Promise<Expense> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch expense');
   const raw: ExpenseRaw = await res.json();
-  return {
-    id: raw.id,
-    date: raw.date,
-    amount: raw.amount,
-    currency: raw.currency,
-    convertedAmount: raw.converted_amount,
-    category: raw.category,
-    notes: raw.notes,
-    paymentMethod: raw.payment_method,
-    creditCardId: raw.credit_card_id,
-    accountId: raw.account_id,
-    source: raw.source,
-    paymentObligationId: raw.payment_obligation_id,
-    subscriptionId: raw.subscription_id,
-    installmentId: raw.installment_id,
-    createdAt: raw.created_at,
-    updatedAt: raw.updated_at,
-  };
+  return mapExpense(raw);
 }
 
 type ExpenseMutationRaw = ExpenseRaw & {
@@ -204,11 +175,17 @@ export async function updateExpense(
   return { ok: true, outcome: mapMutationOutcome(await res.json()) };
 }
 
-export async function deleteExpense(id: number): Promise<PlanCursorChange | null> {
+export async function deleteExpense(id: number): Promise<DeleteExpenseResult> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Failed to delete expense');
+  if (!res.ok) {
+    if (res.status === 409) {
+      const detail = await readErrorDetail(res);
+      if (detail) return { ok: false, conflictDetail: detail };
+    }
+    throw new Error('Failed to delete expense');
+  }
   const raw: { reverse_change: PlanCursorChangeRaw | null } = await res.json();
-  return mapCursorChange(raw.reverse_change);
+  return { ok: true, reverse: mapCursorChange(raw.reverse_change) };
 }
 
 // Result of a manual-dupe expense lookup (Phase 3, Step D).

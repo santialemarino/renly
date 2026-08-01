@@ -15,6 +15,8 @@ interface IncomeEntryRaw {
   notes: string | null;
   account_id: number | null;
   source: string;
+  reconciliation_id: number | null;
+  account_reconciliation_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -39,6 +41,8 @@ export interface IncomeEntry {
   notes: string | null;
   accountId: number | null;
   source: string;
+  reconciliationId: number | null;
+  accountReconciliationId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,6 +82,8 @@ function mapIncomeEntry(raw: IncomeEntryRaw): IncomeEntry {
     notes: raw.notes,
     accountId: raw.account_id,
     source: raw.source,
+    reconciliationId: raw.reconciliation_id,
+    accountReconciliationId: raw.account_reconciliation_id,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };

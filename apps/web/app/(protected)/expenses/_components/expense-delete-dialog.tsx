@@ -30,7 +30,12 @@ export function ExpenseDeleteDialog({
   async function handleDelete() {
     setDeleting(true);
     try {
-      const cursorChange = await deleteExpense(expense.id);
+      const result = await deleteExpense(expense.id);
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
+      const cursorChange = result.reverse;
       const baseMessage = t('delete.success');
       if (cursorChange) {
         const resolution = resolveCursorToast(cursorChange, 'reverse', fmt.date);

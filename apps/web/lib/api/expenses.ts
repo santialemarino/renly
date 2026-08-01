@@ -5,7 +5,13 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
-interface ExpenseRaw {
+/*
+ * Exported (unlike the other raw types) because the colocated expense server actions need the same
+ * wire shape: they extend it for the mutation responses (`advance_change` / `reverse_change`) and
+ * re-use mapExpense below. One declaration of the shape and one mapper, so a new API field cannot
+ * reach one call site and silently miss the other.
+ */
+export interface ExpenseRaw {
   id: number;
   date: string;
   amount: string;
@@ -20,6 +26,8 @@ interface ExpenseRaw {
   payment_obligation_id: number | null;
   subscription_id: number | null;
   installment_id: number | null;
+  reconciliation_id: number | null;
+  account_reconciliation_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +57,8 @@ export interface Expense {
   paymentObligationId: number | null;
   subscriptionId: number | null;
   installmentId: number | null;
+  reconciliationId: number | null;
+  accountReconciliationId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -78,7 +88,8 @@ export interface GetExpensesParams {
 
 // --- Mappers ---
 
-function mapExpense(raw: ExpenseRaw): Expense {
+// Exported alongside ExpenseRaw so the expense server actions map identically — see the note there.
+export function mapExpense(raw: ExpenseRaw): Expense {
   return {
     id: raw.id,
     date: raw.date,
@@ -94,6 +105,8 @@ function mapExpense(raw: ExpenseRaw): Expense {
     paymentObligationId: raw.payment_obligation_id,
     subscriptionId: raw.subscription_id,
     installmentId: raw.installment_id,
+    reconciliationId: raw.reconciliation_id,
+    accountReconciliationId: raw.account_reconciliation_id,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };

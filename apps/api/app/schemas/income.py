@@ -7,7 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.income_entry import IncomeCategory
-from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_income_category
 
 
 # Body for POST /income.
@@ -22,6 +22,9 @@ class IncomeCreate(RequestBase):
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_income_category)
+
 
 # Body for PUT /income/{id}. Partial update.
 class IncomeUpdate(RequestBase):
@@ -35,6 +38,9 @@ class IncomeUpdate(RequestBase):
     # Entry currencies must be convertible — reject codes outside the supported registry (422).
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
+    # Reconciliation-reserved categories are not user-writable (422). See app/schemas/base.py.
+    _validate_category = field_validator("category")(validate_user_pickable_income_category)
+
 
 # Response for a single income entry.
 class IncomeResponse(BaseModel):
@@ -47,6 +53,20 @@ class IncomeResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     account_id: int | None = Field(default=None, description="Cash/bank account this income was deposited to.")
     source: str = Field(description="Entry origin (manual, shortcut, auto).")
+    reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Legacy link to a card reconciliation; no longer written (card credits are signed expenses). "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning account reconciliation when this row is that reconciliation's adjustment income. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 

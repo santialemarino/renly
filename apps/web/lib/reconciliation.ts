@@ -1,19 +1,27 @@
-// The `source` value the backend stamps on an adjustment entry created by a card or account
-// reconciliation.
-export const RECONCILIATION_SOURCE = 'reconciliation';
-
 /*
- * True for an expense / income row that a reconciliation created, which must not be edited directly.
- * Such a row is derived, not authored: its amount IS the reconciliation's recorded `difference`, its
- * category is system-generated and deliberately absent from the pickers, and a card credit carries a
- * NEGATIVE amount that the shared amount input would strip on the first keystroke — saving a
- * sign-flipped value would move the card balance by twice the credit. The API refuses it anyway
- * (`amount > 0`), so the edit affordance could only ever dead-end or corrupt.
+ * True for an expense / income row that a reconciliation created — the adjustment posted by the card
+ * or the account reconciliation flow. Such a row is derived, not authored: its amount IS the
+ * reconciliation's recorded `difference`, so mutating it directly makes the reconciliation lie.
  *
- * The supported way to change one is to re-run or delete its reconciliation, which recomputes or
- * cascade-drops the adjustment. Deleting the entry itself stays available — it is the documented
- * escape hatch and the reconciliation's back-pointer clears cleanly.
+ * Both the Edit and the Delete affordance are withheld, because the API refuses both with
+ * 409 `reconciliation_owned_entry`. Delete is not an escape hatch: the reverse pointer
+ * (`card_reconciliations/account_reconciliations.adjustment_*_id`) is ON DELETE SET NULL, so removing
+ * the entry leaves the reconciliation alive with a null pointer and a `difference` it no longer
+ * applies, while the balance silently snaps back.
+ *
+ * The supported way to change one is to re-run or delete its RECONCILIATION, which recomputes or
+ * cascade-drops the adjustment (`expense_entries/income_entries.{reconciliation_id,
+ * account_reconciliation_id}` are ON DELETE CASCADE).
+ *
+ * Keyed on the foreign keys, not on `source === 'reconciliation'`, so this predicate agrees exactly
+ * with the backend guard. `source` records provenance and survives a restore, which nulls both links —
+ * a restored adjustment is a plain historical entry that nothing owns, so it stays mutable. What such
+ * a row still cannot do is round-trip the entry form, and that is a separate concern owned by
+ * isSystemExpenseCategory / isSystemIncomeCategory in lib/utils/categories.
  */
-export function isReconciliationOwned(entry: { source: string }): boolean {
-  return entry.source === RECONCILIATION_SOURCE;
+export function isReconciliationOwned(entry: {
+  reconciliationId: number | null;
+  accountReconciliationId: number | null;
+}): boolean {
+  return entry.reconciliationId !== null || entry.accountReconciliationId !== null;
 }

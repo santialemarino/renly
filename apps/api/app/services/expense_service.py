@@ -12,6 +12,7 @@ from app.domain import (
     PaymentMethod,
     PaymentPairingError,
     ReverseResult,
+    ensure_not_reconciliation_owned,
 )
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
@@ -349,7 +350,8 @@ async def create_expenses_for_obligation_cycles(
     return last_entry, coalesced
 
 
-# Update an existing expense entry. Only provided fields are changed.
+# Update an existing expense entry. Only provided fields are changed. Rejects a reconciliation's
+# adjustment row with ReconciliationOwnedEntryError (409) — change it via its reconciliation.
 # Marks stale on both the prior and the new (card, currency, date) when either has credit_card_id.
 # Commitment FK transitions trigger the symmetric advance / reverse model (Phase 3, follow-up
 # Items 10 + symmetric edit, audit round 2). For each FK type independently:
@@ -373,6 +375,9 @@ async def update_expense(
     **fields: object,
 ) -> tuple[ExpenseEntry, AdvanceResult | None, ReverseResult | None]:
     entry = await get_expense(session, expense_id, user)
+    # A reconciliation's adjustment is derived — its amount IS the recorded difference. Refuse before
+    # anything is read or mutated, so a rejected request writes nothing.
+    ensure_not_reconciliation_owned(entry.reconciliation_id, entry.account_reconciliation_id)
     old_card_id = entry.credit_card_id
     old_currency = entry.currency
     old_date = entry.date
@@ -496,12 +501,18 @@ async def update_expense(
     return entry, advance_result, reverse_result
 
 
-# Delete an expense entry. Marks any reconciliation covering the entry's date stale.
+# Delete an expense entry. Marks any reconciliation covering the entry's date stale. Rejects a
+# reconciliation's adjustment row with ReconciliationOwnedEntryError (409) — delete the
+# reconciliation to drop its adjustment.
 # When the deleted row had a commitment FK AND was the most-recent linked expense for that FK,
 # the plan's cursor walks back one step (Phase 3, follow-up Item 10). Returns the reverse_result
 # so the router can include the cursor delta in the response body for Item 7's toast.
 async def delete_expense(session: AsyncSession, expense_id: int, user: User) -> ReverseResult | None:
     entry = await get_expense(session, expense_id, user)
+    # Deleting the adjustment would orphan its reconciliation: the reverse pointer is ON DELETE SET
+    # NULL, so the reconciliation survives still claiming a difference it no longer applies while the
+    # balance snaps back. Only deleting the reconciliation cascades cleanly.
+    ensure_not_reconciliation_owned(entry.reconciliation_id, entry.account_reconciliation_id)
     old_card_id = entry.credit_card_id
     old_currency = entry.currency
     old_date = entry.date

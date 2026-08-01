@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CircleDollarSign, Pencil, Trash2 } from 'lucide-react';
+import { CircleDollarSign, Lock, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -23,6 +23,7 @@ import {
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
@@ -31,6 +32,7 @@ import type { IncomeEntry, IncomeListResponse, IncomeSortField } from '@/lib/api
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { isReconciliationOwned } from '@/lib/reconciliation';
+import { isSystemIncomeCategory } from '@/lib/utils/categories';
 
 function RowActions({
   income,
@@ -46,14 +48,20 @@ function RowActions({
   onSuccess: () => void;
 }) {
   const t = useTranslations('income');
+  const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Mirrors the expenses table: reconciliation ownership withholds both actions (the API refuses
+  // both), a system category withholds Edit only (the form cannot round-trip the row). Each reason
+  // gets its own explanation rather than an action that silently disappears.
+  const reconciliationOwned = isReconciliationOwned(income);
+  const systemCategory = isSystemIncomeCategory(income.category);
+  const canEdit = !reconciliationOwned && !systemCategory;
 
   return (
     <>
       <div className="flex items-center justify-center gap-x-1">
-        {/* A reconciliation's adjustment is derived, not authored — see isReconciliationOwned. */}
-        {!isReconciliationOwned(income) && (
+        {canEdit ? (
           <RowActionButton
             icon={Pencil}
             tooltip={t('actions.edit')}
@@ -63,17 +71,29 @@ function RowActions({
               setEditOpen(true);
             }}
           />
+        ) : (
+          <RowLockedIndicator
+            icon={Lock}
+            tooltip={tCommon(
+              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
+            )}
+            ariaLabel={
+              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
+            }
+          />
         )}
-        <RowActionButton
-          icon={Trash2}
-          tooltip={t('actions.delete')}
-          ariaLabel="Delete"
-          variant="destructive"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDeleteOpen(true);
-          }}
-        />
+        {!reconciliationOwned && (
+          <RowActionButton
+            icon={Trash2}
+            tooltip={t('actions.delete')}
+            ariaLabel="Delete"
+            variant="destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteOpen(true);
+            }}
+          />
+        )}
       </div>
 
       <IncomeFormDialog
