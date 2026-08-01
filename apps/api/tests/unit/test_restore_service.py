@@ -11,12 +11,15 @@ from app.config import Settings
 from app.db import get_admin_session, get_session
 from app.deps.auth import get_current_user
 from app.domain import InvalidImportFileError
-from app.domain.restore_specs import RESTORE_SPECS
+from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
 from app.main import create_app
+from app.models.account import Account
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
+from app.models.income_entry import IncomeEntry
 from app.models.investment import Currency, Investment
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 from app.models.user import User
 from app.rate_limit import limiter
 from app.schemas.restore import RestoreResultResponse
@@ -68,6 +71,20 @@ class TestParseExport:
         data = restore_service._parse_export("x.json", b'{"investments": [{"amount": 1234.56}]}')
         assert data["investments"][0]["amount"] == Decimal("1234.56")
         assert isinstance(data["investments"][0]["amount"], Decimal)
+
+
+# Wraps the mocked bulk_insert so a test can assert on the model instances that were written.
+# Call after _mock_repo, which installs the id-assigning side effect this chains onto.
+def _capture_inserts(monkeypatch) -> list:
+    captured: list = []
+    original = restore_service.restore_repository.bulk_insert.side_effect
+
+    async def capture(session, rows):
+        await original(session, rows)
+        captured.extend(rows)
+
+    monkeypatch.setattr(restore_service.restore_repository, "bulk_insert", AsyncMock(side_effect=capture))
+    return captured
 
 
 class TestBuildModel:
@@ -310,6 +327,111 @@ class TestConfirmRestore:
         # Each snapshot points at the distinct investment it was exported under (no merge).
         assert {s.investment_id for s in snapshots} == {inv.id for inv in investments}
         assert snapshots[0].investment_id != snapshots[1].investment_id
+
+
+# A cash balance is derived from an account's opening_balance plus the rows linked to it, so an
+# account that does not come back — or comes back with its entries unattached — reads as zero cash.
+# These pin the whole account cluster: the parent restores, both entry types keep their link, and a
+# transfer's two NOT NULL legs are remapped together or the row is dropped.
+class TestAccountClusterRoundTrip:
+    @pytest.mark.asyncio
+    async def test_entries_keep_their_account_link(self, monkeypatch):
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            accounts=[{"id": 80, "name": "Caja de ahorro", "type": "bank", "currency": "ARS", "opening_balance": 1000, "opening_date": "2026-01-01"}],
+            expense_entries=[
+                {"id": 40, "date": "2026-01-05", "amount": 500, "currency": "ARS", "category": "food", "source": "manual", "account_id": 80}
+            ],
+            income_entries=[
+                {"id": 50, "date": "2026-01-06", "amount": 900, "currency": "ARS", "category": "salary", "source": "manual", "account_id": 80}
+            ],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        account = next(r for r in captured if isinstance(r, Account))
+        expense = next(r for r in captured if isinstance(r, ExpenseEntry))
+        income = next(r for r in captured if isinstance(r, IncomeEntry))
+        # The NEW id, never the exported 80 — the whole point of the remap.
+        assert expense.account_id == account.id
+        assert income.account_id == account.id
+        assert account.id != 80
+        assert account.opening_balance == Decimal("1000")
+
+    @pytest.mark.asyncio
+    async def test_both_transfer_legs_are_remapped(self, monkeypatch):
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            accounts=[
+                {"id": 80, "name": "Pesos", "type": "bank", "currency": "ARS", "opening_date": "2026-01-01"},
+                {"id": 81, "name": "Dólares", "type": "bank", "currency": "USD", "opening_date": "2026-01-01"},
+            ],
+            transfers=[{"id": 90, "from_account_id": 80, "to_account_id": 81, "date": "2026-02-01", "from_amount": 12000, "to_amount": 10}],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        source, destination = (r for r in captured if isinstance(r, Account))
+        transfer = next(r for r in captured if isinstance(r, Transfer))
+        assert (transfer.from_account_id, transfer.to_account_id) == (source.id, destination.id)
+        # Distinct after the remap too — collapsing them would trip the DB's distinct-accounts CHECK.
+        assert transfer.from_account_id != transfer.to_account_id
+        assert (transfer.from_amount, transfer.to_amount) == (Decimal("12000"), Decimal("10"))
+
+    @pytest.mark.asyncio
+    async def test_a_transfer_missing_an_account_is_dropped_whole(self, monkeypatch):
+        # Both legs are required FKs: restoring the half that resolves would debit an account and
+        # credit nothing, which is the shape that destroyed net worth in the transfers review round.
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            accounts=[{"id": 80, "name": "Pesos", "type": "bank", "currency": "ARS", "opening_date": "2026-01-01"}],
+            transfers=[{"id": 90, "from_account_id": 80, "to_account_id": 999, "date": "2026-02-01", "from_amount": 100, "to_amount": 100}],
+        )
+        result = await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        assert not [r for r in captured if isinstance(r, Transfer)]
+        assert next(s for s in result.entities if s.entity == "transfers").skipped_unresolved == 1
+        assert result.restored == 1  # the account only
+
+    @pytest.mark.asyncio
+    async def test_reconciliation_links_still_null_while_the_account_link_survives(self, monkeypatch):
+        # account_reconciliations stay in SKIPPED_ENTITIES, so their back-links must keep nulling even
+        # though the sibling account_id no longer does. A restored adjustment is a plain entry.
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            accounts=[{"id": 80, "name": "Pesos", "type": "bank", "currency": "ARS", "opening_date": "2026-01-01"}],
+            expense_entries=[
+                {
+                    "id": 40,
+                    "date": "2026-01-05",
+                    "amount": 500,
+                    "currency": "ARS",
+                    "category": "account_adjustment",
+                    "source": "reconciliation",
+                    "account_id": 80,
+                    "account_reconciliation_id": 700,
+                }
+            ],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        account = next(r for r in captured if isinstance(r, Account))
+        expense = next(r for r in captured if isinstance(r, ExpenseEntry))
+        assert expense.account_reconciliation_id is None
+        assert expense.account_id == account.id
+
+    @pytest.mark.asyncio
+    async def test_transfers_are_no_longer_reported_as_skipped(self, monkeypatch):
+        _mock_repo(monkeypatch)
+        content = _export(accounts=[], transfers=[], card_reconciliations=[{"id": 1}])
+        result = await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", content)
+        assert "transfers" not in result.skipped_entities
+        assert "accounts" not in result.skipped_entities
+        # The reconciliation cluster stays skipped on purpose — an old true-up against a freshly
+        # re-derived balance would post an adjustment for drift that no longer exists.
+        assert "account_reconciliations" in SKIPPED_ENTITIES and "card_reconciliations" in result.skipped_entities
 
 
 # Router wiring over a TestClient.
