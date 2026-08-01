@@ -11,19 +11,26 @@
 #     with the target's existing rows on a unique constraint (snapshots' UNIQUE(investment_id, date), the
 #     group-members composite PK). Restore is therefore additive but NOT idempotent: re-restoring the same
 #     file adds everything again, so restore into a fresh account (see docs/public/api-reference.md).
-#   - The circular reconciliation/settlement cluster (card_reconciliations and account_reconciliations,
-#     both ↔ expense/income) and preference/secret rows are out of scope; see SKIPPED_ENTITIES.
+#   - The circular reconciliation cluster (card_reconciliations and account_reconciliations, both ↔
+#     expense/income) and preference/secret rows are out of scope; see SKIPPED_ENTITIES.
 #     Expense/income reconciliation and scheduler links are nulled so restored rows are plain historical
 #     entries with no dangling FK and no risk of tripping the scheduler's partial-unique
 #     (subscription_id, date)/(installment_id, date).
-#   - account_id is nulled for the same reason: accounts are not part of the export, so an exported
-#     account_id points at a row the target does not have. Restored entries are unattributed, matching
-#     how imported history behaves; the account's balance is then trued up by reconciling it.
+#   - accounts ARE restored, and entry → account links survive via an account_id remap. A cash balance
+#     is derived from opening_balance plus its linked rows, so nulling the link (what this engine did
+#     before accounts were exported) silently zeroed a restored user's cash until they re-created every
+#     account and reconciled it. Restoring the parent first and remapping the child's id keeps the
+#     balance correct with no user action.
+#   - account_reconciliations stay skipped even though accounts are now restorable, and that is
+#     deliberate rather than an oversight: a reconciliation is a point-in-time true-up recorded against
+#     a balance the restore has just re-derived from scratch, so replaying an old one would post a
+#     second adjustment for drift that no longer exists. Reconcile after restoring.
 
 from dataclasses import dataclass
 
 from sqlmodel import SQLModel
 
+from app.models.account import Account
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
@@ -34,14 +41,18 @@ from app.models.payment_obligation import PaymentObligation
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction
+from app.models.transfer import Transfer
 
 # Exported sections the restore flow deliberately does not write, reported to the user for transparency.
 # api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
-# overwriting the target's settings); card_settlements and the two reconciliation tables are the
-# circular-FK cluster. transfers reference two accounts on NOT NULL columns, and accounts are not yet
-# part of the export — a restored transfer would have nothing to point at, so it is exported for
-# completeness but not replayed until the accounts export lands.
-SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations", "transfers")
+# overwriting the target's settings); the two reconciliation tables are the circular-FK cluster, and
+# replaying an old true-up against a freshly re-derived balance would be wrong regardless (see above).
+# card_settlements is the odd one out and is NOT circular — nothing references it, and its three FKs
+# (credit_cards, users, accounts) are all restorable now that accounts are. It has simply never been
+# restored, which means a restored card carries its charges without the payments made against them.
+# Un-skipping it is an export-contract change of the same kind as adding accounts, so it is flagged
+# rather than folded in here.
+SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations")
 
 
 # A foreign key on the model that points at another restored entity and must be remapped to the new id.
@@ -68,6 +79,7 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
     RestoreSpec("investments", Investment),
     RestoreSpec("investment_groups", InvestmentGroup),
     RestoreSpec("credit_cards", CreditCard),
+    RestoreSpec("accounts", Account),
     RestoreSpec(
         "investment_group_members",
         InvestmentGroupMember,
@@ -103,12 +115,25 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
     RestoreSpec(
         "expense_entries",
         ExpenseEntry,
-        fks=(FkRef("credit_card_id", "credit_cards", False), FkRef("payment_obligation_id", "payment_obligations", False)),
-        null_fields=("subscription_id", "installment_id", "reconciliation_id", "account_reconciliation_id", "account_id"),
+        fks=(
+            FkRef("credit_card_id", "credit_cards", False),
+            FkRef("payment_obligation_id", "payment_obligations", False),
+            FkRef("account_id", "accounts", False),
+        ),
+        null_fields=("subscription_id", "installment_id", "reconciliation_id", "account_reconciliation_id"),
     ),
     RestoreSpec(
         "income_entries",
         IncomeEntry,
-        null_fields=("reconciliation_id", "account_reconciliation_id", "account_id"),
+        fks=(FkRef("account_id", "accounts", False),),
+        null_fields=("reconciliation_id", "account_reconciliation_id"),
+    ),
+    # Both legs are NOT NULL and required: a transfer whose accounts can't both be resolved is dropped
+    # rather than half-restored, because the balance union sums each leg independently — one surviving
+    # leg would move money out of an account and into nowhere.
+    RestoreSpec(
+        "transfers",
+        Transfer,
+        fks=(FkRef("from_account_id", "accounts", True), FkRef("to_account_id", "accounts", True)),
     ),
 )
