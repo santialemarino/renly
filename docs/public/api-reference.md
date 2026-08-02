@@ -106,7 +106,11 @@ Rebuild your data from a **Renly export** (the JSON file from `GET /me/export`) 
 
 **Foreign keys are remapped.** Exported ids won't match the target account, so parents are inserted first and each child's reference is repointed to the newly inserted id. A row whose required parent can't be resolved (or whose data is invalid) is counted under `skipped_unresolved` and skipped; everything else is inserted in one transaction.
 
-**What is restored:** investments, groups (and memberships), snapshots, transactions, credit cards, subscriptions, installments, payment obligations, expenses, and income. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and card settlements/reconciliations. Restored expenses/income keep their amount, date, category, and notes but are recorded as plain entries (their scheduler/reconciliation links are dropped). An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+**What is restored:** investments, groups (and memberships), snapshots, transactions, credit cards, cash/bank accounts, subscriptions, installments, payment obligations, expenses, income, card settlements, and transfers. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and both reconciliation types. Restored expenses/income keep their amount, date, category, notes **and the cash/bank account they were linked to** — their scheduler and reconciliation links are dropped, so they arrive as plain entries. An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+
+**Balances come back on their own.** Every balance in Renly is derived, never stored: an account's is its `opening_balance` plus the rows linked to it, and a card's is its charges minus the settlements paid against it. Restoring those rows and keeping their links intact therefore reproduces both figures with no extra step.
+
+Reconciliations are the deliberate exception. Each one is a point-in-time true-up recorded against a balance the restore has just re-derived from scratch, so replaying an old one would post a second adjustment for drift that no longer exists. **Reconcile after restoring** if a balance still doesn't match your bank or your statement.
 
 ---
 

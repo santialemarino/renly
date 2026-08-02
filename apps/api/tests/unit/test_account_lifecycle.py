@@ -3,12 +3,15 @@ import re
 from datetime import timedelta
 
 import pytest
+from sqlmodel import SQLModel
 
+import app.models  # noqa: F401  (registers every table on SQLModel.metadata for the export-coverage test)
 from app.config import SignupMode, settings
 from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreachedError
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
+from app.repositories.export_repository import _USER_ID_MODELS
 from app.services import auth_service, settings_service, user_account_service
 
 # Coverage for the M2 account-lifecycle service flows: email verification (AUTH-1), password reset
@@ -444,6 +447,23 @@ class TestExport:
         assert "password_hash" not in data["user"]
         assert data["api_keys"] == []
         assert "investments" in data
+
+    # Every user-owned table must be either exported or listed here as a deliberate exclusion. The
+    # export is a hand-maintained dict, and three tables have now reached it late (the reconciliation
+    # pair, transfers, and accounts — which shipped four PRs before anyone noticed a user's cash was
+    # absent from their own export). This turns the next omission into a failing test instead of
+    # silent data loss, and forces the author to classify a new table on purpose.
+    def test_every_user_owned_table_is_exported_or_deliberately_excluded(self):
+        # Session/credential state, not user data: an export is portable and must never carry
+        # anything that authenticates. feedback is a support conversation with the operator rather
+        # than the user's own financial records.
+        deliberately_excluded = {"auth_tokens", "refresh_tokens", "feedback"}
+        exported = {model.__tablename__ for model in _USER_ID_MODELS.values()}
+        user_owned = {name for name, table in SQLModel.metadata.tables.items() if "user_id" in table.columns}
+
+        assert user_owned - exported - deliberately_excluded == set()
+        # And the exclusion list itself can't rot: every name in it must still be a real table.
+        assert deliberately_excluded <= user_owned
 
 
 # --- Timing equalization (AUTH-5) ---
