@@ -25,12 +25,18 @@
 #     deliberate rather than an oversight: a reconciliation is a point-in-time true-up recorded against
 #     a balance the restore has just re-derived from scratch, so replaying an old one would post a
 #     second adjustment for drift that no longer exists. Reconcile after restoring.
+#   - card_settlements ARE restored, and were never actually part of the circular cluster an older
+#     comment here filed them under: nothing references them, and their FKs (credit_cards, users,
+#     accounts) all resolve. Skipping them left a restored card showing its charges with none of the
+#     payments against them, so its balance — sum(expenses) - sum(settlements) — came back at full
+#     historical debt and understated net worth by every payment the user had ever made.
 
 from dataclasses import dataclass
 
 from sqlmodel import SQLModel
 
 from app.models.account import Account
+from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
@@ -47,12 +53,7 @@ from app.models.transfer import Transfer
 # api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
 # overwriting the target's settings); the two reconciliation tables are the circular-FK cluster, and
 # replaying an old true-up against a freshly re-derived balance would be wrong regardless (see above).
-# card_settlements is the odd one out and is NOT circular — nothing references it, and its three FKs
-# (credit_cards, users, accounts) are all restorable now that accounts are. It has simply never been
-# restored, which means a restored card carries its charges without the payments made against them.
-# Un-skipping it is an export-contract change of the same kind as adding accounts, so it is flagged
-# rather than folded in here.
-SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_settlements", "card_reconciliations", "account_reconciliations")
+SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_reconciliations", "account_reconciliations")
 
 
 # A foreign key on the model that points at another restored entity and must be remapped to the new id.
@@ -127,6 +128,13 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         IncomeEntry,
         fks=(FkRef("account_id", "accounts", False),),
         null_fields=("reconciliation_id", "account_reconciliation_id"),
+    ),
+    # The card FK is required (NOT NULL, and a settlement means nothing without the card it paid);
+    # the funding account is optional and nulls out like any other unresolved optional link.
+    RestoreSpec(
+        "card_settlements",
+        CardSettlement,
+        fks=(FkRef("credit_card_id", "credit_cards", True), FkRef("account_id", "accounts", False)),
     ),
     # Both legs are NOT NULL and required: a transfer whose accounts can't both be resolved is dropped
     # rather than half-restored, because the balance union sums each leg independently — one surviving

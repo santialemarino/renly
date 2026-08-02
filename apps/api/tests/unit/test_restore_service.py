@@ -14,6 +14,8 @@ from app.domain import InvalidImportFileError
 from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
 from app.main import create_app
 from app.models.account import Account
+from app.models.card_settlement import CardSettlement
+from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.investment import Currency, Investment
@@ -423,12 +425,53 @@ class TestAccountClusterRoundTrip:
         assert expense.account_id == account.id
 
     @pytest.mark.asyncio
-    async def test_transfers_are_no_longer_reported_as_skipped(self, monkeypatch):
+    async def test_a_settlement_keeps_its_card_and_its_funding_account(self, monkeypatch):
+        # A card balance is sum(expenses) - sum(settlements). Dropping the settlements returned a
+        # restored card at full historical debt, understating net worth by every payment ever made.
         _mock_repo(monkeypatch)
-        content = _export(accounts=[], transfers=[], card_reconciliations=[{"id": 1}])
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            credit_cards=[{"id": 70, "name": "Visa", "closing_day": 25, "due_day": 5, "currency": "ARS"}],
+            accounts=[{"id": 80, "name": "Pesos", "type": "bank", "currency": "ARS", "opening_date": "2026-01-01"}],
+            card_settlements=[{"id": 95, "credit_card_id": 70, "account_id": 80, "date": "2026-02-28", "amount": 7000, "currency": "ARS"}],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        card = next(r for r in captured if isinstance(r, CreditCard))
+        account = next(r for r in captured if isinstance(r, Account))
+        settlement = next(r for r in captured if isinstance(r, CardSettlement))
+        assert settlement.credit_card_id == card.id
+        assert settlement.account_id == account.id
+        assert settlement.amount == Decimal("7000")
+
+    @pytest.mark.asyncio
+    async def test_a_settlement_without_a_card_is_dropped_but_one_without_an_account_is_not(self, monkeypatch):
+        # credit_card_id is NOT NULL and a settlement is meaningless without the card it paid;
+        # account_id is optional, so an unresolved funding account only costs the attribution.
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            credit_cards=[{"id": 70, "name": "Visa", "closing_day": 25, "due_day": 5, "currency": "ARS"}],
+            card_settlements=[
+                {"id": 95, "credit_card_id": 70, "account_id": 999, "date": "2026-02-28", "amount": 7000, "currency": "ARS"},
+                {"id": 96, "credit_card_id": 999, "date": "2026-02-28", "amount": 500, "currency": "ARS"},
+            ],
+        )
+        result = await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        settlements = [r for r in captured if isinstance(r, CardSettlement)]
+        assert len(settlements) == 1
+        assert settlements[0].account_id is None
+        assert next(s for s in result.entities if s.entity == "card_settlements").skipped_unresolved == 1
+
+    @pytest.mark.asyncio
+    async def test_transfers_and_settlements_are_no_longer_reported_as_skipped(self, monkeypatch):
+        _mock_repo(monkeypatch)
+        content = _export(accounts=[], transfers=[], card_settlements=[], card_reconciliations=[{"id": 1}])
         result = await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", content)
         assert "transfers" not in result.skipped_entities
         assert "accounts" not in result.skipped_entities
+        assert "card_settlements" not in result.skipped_entities
         # The reconciliation cluster stays skipped on purpose — an old true-up against a freshly
         # re-derived balance would post an adjustment for drift that no longer exists.
         assert "account_reconciliations" in SKIPPED_ENTITIES and "card_reconciliations" in result.skipped_entities
