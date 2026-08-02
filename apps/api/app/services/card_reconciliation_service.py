@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import NotFoundError, ReconciliationPeriodMismatchError
+from app.domain import CardReconciliationFuturePeriodError, NotFoundError, ReconciliationPeriodMismatchError
 from app.models.card_reconciliation import CardReconciliation
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
@@ -188,10 +188,20 @@ async def get_reconciliation(
 
 # Create-or-replace a reconciliation for (card, currency, period). Atomic:
 #   1. If a reconciliation already exists for the period, delete it (cascade drops its adjustment).
-#   2. Compute the running-balance snapshot at period_end.
-#   3. Compute the difference; create the matching signed adjustment expense (dated on period_end,
+#   2. Mark every LATER period stale, because both the adjustment just dropped and the one about to be
+#      written are dated period_end and so sit inside every later period's balance.
+#   3. Compute the running-balance snapshot at period_end.
+#   4. Compute the difference; create the matching signed adjustment expense (dated on period_end,
 #      tagged source='reconciliation', linked via reconciliation_id) when difference != 0.
-#   4. Write the reconciliation row and patch its back-pointer to the adjustment id.
+#   5. Write the reconciliation row and patch its back-pointer to the adjustment id.
+#
+# Unlike account reconciliation, an out-of-order (older) period is ALLOWED here rather than rejected.
+# The account version has no repair path — reconciliations there simply append, so an older one can
+# only be undone by deleting every later one first, which is why it is forward-only. This one replaces:
+# re-running a period drops its old row and adjustment and recomputes from scratch, so re-running the
+# affected periods in ascending order always converges. Refusing would import a workaround for a
+# limitation cards do not have, and would have to withhold Reconcile on nearly every row of a surface
+# whose whole shape is a list of individually reconcilable statements. Staleness is the signal instead.
 # Returns the fresh reconciliation row.
 async def create_or_replace(
     session: AsyncSession,
@@ -206,6 +216,9 @@ async def create_or_replace(
     card = await _get_card_or_404(session, card_id, user)
     if period_start > period_end:
         raise ReconciliationPeriodMismatchError("period_start must be on or before period_end.")
+    today = await settings_service.get_user_today(session, user.id)
+    if period_end > today:
+        raise CardReconciliationFuturePeriodError()
 
     # Drop the prior row (and its adjustment via the CASCADE on expense_entries.reconciliation_id /
     # income_entries.reconciliation_id) before inserting a fresh pair. session.delete + flush triggers
@@ -215,6 +228,12 @@ async def create_or_replace(
     if prior is not None:
         await card_reconciliation_repository.delete(session, prior)
         await session.flush()
+
+    # Ordering is load-bearing: this period's own slot is empty right now (any prior row was just
+    # deleted and flushed, and the new one is not written yet), so period_end >= period_end matches
+    # ONLY strictly later periods. That is what lets the fresh row below be born is_stale=False
+    # without threading an exclude-id through the hook.
+    await mark_stale_for_date(session, card_id, currency, period_end)
 
     computed = await compute_bucket_balance_at(session, card_id, currency, period_end)
     difference = compute_reconciliation_difference(statement_balance, computed)
@@ -265,7 +284,11 @@ async def create_or_replace(
     return reconciliation
 
 
-# Delete a reconciliation (and cascade-drop its adjustment expense).
+# Delete a reconciliation (and cascade-drop its adjustment expense). Any later period is marked stale:
+# the adjustment leaving is a dated row disappearing from every balance that summed it, so those
+# recorded figures no longer describe reality. Deleting a non-latest period is allowed for the same
+# reason create_or_replace allows an out-of-order one — re-running converges, so staleness is the
+# honest signal rather than a refusal.
 async def delete_reconciliation(
     session: AsyncSession,
     card_id: int,
@@ -273,24 +296,31 @@ async def delete_reconciliation(
     user: User,
 ) -> None:
     rec = await get_reconciliation(session, card_id, reconciliation_id, user)
+    currency, period_end = rec.currency, rec.period_end
     await card_reconciliation_repository.delete(session, rec)
+    # Flush so the row (and its cascaded adjustment) is gone before the hook queries — otherwise the
+    # row being deleted would match its own predicate and be marked stale on the way out.
+    await session.flush()
+    await mark_stale_for_date(session, card_id, currency, period_end)
     await session.commit()
 
 
 # --- Stale-detection hook ---
 
 
-# Mark every reconciliation whose period covers target_date for (card, currency) as stale.
-# Called from expense / settlement create / update / delete hooks. No-op when no reconciliation
-# is affected, so the cost of the hook on every write is one indexed lookup.
-# Does NOT commit — the caller's transaction owns the boundary.
+# Mark every reconciliation whose recorded balance depends on rows dated target_date as stale, for
+# (card, currency) — i.e. every period ending on or after that date, since a bucket balance sums all
+# history up to period_end. Called from the expense / settlement hooks and from this module's own
+# create/delete, because a reconciliation's adjustment is itself a dated expense that moves every
+# later period's balance. No-op when nothing is affected, so the cost on a normal write is one
+# indexed lookup. Does NOT commit — the caller's transaction owns the boundary.
 async def mark_stale_for_date(
     session: AsyncSession,
     card_id: int,
     currency: str,
     target_date: date_type,
 ) -> None:
-    affected = await card_reconciliation_repository.list_covering_date(session, card_id, currency, target_date)
+    affected = await card_reconciliation_repository.list_affected_by_date(session, card_id, currency, target_date)
     if not affected:
         return
     ids = [r.id for r in affected if r.id is not None and not r.is_stale]
