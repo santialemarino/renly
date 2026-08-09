@@ -834,7 +834,7 @@
       "statusReconciled": "Reconciled",
       "statusNotReconciled": "Not reconciled",
       "statusStale": "Stale",
-      "statusStaleHint": "The card's charges or payments changed after this statement was reconciled, so the figures below no longer match. Reconcile it again to refresh them.",
+      "statusStaleHint": "This statement's balance changed after it was reconciled — a charge or payment on or before its closing date was added, edited or removed, or an earlier statement was reconciled. Reconcile it again to refresh the figures.",
       "reconcileButton": "Reconcile",
       "viewReconciliation": "View",
       "table": {
@@ -2614,7 +2614,7 @@
     "plan_required": "This feature requires a Pro plan.",
     "exchange_rate_unavailable": "Exchange rates are unavailable, so values can't be converted to {currency}.",
     "reconciliation_owned_entry": "This entry was created by a reconciliation, so it can't be edited or deleted directly. Re-run or delete that reconciliation instead.",
-    "reconciliation_period_mismatch": "The reconciliation period is invalid.",
+    "reconciliation_period_mismatch": "This period doesn't match one of the card's statements — its closing day may have changed. Refresh the page and try again.",
     "invalid_import_file": "The file couldn't be read. Upload a valid .csv, .tsv, or .xlsx file.",
     "request_too_large": "That request is too large. Please reduce the amount of data and try again.",
     "admin_required": "You don't have permission to do that.",

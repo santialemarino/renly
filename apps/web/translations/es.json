@@ -834,7 +834,7 @@
       "statusReconciled": "Conciliado",
       "statusNotReconciled": "Sin conciliar",
       "statusStale": "Desactualizado",
-      "statusStaleHint": "Los consumos o pagos de la tarjeta cambiaron después de conciliar este resumen, así que los valores de abajo ya no coinciden. Concilialo de nuevo para actualizarlos.",
+      "statusStaleHint": "El saldo de este resumen cambió después de conciliarlo: se agregó, editó o eliminó un consumo o pago con fecha anterior a su cierre, o se concilió un resumen previo. Concilialo de nuevo para actualizar los valores.",
       "reconcileButton": "Conciliar",
       "viewReconciliation": "Ver",
       "table": {
@@ -2614,7 +2614,7 @@
     "plan_required": "Esta función requiere un plan Pro.",
     "exchange_rate_unavailable": "No hay cotizaciones disponibles, así que no se pueden convertir los valores a {currency}.",
     "reconciliation_owned_entry": "Esta entrada fue creada por una conciliación, así que no se puede editar ni eliminar directamente. Volvé a ejecutar esa conciliación o eliminala.",
-    "reconciliation_period_mismatch": "El período de conciliación no es válido.",
+    "reconciliation_period_mismatch": "Este período no coincide con ninguno de los resúmenes de la tarjeta; puede que su día de cierre haya cambiado. Actualizá la página y probá de nuevo.",
     "invalid_import_file": "No se pudo leer el archivo. Subí un .csv, .tsv o .xlsx válido.",
     "request_too_large": "La solicitud es demasiado grande. Reducí la cantidad de datos e intentá de nuevo.",
     "admin_required": "No tenés permiso para hacer eso.",
