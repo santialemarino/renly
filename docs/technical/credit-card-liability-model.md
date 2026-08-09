@@ -167,9 +167,17 @@ that row's adjustment rather than deleting the entry through the guarded service
 
 ### Stale-detection on retroactive edits
 
-`card_reconciliations.is_stale BOOLEAN NOT NULL DEFAULT FALSE`. When the user creates / edits / deletes an `expense_entries` or `card_settlements` row whose date falls inside `[period_start, period_end]` of any existing reconciliation for that bucket, the system flips `is_stale = true` and surfaces a soft confirmation: _"This statement was reconciled on {date} — continue? You'll want to re-reconcile."_ The flag also renders as a badge in the Reconciliations sub-section. Re-running reconciliation for the period replaces the row and clears the flag.
+`card_reconciliations.is_stale BOOLEAN NOT NULL DEFAULT FALSE`. A reconciliation's `computed_balance` is `compute_bucket_balance_at(period_end)`, which sums every charge and settlement dated `<= period_end` **from the beginning of the bucket's history**. The period bounds name _which_ statement; they do not scope the arithmetic. The flag therefore keys on `period_end >= <changed date>`, not on the date falling inside `[period_start, period_end]`:
 
-This guards against the "I forgot to log a January expense, recorded it in May, but reconciled January back in February" case — the reconciliation would silently go wrong otherwise.
+- creating / editing / deleting an `expense_entries` or `card_settlements` row dated on or before `period_end` — **including one dated before the period began**;
+- the scheduler back-filling a missed subscription or installment cycle into the bucket;
+- reconciling or deleting an **earlier** statement, whose adjustment is itself a dated expense inside this balance.
+
+Only changes that can actually move a balance flag it. Editing an expense's notes or category does not, and a reconciliation that matches to the cent writes no adjustment, so it leaves later statements alone.
+
+The flag renders as an amber badge with an explanatory tooltip in the Reconciliations sub-section, and the reconcile dialog repeats it as a banner. Re-running reconciliation for the period replaces the row and clears the flag.
+
+This guards against the "I forgot to log a January expense, recorded it in May, but reconciled January back in February" case — the reconciliation would silently go wrong otherwise. The `period_end >=` bound is what extends that guarantee to the harder version, where the forgotten expense predates a statement reconciled long afterwards.
 
 ### Re-reconcile (replace, never stack)
 
