@@ -216,6 +216,14 @@ async def create_or_replace(
     card = await _get_card_or_404(session, card_id, user)
     if period_start > period_end:
         raise ReconciliationPeriodMismatchError("period_start must be on or before period_end.")
+    # The period must be one this card actually issues. Without this an arbitrary window is accepted,
+    # and the row it writes is unreachable afterwards: list_recent_statements only matches a
+    # reconciliation by the (period_start, period_end) pair compute_statement_period derives from the
+    # closing day, so the row never renders and its adjustment — a real, balance-moving expense — can
+    # be deleted from neither the statements table (no row) nor the expenses table (409, it is
+    # reconciliation-owned). Checking period_end alone is enough: the start is derived from it.
+    if compute_statement_period(card.closing_day, period_end) != (period_start, period_end):
+        raise ReconciliationPeriodMismatchError("The period does not match a statement period for this card.")
     today = await settings_service.get_user_today(session, user.id)
     if period_end > today:
         raise CardReconciliationFuturePeriodError()
@@ -225,18 +233,25 @@ async def create_or_replace(
     # the cascade synchronously within this transaction so the UNIQUE constraint check on the new
     # insert below sees a clean slot.
     prior = await card_reconciliation_repository.get_by_period(session, card_id, currency, period_start, period_end)
+    prior_had_adjustment = prior is not None and prior.adjustment_expense_id is not None
     if prior is not None:
         await card_reconciliation_repository.delete(session, prior)
         await session.flush()
 
-    # Ordering is load-bearing: this period's own slot is empty right now (any prior row was just
-    # deleted and flushed, and the new one is not written yet), so period_end >= period_end matches
-    # ONLY strictly later periods. That is what lets the fresh row below be born is_stale=False
-    # without threading an exclude-id through the hook.
-    await mark_stale_for_date(session, card_id, currency, period_end)
-
     computed = await compute_bucket_balance_at(session, card_id, currency, period_end)
     difference = compute_reconciliation_difference(statement_balance, computed)
+
+    # Propagate only when a dated row actually enters or leaves the ledger — an adjustment is dropped
+    # by the replace above, or a new one is written below. A first-time reconciliation that matches to
+    # the cent writes nothing, so flagging later periods would claim their figures moved when they did
+    # not: the same lie as the missed-flag bug, in the other direction.
+    #
+    # Ordering is load-bearing: this period's own slot is empty right now (any prior row was deleted
+    # and flushed, and the new one is not written yet), so period_end >= period_end matches ONLY
+    # strictly later periods. That is what lets the fresh row below be born is_stale=False without
+    # threading an exclude-id through the hook.
+    if prior_had_adjustment or difference != 0:
+        await mark_stale_for_date(session, card_id, currency, period_end)
 
     reconciliation = CardReconciliation(
         user_id=user.id,
@@ -275,10 +290,6 @@ async def create_or_replace(
         reconciliation.adjustment_expense_id = adjustment_expense.id
         await card_reconciliation_repository.save(session, reconciliation)
 
-    # Card metadata isn't actually mutated; this line silences the unused-variable lint
-    # while keeping ownership verification at the top of the function.
-    _ = card
-
     await session.commit()
     await session.refresh(reconciliation)
     return reconciliation
@@ -297,11 +308,15 @@ async def delete_reconciliation(
 ) -> None:
     rec = await get_reconciliation(session, card_id, reconciliation_id, user)
     currency, period_end = rec.currency, rec.period_end
+    had_adjustment = rec.adjustment_expense_id is not None
     await card_reconciliation_repository.delete(session, rec)
     # Flush so the row (and its cascaded adjustment) is gone before the hook queries — otherwise the
     # row being deleted would match its own predicate and be marked stale on the way out.
     await session.flush()
-    await mark_stale_for_date(session, card_id, currency, period_end)
+    # Only an adjustment leaving changes a later balance. Deleting a reconciliation that matched to
+    # the cent removes no dated row, so nothing downstream moved.
+    if had_adjustment:
+        await mark_stale_for_date(session, card_id, currency, period_end)
     await session.commit()
 
 
@@ -312,8 +327,15 @@ async def delete_reconciliation(
 # (card, currency) — i.e. every period ending on or after that date, since a bucket balance sums all
 # history up to period_end. Called from the expense / settlement hooks and from this module's own
 # create/delete, because a reconciliation's adjustment is itself a dated expense that moves every
-# later period's balance. No-op when nothing is affected, so the cost on a normal write is one
-# indexed lookup. Does NOT commit — the caller's transaction owns the boundary.
+# later period's balance. Callers gate on whether a balance actually moved — flagging on an edit that
+# changed nothing would be the same lie as missing one, in the other direction.
+#
+# The lookup is a range scan over one bucket's reconciliations from target_date forward (bounded by
+# idx_card_reconciliations_period_end), not the single row the period-contains predicate returned.
+# Already-stale rows are filtered before the UPDATE so a repeated edit writes nothing. Kept as
+# read-then-update rather than one conditional UPDATE so the filter stays unit-testable against a
+# mocked repository; the row count is a user's reconciled statements for one card, and both
+# statements run inside the caller's transaction. Does NOT commit — the caller owns the boundary.
 async def mark_stale_for_date(
     session: AsyncSession,
     card_id: int,
