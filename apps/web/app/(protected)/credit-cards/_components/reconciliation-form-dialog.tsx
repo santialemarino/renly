@@ -88,7 +88,13 @@ export function ReconciliationFormDialog({
   async function onSubmit(values: ReconciliationFormValues) {
     if (!statement) return;
     try {
-      await createOrReplaceReconciliation(cardId, values);
+      const result = await createOrReplaceReconciliation(cardId, values);
+      // A coded refusal travels back as data, not as a thrown error — the Server Action boundary
+      // strips the message off anything thrown, which is how the localized copy would go unseen.
+      if (!result.ok) {
+        toast.error(result.conflictDetail);
+        return;
+      }
       toast.success(isReplace ? t('form.replaceSuccess') : t('form.createSuccess'));
       onSuccess();
       onOpenChange(false);

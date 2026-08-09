@@ -17,6 +17,7 @@ from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
 from app.repositories import installment_repository, subscription_repository, user_settings_repository
+from app.services import card_reconciliation_service
 from app.utils.dates import (
     add_months,
     advance_by_cycle,
@@ -141,6 +142,7 @@ async def _generate_subscription_expenses(
 
     created = 0
     advanced = 0
+    touched_buckets: dict[tuple[int, str], date_type] = {}
     for sub, today_for_user in pending:
         dates = subscription_dates_to_emit(
             sub.next_billing_date,
@@ -178,6 +180,7 @@ async def _generate_subscription_expenses(
                     subscription_id=sub.id,
                 )
             )
+            _track_card_bucket(touched_buckets, sub.credit_card_id, sub.currency, d)
             created += 1
         # Advance to the first cycle strictly after today — also when every emission was
         # deduped: that is exactly how a pre-paid cycle's frozen cursor catches up.
@@ -188,8 +191,29 @@ async def _generate_subscription_expenses(
 
     if created:
         await session.flush()
+        await _mark_touched_buckets_stale(session, touched_buckets)
         logger.info("Auto-expenses: created %d subscription charges at %s UTC.", created, now_utc.isoformat())
     return created, advanced
+
+
+# Records that a scheduled charge landed in a card bucket, keeping the EARLIEST date seen per bucket.
+# A statement goes stale once a charge dated on or before its period_end appears, so flagging from the
+# earliest date covers every later charge in the same bucket with one call instead of one per row.
+def _track_card_bucket(touched: dict[tuple[int, str], date_type], card_id: int | None, currency: str, charge_date: date_type) -> None:
+    if card_id is None:
+        return
+    key = (card_id, currency)
+    if key not in touched or charge_date < touched[key]:
+        touched[key] = charge_date
+
+
+# Flags every reconciliation whose recorded balance now includes a freshly emitted charge. The
+# scheduler back-fills missed cycles, so it can insert a charge dated inside — or before — an already
+# reconciled statement; without this the statement keeps rendering as reconciled while its figures no
+# longer match. Does not commit: the caller owns the transaction.
+async def _mark_touched_buckets_stale(session: AsyncSession, touched: dict[tuple[int, str], date_type]) -> None:
+    for (card_id, currency), earliest in touched.items():
+        await card_reconciliation_service.mark_stale_for_date(session, card_id, currency, earliest)
 
 
 # Emits expense_entries for active installment plans belonging to eligible users.
@@ -224,6 +248,7 @@ async def _generate_installment_expenses(
 
     created = 0
     advanced = 0
+    touched_buckets: dict[tuple[int, str], date_type] = {}
     for inst, today_for_user in pending:
         cuotas = installment_cuotas_to_emit(
             inst.start_date,
@@ -257,6 +282,7 @@ async def _generate_installment_expenses(
                     installment_id=inst.id,
                 )
             )
+            _track_card_bucket(touched_buckets, inst.credit_card_id, inst.currency, cuota_date)
             created += 1
         # Advance the installment counter past the last emitted index (also when every
         # emission was deduped); flip the plan inactive once past the final installment.
@@ -269,6 +295,7 @@ async def _generate_installment_expenses(
 
     if created:
         await session.flush()
+        await _mark_touched_buckets_stale(session, touched_buckets)
         logger.info("Auto-expenses: created %d installment charges at %s UTC.", created, now_utc.isoformat())
     return created, advanced
 

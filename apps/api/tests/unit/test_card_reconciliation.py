@@ -4,7 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from app.domain import CardReconciliationFuturePeriodError, ReconciliationPeriodMismatchError
 from app.domain.credit_card import CardBucketBalance
+from app.models.card_reconciliation import CardReconciliation
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseCategory
 from app.models.user import User
@@ -15,11 +17,15 @@ USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 
 
 # Wires create_or_replace's dependencies: an owned card, a fixed computed balance, and a
-# capture-and-assign-id fake for the adjustment row the service writes.
-def _wire_create(monkeypatch, *, computed):
+# capture-and-assign-id fake for the adjustment row the service writes. "Today" sits well after the
+# periods these tests use, so the future-period guard never fires; the stale hook is stubbed out
+# because TestStalePropagation exercises it directly.
+def _wire_create(monkeypatch, *, computed, today=date(2026, 12, 31)):
     captured: dict = {}
     card = CreditCard(id=7, user_id=1, name="Visa", closing_day=20, due_day=28, currency="ARS")
     monkeypatch.setattr(card_reconciliation_service, "_get_card_or_404", AsyncMock(return_value=card))
+    monkeypatch.setattr(card_reconciliation_service.settings_service, "get_user_today", AsyncMock(return_value=today))
+    monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", AsyncMock())
     monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "get_by_period", AsyncMock(return_value=None))
     monkeypatch.setattr(card_reconciliation_service, "compute_bucket_balance_at", AsyncMock(return_value=computed))
     monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "save", AsyncMock())
@@ -246,3 +252,279 @@ class TestSignedAdjustment:
         balance = await card_reconciliation_service.compute_bucket_balance_at(AsyncMock(), 7, "ARS", date(2026, 7, 20))
 
         assert balance == Decimal("800")
+
+
+# --- Staleness: the predicate, and propagation from the reconciliation's own writes ---
+
+
+# Builds fake reconciliation rows for a bucket. Only the fields the stale path reads are set.
+def _rec(rec_id: int, period_start: date, period_end: date, *, is_stale: bool = False) -> CardReconciliation:
+    return CardReconciliation(
+        id=rec_id,
+        user_id=1,
+        card_id=7,
+        currency="ARS",
+        period_start=period_start,
+        period_end=period_end,
+        statement_balance=Decimal("0"),
+        computed_balance=Decimal("0"),
+        difference=Decimal("0"),
+        is_stale=is_stale,
+    )
+
+
+class TestStalePredicate:
+    # A bucket balance is every row dated <= period_end, from the beginning of history — the period
+    # bounds only name WHICH statement. So an edit dated before a reconciled period still moves that
+    # period's balance, which the old period-contains predicate missed: the measured symptom was a
+    # reconciled balance drifting 1000 -> 900 with is_stale still false.
+    @pytest.mark.asyncio
+    async def test_an_edit_before_the_period_still_marks_it_stale(self, monkeypatch):
+        december = _rec(2, date(2026, 11, 21), date(2026, 12, 20))
+        captured: dict = {}
+
+        async def fake_list(_session, card_id, currency, target_date):
+            captured["target_date"] = target_date
+            # Stand in for the real query: December's period_end is after the edited date.
+            return [december] if december.period_end >= target_date else []
+
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "list_affected_by_date", fake_list)
+        mark = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "mark_stale", mark)
+
+        await card_reconciliation_service.mark_stale_for_date(AsyncMock(), 7, "ARS", date(2026, 10, 10))
+
+        assert captured["target_date"] == date(2026, 10, 10)
+        assert mark.await_args.args[1] == [2]
+
+    @pytest.mark.asyncio
+    async def test_an_edit_after_every_period_marks_nothing(self, monkeypatch):
+        monkeypatch.setattr(
+            card_reconciliation_service.card_reconciliation_repository,
+            "list_affected_by_date",
+            AsyncMock(return_value=[]),
+        )
+        mark = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "mark_stale", mark)
+
+        await card_reconciliation_service.mark_stale_for_date(AsyncMock(), 7, "ARS", date(2027, 1, 1))
+
+        mark.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_already_stale_row_is_not_re_marked(self, monkeypatch):
+        monkeypatch.setattr(
+            card_reconciliation_service.card_reconciliation_repository,
+            "list_affected_by_date",
+            AsyncMock(return_value=[_rec(2, date(2026, 11, 21), date(2026, 12, 20), is_stale=True)]),
+        )
+        mark = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "mark_stale", mark)
+
+        await card_reconciliation_service.mark_stale_for_date(AsyncMock(), 7, "ARS", date(2026, 10, 10))
+
+        mark.assert_not_awaited()
+
+
+class TestStalePropagation:
+    # Reconciling an OLDER period posts an adjustment dated at its period_end, which lands inside every
+    # later period's balance. Those later rows keep rendering their recorded difference as valid, so
+    # they must be flagged. This is the case the account feature refuses outright; cards allow it and
+    # propagate staleness instead, because re-running a period here replaces it cleanly.
+    @pytest.mark.asyncio
+    async def test_reconciling_an_older_period_flags_the_later_ones(self, monkeypatch):
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 9, 21),
+            period_end=date(2026, 10, 20),
+            statement_balance=Decimal("1050"),
+        )
+
+        # Keyed on this period's own period_end: the row is not written yet and any prior was already
+        # deleted, so period_end >= period_end reaches strictly later periods only.
+        assert stale.await_args.args[1:] == (7, "ARS", date(2026, 10, 20))
+
+    @pytest.mark.asyncio
+    async def test_the_hook_runs_before_the_row_is_written(self, monkeypatch):
+        # The ordering is the reason the fresh row can be born clean: run the hook after create and
+        # the new row matches its own period_end >= period_end predicate. Asserting is_stale is False
+        # cannot catch that (the row is constructed with is_stale=False), so assert the sequence.
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+        order: list[str] = []
+        real_create = card_reconciliation_service.card_reconciliation_repository.create
+
+        async def tracking_create(session, reconciliation):
+            order.append("create")
+            return await real_create(session, reconciliation)
+
+        async def tracking_stale(*_args, **_kwargs):
+            order.append("stale")
+
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "create", tracking_create)
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", tracking_stale)
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 9, 21),
+            period_end=date(2026, 10, 20),
+            statement_balance=Decimal("1050"),
+        )
+
+        assert order == ["stale", "create"]
+
+    @pytest.mark.asyncio
+    async def test_a_statement_that_matches_to_the_cent_flags_nothing(self, monkeypatch):
+        # difference == 0 writes no adjustment, so no dated row entered the ledger and no later
+        # balance moved. Flagging here would claim figures changed when they did not — the same lie
+        # as missing a flag, pointed the other way.
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 9, 21),
+            period_end=date(2026, 10, 20),
+            statement_balance=Decimal("1000"),
+        )
+
+        stale.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_replacing_a_row_that_had_an_adjustment_flags_even_when_the_new_one_matches(self, monkeypatch):
+        # The replace drops the prior adjustment, which IS a dated row leaving every later balance,
+        # so this must flag even though the fresh difference is zero.
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+        prior = _rec(9, date(2026, 9, 21), date(2026, 10, 20))
+        prior.adjustment_expense_id = 91
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "get_by_period", AsyncMock(return_value=prior))
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "delete", AsyncMock())
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 9, 21),
+            period_end=date(2026, 10, 20),
+            statement_balance=Decimal("1000"),
+        )
+
+        assert stale.await_args.args[1:] == (7, "ARS", date(2026, 10, 20))
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_reconciliation_flags_the_later_ones(self, monkeypatch):
+        # The cascade drops its adjustment, so a dated row vanishes from every balance that summed it.
+        rec = _rec(2, date(2026, 9, 21), date(2026, 10, 20))
+        rec.adjustment_expense_id = 91
+        monkeypatch.setattr(card_reconciliation_service, "get_reconciliation", AsyncMock(return_value=rec))
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "delete", AsyncMock())
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+        session = AsyncMock()
+
+        await card_reconciliation_service.delete_reconciliation(session, 7, 2, USER)
+
+        assert stale.await_args.args[1:] == (7, "ARS", date(2026, 10, 20))
+        # Flushed before the hook runs, or the row being deleted would match its own predicate.
+        assert session.flush.await_count == 1
+        session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_deleting_a_reconciliation_that_had_no_adjustment_flags_nothing(self, monkeypatch):
+        # It matched to the cent, so nothing dated leaves the ledger and no later balance moves.
+        rec = _rec(2, date(2026, 9, 21), date(2026, 10, 20))
+        monkeypatch.setattr(card_reconciliation_service, "get_reconciliation", AsyncMock(return_value=rec))
+        monkeypatch.setattr(card_reconciliation_service.card_reconciliation_repository, "delete", AsyncMock())
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await card_reconciliation_service.delete_reconciliation(AsyncMock(), 7, 2, USER)
+
+        stale.assert_not_awaited()
+
+
+class TestPeriodMustBeARealStatement:
+    # An arbitrary window wrote a row that list_recent_statements can never match (it looks rows up by
+    # the (start, end) pair derived from the closing day), so neither the row nor its balance-moving
+    # adjustment could be deleted from any surface.
+    @pytest.mark.asyncio
+    async def test_a_window_that_is_not_a_statement_period_is_rejected(self, monkeypatch):
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+
+        with pytest.raises(ReconciliationPeriodMismatchError):
+            await card_reconciliation_service.create_or_replace(
+                AsyncMock(),
+                7,
+                USER,
+                currency="ARS",
+                period_start=date(2020, 1, 1),
+                period_end=date(2026, 8, 1),
+                statement_balance=Decimal("100"),
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_start_that_does_not_follow_the_previous_closing_is_rejected(self, monkeypatch):
+        # period_end is a real closing day for closing_day=20, but the start is off by one.
+        _wire_create(monkeypatch, computed=Decimal("1000"))
+
+        with pytest.raises(ReconciliationPeriodMismatchError):
+            await card_reconciliation_service.create_or_replace(
+                AsyncMock(),
+                7,
+                USER,
+                currency="ARS",
+                period_start=date(2026, 9, 22),
+                period_end=date(2026, 10, 20),
+                statement_balance=Decimal("100"),
+            )
+
+
+class TestFuturePeriodGuard:
+    # A statement period that has not closed yet has no statement to reconcile against. This is the one
+    # rule the card and account flows deliberately share.
+    @pytest.mark.asyncio
+    async def test_a_period_closing_after_today_is_rejected(self, monkeypatch):
+        _wire_create(monkeypatch, computed=Decimal("1000"), today=date(2026, 7, 1))
+
+        with pytest.raises(CardReconciliationFuturePeriodError):
+            await card_reconciliation_service.create_or_replace(
+                AsyncMock(),
+                7,
+                USER,
+                currency="ARS",
+                period_start=date(2026, 6, 21),
+                period_end=date(2026, 7, 20),
+                statement_balance=Decimal("1000"),
+            )
+
+    @pytest.mark.asyncio
+    async def test_a_period_closing_today_is_accepted(self, monkeypatch):
+        captured = _wire_create(monkeypatch, computed=Decimal("1000"), today=date(2026, 7, 20))
+
+        await card_reconciliation_service.create_or_replace(
+            AsyncMock(),
+            7,
+            USER,
+            currency="ARS",
+            period_start=date(2026, 6, 21),
+            period_end=date(2026, 7, 20),
+            statement_balance=Decimal("1200"),
+        )
+
+        assert captured["reconciliation"].period_end == date(2026, 7, 20)

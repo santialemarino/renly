@@ -16,8 +16,12 @@ from app.models.utils import utcnow
 # nothing. adjustment_income_id is retained for the historical shape but is no longer written.
 # adjustment_expense_id back-references the adjustment row; expense_entries.reconciliation_id closes
 # the loop with ON DELETE CASCADE.
-# is_stale flips to true when an expense or settlement inside the period is created / updated / deleted
-# after this reconciliation was written. Re-reconciling replaces (delete + cascade + insert).
+# is_stale flips to true when something the recorded figures were derived from changes afterwards.
+# computed_balance sums every charge and settlement dated <= period_end from the beginning of the
+# bucket's history, so the period bounds name WHICH statement without scoping the arithmetic: an edit
+# dated before the period still moves this balance, and reconciling or deleting an EARLIER period
+# does too, because its adjustment is itself a dated row. Re-reconciling replaces (delete + cascade +
+# insert) and clears the flag.
 class CardReconciliation(SQLModel, table=True):
     __tablename__ = "card_reconciliations"
 
@@ -40,7 +44,7 @@ class CardReconciliation(SQLModel, table=True):
         foreign_key="income_entries.id",
         description="Legacy back-pointer to an adjustment income; no longer written (credits are signed expenses).",
     )
-    is_stale: bool = Field(default=False, description="True when a relevant edit inside the period happened after reconciliation.")
+    is_stale: bool = Field(default=False, description="True when a row dated on or before period_end changed after this was reconciled.")
     reconciled_at: datetime = Field(default_factory=utcnow, description="When the user ran the reconciliation.")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

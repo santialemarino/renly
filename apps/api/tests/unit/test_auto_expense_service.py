@@ -6,6 +6,7 @@ import pytest
 
 from app.models.expense_entry import ExpenseEntry
 from app.models.subscription import Subscription
+from app.services import auto_expense_service
 from app.services.auto_expense_service import (
     AUTO_EXPENSES_HOUR_LOCAL,
     _generate_subscription_expenses,
@@ -303,3 +304,83 @@ class Test_ScanCutoff:
     # The SQL due-scan cutoff leads the UTC date by one day so it covers every user's local today.
     def test_cutoff_is_utc_date_plus_one(self):
         assert _scan_cutoff(datetime(2026, 7, 12, 3, 0, tzinfo=UTC)) == date(2026, 7, 13)
+
+
+# --- Card staleness on scheduled charges ---
+
+
+class TestScheduledChargesFlagReconciledStatements:
+    # The scheduler is the second write path into a card bucket, and it back-fills: a missed cycle can
+    # land inside — or before — an already-reconciled statement. Without this hook the statement keeps
+    # rendering as reconciled while its recorded figures no longer match.
+    def _session(self, subscriptions, linked_rows):
+        subs_result = Mock()
+        subs_result.scalars.return_value.all.return_value = subscriptions
+        linked_result = Mock()
+        linked_result.all.return_value = linked_rows
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=[subs_result, linked_result])
+        session.add = Mock()
+        session.flush = AsyncMock()
+        return session
+
+    def _card_sub(self) -> Subscription:
+        return Subscription(
+            id=1,
+            user_id=1,
+            name="Netflix",
+            amount=Decimal("5990"),
+            currency="ARS",
+            billing_cycle=BILLING_CYCLE_MONTHLY,
+            next_billing_date=date(2026, 6, 30),
+            anchor_day=30,
+            is_active=True,
+            credit_card_id=7,
+            payment_method="credit_card",
+        )
+
+    @pytest.mark.asyncio
+    async def test_an_emitted_card_charge_flags_its_bucket(self, monkeypatch):
+        stale = AsyncMock()
+        monkeypatch.setattr(auto_expense_service.card_reconciliation_service, "mark_stale_for_date", stale)
+        sub = self._card_sub()
+        session = self._session([sub], [])
+
+        created, _advanced = await _generate_subscription_expenses(
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+        )
+
+        assert created == 1
+        assert stale.await_args.args[1:] == (7, "ARS", date(2026, 6, 30))
+
+    @pytest.mark.asyncio
+    async def test_a_deduped_cycle_flags_nothing(self, monkeypatch):
+        # Nothing was inserted, so no balance moved.
+        stale = AsyncMock()
+        monkeypatch.setattr(auto_expense_service.card_reconciliation_service, "mark_stale_for_date", stale)
+        sub = self._card_sub()
+        session = self._session([sub], [(1, date(2026, 6, 28))])
+
+        created, _advanced = await _generate_subscription_expenses(
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+        )
+
+        assert created == 0
+        stale.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_cash_subscription_flags_nothing(self, monkeypatch):
+        # No card link, so no bucket to invalidate.
+        stale = AsyncMock()
+        monkeypatch.setattr(auto_expense_service.card_reconciliation_service, "mark_stale_for_date", stale)
+        sub = self._card_sub()
+        sub.credit_card_id = None
+        sub.payment_method = "debit"
+        session = self._session([sub], [])
+
+        created, _advanced = await _generate_subscription_expenses(
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+        )
+
+        assert created == 1
+        stale.assert_not_awaited()

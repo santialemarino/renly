@@ -381,6 +381,7 @@ async def update_expense(
     old_card_id = entry.credit_card_id
     old_currency = entry.currency
     old_date = entry.date
+    old_amount = entry.amount
     old_obligation_id = entry.payment_obligation_id
     old_subscription_id = entry.subscription_id
     old_installment_id = entry.installment_id
@@ -468,9 +469,14 @@ async def update_expense(
         setattr(entry, key, value)
     await expense_repository.save(session, entry)
 
-    if old_card_id is not None:
-        await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
+    # Only an edit that actually moves a bucket balance invalidates a statement. Notes, category and
+    # the plan links do not, and flagging on those is not harmless: staleness reaches every statement
+    # from the row's date forward, so a typo fix on an old charge would turn years of reconciled
+    # statements amber and demand a manual re-run of each.
     moved = entry.credit_card_id != old_card_id or entry.currency != old_currency or entry.date != old_date
+    balance_changed = moved or entry.amount != old_amount
+    if old_card_id is not None and balance_changed:
+        await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
     if entry.credit_card_id is not None and moved:
         await card_reconciliation_service.mark_stale_for_date(session, entry.credit_card_id, entry.currency, entry.date)
 

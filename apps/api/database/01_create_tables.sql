@@ -491,7 +491,9 @@ CREATE UNIQUE INDEX idx_expense_entries_installment_date
 --   reconciliation claiming a difference it no longer applies. Delete the reconciliation instead — the
 --   expense_entries.reconciliation_id side is ON DELETE CASCADE and drops the adjustment with it.
 -- adjustment_income_id is retained for the historical shape but is no longer written.
--- is_stale flips to true when an expense_entries or card_settlements row inside the period is created
+-- is_stale flips to true when a row the recorded balance was derived from changes afterwards. The
+-- balance sums everything dated <= period_end from the start of the bucket's history, so the trigger
+-- is a charge or settlement dated ON OR BEFORE period_end being created
 --   / updated / deleted after this reconciliation was written. UI surfaces a re-reconcile prompt.
 -- Re-reconciliation is delete-and-replace via the UNIQUE constraint and the cascade from
 --   expense_entries / income_entries.reconciliation_id.

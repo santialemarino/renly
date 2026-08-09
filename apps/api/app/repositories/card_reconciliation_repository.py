@@ -55,10 +55,15 @@ async def get_by_period(
     return result.scalar_one_or_none()
 
 
-# Return reconciliations whose period contains the given date for a given (card, currency).
-# Used by stale-detection hooks: any retroactive edit to an expense / settlement inside this list's
-# periods marks those reconciliations as stale.
-async def list_covering_date(
+# Return every reconciliation whose recorded balance depends on rows dated target_date, for a given
+# (card, currency). Used by the stale-detection hooks.
+#
+# The bound is period_end >= target_date, NOT "the period contains the date". A reconciliation's
+# computed_balance comes from compute_bucket_balance_at(period_end), which sums everything dated
+# <= period_end from the beginning of the bucket's history — the period bounds only name WHICH
+# statement, they do not scope the arithmetic. So a row dated before a reconciled period still moves
+# that period's balance, and the old period-contains predicate silently missed it.
+async def list_affected_by_date(
     session: AsyncSession,
     card_id: int,
     currency: str,
@@ -68,7 +73,6 @@ async def list_covering_date(
         select(CardReconciliation).where(
             CardReconciliation.card_id == card_id,
             CardReconciliation.currency == currency,
-            CardReconciliation.period_start <= target_date,
             CardReconciliation.period_end >= target_date,
         )
     )
@@ -262,8 +266,8 @@ class CardReconciliationRepository:
     get_by_id = staticmethod(get_by_id)
     get_by_period = staticmethod(get_by_period)
     get_first_activity_date = staticmethod(get_first_activity_date)
+    list_affected_by_date = staticmethod(list_affected_by_date)
     list_by_card = staticmethod(list_by_card)
-    list_covering_date = staticmethod(list_covering_date)
     list_expense_daily_sums = staticmethod(list_expense_daily_sums)
     list_settlement_daily_sums = staticmethod(list_settlement_daily_sums)
     mark_stale = staticmethod(mark_stale)

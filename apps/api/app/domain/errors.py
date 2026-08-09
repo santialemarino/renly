@@ -145,6 +145,19 @@ class AccountReconciliationNotLatestError(DomainError):
         return {"last_reconciled_date": self.last_reconciled_date.isoformat()}
 
 
+# A card reconciliation's statement period closes in the future. A reconciliation records the balance
+# printed on a statement the user has actually received, and a period cannot have closed yet. This is
+# the one rule the card and account flows deliberately share — they differ on ordering, not on whether
+# a statement can exist before its closing date. Mapped to 400.
+class CardReconciliationFuturePeriodError(DomainError):
+    code = "card_reconciliation_future_period"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A statement period that has not closed yet cannot be reconciled."
+        super().__init__(self.message)
+
+
 # Investment currency cannot be changed because snapshots exist. Mapped to 409 by the API.
 class CurrencyChangeBlockedError(DomainError):
     code = "currency_change_blocked"

@@ -155,11 +155,16 @@ export async function fetchReconciliations(
   return raw.map(mapReconciliation);
 }
 
+// Discriminated result so the reconcile dialog can surface the backend's coded 400 (an unclosed
+// period, a window that is not one of this card's statements) instead of a generic save-failed
+// toast — a thrown error's message does not survive the Server Action boundary.
+export type ReconciliationResult = { ok: true } | { ok: false; conflictDetail: string };
+
 // Create-or-replace a reconciliation for (card, currency, period). Replaces in-place when one exists.
 export async function createOrReplaceReconciliation(
   cardId: number,
   values: ReconciliationFormValues,
-): Promise<void> {
+): Promise<ReconciliationResult> {
   const res = await authenticatedFetch(`/credit-cards/${cardId}/reconciliations`, {
     method: 'POST',
     body: {
@@ -169,7 +174,17 @@ export async function createOrReplaceReconciliation(
       statement_balance: values.statementBalance,
     },
   });
-  if (!res.ok) throw new Error('Failed to save reconciliation');
+  if (!res.ok) {
+    if (res.status === 400) {
+      const parsed = await parseApiError(res);
+      if (parsed.code || parsed.detail) {
+        const t = await getTranslations('apiErrors');
+        return { ok: false, conflictDetail: resolveApiError(t, parsed, '') };
+      }
+    }
+    throw new Error('Failed to save reconciliation');
+  }
+  return { ok: true };
 }
 
 // Delete a reconciliation (cascades to its adjustment expense or income).

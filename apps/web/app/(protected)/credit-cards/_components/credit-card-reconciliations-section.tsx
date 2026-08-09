@@ -201,9 +201,23 @@ export function CreditCardReconciliationsSection({
                                   </Badge>
                                 )}
                                 {status === 'stale' && (
-                                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
-                                    {t('statusStale')}
-                                  </Badge>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      {/* Focusable so the explanation is reachable by keyboard, and
+                                          role="note" so it announces as the ancillary remark it is
+                                          rather than as an unlabelled stop with no affordance. */}
+                                      <Badge
+                                        role="note"
+                                        tabIndex={0}
+                                        className="bg-amber-100 text-amber-700 hover:bg-amber-100"
+                                      >
+                                        {t('statusStale')}
+                                      </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-xs">
+                                      {t('statusStaleHint')}
+                                    </TooltipContent>
+                                  </Tooltip>
                                 )}
                                 {status === 'not_reconciled' && (
                                   <Badge className="bg-muted text-muted-foreground hover:bg-muted">
