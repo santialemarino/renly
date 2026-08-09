@@ -397,3 +397,48 @@ class TestUpdateExpenseTransitions:
         assert reverse is None
         advance_mock.assert_not_called()
         reverse_mock.assert_not_called()
+
+
+# --- Stale-mark blast radius (card reconciliation) ---
+
+
+class TestStaleMarkOnlyFiresWhenABalanceMoves:
+    # Staleness reaches every statement from the row's date forward, so firing it on an edit that
+    # cannot move a balance would turn years of reconciled statements amber over a typo fix. The
+    # trigger is the fields the bucket sum reads: date, amount, currency, and the card link.
+    @pytest.mark.asyncio
+    async def test_a_notes_only_edit_does_not_flag_anything(self, monkeypatch):
+        entry = _entry(credit_card_id=7)
+        entry.payment_method = "credit_card"
+        _mock_repos(monkeypatch, entry)
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await expense_service.update_expense(AsyncMock(), 1, USER, notes="typo fixed")
+
+        stale.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_amount_edit_flags_the_bucket(self, monkeypatch):
+        entry = _entry(credit_card_id=7)
+        entry.payment_method = "credit_card"
+        _mock_repos(monkeypatch, entry)
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await expense_service.update_expense(AsyncMock(), 1, USER, amount=Decimal("250"))
+
+        assert stale.await_args.args[1:] == (7, "USD", date(2026, 6, 5))
+
+    @pytest.mark.asyncio
+    async def test_a_date_move_flags_both_the_old_and_the_new_position(self, monkeypatch):
+        entry = _entry(credit_card_id=7)
+        entry.payment_method = "credit_card"
+        _mock_repos(monkeypatch, entry)
+        stale = AsyncMock()
+        monkeypatch.setattr(card_reconciliation_service, "mark_stale_for_date", stale)
+
+        await expense_service.update_expense(AsyncMock(), 1, USER, date=date(2026, 8, 9))
+
+        flagged = {call.args[3] for call in stale.await_args_list}
+        assert flagged == {date(2026, 6, 5), date(2026, 8, 9)}
