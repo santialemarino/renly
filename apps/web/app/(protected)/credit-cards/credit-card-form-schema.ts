@@ -25,6 +25,9 @@ export function buildCreditCardFormSchema(
       .refine((v) => !v || (!Number.isNaN(Number(v)) && Number(v) >= 0), {
         message: invalidMonthlyPaymentMsg,
       }),
+    // Optional funding account that pre-fills a settlement's "Paid from". Nullable so clearing it can
+    // round-trip through `null` (AccountField's contract).
+    defaultAccountId: z.number().nullable().optional(),
   });
 }
 

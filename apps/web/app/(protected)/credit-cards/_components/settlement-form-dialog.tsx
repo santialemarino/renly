@@ -37,6 +37,10 @@ interface SettlementFormDialogProps {
   // Accounts the payment can be drawn from. Filtered to the settled bucket's currency by AccountField;
   // omitted or empty hides the field entirely (cash-less users see no change).
   accounts?: Account[];
+  // The card's optional default funding account ("débito automático"), used only as the initial value
+  // of "Paid from". It never creates a settlement on its own: a real auto-debit can fail, and Renly
+  // must not invent a payment that did not happen.
+  defaultAccountId: number | null;
   onSuccess: () => void;
 }
 
@@ -46,6 +50,7 @@ export function SettlementFormDialog({
   cardId,
   bucketCurrencies,
   accounts,
+  defaultAccountId,
   onSuccess,
 }: SettlementFormDialogProps) {
   const t = useTranslations('creditCards');
@@ -65,25 +70,28 @@ export function SettlementFormDialog({
       date: '',
       amount: '',
       currency: defaultCurrency,
-      accountId: undefined,
+      accountId: defaultAccountId,
       notes: '',
     },
   });
 
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  // Reset form when dialog opens — re-anchor currency to the card's primary bucket.
+  // Reset form when dialog opens — re-anchor currency to the card's primary bucket, and pre-fill the
+  // funding account from the card's default. The default is restricted to the card's own currency, so
+  // it matches the primary bucket the form opens on; switching to another bucket's currency clears it
+  // through AccountField's own mismatch effect rather than submitting a link the API would refuse.
   useEffect(() => {
     if (open) {
       form.reset({
         date: '',
         amount: '',
         currency: defaultCurrency,
-        accountId: undefined,
+        accountId: defaultAccountId,
         notes: '',
       });
     }
-  }, [open, form, defaultCurrency]);
+  }, [open, form, defaultCurrency, defaultAccountId]);
 
   async function onSubmit(values: SettlementFormValues) {
     try {
@@ -169,15 +177,13 @@ export function SettlementFormDialog({
               />
             )}
 
-            {accounts && accounts.length > 0 && (
-              <AccountField
-                control={form.control}
-                setValue={form.setValue}
-                accounts={accounts}
-                currency={watchedCurrency || undefined}
-                label={t('settlements.form.account')}
-              />
-            )}
+            <AccountField
+              control={form.control}
+              setValue={form.setValue}
+              accounts={accounts ?? []}
+              currency={watchedCurrency || undefined}
+              label={t('settlements.form.account')}
+            />
 
             <FormField
               control={form.control}

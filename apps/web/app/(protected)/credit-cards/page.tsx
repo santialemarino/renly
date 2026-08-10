@@ -34,8 +34,13 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
       showArchived: params.show_archived === 'true',
     }),
     getSettings().catch(() => null),
-    // Active accounts for the optional "paid from" link on a settlement (empty on error → field hidden).
-    getAccounts().catch(() => []),
+    /*
+     * Accounts for the optional "paid from" link on a settlement and for a card's default funding
+     * account (empty on error → the fields hide themselves). Archived ones are included so a stored
+     * default that has since been archived still renders by name instead of a blank picker; the
+     * pickers themselves only ever OFFER active accounts.
+     */
+    getAccounts({ showArchived: true }).catch(() => []),
   ]);
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -48,7 +53,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
-      <CreditCardsToolbar preferredCurrencies={preferredCurrencies} />
+      <CreditCardsToolbar preferredCurrencies={preferredCurrencies} accounts={accounts} />
       <CreditCardsTable
         cards={cards}
         preferredCurrencies={preferredCurrencies}

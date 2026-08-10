@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import {
   Button,
@@ -23,9 +23,11 @@ import {
   buildCreditCardFormSchema,
   type CreditCardFormValues,
 } from '@/app/(protected)/credit-cards/credit-card-form-schema';
+import { AccountField } from '@/components/account-field';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
@@ -34,6 +36,12 @@ interface CreditCardFormDialogProps {
   onOpenChange: (open: boolean) => void;
   card?: CreditCard;
   preferredCurrencies?: string[];
+  /*
+   * Accounts the card's optional default funding account can be picked from ("débito automático").
+   * Omitted by the stacked inline-create flow inside PaymentMethodFields, which is deliberately a
+   * minimal quick-add — the funding account is a card setting, configured from the Credit Cards page.
+   */
+  accounts?: Account[];
   onSuccess: () => void;
   // Fires only on CREATE success with the freshly-created card, before onSuccess.
   // PaymentMethodFields uses it to append + auto-select the card inline.
@@ -49,6 +57,7 @@ export function CreditCardFormDialog({
   onOpenChange,
   card,
   preferredCurrencies,
+  accounts,
   onSuccess,
   onCreated,
   stacked = false,
@@ -74,10 +83,12 @@ export function CreditCardFormDialog({
       dueDay: '',
       currency: '',
       monthlyPayment: '',
+      defaultAccountId: null,
     },
   });
 
   const isEdit = !!card;
+  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -90,6 +101,7 @@ export function CreditCardFormDialog({
       dueDay: c ? String(c.dueDay) : '',
       currency: c?.currency ?? '',
       monthlyPayment: c?.monthlyPayment != null ? String(c.monthlyPayment) : '',
+      defaultAccountId: c?.defaultAccountId ?? null,
     }),
     onSuccess,
   });
@@ -97,12 +109,12 @@ export function CreditCardFormDialog({
   async function onSubmit(values: CreditCardFormValues) {
     await submitWithLifecycle(
       async () => {
-        if (isEdit) {
-          await updateCreditCard(card.id, values);
-        } else {
-          const created = await createCreditCard(values);
-          onCreated?.(created);
-        }
+        if (isEdit) return await updateCreditCard(card.id, values);
+        const result = await createCreditCard(values);
+        // Both actions return the backend's refusal as DATA (a mismatched funding account) —
+        // submitWithLifecycle surfaces its localized reason instead of the generic save error.
+        if (!result.ok) return result;
+        onCreated?.(result.card);
       },
       t(isEdit ? 'form.updateSuccess' : 'form.createSuccess'),
       t('form.saveError'),
@@ -218,6 +230,27 @@ export function CreditCardFormDialog({
                 </FormItem>
               )}
             />
+
+            {/* Only offered in the card's own currency: a settlement's account picker filters to the
+                settled bucket's currency, so a default in any other currency could only ever be a
+                link that dialog would refuse. */}
+            {accounts?.some((a) => a.isActive) && (
+              <div className="flex flex-col gap-y-1">
+                <AccountField
+                  control={form.control}
+                  setValue={form.setValue}
+                  accounts={accounts}
+                  currency={watchedCurrency || undefined}
+                  label={t('form.defaultAccount.label')}
+                  name="defaultAccountId"
+                />
+                {/* The hint has to be suppressed with the field, so it stays inside this guard even
+                    though AccountField would self-suppress on its own. */}
+                <p className="text-paragraph-xs text-muted-foreground">
+                  {t('form.defaultAccount.hint')}
+                </p>
+              </div>
+            )}
           </form>
         </Form>
 
