@@ -17,6 +17,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField } from '@/lib/api/installments';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
@@ -27,6 +28,8 @@ interface InstallmentsTableProps {
   installments: Installment[];
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }
@@ -35,6 +38,7 @@ export function InstallmentsTable({
   installments,
   preferredCurrencies,
   creditCards,
+  accounts,
   activeCurrency,
   firstRun,
 }: InstallmentsTableProps) {
@@ -236,6 +240,7 @@ export function InstallmentsTable({
         installment={editInstallment ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

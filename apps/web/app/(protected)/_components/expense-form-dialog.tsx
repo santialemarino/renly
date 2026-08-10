@@ -70,6 +70,9 @@ export interface PrefillFromObligation {
   currency: string;
   paymentMethod?: ExpenseFormValues['paymentMethod'];
   creditCardId?: number;
+  // The obligation's default funding account, pre-filled as "Paid from". Obligations are never
+  // auto-emitted, so this is where their default is honoured — overridable like every other prefill.
+  accountId?: number;
   category?: ExpenseFormValues['category'];
   paymentObligationId: number;
   recurrence: string | null;
@@ -315,7 +318,7 @@ export function ExpenseFormDialog({
           notes: '',
           paymentMethod: prefillFromObligation.paymentMethod,
           creditCardId: prefillFromObligation.creditCardId,
-          accountId: undefined,
+          accountId: prefillFromObligation.accountId ?? null,
           paymentObligationId: prefillFromObligation.paymentObligationId,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -684,11 +687,14 @@ export function ExpenseFormDialog({
                 preferredCurrencies={preferredCurrencies}
               />
 
-              {accounts && accounts.length > 0 && watchedPaymentMethod !== 'credit_card' && (
+              {/* A card expense hits the card and only draws cash later at settlement, so it never
+                  links an account. AccountField itself suppresses the field when the user has no
+                  account to offer and none stored. */}
+              {watchedPaymentMethod !== 'credit_card' && (
                 <AccountField
                   control={form.control}
                   setValue={form.setValue}
-                  accounts={accounts}
+                  accounts={accounts ?? []}
                   currency={watchedCurrency || undefined}
                   label={t('form.account.label')}
                 />

@@ -27,6 +27,7 @@ import {
   buildInstallmentFormSchema,
   type InstallmentFormValues,
 } from '@/app/(protected)/installments/installment-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { IntegerInput } from '@/components/integer-input';
@@ -34,6 +35,7 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
 import { InfoHint } from '@/components/styled-hint';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment } from '@/lib/api/installments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
@@ -47,6 +49,8 @@ interface InstallmentFormDialogProps {
   installment?: Installment;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -66,6 +70,7 @@ export function InstallmentFormDialog({
   installment,
   preferredCurrencies,
   creditCards,
+  accounts,
   onSuccess,
 }: InstallmentFormDialogProps) {
   const fmt = useFormatters();
@@ -95,6 +100,7 @@ export function InstallmentFormDialog({
       startDate: '',
       paymentMethod: undefined,
       creditCardId: undefined,
+      defaultAccountId: null,
     },
   });
 
@@ -103,6 +109,7 @@ export function InstallmentFormDialog({
   const watchedInstallmentsCount = useWatch({ control: form.control, name: 'installmentsCount' });
   const watchedOriginalPrice = useWatch({ control: form.control, name: 'originalPrice' });
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
 
   const isEdit = !!installment;
   const isLocked = isEdit && Number(installment.currentInstallment) > 1;
@@ -148,6 +155,7 @@ export function InstallmentFormDialog({
         startDate: i?.startDate ?? '',
         paymentMethod: (i?.paymentMethod ?? undefined) as InstallmentFormValues['paymentMethod'],
         creditCardId: i?.creditCardId ?? undefined,
+        defaultAccountId: i?.defaultAccountId ?? null,
       };
     },
     onSuccess,
@@ -547,6 +555,29 @@ export function InstallmentFormDialog({
               disabled={isLocked}
               disabledTooltip={t('form.locked')}
             />
+
+            {/* Not disabled by isLocked: the funding account is a forward-looking convenience for the
+                remaining cuotas, not a contractual term of the plan (unlike its amounts, currency and
+                payment method), so it stays editable once charging has started. */}
+            {watchedPaymentMethod !== 'credit_card' && (
+              <div className="flex flex-col gap-y-1">
+                <AccountField
+                  control={form.control}
+                  setValue={form.setValue}
+                  accounts={accounts ?? []}
+                  currency={watchedCurrency || undefined}
+                  label={t('form.defaultAccount.label')}
+                  name="defaultAccountId"
+                />
+                {/* The hint has to be suppressed with the field, so it sits inside this guard rather
+                    than relying on AccountField's own self-suppression. */}
+                {accounts?.some((a) => a.isActive) && (
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.defaultAccount.hint')}
+                  </p>
+                )}
+              </div>
+            )}
           </form>
         </Form>
 

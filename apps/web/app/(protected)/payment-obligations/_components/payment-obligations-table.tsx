@@ -113,6 +113,7 @@ export function PaymentObligationsTable({
       paymentMethod: (obligation.paymentMethod ??
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
+      accountId: obligation.defaultAccountId ?? undefined,
       paymentObligationId: obligation.id,
       recurrence: obligation.recurrence,
     });
@@ -299,6 +300,7 @@ export function PaymentObligationsTable({
         obligation={editObligation ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

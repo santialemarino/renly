@@ -42,9 +42,13 @@ export default async function PaymentObligationsPage({
     // The Mark-Paid expense dialog restricts its currency picker to the convertible set; on a
     // fetch error the picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
-    // Active accounts for the optional "paid from" link on a non-card Mark-Paid expense
-    // (empty on error → field hidden).
-    getAccounts().catch(() => []),
+    /*
+     * Accounts for the optional "paid from" link on a non-card Mark-Paid expense and for an
+     * obligation's default funding account (empty on error → the fields hide themselves). Archived
+     * ones are included so a stored link or default that has since been archived still renders by
+     * name instead of a blank picker; the pickers only ever OFFER active accounts.
+     */
+    getAccounts({ showArchived: true }).catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -70,6 +74,7 @@ export default async function PaymentObligationsPage({
       <PaymentObligationsToolbar
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
       />
       <PaymentObligationsTable
         obligations={obligations}

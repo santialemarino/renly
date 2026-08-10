@@ -24,11 +24,13 @@ import {
   buildPaymentObligationFormSchema,
   type PaymentObligationFormValues,
 } from '@/app/(protected)/payment-obligations/payment-obligation-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
@@ -46,6 +48,8 @@ interface PaymentObligationFormDialogProps {
   obligation?: PaymentObligation;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -55,6 +59,7 @@ export function PaymentObligationFormDialog({
   obligation,
   preferredCurrencies,
   creditCards,
+  accounts,
   onSuccess,
 }: PaymentObligationFormDialogProps) {
   const locale = useLocale();
@@ -78,12 +83,14 @@ export function PaymentObligationFormDialog({
       expenseCategory: undefined,
       paymentMethod: undefined,
       creditCardId: undefined,
+      defaultAccountId: null,
       notes: '',
     },
   });
 
   const isEdit = !!obligation;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
 
   const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
 
@@ -104,6 +111,7 @@ export function PaymentObligationFormDialog({
       paymentMethod: (o?.paymentMethod ??
         undefined) as PaymentObligationFormValues['paymentMethod'],
       creditCardId: o?.creditCardId ?? undefined,
+      defaultAccountId: o?.defaultAccountId ?? null,
       notes: o?.notes ?? '',
     }),
     onSuccess,
@@ -286,6 +294,28 @@ export function PaymentObligationFormDialog({
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
             />
+
+            {/* Obligations are not auto-emitted, so this default is honoured by Mark Paid: it pre-fills
+                the "Paid from" on the expense that flow creates. */}
+            {watchedPaymentMethod !== 'credit_card' && (
+              <div className="flex flex-col gap-y-1">
+                <AccountField
+                  control={form.control}
+                  setValue={form.setValue}
+                  accounts={accounts ?? []}
+                  currency={watchedCurrency || undefined}
+                  label={t('form.defaultAccount.label')}
+                  name="defaultAccountId"
+                />
+                {/* The hint has to be suppressed with the field, so it sits inside this guard rather
+                    than relying on AccountField's own self-suppression. */}
+                {accounts?.some((a) => a.isActive) && (
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.defaultAccount.hint')}
+                  </p>
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}

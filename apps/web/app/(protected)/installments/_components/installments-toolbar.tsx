@@ -7,16 +7,20 @@ import { useTranslations } from 'next-intl';
 import { InstallmentFormDialog } from '@/app/(protected)/installments/_components/installment-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface InstallmentsToolbarProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
 }
 
 export function InstallmentsToolbar({
   preferredCurrencies,
   creditCards,
+  accounts,
 }: InstallmentsToolbarProps) {
   const t = useTranslations('installments');
   const router = useRouter();
@@ -36,6 +40,7 @@ export function InstallmentsToolbar({
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>

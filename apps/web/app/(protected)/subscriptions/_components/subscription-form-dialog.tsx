@@ -23,11 +23,13 @@ import {
   buildSubscriptionFormSchema,
   type SubscriptionFormValues,
 } from '@/app/(protected)/subscriptions/subscription-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
@@ -40,6 +42,8 @@ interface SubscriptionFormDialogProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -50,6 +54,7 @@ export function SubscriptionFormDialog({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   onSuccess,
 }: SubscriptionFormDialogProps) {
   const t = useTranslations('subscriptions');
@@ -70,11 +75,13 @@ export function SubscriptionFormDialog({
       nextBillingDate: '',
       paymentMethod: undefined,
       creditCardId: undefined,
+      defaultAccountId: null,
     },
   });
 
   const isEdit = !!subscription;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -89,6 +96,7 @@ export function SubscriptionFormDialog({
       nextBillingDate: s?.nextBillingDate ?? '',
       paymentMethod: (s?.paymentMethod ?? undefined) as SubscriptionFormValues['paymentMethod'],
       creditCardId: s?.creditCardId ?? undefined,
+      defaultAccountId: s?.defaultAccountId ?? null,
     }),
     onSuccess,
   });
@@ -221,6 +229,28 @@ export function SubscriptionFormDialog({
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
             />
+
+            {/* A card-paid subscription hits the card and draws cash at the settlement, so it names no
+                funding account — the card's own default covers that half. */}
+            {watchedPaymentMethod !== 'credit_card' && (
+              <div className="flex flex-col gap-y-1">
+                <AccountField
+                  control={form.control}
+                  setValue={form.setValue}
+                  accounts={accounts ?? []}
+                  currency={watchedCurrency || undefined}
+                  label={t('form.defaultAccount.label')}
+                  name="defaultAccountId"
+                />
+                {/* The hint has to be suppressed with the field, so it sits inside this guard rather
+                    than relying on AccountField's own self-suppression. */}
+                {accounts?.some((a) => a.isActive) && (
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('form.defaultAccount.hint')}
+                  </p>
+                )}
+              </div>
+            )}
           </form>
         </Form>
 

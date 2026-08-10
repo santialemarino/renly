@@ -7,16 +7,20 @@ import { useTranslations } from 'next-intl';
 import { PaymentObligationFormDialog } from '@/app/(protected)/payment-obligations/_components/payment-obligation-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 
 interface PaymentObligationsToolbarProps {
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
 }
 
 export function PaymentObligationsToolbar({
   preferredCurrencies,
   creditCards,
+  accounts,
 }: PaymentObligationsToolbarProps) {
   const t = useTranslations('paymentObligations');
   const router = useRouter();
@@ -36,6 +40,7 @@ export function PaymentObligationsToolbar({
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>

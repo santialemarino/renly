@@ -17,6 +17,7 @@ interface PaymentObligationRaw {
   expense_category: string | null;
   payment_method: string | null;
   credit_card_id: number | null;
+  default_account_id: number | null;
   is_active: boolean;
   notes: string | null;
   last_payment_date: string | null;
@@ -38,6 +39,7 @@ export interface PaymentObligation {
   expenseCategory: string | null;
   paymentMethod: string | null;
   creditCardId: number | null;
+  defaultAccountId: number | null;
   isActive: boolean;
   notes: string | null;
   lastPaymentDate: string | null;
@@ -60,6 +62,7 @@ function mapObligation(raw: PaymentObligationRaw): PaymentObligation {
     expenseCategory: raw.expense_category,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
+    defaultAccountId: raw.default_account_id,
     isActive: raw.is_active,
     notes: raw.notes,
     lastPaymentDate: raw.last_payment_date,

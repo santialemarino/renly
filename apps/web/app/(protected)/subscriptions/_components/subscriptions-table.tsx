@@ -17,6 +17,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
@@ -27,6 +28,8 @@ interface SubscriptionsTableProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }
@@ -36,6 +39,7 @@ export function SubscriptionsTable({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeCurrency,
   firstRun,
 }: SubscriptionsTableProps) {
@@ -202,6 +206,7 @@ export function SubscriptionsTable({
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 
