@@ -198,7 +198,8 @@
     "accountField": {
       "placeholder": "Seleccioná una cuenta",
       "none": "Ninguna",
-      "noneForCurrency": "Sin cuentas en {currency}"
+      "noneForCurrency": "Sin cuentas en {currency}",
+      "archived": "{name} (archivada)"
     },
     "lockedRow": {
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
@@ -770,6 +771,10 @@
         "invalid": "Debe ser un número no negativo.",
         "overlapHint": "Renly ya cuenta las suscripciones y cuotas pagadas con esta tarjeta. Definilo solo para pagos de deuda revolvente además de esos."
       },
+      "defaultAccount": {
+        "label": "Cuenta de pago predeterminada",
+        "hint": "Precarga “Pagado desde” cuando registres un pago de esta tarjeta. Renly nunca registra un pago por su cuenta."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -808,6 +813,7 @@
         "date": "Fecha",
         "amount": "Monto",
         "currency": "Moneda",
+        "account": "Pagado desde",
         "notes": "Notas"
       },
       "form": {
@@ -1151,6 +1157,10 @@
         "label": "Próximo cobro",
         "placeholder": "Seleccioná una fecha"
       },
+      "defaultAccount": {
+        "label": "Pagado desde",
+        "hint": "Los cargos que Renly genera para esta suscripción se pagan desde esta cuenta, así tu saldo queda bien."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -1254,6 +1264,10 @@
       "notes": {
         "label": "Notas",
         "placeholder": "Notas opcionales..."
+      },
+      "defaultAccount": {
+        "label": "Pagado desde",
+        "hint": "Precarga “Pagado desde” cuando marques esta obligación como pagada."
       },
       "cancel": "Cancelar",
       "cta": {
@@ -1397,6 +1411,10 @@
       "locked": "Bloqueado porque ya se cobraron cuotas. Para cambiar estos datos, eliminá el plan y volvé a crearlo.",
       "interestMustBePositive": "Por cuota × cantidad debe ser mayor al precio original.",
       "invalidPositiveInteger": "Debe ser un número entero positivo.",
+      "defaultAccount": {
+        "label": "Pagado desde",
+        "hint": "Las cuotas que Renly genera para este plan se pagan desde esta cuenta, así tu saldo queda bien."
+      },
       "cancel": "Cancelar",
       "cta": {
         "label": "Guardar",
@@ -2589,7 +2607,7 @@
     }
   },
   "apiErrors": {
-    "account_card_exclusivity": "Un gasto con tarjeta de crédito no puede además pagarse desde una cuenta.",
+    "account_card_exclusivity": "Un cargo con tarjeta de crédito no puede además pagarse desde una cuenta.",
     "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
     "account_reconciliation_before_last": "Esta cuenta ya está conciliada hasta el {last_reconciled_date}. Elegí esa fecha o una posterior, o eliminá primero la conciliación posterior.",

@@ -198,7 +198,8 @@
     "accountField": {
       "placeholder": "Select an account",
       "none": "None",
-      "noneForCurrency": "No {currency} accounts"
+      "noneForCurrency": "No {currency} accounts",
+      "archived": "{name} (archived)"
     },
     "lockedRow": {
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
@@ -770,6 +771,10 @@
         "invalid": "Must be a non-negative number.",
         "overlapHint": "Renly already counts subscriptions and installments paid with this card. Set this only for revolving debt payments beyond those."
       },
+      "defaultAccount": {
+        "label": "Default funding account",
+        "hint": "Pre-fills “Paid from” when you record a payment on this card. Renly never records a payment on its own."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -808,6 +813,7 @@
         "date": "Date",
         "amount": "Amount",
         "currency": "Currency",
+        "account": "Paid from",
         "notes": "Notes"
       },
       "form": {
@@ -1151,6 +1157,10 @@
         "label": "Next billing date",
         "placeholder": "Select a date"
       },
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Charges Renly creates for this subscription are paid from this account, so your balance stays right."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -1254,6 +1264,10 @@
       "notes": {
         "label": "Notes",
         "placeholder": "Optional notes..."
+      },
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Pre-fills “Paid from” when you mark this obligation paid."
       },
       "cancel": "Cancel",
       "cta": {
@@ -1397,6 +1411,10 @@
       "locked": "Locked because installments have been charged. To change these terms, delete and recreate the plan.",
       "interestMustBePositive": "Per installment × count must be greater than the original price.",
       "invalidPositiveInteger": "Must be a positive whole number.",
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Cuotas Renly creates for this plan are paid from this account, so your balance stays right."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -2589,7 +2607,7 @@
     }
   },
   "apiErrors": {
-    "account_card_exclusivity": "A credit-card expense can't also be paid from an account.",
+    "account_card_exclusivity": "A credit-card charge can't also be paid from an account.",
     "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
