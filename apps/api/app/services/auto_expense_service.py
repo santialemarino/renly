@@ -16,7 +16,12 @@ from app.domain import claimed_installment_cuotas, claimed_subscription_cycles
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
-from app.repositories import installment_repository, subscription_repository, user_settings_repository
+from app.repositories import (
+    account_repository,
+    installment_repository,
+    subscription_repository,
+    user_settings_repository,
+)
 from app.services import card_reconciliation_service
 from app.utils.dates import (
     add_months,
@@ -139,6 +144,7 @@ async def _generate_subscription_expenses(
 
     sub_ids = [s.id for s, _ in pending]
     existing = await _existing_subscription_dates(session, sub_ids)
+    default_accounts = await _resolve_default_accounts(session, [s for s, _ in pending])
 
     created = 0
     advanced = 0
@@ -176,6 +182,7 @@ async def _generate_subscription_expenses(
                     notes=sub.name,
                     payment_method=sub.payment_method,
                     credit_card_id=sub.credit_card_id,
+                    account_id=default_accounts.get(sub.id),
                     source=SOURCE_SUBSCRIPTION,
                     subscription_id=sub.id,
                 )
@@ -194,6 +201,27 @@ async def _generate_subscription_expenses(
         await _mark_touched_buckets_stale(session, touched_buckets)
         logger.info("Auto-expenses: created %d subscription charges at %s UTC.", created, now_utc.isoformat())
     return created, advanced
+
+
+# Resolves the cash/bank account each pending plan's emitted charges should be linked to, in ONE query
+# for every user in the tick. Returns {plan_id: account_id} holding only links that are still safe to
+# write: the account must belong to the plan's owner (SEC-4 — the loader is unscoped by design) and
+# share its currency, because the balance union sums linked rows without conversion, so a
+# mismatched-currency link would corrupt the account's balance. A default that no longer qualifies
+# (the account's currency was changed while nothing but this default referenced it) is skipped rather
+# than blocking the charge: the expense still lands, merely unattributed, which is exactly the
+# pre-default behaviour, and reconciliation remains the backstop.
+async def _resolve_default_accounts(session: AsyncSession, plans: list[Subscription] | list[Installment]) -> dict[int, int]:
+    account_ids = sorted({p.default_account_id for p in plans if p.default_account_id is not None})
+    if not account_ids:
+        return {}
+    accounts = {a.id: a for a in await account_repository.get_by_ids_across_users(session, account_ids)}
+    resolved: dict[int, int] = {}
+    for plan in plans:
+        account = accounts.get(plan.default_account_id) if plan.default_account_id is not None else None
+        if account is not None and account.user_id == plan.user_id and account.currency == plan.currency:
+            resolved[plan.id] = account.id
+    return resolved
 
 
 # Records that a scheduled charge landed in a card bucket, keeping the EARLIEST date seen per bucket.
@@ -245,6 +273,7 @@ async def _generate_installment_expenses(
 
     inst_ids = [i.id for i, _ in pending]
     existing = await _existing_installment_dates(session, inst_ids)
+    default_accounts = await _resolve_default_accounts(session, [i for i, _ in pending])
 
     created = 0
     advanced = 0
@@ -278,6 +307,7 @@ async def _generate_installment_expenses(
                     notes=inst.name,
                     payment_method=inst.payment_method,
                     credit_card_id=inst.credit_card_id,
+                    account_id=default_accounts.get(inst.id),
                     source=SOURCE_INSTALLMENT,
                     installment_id=inst.id,
                 )

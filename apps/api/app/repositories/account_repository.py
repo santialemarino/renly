@@ -52,6 +52,16 @@ async def get_by_ids(session: AsyncSession, account_ids: list[int], user_id: int
     return list(result.scalars().all())
 
 
+# Get multiple accounts by id across ALL users. Deliberately unscoped, for the scheduler only: it
+# resolves the default funding accounts of many users' plans in one query (the same shape as
+# subscription_repository.list_active_due), and its caller re-checks each row's owner (SEC-4).
+async def get_by_ids_across_users(session: AsyncSession, account_ids: list[int]) -> list[Account]:
+    if not account_ids:
+        return []
+    result = await session.execute(select(Account).where(Account.id.in_(account_ids)))
+    return list(result.scalars().all())
+
+
 # Insert a new account.
 async def create(session: AsyncSession, account: Account) -> Account:
     session.add(account)
@@ -74,6 +84,7 @@ class AccountRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
+    get_by_ids_across_users = staticmethod(get_by_ids_across_users)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)
