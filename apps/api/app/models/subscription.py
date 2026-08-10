@@ -27,6 +27,11 @@ class Subscription(SQLModel, table=True):
     credit_card_id: int | None = Field(
         default=None, foreign_key="credit_cards.id", description="Credit card used (when payment_method = credit_card)."
     )
+    default_account_id: int | None = Field(
+        default=None,
+        foreign_key="accounts.id",
+        description="Optional account the scheduler links each emitted charge to (non-card payment methods only).",
+    )
     is_active: bool = Field(default=True, description="Whether the subscription is active.")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
