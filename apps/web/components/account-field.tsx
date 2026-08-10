@@ -43,6 +43,9 @@ interface AccountFieldProps<T extends AccountFieldFormValues & FieldValues> {
   accounts: Account[];
   currency: string | undefined;
   label: string;
+  // Optional explanation under the control. Lives here rather than at the call site so it is
+  // suppressed together with the field — a hint for a control that isn't on screen explains nothing.
+  hint?: string;
   // Defaults to the entry money-link field.
   name?: AccountFieldName;
 }
@@ -57,6 +60,7 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
   accounts,
   currency,
   label,
+  hint,
   name = 'accountId',
 }: AccountFieldProps<T>) {
   /*
@@ -112,6 +116,7 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
               }))}
             />
           </FormControl>
+          {hint && <p className="text-paragraph-xs text-muted-foreground">{hint}</p>}
           <FormMessage />
         </FormItem>
       )}

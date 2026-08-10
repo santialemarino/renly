@@ -233,23 +233,15 @@ export function SubscriptionFormDialog({
             {/* A card-paid subscription hits the card and draws cash at the settlement, so it names no
                 funding account — the card's own default covers that half. */}
             {watchedPaymentMethod !== 'credit_card' && (
-              <div className="flex flex-col gap-y-1">
-                <AccountField
-                  control={form.control}
-                  setValue={form.setValue}
-                  accounts={accounts ?? []}
-                  currency={watchedCurrency || undefined}
-                  label={t('form.defaultAccount.label')}
-                  name="defaultAccountId"
-                />
-                {/* The hint has to be suppressed with the field, so it sits inside this guard rather
-                    than relying on AccountField's own self-suppression. */}
-                {accounts?.some((a) => a.isActive) && (
-                  <p className="text-paragraph-xs text-muted-foreground">
-                    {t('form.defaultAccount.hint')}
-                  </p>
-                )}
-              </div>
+              <AccountField
+                control={form.control}
+                setValue={form.setValue}
+                accounts={accounts ?? []}
+                currency={watchedCurrency || undefined}
+                label={t('form.defaultAccount.label')}
+                hint={t('form.defaultAccount.hint')}
+                name="defaultAccountId"
+              />
             )}
           </form>
         </Form>

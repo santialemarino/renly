@@ -58,9 +58,8 @@ export function buildAccountFieldOptions(
         ]
       : [];
 
-  if (matching.length === 0 && unofferable.length === 0 && !accounts.some((a) => a.isActive)) {
-    return null;
-  }
+  // No active account to offer (which also means `matching` is empty) and no stored link to show.
+  if (unofferable.length === 0 && !accounts.some((a) => a.isActive)) return null;
 
   return [
     { kind: 'none', noMatchingCurrency: matching.length === 0 },

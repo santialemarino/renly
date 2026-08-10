@@ -234,23 +234,15 @@ export function CreditCardFormDialog({
             {/* Only offered in the card's own currency: a settlement's account picker filters to the
                 settled bucket's currency, so a default in any other currency could only ever be a
                 link that dialog would refuse. */}
-            {accounts?.some((a) => a.isActive) && (
-              <div className="flex flex-col gap-y-1">
-                <AccountField
-                  control={form.control}
-                  setValue={form.setValue}
-                  accounts={accounts}
-                  currency={watchedCurrency || undefined}
-                  label={t('form.defaultAccount.label')}
-                  name="defaultAccountId"
-                />
-                {/* The hint has to be suppressed with the field, so it stays inside this guard even
-                    though AccountField would self-suppress on its own. */}
-                <p className="text-paragraph-xs text-muted-foreground">
-                  {t('form.defaultAccount.hint')}
-                </p>
-              </div>
-            )}
+            <AccountField
+              control={form.control}
+              setValue={form.setValue}
+              accounts={accounts ?? []}
+              currency={watchedCurrency || undefined}
+              label={t('form.defaultAccount.label')}
+              hint={t('form.defaultAccount.hint')}
+              name="defaultAccountId"
+            />
           </form>
         </Form>
 

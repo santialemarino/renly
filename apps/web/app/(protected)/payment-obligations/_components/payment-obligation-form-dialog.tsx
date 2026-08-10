@@ -298,23 +298,15 @@ export function PaymentObligationFormDialog({
             {/* Obligations are not auto-emitted, so this default is honoured by Mark Paid: it pre-fills
                 the "Paid from" on the expense that flow creates. */}
             {watchedPaymentMethod !== 'credit_card' && (
-              <div className="flex flex-col gap-y-1">
-                <AccountField
-                  control={form.control}
-                  setValue={form.setValue}
-                  accounts={accounts ?? []}
-                  currency={watchedCurrency || undefined}
-                  label={t('form.defaultAccount.label')}
-                  name="defaultAccountId"
-                />
-                {/* The hint has to be suppressed with the field, so it sits inside this guard rather
-                    than relying on AccountField's own self-suppression. */}
-                {accounts?.some((a) => a.isActive) && (
-                  <p className="text-paragraph-xs text-muted-foreground">
-                    {t('form.defaultAccount.hint')}
-                  </p>
-                )}
-              </div>
+              <AccountField
+                control={form.control}
+                setValue={form.setValue}
+                accounts={accounts ?? []}
+                currency={watchedCurrency || undefined}
+                label={t('form.defaultAccount.label')}
+                hint={t('form.defaultAccount.hint')}
+                name="defaultAccountId"
+              />
             )}
 
             <FormField
