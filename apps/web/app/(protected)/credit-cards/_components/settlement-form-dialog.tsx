@@ -95,7 +95,13 @@ export function SettlementFormDialog({
 
   async function onSubmit(values: SettlementFormValues) {
     try {
-      await createSettlement(cardId, values);
+      const result = await createSettlement(cardId, values);
+      // The action returns a refusal as DATA (the Server Action boundary strips a thrown error's
+      // message), so its localized reason renders instead of the generic save error.
+      if (!result.ok) {
+        toast.error(result.conflictDetail || t('settlements.createError'));
+        return;
+      }
       toast.success(t('settlements.createSuccess'));
       onSuccess();
       onOpenChange(false);

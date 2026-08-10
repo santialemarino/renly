@@ -106,16 +106,25 @@ export async function unarchiveCreditCard(id: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to unarchive credit card');
 }
 
+export type CreateSettlementResult = { ok: true } | { ok: false; conflictDetail: string };
+
 export async function createSettlement(
   cardId: number,
   values: SettlementFormValues,
-): Promise<void> {
+): Promise<CreateSettlementResult> {
   const { accountId, ...rest } = values;
   const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, {
     method: 'POST',
     body: { ...rest, account_id: accountId ?? null },
   });
-  if (!res.ok) throw new Error('Failed to create settlement');
+  if (!res.ok) {
+    // Reachable: the pre-filled default is in the card's currency, but on a multi-bucket card the user
+    // can settle a DIFFERENT bucket, and an archived pre-fill is deliberately not auto-cleared (that
+    // rule exists so editing an entry never drops its link). The refusal has to say why.
+    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    throw new Error('Failed to create settlement');
+  }
+  return { ok: true };
 }
 
 export async function deleteSettlement(cardId: number, settlementId: number): Promise<void> {
