@@ -37,14 +37,13 @@ import { SettlementFormDialog } from '@/app/(protected)/credit-cards/_components
 import {
   fetchSettlements,
   unarchiveCreditCard,
-  type SettlementResult,
 } from '@/app/(protected)/credit-cards/credit-card-actions';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
-import type { CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
+import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -57,20 +56,23 @@ function SettlementsSection({
   cardId,
   bucketCurrencies,
   accounts,
+  defaultAccountId,
   expanded,
 }: {
   cardId: number;
   bucketCurrencies: string[];
   accounts?: Account[];
+  // The card's optional funding account, pre-filled as the settlement's "Paid from".
+  defaultAccountId: number | null;
   expanded: boolean;
 }) {
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
-  const [settlements, setSettlements] = useState<SettlementResult[]>([]);
+  const [settlements, setSettlements] = useState<CardSettlement[]>([]);
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [deleteSettlementState, setDeleteSettlementState] = useState<SettlementResult | null>(null);
+  const [deleteSettlementState, setDeleteSettlementState] = useState<CardSettlement | null>(null);
 
   const loadSettlements = useCallback(async () => {
     setLoading(true);
@@ -156,6 +158,7 @@ function SettlementsSection({
                             <TableHead>{t('settlements.table.date')}</TableHead>
                             <TableHead>{t('settlements.table.amount')}</TableHead>
                             <TableHead>{t('settlements.table.currency')}</TableHead>
+                            <TableHead>{t('settlements.table.account')}</TableHead>
                             <TableHead>{t('settlements.table.notes')}</TableHead>
                             <TableHead className="w-12 text-center">{t('table.actions')}</TableHead>
                           </TableRow>
@@ -168,6 +171,13 @@ function SettlementsSection({
                                 {fmt.amount(s.amount, s.currency)}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
+                              {/* Names the account the bill was paid from, so a mis-picked link is
+                                  visible instead of write-only. An em dash means the settlement was
+                                  recorded without one: the card debt dropped and no cash was
+                                  recorded leaving. */}
+                              <TableCell className="max-w-40 truncate text-muted-foreground">
+                                {s.accountName ?? '—'}
+                              </TableCell>
                               <TableCell className="max-w-48 truncate text-muted-foreground">
                                 {s.notes ?? '—'}
                               </TableCell>
@@ -201,6 +211,7 @@ function SettlementsSection({
                   cardId={cardId}
                   bucketCurrencies={bucketCurrencies}
                   accounts={accounts}
+                  defaultAccountId={defaultAccountId}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -402,6 +413,7 @@ export function CreditCardsTable({
                       cardId={card.id}
                       bucketCurrencies={card.balances.map((b) => b.currency)}
                       accounts={accounts}
+                      defaultAccountId={card.defaultAccountId}
                       expanded={isExpanded}
                     />
                   </Fragment>
@@ -419,6 +431,7 @@ export function CreditCardsTable({
         }}
         card={editCard ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

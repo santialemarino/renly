@@ -11,35 +11,69 @@ import {
   type CardReconciliation,
   type StatementPeriod,
 } from '@/lib/api/card-reconciliations';
-import { mapCreditCard, type CreditCard } from '@/lib/api/credit-cards';
+import {
+  mapCreditCard,
+  mapSettlement,
+  type CardSettlement,
+  type CardSettlementRaw,
+  type CreditCard,
+} from '@/lib/api/credit-cards';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
 
 function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
-  const { closingDay, dueDay, monthlyPayment, ...rest } = values;
+  const { closingDay, dueDay, monthlyPayment, defaultAccountId, ...rest } = values;
   return {
     ...rest,
     closing_day: Number(closingDay),
     due_day: Number(dueDay),
     monthly_payment: monthlyPayment && monthlyPayment.trim() !== '' ? Number(monthlyPayment) : null,
+    default_account_id: defaultAccountId ?? null,
   };
 }
 
-export async function createCreditCard(values: CreditCardFormValues): Promise<CreditCard> {
+// Resolves a refused card save to its localized reason — today, a default funding account whose
+// currency no longer matches the card's (reachable from a stale page, or when the stored default was
+// archived and so is absent from the picker that would otherwise have cleared it).
+async function cardError(res: Response): Promise<string> {
+  const t = await getTranslations('apiErrors');
+  return resolveApiError(t, await parseApiError(res), '');
+}
+
+// Discriminated results so the form dialog surfaces the backend's coded 400 instead of a generic
+// save-failed toast — a thrown error's message does not survive the Server Action boundary.
+export type CreateCreditCardResult =
+  | { ok: true; card: CreditCard }
+  | { ok: false; conflictDetail: string };
+export type UpdateCreditCardResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function createCreditCard(
+  values: CreditCardFormValues,
+): Promise<CreateCreditCardResult> {
   const res = await authenticatedFetch('/credit-cards', {
     method: 'POST',
     body: buildCardBody(values),
   });
-  if (!res.ok) throw new Error('Failed to create credit card');
-  return mapCreditCard(await res.json());
+  if (!res.ok) {
+    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    throw new Error('Failed to create credit card');
+  }
+  return { ok: true, card: mapCreditCard(await res.json()) };
 }
 
-export async function updateCreditCard(id: number, values: CreditCardFormValues): Promise<void> {
+export async function updateCreditCard(
+  id: number,
+  values: CreditCardFormValues,
+): Promise<UpdateCreditCardResult> {
   const res = await authenticatedFetch(`/credit-cards/${id}`, {
     method: 'PUT',
     body: buildCardBody(values),
   });
-  if (!res.ok) throw new Error('Failed to update credit card');
+  if (!res.ok) {
+    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    throw new Error('Failed to update credit card');
+  }
+  return { ok: true };
 }
 
 // Discriminated result so the delete dialog can surface the backend's 409 detail (which
@@ -91,39 +125,14 @@ export async function deleteSettlement(cardId: number, settlementId: number): Pr
   if (!res.ok) throw new Error('Failed to delete settlement');
 }
 
-interface SettlementRaw {
-  id: number;
-  credit_card_id: number;
-  date: string;
-  amount: string;
-  currency: string;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface SettlementResult {
-  id: number;
-  creditCardId: number;
-  date: string;
-  amount: string;
-  currency: string;
-  notes: string | null;
-}
-
-// Fetches settlements for a card (callable from client components).
-export async function fetchSettlements(cardId: number): Promise<SettlementResult[]> {
+// Fetches settlements for a card (callable from client components). The wire shape and its mapper are
+// imported from lib/api/credit-cards rather than re-declared here — two copies of a wire shape means
+// the next API field reaches one call site and silently misses the other.
+export async function fetchSettlements(cardId: number): Promise<CardSettlement[]> {
   const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch settlements');
-  const raw: SettlementRaw[] = await res.json();
-  return raw.map((s) => ({
-    id: s.id,
-    creditCardId: s.credit_card_id,
-    date: s.date,
-    amount: s.amount,
-    currency: s.currency,
-    notes: s.notes,
-  }));
+  const raw: CardSettlementRaw[] = await res.json();
+  return raw.map(mapSettlement);
 }
 
 // Fetches recent statement periods per bucket with reconciliation status (Phase 3, Step 5).
