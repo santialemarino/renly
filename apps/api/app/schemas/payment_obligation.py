@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
+from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
 
@@ -29,6 +29,10 @@ class PaymentObligationCreate(RequestBase):
     )
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional account, in the obligation's currency, that Mark Paid pre-fills as 'Paid from' (non-card methods only).",
+    )
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
@@ -38,10 +42,12 @@ class PaymentObligationCreate(RequestBase):
     _validate_expense_category = field_validator("expense_category")(validate_user_pickable_expense_category)
 
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
-    # a card-less credit_card entry is allowed (zero-card users, imports).
+    # a card-less credit_card entry is allowed (zero-card users, imports). A default funding
+    # account is the mirror rule: a card-paid obligation draws cash at the card settlement, never here.
     @model_validator(mode="after")
     def validate_payment_pairing(self) -> "PaymentObligationCreate":
         ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        ensure_account_pairing(self.payment_method, self.default_account_id)
         return self
 
 
@@ -56,6 +62,10 @@ class PaymentObligationUpdate(RequestBase):
     expense_category: ExpenseCategory | None = Field(default=None, description="Structured expense category.")
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional account Mark Paid pre-fills as 'Paid from'. Send null to clear.",
+    )
     is_active: bool | None = Field(default=None, description="Whether the obligation is active.")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
 
@@ -65,13 +75,15 @@ class PaymentObligationUpdate(RequestBase):
     # value here would author a fake true-up one step later (422). See app/schemas/base.py.
     _validate_expense_category = field_validator("expense_category")(validate_user_pickable_expense_category)
 
-    # Same-request pairing guard: only fires when BOTH keys were provided. The merged
-    # effective check (request fields over the stored row) lives in the service.
+    # Same-request pairing guards: each only fires when BOTH its keys were provided. The merged
+    # effective checks (request fields over the stored row) live in the service.
     @model_validator(mode="after")
     def validate_payment_pairing(self) -> "PaymentObligationUpdate":
         provided = self.model_fields_set
         if "payment_method" in provided and "credit_card_id" in provided:
             ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        if "payment_method" in provided and "default_account_id" in provided:
+            ensure_account_pairing(self.payment_method, self.default_account_id)
         return self
 
 
@@ -88,6 +100,7 @@ class PaymentObligationResponse(BaseModel):
     expense_category: ExpenseCategory | None = Field(default=None, description="Structured expense category.")
     payment_method: str | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    default_account_id: int | None = Field(default=None, description="Optional account Mark Paid pre-fills as 'Paid from'.")
     is_active: bool = Field(description="Whether the obligation is active.")
     notes: str | None = Field(default=None, description="Optional notes.")
     last_payment_date: date_type | None = Field(

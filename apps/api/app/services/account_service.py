@@ -50,18 +50,21 @@ async def get_account(session: AsyncSession, account_id: int, user: User) -> Acc
     return account
 
 
-# Validates that an account link (from an expense / income / settlement) is legal: the account must
-# exist and belong to the user (SEC-4), and its currency must match the entry's — a cash balance
-# stays exact, so mismatched-currency links are rejected (mirrors the investment base-currency lock).
-# A None account_id is a no-op (unlinked entries are allowed and untouched).
-async def validate_account_link(session: AsyncSession, user: User, account_id: int | None, currency: str) -> None:
+# Validates that an account link (from an expense / income / settlement, or a card / plan naming its
+# default funding account) is legal: the account must exist and belong to the user (SEC-4), and its
+# currency must match the linking row's — a cash balance stays exact, so mismatched-currency links are
+# rejected (mirrors the investment base-currency lock). A None account_id is a no-op (unlinked entries
+# are allowed and untouched). Returns the validated account so a caller that needs it (e.g. to
+# denormalize its name onto a response) doesn't re-fetch it; None when there was no link.
+async def validate_account_link(session: AsyncSession, user: User, account_id: int | None, currency: str) -> Account | None:
     if account_id is None:
-        return
+        return None
     account = await account_repository.get_by_id(session, account_id, user.id)
     if account is None:
         raise NotFoundError("Account not found.")
     if account.currency != currency:
         raise AccountCurrencyMismatchError(currency, account.currency)
+    return account
 
 
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,

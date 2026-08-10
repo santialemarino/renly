@@ -21,6 +21,10 @@ class CreditCardCreate(RequestBase):
         decimal_places=2,
         ge=0,
     )
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional funding account, in the card's own currency. Pre-fills a settlement's 'Paid from'; never creates one.",
+    )
 
 
 # Body for PUT /credit-cards/{id}. Partial update.
@@ -36,6 +40,10 @@ class CreditCardUpdate(RequestBase):
         max_digits=18,
         decimal_places=2,
         ge=0,
+    )
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional funding account, in the card's own currency. Send null to clear.",
     )
 
 
@@ -60,6 +68,7 @@ class CreditCardResponse(BaseModel):
         default=None,
         description="Optional typical monthly payment. When set, counts in the liquidity ratio.",
     )
+    default_account_id: int | None = Field(default=None, description="Optional funding account pre-filled on a settlement.")
     balances: list[CardBucketBalanceResponse] = Field(
         default_factory=list,
         description="Per-currency bucket balances. Primary first, then any other currency with activity.",

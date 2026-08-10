@@ -72,6 +72,7 @@ async def create_subscription(
         next_billing_date=body.next_billing_date,
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
+        default_account_id=body.default_account_id,
     )
     return SubscriptionResponse.model_validate(subscription)
 

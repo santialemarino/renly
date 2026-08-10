@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from app.domain.payment_method import PaymentMethod, ensure_payment_pairing
+from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.schemas.base import RequestBase, validate_supported_currency
 from app.utils.dates import add_months
 
@@ -22,14 +22,20 @@ class InstallmentCreate(RequestBase):
     current_installment: int = Field(default=1, description="Index of the next installment to issue (1-based).", ge=1)
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method (cash, debit, transfer, credit_card).")
     credit_card_id: int | None = Field(default=None, description="Credit card id (when payment_method = credit_card).")
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional account, in the plan's currency, that each emitted cuota is linked to (non-card methods only).",
+    )
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
     # credit_card_id only pairs with the credit_card method. The reverse is NOT required —
-    # a card-less credit_card entry is allowed (zero-card users, imports).
+    # a card-less credit_card entry is allowed (zero-card users, imports). A default funding
+    # account is the mirror rule: a card-paid plan draws cash at the card settlement, never here.
     @model_validator(mode="after")
     def validate_payment_pairing(self) -> "InstallmentCreate":
         ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        ensure_account_pairing(self.payment_method, self.default_account_id)
         return self
 
 
@@ -43,18 +49,24 @@ class InstallmentUpdate(RequestBase):
     current_installment: int | None = Field(default=None, description="Index of the next installment to issue.", ge=1)
     payment_method: PaymentMethod | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    default_account_id: int | None = Field(
+        default=None,
+        description="Optional account each emitted cuota is linked to. Send null to clear.",
+    )
     is_active: bool | None = Field(default=None, description="Whether the installment plan is active.")
     start_date: date_type | None = Field(default=None, description="Date of the first installment.")
 
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
-    # Same-request pairing guard: only fires when BOTH keys were provided. The merged
-    # effective check (request fields over the stored row) lives in the service.
+    # Same-request pairing guards: each only fires when BOTH its keys were provided. The merged
+    # effective checks (request fields over the stored row) live in the service.
     @model_validator(mode="after")
     def validate_payment_pairing(self) -> "InstallmentUpdate":
         provided = self.model_fields_set
         if "payment_method" in provided and "credit_card_id" in provided:
             ensure_payment_pairing(self.payment_method, self.credit_card_id)
+        if "payment_method" in provided and "default_account_id" in provided:
+            ensure_account_pairing(self.payment_method, self.default_account_id)
         return self
 
 
@@ -86,6 +98,7 @@ class InstallmentResponse(BaseModel):
     current_installment: int = Field(description="Index of the next installment to issue (1-based).")
     payment_method: str | None = Field(default=None, description="Payment method.")
     credit_card_id: int | None = Field(default=None, description="Credit card id.")
+    default_account_id: int | None = Field(default=None, description="Optional account each emitted cuota is linked to.")
     is_active: bool = Field(description="Whether the installment plan is active.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

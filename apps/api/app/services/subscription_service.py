@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
+    AccountCardExclusivityError,
     AdvanceResult,
     CycleAdvanceDecision,
     NotFoundError,
@@ -17,7 +18,7 @@ from app.models.subscription import Subscription
 from app.models.user import User
 from app.repositories import credit_card_repository, subscription_repository
 from app.schemas.subscription import SubscriptionResponse
-from app.services import exchange_rate_service
+from app.services import account_service, exchange_rate_service
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
 from app.utils.metrics import RateLookup, convert_optional
 
@@ -107,10 +108,14 @@ async def create_subscription(
     next_billing_date: date_type,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
+    default_account_id: int | None = None,
 ) -> Subscription:
     # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
     if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
         raise NotFoundError("Credit card not found")
+    # The default funding account must be owned and match the plan's currency — the scheduler links it
+    # onto every emitted charge, and every account-linked row must be in that account's currency.
+    await account_service.validate_account_link(session, user, default_account_id, currency)
     subscription = Subscription(
         user_id=user.id,
         name=name,
@@ -121,6 +126,7 @@ async def create_subscription(
         anchor_day=next_billing_date.day,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
+        default_account_id=default_account_id,
     )
     subscription = await subscription_repository.create(session, subscription)
     await session.commit()
@@ -145,6 +151,18 @@ async def update_subscription(
     if new_card_id is not None and new_card_id != subscription.credit_card_id:
         if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
             raise NotFoundError("Credit card not found")
+    # Effective default funding account after the merge: a card-paid plan never draws an account (its
+    # cash leg lands at the card settlement), and the account must still match the effective currency —
+    # so switching the plan to a card, or to another currency, is refused rather than left inconsistent.
+    new_default_account_id = fields.get("default_account_id", subscription.default_account_id)
+    new_currency = fields.get("currency") or subscription.currency
+    if new_default_account_id is not None and new_method == PaymentMethod.credit_card:
+        raise AccountCardExclusivityError()
+    # Only re-validated when the pair actually MOVES: an unchanged pair was already validated when it
+    # was attached, and re-checking it would let a stale stored default (its account's currency changed
+    # while nothing else referenced it) block an unrelated edit such as a rename or an archive.
+    if new_default_account_id != subscription.default_account_id or new_currency != subscription.currency:
+        await account_service.validate_account_link(session, user, new_default_account_id, new_currency)
     for key, value in fields.items():
         setattr(subscription, key, value)
     if "next_billing_date" in fields and fields["next_billing_date"] is not None:

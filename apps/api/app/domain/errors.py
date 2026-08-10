@@ -27,14 +27,15 @@ class DomainError(Exception):
         return {}
 
 
-# A credit-card expense also links a cash/bank account. A card expense increases the card liability
-# now and only draws cash later at settlement, so it never links an account directly. Mapped to 400.
+# A credit-card charge also names a cash/bank account: an expense linking one directly, or a recurring
+# plan / card naming one as its default. A card charge increases the card liability now and only draws
+# cash later at settlement, so it never draws an account directly. Mapped to 400.
 class AccountCardExclusivityError(DomainError):
     code = "account_card_exclusivity"
     status_code = 400
 
     def __init__(self) -> None:
-        self.message = "A credit-card expense cannot also be paid from an account."
+        self.message = "A credit-card charge cannot also be paid from an account."
         super().__init__(self.message)
 
 

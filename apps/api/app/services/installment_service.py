@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
+    AccountCardExclusivityError,
     AdvanceResult,
     CycleAdvanceDecision,
     InstallmentLockedFieldError,
@@ -18,7 +19,7 @@ from app.models.installment import Installment
 from app.models.user import User
 from app.repositories import credit_card_repository, installment_repository
 from app.schemas.installment import InstallmentResponse
-from app.services import exchange_rate_service
+from app.services import account_service, exchange_rate_service
 from app.utils.metrics import RateLookup, convert_optional
 
 # Contractual fields locked once any installment has been charged (current_installment > 1).
@@ -130,10 +131,14 @@ async def create_installment(
     current_installment: int = 1,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
+    default_account_id: int | None = None,
 ) -> Installment:
     # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
     if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
         raise NotFoundError("Credit card not found")
+    # The default funding account must be owned and match the plan's currency — the scheduler links it
+    # onto every emitted cuota, and every account-linked row must be in that account's currency.
+    await account_service.validate_account_link(session, user, default_account_id, currency)
     installment = Installment(
         user_id=user.id,
         name=name,
@@ -145,6 +150,7 @@ async def create_installment(
         start_date=start_date,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
+        default_account_id=default_account_id,
     )
     installment = await installment_repository.create(session, installment)
     await session.commit()
@@ -173,6 +179,19 @@ async def update_installment(
     if new_card_id is not None and new_card_id != installment.credit_card_id:
         if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
             raise NotFoundError("Credit card not found")
+    # Effective default funding account after the merge: a card-paid plan never draws an account (its
+    # cash leg lands at the card settlement), and the account must still match the effective currency.
+    # Deliberately NOT one of the LOCKED_FIELDS — it is a forward-looking convenience rather than a
+    # contractual term, so it stays editable once charging has started.
+    new_default_account_id = fields.get("default_account_id", installment.default_account_id)
+    new_currency = fields.get("currency") or installment.currency
+    if new_default_account_id is not None and new_method == PaymentMethod.credit_card:
+        raise AccountCardExclusivityError()
+    # Only re-validated when the pair actually MOVES: an unchanged pair was already validated when it
+    # was attached, and re-checking it would let a stale stored default (its account's currency changed
+    # while nothing else referenced it) block an unrelated edit such as a rename or an archive.
+    if new_default_account_id != installment.default_account_id or new_currency != installment.currency:
+        await account_service.validate_account_link(session, user, new_default_account_id, new_currency)
     for key, value in fields.items():
         setattr(installment, key, value)
     await installment_repository.save(session, installment)

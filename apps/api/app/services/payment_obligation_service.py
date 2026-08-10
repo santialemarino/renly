@@ -3,13 +3,20 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import AdvanceResult, NotFoundError, PaymentMethod, PaymentPairingError, ReverseResult
+from app.domain import (
+    AccountCardExclusivityError,
+    AdvanceResult,
+    NotFoundError,
+    PaymentMethod,
+    PaymentPairingError,
+    ReverseResult,
+)
 from app.models.expense_entry import ExpenseCategory
 from app.models.payment_obligation import PaymentObligation
 from app.models.user import User
 from app.repositories import credit_card_repository, expense_repository, payment_obligation_repository
 from app.schemas.payment_obligation import PaymentObligationResponse
-from app.services import exchange_rate_service
+from app.services import account_service, exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
 from app.utils.metrics import RateLookup, convert_optional
 
@@ -111,11 +118,15 @@ async def create_obligation(
     expense_category: ExpenseCategory | None = None,
     payment_method: str | None = None,
     credit_card_id: int | None = None,
+    default_account_id: int | None = None,
     notes: str | None = None,
 ) -> PaymentObligation:
     # SEC-4: a plan must not reference another user's card (FK bypasses RLS).
     if credit_card_id is not None and await credit_card_repository.get_by_id(session, credit_card_id, user.id) is None:
         raise NotFoundError("Credit card not found")
+    # The default funding account must be owned and match the obligation's currency — Mark Paid copies
+    # it onto the expense it creates, and every account-linked row must be in that account's currency.
+    await account_service.validate_account_link(session, user, default_account_id, currency)
     obligation = PaymentObligation(
         user_id=user.id,
         name=name,
@@ -128,6 +139,7 @@ async def create_obligation(
         expense_category=expense_category,
         payment_method=payment_method,
         credit_card_id=credit_card_id,
+        default_account_id=default_account_id,
         notes=notes,
     )
     obligation = await payment_obligation_repository.create(session, obligation)
@@ -154,6 +166,17 @@ async def update_obligation(
     if new_card_id is not None and new_card_id != obligation.credit_card_id:
         if await credit_card_repository.get_by_id(session, new_card_id, user.id) is None:
             raise NotFoundError("Credit card not found")
+    # Effective default funding account after the merge: a card-paid obligation never draws an account
+    # (its cash leg lands at the card settlement), and the account must still match the effective currency.
+    new_default_account_id = fields.get("default_account_id", obligation.default_account_id)
+    new_currency = fields.get("currency") or obligation.currency
+    if new_default_account_id is not None and new_method == PaymentMethod.credit_card:
+        raise AccountCardExclusivityError()
+    # Only re-validated when the pair actually MOVES: an unchanged pair was already validated when it
+    # was attached, and re-checking it would let a stale stored default (its account's currency changed
+    # while nothing else referenced it) block an unrelated edit such as a rename or an archive.
+    if new_default_account_id != obligation.default_account_id or new_currency != obligation.currency:
+        await account_service.validate_account_link(session, user, new_default_account_id, new_currency)
     for key, value in fields.items():
         setattr(obligation, key, value)
     if "next_due_date" in fields and fields["next_due_date"] is not None:

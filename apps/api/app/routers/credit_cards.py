@@ -88,6 +88,7 @@ async def create_card(
         due_day=body.due_day,
         currency=body.currency,
         monthly_payment=body.monthly_payment,
+        default_account_id=body.default_account_id,
     )
     return _to_response(card, [], False)
 
@@ -146,15 +147,14 @@ async def unarchive_card(
 # --- Settlements ---
 
 
-# List settlements for a credit card.
+# List settlements for a credit card, each naming the account it was paid from (when linked).
 @router.get("/{card_id}/settlements", response_model=list[CardSettlementResponse])
 async def list_settlements(
     card_id: int,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> list[CardSettlementResponse]:
-    settlements = await credit_card_service.list_settlements(session, card_id, current_user)
-    return [CardSettlementResponse.model_validate(s) for s in settlements]
+    return await credit_card_service.list_settlements(session, card_id, current_user)
 
 
 # Record a new settlement for a credit card.
@@ -169,7 +169,7 @@ async def create_settlement(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> CardSettlementResponse:
-    settlement = await credit_card_service.create_settlement(
+    return await credit_card_service.create_settlement(
         session,
         card_id,
         current_user,
@@ -179,7 +179,6 @@ async def create_settlement(
         account_id=body.account_id,
         notes=body.notes,
     )
-    return CardSettlementResponse.model_validate(settlement)
 
 
 # Delete a settlement. Returns 204.
