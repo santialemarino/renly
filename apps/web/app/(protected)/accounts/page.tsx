@@ -39,7 +39,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   /*
    * The transfer dialog's pickers need EVERY account, not the page's filtered view — searching
    * "Galicia" must not make the destination list empty and the transfer uncreatable. Every other page
-   * that renders an account picker calls getAccounts() unfiltered for the same reason.
+   * that renders an account picker fetches unfiltered for the same reason (those pass
+   * `showArchived: true`, since their pickers must be able to NAME an already-stored archived link;
+   * the transfer pickers deliberately exclude archived accounts, so this call stays active-only).
    */
   const allAccounts = await getAccounts();
 

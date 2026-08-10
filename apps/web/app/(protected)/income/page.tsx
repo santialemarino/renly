@@ -43,8 +43,12 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   // Entry forms restrict their currency picker to the convertible set; on a fetch error the
   // picker degrades to the full list and the API's 422 still guards.
   const supportedCurrencies = await getSupportedCurrencies().catch(() => undefined);
-  // Active accounts for the optional "deposited to" link on the income form (empty on error → field hidden).
-  const accounts = await getAccounts().catch(() => []);
+  /*
+   * Accounts for the optional "deposited to" link (empty on error → the field hides itself). Archived
+   * ones are included so an entry linked to a since-archived account still renders it by name instead
+   * of a blank picker; the picker only ever OFFERS active accounts.
+   */
+  const accounts = await getAccounts({ showArchived: true }).catch(() => []);
 
   const currency = resolveActiveCurrency(cookieStore, primary);
 
