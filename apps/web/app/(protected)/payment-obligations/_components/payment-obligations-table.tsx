@@ -113,7 +113,12 @@ export function PaymentObligationsTable({
       paymentMethod: (obligation.paymentMethod ??
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
-      accountId: obligation.defaultAccountId ?? undefined,
+      // Only when the picker would offer it: pre-selecting an ARCHIVED account on a NEW expense
+      // would attach money to a closed account the user never chose (the spare-an-archived-link rule
+      // is for entries being edited), and a failed accounts fetch would hide the field entirely.
+      accountId: accounts?.some((a) => a.id === obligation.defaultAccountId && a.isActive)
+        ? (obligation.defaultAccountId ?? undefined)
+        : undefined,
       paymentObligationId: obligation.id,
       recurrence: obligation.recurrence,
     });

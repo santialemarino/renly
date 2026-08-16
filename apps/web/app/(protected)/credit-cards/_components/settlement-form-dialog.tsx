@@ -64,13 +64,25 @@ export function SettlementFormDialog({
   const defaultCurrency = bucketCurrencies[0] ?? '';
   const showBucketPicker = bucketCurrencies.length > 1;
 
+  /*
+   * Only pre-fill a default the picker would actually offer. Seeding it unconditionally moved real
+   * money invisibly in two cases: an ARCHIVED default would arrive pre-selected on a brand-new
+   * settlement (the spare-an-archived-link rule exists for entries being EDITED, not for creating one),
+   * and if the accounts fetch failed the page's `.catch(() => [])` left AccountField with nothing to
+   * render — so the field vanished while form state still held the id and the save still posted it.
+   */
+  const prefilledAccountId =
+    accounts?.some((a) => a.id === defaultAccountId && a.isActive) === true
+      ? defaultAccountId
+      : null;
+
   const form = useForm<SettlementFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: '',
       amount: '',
       currency: defaultCurrency,
-      accountId: defaultAccountId,
+      accountId: prefilledAccountId,
       notes: '',
     },
   });
@@ -87,11 +99,11 @@ export function SettlementFormDialog({
         date: '',
         amount: '',
         currency: defaultCurrency,
-        accountId: defaultAccountId,
+        accountId: prefilledAccountId,
         notes: '',
       });
     }
-  }, [open, form, defaultCurrency, defaultAccountId]);
+  }, [open, form, defaultCurrency, prefilledAccountId]);
 
   async function onSubmit(values: SettlementFormValues) {
     try {
@@ -189,6 +201,7 @@ export function SettlementFormDialog({
               accounts={accounts ?? []}
               currency={watchedCurrency || undefined}
               label={t('settlements.form.account')}
+              name="accountId"
             />
 
             <FormField
