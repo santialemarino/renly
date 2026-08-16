@@ -41,6 +41,20 @@ async def get_latest_dates_by_account_ids(session: AsyncSession, account_ids: li
     return {account_id: as_of_date for account_id, as_of_date in result.all()}
 
 
+# Latest reconciled date per account across ALL users. Deliberately unscoped, for the scheduler only:
+# it resolves the reconciled cutoff of many users' funding accounts in one query (the same shape as
+# account_repository.get_by_ids_across_users), and its caller has already verified each account's owner.
+async def get_latest_dates_across_users(session: AsyncSession, account_ids: list[int]) -> dict[int, date_type]:
+    if not account_ids:
+        return {}
+    result = await session.execute(
+        select(AccountReconciliation.account_id, func.max(AccountReconciliation.as_of_date))
+        .where(AccountReconciliation.account_id.in_(account_ids))
+        .group_by(AccountReconciliation.account_id)
+    )
+    return {account_id: as_of_date for account_id, as_of_date in result.all()}
+
+
 # Insert a new reconciliation.
 async def create(session: AsyncSession, reconciliation: AccountReconciliation) -> AccountReconciliation:
     session.add(reconciliation)
@@ -63,6 +77,7 @@ class AccountReconciliationRepository:
     list_by_account = staticmethod(list_by_account)
     get_by_id = staticmethod(get_by_id)
     get_latest_dates_by_account_ids = staticmethod(get_latest_dates_by_account_ids)
+    get_latest_dates_across_users = staticmethod(get_latest_dates_across_users)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)

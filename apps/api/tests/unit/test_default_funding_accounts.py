@@ -336,19 +336,29 @@ async def _update(service, user: User, **fields):
 
 
 class TestSchedulerHonoursTheDefault:
+    # Default the reconciled-cutoff lookup to "never reconciled" so each test opts into the bound it
+    # is about; the cutoff itself is exercised by its own cases below.
+    @pytest.fixture(autouse=True)
+    def _no_reconciliations(self, monkeypatch):
+        monkeypatch.setattr(
+            auto_expense_service.account_reconciliation_repository,
+            "get_latest_dates_across_users",
+            AsyncMock(return_value={}),
+        )
+
     @pytest.mark.asyncio
     async def test_no_query_when_no_plan_carries_a_default(self, monkeypatch):
         get_mock = AsyncMock()
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", get_mock)
 
-        assert await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription()]) == {}
+        assert await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription()]) == ({}, {})
         get_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_matching_account_resolves(self, monkeypatch):
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(currency="ARS")]))
 
-        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
+        resolved, _ = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
 
         assert {plan_id: account.id for plan_id, account in resolved.items()} == {3: 7}
 
@@ -359,7 +369,7 @@ class TestSchedulerHonoursTheDefault:
         # account's balance, which sums linked rows without conversion.
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(currency="USD")]))
 
-        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(currency="ARS", default_account_id=7)])
+        resolved, _ = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(currency="ARS", default_account_id=7)])
 
         assert resolved == {}
 
@@ -369,7 +379,7 @@ class TestSchedulerHonoursTheDefault:
         # re-checked per row here.
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(user_id=99)]))
 
-        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
+        resolved, _ = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
 
         assert resolved == {}
 
@@ -379,7 +389,7 @@ class TestSchedulerHonoursTheDefault:
         # one, so the nightly job must not keep depositing charges into it either.
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(is_active=False)]))
 
-        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
+        resolved, _ = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
 
         assert resolved == {}
 
@@ -391,7 +401,7 @@ class TestSchedulerHonoursTheDefault:
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account()]))
         plan = _subscription(default_account_id=7, payment_method="credit_card", credit_card_id=5)
 
-        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [plan])
+        resolved, _ = await auto_expense_service._resolve_default_accounts(AsyncMock(), [plan])
 
         assert resolved == {}
 
@@ -400,9 +410,9 @@ class TestSchedulerHonoursTheDefault:
         # "Paid from X" while never moving X's balance. The scheduler picks these dates itself.
         account = _account(opening_date=date(2026, 7, 1))
 
-        assert auto_expense_service._link_for_date(account, date(2026, 6, 30)) is None
-        assert auto_expense_service._link_for_date(account, date(2026, 7, 1)) == 7
-        assert auto_expense_service._link_for_date(None, date(2026, 7, 1)) is None
+        assert auto_expense_service._link_for_date(account, date(2026, 6, 30), None) is None
+        assert auto_expense_service._link_for_date(account, date(2026, 7, 1), None) == 7
+        assert auto_expense_service._link_for_date(None, date(2026, 7, 1), None) is None
 
     @pytest.mark.asyncio
     async def test_a_back_filled_charge_before_the_opening_date_stays_unattributed(self, monkeypatch):
@@ -420,6 +430,37 @@ class TestSchedulerHonoursTheDefault:
         entries = _added_entries(session)
         assert created == 3  # June, July and August cycles
         assert [(e.date, e.account_id) for e in entries] == [
+            (date(2026, 6, 1), None),
+            (date(2026, 7, 1), None),
+            (date(2026, 8, 1), 7),
+        ]
+
+    def test_a_charge_on_or_before_the_reconciled_date_is_not_linked(self):
+        # The reconciliation recorded the real balance on its date and its adjustment already absorbed
+        # this charge, so linking it now would subtract the same money twice — and forward-only
+        # reconciliation means the user could not re-reconcile that date to undo it.
+        account = _account(opening_date=date(2026, 1, 1))
+
+        assert auto_expense_service._link_for_date(account, date(2026, 7, 31), date(2026, 8, 1)) is None
+        assert auto_expense_service._link_for_date(account, date(2026, 8, 1), date(2026, 8, 1)) is None
+        assert auto_expense_service._link_for_date(account, date(2026, 8, 2), date(2026, 8, 1)) == 7
+
+    @pytest.mark.asyncio
+    async def test_a_back_filled_charge_into_a_reconciled_period_stays_unattributed(self, monkeypatch):
+        sub = _subscription(default_account_id=7, next_billing_date=date(2026, 6, 1))
+        session = _scheduler_session([sub], [])
+        monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account()]))
+        monkeypatch.setattr(
+            auto_expense_service.account_reconciliation_repository,
+            "get_latest_dates_across_users",
+            AsyncMock(return_value={7: date(2026, 7, 1)}),
+        )
+
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+
+        assert created == 3
+        # June and July are inside the reconciled period; only August moves the balance.
+        assert [(e.date, e.account_id) for e in _added_entries(session)] == [
             (date(2026, 6, 1), None),
             (date(2026, 7, 1), None),
             (date(2026, 8, 1), 7),

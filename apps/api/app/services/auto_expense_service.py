@@ -18,6 +18,7 @@ from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
 from app.repositories import (
+    account_reconciliation_repository,
     account_repository,
     installment_repository,
     subscription_repository,
@@ -145,7 +146,7 @@ async def _generate_subscription_expenses(
 
     sub_ids = [s.id for s, _ in pending]
     existing = await _existing_subscription_dates(session, sub_ids)
-    default_accounts = await _resolve_default_accounts(session, [s for s, _ in pending])
+    default_accounts, reconciled_through = await _resolve_default_accounts(session, [s for s, _ in pending])
 
     created = 0
     advanced = 0
@@ -183,7 +184,7 @@ async def _generate_subscription_expenses(
                     notes=sub.name,
                     payment_method=sub.payment_method,
                     credit_card_id=sub.credit_card_id,
-                    account_id=_link_for_date(default_accounts.get(sub.id), d),
+                    account_id=_link_for_date(default_accounts.get(sub.id), d, reconciled_through.get(sub.default_account_id)),
                     source=SOURCE_SUBSCRIPTION,
                     subscription_id=sub.id,
                 )
@@ -218,11 +219,14 @@ async def _generate_subscription_expenses(
 # lands, merely unattributed, which is exactly the pre-default behaviour, and reconciliation remains
 # the backstop. It is logged, because a link the user configured silently ceasing to apply is
 # otherwise invisible everywhere.
-async def _resolve_default_accounts(session: AsyncSession, plans: list[Subscription] | list[Installment]) -> dict[int, Account]:
+async def _resolve_default_accounts(
+    session: AsyncSession, plans: list[Subscription] | list[Installment]
+) -> tuple[dict[int, Account], dict[int, date_type]]:
     account_ids = sorted({p.default_account_id for p in plans if p.default_account_id is not None})
     if not account_ids:
-        return {}
+        return {}, {}
     accounts = {a.id: a for a in await account_repository.get_by_ids_across_users(session, account_ids)}
+    reconciled_through = await account_reconciliation_repository.get_latest_dates_across_users(session, account_ids)
     resolved: dict[int, Account] = {}
     for plan in plans:
         if plan.default_account_id is None:
@@ -242,16 +246,26 @@ async def _resolve_default_accounts(session: AsyncSession, plans: list[Subscript
                 plan.id,
                 plan.default_account_id,
             )
-    return resolved
+    return resolved, reconciled_through
 
 
-# The account id a charge dated `charge_date` may carry, or None when it must stay unattributed.
-# Every account-balance sum is bounded below by the account's opening_date (opening_balance IS the
-# balance at that date), so a back-filled charge dated earlier would render as "Paid from X" while
-# never moving X's balance — a link that lies. The scheduler picks these dates itself, walking a plan's
-# cursor, so the user has no way to foresee it.
-def _link_for_date(account: Account | None, charge_date: date_type) -> int | None:
+# The account id a charge dated `charge_date` may carry, or None when it must stay unattributed. Two
+# lower bounds, both meaning "this date is already accounted for":
+#
+#   - opening_date, because opening_balance IS the balance at that date, so an earlier row is already
+#     inside it and the sums exclude it — the link would render "Paid from X" while never moving X;
+#   - the account's latest reconciliation, because a reconciliation records the real balance on its
+#     date and its adjustment already absorbed everything Renly did not know about, this charge
+#     included. Linking it now would subtract the same money a second time, and the forward-only rule
+#     means the user could not even re-reconcile that date to undo it.
+#
+# Both apply to the SCHEDULER specifically: it picks these dates itself by walking a plan's cursor and
+# back-filling missed cycles, so a user cannot foresee them the way they can when back-dating an entry
+# by hand. The charge itself still lands — it is real spending — merely unattributed.
+def _link_for_date(account: Account | None, charge_date: date_type, reconciled_through: date_type | None) -> int | None:
     if account is None or charge_date < account.opening_date:
+        return None
+    if reconciled_through is not None and charge_date <= reconciled_through:
         return None
     return account.id
 
@@ -305,7 +319,7 @@ async def _generate_installment_expenses(
 
     inst_ids = [i.id for i, _ in pending]
     existing = await _existing_installment_dates(session, inst_ids)
-    default_accounts = await _resolve_default_accounts(session, [i for i, _ in pending])
+    default_accounts, reconciled_through = await _resolve_default_accounts(session, [i for i, _ in pending])
 
     created = 0
     advanced = 0
@@ -339,7 +353,7 @@ async def _generate_installment_expenses(
                     notes=inst.name,
                     payment_method=inst.payment_method,
                     credit_card_id=inst.credit_card_id,
-                    account_id=_link_for_date(default_accounts.get(inst.id), cuota_date),
+                    account_id=_link_for_date(default_accounts.get(inst.id), cuota_date, reconciled_through.get(inst.default_account_id)),
                     source=SOURCE_INSTALLMENT,
                     installment_id=inst.id,
                 )
