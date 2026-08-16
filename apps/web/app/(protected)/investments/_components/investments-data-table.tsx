@@ -6,27 +6,14 @@ import { Archive, ArchiveRestore, Pencil, Rows3 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@repo/ui/components';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
 import { InvestmentArchiveFormDialog } from '@/app/(protected)/investments/_components/investment-archive-form-dialog';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { unarchiveInvestment } from '@/app/(protected)/investments/investments-actions';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
 import type {
   Investment,
@@ -255,69 +242,12 @@ export function InvestmentsDataTable({
         </Table>
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-paragraph-sm text-muted-foreground">{t('table.total', { total })}</p>
-          <Pagination className="w-auto mx-0">
-            <PaginationContent>
-              <PaginationItem>
-                <PaginationPrevious
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (page > 1) handlePageChange(page - 1);
-                  }}
-                  aria-disabled={page <= 1}
-                  className={page <= 1 ? 'pointer-events-none opacity-50' : ''}
-                  text={t('pagination.previous')}
-                />
-              </PaginationItem>
-
-              {/* Keep first, last, and the two neighbours of the current page; inject ellipsis where there is a gap. */}
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
-                .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
-                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('ellipsis');
-                  acc.push(p);
-                  return acc;
-                }, [])
-                .map((item, idx) =>
-                  item === 'ellipsis' ? (
-                    <PaginationItem key={`ellipsis-${idx}`}>
-                      <PaginationEllipsis />
-                    </PaginationItem>
-                  ) : (
-                    <PaginationItem key={item}>
-                      <PaginationLink
-                        href="#"
-                        isActive={item === page}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          handlePageChange(item);
-                        }}
-                      >
-                        {item}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ),
-                )}
-
-              <PaginationItem>
-                <PaginationNext
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (page < totalPages) handlePageChange(page + 1);
-                  }}
-                  aria-disabled={page >= totalPages}
-                  className={page >= totalPages ? 'pointer-events-none opacity-50' : ''}
-                  text={t('pagination.next')}
-                />
-              </PaginationItem>
-            </PaginationContent>
-          </Pagination>
-        </div>
-      )}
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        totalLabel={t('table.total', { total })}
+        onPageChange={handlePageChange}
+      />
     </div>
   );
 }
