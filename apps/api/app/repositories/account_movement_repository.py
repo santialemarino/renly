@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlmodel import select
 
-from app.domain.account_movement import MovementKind
+from app.domain.account_movement import MovementKind, MovementSource
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
@@ -68,6 +68,7 @@ def _income_branch(account_id: int, user_id: int, *, adjustments: bool | None):
     stmt = (
         select(
             IncomeEntry.id.label("source_id"),
+            literal(MovementSource.income.value).label("source"),
             literal(_RANK_INCOME).label("sort_rank"),
             _entry_kind(IncomeEntry.account_reconciliation_id, MovementKind.income),
             IncomeEntry.date.label("date"),
@@ -94,6 +95,7 @@ def _expense_branch(account_id: int, user_id: int, *, adjustments: bool | None):
     stmt = (
         select(
             ExpenseEntry.id.label("source_id"),
+            literal(MovementSource.expense.value).label("source"),
             literal(_RANK_EXPENSE).label("sort_rank"),
             _entry_kind(ExpenseEntry.account_reconciliation_id, MovementKind.expense),
             ExpenseEntry.date.label("date"),
@@ -119,6 +121,7 @@ def _settlement_branch(account_id: int, user_id: int):
     return (
         select(
             CardSettlement.id.label("source_id"),
+            literal(MovementSource.settlement.value).label("source"),
             literal(_RANK_SETTLEMENT).label("sort_rank"),
             literal(MovementKind.settlement.value).label("kind"),
             CardSettlement.date.label("date"),
@@ -152,6 +155,7 @@ def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool):
     return (
         select(
             Transfer.id.label("source_id"),
+            literal(MovementSource.transfer.value).label("source"),
             literal(_RANK_TRANSFER_OUT if outgoing else _RANK_TRANSFER_IN).label("sort_rank"),
             literal(MovementKind.transfer.value).label("kind"),
             Transfer.date.label("date"),

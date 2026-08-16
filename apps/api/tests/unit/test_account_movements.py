@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain import NotFoundError
-from app.domain.account_movement import MovementKind
+from app.domain.account_movement import MovementKind, MovementSource
 from app.models.account import Account, AccountType
 from app.models.user import User
 from app.services import account_movement_service
@@ -19,6 +19,16 @@ from app.services import account_movement_service
 # return rows a wrong query never would.
 
 USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
+
+# The source a kind comes from when a test doesn't care. `adjustment` has no single answer — it spans
+# both entry tables — so a test about adjustments names the source it means.
+_DEFAULT_SOURCE = {
+    MovementKind.income: MovementSource.income,
+    MovementKind.expense: MovementSource.expense,
+    MovementKind.settlement: MovementSource.settlement,
+    MovementKind.transfer: MovementSource.transfer,
+    MovementKind.adjustment: MovementSource.expense,
+}
 
 
 def _account(**overrides) -> Account:
@@ -37,8 +47,9 @@ def _account(**overrides) -> Account:
 
 
 # A repository row: the union's projection, which the service reads by attribute.
-def _row(source_id: int, kind: MovementKind, day: int, amount: str, **overrides):
+def _row(source_id: int, kind: MovementKind, day: int, amount: str, *, source: MovementSource | None = None, **overrides):
     data = dict(
+        source=(source or _DEFAULT_SOURCE[kind]).value,
         source_id=source_id,
         kind=kind.value,
         date=date(2026, 7, day),
@@ -197,3 +208,29 @@ class TestRowMapping:
         _wire(monkeypatch, rows=[])
         movements, total, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
         assert (movements, total) == ([], 0)
+
+
+class TestRowIdentity:
+    @pytest.mark.asyncio
+    async def test_two_adjustments_sharing_an_id_stay_distinguishable(self, monkeypatch):
+        # income_entries and expense_entries have independent id sequences, so a reconciliation that
+        # posted an income adjustment and one that posted an expense adjustment can both be id 30.
+        # `kind` is 'adjustment' for both, so only `source` tells them apart — which is what the
+        # ledger's React key is built from.
+        _wire(
+            monkeypatch,
+            rows=[
+                _row(30, MovementKind.adjustment, 12, "-1500", source=MovementSource.expense),
+                _row(30, MovementKind.adjustment, 12, "700", source=MovementSource.income),
+            ],
+        )
+        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        keys = [(m.source, m.source_id) for m in movements]
+        assert len(set(keys)) == 2
+        assert len({(m.kind, m.source_id) for m in movements}) == 1
+
+    @pytest.mark.asyncio
+    async def test_source_survives_the_mapping(self, monkeypatch):
+        _wire(monkeypatch, rows=[_row(4, MovementKind.settlement, 15, "-8000")])
+        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert movements[0].source is MovementSource.settlement

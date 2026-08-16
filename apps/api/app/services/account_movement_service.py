@@ -21,7 +21,7 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.account_movement import AccountMovement, MovementKind
+from app.domain.account_movement import AccountMovement, MovementKind, MovementSource
 from app.models.user import User
 from app.repositories import account_movement_repository
 from app.services import account_service
@@ -59,6 +59,7 @@ async def list_account_movements(
         amount = Decimal(str(row.amount))
         movements.append(
             AccountMovement(
+                source=MovementSource(row.source),
                 source_id=row.source_id,
                 kind=MovementKind(row.kind),
                 date=row.date,

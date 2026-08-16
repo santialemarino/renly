@@ -5,14 +5,15 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
-from app.domain.account_movement import MovementKind
+from app.domain.account_movement import MovementKind, MovementSource
 
 
 # One row of the ledger. `amount` is signed in the account's currency (positive in, negative out), so
 # a reader never has to know which kinds subtract; `source_id` is the id of the row in ITS OWN table
 # and is therefore only unique per kind.
 class AccountMovementResponse(BaseModel):
-    source_id: int = Field(description="Id of the underlying row, unique within its kind.")
+    source: MovementSource = Field(description="Table the movement was read from; with source_id it identifies the row.")
+    source_id: int = Field(description="Id of the underlying row, unique only within its source.")
     kind: MovementKind = Field(description="What the movement is, from the account's point of view.")
     date: date_type = Field(description="Date the movement is dated.")
     amount: Decimal = Field(description="Signed amount in the account's currency: positive in, negative out.", max_digits=18, decimal_places=2)

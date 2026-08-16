@@ -21,6 +21,17 @@ class MovementKind(StrEnum):
     transfer = "transfer"
 
 
+# Which table a movement was read from. This is what IDENTIFIES a row — `kind` cannot, because the
+# adjustment kind spans two tables whose id sequences are independent, so a reconciliation that
+# posted an income adjustment and one that posted an expense adjustment really can collide on
+# (kind, source_id). Also the anchor anything wanting to link back to the owning record would need.
+class MovementSource(StrEnum):
+    expense = "expense"
+    income = "income"
+    settlement = "settlement"
+    transfer = "transfer"
+
+
 # One movement in an account's ledger. `amount` is SIGNED in the account's own currency: positive
 # put money in, negative took it out. There is no per-row currency because there cannot be one —
 # every linked row is validated to match the account's currency and each transfer leg is stored in
@@ -36,6 +47,7 @@ class MovementKind(StrEnum):
 # names, so a row can still say what it is when the client's own lists fail to load or when the other
 # side has since been archived.
 class AccountMovement(NamedTuple):
+    source: MovementSource
     source_id: int
     kind: MovementKind
     date: date_type
