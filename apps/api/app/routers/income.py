@@ -22,6 +22,8 @@ async def list_income(
     category: IncomeCategory | None = Query(default=None, description="Filter by category."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
+    sort_by: str | None = Query(default=None, description="Column to sort by (date, amount, category)."),
+    sort_order: str = Query(default="desc", description="Sort direction (asc or desc)."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> IncomeListResponse:
@@ -32,6 +34,8 @@ async def list_income(
         category=category,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
         currency=currency,
         page=page,
         page_size=page_size,

@@ -77,6 +77,8 @@ async def list_expenses(
     payment_method: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "desc",
     currency: str | None = None,
     page: int = 1,
     page_size: int = 25,
@@ -89,6 +91,8 @@ async def list_expenses(
         payment_method=payment_method,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by,
+        sort_order=sort_order,
         page=page,
         page_size=page_size,
     )

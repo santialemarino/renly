@@ -2,15 +2,27 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import String, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.account import Account
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
+from app.repositories.utils import apply_entry_sort
+
+# Sortable columns for the expenses list. `category` is sorted as TEXT, not as the enum: ORDER BY on
+# a Postgres enum follows its DECLARATION order, which differs between a database built from
+# 01_create_tables.sql and one built by migrations — the same rows would come back in a different
+# order per environment. The values are alphabetical anyway, so the cast costs nothing.
+_SORT_COLUMNS = {
+    "date": ExpenseEntry.date,
+    "amount": ExpenseEntry.amount,
+    "category": cast(ExpenseEntry.category, String),
+    "payment_method": ExpenseEntry.payment_method,
+}
 
 
-# List expenses for a user with optional filters and pagination.
+# List expenses for a user with optional filters, sorting, and pagination.
 async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
@@ -20,6 +32,8 @@ async def list_by_user_filtered(
     payment_method: str | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "desc",
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[ExpenseEntry], int]:
@@ -39,7 +53,14 @@ async def list_by_user_filtered(
     count_result = await session.execute(select(func.count()).select_from(base.subquery()))
     total = count_result.scalar_one()
 
-    query = base.order_by(ExpenseEntry.date.desc(), ExpenseEntry.id.desc())
+    query = apply_entry_sort(
+        base,
+        sort_by,
+        sort_order,
+        sort_columns=_SORT_COLUMNS,
+        default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
+        id_column=ExpenseEntry.id,
+    )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)
     return list(result.scalars().all()), total
