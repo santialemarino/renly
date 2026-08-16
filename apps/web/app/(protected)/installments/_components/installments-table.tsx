@@ -78,6 +78,23 @@ export function InstallmentsTable({
     }
   }
 
+  /*
+   * The "Paid from X" line under a plan's payment method, or null when the plan draws no account.
+   * The funding account qualifies the method rather than standing alone, so it reads as a second line
+   * there instead of a mostly-empty column — and without it the link is write-only on the one entity
+   * that spends it every month unprompted. Archived accounts resolve too (the page fetches them for
+   * exactly this reason), so a plan pointing at one still says which.
+   */
+  function fundingLine(accountId: number | null) {
+    const account = accounts?.find((a) => a.id === accountId);
+    if (!account) return null;
+    return (
+      <span className="block text-paragraph-xs text-muted-foreground">
+        {t('table.paidFrom', { account: account.name })}
+      </span>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-y-4">
       <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
@@ -179,6 +196,7 @@ export function InstallmentsTable({
                     <TableCell>{inst.nextCuotaDate ? fmt.date(inst.nextCuotaDate) : '—'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {inst.paymentMethod ? t(`paymentMethods.${inst.paymentMethod}`) : '—'}
+                      {fundingLine(inst.defaultAccountId)}
                     </TableCell>
                     <TableCell className="text-center">
                       {!inst.isActive ? (

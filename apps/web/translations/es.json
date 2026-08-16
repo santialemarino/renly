@@ -1107,7 +1107,8 @@
       "actions": "Acciones",
       "empty": "No se encontraron suscripciones.",
       "emptyTitle": "Controlá tus suscripciones",
-      "emptyDescription": "Agregá tus suscripciones recurrentes para ver qué se viene en tu calendario de pagos."
+      "emptyDescription": "Agregá tus suscripciones recurrentes para ver qué se viene en tu calendario de pagos.",
+      "paidFrom": "Pagado desde {account}"
     },
     "billingCycles": {
       "weekly": "Semanal",
@@ -1202,7 +1203,8 @@
       "empty": "No se encontraron obligaciones de pago.",
       "emptyTitle": "Planificá tus próximos pagos",
       "emptyDescription": "Registrá obligaciones únicas o recurrentes para ver todo lo que debés en tu calendario de pagos.",
-      "paidOn": "Pagada el {date}"
+      "paidOn": "Pagada el {date}",
+      "paidFrom": "Pagado desde {account}"
     },
     "recurrences": {
       "oneOff": "Único",
@@ -1346,7 +1348,8 @@
       "actions": "Acciones",
       "empty": "No se encontraron planes de cuotas.",
       "emptyTitle": "Gestioná tus planes de cuotas",
-      "emptyDescription": "Agregá un plan para seguir cada pago y sus próximos vencimientos."
+      "emptyDescription": "Agregá un plan para seguir cada pago y sus próximos vencimientos.",
+      "paidFrom": "Pagado desde {account}"
     },
     "paymentMethods": {
       "cash": "Efectivo",
@@ -2609,6 +2612,7 @@
   "apiErrors": {
     "account_card_exclusivity": "Un cargo con tarjeta de crédito no puede además pagarse desde una cuenta.",
     "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
+    "account_currency_change_blocked_by_default": "No se puede cambiar la moneda de una cuenta mientras {referencing_count} tarjeta(s) o plan(es) la usan como predeterminada. Quitá esos primero.",
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
     "account_reconciliation_before_last": "Esta cuenta ya está conciliada hasta el {last_reconciled_date}. Elegí esa fecha o una posterior, o eliminá primero la conciliación posterior.",
     "account_reconciliation_before_opening": "La fecha de conciliación debe ser igual o posterior a la fecha de apertura de la cuenta ({opening_date}).",

@@ -1107,7 +1107,8 @@
       "actions": "Actions",
       "empty": "No subscriptions found.",
       "emptyTitle": "Keep tabs on your subscriptions",
-      "emptyDescription": "Add your recurring subscriptions to see what's coming up on your payments calendar."
+      "emptyDescription": "Add your recurring subscriptions to see what's coming up on your payments calendar.",
+      "paidFrom": "Paid from {account}"
     },
     "billingCycles": {
       "weekly": "Weekly",
@@ -1202,7 +1203,8 @@
       "empty": "No payment obligations found.",
       "emptyTitle": "Plan your upcoming payments",
       "emptyDescription": "Record one-off or recurring obligations to see everything you owe on your payments calendar.",
-      "paidOn": "Paid on {date}"
+      "paidOn": "Paid on {date}",
+      "paidFrom": "Paid from {account}"
     },
     "recurrences": {
       "oneOff": "One-off",
@@ -1346,7 +1348,8 @@
       "actions": "Actions",
       "empty": "No installment plans found.",
       "emptyTitle": "Manage your installment plans",
-      "emptyDescription": "Add a plan to track each payment and its upcoming due dates."
+      "emptyDescription": "Add a plan to track each payment and its upcoming due dates.",
+      "paidFrom": "Paid from {account}"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -2609,6 +2612,7 @@
   "apiErrors": {
     "account_card_exclusivity": "A credit-card charge can't also be paid from an account.",
     "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
+    "account_currency_change_blocked_by_default": "An account's currency can't be changed while {referencing_count} card(s) or plan(s) use it as their default. Clear those first.",
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
     "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",

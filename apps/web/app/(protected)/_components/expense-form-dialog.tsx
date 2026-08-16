@@ -458,6 +458,23 @@ export function ExpenseFormDialog({
     toast.success(lines.join(' '));
   }
 
+  /*
+   * Copies a linked plan's funding account onto the entry, the way Mark Paid already does — picking
+   * the plan from this form is the other documented way to pay it, and leaving "Paid from" empty here
+   * left the cash leg unattributed on exactly the plans configured to avoid that.
+   *
+   * Only when the field is still empty (never overwrites an explicit pick) and only when the picker
+   * would offer the account: an archived or currency-mismatched default must not be attached to a new
+   * entry behind the user's back.
+   */
+  function prefillFundingAccount(defaultAccountId: number | null | undefined) {
+    if (defaultAccountId == null || form.getValues('accountId') != null) return;
+    const account = accounts?.find((a) => a.id === defaultAccountId);
+    if (account?.isActive && account.currency === form.getValues('currency')) {
+      form.setValue('accountId', defaultAccountId);
+    }
+  }
+
   async function onSubmit(values: ExpenseFormValues) {
     if (!isEdit && selectedNovelCurrencyCardName(values)) {
       setNovelCurrencyPending(values);
@@ -735,6 +752,7 @@ export function ExpenseFormDialog({
                                   o.expenseCategory as ExpenseFormValues['category'],
                                 );
                               }
+                              prefillFundingAccount(o?.defaultAccountId);
                             }
                           }}
                         />
@@ -780,6 +798,11 @@ export function ExpenseFormDialog({
                           form.setValue('installmentId', next.id);
                           form.setValue('subscriptionId', undefined);
                         }
+                        const plan =
+                          next.kind === 'subscription'
+                            ? activeSubscriptions?.find((x) => x.id === next.id)
+                            : activeInstallments?.find((x) => x.id === next.id);
+                        prefillFundingAccount(plan?.defaultAccountId);
                       }}
                     />
                   </FormControl>
