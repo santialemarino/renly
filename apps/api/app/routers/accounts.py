@@ -6,15 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.domain.account_movement import MovementKind
 from app.models.account import Account
 from app.models.user import User
 from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
+from app.schemas.account_movement import AccountMovementListResponse, AccountMovementResponse
 from app.schemas.account_reconciliation import (
     AccountComputedBalanceResponse,
     AccountReconciliationCreate,
     AccountReconciliationResponse,
 )
-from app.services import account_reconciliation_service, account_service
+from app.services import account_movement_service, account_reconciliation_service, account_service
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
@@ -142,6 +144,34 @@ async def unarchive_account(
 ) -> AccountResponse:
     account = await account_service.unarchive_account(session, account_id, current_user)
     return (await _to_responses(session, [account], current_user))[0]
+
+
+# The account's ledger: every movement that reaches it, newest first, paginated. `balance_after` is
+# populated only on the unfiltered view — see account_movement_service for why.
+@router.get("/{account_id}/movements", response_model=AccountMovementListResponse)
+async def list_movements(
+    account_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    kind: MovementKind | None = Query(default=None, description="Filter by movement kind."),
+    page: int = Query(default=1, ge=1, description="Page number."),
+    page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
+) -> AccountMovementListResponse:
+    movements, total, currency = await account_movement_service.list_account_movements(
+        session,
+        account_id,
+        current_user,
+        kind=kind,
+        page=page,
+        page_size=page_size,
+    )
+    return AccountMovementListResponse(
+        items=[AccountMovementResponse.model_validate(m) for m in movements],
+        total=total,
+        page=page,
+        page_size=page_size,
+        currency=currency,
+    )
 
 
 # The account's derived balance at a date. Drives the reconcile dialog's difference preview, which

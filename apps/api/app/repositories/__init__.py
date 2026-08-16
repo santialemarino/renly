@@ -1,5 +1,6 @@
 # Data access.
 
+from app.repositories.account_movement_repository import account_movement_repository
 from app.repositories.account_reconciliation_repository import account_reconciliation_repository
 from app.repositories.account_repository import account_repository
 from app.repositories.api_key_repository import api_key_repository
@@ -29,6 +30,7 @@ from app.repositories.user_repository import user_repository
 from app.repositories.user_settings_repository import user_settings_repository
 
 __all__ = [
+    "account_movement_repository",
     "account_reconciliation_repository",
     "account_repository",
     "api_key_repository",
