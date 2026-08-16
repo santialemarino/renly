@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -32,6 +33,7 @@ import { PaymentMethodFields } from '@/components/payment-method-fields';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
@@ -232,17 +234,29 @@ export function SubscriptionFormDialog({
 
             {/* A card-paid subscription hits the card and draws cash at the settlement, so it names no
                 funding account — the card's own default covers that half. */}
-            {watchedPaymentMethod !== 'credit_card' && (
-              <AccountField
-                control={form.control}
-                setValue={form.setValue}
-                accounts={accounts ?? []}
-                currency={watchedCurrency || undefined}
-                label={t('form.defaultAccount.label')}
-                hint={t('form.defaultAccount.hint')}
-                name="defaultAccountId"
-              />
-            )}
+            {/* Height-reveal on the same trigger PaymentMethodFields' card row uses, so the two
+                conditional rows in this form animate alike instead of one snapping. */}
+            <AnimatePresence initial={false}>
+              {watchedPaymentMethod !== 'credit_card' && (
+                <motion.div
+                  key="default-account"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                >
+                  <AccountField
+                    control={form.control}
+                    setValue={form.setValue}
+                    accounts={accounts ?? []}
+                    currency={watchedCurrency || undefined}
+                    label={t('form.defaultAccount.label')}
+                    hint={t('form.defaultAccount.hint')}
+                    name="defaultAccountId"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 

@@ -559,17 +559,29 @@ export function InstallmentFormDialog({
             {/* Not disabled by isLocked: the funding account is a forward-looking convenience for the
                 remaining cuotas, not a contractual term of the plan (unlike its amounts, currency and
                 payment method), so it stays editable once charging has started. */}
-            {watchedPaymentMethod !== 'credit_card' && (
-              <AccountField
-                control={form.control}
-                setValue={form.setValue}
-                accounts={accounts ?? []}
-                currency={watchedCurrency || undefined}
-                label={t('form.defaultAccount.label')}
-                hint={t('form.defaultAccount.hint')}
-                name="defaultAccountId"
-              />
-            )}
+            {/* Height-reveal on the same trigger PaymentMethodFields' card row uses, so the two
+                conditional rows in this form animate alike instead of one snapping. */}
+            <AnimatePresence initial={false}>
+              {watchedPaymentMethod !== 'credit_card' && (
+                <motion.div
+                  key="default-account"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                >
+                  <AccountField
+                    control={form.control}
+                    setValue={form.setValue}
+                    accounts={accounts ?? []}
+                    currency={watchedCurrency || undefined}
+                    label={t('form.defaultAccount.label')}
+                    hint={t('form.defaultAccount.hint')}
+                    name="defaultAccountId"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 
