@@ -200,6 +200,7 @@ export function IncomeFormDialog({
               accounts={accounts ?? []}
               currency={watchedCurrency || undefined}
               label={t('form.account.label')}
+              name="accountId"
             />
 
             <FormField

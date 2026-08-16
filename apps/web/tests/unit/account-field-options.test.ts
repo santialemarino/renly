@@ -52,8 +52,10 @@ describe('buildAccountFieldOptions', () => {
   it('appends a stored link to an ARCHIVED account so the trigger never goes blank', () => {
     const archived = account({ isActive: false });
     expect(buildAccountFieldOptions([archived], 'ARS', 1)).toEqual([
-      { kind: 'none', noMatchingCurrency: true },
-      { kind: 'archived', account: archived },
+      // Not `noMatchingCurrency`: the sentinel would read "No ARS accounts" directly above an ARS
+      // account the user can select, and it is the only way to clear the link.
+      { kind: 'none', noMatchingCurrency: false },
+      { kind: 'account', account: archived },
     ]);
   });
 
@@ -62,7 +64,7 @@ describe('buildAccountFieldOptions', () => {
     // for that render or the field flashes empty.
     const other = account({ currency: 'USD' });
     expect(buildAccountFieldOptions([other], 'ARS', 1)).toEqual([
-      { kind: 'none', noMatchingCurrency: true },
+      { kind: 'none', noMatchingCurrency: false },
       { kind: 'account', account: other },
     ]);
   });
@@ -80,6 +82,12 @@ describe('buildAccountFieldOptions', () => {
       { kind: 'none', noMatchingCurrency: false },
       { kind: 'account', account: ars },
     ]);
+  });
+
+  it('names the currency on the sentinel only when the list is genuinely empty', () => {
+    // The dead-end explanation must not contradict a row sitting right below it.
+    const [emptySentinel] = buildAccountFieldOptions([account()], 'USD', null) ?? [];
+    expect(emptySentinel).toEqual({ kind: 'none', noMatchingCurrency: true });
   });
 
   it('offers every active account when no currency is set yet', () => {

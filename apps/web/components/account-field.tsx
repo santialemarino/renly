@@ -4,7 +4,14 @@ import { useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useWatch, type Control, type FieldValues, type UseFormSetValue } from 'react-hook-form';
 
-import { FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import {
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import type { Account } from '@/lib/api/accounts';
 import {
@@ -46,8 +53,12 @@ interface AccountFieldProps<T extends AccountFieldFormValues & FieldValues> {
   // Optional explanation under the control. Lives here rather than at the call site so it is
   // suppressed together with the field — a hint for a control that isn't on screen explains nothing.
   hint?: string;
-  // Defaults to the entry money-link field.
-  name?: AccountFieldName;
+  /*
+   * Required rather than defaulted: both keys are optional on AccountFieldFormValues, so a form that
+   * declares only one of them still satisfies the constraint — a forgotten `name` would silently bind
+   * the other field, writing to a key the caller's zod schema never declares, with no type error.
+   */
+  name: AccountFieldName;
 }
 
 // Optional "paid from / deposited to / drawn from" account selector, shared by the expense, income and
@@ -61,7 +72,7 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
   currency,
   label,
   hint,
-  name = 'accountId',
+  name,
 }: AccountFieldProps<T>) {
   /*
    * Narrow the caller's form typing to the minimal shape. Safe because T extends
@@ -90,10 +101,9 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
         ? t('accountField.noneForCurrency', { currency })
         : t('accountField.none');
     }
-    if (option.kind === 'archived') {
-      return t('accountField.archived', { name: option.account.name });
-    }
-    return option.account.name;
+    return option.account.isActive
+      ? option.account.name
+      : t('accountField.archived', { name: option.account.name });
   }
 
   if (options === null) return null;
@@ -116,7 +126,9 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
               }))}
             />
           </FormControl>
-          {hint && <p className="text-paragraph-xs text-muted-foreground">{hint}</p>}
+          {/* FormDescription (not a bare <p>) carries the id FormControl already points
+              aria-describedby at, so the explanation is announced instead of dangling. */}
+          {hint && <FormDescription className="text-paragraph-xs">{hint}</FormDescription>}
           <FormMessage />
         </FormItem>
       )}

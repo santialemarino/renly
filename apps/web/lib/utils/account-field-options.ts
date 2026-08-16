@@ -11,12 +11,12 @@ import type { Account } from '@/lib/api/accounts';
  * resolves the localized string. That keeps this module free of i18n and the copy in one place.
  */
 
-// One row of the account picker. `none` is the always-present sentinel (the API stores null);
-// `archived` marks a stored link the filtered list can't offer, so it can be labelled as such.
+// One row of the account picker. `none` is the always-present sentinel (the API stores null); an
+// `account` row carries the raw account, and the component labels an inactive one as archived —
+// `isActive` is already on the account, so a separate discriminant would be a second copy of it.
 export type AccountOption =
   | { kind: 'none'; noMatchingCurrency: boolean }
-  | { kind: 'account'; account: Account }
-  | { kind: 'archived'; account: Account };
+  | { kind: 'account'; account: Account };
 
 // Whether the currently-selected account must be dropped because the entry's currency moved away from
 // it. Only ACTIVE accounts are cleared: an archived link is absent from the offerable list, and
@@ -43,27 +43,23 @@ export function buildAccountFieldOptions(
   const matching = accounts.filter((a) => a.isActive && (!currency || a.currency === currency));
   const selected = accounts.find((a) => a.id === selectedId);
   /*
-   * A stored link the filtered list can't offer (archived, or in another currency that
-   * shouldClearAccountLink deliberately spares) still has to render: the combobox falls back to its
+   * A stored link the filtered list can't offer still has to render: the combobox falls back to its
    * placeholder when no option matches the value, so the trigger would go BLANK while form state still
    * held the id — the field would read as cleared and a save would silently keep the old link.
+   *
+   * In practice this is the ARCHIVED case, which shouldClearAccountLink deliberately spares. An ACTIVE
+   * account outside `matching` is by definition currency-mismatched, i.e. exactly what that function
+   * clears, so it shows for the single render before the effect fires rather than flashing blank.
    */
-  const unofferable =
-    selected && !matching.some((a) => a.id === selected.id)
-      ? [
-          {
-            kind: selected.isActive ? ('account' as const) : ('archived' as const),
-            account: selected,
-          },
-        ]
-      : [];
+  const unofferable = selected && !matching.some((a) => a.id === selected.id) ? [selected] : [];
 
   // No active account to offer (which also means `matching` is empty) and no stored link to show.
   if (unofferable.length === 0 && !accounts.some((a) => a.isActive)) return null;
 
   return [
-    { kind: 'none', noMatchingCurrency: matching.length === 0 },
-    ...matching.map((account) => ({ kind: 'account' as const, account })),
-    ...unofferable,
+    // Names the currency only when there is genuinely nothing in the list — an archived row below
+    // would otherwise sit under a sentinel claiming no such account exists.
+    { kind: 'none', noMatchingCurrency: matching.length === 0 && unofferable.length === 0 },
+    ...[...matching, ...unofferable].map((account) => ({ kind: 'account' as const, account })),
   ];
 }
