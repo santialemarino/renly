@@ -10,7 +10,7 @@ from app.domain.account_movement import MovementKind
 from app.models.account import Account
 from app.models.user import User
 from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
-from app.schemas.account_movement import AccountMovementListResponse, AccountMovementResponse
+from app.schemas.account_movement import AccountMovementListResponse
 from app.schemas.account_reconciliation import (
     AccountComputedBalanceResponse,
     AccountReconciliationCreate,
@@ -154,23 +154,16 @@ async def list_movements(
     current_user: CurrentUser,
     session: SessionDep,
     kind: MovementKind | None = Query(default=None, description="Filter by movement kind."),
-    page: int = Query(default=1, ge=1, description="Page number."),
+    page: int = Query(default=1, ge=1, description="Page number; clamped to the last page that has rows."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> AccountMovementListResponse:
-    movements, total, currency = await account_movement_service.list_account_movements(
+    return await account_movement_service.list_account_movements(
         session,
         account_id,
         current_user,
         kind=kind,
         page=page,
         page_size=page_size,
-    )
-    return AccountMovementListResponse(
-        items=[AccountMovementResponse.model_validate(m) for m in movements],
-        total=total,
-        page=page,
-        page_size=page_size,
-        currency=currency,
     )
 
 

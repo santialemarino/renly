@@ -33,7 +33,7 @@ async def list_by_user_filtered(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
     sort_by: str | None = None,
-    sort_order: str = "desc",
+    sort_order: str = "asc",
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[ExpenseEntry], int]:
@@ -55,11 +55,11 @@ async def list_by_user_filtered(
 
     query = apply_entry_sort(
         base,
+        ExpenseEntry,
         sort_by,
         sort_order,
         sort_columns=_SORT_COLUMNS,
         default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        id_column=ExpenseEntry.id,
     )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)

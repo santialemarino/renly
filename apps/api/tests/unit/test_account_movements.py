@@ -69,8 +69,8 @@ def _wire(monkeypatch, *, rows, total=None, balance="100000", newer="0"):
     monkeypatch.setattr(account_movement_service.account_service, "get_account", AsyncMock(return_value=_account()))
     monkeypatch.setattr(
         account_movement_service.account_service,
-        "get_account_balances",
-        AsyncMock(return_value={7: Decimal(balance)}),
+        "get_account_balance",
+        AsyncMock(return_value=Decimal(balance)),
     )
     monkeypatch.setattr(account_movement_service.account_movement_repository, "list_movements", AsyncMock(return_value=rows))
     monkeypatch.setattr(
@@ -97,8 +97,8 @@ class TestRunningBalance:
         # The ledger must not compute a second answer for "what is this account worth" — the top row
         # is the number the accounts table shows, so the two surfaces cannot disagree.
         _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 10, "-2500")], balance="444700")
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert movements[0].balance_after == Decimal("444700")
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert response.items[0].balance_after == Decimal("444700")
 
     @pytest.mark.asyncio
     async def test_each_row_undoes_the_one_above_it(self, monkeypatch):
@@ -111,8 +111,8 @@ class TestRunningBalance:
             ],
             balance="10000",
         )
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert [m.balance_after for m in movements] == [Decimal("10000"), Decimal("12500"), Decimal("11500")]
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert [m.balance_after for m in response.items] == [Decimal("10000"), Decimal("12500"), Decimal("11500")]
 
     @pytest.mark.asyncio
     async def test_walking_the_whole_ledger_down_lands_on_the_opening_balance(self, monkeypatch):
@@ -125,24 +125,49 @@ class TestRunningBalance:
             _row(4, MovementKind.expense, 10, "-12000"),
         ]
         _wire(monkeypatch, rows=rows, balance="278500")
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        oldest = movements[-1]
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        oldest = response.items[-1]
         assert oldest.balance_after - oldest.amount == _account().opening_balance
 
     @pytest.mark.asyncio
     async def test_a_later_page_is_anchored_by_the_movements_above_it(self, monkeypatch):
         # Page 3's first row is not the account's balance — it is the balance minus everything newer,
         # which is the whole reason the repository exposes sum_of_newer_movements.
-        sum_newer = _wire(monkeypatch, rows=[_row(9, MovementKind.expense, 5, "-100")], balance="10000", newer="3000")
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=3, page_size=4)
-        assert movements[0].balance_after == Decimal("7000")
+        sum_newer = _wire(monkeypatch, rows=[_row(9, MovementKind.expense, 5, "-100")], total=12, balance="10000", newer="3000")
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=3, page_size=4)
+        assert response.items[0].balance_after == Decimal("7000")
         assert sum_newer.await_args.kwargs["offset"] == 8
 
     @pytest.mark.asyncio
-    async def test_first_page_skips_the_anchor_query(self, monkeypatch):
+    async def test_page_one_asks_for_no_movements_above_it(self, monkeypatch):
         sum_newer = _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 5, "-100")])
         await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=1, page_size=25)
         assert sum_newer.await_args.kwargs["offset"] == 0
+
+
+class TestPageClamping:
+    @pytest.mark.asyncio
+    async def test_a_page_past_the_end_is_clamped_to_the_last_one(self, monkeypatch):
+        # A stale bookmark, or entries deleted while the user sat on a later page, would otherwise
+        # render "no movements yet" beneath a header showing a non-zero balance, with no page marked
+        # active in the pager. Clamping also keeps OFFSET bounded — Python ints are unbounded, and a
+        # large enough page overflows the int64 bind parameter with a 500 rather than a 422.
+        _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 5, "-100")], total=30)
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=10**20, page_size=25)
+        assert response.page == 2
+        assert account_movement_service.account_movement_repository.list_movements.await_args.kwargs["page"] == 2
+
+    @pytest.mark.asyncio
+    async def test_an_empty_ledger_stays_on_page_one(self, monkeypatch):
+        _wire(monkeypatch, rows=[], total=0)
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=4)
+        assert response.page == 1
+
+    @pytest.mark.asyncio
+    async def test_a_page_within_range_is_left_alone(self, monkeypatch):
+        _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 5, "-100")], total=30)
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page=2, page_size=25)
+        assert response.page == 2
 
 
 class TestFilteredView:
@@ -151,8 +176,8 @@ class TestFilteredView:
         # Under a filter each value would still be true, but consecutive rows would differ by amounts
         # the filter hides — so the column is withheld rather than made to look like broken arithmetic.
         _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 10, "-2500"), _row(2, MovementKind.expense, 5, "-100")])
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, kind=MovementKind.expense)
-        assert [m.balance_after for m in movements] == [None, None]
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, kind=MovementKind.expense)
+        assert [m.balance_after for m in response.items] == [None, None]
 
     @pytest.mark.asyncio
     async def test_a_filter_never_asks_for_the_anchor(self, monkeypatch):
@@ -175,8 +200,8 @@ class TestRowMapping:
     @pytest.mark.asyncio
     async def test_carries_the_accounts_currency_not_a_per_row_one(self, monkeypatch):
         _wire(monkeypatch, rows=[])
-        _, _, currency = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert currency == "ARS"
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert response.currency == "ARS"
 
     @pytest.mark.asyncio
     async def test_transfer_row_keeps_the_other_sides_pair(self, monkeypatch):
@@ -194,20 +219,24 @@ class TestRowMapping:
                 )
             ],
         )
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert (movements[0].counterparty, movements[0].counterparty_amount, movements[0].counterparty_currency) == ("Dolares", Decimal("40"), "USD")
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert (response.items[0].counterparty, response.items[0].counterparty_amount, response.items[0].counterparty_currency) == (
+            "Dolares",
+            Decimal("40"),
+            "USD",
+        )
 
     @pytest.mark.asyncio
     async def test_total_is_the_unpaged_count(self, monkeypatch):
         _wire(monkeypatch, rows=[_row(1, MovementKind.expense, 10, "-1")], total=97)
-        _, total, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page_size=1)
-        assert total == 97
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER, page_size=1)
+        assert response.total == 97
 
     @pytest.mark.asyncio
     async def test_empty_ledger_returns_no_rows_and_no_error(self, monkeypatch):
         _wire(monkeypatch, rows=[])
-        movements, total, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert (movements, total) == ([], 0)
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert (response.items, response.total) == ([], 0)
 
 
 class TestRowIdentity:
@@ -224,13 +253,13 @@ class TestRowIdentity:
                 _row(30, MovementKind.adjustment, 12, "700", source=MovementSource.income),
             ],
         )
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        keys = [(m.source, m.source_id) for m in movements]
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        keys = [(m.source, m.source_id) for m in response.items]
         assert len(set(keys)) == 2
-        assert len({(m.kind, m.source_id) for m in movements}) == 1
+        assert len({(m.kind, m.source_id) for m in response.items}) == 1
 
     @pytest.mark.asyncio
     async def test_source_survives_the_mapping(self, monkeypatch):
         _wire(monkeypatch, rows=[_row(4, MovementKind.settlement, 15, "-8000")])
-        movements, _, _ = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
-        assert movements[0].source is MovementSource.settlement
+        response = await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert response.items[0].source is MovementSource.settlement

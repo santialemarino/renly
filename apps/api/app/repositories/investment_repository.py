@@ -1,15 +1,20 @@
 # Data access for investments.
 
-from sqlalchemy import asc, desc, func
+from sqlalchemy import String, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment import Investment, InvestmentCategory
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.repositories.utils import apply_entry_sort
 
+# Sortable columns for the investments list. `category` is sorted as TEXT rather than as the enum:
+# ORDER BY on a Postgres enum follows its DECLARATION order, which differs between a database built
+# from 01_create_tables.sql and one built by migrations, so the same rows would come back in a
+# different order per environment.
 _SORT_COLUMNS = {
     "name": Investment.name,
-    "category": Investment.category,
+    "category": cast(Investment.category, String),
     "base_currency": Investment.base_currency,
     "broker": Investment.broker,
 }
@@ -41,10 +46,17 @@ async def list_by_user_filtered(
     count_stmt = select(func.count()).select_from(stmt.subquery())
     count_result = await session.execute(count_stmt)
     total = count_result.scalar_one()
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else Investment.id
-    items_stmt = stmt.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
+    # This list is paginated, so the sort needs the id tiebreak too: `category` and `base_currency`
+    # are low-cardinality, and without a total order Postgres may repeat a row across pages or skip it.
+    sorted_stmt = apply_entry_sort(
+        stmt,
+        Investment,
+        sort_by,
+        sort_order,
+        sort_columns=_SORT_COLUMNS,
+        default_order=(Investment.id,),
+    )
+    items_stmt = sorted_stmt.offset((page - 1) * page_size).limit(page_size)
     items_result = await session.execute(items_stmt)
     items = list(items_result.scalars().all())
     return items, total

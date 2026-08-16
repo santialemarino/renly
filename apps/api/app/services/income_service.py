@@ -31,7 +31,7 @@ async def list_income(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
     sort_by: str | None = None,
-    sort_order: str = "desc",
+    sort_order: str = "asc",
     currency: str | None = None,
     page: int = 1,
     page_size: int = 25,

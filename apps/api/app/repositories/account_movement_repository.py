@@ -180,18 +180,18 @@ def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool):
 # EXCLUDE adjustments — a true-up is not money the user earned or spent, and filtering to it is what
 # the 'adjustment' kind is for.
 def _branches(account_id: int, user_id: int, *, kind: MovementKind | None) -> list:
-    if kind is MovementKind.income:
+    if kind == MovementKind.income:
         return [_income_branch(account_id, user_id, adjustments=False)]
-    if kind is MovementKind.expense:
+    if kind == MovementKind.expense:
         return [_expense_branch(account_id, user_id, adjustments=False)]
-    if kind is MovementKind.adjustment:
+    if kind == MovementKind.adjustment:
         return [
             _income_branch(account_id, user_id, adjustments=True),
             _expense_branch(account_id, user_id, adjustments=True),
         ]
-    if kind is MovementKind.settlement:
+    if kind == MovementKind.settlement:
         return [_settlement_branch(account_id, user_id)]
-    if kind is MovementKind.transfer:
+    if kind == MovementKind.transfer:
         return [
             _transfer_branch(account_id, user_id, outgoing=True),
             _transfer_branch(account_id, user_id, outgoing=False),

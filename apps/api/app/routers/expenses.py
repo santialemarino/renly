@@ -53,7 +53,7 @@ async def list_expenses(
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
     sort_by: str | None = Query(default=None, description="Column to sort by (date, amount, category, payment_method)."),
-    sort_order: str = Query(default="desc", description="Sort direction (asc or desc)."),
+    sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
     page: int = Query(default=1, ge=1, description="Page number."),
     page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> ExpenseListResponse:

@@ -22,22 +22,22 @@ class TestApplyEntrySort:
     def test_maps_the_requested_column(self):
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             "amount",
             "asc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert "expense_entries.amount ASC" in _order_by(stmt)
 
     def test_desc_is_honoured(self):
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             "amount",
             "desc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert "expense_entries.amount DESC" in _order_by(stmt)
 
@@ -46,11 +46,11 @@ class TestApplyEntrySort:
         # be skipped entirely — the sort key alone is not a total order.
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             "category",
             "asc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert _order_by(stmt).endswith("expense_entries.id DESC")
 
@@ -59,22 +59,22 @@ class TestApplyEntrySort:
         # built from 01_create_tables.sql and one built by migrations.
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             "category",
             "asc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert "CAST(expense_entries.category AS VARCHAR)" in _order_by(stmt)
 
     def test_no_sort_by_falls_back_to_the_default_order(self):
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             None,
             "desc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert _order_by(stmt) == "expense_entries.date DESC, expense_entries.id DESC"
 
@@ -83,11 +83,11 @@ class TestApplyEntrySort:
         # — worth ignoring, not worth a 422.
         stmt = apply_entry_sort(
             select(ExpenseEntry),
+            ExpenseEntry,
             "notes; drop table",
             "asc",
             sort_columns=EXPENSE_SORT_COLUMNS,
             default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-            id_column=ExpenseEntry.id,
         )
         assert _order_by(stmt) == "expense_entries.date DESC, expense_entries.id DESC"
 
@@ -102,10 +102,10 @@ class TestSortableColumns:
     def test_income_category_also_sorts_as_text(self):
         stmt = apply_entry_sort(
             select(IncomeEntry),
+            IncomeEntry,
             "category",
             "asc",
             sort_columns=INCOME_SORT_COLUMNS,
             default_order=(IncomeEntry.date.desc(), IncomeEntry.id.desc()),
-            id_column=IncomeEntry.id,
         )
         assert "CAST(income_entries.category AS VARCHAR)" in _order_by(stmt)

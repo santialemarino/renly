@@ -53,8 +53,7 @@ def compute_reconciliation_difference(statement_balance: Decimal, computed_balan
 
 # Derived balance of an account at as_of_date: opening_balance (only once the account has opened)
 # plus linked income, minus linked expenses and settlements drawn from it, all dated on or before
-# as_of_date. Mirrors account_service.get_account_summaries but bounded in time — transfers join the
-# union in a later PR, exactly as they will there.
+# as_of_date, plus both transfer legs. Mirrors account_service.get_account_balances but bounded in time.
 async def compute_account_balance_at(
     session: AsyncSession,
     account: Account,

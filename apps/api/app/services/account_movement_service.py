@@ -14,9 +14,12 @@
 # That leaves one failure the anchoring cannot catch — a movement type missing from the union would
 # still produce a self-consistent column, just one with an unexplained jump in it. The invariant that
 # catches it is the walk-down: the oldest row's balance_after minus its own amount must equal the
-# account's opening_balance. It is asserted in the tests and is why the union's per-branch
+# account's opening_balance. Because every balance test mocks the repositories, that invariant is
+# only meaningful against a real database and is verified there by hand (see the PR's live run) —
+# the same gap the deferred e2e harness would close, and the reason the union's per-branch
 # opening_date bound has to match the balance sums exactly.
 
+import math
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,12 +27,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain.account_movement import AccountMovement, MovementKind, MovementSource
 from app.models.user import User
 from app.repositories import account_movement_repository
+from app.schemas.account_movement import AccountMovementListResponse, AccountMovementResponse
 from app.services import account_service
 
-ZERO = Decimal(0)
 
-
-# One page of an account's ledger, newest first, plus the total for pagination. Verifies ownership.
+# One page of an account's ledger, newest first. Verifies ownership.
+#
+# `page` is CLAMPED to the last page that has rows: a stale bookmark or a deletion that shortened the
+# ledger would otherwise render "no movements yet" under a header showing a non-zero balance, with no
+# page marked active in the pager. Clamping also keeps the OFFSET bounded — Python ints are unbounded
+# and a large enough page overflows the int64 bind parameter.
 #
 # `balance_after` is populated only on the unfiltered ledger. Under a kind filter each row's balance
 # would still be true, but consecutive visible rows would differ by amounts the filter hides, which
@@ -42,37 +49,42 @@ async def list_account_movements(
     kind: MovementKind | None = None,
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[AccountMovement], int, str]:
+) -> AccountMovementListResponse:
     account = await account_service.get_account(session, account_id, user)
-    rows = await account_movement_repository.list_movements(session, account_id, user.id, kind=kind, page=page, page_size=page_size)
     total = await account_movement_repository.count_movements(session, account_id, user.id, kind=kind)
+    page = min(page, max(1, math.ceil(total / page_size)))
+    rows = await account_movement_repository.list_movements(session, account_id, user.id, kind=kind, page=page, page_size=page_size)
 
     running = None
     if kind is None:
-        balances = await account_service.get_account_balances(session, [account], user.id)
+        balance = await account_service.get_account_balance(session, account, user.id)
         newer = await account_movement_repository.sum_of_newer_movements(session, account_id, user.id, offset=(page - 1) * page_size)
         # The balance immediately after the page's FIRST row: everything newer than it, undone.
-        running = balances.get(account_id, account.opening_balance) - newer
+        running = balance - newer
 
-    movements = []
+    items = []
     for row in rows:
-        amount = Decimal(str(row.amount))
-        movements.append(
-            AccountMovement(
-                source=MovementSource(row.source),
-                source_id=row.source_id,
-                kind=MovementKind(row.kind),
-                date=row.date,
-                amount=amount,
-                balance_after=running,
-                category=row.category,
-                counterparty=row.counterparty,
-                counterparty_amount=Decimal(str(row.counterparty_amount)) if row.counterparty_amount is not None else None,
-                counterparty_currency=row.counterparty_currency,
-                notes=row.notes,
-            )
+        movement = AccountMovement(
+            source=MovementSource(row.source),
+            source_id=row.source_id,
+            kind=MovementKind(row.kind),
+            date=row.date,
+            amount=row.amount,
+            balance_after=running,
+            category=row.category,
+            counterparty=row.counterparty,
+            counterparty_amount=row.counterparty_amount,
+            counterparty_currency=row.counterparty_currency,
+            notes=row.notes,
         )
+        items.append(AccountMovementResponse.model_validate(movement))
         if running is not None:
-            running -= amount
+            running -= Decimal(row.amount)
 
-    return movements, total, account.currency
+    return AccountMovementListResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        currency=account.currency,
+    )
