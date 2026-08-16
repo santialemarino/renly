@@ -1,35 +1,12 @@
 {
   "common": {
-    "appName": "Renly",
-    "sampleData": {
-      "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",
-      "clear": "Limpiar",
-      "clearError": "No se pudieron limpiar los datos de ejemplo. Probá de nuevo.",
-      "actions": "Acciones",
-      "view": "Ver",
-      "detailNotice": "Datos de ejemplo — agregá los tuyos para reemplazarlos."
+    "accountField": {
+      "placeholder": "Seleccioná una cuenta",
+      "none": "Ninguna",
+      "noneForCurrency": "Sin cuentas en {currency}",
+      "archived": "{name} (archivada)"
     },
-    "goToDashboard": "Ir al Dashboard",
-    "notFound": {
-      "title": "Página no disponible",
-      "description": "La información solicitada no está disponible en este momento.\nTe invitamos a volver a la página de inicio.",
-      "cta": {
-        "label": "Ir a la página de inicio"
-      }
-    },
-    "form": {
-      "errors": {
-        "required": "Este campo es requerido",
-        "invalidEmail": "Ingresá un correo electrónico válido",
-        "passwordMinLength": "La contraseña debe tener al menos {length} caracteres",
-        "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
-        "passwordRequirements": "La contraseña no cumple los requisitos",
-        "passwordMismatch": "Las contraseñas no coinciden",
-        "serverError": "Algo salió mal. Intentá de nuevo más tarde.",
-        "tooLong": "Debe tener {max} caracteres o menos."
-      },
-      "togglePassword": "Mostrar contraseña"
-    },
+    "allCategories": "Todas las categorías",
     "amountMismatch": {
       "obligation": {
         "title": "¿Actualizar monto esperado?",
@@ -50,6 +27,7 @@
         "updateError": "No se pudo actualizar el monto de la suscripción."
       }
     },
+    "appName": "Renly",
     "categories": {
       "account_adjustment": "Ajuste de Cuenta",
       "bonus": "Bonificaciones",
@@ -93,6 +71,92 @@
       "uncategorized": "Sin categoría",
       "utilities": "Servicios"
     },
+    "checkEmail": {
+      "title": "Revisá tu correo",
+      "description": "Si {email} se puede usar, le enviamos un mensaje con los próximos pasos. Abrilo para continuar y revisá el spam si no lo ves en tu bandeja de entrada.",
+      "resend": "Reenviar correo",
+      "resending": "Enviando…",
+      "resent": "Enviado: revisá tu bandeja de entrada.",
+      "backToLogin": "Volver al inicio de sesión",
+      "resendIn": "Reenviar en {seconds}s"
+    },
+    "combobox": {
+      "empty": "No se encontraron resultados."
+    },
+    "cookieConsent": {
+      "message": "Renly usa cookies esenciales para mantener tu sesión y recordar tus preferencias.\nNo las usamos para publicidad ni seguimiento de terceros.",
+      "accept": "Entendido",
+      "learnMore": "Política de Privacidad"
+    },
+    "currency": {
+      "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
+      "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
+      "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Mostrando valores en moneda original. Soporte disponible pronto.",
+      "pinnedGroupLabel": "Comunes",
+      "preferredGroupLabel": "Preferidas",
+      "otherGroupLabel": "Otras monedas"
+    },
+    "currencyHint": {
+      "message": "Los valores de meses anteriores se convierten al tipo de cambio de hoy, no al histórico. Los montos pueden diferir de lo que valían en su momento."
+    },
+    "export": {
+      "label": "Exportar",
+      "loading": "Preparando…",
+      "success": "Tu exportación de datos fue descargada."
+    },
+    "form": {
+      "errors": {
+        "required": "Este campo es requerido",
+        "invalidEmail": "Ingresá un correo electrónico válido",
+        "passwordMinLength": "La contraseña debe tener al menos {length} caracteres",
+        "passwordMaxLength": "La contraseña debe tener menos de {length} caracteres",
+        "passwordRequirements": "La contraseña no cumple los requisitos",
+        "passwordMismatch": "Las contraseñas no coinciden",
+        "serverError": "Algo salió mal. Intentá de nuevo más tarde.",
+        "tooLong": "Debe tener {max} caracteres o menos."
+      },
+      "togglePassword": "Mostrar contraseña"
+    },
+    "goToDashboard": "Ir al Dashboard",
+    "groupFilter": {
+      "all": "Todos los grupos",
+      "selected": "Grupos ({count})",
+      "search": "Buscar grupos...",
+      "empty": "No se encontraron grupos."
+    },
+    "learnMore": "Más información",
+    "lockedRow": {
+      "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
+      "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
+    },
+    "nextCycleHint": "· próximo {date}",
+    "notFound": {
+      "title": "Página no disponible",
+      "description": "La información solicitada no está disponible en este momento.\nTe invitamos a volver a la página de inicio.",
+      "cta": {
+        "label": "Ir a la página de inicio"
+      }
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "passwordMeter": {
+      "title": "Fortaleza",
+      "strength": {
+        "strong": "Fuerte",
+        "moderate": "Moderada",
+        "weak": "Débil"
+      },
+      "requirements": {
+        "title": "La contraseña debe incluir:",
+        "characters": "Al menos {length} caracteres",
+        "uppercase": "Una letra mayúscula",
+        "lowercase": "Una letra minúscula",
+        "number": "Un número",
+        "special": "Un carácter especial (!@#$%^&*)"
+      }
+    },
     "paymentMethod": {
       "label": "Método de pago",
       "placeholder": "Seleccioná un método",
@@ -112,71 +176,9 @@
         "addCard": "Agregar tarjeta"
       }
     },
-    "allCategories": "Todas las categorías",
-    "groupFilter": {
-      "all": "Todos los grupos",
-      "selected": "Grupos ({count})",
-      "search": "Buscar grupos...",
-      "empty": "No se encontraron grupos."
-    },
-    "combobox": {
-      "empty": "No se encontraron resultados."
-    },
     "period": {
       "monthSuffix": "M",
       "yearSuffix": "A"
-    },
-    "currencyHint": {
-      "message": "Los valores de meses anteriores se convierten al tipo de cambio de hoy, no al histórico. Los montos pueden diferir de lo que valían en su momento."
-    },
-    "currency": {
-      "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
-      "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
-      "unsupportedSwitch": "La conversión a {currency} no está disponible aún. Mostrando valores en moneda original. Soporte disponible pronto.",
-      "pinnedGroupLabel": "Comunes",
-      "preferredGroupLabel": "Preferidas",
-      "otherGroupLabel": "Otras monedas"
-    },
-    "typeToConfirm": {
-      "label": "Escribí \"{name}\" para confirmar",
-      "cancel": "Cancelar",
-      "confirm": "Confirmar",
-      "loading": "Procesando..."
-    },
-    "nextCycleHint": "· próximo {date}",
-    "checkEmail": {
-      "title": "Revisá tu correo",
-      "description": "Si {email} se puede usar, le enviamos un mensaje con los próximos pasos. Abrilo para continuar y revisá el spam si no lo ves en tu bandeja de entrada.",
-      "resend": "Reenviar correo",
-      "resending": "Enviando…",
-      "resent": "Enviado: revisá tu bandeja de entrada.",
-      "backToLogin": "Volver al inicio de sesión",
-      "resendIn": "Reenviar en {seconds}s"
-    },
-    "passwordMeter": {
-      "title": "Fortaleza",
-      "strength": {
-        "strong": "Fuerte",
-        "moderate": "Moderada",
-        "weak": "Débil"
-      },
-      "requirements": {
-        "title": "La contraseña debe incluir:",
-        "characters": "Al menos {length} caracteres",
-        "uppercase": "Una letra mayúscula",
-        "lowercase": "Una letra minúscula",
-        "number": "Un número",
-        "special": "Un carácter especial (!@#$%^&*)"
-      }
-    },
-    "cookieConsent": {
-      "message": "Renly usa cookies esenciales para mantener tu sesión y recordar tus preferencias.\nNo las usamos para publicidad ni seguimiento de terceros.",
-      "accept": "Entendido",
-      "learnMore": "Política de Privacidad"
-    },
-    "publicHeader": {
-      "login": "Iniciar sesión",
-      "signup": "Crear cuenta"
     },
     "publicFooter": {
       "tagline": "Finanzas personales para inversores argentinos.",
@@ -189,22 +191,24 @@
       },
       "rights": "Todos los derechos reservados."
     },
+    "publicHeader": {
+      "login": "Iniciar sesión",
+      "signup": "Crear cuenta"
+    },
     "requestAccess": "Solicitar acceso",
-    "learnMore": "Más información",
-    "export": {
-      "label": "Exportar",
-      "loading": "Preparando…",
-      "success": "Tu exportación de datos fue descargada."
+    "sampleData": {
+      "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",
+      "clear": "Limpiar",
+      "clearError": "No se pudieron limpiar los datos de ejemplo. Probá de nuevo.",
+      "actions": "Acciones",
+      "view": "Ver",
+      "detailNotice": "Datos de ejemplo — agregá los tuyos para reemplazarlos."
     },
-    "accountField": {
-      "placeholder": "Seleccioná una cuenta",
-      "none": "Ninguna",
-      "noneForCurrency": "Sin cuentas en {currency}",
-      "archived": "{name} (archivada)"
-    },
-    "lockedRow": {
-      "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
-      "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
+    "typeToConfirm": {
+      "label": "Escribí \"{name}\" para confirmar",
+      "cancel": "Cancelar",
+      "confirm": "Confirmar",
+      "loading": "Procesando..."
     }
   },
   "login": {
@@ -512,10 +516,6 @@
       "edit": "Editar",
       "delete": "Eliminar"
     },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
-    },
     "form": {
       "titleCreate": "Agregar ingreso",
       "titleEdit": "Editar ingreso",
@@ -590,10 +590,6 @@
     "actions": {
       "edit": "Editar",
       "delete": "Eliminar"
-    },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
     },
     "paymentMethods": {
       "cash": "Efectivo",
@@ -886,47 +882,25 @@
     }
   },
   "accounts": {
-    "metadata": {
-      "title": "Cuentas",
-      "description": "Gestioná tus cuentas de efectivo y bancarias"
-    },
-    "title": "Cuentas",
-    "subtitle": "Seguí tus saldos de efectivo, banco y billeteras — la base de tu patrimonio.",
-    "reconcileHint": "Renly refleja lo que cargás: conciliá una cuenta cuando quieras para que coincida con lo que muestra de verdad.",
-    "toolbar": {
-      "searchPlaceholder": "Buscar cuentas...",
-      "add": "Agregar cuenta",
-      "showArchived": "Mostrar archivadas"
-    },
-    "table": {
-      "name": "Nombre",
-      "type": "Tipo",
-      "currency": "Moneda",
-      "balance": "Saldo",
-      "openingDate": "Fecha de apertura",
-      "lastReconciled": "Última conciliación",
-      "neverReconciled": "Nunca",
-      "actions": "Acciones",
-      "empty": "No se encontraron cuentas.",
-      "emptyTitle": "Agregá tu primera cuenta",
-      "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés."
-    },
-    "types": {
-      "cash": "Efectivo",
-      "bank": "Banco",
-      "wallet": "Billetera",
-      "other": "Otra"
-    },
     "actions": {
-      "reconcile": "Conciliar",
-      "edit": "Editar",
-      "delete": "Eliminar",
       "archive": "Archivar",
-      "unarchive": "Desarchivar",
-      "archiveSuccess": "Cuenta archivada.",
       "archiveError": "No se pudo archivar la cuenta.",
+      "archiveSuccess": "Cuenta archivada.",
+      "delete": "Eliminar",
+      "edit": "Editar",
+      "reconcile": "Conciliar",
+      "unarchive": "Desarchivar",
+      "unarchiveError": "No se pudo desarchivar la cuenta.",
       "unarchiveSuccess": "Cuenta desarchivada.",
-      "unarchiveError": "No se pudo desarchivar la cuenta."
+      "viewLedger": "Ver detalle"
+    },
+    "delete": {
+      "title": "Eliminar cuenta",
+      "confirm": "¿Seguro que querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
+      "confirmButton": "Eliminar",
+      "deleting": "Eliminando...",
+      "success": "Cuenta eliminada.",
+      "error": "No se pudo eliminar la cuenta."
     },
     "form": {
       "titleCreate": "Agregar cuenta",
@@ -967,14 +941,51 @@
       "updateSuccess": "Cuenta actualizada.",
       "saveError": "No se pudo guardar la cuenta."
     },
-    "delete": {
-      "title": "Eliminar cuenta",
-      "confirm": "¿Seguro que querés eliminar \"{name}\"? Esta acción no se puede deshacer.",
-      "confirmButton": "Eliminar",
-      "deleting": "Eliminando...",
-      "success": "Cuenta eliminada.",
-      "error": "No se pudo eliminar la cuenta."
+    "ledger": {
+      "back": "Cuentas",
+      "archived": "Archivada",
+      "subtitle": "{type} · {currency}",
+      "stats": {
+        "balance": "Saldo actual",
+        "opened": "Apertura",
+        "lastReconciled": "Última conciliación"
+      },
+      "filter": {
+        "all": "Todos los movimientos"
+      },
+      "kinds": {
+        "income": "Ingreso",
+        "expense": "Gasto",
+        "transfer": "Transferencia",
+        "settlement": "Pago de tarjeta",
+        "adjustment": "Conciliación"
+      },
+      "rows": {
+        "settlement": "Pago a {card}",
+        "transferOut": "Enviado a {account}",
+        "transferIn": "Recibido de {account}",
+        "crossCurrency": "{amount} del otro lado"
+      },
+      "table": {
+        "date": "Fecha",
+        "movement": "Movimiento",
+        "notes": "Notas",
+        "amount": "Monto",
+        "balance": "Saldo",
+        "total": "{total, plural, one {# movimiento} other {# movimientos}}",
+        "empty": "Todavía no hay movimientos.",
+        "emptyFiltered": "No hay movimientos de este tipo.",
+        "emptyTitle": "Todavía no se movió nada",
+        "emptyDescription": "Los ingresos, gastos, transferencias y pagos de tarjeta vinculados a esta cuenta van a aparecer acá.",
+        "readOnlyNote": "Los movimientos se editan donde se crearon: Gastos, Ingresos, la tarjeta que pagaron o las transferencias de esta cuenta.",
+        "filteredNote": "El saldo acumulado se muestra en el detalle sin filtrar, donde se ve cada movimiento entre dos filas."
+      }
     },
+    "metadata": {
+      "title": "Cuentas",
+      "description": "Gestioná tus cuentas de efectivo y bancarias"
+    },
+    "reconcileHint": "Renly refleja lo que cargás: conciliá una cuenta cuando quieras para que coincida con lo que muestra de verdad.",
     "reconciliations": {
       "title": "Conciliaciones",
       "subtitle": "Ingresá el saldo real que muestra tu banco o billetera y Renly agrega un ajuste para igualarlo.",
@@ -1024,6 +1035,26 @@
         "success": "Conciliación eliminada.",
         "error": "No se pudo eliminar la conciliación."
       }
+    },
+    "subtitle": "Seguí tus saldos de efectivo, banco y billeteras — la base de tu patrimonio.",
+    "table": {
+      "name": "Nombre",
+      "type": "Tipo",
+      "currency": "Moneda",
+      "balance": "Saldo",
+      "openingDate": "Fecha de apertura",
+      "lastReconciled": "Última conciliación",
+      "neverReconciled": "Nunca",
+      "actions": "Acciones",
+      "empty": "No se encontraron cuentas.",
+      "emptyTitle": "Agregá tu primera cuenta",
+      "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés."
+    },
+    "title": "Cuentas",
+    "toolbar": {
+      "searchPlaceholder": "Buscar cuentas...",
+      "add": "Agregar cuenta",
+      "showArchived": "Mostrar archivadas"
     },
     "transfers": {
       "title": "Transferencias",
@@ -1085,6 +1116,12 @@
         "success": "Transferencia eliminada.",
         "error": "No se pudo eliminar la transferencia."
       }
+    },
+    "types": {
+      "cash": "Efectivo",
+      "bank": "Banco",
+      "wallet": "Billetera",
+      "other": "Otra"
     }
   },
   "subscriptions": {
@@ -1543,10 +1580,6 @@
       "edit": "Editar",
       "archive": "Archivar",
       "unarchive": "Desarchivar"
-    },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
     },
     "form": {
       "titleCreate": "Agregar inversión",

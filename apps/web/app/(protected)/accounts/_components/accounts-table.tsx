@@ -9,6 +9,7 @@ import {
   Landmark,
   Pencil,
   Scale,
+  ScrollText,
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -26,7 +27,7 @@ import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/acc
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
-import { ROUTES } from '@/config/routes';
+import { accountLedgerPath, ROUTES } from '@/config/routes';
 import type { Account, AccountSortField } from '@/lib/api/accounts';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -128,7 +129,7 @@ export function AccountsTable({
                 onSort={handleSortChange}
               />
               <TableHead>{t('table.lastReconciled')}</TableHead>
-              <TableHead className="w-36 text-center">{t('table.actions')}</TableHead>
+              <TableHead className="w-44 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -175,6 +176,13 @@ export function AccountsTable({
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         {!a.isActive ? (
                           <div className="flex items-center justify-center gap-x-1">
+                            {/* An archived account's history is still worth reading. */}
+                            <RowActionButton
+                              icon={ScrollText}
+                              tooltip={t('actions.viewLedger')}
+                              ariaLabel="View ledger"
+                              onClick={() => router.push(accountLedgerPath(a.id))}
+                            />
                             <RowActionButton
                               icon={ArchiveRestore}
                               tooltip={t('actions.unarchive')}
@@ -192,6 +200,12 @@ export function AccountsTable({
                           </div>
                         ) : (
                           <div className="flex items-center justify-center gap-x-1">
+                            <RowActionButton
+                              icon={ScrollText}
+                              tooltip={t('actions.viewLedger')}
+                              ariaLabel="View ledger"
+                              onClick={() => router.push(accountLedgerPath(a.id))}
+                            />
                             <RowActionButton
                               icon={Scale}
                               tooltip={t('actions.reconcile')}

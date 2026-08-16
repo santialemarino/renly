@@ -84,3 +84,13 @@ export async function getAccounts(params: GetAccountsParams = {}): Promise<Accou
   const raw: AccountRaw[] = await res.json();
   return raw.map(mapAccount);
 }
+
+// One account with its derived balance. Returns null for an id that isn't the caller's, so the
+// ledger page can render a real 404 rather than leaking that the account exists for someone else.
+export async function getAccount(accountId: number): Promise<Account | null> {
+  const res = await authenticatedFetch(`/accounts/${accountId}`, { method: 'GET' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch account');
+  const raw: AccountRaw = await res.json();
+  return mapAccount(raw);
+}

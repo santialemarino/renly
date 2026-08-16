@@ -1,35 +1,12 @@
 {
   "common": {
-    "appName": "Renly",
-    "sampleData": {
-      "banner": "This is sample data to show you around. Add your own to replace it.",
-      "clear": "Clear",
-      "clearError": "Couldn't clear the sample data. Please try again.",
-      "actions": "Actions",
-      "view": "View",
-      "detailNotice": "Sample data — add your own to replace it."
+    "accountField": {
+      "placeholder": "Select an account",
+      "none": "None",
+      "noneForCurrency": "No {currency} accounts",
+      "archived": "{name} (archived)"
     },
-    "goToDashboard": "Go to Dashboard",
-    "notFound": {
-      "title": "Page not available",
-      "description": "The requested information is not available at this time.\nWe invite you to return to the homepage.",
-      "cta": {
-        "label": "Go to Homepage"
-      }
-    },
-    "form": {
-      "errors": {
-        "required": "This field is required",
-        "invalidEmail": "Please enter a valid email address",
-        "passwordMinLength": "Password must be at least {length} characters",
-        "passwordMaxLength": "Password must be less than {length} characters",
-        "passwordRequirements": "Password does not meet the requirements",
-        "passwordMismatch": "Passwords do not match",
-        "serverError": "Something went wrong. Please try again later.",
-        "tooLong": "Must be {max} characters or fewer."
-      },
-      "togglePassword": "Show password"
-    },
+    "allCategories": "All categories",
     "amountMismatch": {
       "obligation": {
         "title": "Update expected amount?",
@@ -50,6 +27,7 @@
         "updateError": "Failed to update subscription amount."
       }
     },
+    "appName": "Renly",
     "categories": {
       "account_adjustment": "Account Adjustment",
       "bonus": "Bonuses",
@@ -93,6 +71,92 @@
       "uncategorized": "Uncategorized",
       "utilities": "Utilities"
     },
+    "checkEmail": {
+      "title": "Check your email",
+      "description": "If {email} can be used, we've sent it a message with what to do next. Open it to continue, and check your spam folder if it's not in your inbox.",
+      "resend": "Resend email",
+      "resending": "Sending…",
+      "resent": "Sent — check your inbox.",
+      "backToLogin": "Back to log in",
+      "resendIn": "Resend in {seconds}s"
+    },
+    "combobox": {
+      "empty": "No results found."
+    },
+    "cookieConsent": {
+      "message": "Renly uses essential cookies to keep you signed in and remember your preferences.\nWe don't use them for advertising or third-party tracking.",
+      "accept": "Got it",
+      "learnMore": "Privacy Policy"
+    },
+    "currency": {
+      "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
+      "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
+      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
+      "pinnedGroupLabel": "Common",
+      "preferredGroupLabel": "Preferred",
+      "otherGroupLabel": "Other currencies"
+    },
+    "currencyHint": {
+      "message": "Values from past months are converted at today's exchange rate, not the historical rate. Amounts may differ from what they were worth at the time."
+    },
+    "export": {
+      "label": "Export",
+      "loading": "Preparing…",
+      "success": "Your data export has been downloaded."
+    },
+    "form": {
+      "errors": {
+        "required": "This field is required",
+        "invalidEmail": "Please enter a valid email address",
+        "passwordMinLength": "Password must be at least {length} characters",
+        "passwordMaxLength": "Password must be less than {length} characters",
+        "passwordRequirements": "Password does not meet the requirements",
+        "passwordMismatch": "Passwords do not match",
+        "serverError": "Something went wrong. Please try again later.",
+        "tooLong": "Must be {max} characters or fewer."
+      },
+      "togglePassword": "Show password"
+    },
+    "goToDashboard": "Go to Dashboard",
+    "groupFilter": {
+      "all": "All groups",
+      "selected": "Groups ({count})",
+      "search": "Search groups...",
+      "empty": "No groups found."
+    },
+    "learnMore": "Learn more",
+    "lockedRow": {
+      "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
+      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
+    },
+    "nextCycleHint": "· next {date}",
+    "notFound": {
+      "title": "Page not available",
+      "description": "The requested information is not available at this time.\nWe invite you to return to the homepage.",
+      "cta": {
+        "label": "Go to Homepage"
+      }
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "passwordMeter": {
+      "title": "Strength",
+      "strength": {
+        "strong": "Strong",
+        "moderate": "Moderate",
+        "weak": "Weak"
+      },
+      "requirements": {
+        "title": "Password must include:",
+        "characters": "At least {length} characters",
+        "uppercase": "One uppercase letter",
+        "lowercase": "One lowercase letter",
+        "number": "One number",
+        "special": "One special character (!@#$%^&*)"
+      }
+    },
     "paymentMethod": {
       "label": "Payment method",
       "placeholder": "Select a method",
@@ -112,71 +176,9 @@
         "addCard": "Add a card"
       }
     },
-    "allCategories": "All categories",
-    "groupFilter": {
-      "all": "All groups",
-      "selected": "Groups ({count})",
-      "search": "Search groups...",
-      "empty": "No groups found."
-    },
-    "combobox": {
-      "empty": "No results found."
-    },
     "period": {
       "monthSuffix": "M",
       "yearSuffix": "Y"
-    },
-    "currencyHint": {
-      "message": "Values from past months are converted at today's exchange rate, not the historical rate. Amounts may differ from what they were worth at the time."
-    },
-    "currency": {
-      "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
-      "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
-      "unsupportedSwitch": "Conversion to {currency} is not available yet. Showing values in original currency. Support coming soon.",
-      "pinnedGroupLabel": "Common",
-      "preferredGroupLabel": "Preferred",
-      "otherGroupLabel": "Other currencies"
-    },
-    "typeToConfirm": {
-      "label": "Type \"{name}\" to confirm",
-      "cancel": "Cancel",
-      "confirm": "Confirm",
-      "loading": "Processing..."
-    },
-    "nextCycleHint": "· next {date}",
-    "checkEmail": {
-      "title": "Check your email",
-      "description": "If {email} can be used, we've sent it a message with what to do next. Open it to continue, and check your spam folder if it's not in your inbox.",
-      "resend": "Resend email",
-      "resending": "Sending…",
-      "resent": "Sent — check your inbox.",
-      "backToLogin": "Back to log in",
-      "resendIn": "Resend in {seconds}s"
-    },
-    "passwordMeter": {
-      "title": "Strength",
-      "strength": {
-        "strong": "Strong",
-        "moderate": "Moderate",
-        "weak": "Weak"
-      },
-      "requirements": {
-        "title": "Password must include:",
-        "characters": "At least {length} characters",
-        "uppercase": "One uppercase letter",
-        "lowercase": "One lowercase letter",
-        "number": "One number",
-        "special": "One special character (!@#$%^&*)"
-      }
-    },
-    "cookieConsent": {
-      "message": "Renly uses essential cookies to keep you signed in and remember your preferences.\nWe don't use them for advertising or third-party tracking.",
-      "accept": "Got it",
-      "learnMore": "Privacy Policy"
-    },
-    "publicHeader": {
-      "login": "Log in",
-      "signup": "Sign up"
     },
     "publicFooter": {
       "tagline": "Personal finance for Argentine investors.",
@@ -189,22 +191,24 @@
       },
       "rights": "All rights reserved."
     },
+    "publicHeader": {
+      "login": "Log in",
+      "signup": "Sign up"
+    },
     "requestAccess": "Request access",
-    "learnMore": "Learn more",
-    "export": {
-      "label": "Export",
-      "loading": "Preparing…",
-      "success": "Your data export has been downloaded."
+    "sampleData": {
+      "banner": "This is sample data to show you around. Add your own to replace it.",
+      "clear": "Clear",
+      "clearError": "Couldn't clear the sample data. Please try again.",
+      "actions": "Actions",
+      "view": "View",
+      "detailNotice": "Sample data — add your own to replace it."
     },
-    "accountField": {
-      "placeholder": "Select an account",
-      "none": "None",
-      "noneForCurrency": "No {currency} accounts",
-      "archived": "{name} (archived)"
-    },
-    "lockedRow": {
-      "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
-      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
+    "typeToConfirm": {
+      "label": "Type \"{name}\" to confirm",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "loading": "Processing..."
     }
   },
   "login": {
@@ -512,10 +516,6 @@
       "edit": "Edit",
       "delete": "Delete"
     },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
-    },
     "form": {
       "titleCreate": "Add income",
       "titleEdit": "Edit income",
@@ -590,10 +590,6 @@
     "actions": {
       "edit": "Edit",
       "delete": "Delete"
-    },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -886,47 +882,25 @@
     }
   },
   "accounts": {
-    "metadata": {
-      "title": "Accounts",
-      "description": "Manage your cash and bank accounts"
-    },
-    "title": "Accounts",
-    "subtitle": "Track your cash, bank, and wallet balances — the foundation of your net worth.",
-    "reconcileHint": "Renly reflects what you enter — reconcile an account any time to match what it actually shows.",
-    "toolbar": {
-      "searchPlaceholder": "Search accounts...",
-      "add": "Add account",
-      "showArchived": "Show archived"
-    },
-    "table": {
-      "name": "Name",
-      "type": "Type",
-      "currency": "Currency",
-      "balance": "Balance",
-      "openingDate": "Opening date",
-      "lastReconciled": "Last reconciled",
-      "neverReconciled": "Never",
-      "actions": "Actions",
-      "empty": "No accounts found.",
-      "emptyTitle": "Add your first account",
-      "emptyDescription": "Track your cash, bank, and wallet balances so your net worth reflects the money you actually hold."
-    },
-    "types": {
-      "cash": "Cash",
-      "bank": "Bank",
-      "wallet": "Wallet",
-      "other": "Other"
-    },
     "actions": {
-      "reconcile": "Reconcile",
-      "edit": "Edit",
-      "delete": "Delete",
       "archive": "Archive",
-      "unarchive": "Unarchive",
-      "archiveSuccess": "Account archived.",
       "archiveError": "Failed to archive account.",
+      "archiveSuccess": "Account archived.",
+      "delete": "Delete",
+      "edit": "Edit",
+      "reconcile": "Reconcile",
+      "unarchive": "Unarchive",
+      "unarchiveError": "Failed to unarchive account.",
       "unarchiveSuccess": "Account unarchived.",
-      "unarchiveError": "Failed to unarchive account."
+      "viewLedger": "View ledger"
+    },
+    "delete": {
+      "title": "Delete account",
+      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
+      "confirmButton": "Delete",
+      "deleting": "Deleting...",
+      "success": "Account deleted.",
+      "error": "Failed to delete account."
     },
     "form": {
       "titleCreate": "Add account",
@@ -967,14 +941,51 @@
       "updateSuccess": "Account updated.",
       "saveError": "Failed to save account."
     },
-    "delete": {
-      "title": "Delete account",
-      "confirm": "Are you sure you want to delete \"{name}\"? This action cannot be undone.",
-      "confirmButton": "Delete",
-      "deleting": "Deleting...",
-      "success": "Account deleted.",
-      "error": "Failed to delete account."
+    "ledger": {
+      "back": "Accounts",
+      "archived": "Archived",
+      "subtitle": "{type} · {currency}",
+      "stats": {
+        "balance": "Current balance",
+        "opened": "Opened",
+        "lastReconciled": "Last reconciled"
+      },
+      "filter": {
+        "all": "All movements"
+      },
+      "kinds": {
+        "income": "Income",
+        "expense": "Expense",
+        "transfer": "Transfer",
+        "settlement": "Card payment",
+        "adjustment": "Reconciliation"
+      },
+      "rows": {
+        "settlement": "Payment to {card}",
+        "transferOut": "Sent to {account}",
+        "transferIn": "Received from {account}",
+        "crossCurrency": "{amount} on the other side"
+      },
+      "table": {
+        "date": "Date",
+        "movement": "Movement",
+        "notes": "Notes",
+        "amount": "Amount",
+        "balance": "Balance",
+        "total": "{total, plural, one {# movement} other {# movements}}",
+        "empty": "No movements yet.",
+        "emptyFiltered": "No movements of this kind.",
+        "emptyTitle": "Nothing has moved yet",
+        "emptyDescription": "Income, expenses, transfers and card payments linked to this account will appear here.",
+        "readOnlyNote": "Movements are edited where they were created — Expenses, Income, the card they paid, or this account's transfers.",
+        "filteredNote": "The running balance is shown on the unfiltered ledger, where every movement between two rows is visible."
+      }
     },
+    "metadata": {
+      "title": "Accounts",
+      "description": "Manage your cash and bank accounts"
+    },
+    "reconcileHint": "Renly reflects what you enter — reconcile an account any time to match what it actually shows.",
     "reconciliations": {
       "title": "Reconciliations",
       "subtitle": "Enter the balance your bank or wallet actually shows and Renly posts one adjustment to match it.",
@@ -1024,6 +1035,26 @@
         "success": "Reconciliation deleted.",
         "error": "Failed to delete the reconciliation."
       }
+    },
+    "subtitle": "Track your cash, bank, and wallet balances — the foundation of your net worth.",
+    "table": {
+      "name": "Name",
+      "type": "Type",
+      "currency": "Currency",
+      "balance": "Balance",
+      "openingDate": "Opening date",
+      "lastReconciled": "Last reconciled",
+      "neverReconciled": "Never",
+      "actions": "Actions",
+      "empty": "No accounts found.",
+      "emptyTitle": "Add your first account",
+      "emptyDescription": "Track your cash, bank, and wallet balances so your net worth reflects the money you actually hold."
+    },
+    "title": "Accounts",
+    "toolbar": {
+      "searchPlaceholder": "Search accounts...",
+      "add": "Add account",
+      "showArchived": "Show archived"
     },
     "transfers": {
       "title": "Transfers",
@@ -1085,6 +1116,12 @@
         "success": "Transfer deleted.",
         "error": "Couldn't delete the transfer."
       }
+    },
+    "types": {
+      "cash": "Cash",
+      "bank": "Bank",
+      "wallet": "Wallet",
+      "other": "Other"
     }
   },
   "subscriptions": {
@@ -1543,10 +1580,6 @@
       "edit": "Edit",
       "archive": "Archive",
       "unarchive": "Unarchive"
-    },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
     },
     "form": {
       "titleCreate": "Add investment",
