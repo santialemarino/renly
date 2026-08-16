@@ -104,7 +104,8 @@
       },
       "creditCard": {
         "label": "Tarjeta de crédito",
-        "placeholder": "Seleccioná una tarjeta"
+        "placeholder": "Seleccioná una tarjeta",
+        "archived": "{name} (archivada)"
       },
       "noCards": {
         "message": "Todavía no tenés ninguna tarjeta de crédito.",

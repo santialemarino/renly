@@ -11,11 +11,16 @@ import type { Account } from '@/lib/api/accounts';
 
 interface CreditCardsToolbarProps {
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   // Accounts the card's optional default funding account can be picked from.
   accounts?: Account[];
 }
 
-export function CreditCardsToolbar({ preferredCurrencies, accounts }: CreditCardsToolbarProps) {
+export function CreditCardsToolbar({
+  preferredCurrencies,
+  supportedCurrencies,
+  accounts,
+}: CreditCardsToolbarProps) {
   const t = useTranslations('creditCards');
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -33,6 +38,7 @@ export function CreditCardsToolbar({ preferredCurrencies, accounts }: CreditCard
         open={createOpen}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         accounts={accounts}
         onSuccess={() => router.refresh()}
       />

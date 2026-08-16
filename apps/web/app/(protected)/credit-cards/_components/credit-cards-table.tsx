@@ -250,11 +250,13 @@ function SettlementsSection({
 export function CreditCardsTable({
   cards,
   preferredCurrencies,
+  supportedCurrencies,
   accounts,
   firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
   accounts?: Account[];
   firstRun?: boolean;
 }) {
@@ -431,6 +433,7 @@ export function CreditCardsTable({
         }}
         card={editCard ?? undefined}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
         accounts={accounts}
         onSuccess={() => router.refresh()}
       />

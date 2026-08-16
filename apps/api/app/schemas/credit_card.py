@@ -3,9 +3,9 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /credit-cards.
@@ -26,6 +26,11 @@ class CreditCardCreate(RequestBase):
         description="Optional funding account, in the card's own currency. Pre-fills a settlement's 'Paid from'; never creates one.",
     )
 
+    # The card was the last money entity whose currency went unvalidated, which started to matter once
+    # that currency had to MATCH an account's: the validator also normalizes case, so an unnormalized
+    # "usd" card could never pair with a "USD" account. Same rule the other six request schemas carry.
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
 
 # Body for PUT /credit-cards/{id}. Partial update.
 class CreditCardUpdate(RequestBase):
@@ -45,6 +50,8 @@ class CreditCardUpdate(RequestBase):
         default=None,
         description="Optional funding account, in the card's own currency. Send null to clear.",
     )
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
 # Per-currency bucket balance on a credit card (Phase 3 dual-currency model).

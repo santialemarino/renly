@@ -84,15 +84,22 @@ export const getSettings = cache(async (): Promise<SettingsData> => {
   return mapSettings(await res.json());
 });
 
-// Settings + credit cards for a protected list page, fetched in parallel with
-// page-safe fallbacks (null settings / empty card list on error).
+/*
+ * Settings + credit cards for a protected list page, fetched in parallel with page-safe fallbacks
+ * (null settings / empty card list on error).
+ *
+ * Archived cards are included for the same reason the picker pages include archived accounts: a form
+ * whose stored card has since been archived must still render its name, because the combobox falls
+ * back to its placeholder when no option matches the value — the trigger would read as empty while
+ * form state still held the id. PaymentMethodFields only ever OFFERS active cards.
+ */
 export async function getPageSettings(): Promise<{
   settings: SettingsData | null;
   creditCards: CreditCard[];
 }> {
   const [settings, creditCards] = await Promise.all([
     getSettings().catch(() => null),
-    getCreditCards().catch(() => []),
+    getCreditCards({ showArchived: true }).catch(() => []),
   ]);
   return { settings, creditCards };
 }

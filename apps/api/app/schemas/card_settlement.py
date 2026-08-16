@@ -4,9 +4,9 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.base import RequestBase
+from app.schemas.base import RequestBase, validate_supported_currency
 
 
 # Body for POST /credit-cards/{id}/settlements.
@@ -16,6 +16,10 @@ class CardSettlementCreate(RequestBase):
     currency: str = Field(description="Currency (ISO 4217).", max_length=3)
     account_id: int | None = Field(default=None, description="Cash/bank account the payment was drawn from (optional).")
     notes: str | None = Field(default=None, description="Optional notes.", max_length=500)
+
+    # Normalizes case as well as validating, so a settlement's currency compares to the funding
+    # account's without a case-insensitive fallback.
+    _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
 # Response for a single card settlement. account_name is denormalized from the account so a client can

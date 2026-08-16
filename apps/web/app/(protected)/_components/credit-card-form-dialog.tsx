@@ -36,6 +36,8 @@ interface CreditCardFormDialogProps {
   onOpenChange: (open: boolean) => void;
   card?: CreditCard;
   preferredCurrencies?: string[];
+  // Restricts the currency picker to the convertible set, matching every other money form.
+  supportedCurrencies?: string[];
   /*
    * Accounts the card's optional default funding account can be picked from ("débito automático").
    * Omitted by the stacked inline-create flow inside PaymentMethodFields, which is deliberately a
@@ -57,6 +59,7 @@ export function CreditCardFormDialog({
   onOpenChange,
   card,
   preferredCurrencies,
+  supportedCurrencies,
   accounts,
   onSuccess,
   onCreated,
@@ -195,6 +198,7 @@ export function CreditCardFormDialog({
                         value={field.value || null}
                         exclude={[]}
                         preferredCurrencies={preferredCurrencies}
+                        codes={supportedCurrencies}
                         placeholder={t('form.currency.placeholder')}
                         searchPlaceholder={t('form.currency.searchPlaceholder')}
                         noResults={t('form.currency.noResults')}
