@@ -39,12 +39,18 @@ interface AccountLedgerTableProps {
   data: AccountMovementList;
   // True while a kind filter is applied: the running balance is withheld, so the column goes too.
   filtered: boolean;
+  firstRun?: boolean;
 }
 
 // The account's movements, newest first. Read-only by design — the five kinds are owned by four
 // different surfaces with four different edit affordances, and two of them (adjustments, and any
 // entry in a reserved category) are not editable anywhere. A footnote points at where each lives.
-export function AccountLedgerTable({ accountId, data, filtered }: AccountLedgerTableProps) {
+export function AccountLedgerTable({
+  accountId,
+  data,
+  filtered,
+  firstRun,
+}: AccountLedgerTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('accounts.ledger');
   const tCommon = useTranslations('common');
@@ -75,14 +81,17 @@ export function AccountLedgerTable({ accountId, data, filtered }: AccountLedgerT
               <TableHead>{t('table.date')}</TableHead>
               <TableHead>{t('table.movement')}</TableHead>
               <TableHead>{t('table.notes')}</TableHead>
-              <TableHead className="text-right">{t('table.amount')}</TableHead>
-              {showBalance && <TableHead className="text-right">{t('table.balance')}</TableHead>}
+              <TableHead className="text-right">{t('table.amountIn', { currency })}</TableHead>
+              {showBalance && (
+                <TableHead className="text-right">{t('table.balanceIn', { currency })}</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {items.length === 0 ? (
               <TableEmptyRow
                 colSpan={showBalance ? COLUMN_COUNT : COLUMN_COUNT - 1}
+                firstRun={firstRun}
                 icon={ScrollText}
                 title={t('table.emptyTitle')}
                 description={t('table.emptyDescription')}

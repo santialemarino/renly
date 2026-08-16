@@ -9,16 +9,19 @@ import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { getAccountMovements } from '@/lib/api/account-movements';
 import { getAccount } from '@/lib/api/accounts';
+import { getPageSettings } from '@/lib/api/settings';
 import { MOVEMENT_KINDS, type MovementKind } from '@/lib/constants/accounts';
+import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+
+// Its own namespace rather than the accounts list's, so a ledger tab isn't titled "Accounts".
+export async function generateMetadata() {
+  return await generatePageMetadata('accounts.ledger');
+}
 
 interface AccountLedgerPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ kind?: string; page?: string }>;
-}
-
-export async function generateMetadata() {
-  return await generatePageMetadata('accounts');
 }
 
 export default async function AccountLedgerPage({ params, searchParams }: AccountLedgerPageProps) {
@@ -35,14 +38,24 @@ export default async function AccountLedgerPage({ params, searchParams }: Accoun
   const account = await getAccount(accountId);
   if (!account) notFound();
 
-  // An unknown kind is a hand-edited URL: drop it rather than pass it on, so the page renders the
-  // whole ledger instead of an API validation error.
+  /*
+   * Both query params are sanitized rather than forwarded: a hand-edited URL should render the
+   * ledger, not an API validation error this page has no error boundary to catch. An unknown kind
+   * falls back to the whole ledger; a fractional or infinite page falls back to the first (a page
+   * past the end needs nothing here — the API clamps it to the last page that has rows).
+   */
   const kind = MOVEMENT_KINDS.includes(query.kind as MovementKind)
     ? (query.kind as MovementKind)
     : undefined;
-  const page = Math.max(1, Number(query.page) || 1);
+  const requestedPage = Math.trunc(Number(query.page));
+  const page = Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1;
 
+  const { settings } = await getPageSettings();
   const movements = await getAccountMovements(accountId, { kind, page });
+
+  // Teach the empty state only during first-run and only when no filter is hiding existing rows —
+  // the same rule every other list surface uses.
+  const firstRun = isFirstRunEmptyState(movements.total === 0, !!kind, settings);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
@@ -50,8 +63,13 @@ export default async function AccountLedgerPage({ params, searchParams }: Accoun
         {t('ledger.back')}
       </InlineLink>
       <AccountLedgerHeader account={account} />
-      <AccountLedgerToolbar accountId={accountId} />
-      <AccountLedgerTable accountId={accountId} data={movements} filtered={!!kind} />
+      <AccountLedgerToolbar accountId={accountId} kind={kind} />
+      <AccountLedgerTable
+        accountId={accountId}
+        data={movements}
+        filtered={!!kind}
+        firstRun={firstRun}
+      />
     </div>
   );
 }

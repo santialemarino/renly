@@ -181,7 +181,7 @@ export function AccountsTable({
                               icon={ScrollText}
                               tooltip={t('actions.viewLedger')}
                               ariaLabel="View ledger"
-                              onClick={() => router.push(accountLedgerPath(a.id))}
+                              href={accountLedgerPath(a.id)}
                             />
                             <RowActionButton
                               icon={ArchiveRestore}
@@ -204,7 +204,7 @@ export function AccountsTable({
                               icon={ScrollText}
                               tooltip={t('actions.viewLedger')}
                               ariaLabel="View ledger"
-                              onClick={() => router.push(accountLedgerPath(a.id))}
+                              href={accountLedgerPath(a.id)}
                             />
                             <RowActionButton
                               icon={Scale}

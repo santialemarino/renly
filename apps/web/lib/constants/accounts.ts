@@ -21,8 +21,6 @@ export type MovementKind = (typeof MOVEMENT_KINDS)[number];
 /*
  * Which table a movement came from — what actually IDENTIFIES a ledger row. `MovementKind` cannot:
  * `adjustment` spans income and expense, whose id sequences are independent, so two adjustments can
- * share (kind, sourceId).
+ * share (kind, sourceId). A type rather than an array because nothing enumerates it at runtime.
  */
-export const MOVEMENT_SOURCES = ['income', 'expense', 'settlement', 'transfer'] as const;
-
-export type MovementSource = (typeof MOVEMENT_SOURCES)[number];
+export type MovementSource = 'income' | 'expense' | 'settlement' | 'transfer';

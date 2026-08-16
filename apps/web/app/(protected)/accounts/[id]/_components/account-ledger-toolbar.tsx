@@ -1,6 +1,5 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { Filter } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -12,24 +11,25 @@ import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigat
 
 interface AccountLedgerToolbarProps {
   accountId: number;
+  // The kind the PAGE resolved, not the raw param: an unrecognized `?kind=` renders the whole
+  // ledger, so re-reading the URL here would label the chip with a filter that isn't applied (and
+  // with an unmapped value, print the raw translation key).
+  kind?: MovementKind;
 }
 
 // The ledger's only filter. There is no search box: the rows are movements rather than named
 // entities, and the three columns worth searching (category, counterparty, notes) each belong to a
 // different subset of kinds — filtering by kind is the question this surface actually gets asked.
-export function AccountLedgerToolbar({ accountId }: AccountLedgerToolbarProps) {
+export function AccountLedgerToolbar({ accountId, kind }: AccountLedgerToolbarProps) {
   const t = useTranslations('accounts.ledger');
-  const searchParams = useSearchParams();
   // A kind change resets pagination — page 4 of "all" is rarely a page of "settlements".
   const { navigate } = useSearchParamsNavigation(accountLedgerPath(accountId), { resetPage: true });
-
-  const kind = searchParams.get('kind') ?? CATEGORY_ALL;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <FilterCombobox
         items={MOVEMENT_KINDS}
-        value={kind}
+        value={kind ?? CATEGORY_ALL}
         onValueChange={(value) => navigate({ kind: value === CATEGORY_ALL ? null : value })}
         labelFor={(value) => t(`kinds.${value as MovementKind}`)}
         allLabel={t('filter.all')}
