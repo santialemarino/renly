@@ -1,10 +1,8 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { IncomeFormValues } from '@/app/(protected)/income/income-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 // The API expects snake_case account_id; every other income field is a single word (camelCase ==
 // snake_case), so only the account link needs remapping.
@@ -17,15 +15,6 @@ function toBody(values: IncomeFormValues) {
 // reconciliation owns is refused with reconciliation_owned_entry. Returned as data rather than thrown
 // because the Server Action boundary strips prototype chains (see expenses-actions for the long form).
 export type IncomeMutationResult = { ok: true } | { ok: false; conflictDetail: string };
-
-// Resolves a 409 body to a localized message (mapped API `code`, else raw `detail`), or null when the
-// body carries neither so the caller falls back to its generic error.
-async function readConflictDetail(res: Response): Promise<string | null> {
-  const parsed = await parseApiError(res);
-  if (!parsed.code && !parsed.detail) return null;
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, parsed, '') || null;
-}
 
 export async function createIncome(values: IncomeFormValues): Promise<void> {
   const res = await authenticatedFetch('/income', {
@@ -44,10 +33,8 @@ export async function updateIncome(
     body: toBody(values),
   });
   if (!res.ok) {
-    if (res.status === 409) {
-      const detail = await readConflictDetail(res);
-      if (detail) return { ok: false, conflictDetail: detail };
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to update income entry');
   }
   return { ok: true };
@@ -56,10 +43,8 @@ export async function updateIncome(
 export async function deleteIncome(id: number): Promise<IncomeMutationResult> {
   const res = await authenticatedFetch(`/income/${id}`, { method: 'DELETE' });
   if (!res.ok) {
-    if (res.status === 409) {
-      const detail = await readConflictDetail(res);
-      if (detail) return { ok: false, conflictDetail: detail };
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to delete income entry');
   }
   return { ok: true };

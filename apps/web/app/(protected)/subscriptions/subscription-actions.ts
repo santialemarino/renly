@@ -1,10 +1,8 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { SubscriptionFormValues } from '@/app/(protected)/subscriptions/subscription-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 function toBody(values: SubscriptionFormValues) {
   const { billingCycle, nextBillingDate, paymentMethod, creditCardId, defaultAccountId, ...rest } =
@@ -22,14 +20,6 @@ function toBody(values: SubscriptionFormValues) {
   };
 }
 
-// Resolves a refused save to its localized reason (a default funding account in another currency, a
-// card-paid plan that also names one, a mismatched card pairing, a locked field). Returned as DATA
-// rather than thrown: the Server Action boundary strips prototype chains, so a thrown message is lost.
-async function planError(res: Response): Promise<string> {
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, await parseApiError(res), '');
-}
-
 export type SaveSubscriptionResult = { ok: true } | { ok: false; conflictDetail: string };
 
 export async function createSubscription(
@@ -40,7 +30,8 @@ export async function createSubscription(
     body: toBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await planError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create subscription');
   }
   return { ok: true };
@@ -55,7 +46,8 @@ export async function updateSubscription(
     body: toBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await planError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to update subscription');
   }
   return { ok: true };

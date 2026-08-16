@@ -1,7 +1,5 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { CreditCardFormValues } from '@/app/(protected)/credit-cards/credit-card-form-schema';
 import type { ReconciliationFormValues } from '@/app/(protected)/credit-cards/reconciliation-form-schema';
 import type { SettlementFormValues } from '@/app/(protected)/credit-cards/settlement-form-schema';
@@ -19,7 +17,7 @@ import {
   type CreditCard,
 } from '@/lib/api/credit-cards';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
   const { closingDay, dueDay, monthlyPayment, defaultAccountId, ...rest } = values;
@@ -30,14 +28,6 @@ function buildCardBody(values: CreditCardFormValues): Record<string, unknown> {
     monthly_payment: monthlyPayment && monthlyPayment.trim() !== '' ? Number(monthlyPayment) : null,
     default_account_id: defaultAccountId ?? null,
   };
-}
-
-// Resolves a refused card save to its localized reason — today, a default funding account whose
-// currency no longer matches the card's (reachable from a stale page, or when the stored default was
-// archived and so is absent from the picker that would otherwise have cleared it).
-async function cardError(res: Response): Promise<string> {
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, await parseApiError(res), '');
 }
 
 // Discriminated results so the form dialog surfaces the backend's coded 400 instead of a generic
@@ -55,7 +45,8 @@ export async function createCreditCard(
     body: buildCardBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create credit card');
   }
   return { ok: true, card: mapCreditCard(await res.json()) };
@@ -70,7 +61,8 @@ export async function updateCreditCard(
     body: buildCardBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to update credit card');
   }
   return { ok: true };
@@ -84,13 +76,8 @@ export type DeleteCreditCardResult = { ok: true } | { ok: false; conflictDetail:
 export async function deleteCreditCard(id: number): Promise<DeleteCreditCardResult> {
   const res = await authenticatedFetch(`/credit-cards/${id}`, { method: 'DELETE' });
   if (!res.ok) {
-    if (res.status === 409) {
-      const parsed = await parseApiError(res);
-      if (parsed.code || parsed.detail) {
-        const t = await getTranslations('apiErrors');
-        return { ok: false, conflictDetail: resolveApiError(t, parsed, '') };
-      }
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to delete credit card');
   }
   return { ok: true };
@@ -118,10 +105,10 @@ export async function createSettlement(
     body: { ...rest, account_id: accountId ?? null },
   });
   if (!res.ok) {
-    // Reachable: the pre-filled default is in the card's currency, but on a multi-bucket card the user
-    // can settle a DIFFERENT bucket, and an archived pre-fill is deliberately not auto-cleared (that
-    // rule exists so editing an entry never drops its link). The refusal has to say why.
-    if (res.status === 400) return { ok: false, conflictDetail: await cardError(res) };
+    // Reachable: the pre-filled default is in the card's currency, but on a multi-bucket card the
+    // user can settle a DIFFERENT bucket. The refusal has to say why.
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create settlement');
   }
   return { ok: true };
@@ -193,13 +180,8 @@ export async function createOrReplaceReconciliation(
     },
   });
   if (!res.ok) {
-    if (res.status === 400) {
-      const parsed = await parseApiError(res);
-      if (parsed.code || parsed.detail) {
-        const t = await getTranslations('apiErrors');
-        return { ok: false, conflictDetail: resolveApiError(t, parsed, '') };
-      }
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to save reconciliation');
   }
   return { ok: true };

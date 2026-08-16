@@ -1,10 +1,8 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { InstallmentFormValues } from '@/app/(protected)/installments/installment-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 function toBody(values: InstallmentFormValues) {
   const installmentNum = Number(values.installmentAmount);
@@ -32,14 +30,6 @@ function toBody(values: InstallmentFormValues) {
   };
 }
 
-// Resolves a refused save to its localized reason (a default funding account in another currency, a
-// card-paid plan that also names one, a mismatched card pairing, a locked field). Returned as DATA
-// rather than thrown: the Server Action boundary strips prototype chains, so a thrown message is lost.
-async function planError(res: Response): Promise<string> {
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, await parseApiError(res), '');
-}
-
 export type SaveInstallmentResult = { ok: true } | { ok: false; conflictDetail: string };
 
 export async function createInstallment(
@@ -50,7 +40,8 @@ export async function createInstallment(
     body: toBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await planError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create installment plan');
   }
   return { ok: true };
@@ -65,7 +56,8 @@ export async function updateInstallment(
     body: toBody(values),
   });
   if (!res.ok) {
-    if (res.status === 400) return { ok: false, conflictDetail: await planError(res) };
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to update installment plan');
   }
   return { ok: true };
