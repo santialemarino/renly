@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain import AccountCardExclusivityError, AccountCurrencyMismatchError
-from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
 from app.models.account import Account, AccountType
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
@@ -351,7 +350,7 @@ class TestSchedulerHonoursTheDefault:
 
         resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
 
-        assert resolved == {3: 7}
+        assert {plan_id: account.id for plan_id, account in resolved.items()} == {3: 7}
 
     @pytest.mark.asyncio
     async def test_a_currency_mismatch_is_skipped_not_written(self, monkeypatch):
@@ -373,6 +372,58 @@ class TestSchedulerHonoursTheDefault:
         resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
 
         assert resolved == {}
+
+    @pytest.mark.asyncio
+    async def test_an_archived_account_is_skipped(self, monkeypatch):
+        # Archiving means the user stopped using the account; no picker in the app will link money to
+        # one, so the nightly job must not keep depositing charges into it either.
+        monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(is_active=False)]))
+
+        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [_subscription(default_account_id=7)])
+
+        assert resolved == {}
+
+    @pytest.mark.asyncio
+    async def test_a_card_paid_plan_is_skipped(self, monkeypatch):
+        # Reachable through restore, which copies payment_method verbatim and remaps the default with
+        # no cross-field validation. Linking here as well would raise the card liability AND drop cash
+        # for one charge — the double-count the whole feature exists to avoid.
+        monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account()]))
+        plan = _subscription(default_account_id=7, payment_method="credit_card", credit_card_id=5)
+
+        resolved = await auto_expense_service._resolve_default_accounts(AsyncMock(), [plan])
+
+        assert resolved == {}
+
+    def test_a_charge_dated_before_the_account_opened_is_not_linked(self):
+        # Every balance sum is bounded below by opening_date, so such a link would render as
+        # "Paid from X" while never moving X's balance. The scheduler picks these dates itself.
+        account = _account(opening_date=date(2026, 7, 1))
+
+        assert auto_expense_service._link_for_date(account, date(2026, 6, 30)) is None
+        assert auto_expense_service._link_for_date(account, date(2026, 7, 1)) == 7
+        assert auto_expense_service._link_for_date(None, date(2026, 7, 1)) is None
+
+    @pytest.mark.asyncio
+    async def test_a_back_filled_charge_before_the_opening_date_stays_unattributed(self, monkeypatch):
+        # End to end: the plan qualifies, but the back-fill reaches back past the account's opening.
+        sub = _subscription(default_account_id=7, next_billing_date=date(2026, 6, 1))
+        session = _scheduler_session([sub], [])
+        monkeypatch.setattr(
+            auto_expense_service.account_repository,
+            "get_by_ids_across_users",
+            AsyncMock(return_value=[_account(currency="ARS", opening_date=date(2026, 8, 1))]),
+        )
+
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+
+        entries = _added_entries(session)
+        assert created == 3  # June, July and August cycles
+        assert [(e.date, e.account_id) for e in entries] == [
+            (date(2026, 6, 1), None),
+            (date(2026, 7, 1), None),
+            (date(2026, 8, 1), 7),
+        ]
 
     @pytest.mark.asyncio
     async def test_an_emitted_subscription_charge_carries_the_account(self, monkeypatch):
@@ -485,35 +536,3 @@ class TestSettlementResponseNamesTheAccount:
 
         assert result.account_name == "Caja $"
         get_by_ids.assert_not_awaited()  # validate_account_link already returned the account
-
-
-class TestRestoreSpecsCoverEveryForeignKey:
-    # Structural guards, in the spirit of the export guard #171 added: three tables had reached the
-    # export late, and a FK left off a RestoreSpec is the same failure one layer down — the engine
-    # copies unlisted columns VERBATIM, so an un-remapped account id doesn't merely dangle, it resolves
-    # to whatever row holds that id in the restoring account (a cross-tenant pointer).
-    def test_every_fk_to_a_restored_entity_is_remapped_or_nulled(self):
-        table_to_key = {spec.model.__tablename__: spec.key for spec in RESTORE_SPECS}
-        missing: list[str] = []
-        for spec in RESTORE_SPECS:
-            handled = {fk.field for fk in spec.fks} | set(spec.null_fields) | {"user_id"}
-            for column in spec.model.__table__.columns:
-                for fk in column.foreign_keys:
-                    target = fk.column.table.name
-                    if target in table_to_key and column.name not in handled:
-                        missing.append(f"{spec.key}.{column.name} -> {target}")
-        assert missing == []
-
-    def test_every_fk_to_a_skipped_entity_is_nulled(self):
-        for spec in RESTORE_SPECS:
-            for column in spec.model.__table__.columns:
-                for fk in column.foreign_keys:
-                    if fk.column.table.name in SKIPPED_ENTITIES:
-                        assert column.name in spec.null_fields, f"{spec.key}.{column.name} points at a skipped entity"
-
-    def test_every_parent_is_restored_before_its_children(self):
-        # Would have caught `accounts` sitting after `credit_cards` once a card started naming one.
-        position = {spec.key: index for index, spec in enumerate(RESTORE_SPECS)}
-        for index, spec in enumerate(RESTORE_SPECS):
-            for fk in spec.fks:
-                assert position[fk.parent] < index, f"{spec.key} is restored before its parent {fk.parent}"

@@ -12,7 +12,8 @@ from datetime import date as date_type
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.domain import claimed_installment_cuotas, claimed_subscription_cycles
+from app.domain import PaymentMethod, claimed_installment_cuotas, claimed_subscription_cycles
+from app.models.account import Account
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
@@ -182,7 +183,7 @@ async def _generate_subscription_expenses(
                     notes=sub.name,
                     payment_method=sub.payment_method,
                     credit_card_id=sub.credit_card_id,
-                    account_id=default_accounts.get(sub.id),
+                    account_id=_link_for_date(default_accounts.get(sub.id), d),
                     source=SOURCE_SUBSCRIPTION,
                     subscription_id=sub.id,
                 )
@@ -204,24 +205,55 @@ async def _generate_subscription_expenses(
 
 
 # Resolves the cash/bank account each pending plan's emitted charges should be linked to, in ONE query
-# for every user in the tick. Returns {plan_id: account_id} holding only links that are still safe to
-# write: the account must belong to the plan's owner (SEC-4 — the loader is unscoped by design) and
-# share its currency, because the balance union sums linked rows without conversion, so a
-# mismatched-currency link would corrupt the account's balance. A default that no longer qualifies
-# (the account's currency was changed while nothing but this default referenced it) is skipped rather
-# than blocking the charge: the expense still lands, merely unattributed, which is exactly the
-# pre-default behaviour, and reconciliation remains the backstop.
-async def _resolve_default_accounts(session: AsyncSession, plans: list[Subscription] | list[Installment]) -> dict[int, int]:
+# for every user in the tick. Returns {plan_id: Account} holding only links that are still safe to
+# write — every condition a picker enforces before it will offer an account, re-checked here because
+# the plan's stored default can go stale long after it was chosen:
+#   - owned by the plan's owner (SEC-4 — the loader is unscoped by design);
+#   - same currency, because the balance union sums linked rows without conversion;
+#   - still active, since archiving an account means the user has stopped using it and no picker in
+#     the app will link money to one;
+#   - not a card-paid plan, whose cash leg lands at the card settlement — linking here as well would
+#     count the same charge twice (the write paths refuse the pair, but a restored plan bypasses them).
+# A default that no longer qualifies is skipped rather than blocking the charge: the expense still
+# lands, merely unattributed, which is exactly the pre-default behaviour, and reconciliation remains
+# the backstop. It is logged, because a link the user configured silently ceasing to apply is
+# otherwise invisible everywhere.
+async def _resolve_default_accounts(session: AsyncSession, plans: list[Subscription] | list[Installment]) -> dict[int, Account]:
     account_ids = sorted({p.default_account_id for p in plans if p.default_account_id is not None})
     if not account_ids:
         return {}
     accounts = {a.id: a for a in await account_repository.get_by_ids_across_users(session, account_ids)}
-    resolved: dict[int, int] = {}
+    resolved: dict[int, Account] = {}
     for plan in plans:
-        account = accounts.get(plan.default_account_id) if plan.default_account_id is not None else None
-        if account is not None and account.user_id == plan.user_id and account.currency == plan.currency:
-            resolved[plan.id] = account.id
+        if plan.default_account_id is None:
+            continue
+        account = accounts.get(plan.default_account_id)
+        if (
+            account is not None
+            and account.user_id == plan.user_id
+            and account.currency == plan.currency
+            and account.is_active
+            and plan.payment_method != PaymentMethod.credit_card
+        ):
+            resolved[plan.id] = account
+        else:
+            logger.warning(
+                "Auto-expenses: plan %s no longer qualifies for funding account %s; emitting unattributed.",
+                plan.id,
+                plan.default_account_id,
+            )
     return resolved
+
+
+# The account id a charge dated `charge_date` may carry, or None when it must stay unattributed.
+# Every account-balance sum is bounded below by the account's opening_date (opening_balance IS the
+# balance at that date), so a back-filled charge dated earlier would render as "Paid from X" while
+# never moving X's balance — a link that lies. The scheduler picks these dates itself, walking a plan's
+# cursor, so the user has no way to foresee it.
+def _link_for_date(account: Account | None, charge_date: date_type) -> int | None:
+    if account is None or charge_date < account.opening_date:
+        return None
+    return account.id
 
 
 # Records that a scheduled charge landed in a card bucket, keeping the EARLIEST date seen per bucket.
@@ -307,7 +339,7 @@ async def _generate_installment_expenses(
                     notes=inst.name,
                     payment_method=inst.payment_method,
                     credit_card_id=inst.credit_card_id,
-                    account_id=default_accounts.get(inst.id),
+                    account_id=_link_for_date(default_accounts.get(inst.id), cuota_date),
                     source=SOURCE_INSTALLMENT,
                     installment_id=inst.id,
                 )
