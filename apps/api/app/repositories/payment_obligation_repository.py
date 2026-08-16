@@ -80,6 +80,18 @@ async def count_by_credit_card(session: AsyncSession, credit_card_id: int, user_
     return int(result.scalar_one())
 
 
+# Counts the payment obligations naming this account as their default funding account. Backs the currency lock:
+# a default whose currency stops matching silently stops applying, so the change is refused instead.
+async def count_by_default_account(session: AsyncSession, account_id: int, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).where(
+            PaymentObligation.default_account_id == account_id,
+            PaymentObligation.user_id == user_id,
+        )
+    )
+    return result.scalar_one()
+
+
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
 class PaymentObligationRepository:
     list_by_user = staticmethod(list_by_user)
@@ -88,6 +100,7 @@ class PaymentObligationRepository:
     save = staticmethod(save)
     delete = staticmethod(delete)
     count_by_credit_card = staticmethod(count_by_credit_card)
+    count_by_default_account = staticmethod(count_by_default_account)
 
 
 # Singleton used by services to access payment obligation persistence.

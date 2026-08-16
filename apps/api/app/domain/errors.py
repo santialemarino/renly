@@ -39,6 +39,27 @@ class AccountCardExclusivityError(DomainError):
         super().__init__(self.message)
 
 
+# An account's currency cannot be changed because a credit card or a recurring plan names it as their
+# default funding account. Deliberately separate from AccountCurrencyChangeBlockedError: no money has
+# moved, so "has linked entries" would be false — what stands in the way is a standing default whose
+# charges would silently stop being attributed the moment the currencies stopped matching. Mapped to 409.
+class AccountCurrencyChangeBlockedByDefaultError(DomainError):
+    code = "account_currency_change_blocked_by_default"
+    status_code = 409
+
+    def __init__(self, referencing_count: int) -> None:
+        self.referencing_count = referencing_count
+        self.message = (
+            f"Currency cannot be changed because {referencing_count} card(s) or plan(s) use this account "
+            "as their default. Clear those defaults first."
+        )
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"referencing_count": self.referencing_count}
+
+
 # An account's currency cannot be changed because money entries link to it — a cash balance must stay
 # exact, and changing the currency would silently mix currencies in the derived balance. Mapped to 409.
 class AccountCurrencyChangeBlockedError(DomainError):

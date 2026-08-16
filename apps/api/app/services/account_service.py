@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
     AccountCardExclusivityError,
+    AccountCurrencyChangeBlockedByDefaultError,
     AccountCurrencyChangeBlockedError,
     AccountCurrencyMismatchError,
     AccountOpeningDateChangeBlockedError,
@@ -16,8 +17,12 @@ from app.models.user import User
 from app.repositories import (
     account_repository,
     card_settlement_repository,
+    credit_card_repository,
     expense_repository,
     income_repository,
+    installment_repository,
+    payment_obligation_repository,
+    subscription_repository,
     transfer_repository,
 )
 
@@ -184,6 +189,19 @@ async def account_has_links(session: AsyncSession, account_id: int, user_id: int
     )
 
 
+# Counts the cards and recurring plans naming this account as their default funding account. A default
+# is not a money link — nothing has moved — but it is a standing instruction, so it still constrains the
+# account's currency: the moment the two stop matching, every charge that default was meant to attribute
+# silently stops being attributed.
+async def count_default_references(session: AsyncSession, account_id: int, user_id: int) -> int:
+    return (
+        await credit_card_repository.count_by_default_account(session, account_id, user_id)
+        + await subscription_repository.count_by_default_account(session, account_id, user_id)
+        + await installment_repository.count_by_default_account(session, account_id, user_id)
+        + await payment_obligation_repository.count_by_default_account(session, account_id, user_id)
+    )
+
+
 # Update an existing account. Only provided fields are changed. Changing the currency is blocked once
 # money links to the account — it would silently mix currencies in the derived balance (mirrors the
 # investment base-currency lock).
@@ -206,6 +224,13 @@ async def update_account(
         if currency_moved:
             raise AccountCurrencyChangeBlockedError()
         raise AccountOpeningDateChangeBlockedError()
+    # A standing default constrains the currency too, with its own error: no money has moved, so the
+    # "has linked entries" message above would be false, and the user needs to be told what actually
+    # stands in the way. Only the currency — opening_date does not affect whether a default applies.
+    if currency_moved:
+        references = await count_default_references(session, account_id, user.id)
+        if references:
+            raise AccountCurrencyChangeBlockedByDefaultError(references)
     for key, value in fields.items():
         setattr(account, key, value)
     await account_repository.save(session, account)

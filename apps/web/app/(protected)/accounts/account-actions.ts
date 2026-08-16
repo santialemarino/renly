@@ -11,7 +11,7 @@ import {
 import { mapTransferList, type Transfer } from '@/lib/api/transfers';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { ApiError } from '@/lib/i18n/api-errors';
-import { localizedApiError } from '@/lib/i18n/api-errors-server';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 
 function toBody(values: AccountFormValues) {
@@ -24,14 +24,32 @@ function toBody(values: AccountFormValues) {
   };
 }
 
-export async function createAccount(values: AccountFormValues): Promise<void> {
+// The account form's refusals are all coded and all actionable — the currency and opening-date locks,
+// and the standing-default lock — so they are returned as data for submitWithLifecycle to surface
+// rather than thrown, which the Server Action boundary would reduce to a generic toast.
+export type SaveAccountResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function createAccount(values: AccountFormValues): Promise<SaveAccountResult> {
   const res = await authenticatedFetch('/accounts', { method: 'POST', body: toBody(values) });
-  if (!res.ok) throw new Error('Failed to create account');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to create account');
+  }
+  return { ok: true };
 }
 
-export async function updateAccount(id: number, values: AccountFormValues): Promise<void> {
+export async function updateAccount(
+  id: number,
+  values: AccountFormValues,
+): Promise<SaveAccountResult> {
   const res = await authenticatedFetch(`/accounts/${id}`, { method: 'PUT', body: toBody(values) });
-  if (!res.ok) throw new Error('Failed to update account');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to update account');
+  }
+  return { ok: true };
 }
 
 export async function deleteAccount(id: number): Promise<void> {
