@@ -142,10 +142,9 @@ async def update_card(
     **fields: object,
 ) -> CreditCard:
     card = await get_card(session, card_id, user)
-    new_default_account_id = fields.get("default_account_id", card.default_account_id)
-    new_currency = fields.get("currency") or card.currency
-    if new_default_account_id != card.default_account_id or new_currency != card.currency:
-        await account_service.validate_account_link(session, user, new_default_account_id, new_currency)
+    await account_service.validate_effective_default_link(
+        session, user, fields=fields, stored_account_id=card.default_account_id, stored_currency=card.currency
+    )
     for key, value in fields.items():
         setattr(card, key, value)
     await credit_card_repository.save(session, card)

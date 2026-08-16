@@ -4,7 +4,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
-    AccountCardExclusivityError,
     AdvanceResult,
     CycleAdvanceDecision,
     NotFoundError,
@@ -154,15 +153,14 @@ async def update_subscription(
     # Effective default funding account after the merge: a card-paid plan never draws an account (its
     # cash leg lands at the card settlement), and the account must still match the effective currency —
     # so switching the plan to a card, or to another currency, is refused rather than left inconsistent.
-    new_default_account_id = fields.get("default_account_id", subscription.default_account_id)
-    new_currency = fields.get("currency") or subscription.currency
-    if new_default_account_id is not None and new_method == PaymentMethod.credit_card:
-        raise AccountCardExclusivityError()
-    # Only re-validated when the pair actually MOVES: an unchanged pair was already validated when it
-    # was attached, and re-checking it would let a stale stored default (its account's currency changed
-    # while nothing else referenced it) block an unrelated edit such as a rename or an archive.
-    if new_default_account_id != subscription.default_account_id or new_currency != subscription.currency:
-        await account_service.validate_account_link(session, user, new_default_account_id, new_currency)
+    await account_service.validate_effective_default_link(
+        session,
+        user,
+        fields=fields,
+        stored_account_id=subscription.default_account_id,
+        stored_currency=subscription.currency,
+        effective_method=new_method,
+    )
     for key, value in fields.items():
         setattr(subscription, key, value)
     if "next_billing_date" in fields and fields["next_billing_date"] is not None:

@@ -4,10 +4,12 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
+    AccountCardExclusivityError,
     AccountCurrencyChangeBlockedError,
     AccountCurrencyMismatchError,
     AccountOpeningDateChangeBlockedError,
     NotFoundError,
+    PaymentMethod,
 )
 from app.models.account import Account, AccountType
 from app.models.user import User
@@ -65,6 +67,36 @@ async def validate_account_link(session: AsyncSession, user: User, account_id: i
     if account.currency != currency:
         raise AccountCurrencyMismatchError(currency, account.currency)
     return account
+
+
+# Validates the EFFECTIVE default funding account of a card or a recurring plan on a partial update:
+# the request's fields merged over the stored row. Three services plus the card service need exactly
+# this, so it lives here beside the validator it wraps rather than being restated in each.
+#
+# `effective_method` is the plan's merged payment method, or None for a credit card (which has no
+# method of its own). A card-paid plan never names a funding account — its cash leg lands at the card
+# settlement, so linking here as well would count one charge twice.
+#
+# Re-validated ONLY when the (account, currency) pair actually moves. An unchanged pair was already
+# validated when it was attached, and re-checking it would let a stale stored default — its account's
+# currency changed while nothing else referenced it — block an unrelated edit such as a rename or an
+# archive. `currency` falls back on a falsy value because it is non-nullable: an explicit null is a
+# malformed clear, not a request to drop the currency.
+async def validate_effective_default_link(
+    session: AsyncSession,
+    user: User,
+    *,
+    fields: dict[str, object],
+    stored_account_id: int | None,
+    stored_currency: str,
+    effective_method: str | None = None,
+) -> None:
+    new_account_id = fields.get("default_account_id", stored_account_id)
+    new_currency = fields.get("currency") or stored_currency
+    if new_account_id is not None and effective_method == PaymentMethod.credit_card:
+        raise AccountCardExclusivityError()
+    if (new_account_id, new_currency) != (stored_account_id, stored_currency):
+        await validate_account_link(session, user, new_account_id, new_currency)
 
 
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,
