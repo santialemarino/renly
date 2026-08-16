@@ -2,6 +2,7 @@
 
 import type { InstallmentFormValues } from '@/app/(protected)/installments/installment-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 function toBody(values: InstallmentFormValues) {
   const installmentNum = Number(values.installmentAmount);
@@ -22,23 +23,44 @@ function toBody(values: InstallmentFormValues) {
     start_date: values.startDate,
     payment_method: values.paymentMethod ?? null,
     credit_card_id: values.paymentMethod === 'credit_card' ? (values.creditCardId ?? null) : null,
+    // A card-paid plan draws cash at the card settlement, never here — so the funding account is
+    // dropped when the method is credit_card rather than sent for the API to refuse.
+    default_account_id:
+      values.paymentMethod === 'credit_card' ? null : (values.defaultAccountId ?? null),
   };
 }
 
-export async function createInstallment(values: InstallmentFormValues): Promise<void> {
+export type SaveInstallmentResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function createInstallment(
+  values: InstallmentFormValues,
+): Promise<SaveInstallmentResult> {
   const res = await authenticatedFetch('/installments', {
     method: 'POST',
     body: toBody(values),
   });
-  if (!res.ok) throw new Error('Failed to create installment plan');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to create installment plan');
+  }
+  return { ok: true };
 }
 
-export async function updateInstallment(id: number, values: InstallmentFormValues): Promise<void> {
+export async function updateInstallment(
+  id: number,
+  values: InstallmentFormValues,
+): Promise<SaveInstallmentResult> {
   const res = await authenticatedFetch(`/installments/${id}`, {
     method: 'PUT',
     body: toBody(values),
   });
-  if (!res.ok) throw new Error('Failed to update installment plan');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to update installment plan');
+  }
+  return { ok: true };
 }
 
 export async function deleteInstallment(id: number): Promise<void> {

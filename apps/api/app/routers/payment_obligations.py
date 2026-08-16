@@ -77,6 +77,7 @@ async def create_obligation(
         expense_category=body.expense_category,
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
+        default_account_id=body.default_account_id,
         notes=body.notes,
     )
     return PaymentObligationResponse.model_validate(obligation)

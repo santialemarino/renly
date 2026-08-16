@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -23,13 +24,16 @@ import {
   buildSubscriptionFormSchema,
   type SubscriptionFormValues,
 } from '@/app/(protected)/subscriptions/subscription-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { BILLING_CYCLES } from '@/lib/constants/recurrences';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
@@ -40,6 +44,8 @@ interface SubscriptionFormDialogProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -50,6 +56,7 @@ export function SubscriptionFormDialog({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   onSuccess,
 }: SubscriptionFormDialogProps) {
   const t = useTranslations('subscriptions');
@@ -70,11 +77,13 @@ export function SubscriptionFormDialog({
       nextBillingDate: '',
       paymentMethod: undefined,
       creditCardId: undefined,
+      defaultAccountId: null,
     },
   });
 
   const isEdit = !!subscription;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -89,6 +98,7 @@ export function SubscriptionFormDialog({
       nextBillingDate: s?.nextBillingDate ?? '',
       paymentMethod: (s?.paymentMethod ?? undefined) as SubscriptionFormValues['paymentMethod'],
       creditCardId: s?.creditCardId ?? undefined,
+      defaultAccountId: s?.defaultAccountId ?? null,
     }),
     onSuccess,
   });
@@ -221,6 +231,32 @@ export function SubscriptionFormDialog({
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
             />
+
+            {/* A card-paid subscription hits the card and draws cash at the settlement, so it names no
+                funding account — the card's own default covers that half. */}
+            {/* Height-reveal on the same trigger PaymentMethodFields' card row uses, so the two
+                conditional rows in this form animate alike instead of one snapping. */}
+            <AnimatePresence initial={false}>
+              {watchedPaymentMethod !== 'credit_card' && (
+                <motion.div
+                  key="default-account"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                >
+                  <AccountField
+                    control={form.control}
+                    setValue={form.setValue}
+                    accounts={accounts ?? []}
+                    currency={watchedCurrency || undefined}
+                    label={t('form.defaultAccount.label')}
+                    hint={t('form.defaultAccount.hint')}
+                    name="defaultAccountId"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </form>
         </Form>
 

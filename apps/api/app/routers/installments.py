@@ -77,6 +77,7 @@ async def create_installment(
         start_date=body.start_date,
         payment_method=body.payment_method,
         credit_card_id=body.credit_card_id,
+        default_account_id=body.default_account_id,
     )
     return InstallmentResponse.model_validate(installment)
 

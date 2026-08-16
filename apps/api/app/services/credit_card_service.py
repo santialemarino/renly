@@ -4,10 +4,12 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import CardBucketBalance, HasLinkedExpensesError, NotFoundError
+from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.user import User
 from app.repositories import (
+    account_repository,
     card_settlement_repository,
     credit_card_repository,
     expense_repository,
@@ -15,6 +17,7 @@ from app.repositories import (
     payment_obligation_repository,
     subscription_repository,
 )
+from app.schemas.card_settlement import CardSettlementResponse
 from app.services import account_service, card_reconciliation_service
 
 # --- Credit cards ---
@@ -97,7 +100,9 @@ async def cards_have_expenses(session: AsyncSession, card_ids: list[int], user_i
     return {card_id: counts.get(card_id, 0) > 0 for card_id in card_ids}
 
 
-# Create a new credit card.
+# Create a new credit card. A default funding account must be owned and denominated in the card's own
+# currency — the settlement dialog filters the picker to the settled bucket's currency, so a default in
+# any other currency could only ever be a link that dialog would refuse.
 async def create_card(
     session: AsyncSession,
     user: User,
@@ -107,7 +112,9 @@ async def create_card(
     due_day: int,
     currency: str,
     monthly_payment: Decimal | None = None,
+    default_account_id: int | None = None,
 ) -> CreditCard:
+    await account_service.validate_account_link(session, user, default_account_id, currency)
     card = CreditCard(
         user_id=user.id,
         name=name,
@@ -115,13 +122,19 @@ async def create_card(
         due_day=due_day,
         currency=currency,
         monthly_payment=monthly_payment,
+        default_account_id=default_account_id,
     )
     card = await credit_card_repository.create(session, card)
     await session.commit()
     return card
 
 
-# Update an existing credit card. Only provided fields are changed.
+# Update an existing credit card. Only provided fields are changed. The default funding account is
+# re-validated against the EFFECTIVE currency (request field over the stored row), so changing the
+# card's currency while a default is set is refused rather than silently leaving a mismatched pair.
+# Only re-validated when that pair actually MOVES: an unchanged pair was already validated when it was
+# attached, and re-checking it would let a stale stored default (its account's currency changed while
+# nothing else referenced it) block an unrelated edit such as a rename.
 async def update_card(
     session: AsyncSession,
     card_id: int,
@@ -129,6 +142,9 @@ async def update_card(
     **fields: object,
 ) -> CreditCard:
     card = await get_card(session, card_id, user)
+    await account_service.validate_effective_default_link(
+        session, user, fields=fields, stored_account_id=card.default_account_id, stored_currency=card.currency
+    )
     for key, value in fields.items():
         setattr(card, key, value)
     await credit_card_repository.save(session, card)
@@ -177,10 +193,22 @@ async def unarchive_card(session: AsyncSession, card_id: int, user: User) -> Cre
 # --- Settlements ---
 
 
-# List settlements for a credit card (verifies card ownership first).
-async def list_settlements(session: AsyncSession, card_id: int, user: User) -> list[CardSettlement]:
+# Maps a settlement to its response, denormalizing the funding account's name so a client renders which
+# account paid without a second lookup — and so an archived account still reads by name.
+def _to_settlement_response(settlement: CardSettlement, account: Account | None) -> CardSettlementResponse:
+    resp = CardSettlementResponse.model_validate(settlement)
+    resp.account_name = account.name if account is not None else None
+    return resp
+
+
+# List settlements for a credit card (verifies card ownership first), each carrying its funding
+# account's name. Accounts are batch-loaded once for the whole list rather than per row.
+async def list_settlements(session: AsyncSession, card_id: int, user: User) -> list[CardSettlementResponse]:
     await get_card(session, card_id, user)
-    return await card_settlement_repository.list_by_card(session, card_id)
+    settlements = await card_settlement_repository.list_by_card(session, card_id)
+    referenced = sorted({s.account_id for s in settlements if s.account_id is not None})
+    accounts = {a.id: a for a in await account_repository.get_by_ids(session, referenced, user.id) if a.id is not None}
+    return [_to_settlement_response(s, accounts.get(s.account_id) if s.account_id is not None else None) for s in settlements]
 
 
 # Record a new card settlement. Marks any reconciliation covering the settlement date stale (Phase 3, Step 5).
@@ -194,9 +222,9 @@ async def create_settlement(
     currency: str,
     account_id: int | None = None,
     notes: str | None = None,
-) -> CardSettlement:
+) -> CardSettlementResponse:
     await get_card(session, card_id, user)
-    await account_service.validate_account_link(session, user, account_id, currency)
+    account = await account_service.validate_account_link(session, user, account_id, currency)
     settlement = CardSettlement(
         credit_card_id=card_id,
         user_id=user.id,
@@ -209,7 +237,7 @@ async def create_settlement(
     settlement = await card_settlement_repository.create(session, settlement)
     await card_reconciliation_service.mark_stale_for_date(session, card_id, currency, date)
     await session.commit()
-    return settlement
+    return _to_settlement_response(settlement, account)
 
 
 # Delete a settlement (verifies card ownership first). Marks any reconciliation covering the settlement date stale.

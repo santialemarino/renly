@@ -15,6 +15,7 @@ interface SubscriptionRaw {
   next_billing_date: string;
   payment_method: string | null;
   credit_card_id: number | null;
+  default_account_id: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -32,6 +33,7 @@ export interface Subscription {
   nextBillingDate: string;
   paymentMethod: string | null;
   creditCardId: number | null;
+  defaultAccountId: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +52,7 @@ function mapSubscription(raw: SubscriptionRaw): Subscription {
     nextBillingDate: raw.next_billing_date,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
+    defaultAccountId: raw.default_account_id,
     isActive: raw.is_active,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

@@ -16,6 +16,10 @@
 #     Expense/income reconciliation and scheduler links are nulled so restored rows are plain historical
 #     entries with no dangling FK and no risk of tripping the scheduler's partial-unique
 #     (subscription_id, date)/(installment_id, date).
+#   - EVERY account-pointing column is remapped, never left verbatim: besides the entry links below,
+#     that includes the default funding account on credit_cards and on all three plan types. An
+#     un-remapped id would not merely dangle — it would resolve to whatever row happens to hold that id
+#     in the restoring account, i.e. a cross-tenant pointer.
 #   - accounts ARE restored, and entry → account links survive via an account_id remap. A cash balance
 #     is derived from opening_balance plus its linked rows, so nulling the link (what this engine did
 #     before accounts were exported) silently zeroed a restored user's cash until they re-created every
@@ -75,12 +79,18 @@ class RestoreSpec:
     has_id: bool = True  # investment_group_members has a composite PK, no surrogate id to remap
 
 
-# Restore order matters: parents precede children so FK remaps resolve. Independent entities first.
+# Restore order matters: parents precede children so FK remaps resolve. Independent entities first —
+# and `accounts` precedes `credit_cards` because a card names its default funding account, so the
+# accounts' id map has to exist by the time cards are rebuilt.
 RESTORE_SPECS: tuple[RestoreSpec, ...] = (
     RestoreSpec("investments", Investment),
     RestoreSpec("investment_groups", InvestmentGroup),
-    RestoreSpec("credit_cards", CreditCard),
     RestoreSpec("accounts", Account),
+    RestoreSpec(
+        "credit_cards",
+        CreditCard,
+        fks=(FkRef("default_account_id", "accounts", False),),
+    ),
     RestoreSpec(
         "investment_group_members",
         InvestmentGroupMember,
@@ -98,20 +108,23 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         Transaction,
         fks=(FkRef("investment_id", "investments", True),),
     ),
+    # Both optional links are remapped rather than nulled: the default funding account is what makes a
+    # restored plan's future charges land on the right balance, and leaving the exported id verbatim
+    # would point the row at whatever account happens to hold that id in the target account.
     RestoreSpec(
         "subscriptions",
         Subscription,
-        fks=(FkRef("credit_card_id", "credit_cards", False),),
+        fks=(FkRef("credit_card_id", "credit_cards", False), FkRef("default_account_id", "accounts", False)),
     ),
     RestoreSpec(
         "installments",
         Installment,
-        fks=(FkRef("credit_card_id", "credit_cards", False),),
+        fks=(FkRef("credit_card_id", "credit_cards", False), FkRef("default_account_id", "accounts", False)),
     ),
     RestoreSpec(
         "payment_obligations",
         PaymentObligation,
-        fks=(FkRef("credit_card_id", "credit_cards", False),),
+        fks=(FkRef("credit_card_id", "credit_cards", False), FkRef("default_account_id", "accounts", False)),
     ),
     RestoreSpec(
         "expense_entries",

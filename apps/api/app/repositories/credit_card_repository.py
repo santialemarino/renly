@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -61,10 +62,23 @@ async def delete(session: AsyncSession, card: CreditCard) -> None:
     await session.delete(card)
 
 
+# Counts the credit cards naming this account as their default funding account. Backs the currency lock:
+# a default whose currency stops matching silently stops applying, so the change is refused instead.
+async def count_by_default_account(session: AsyncSession, account_id: int, user_id: int) -> int:
+    result = await session.execute(
+        select(func.count()).where(
+            CreditCard.default_account_id == account_id,
+            CreditCard.user_id == user_id,
+        )
+    )
+    return result.scalar_one()
+
+
 # Namespace to call repository functions (e.g. credit_card_repository.list_by_user).
 class CreditCardRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
+    count_by_default_account = staticmethod(count_by_default_account)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)

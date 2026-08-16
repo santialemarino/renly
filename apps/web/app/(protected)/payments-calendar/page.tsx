@@ -37,9 +37,12 @@ export default async function PaymentsCalendarPage({ searchParams }: PaymentsCal
     // The linked-expense edit dialog restricts its currency picker to the convertible set; on a
     // fetch error the picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
-    // Active accounts for the optional "paid from" link on a non-card linked expense
-    // (empty on error → field hidden).
-    getAccounts().catch(() => []),
+    /*
+     * Accounts for the optional "paid from" link (empty on error → the field hides itself). Archived ones
+     * are included so an entry linked to a since-archived account still renders it by name instead of a
+     * blank picker; the picker only ever OFFERS active accounts.
+     */
+    getAccounts({ showArchived: true }).catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;

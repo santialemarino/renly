@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 
@@ -24,13 +25,16 @@ import {
   buildPaymentObligationFormSchema,
   type PaymentObligationFormValues,
 } from '@/app/(protected)/payment-obligations/payment-obligation-form-schema';
+import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { PaymentMethodFields } from '@/components/payment-method-fields';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { OBLIGATION_RECURRENCES } from '@/lib/constants/recurrences';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
@@ -46,6 +50,8 @@ interface PaymentObligationFormDialogProps {
   obligation?: PaymentObligation;
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   onSuccess: () => void;
 }
 
@@ -55,6 +61,7 @@ export function PaymentObligationFormDialog({
   obligation,
   preferredCurrencies,
   creditCards,
+  accounts,
   onSuccess,
 }: PaymentObligationFormDialogProps) {
   const locale = useLocale();
@@ -78,12 +85,14 @@ export function PaymentObligationFormDialog({
       expenseCategory: undefined,
       paymentMethod: undefined,
       creditCardId: undefined,
+      defaultAccountId: null,
       notes: '',
     },
   });
 
   const isEdit = !!obligation;
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedPaymentMethod = useWatch({ control: form.control, name: 'paymentMethod' });
 
   const sortedExpenseCategories = sortExpenseCategoriesByLabel((key) => tCommon(key), locale);
 
@@ -104,6 +113,7 @@ export function PaymentObligationFormDialog({
       paymentMethod: (o?.paymentMethod ??
         undefined) as PaymentObligationFormValues['paymentMethod'],
       creditCardId: o?.creditCardId ?? undefined,
+      defaultAccountId: o?.defaultAccountId ?? null,
       notes: o?.notes ?? '',
     }),
     onSuccess,
@@ -286,6 +296,32 @@ export function PaymentObligationFormDialog({
               creditCards={creditCards}
               preferredCurrencies={preferredCurrencies}
             />
+
+            {/* Obligations are not auto-emitted, so this default is honoured by Mark Paid: it pre-fills
+                the "Paid from" on the expense that flow creates. */}
+            {/* Height-reveal on the same trigger PaymentMethodFields' card row uses, so the two
+                conditional rows in this form animate alike instead of one snapping. */}
+            <AnimatePresence initial={false}>
+              {watchedPaymentMethod !== 'credit_card' && (
+                <motion.div
+                  key="default-account"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                >
+                  <AccountField
+                    control={form.control}
+                    setValue={form.setValue}
+                    accounts={accounts ?? []}
+                    currency={watchedCurrency || undefined}
+                    label={t('form.defaultAccount.label')}
+                    hint={t('form.defaultAccount.hint')}
+                    name="defaultAccountId"
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <FormField
               control={form.control}

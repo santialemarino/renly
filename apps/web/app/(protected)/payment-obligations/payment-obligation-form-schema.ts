@@ -15,6 +15,9 @@ export function buildPaymentObligationFormSchema(requiredMsg: string) {
     expenseCategory: z.enum(EXPENSE_CATEGORIES).optional(),
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     creditCardId: z.number().optional(),
+    // Optional funding account the scheduler links each emitted charge to (non-card methods only).
+    // Nullable so clearing it can round-trip through `null` (AccountField's contract).
+    defaultAccountId: z.number().nullable().optional(),
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }

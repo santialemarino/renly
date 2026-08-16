@@ -9,6 +9,8 @@ from app.domain.currency import SUPPORTED_CURRENCIES
 from app.models.asset_price import AssetPrice
 from app.models.investment import Currency, InvestmentCategory
 from app.models.transaction import TransactionType
+from app.schemas.card_settlement import CardSettlementCreate
+from app.schemas.credit_card import CreditCardCreate, CreditCardUpdate
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.income import IncomeCreate
 from app.schemas.installment import InstallmentCreate, InstallmentUpdate
@@ -153,6 +155,25 @@ class TestEntryCurrencyAllowlist:
     def test_payment_obligation_update_rejects_unsupported_currency(self):
         with pytest.raises(ValidationError, match="Unsupported currency"):
             PaymentObligationUpdate(currency="CLP")
+
+    # Cards and settlements were the last money schemas without the allowlist, which began to matter
+    # once a card's currency had to MATCH its funding account's: the validator normalizes case too, so
+    # an unnormalized "usd" card could never pair with a "USD" account.
+    def test_credit_card_create_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            CreditCardCreate(name="Visa", closing_day=25, due_day=10, currency="CLP")
+
+    def test_credit_card_create_normalizes_case(self):
+        body = CreditCardCreate(name="Visa", closing_day=25, due_day=10, currency="usd")
+        assert body.currency == "USD"
+
+    def test_credit_card_update_rejects_unsupported_currency(self):
+        with pytest.raises(ValidationError, match="Unsupported currency"):
+            CreditCardUpdate(currency="CLP")
+
+    def test_settlement_create_normalizes_case(self):
+        body = CardSettlementCreate(date=date(2026, 8, 1), amount=Decimal("700"), currency="ars")
+        assert body.currency == "ARS"
 
 
 # Asset-price lookup only reports converted_* when a rate actually existed.

@@ -194,15 +194,14 @@ export function IncomeFormDialog({
               )}
             />
 
-            {accounts && accounts.length > 0 && (
-              <AccountField
-                control={form.control}
-                setValue={form.setValue}
-                accounts={accounts}
-                currency={watchedCurrency || undefined}
-                label={t('form.account.label')}
-              />
-            )}
+            <AccountField
+              control={form.control}
+              setValue={form.setValue}
+              accounts={accounts ?? []}
+              currency={watchedCurrency || undefined}
+              label={t('form.account.label')}
+              name="accountId"
+            />
 
             <FormField
               control={form.control}

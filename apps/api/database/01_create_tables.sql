@@ -277,19 +277,24 @@ CREATE INDEX idx_cedear_ratios_ticker ON cedear_ratios(ticker, effective_date DE
 
 -- User-owned credit cards (liability accounts).
 -- closing_day and due_day are 1-31 day-of-month values.
+-- default_account_id is the optional "débito automático" funding account: it PRE-FILLS the
+--   settlement dialog's "Paid from" and never generates a settlement on its own — a real auto-debit
+--   can fail, and Renly must never invent a payment that did not happen. Its FK constraint is added
+--   via ALTER TABLE below because accounts is created after this table.
 CREATE TABLE credit_cards (
-  id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name            VARCHAR(100) NOT NULL,
-  closing_day     INTEGER NOT NULL CHECK (closing_day >= 1 AND closing_day <= 31),
-  due_day         INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
-  currency        VARCHAR(3) NOT NULL,
-  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  id                 BIGSERIAL PRIMARY KEY,
+  user_id            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name               VARCHAR(100) NOT NULL,
+  closing_day        INTEGER NOT NULL CHECK (closing_day >= 1 AND closing_day <= 31),
+  due_day            INTEGER NOT NULL CHECK (due_day >= 1 AND due_day <= 31),
+  currency           VARCHAR(3) NOT NULL,
+  is_active          BOOLEAN NOT NULL DEFAULT TRUE,
   -- Optional typical monthly payment toward this card (for revolving-debt users).
   -- When set, counts as a fixed monthly commitment in the liquidity ratio.
-  monthly_payment NUMERIC(18,2) CHECK (monthly_payment IS NULL OR monthly_payment >= 0),
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  monthly_payment    NUMERIC(18,2) CHECK (monthly_payment IS NULL OR monthly_payment >= 0),
+  default_account_id BIGINT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
@@ -314,6 +319,17 @@ CREATE TABLE accounts (
 
 CREATE INDEX idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX idx_accounts_user_active ON accounts(user_id, is_active);
+
+-- Forward FK from credit_cards to accounts (the default funding account).
+-- Declared via ALTER TABLE because accounts is created after credit_cards.
+-- ON DELETE SET NULL: deleting an account clears the default rather than blocking the delete —
+-- the default is a convenience, never a record of money that moved.
+ALTER TABLE credit_cards
+  ADD CONSTRAINT credit_cards_default_account_id_fkey
+  FOREIGN KEY (default_account_id) REFERENCES accounts(id) ON DELETE SET NULL;
+
+CREATE INDEX idx_credit_cards_default_account_id ON credit_cards(default_account_id)
+  WHERE default_account_id IS NOT NULL;
 
 -- Income entries (daily income tracking).
 -- source tracks origin: 'manual', 'shortcut', 'auto', 'reconciliation'.
@@ -378,29 +394,39 @@ CREATE INDEX idx_card_settlements_account_id
 -- next_billing_date and lets the scheduler snap back to the original day after
 -- a short-month clamp (e.g. Jan 31 -> Feb 28 -> Mar 31, not Mar 28). Ignored by
 -- weekly / biweekly cycles since those advance by literal days.
+-- default_account_id is the optional account the scheduler links each emitted charge to, so an
+--   auto-generated expense decrements the balance it really came out of. Only meaningful when
+--   payment_method <> 'credit_card' (a card-paid plan hits the card, and its cash leg lands at the
+--   card settlement instead). ON DELETE SET NULL — the default is a convenience, not a money record.
 CREATE TABLE subscriptions (
-  id                BIGSERIAL PRIMARY KEY,
-  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name              VARCHAR(255) NOT NULL,
-  amount            NUMERIC(18, 2) NOT NULL,
-  currency          VARCHAR(3) NOT NULL,
-  billing_cycle     VARCHAR(20) NOT NULL,
-  payment_method    VARCHAR(20),
-  credit_card_id    BIGINT REFERENCES credit_cards(id),
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
-  next_billing_date DATE NOT NULL,
-  anchor_day        INTEGER NOT NULL CHECK (anchor_day >= 1 AND anchor_day <= 31),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 BIGSERIAL PRIMARY KEY,
+  user_id            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name               VARCHAR(255) NOT NULL,
+  amount             NUMERIC(18, 2) NOT NULL,
+  currency           VARCHAR(3) NOT NULL,
+  billing_cycle      VARCHAR(20) NOT NULL,
+  payment_method     VARCHAR(20),
+  credit_card_id     BIGINT REFERENCES credit_cards(id),
+  default_account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+  next_billing_date  DATE NOT NULL,
+  anchor_day         INTEGER NOT NULL CHECK (anchor_day >= 1 AND anchor_day <= 31),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_subscriptions_user_id ON subscriptions(user_id);
 CREATE INDEX idx_subscriptions_user_next_billing ON subscriptions(user_id, next_billing_date);
 CREATE INDEX idx_subscriptions_credit_card ON subscriptions(credit_card_id);
+CREATE INDEX idx_subscriptions_default_account_id ON subscriptions(default_account_id)
+  WHERE default_account_id IS NOT NULL;
 
 -- Installments (cuotas; e.g. TV Samsung 12x).
 -- Auto-generates one expense_entry per cuota each month (Phase 3, Step 3).
 -- is_active flips to false when current_installment > installments_count (fully paid).
+-- default_account_id mirrors subscriptions: the account the scheduler links each emitted cuota to.
+--   Deliberately NOT one of the LOCKED_FIELDS — it is a forward-looking convenience rather than a
+--   contractual term of the plan, so it stays editable after charging has started.
 CREATE TABLE installments (
   id                  BIGSERIAL PRIMARY KEY,
   user_id             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -412,6 +438,7 @@ CREATE TABLE installments (
   current_installment INTEGER NOT NULL DEFAULT 1,
   payment_method      VARCHAR(20),
   credit_card_id      BIGINT REFERENCES credit_cards(id),
+  default_account_id  BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   is_active           BOOLEAN NOT NULL DEFAULT TRUE,
   start_date          DATE NOT NULL,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -421,6 +448,8 @@ CREATE TABLE installments (
 CREATE INDEX idx_installments_user_id ON installments(user_id);
 CREATE INDEX idx_installments_user_active ON installments(user_id, is_active);
 CREATE INDEX idx_installments_credit_card ON installments(credit_card_id);
+CREATE INDEX idx_installments_default_account_id ON installments(default_account_id)
+  WHERE default_account_id IS NOT NULL;
 
 -- Expense entries (daily expense tracking).
 -- payment_method: 'cash', 'debit', 'transfer', 'credit_card'.
@@ -610,28 +639,34 @@ CREATE INDEX idx_transfers_to_account_date ON transfers(to_account_id, date);
 -- Payment obligations (e.g. electricity, ABL, gas, internet). Surfaces in Payments Calendar (Phase 3, Step 4).
 -- recurrence: 'monthly', 'bimonthly', 'quarterly', 'annual', or NULL for one-off.
 -- next_due_date is the anchor for the next occurrence; recurring obligations project forward from it.
+-- default_account_id is the account Mark Paid pre-fills as "Paid from" on the expense it creates.
+--   Obligations are not auto-emitted (there is no scheduler for them), so this default is honoured at
+--   Mark Paid time rather than by a background job.
 CREATE TABLE payment_obligations (
-  id                BIGSERIAL PRIMARY KEY,
-  user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  name              VARCHAR(255) NOT NULL,
-  amount            NUMERIC(18, 2) NOT NULL,
-  currency          VARCHAR(3) NOT NULL,
-  next_due_date     DATE NOT NULL,
-  anchor_day        INTEGER NOT NULL CHECK (anchor_day BETWEEN 1 AND 31),
-  recurrence        VARCHAR(20),
-  category          VARCHAR(100),
-  expense_category  expense_category,
-  payment_method    VARCHAR(20),
-  credit_card_id    BIGINT REFERENCES credit_cards(id),
-  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
-  notes             TEXT,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id                 BIGSERIAL PRIMARY KEY,
+  user_id            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name               VARCHAR(255) NOT NULL,
+  amount             NUMERIC(18, 2) NOT NULL,
+  currency           VARCHAR(3) NOT NULL,
+  next_due_date      DATE NOT NULL,
+  anchor_day         INTEGER NOT NULL CHECK (anchor_day BETWEEN 1 AND 31),
+  recurrence         VARCHAR(20),
+  category           VARCHAR(100),
+  expense_category   expense_category,
+  payment_method     VARCHAR(20),
+  credit_card_id     BIGINT REFERENCES credit_cards(id),
+  default_account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  is_active          BOOLEAN NOT NULL DEFAULT TRUE,
+  notes              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_payment_obligations_user_id ON payment_obligations(user_id);
 CREATE INDEX idx_payment_obligations_user_next_due_date ON payment_obligations(user_id, next_due_date);
 CREATE INDEX idx_payment_obligations_credit_card ON payment_obligations(credit_card_id);
+CREATE INDEX idx_payment_obligations_default_account_id ON payment_obligations(default_account_id)
+  WHERE default_account_id IS NOT NULL;
 
 -- Forward FK from expense_entries to payment_obligations (Phase 3, Step E).
 -- Declared via ALTER TABLE because payment_obligations is created after expense_entries.

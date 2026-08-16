@@ -85,8 +85,16 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
     ...inlineCards.filter((c) => !creditCards?.some((p) => p.id === c.id)),
   ];
   const activeCards = allCards.filter((c) => c.isActive);
+  /*
+   * A stored card the offerable list can't show — archived since it was picked — still has to render,
+   * or the trigger falls back to its placeholder and reads as cleared while form state keeps the id
+   * (the same failure the account picker guards against; see lib/utils/account-field-options).
+   * Appended, never offered: it is only there so the control tells the truth about what is stored.
+   */
+  const storedCard = allCards.find((c) => c.id === watchedCreditCardId);
+  const unofferableCard = storedCard && !storedCard.isActive ? storedCard : undefined;
   const showCardRow = watchedPaymentMethod === 'credit_card';
-  const hasActiveCards = activeCards.length > 0;
+  const hasActiveCards = activeCards.length > 0 || !!unofferableCard;
 
   // Clear credit card when payment method changes away from credit_card.
   useEffect(() => {
@@ -153,10 +161,22 @@ export function PaymentMethodFields<T extends PaymentMethodFormValues & FieldVal
                             disabled={disabled}
                             placeholder={t('creditCard.placeholder')}
                             data-testid="payment-method-card-select"
-                            options={activeCards.map((card) => ({
-                              value: card.id.toString(),
-                              label: card.name,
-                            }))}
+                            options={[
+                              ...activeCards.map((card) => ({
+                                value: card.id.toString(),
+                                label: card.name,
+                              })),
+                              ...(unofferableCard
+                                ? [
+                                    {
+                                      value: unofferableCard.id.toString(),
+                                      label: t('creditCard.archived', {
+                                        name: unofferableCard.name,
+                                      }),
+                                    },
+                                  ]
+                                : []),
+                            ]}
                           />
                         </FormControl>
                       </MaybeLockedTooltip>

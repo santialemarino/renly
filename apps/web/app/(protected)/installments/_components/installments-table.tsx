@@ -17,6 +17,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Installment, InstallmentSortField } from '@/lib/api/installments';
 import { INTEREST_EPSILON } from '@/lib/constants/installments';
@@ -27,6 +28,8 @@ interface InstallmentsTableProps {
   installments: Installment[];
   preferredCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }
@@ -35,6 +38,7 @@ export function InstallmentsTable({
   installments,
   preferredCurrencies,
   creditCards,
+  accounts,
   activeCurrency,
   firstRun,
 }: InstallmentsTableProps) {
@@ -72,6 +76,23 @@ export function InstallmentsTable({
     } finally {
       setArchivingId(null);
     }
+  }
+
+  /*
+   * The "Paid from X" line under a plan's payment method, or null when the plan draws no account.
+   * The funding account qualifies the method rather than standing alone, so it reads as a second line
+   * there instead of a mostly-empty column — and without it the link is write-only on the one entity
+   * that spends it every month unprompted. Archived accounts resolve too (the page fetches them for
+   * exactly this reason), so a plan pointing at one still says which.
+   */
+  function fundingLine(accountId: number | null) {
+    const account = accounts?.find((a) => a.id === accountId);
+    if (!account) return null;
+    return (
+      <span className="block text-paragraph-xs text-muted-foreground">
+        {t('table.paidFrom', { account: account.name })}
+      </span>
+    );
   }
 
   return (
@@ -175,6 +196,7 @@ export function InstallmentsTable({
                     <TableCell>{inst.nextCuotaDate ? fmt.date(inst.nextCuotaDate) : '—'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {inst.paymentMethod ? t(`paymentMethods.${inst.paymentMethod}`) : '—'}
+                      {fundingLine(inst.defaultAccountId)}
                     </TableCell>
                     <TableCell className="text-center">
                       {!inst.isActive ? (
@@ -236,6 +258,7 @@ export function InstallmentsTable({
         installment={editInstallment ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

@@ -113,6 +113,12 @@ export function PaymentObligationsTable({
       paymentMethod: (obligation.paymentMethod ??
         undefined) as PrefillFromObligation['paymentMethod'],
       creditCardId: obligation.creditCardId ?? undefined,
+      // Only when the picker would offer it: pre-selecting an ARCHIVED account on a NEW expense
+      // would attach money to a closed account the user never chose (the spare-an-archived-link rule
+      // is for entries being edited), and a failed accounts fetch would hide the field entirely.
+      accountId: accounts?.some((a) => a.id === obligation.defaultAccountId && a.isActive)
+        ? (obligation.defaultAccountId ?? undefined)
+        : undefined,
       paymentObligationId: obligation.id,
       recurrence: obligation.recurrence,
     });
@@ -142,6 +148,23 @@ export function PaymentObligationsTable({
     } finally {
       setArchivingId(null);
     }
+  }
+
+  /*
+   * The "Paid from X" line under a plan's payment method, or null when the plan draws no account.
+   * The funding account qualifies the method rather than standing alone, so it reads as a second line
+   * there instead of a mostly-empty column — and without it the link is write-only on the one entity
+   * that spends it every month unprompted. Archived accounts resolve too (the page fetches them for
+   * exactly this reason), so a plan pointing at one still says which.
+   */
+  function fundingLine(accountId: number | null) {
+    const account = accounts?.find((a) => a.id === accountId);
+    if (!account) return null;
+    return (
+      <span className="block text-paragraph-xs text-muted-foreground">
+        {t('table.paidFrom', { account: account.name })}
+      </span>
+    );
   }
 
   return (
@@ -224,6 +247,7 @@ export function PaymentObligationsTable({
                     <TableCell className="text-muted-foreground">{o.category || '—'}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {o.paymentMethod ? t(`paymentMethods.${o.paymentMethod}`) : '—'}
+                      {fundingLine(o.defaultAccountId)}
                     </TableCell>
                     <TableCell className="text-center">
                       {!o.isActive ? (
@@ -299,6 +323,7 @@ export function PaymentObligationsTable({
         obligation={editObligation ?? undefined}
         preferredCurrencies={preferredCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

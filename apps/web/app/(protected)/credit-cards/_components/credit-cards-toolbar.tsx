@@ -7,8 +7,20 @@ import { useTranslations } from 'next-intl';
 import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 
-export function CreditCardsToolbar({ preferredCurrencies }: { preferredCurrencies?: string[] }) {
+interface CreditCardsToolbarProps {
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  // Accounts the card's optional default funding account can be picked from.
+  accounts?: Account[];
+}
+
+export function CreditCardsToolbar({
+  preferredCurrencies,
+  supportedCurrencies,
+  accounts,
+}: CreditCardsToolbarProps) {
   const t = useTranslations('creditCards');
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -26,6 +38,8 @@ export function CreditCardsToolbar({ preferredCurrencies }: { preferredCurrencie
         open={createOpen}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
+        supportedCurrencies={supportedCurrencies}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
     </EntityListToolbar>

@@ -17,6 +17,7 @@ import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
+import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Subscription, SubscriptionSortField } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
@@ -27,6 +28,8 @@ interface SubscriptionsTableProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
+  // Accounts the optional default funding account can be picked from.
+  accounts?: Account[];
   activeCurrency?: string;
   firstRun?: boolean;
 }
@@ -36,6 +39,7 @@ export function SubscriptionsTable({
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
+  accounts,
   activeCurrency,
   firstRun,
 }: SubscriptionsTableProps) {
@@ -73,6 +77,23 @@ export function SubscriptionsTable({
     } finally {
       setArchivingId(null);
     }
+  }
+
+  /*
+   * The "Paid from X" line under a plan's payment method, or null when the plan draws no account.
+   * The funding account qualifies the method rather than standing alone, so it reads as a second line
+   * there instead of a mostly-empty column — and without it the link is write-only on the one entity
+   * that spends it every month unprompted. Archived accounts resolve too (the page fetches them for
+   * exactly this reason), so a plan pointing at one still says which.
+   */
+  function fundingLine(accountId: number | null) {
+    const account = accounts?.find((a) => a.id === accountId);
+    if (!account) return null;
+    return (
+      <span className="block text-paragraph-xs text-muted-foreground">
+        {t('table.paidFrom', { account: account.name })}
+      </span>
+    );
   }
 
   return (
@@ -140,6 +161,7 @@ export function SubscriptionsTable({
                     <TableCell>{fmt.date(sub.nextBillingDate)}</TableCell>
                     <TableCell className="text-muted-foreground">
                       {sub.paymentMethod ? t(`paymentMethods.${sub.paymentMethod}`) : '—'}
+                      {fundingLine(sub.defaultAccountId)}
                     </TableCell>
                     <TableCell className="text-center">
                       {!sub.isActive ? (
@@ -202,6 +224,7 @@ export function SubscriptionsTable({
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         onSuccess={() => router.refresh()}
       />
 

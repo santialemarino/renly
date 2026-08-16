@@ -27,15 +27,37 @@ class DomainError(Exception):
         return {}
 
 
-# A credit-card expense also links a cash/bank account. A card expense increases the card liability
-# now and only draws cash later at settlement, so it never links an account directly. Mapped to 400.
+# A credit-card charge also names a cash/bank account: an expense linking one directly, or a recurring
+# plan / card naming one as its default. A card charge increases the card liability now and only draws
+# cash later at settlement, so it never draws an account directly. Mapped to 400.
 class AccountCardExclusivityError(DomainError):
     code = "account_card_exclusivity"
     status_code = 400
 
     def __init__(self) -> None:
-        self.message = "A credit-card expense cannot also be paid from an account."
+        self.message = "A credit-card charge cannot also be paid from an account."
         super().__init__(self.message)
+
+
+# An account's currency cannot be changed because a credit card or a recurring plan names it as their
+# default funding account. Deliberately separate from AccountCurrencyChangeBlockedError: no money has
+# moved, so "has linked entries" would be false — what stands in the way is a standing default whose
+# charges would silently stop being attributed the moment the currencies stopped matching. Mapped to 409.
+class AccountCurrencyChangeBlockedByDefaultError(DomainError):
+    code = "account_currency_change_blocked_by_default"
+    status_code = 409
+
+    def __init__(self, referencing_count: int) -> None:
+        self.referencing_count = referencing_count
+        self.message = (
+            f"Currency cannot be changed because {referencing_count} card(s) or plan(s) use this account "
+            "as their default. Clear those defaults first."
+        )
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"referencing_count": self.referencing_count}
 
 
 # An account's currency cannot be changed because money entries link to it — a cash balance must stay

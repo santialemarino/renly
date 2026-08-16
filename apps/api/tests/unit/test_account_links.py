@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.domain import (
     AccountCardExclusivityError,
+    AccountCurrencyChangeBlockedByDefaultError,
     AccountCurrencyChangeBlockedError,
     AccountCurrencyMismatchError,
     NotFoundError,
@@ -239,6 +240,7 @@ class TestAccountCurrencyLock:
     async def test_currency_change_allowed_when_no_links(self, monkeypatch):
         monkeypatch.setattr(account_service, "get_account", AsyncMock(return_value=_account(currency="ARS")))
         monkeypatch.setattr(account_service, "account_has_links", AsyncMock(return_value=False))
+        monkeypatch.setattr(account_service, "count_default_references", AsyncMock(return_value=0))
         monkeypatch.setattr(account_service.account_repository, "save", AsyncMock())
         session = AsyncMock()
 
@@ -246,6 +248,36 @@ class TestAccountCurrencyLock:
 
         assert result.currency == "USD"
         session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_currency_change_blocked_by_a_standing_default(self, monkeypatch):
+        # No money has moved, so account_has_links is False and the "linked entries" error would be a
+        # lie — but a card or plan still points here, and the moment the currencies diverge every
+        # charge it was meant to attribute stops being attributed, silently.
+        monkeypatch.setattr(account_service, "get_account", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(account_service, "account_has_links", AsyncMock(return_value=False))
+        monkeypatch.setattr(account_service, "count_default_references", AsyncMock(return_value=2))
+        save_mock = AsyncMock()
+        monkeypatch.setattr(account_service.account_repository, "save", save_mock)
+
+        with pytest.raises(AccountCurrencyChangeBlockedByDefaultError) as exc:
+            await account_service.update_account(AsyncMock(), 7, USER, currency="USD")
+
+        assert exc.value.extra == {"referencing_count": 2}
+        save_mock.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_opening_date_change_is_not_blocked_by_a_standing_default(self, monkeypatch):
+        # A default has no bearing on the opening anchor — only on which currency it must match.
+        monkeypatch.setattr(account_service, "get_account", AsyncMock(return_value=_account()))
+        monkeypatch.setattr(account_service, "account_has_links", AsyncMock(return_value=False))
+        counter = AsyncMock(return_value=3)
+        monkeypatch.setattr(account_service, "count_default_references", counter)
+        monkeypatch.setattr(account_service.account_repository, "save", AsyncMock())
+
+        await account_service.update_account(AsyncMock(), 7, USER, opening_date=date(2026, 2, 1))
+
+        counter.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_same_currency_is_not_a_change_and_skips_the_link_check(self, monkeypatch):

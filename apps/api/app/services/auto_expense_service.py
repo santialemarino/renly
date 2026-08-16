@@ -12,11 +12,18 @@ from datetime import date as date_type
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from app.domain import claimed_installment_cuotas, claimed_subscription_cycles
+from app.domain import PaymentMethod, claimed_installment_cuotas, claimed_subscription_cycles
+from app.models.account import Account
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
 from app.models.subscription import Subscription
-from app.repositories import installment_repository, subscription_repository, user_settings_repository
+from app.repositories import (
+    account_reconciliation_repository,
+    account_repository,
+    installment_repository,
+    subscription_repository,
+    user_settings_repository,
+)
 from app.services import card_reconciliation_service
 from app.utils.dates import (
     add_months,
@@ -139,6 +146,7 @@ async def _generate_subscription_expenses(
 
     sub_ids = [s.id for s, _ in pending]
     existing = await _existing_subscription_dates(session, sub_ids)
+    default_accounts, reconciled_through = await _resolve_default_accounts(session, [s for s, _ in pending])
 
     created = 0
     advanced = 0
@@ -176,6 +184,7 @@ async def _generate_subscription_expenses(
                     notes=sub.name,
                     payment_method=sub.payment_method,
                     credit_card_id=sub.credit_card_id,
+                    account_id=_link_for_date(default_accounts.get(sub.id), d, reconciled_through.get(sub.default_account_id)),
                     source=SOURCE_SUBSCRIPTION,
                     subscription_id=sub.id,
                 )
@@ -194,6 +203,71 @@ async def _generate_subscription_expenses(
         await _mark_touched_buckets_stale(session, touched_buckets)
         logger.info("Auto-expenses: created %d subscription charges at %s UTC.", created, now_utc.isoformat())
     return created, advanced
+
+
+# Resolves the cash/bank account each pending plan's emitted charges should be linked to, in ONE query
+# for every user in the tick. Returns {plan_id: Account} holding only links that are still safe to
+# write — every condition a picker enforces before it will offer an account, re-checked here because
+# the plan's stored default can go stale long after it was chosen:
+#   - owned by the plan's owner (SEC-4 — the loader is unscoped by design);
+#   - same currency, because the balance union sums linked rows without conversion;
+#   - still active, since archiving an account means the user has stopped using it and no picker in
+#     the app will link money to one;
+#   - not a card-paid plan, whose cash leg lands at the card settlement — linking here as well would
+#     count the same charge twice (the write paths refuse the pair, but a restored plan bypasses them).
+# A default that no longer qualifies is skipped rather than blocking the charge: the expense still
+# lands, merely unattributed, which is exactly the pre-default behaviour, and reconciliation remains
+# the backstop. It is logged, because a link the user configured silently ceasing to apply is
+# otherwise invisible everywhere.
+async def _resolve_default_accounts(
+    session: AsyncSession, plans: list[Subscription] | list[Installment]
+) -> tuple[dict[int, Account], dict[int, date_type]]:
+    account_ids = sorted({p.default_account_id for p in plans if p.default_account_id is not None})
+    if not account_ids:
+        return {}, {}
+    accounts = {a.id: a for a in await account_repository.get_by_ids_across_users(session, account_ids)}
+    reconciled_through = await account_reconciliation_repository.get_latest_dates_across_users(session, account_ids)
+    resolved: dict[int, Account] = {}
+    for plan in plans:
+        if plan.default_account_id is None:
+            continue
+        account = accounts.get(plan.default_account_id)
+        if (
+            account is not None
+            and account.user_id == plan.user_id
+            and account.currency == plan.currency
+            and account.is_active
+            and plan.payment_method != PaymentMethod.credit_card
+        ):
+            resolved[plan.id] = account
+        else:
+            logger.warning(
+                "Auto-expenses: plan %s no longer qualifies for funding account %s; emitting unattributed.",
+                plan.id,
+                plan.default_account_id,
+            )
+    return resolved, reconciled_through
+
+
+# The account id a charge dated `charge_date` may carry, or None when it must stay unattributed. Two
+# lower bounds, both meaning "this date is already accounted for":
+#
+#   - opening_date, because opening_balance IS the balance at that date, so an earlier row is already
+#     inside it and the sums exclude it — the link would render "Paid from X" while never moving X;
+#   - the account's latest reconciliation, because a reconciliation records the real balance on its
+#     date and its adjustment already absorbed everything Renly did not know about, this charge
+#     included. Linking it now would subtract the same money a second time, and the forward-only rule
+#     means the user could not even re-reconcile that date to undo it.
+#
+# Both apply to the SCHEDULER specifically: it picks these dates itself by walking a plan's cursor and
+# back-filling missed cycles, so a user cannot foresee them the way they can when back-dating an entry
+# by hand. The charge itself still lands — it is real spending — merely unattributed.
+def _link_for_date(account: Account | None, charge_date: date_type, reconciled_through: date_type | None) -> int | None:
+    if account is None or charge_date < account.opening_date:
+        return None
+    if reconciled_through is not None and charge_date <= reconciled_through:
+        return None
+    return account.id
 
 
 # Records that a scheduled charge landed in a card bucket, keeping the EARLIEST date seen per bucket.
@@ -245,6 +319,7 @@ async def _generate_installment_expenses(
 
     inst_ids = [i.id for i, _ in pending]
     existing = await _existing_installment_dates(session, inst_ids)
+    default_accounts, reconciled_through = await _resolve_default_accounts(session, [i for i, _ in pending])
 
     created = 0
     advanced = 0
@@ -278,6 +353,7 @@ async def _generate_installment_expenses(
                     notes=inst.name,
                     payment_method=inst.payment_method,
                     credit_card_id=inst.credit_card_id,
+                    account_id=_link_for_date(default_accounts.get(inst.id), cuota_date, reconciled_through.get(inst.default_account_id)),
                     source=SOURCE_INSTALLMENT,
                     installment_id=inst.id,
                 )

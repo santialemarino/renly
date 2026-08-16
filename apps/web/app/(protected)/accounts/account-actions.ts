@@ -1,7 +1,5 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { AccountFormValues } from '@/app/(protected)/accounts/account-form-schema';
 import type { AccountReconcileFormValues } from '@/app/(protected)/accounts/account-reconcile-form-schema';
 import type { TransferFormValues } from '@/app/(protected)/accounts/transfer-form-schema';
@@ -12,7 +10,8 @@ import {
 } from '@/lib/api/account-reconciliations';
 import { mapTransferList, type Transfer } from '@/lib/api/transfers';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError, type ApiError } from '@/lib/i18n/api-errors';
+import type { ApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 import { getFormatters } from '@/lib/i18n/formatters-server';
 
 function toBody(values: AccountFormValues) {
@@ -25,14 +24,32 @@ function toBody(values: AccountFormValues) {
   };
 }
 
-export async function createAccount(values: AccountFormValues): Promise<void> {
+// The account form's refusals are all coded and all actionable — the currency and opening-date locks,
+// and the standing-default lock — so they are returned as data for submitWithLifecycle to surface
+// rather than thrown, which the Server Action boundary would reduce to a generic toast.
+export type SaveAccountResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function createAccount(values: AccountFormValues): Promise<SaveAccountResult> {
   const res = await authenticatedFetch('/accounts', { method: 'POST', body: toBody(values) });
-  if (!res.ok) throw new Error('Failed to create account');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to create account');
+  }
+  return { ok: true };
 }
 
-export async function updateAccount(id: number, values: AccountFormValues): Promise<void> {
+export async function updateAccount(
+  id: number,
+  values: AccountFormValues,
+): Promise<SaveAccountResult> {
   const res = await authenticatedFetch(`/accounts/${id}`, { method: 'PUT', body: toBody(values) });
-  if (!res.ok) throw new Error('Failed to update account');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to update account');
+  }
+  return { ok: true };
 }
 
 export async function deleteAccount(id: number): Promise<void> {
@@ -89,17 +106,16 @@ async function localizeDateParams(error: ApiError): Promise<ApiError> {
   return { ...error, params };
 }
 
-// Resolves a failed reconciliation response to a localized message for the dialog / toast.
+// Resolves a failed reconciliation response to a localized message for the dialog / toast, with the
+// ISO dates in its params formatted first.
 async function reconciliationError(res: Response): Promise<string> {
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, await localizeDateParams(await parseApiError(res)), '');
+  return (await localizedApiError(res, localizeDateParams)) ?? '';
 }
 
 // Resolves a refused transfer to its localized reason (same account, mismatched single-currency
 // amounts, or a missing cross-currency amount).
 async function transferError(res: Response): Promise<string> {
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, await parseApiError(res), '');
+  return (await localizedApiError(res)) ?? '';
 }
 
 // Reconcile an account against its real balance. Returns the localized message on a rejected date

@@ -12,6 +12,9 @@ export function buildSubscriptionFormSchema(requiredMsg: string) {
     nextBillingDate: z.string().min(1, { message: requiredMsg }),
     paymentMethod: z.enum(PAYMENT_METHODS).optional(),
     creditCardId: z.number().optional(),
+    // Optional funding account the scheduler links each emitted charge to (non-card methods only).
+    // Nullable so clearing it can round-trip through `null` (AccountField's contract).
+    defaultAccountId: z.number().nullable().optional(),
   });
 }
 

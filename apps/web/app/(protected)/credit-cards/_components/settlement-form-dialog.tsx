@@ -37,6 +37,10 @@ interface SettlementFormDialogProps {
   // Accounts the payment can be drawn from. Filtered to the settled bucket's currency by AccountField;
   // omitted or empty hides the field entirely (cash-less users see no change).
   accounts?: Account[];
+  // The card's optional default funding account ("débito automático"), used only as the initial value
+  // of "Paid from". It never creates a settlement on its own: a real auto-debit can fail, and Renly
+  // must not invent a payment that did not happen.
+  defaultAccountId: number | null;
   onSuccess: () => void;
 }
 
@@ -46,6 +50,7 @@ export function SettlementFormDialog({
   cardId,
   bucketCurrencies,
   accounts,
+  defaultAccountId,
   onSuccess,
 }: SettlementFormDialogProps) {
   const t = useTranslations('creditCards');
@@ -59,35 +64,56 @@ export function SettlementFormDialog({
   const defaultCurrency = bucketCurrencies[0] ?? '';
   const showBucketPicker = bucketCurrencies.length > 1;
 
+  /*
+   * Only pre-fill a default the picker would actually offer. Seeding it unconditionally moved real
+   * money invisibly in two cases: an ARCHIVED default would arrive pre-selected on a brand-new
+   * settlement (the spare-an-archived-link rule exists for entries being EDITED, not for creating one),
+   * and if the accounts fetch failed the page's `.catch(() => [])` left AccountField with nothing to
+   * render — so the field vanished while form state still held the id and the save still posted it.
+   */
+  const prefilledAccountId =
+    accounts?.some((a) => a.id === defaultAccountId && a.isActive) === true
+      ? defaultAccountId
+      : null;
+
   const form = useForm<SettlementFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: '',
       amount: '',
       currency: defaultCurrency,
-      accountId: undefined,
+      accountId: prefilledAccountId,
       notes: '',
     },
   });
 
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
-  // Reset form when dialog opens — re-anchor currency to the card's primary bucket.
+  // Reset form when dialog opens — re-anchor currency to the card's primary bucket, and pre-fill the
+  // funding account from the card's default. The default is restricted to the card's own currency, so
+  // it matches the primary bucket the form opens on; switching to another bucket's currency clears it
+  // through AccountField's own mismatch effect rather than submitting a link the API would refuse.
   useEffect(() => {
     if (open) {
       form.reset({
         date: '',
         amount: '',
         currency: defaultCurrency,
-        accountId: undefined,
+        accountId: prefilledAccountId,
         notes: '',
       });
     }
-  }, [open, form, defaultCurrency]);
+  }, [open, form, defaultCurrency, prefilledAccountId]);
 
   async function onSubmit(values: SettlementFormValues) {
     try {
-      await createSettlement(cardId, values);
+      const result = await createSettlement(cardId, values);
+      // The action returns a refusal as DATA (the Server Action boundary strips a thrown error's
+      // message), so its localized reason renders instead of the generic save error.
+      if (!result.ok) {
+        toast.error(result.conflictDetail || t('settlements.createError'));
+        return;
+      }
       toast.success(t('settlements.createSuccess'));
       onSuccess();
       onOpenChange(false);
@@ -169,15 +195,14 @@ export function SettlementFormDialog({
               />
             )}
 
-            {accounts && accounts.length > 0 && (
-              <AccountField
-                control={form.control}
-                setValue={form.setValue}
-                accounts={accounts}
-                currency={watchedCurrency || undefined}
-                label={t('settlements.form.account')}
-              />
-            )}
+            <AccountField
+              control={form.control}
+              setValue={form.setValue}
+              accounts={accounts ?? []}
+              currency={watchedCurrency || undefined}
+              label={t('settlements.form.account')}
+              name="accountId"
+            />
 
             <FormField
               control={form.control}

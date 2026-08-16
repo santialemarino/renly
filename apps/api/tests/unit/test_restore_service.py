@@ -551,3 +551,35 @@ class TestRestoreEndpoints:
 def test_all_specs_have_unique_keys():
     keys = [spec.key for spec in RESTORE_SPECS]
     assert len(keys) == len(set(keys))
+
+
+class TestRestoreSpecsCoverEveryForeignKey:
+    # Structural guards, in the spirit of the export guard #171 added: three tables had reached the
+    # export late, and a FK left off a RestoreSpec is the same failure one layer down — the engine
+    # copies unlisted columns VERBATIM, so an un-remapped account id doesn't merely dangle, it resolves
+    # to whatever row holds that id in the restoring account (a cross-tenant pointer).
+    def test_every_fk_to_a_restored_entity_is_remapped_or_nulled(self):
+        table_to_key = {spec.model.__tablename__: spec.key for spec in RESTORE_SPECS}
+        missing: list[str] = []
+        for spec in RESTORE_SPECS:
+            handled = {fk.field for fk in spec.fks} | set(spec.null_fields) | {"user_id"}
+            for column in spec.model.__table__.columns:
+                for fk in column.foreign_keys:
+                    target = fk.column.table.name
+                    if target in table_to_key and column.name not in handled:
+                        missing.append(f"{spec.key}.{column.name} -> {target}")
+        assert missing == []
+
+    def test_every_fk_to_a_skipped_entity_is_nulled(self):
+        for spec in RESTORE_SPECS:
+            for column in spec.model.__table__.columns:
+                for fk in column.foreign_keys:
+                    if fk.column.table.name in SKIPPED_ENTITIES:
+                        assert column.name in spec.null_fields, f"{spec.key}.{column.name} points at a skipped entity"
+
+    def test_every_parent_is_restored_before_its_children(self):
+        # Would have caught `accounts` sitting after `credit_cards` once a card started naming one.
+        position = {spec.key: index for index, spec in enumerate(RESTORE_SPECS)}
+        for index, spec in enumerate(RESTORE_SPECS):
+            for fk in spec.fks:
+                assert position[fk.parent] < index, f"{spec.key} is restored before its parent {fk.parent}"

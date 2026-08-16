@@ -23,5 +23,10 @@ class CreditCard(SQLModel, table=True):
         decimal_places=2,
         description="Optional monthly payment (revolving-debt users). When set, counts as a fixed commitment in the liquidity ratio.",
     )
+    default_account_id: int | None = Field(
+        default=None,
+        foreign_key="accounts.id",
+        description="Optional funding account ('débito automático'). Pre-fills the settlement's 'Paid from'; never generates a settlement.",
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

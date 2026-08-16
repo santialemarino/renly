@@ -104,7 +104,8 @@
       },
       "creditCard": {
         "label": "Credit card",
-        "placeholder": "Select a card"
+        "placeholder": "Select a card",
+        "archived": "{name} (archived)"
       },
       "noCards": {
         "message": "You don't have any credit cards yet.",
@@ -198,7 +199,8 @@
     "accountField": {
       "placeholder": "Select an account",
       "none": "None",
-      "noneForCurrency": "No {currency} accounts"
+      "noneForCurrency": "No {currency} accounts",
+      "archived": "{name} (archived)"
     },
     "lockedRow": {
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
@@ -770,6 +772,10 @@
         "invalid": "Must be a non-negative number.",
         "overlapHint": "Renly already counts subscriptions and installments paid with this card. Set this only for revolving debt payments beyond those."
       },
+      "defaultAccount": {
+        "label": "Default funding account",
+        "hint": "Pre-fills “Paid from” when you record a payment on this card. Renly never records a payment on its own."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -808,6 +814,7 @@
         "date": "Date",
         "amount": "Amount",
         "currency": "Currency",
+        "account": "Paid from",
         "notes": "Notes"
       },
       "form": {
@@ -1101,7 +1108,8 @@
       "actions": "Actions",
       "empty": "No subscriptions found.",
       "emptyTitle": "Keep tabs on your subscriptions",
-      "emptyDescription": "Add your recurring subscriptions to see what's coming up on your payments calendar."
+      "emptyDescription": "Add your recurring subscriptions to see what's coming up on your payments calendar.",
+      "paidFrom": "Paid from {account}"
     },
     "billingCycles": {
       "weekly": "Weekly",
@@ -1151,6 +1159,10 @@
         "label": "Next billing date",
         "placeholder": "Select a date"
       },
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Charges Renly creates for this subscription are paid from this account, so your balance stays right."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -1192,7 +1204,8 @@
       "empty": "No payment obligations found.",
       "emptyTitle": "Plan your upcoming payments",
       "emptyDescription": "Record one-off or recurring obligations to see everything you owe on your payments calendar.",
-      "paidOn": "Paid on {date}"
+      "paidOn": "Paid on {date}",
+      "paidFrom": "Paid from {account}"
     },
     "recurrences": {
       "oneOff": "One-off",
@@ -1254,6 +1267,10 @@
       "notes": {
         "label": "Notes",
         "placeholder": "Optional notes..."
+      },
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Pre-fills “Paid from” when you mark this obligation paid."
       },
       "cancel": "Cancel",
       "cta": {
@@ -1332,7 +1349,8 @@
       "actions": "Actions",
       "empty": "No installment plans found.",
       "emptyTitle": "Manage your installment plans",
-      "emptyDescription": "Add a plan to track each payment and its upcoming due dates."
+      "emptyDescription": "Add a plan to track each payment and its upcoming due dates.",
+      "paidFrom": "Paid from {account}"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -1397,6 +1415,10 @@
       "locked": "Locked because installments have been charged. To change these terms, delete and recreate the plan.",
       "interestMustBePositive": "Per installment × count must be greater than the original price.",
       "invalidPositiveInteger": "Must be a positive whole number.",
+      "defaultAccount": {
+        "label": "Paid from",
+        "hint": "Cuotas Renly creates for this plan are paid from this account, so your balance stays right."
+      },
       "cancel": "Cancel",
       "cta": {
         "label": "Save",
@@ -2589,8 +2611,9 @@
     }
   },
   "apiErrors": {
-    "account_card_exclusivity": "A credit-card expense can't also be paid from an account.",
+    "account_card_exclusivity": "A credit-card charge can't also be paid from an account.",
     "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
+    "account_currency_change_blocked_by_default": "An account's currency can't be changed while {referencing_count} card(s) or plan(s) use it as their default. Clear those first.",
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
     "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",

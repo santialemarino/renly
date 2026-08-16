@@ -1,12 +1,10 @@
 'use server';
 
-import { getTranslations } from 'next-intl/server';
-
 import type { ExpenseFormValues } from '@/app/(protected)/expenses/expenses-form-schema';
 import type { Expense, ExpenseRaw } from '@/lib/api/expenses';
 import { mapExpense } from '@/lib/api/expenses';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import { parseApiError, resolveApiError } from '@/lib/i18n/api-errors';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 // Cursor change emitted by a linked plan on create / update / delete (Phase 3,
 // follow-up Item 7). The form composes a follow-up toast line — "Netflix's next
@@ -92,15 +90,6 @@ function mapMutationOutcome(raw: ExpenseMutationRaw): ExpenseMutationOutcome {
   };
 }
 
-// Resolves a failed response to a localized conflict message (mapped API `code`, else raw `detail`),
-// or null when the body carries neither so the caller falls back to its generic error.
-async function readErrorDetail(res: Response): Promise<string | null> {
-  const parsed = await parseApiError(res);
-  if (!parsed.code && !parsed.detail) return null;
-  const t = await getTranslations('apiErrors');
-  return resolveApiError(t, parsed, '') || null;
-}
-
 export async function createExpense(values: ExpenseFormValues): Promise<ExpenseMutationResult> {
   const {
     paymentMethod,
@@ -131,10 +120,8 @@ export async function createExpense(values: ExpenseFormValues): Promise<ExpenseM
     },
   });
   if (!res.ok) {
-    if (res.status === 409) {
-      const detail = await readErrorDetail(res);
-      if (detail) return { ok: false, conflictDetail: detail };
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create expense');
   }
   return { ok: true, outcome: mapMutationOutcome(await res.json()) };
@@ -166,10 +153,8 @@ export async function updateExpense(
     },
   });
   if (!res.ok) {
-    if (res.status === 409) {
-      const detail = await readErrorDetail(res);
-      if (detail) return { ok: false, conflictDetail: detail };
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to update expense');
   }
   return { ok: true, outcome: mapMutationOutcome(await res.json()) };
@@ -178,10 +163,8 @@ export async function updateExpense(
 export async function deleteExpense(id: number): Promise<DeleteExpenseResult> {
   const res = await authenticatedFetch(`/expenses/${id}`, { method: 'DELETE' });
   if (!res.ok) {
-    if (res.status === 409) {
-      const detail = await readErrorDetail(res);
-      if (detail) return { ok: false, conflictDetail: detail };
-    }
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to delete expense');
   }
   const raw: { reverse_change: PlanCursorChangeRaw | null } = await res.json();

@@ -19,6 +19,7 @@ interface InstallmentRaw {
   next_cuota_date: string | null;
   payment_method: string | null;
   credit_card_id: number | null;
+  default_account_id: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -44,6 +45,7 @@ export interface Installment {
   nextCuotaDate: string | null;
   paymentMethod: string | null;
   creditCardId: number | null;
+  defaultAccountId: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +68,7 @@ function mapInstallment(raw: InstallmentRaw): Installment {
     nextCuotaDate: raw.next_cuota_date,
     paymentMethod: raw.payment_method,
     creditCardId: raw.credit_card_id,
+    defaultAccountId: raw.default_account_id,
     isActive: raw.is_active,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

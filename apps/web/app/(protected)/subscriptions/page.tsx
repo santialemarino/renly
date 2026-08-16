@@ -4,6 +4,7 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SubscriptionsTable } from '@/app/(protected)/subscriptions/_components/subscriptions-table';
 import { SubscriptionsToolbar } from '@/app/(protected)/subscriptions/_components/subscriptions-toolbar';
+import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getPageSettings } from '@/lib/api/settings';
 import { getSubscriptions, type SubscriptionSortField } from '@/lib/api/subscriptions';
@@ -31,11 +32,17 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies] = await Promise.all([
+  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
     getPageSettings(),
     // Entry forms restrict their currency picker to the convertible set; on a fetch error the
     // picker degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
+    /*
+     * Accounts for the plan's optional default funding account (empty on error → the field hides
+     * itself). Archived ones are included so a stored default that has since been archived still
+     * renders by name instead of a blank picker; the picker only ever OFFERS active accounts.
+     */
+    getAccounts({ showArchived: true }).catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -62,12 +69,14 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
       />
       <SubscriptionsTable
         subscriptions={subscriptions}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
+        accounts={accounts}
         activeCurrency={currency}
         firstRun={firstRun}
       />

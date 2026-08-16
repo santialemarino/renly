@@ -19,6 +19,7 @@ from app.domain.cycle_advance import (
 )
 from app.domain.errors import (
     AccountCardExclusivityError,
+    AccountCurrencyChangeBlockedByDefaultError,
     AccountCurrencyChangeBlockedError,
     AccountCurrencyMismatchError,
     AccountOpeningDateChangeBlockedError,
@@ -57,6 +58,7 @@ from app.domain.reconciliation import ensure_not_reconciliation_owned
 
 __all__ = [
     "AccountCardExclusivityError",
+    "AccountCurrencyChangeBlockedByDefaultError",
     "AccountCurrencyChangeBlockedError",
     "AccountCurrencyMismatchError",
     "AccountOpeningDateChangeBlockedError",

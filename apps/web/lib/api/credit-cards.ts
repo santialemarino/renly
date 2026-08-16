@@ -18,19 +18,24 @@ interface CreditCardRaw {
   currency: string;
   is_active: boolean;
   monthly_payment: string | null;
+  default_account_id: number | null;
   balances: CardBucketBalanceRaw[];
   has_expenses: boolean;
   created_at: string;
   updated_at: string;
 }
 
-interface CardSettlementRaw {
+// Exported so the colocated actions file maps the same wire shape instead of re-declaring it:
+// the settlements list is fetched from a client component, which can't import this server-only module
+// at runtime, so `fetchSettlements` lives in the actions file and reuses these.
+export interface CardSettlementRaw {
   id: number;
   credit_card_id: number;
   date: string;
   amount: string;
   currency: string;
   account_id: number | null;
+  account_name: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -51,6 +56,7 @@ export interface CreditCard {
   currency: string;
   isActive: boolean;
   monthlyPayment: number | null;
+  defaultAccountId: number | null;
   balances: CardBucketBalance[];
   hasExpenses: boolean;
   createdAt: string;
@@ -64,6 +70,8 @@ export interface CardSettlement {
   amount: string;
   currency: string;
   accountId: number | null;
+  // Denormalized by the API so an archived funding account still renders by name.
+  accountName: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -80,6 +88,7 @@ export function mapCreditCard(raw: CreditCardRaw): CreditCard {
     currency: raw.currency,
     isActive: raw.is_active,
     monthlyPayment: raw.monthly_payment !== null ? Number(raw.monthly_payment) : null,
+    defaultAccountId: raw.default_account_id,
     balances: raw.balances.map((b) => ({ currency: b.currency, balance: b.balance })),
     hasExpenses: raw.has_expenses,
     createdAt: raw.created_at,
@@ -87,7 +96,7 @@ export function mapCreditCard(raw: CreditCardRaw): CreditCard {
   };
 }
 
-function mapSettlement(raw: CardSettlementRaw): CardSettlement {
+export function mapSettlement(raw: CardSettlementRaw): CardSettlement {
   return {
     id: raw.id,
     creditCardId: raw.credit_card_id,
@@ -95,6 +104,7 @@ function mapSettlement(raw: CardSettlementRaw): CardSettlement {
     amount: raw.amount,
     currency: raw.currency,
     accountId: raw.account_id,
+    accountName: raw.account_name,
     notes: raw.notes,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
@@ -124,11 +134,4 @@ export async function getCreditCards(params: GetCreditCardsParams = {}): Promise
   if (!res.ok) throw new Error('Failed to fetch credit cards');
   const raw: CreditCardRaw[] = await res.json();
   return raw.map(mapCreditCard);
-}
-
-export async function getSettlements(cardId: number): Promise<CardSettlement[]> {
-  const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, { method: 'GET' });
-  if (!res.ok) throw new Error('Failed to fetch settlements');
-  const raw: CardSettlementRaw[] = await res.json();
-  return raw.map(mapSettlement);
 }

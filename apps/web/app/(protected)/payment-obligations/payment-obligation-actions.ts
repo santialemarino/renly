@@ -2,6 +2,7 @@
 
 import type { PaymentObligationFormValues } from '@/app/(protected)/payment-obligations/payment-obligation-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
 function toBody(values: PaymentObligationFormValues) {
   const {
@@ -11,6 +12,7 @@ function toBody(values: PaymentObligationFormValues) {
     expenseCategory,
     paymentMethod,
     creditCardId,
+    defaultAccountId,
     notes,
     ...rest
   } = values;
@@ -23,27 +25,44 @@ function toBody(values: PaymentObligationFormValues) {
     expense_category: expenseCategory ?? null,
     payment_method: paymentMethod ?? null,
     credit_card_id: paymentMethod === 'credit_card' ? (creditCardId ?? null) : null,
+    // A card-paid plan draws cash at the card settlement, never here — so the funding account is
+    // dropped when the method is credit_card rather than sent for the API to refuse.
+    default_account_id: paymentMethod === 'credit_card' ? null : (defaultAccountId ?? null),
     notes: notes || null,
   };
 }
 
-export async function createPaymentObligation(values: PaymentObligationFormValues): Promise<void> {
+export type SavePaymentObligationResult = { ok: true } | { ok: false; conflictDetail: string };
+
+export async function createPaymentObligation(
+  values: PaymentObligationFormValues,
+): Promise<SavePaymentObligationResult> {
   const res = await authenticatedFetch('/payment-obligations', {
     method: 'POST',
     body: toBody(values),
   });
-  if (!res.ok) throw new Error('Failed to create payment obligation');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to create payment obligation');
+  }
+  return { ok: true };
 }
 
 export async function updatePaymentObligation(
   id: number,
   values: PaymentObligationFormValues,
-): Promise<void> {
+): Promise<SavePaymentObligationResult> {
   const res = await authenticatedFetch(`/payment-obligations/${id}`, {
     method: 'PUT',
     body: toBody(values),
   });
-  if (!res.ok) throw new Error('Failed to update payment obligation');
+  if (!res.ok) {
+    const detail = isRefusal(res) ? await localizedApiError(res) : null;
+    if (detail) return { ok: false, conflictDetail: detail };
+    throw new Error('Failed to update payment obligation');
+  }
+  return { ok: true };
 }
 
 export async function deletePaymentObligation(id: number): Promise<void> {

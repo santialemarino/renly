@@ -70,6 +70,9 @@ export interface PrefillFromObligation {
   currency: string;
   paymentMethod?: ExpenseFormValues['paymentMethod'];
   creditCardId?: number;
+  // The obligation's default funding account, pre-filled as "Paid from". Obligations are never
+  // auto-emitted, so this is where their default is honoured — overridable like every other prefill.
+  accountId?: number;
   category?: ExpenseFormValues['category'];
   paymentObligationId: number;
   recurrence: string | null;
@@ -315,7 +318,7 @@ export function ExpenseFormDialog({
           notes: '',
           paymentMethod: prefillFromObligation.paymentMethod,
           creditCardId: prefillFromObligation.creditCardId,
-          accountId: undefined,
+          accountId: prefillFromObligation.accountId ?? null,
           paymentObligationId: prefillFromObligation.paymentObligationId,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -453,6 +456,23 @@ export function ExpenseFormDialog({
       if (a) lines.push(t(`form.${a.key}`, a.params));
     }
     toast.success(lines.join(' '));
+  }
+
+  /*
+   * Copies a linked plan's funding account onto the entry, the way Mark Paid already does — picking
+   * the plan from this form is the other documented way to pay it, and leaving "Paid from" empty here
+   * left the cash leg unattributed on exactly the plans configured to avoid that.
+   *
+   * Only when the field is still empty (never overwrites an explicit pick) and only when the picker
+   * would offer the account: an archived or currency-mismatched default must not be attached to a new
+   * entry behind the user's back.
+   */
+  function prefillFundingAccount(defaultAccountId: number | null | undefined) {
+    if (defaultAccountId == null || form.getValues('accountId') != null) return;
+    const account = accounts?.find((a) => a.id === defaultAccountId);
+    if (account?.isActive && account.currency === form.getValues('currency')) {
+      form.setValue('accountId', defaultAccountId);
+    }
   }
 
   async function onSubmit(values: ExpenseFormValues) {
@@ -684,13 +704,17 @@ export function ExpenseFormDialog({
                 preferredCurrencies={preferredCurrencies}
               />
 
-              {accounts && accounts.length > 0 && watchedPaymentMethod !== 'credit_card' && (
+              {/* A card expense hits the card and only draws cash later at settlement, so it never
+                  links an account. AccountField itself suppresses the field when the user has no
+                  account to offer and none stored. */}
+              {watchedPaymentMethod !== 'credit_card' && (
                 <AccountField
                   control={form.control}
                   setValue={form.setValue}
-                  accounts={accounts}
+                  accounts={accounts ?? []}
                   currency={watchedCurrency || undefined}
                   label={t('form.account.label')}
+                  name="accountId"
                 />
               )}
 
@@ -728,6 +752,7 @@ export function ExpenseFormDialog({
                                   o.expenseCategory as ExpenseFormValues['category'],
                                 );
                               }
+                              prefillFundingAccount(o?.defaultAccountId);
                             }
                           }}
                         />
@@ -773,6 +798,11 @@ export function ExpenseFormDialog({
                           form.setValue('installmentId', next.id);
                           form.setValue('subscriptionId', undefined);
                         }
+                        const plan =
+                          next.kind === 'subscription'
+                            ? activeSubscriptions?.find((x) => x.id === next.id)
+                            : activeInstallments?.find((x) => x.id === next.id);
+                        prefillFundingAccount(plan?.defaultAccountId);
                       }}
                     />
                   </FormControl>
