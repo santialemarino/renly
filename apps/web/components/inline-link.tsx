@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
+import { AnimatedIcon } from '@/components/animated-icon';
 
 // Text color per variant (applied to the root).
 const INLINE_LINK_TEXT = {
@@ -38,11 +39,15 @@ const UNDERLINE =
 interface InlineLinkBaseProps {
   color?: keyof typeof INLINE_LINK_TEXT;
   size?: keyof typeof INLINE_LINK_SIZES;
-  // Optional leading icon (rotates on hover, like the nav items); the underline stays under the text only.
+  // Optional leading icon (bespoke motion on hover/focus via AnimatedIcon); the underline stays under the text only.
   icon?: LucideIcon;
   className?: string;
   children: React.ReactNode;
 }
+
+// data-animate-icon on the root drives the leading icon's bespoke motion on hover/focus (only when an
+// icon is present); an empty-string attribute still matches the `[data-animate-icon]` motion rules.
+const ICON_TRIGGER = { 'data-animate-icon': '' } as const;
 
 // Either a navigation (href, optionally a download) or an in-page action (onClick) — same affordance.
 type InlineLinkProps = InlineLinkBaseProps &
@@ -54,7 +59,8 @@ type InlineLinkProps = InlineLinkBaseProps &
 /*
  * Shared inline text link/action used across the auth surface, the public footer/legal links, the
  * brand wordmark, and inline actions (e.g. replaying the welcome tour). Hover reveals an animated
- * underline (text-decoration-color transitions in/out); an optional leading icon rotates on hover.
+ * underline (text-decoration-color transitions in/out); an optional leading icon plays its bespoke
+ * AnimatedIcon motion on hover/focus.
  * Keyboard focus replaces the default browser outline with the gentlest spring "bump"
  * (animate-focus-bump-subtle — a true 1→1.05→1 keyframe, sized for text where the 1.15 soft bump
  * moves too much), so focus reads distinct from hover. Renders a `<Link>` when given an `href`
@@ -75,9 +81,10 @@ export function InlineLink(props: InlineLinkProps) {
     className,
   );
 
+  const iconTrigger = Icon ? ICON_TRIGGER : {};
   const content = Icon ? (
     <>
-      <Icon className="size-4 shrink-0 transition-transform duration-200 ease-out group-hover/inline-link:rotate-12 group-focus-visible/inline-link:rotate-12" />
+      <AnimatedIcon icon={Icon} className="size-4 shrink-0" />
       <span className={cn(UNDERLINE, INLINE_LINK_UNDERLINE_GROUP[color])}>{children}</span>
     </>
   ) : (
@@ -86,7 +93,13 @@ export function InlineLink(props: InlineLinkProps) {
 
   if ('href' in props && props.href !== undefined && props.external) {
     return (
-      <a href={props.href} target="_blank" rel="noopener noreferrer" className={root}>
+      <a
+        href={props.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={root}
+        {...iconTrigger}
+      >
         {content}
       </a>
     );
@@ -97,7 +110,7 @@ export function InlineLink(props: InlineLinkProps) {
   // delegation; without one the link still works, degrading to a native jump.
   if ('href' in props && props.href !== undefined && props.href.startsWith('#')) {
     return (
-      <a href={props.href} className={root}>
+      <a href={props.href} className={root} {...iconTrigger}>
         {content}
       </a>
     );
@@ -110,6 +123,7 @@ export function InlineLink(props: InlineLinkProps) {
         download={props.download}
         prefetch={props.download ? false : undefined}
         className={root}
+        {...iconTrigger}
       >
         {content}
       </Link>
@@ -117,7 +131,7 @@ export function InlineLink(props: InlineLinkProps) {
   }
 
   return (
-    <button type="button" onClick={props.onClick} className={root}>
+    <button type="button" onClick={props.onClick} className={root} {...iconTrigger}>
       {content}
     </button>
   );

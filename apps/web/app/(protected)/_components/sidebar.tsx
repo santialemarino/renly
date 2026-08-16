@@ -64,6 +64,7 @@ import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switche
 import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
 import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
+import { AnimatedIcon } from '@/components/animated-icon';
 import { Brand } from '@/components/brand';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { ALL_ROUTE_PATHS, LOGIN_ROUTE, ROUTES } from '@/config/routes';
@@ -123,9 +124,9 @@ const ROUTE_PATH_SET = new Set<string>(ALL_ROUTE_PATHS);
 const NAV_ITEM_STYLES =
   'hover:bg-gray-100 active:bg-gray-200 focus-visible:bg-gray-100 focus-visible:outline-none focus-visible:ring-0 data-[active=true]:bg-blue-800 data-[active=true]:text-white data-[active=true]:hover:bg-blue-900 data-[active=true]:active:bg-blue-950 data-[active=true]:focus-visible:bg-blue-900';
 
-/** Extra styles for SidebarMenuSubButton: hover text color (matching the main button primitive), transition, and svg icon animation. */
+/** Extra styles for SidebarMenuSubButton: hover text color (matching the main button primitive) and background/color transition. Icon motion is owned by AnimatedIcon (data-animate-icon). */
 const SUB_BUTTON_EXTRAS =
-  'hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground transition-[background-color,color] duration-200 ease-out [&_svg]:transition-transform [&_svg]:duration-200 [&_svg]:ease-out';
+  'hover:text-sidebar-accent-foreground focus-visible:text-sidebar-accent-foreground transition-[background-color,color] duration-200 ease-out';
 
 /*
  * Animates an advanced sub-item's reveal/collapse (height + opacity, both directions) when a
@@ -187,20 +188,15 @@ function NavSubItem({
   // For an onClick action that opens an overlay (e.g. a dialog), so screen readers announce it.
   ariaHasPopup?: React.AriaAttributes['aria-haspopup'];
 } & ({ href: string; onClick?: never } | { href?: never; onClick: () => void })) {
-  const subButtonClass = cn(
-    'h-8 text-paragraph-sm-medium',
-    NAV_ITEM_STYLES,
-    SUB_BUTTON_EXTRAS,
-    !active && 'hover:[&_svg]:rotate-12 focus-visible:[&_svg]:rotate-12',
-  );
+  const subButtonClass = cn('h-8 text-paragraph-sm-medium', NAV_ITEM_STYLES, SUB_BUTTON_EXTRAS);
   const inner = (
     <>
-      <Icon />
+      <AnimatedIcon icon={Icon} />
       <TruncatingTooltip text={label} side="right" />
     </>
   );
   const button = (
-    <SidebarMenuSubButton asChild isActive={active} className={subButtonClass}>
+    <SidebarMenuSubButton asChild isActive={active} data-animate-icon className={subButtonClass}>
       {href ? (
         <Link href={href}>{inner}</Link>
       ) : (
@@ -311,15 +307,11 @@ export function AppSidebar({
                   asChild
                   isActive={isActive(ROUTES.dashboard)}
                   size="lg"
-                  className={cn(
-                    '[&_svg]:size-5 text-paragraph-medium',
-                    NAV_ITEM_STYLES,
-                    !isActive(ROUTES.dashboard) &&
-                      'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                  )}
+                  data-animate-icon
+                  className={cn('[&_svg]:size-5 text-paragraph-medium', NAV_ITEM_STYLES)}
                 >
                   <Link href={ROUTES.dashboard}>
-                    <LayoutDashboard />
+                    <AnimatedIcon icon={LayoutDashboard} />
                     <span>{t('nav.dashboard')}</span>
                   </Link>
                 </SidebarMenuButton>
@@ -331,15 +323,14 @@ export function AppSidebar({
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       size="lg"
+                      data-animate-icon
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        !isFinancesActive &&
-                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                         isFinancesActive && 'bg-gray-100',
                       )}
                     >
-                      <Wallet />
+                      <AnimatedIcon icon={Wallet} />
                       <span>{t('navGroups.finances')}</span>
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
@@ -367,16 +358,15 @@ export function AppSidebar({
                         >
                           <CollapsibleTrigger asChild>
                             <SidebarMenuSubButton
+                              data-animate-icon
                               className={cn(
                                 'h-8 text-paragraph-sm-medium cursor-pointer',
                                 NAV_ITEM_STYLES,
                                 SUB_BUTTON_EXTRAS,
                                 isCommitmentsActive && 'bg-gray-100',
-                                !isCommitmentsActive &&
-                                  'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                               )}
                             >
-                              <ClipboardList />
+                              <AnimatedIcon icon={ClipboardList} />
                               <span>{t('navGroups.commitments')}</span>
                               <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/inner-collapsible:rotate-90" />
                             </SidebarMenuSubButton>
@@ -407,15 +397,14 @@ export function AppSidebar({
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       size="lg"
+                      data-animate-icon
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        !isPortfolioActive &&
-                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                         isPortfolioActive && 'bg-gray-100',
                       )}
                     >
-                      <TrendingUp />
+                      <AnimatedIcon icon={TrendingUp} />
                       <span>{t('navGroups.portfolio')}</span>
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
@@ -445,15 +434,14 @@ export function AppSidebar({
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       size="lg"
+                      data-animate-icon
                       className={cn(
                         '[&_svg]:size-5 text-paragraph-medium',
                         NAV_ITEM_STYLES,
-                        !isSettingsActive &&
-                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                         isSettingsActive && 'bg-gray-100',
                       )}
                     >
-                      <Settings />
+                      <AnimatedIcon icon={Settings} />
                       <span>{t('navGroups.settings')}</span>
                       <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                     </SidebarMenuButton>
@@ -481,15 +469,14 @@ export function AppSidebar({
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         size="lg"
+                        data-animate-icon
                         className={cn(
                           '[&_svg]:size-5 text-paragraph-medium',
                           NAV_ITEM_STYLES,
-                          !isAdminActive &&
-                            'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
                           isAdminActive && 'bg-gray-100',
                         )}
                       >
-                        <ShieldCheck />
+                        <AnimatedIcon icon={ShieldCheck} />
                         <span>{t('navGroups.administration')}</span>
                         <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                       </SidebarMenuButton>
@@ -588,13 +575,10 @@ export function AppSidebar({
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className={cn(
-                    '[&_svg]:size-5 text-paragraph-medium',
-                    NAV_ITEM_STYLES,
-                    'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
-                  )}
+                  data-animate-icon
+                  className={cn('[&_svg]:size-5 text-paragraph-medium', NAV_ITEM_STYLES)}
                 >
-                  <LifeBuoy />
+                  <AnimatedIcon icon={LifeBuoy} />
                   <span>{t('navGroups.support')}</span>
                   <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                 </SidebarMenuButton>
@@ -624,12 +608,13 @@ export function AppSidebar({
               onClick={handleLogout}
               disabled={loggingOut}
               size="lg"
+              data-animate-icon
               className={cn(
                 'text-paragraph-medium hover:text-red-500 hover:bg-transparent focus-visible:text-red-500 focus-visible:bg-transparent focus-visible:outline-none focus-visible:ring-0 active:bg-transparent [&_svg]:size-5',
                 loggingOut && 'text-red-800 hover:text-red-800',
               )}
             >
-              <LogOut />
+              <AnimatedIcon icon={LogOut} />
               <span>{loggingOut ? t('logout.loading') : t('logout.label')}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -157,6 +157,191 @@
 }
 
 /*
+ * Bespoke icon motion (icon-animations). A small, hand-authored vocabulary of motions that animate
+ * each icon's own parts in a way that reads true to the icon — a bell rings, a cog turns, a check
+ * draws in. Consumed via the app's <AnimatedIcon> primitive, which maps every Lucide icon to the
+ * motion family that fits it (its own strokes drawing in — `aicon-draw` — is the catch-all, so no
+ * icon is left on a generic transform).
+ *
+ * Trigger model: motion plays while the nearest interactive ancestor marked `data-animate-icon` is
+ * hovered OR keyboard-focused (focus parity, ux-motion). Only transform / stroke-dashoffset move, so
+ * there is no layout shift. Durations are the animation constants as CSS vars (500ms = ANIMATION_SLOW,
+ * 250ms = ANIMATION_DEFAULT). Everything is wrapped in `prefers-reduced-motion: no-preference`, so
+ * reduced motion shows no movement at all — the base (non-moving) setup stays outside the gate.
+ */
+:root {
+  --aicon-spin-duration: 500ms;
+  --aicon-draw-duration: 450ms;
+  --aicon-pose-duration: 250ms;
+  --aicon-draw-stagger: 90ms;
+}
+
+@keyframes aicon-spin {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes aicon-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(14deg);
+  }
+  35% {
+    transform: rotate(-11deg);
+  }
+  55% {
+    transform: rotate(7deg);
+  }
+  75% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes aicon-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+@keyframes aicon-pop {
+  0% {
+    transform: scale(0.72) rotate(-8deg);
+  }
+  60% {
+    transform: scale(1.06) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes aicon-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-2.5px);
+  }
+  65% {
+    transform: translateY(2.5px);
+  }
+}
+
+/* Draw: pathLength is normalised to 1 (set by <AnimatedIcon>/<DrawIcon>), so one dash covers any shape. */
+@keyframes aicon-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Base (non-moving) setup — safe under reduced motion, so it lives outside the gate. */
+.aicon-spin,
+.aicon-ring,
+.aicon-pop,
+.aicon-pulse,
+.aicon-bob {
+  transform-box: fill-box;
+}
+.aicon-spin,
+.aicon-pop,
+.aicon-pulse,
+.aicon-bob {
+  transform-origin: center;
+}
+.aicon-ring {
+  transform-origin: top;
+}
+.aipart-turn {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.aicon-draw {
+  stroke-dasharray: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Whole-glyph keyframe families — play once on hover / focus. */
+  [data-animate-icon]:hover .aicon-spin,
+  [data-animate-icon]:focus-visible .aicon-spin {
+    animation: aicon-spin var(--aicon-spin-duration) ease-in-out;
+  }
+  [data-animate-icon]:hover .aicon-ring,
+  [data-animate-icon]:focus-visible .aicon-ring {
+    animation: aicon-ring var(--aicon-spin-duration) ease-in-out;
+  }
+  [data-animate-icon]:hover .aicon-pulse,
+  [data-animate-icon]:focus-visible .aicon-pulse {
+    animation: aicon-pulse var(--aicon-pose-duration) ease-in-out;
+  }
+  [data-animate-icon]:hover .aicon-pop,
+  [data-animate-icon]:focus-visible .aicon-pop {
+    animation: aicon-pop var(--aicon-pose-duration) ease-out;
+  }
+  [data-animate-icon]:hover .aicon-bob,
+  [data-animate-icon]:focus-visible .aicon-bob {
+    animation: aicon-bob var(--aicon-pose-duration) ease-in-out;
+  }
+
+  /* Draw family — every tagged part draws in, staggered by its --aicon-i index. */
+  [data-animate-icon]:hover .aicon-draw,
+  [data-animate-icon]:focus-visible .aicon-draw {
+    animation: aicon-draw var(--aicon-draw-duration) ease-out backwards;
+    animation-delay: calc(var(--aicon-i, 0) * var(--aicon-draw-stagger));
+  }
+
+  /* Directional nudge poses — hold while hovered, ease back on leave (smooth both ways). */
+  .aicon-nudge-up,
+  .aicon-nudge-right,
+  .aicon-nudge-down,
+  .aicon-nudge-left,
+  .aipart-slide-x,
+  .aipart-turn {
+    transition: transform var(--aicon-pose-duration) ease-out;
+  }
+  [data-animate-icon]:hover .aicon-nudge-up,
+  [data-animate-icon]:focus-visible .aicon-nudge-up {
+    transform: translateY(-2.5px);
+  }
+  [data-animate-icon]:hover .aicon-nudge-down,
+  [data-animate-icon]:focus-visible .aicon-nudge-down {
+    transform: translateY(2.5px);
+  }
+  [data-animate-icon]:hover .aicon-nudge-right,
+  [data-animate-icon]:focus-visible .aicon-nudge-right {
+    transform: translateX(2.5px);
+  }
+  [data-animate-icon]:hover .aicon-nudge-left,
+  [data-animate-icon]:focus-visible .aicon-nudge-left {
+    transform: translateX(-2.5px);
+  }
+
+  /* Part-level poses (bespoke icons): a cog turns in place, an arrow slides out the door. */
+  [data-animate-icon]:hover .aipart-turn,
+  [data-animate-icon]:focus-visible .aipart-turn {
+    transform: rotate(120deg);
+  }
+  [data-animate-icon]:hover .aipart-slide-x,
+  [data-animate-icon]:focus-visible .aipart-slide-x {
+    transform: translateX(2.5px);
+  }
+}
+
+/*
  * The Collapsible expand/collapse animations (animate-collapsible-down/up utilities + the
  * collapsible-down/up keyframes reading --radix-collapsible-content-height) are provided by
  * tw-animate-css (imported above), like the other Radix-primitive animations the app uses
