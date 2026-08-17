@@ -465,6 +465,62 @@ class TestAccountClusterRoundTrip:
         assert next(s for s in result.entities if s.entity == "card_settlements").skipped_unresolved == 1
 
     @pytest.mark.asyncio
+    async def test_a_dropped_funding_account_takes_its_cash_amount_with_it(self, monkeypatch):
+        # account_amount is denominated in the funding ACCOUNT's currency, so once that link is dropped
+        # there is nothing left to interpret it — and a DB CHECK forbids the pairing outright, so keeping
+        # it would fail the insert rather than merely mislead. The CARD leg survives, so the restored
+        # settlement still clears its bucket correctly; only the cash side it can't attribute is lost.
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            credit_cards=[{"id": 70, "name": "Visa", "closing_day": 25, "due_day": 5, "currency": "USD"}],
+            card_settlements=[
+                {
+                    "id": 95,
+                    "credit_card_id": 70,
+                    "account_id": 999,
+                    "date": "2026-02-28",
+                    "amount": 100,
+                    "currency": "USD",
+                    "account_amount": 130000,
+                }
+            ],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        settlement = next(r for r in captured if isinstance(r, CardSettlement))
+        assert (settlement.account_id, settlement.account_amount) == (None, None)
+        assert (settlement.amount, settlement.currency) == (Decimal("100"), "USD")
+
+    @pytest.mark.asyncio
+    async def test_a_resolved_funding_account_keeps_its_cash_amount(self, monkeypatch):
+        # The dependent-null rule must fire only when the link actually drops, never on a healthy remap —
+        # otherwise every cross-currency settlement would come back having moved no cash.
+        _mock_repo(monkeypatch)
+        captured = _capture_inserts(monkeypatch)
+        content = _export(
+            credit_cards=[{"id": 70, "name": "Visa", "closing_day": 25, "due_day": 5, "currency": "USD"}],
+            accounts=[{"id": 80, "name": "Pesos", "type": "bank", "currency": "ARS", "opening_date": "2026-01-01"}],
+            card_settlements=[
+                {
+                    "id": 95,
+                    "credit_card_id": 70,
+                    "account_id": 80,
+                    "date": "2026-02-28",
+                    "amount": 100,
+                    "currency": "USD",
+                    "account_amount": 130000,
+                }
+            ],
+        )
+        await restore_service.confirm_restore(AsyncMock(), USER, "x.json", content)
+
+        account = next(r for r in captured if isinstance(r, Account))
+        settlement = next(r for r in captured if isinstance(r, CardSettlement))
+        assert settlement.account_id == account.id
+        assert settlement.account_amount == Decimal("130000")
+
+    @pytest.mark.asyncio
     async def test_transfers_and_settlements_are_no_longer_reported_as_skipped(self, monkeypatch):
         _mock_repo(monkeypatch)
         content = _export(accounts=[], transfers=[], card_settlements=[], card_reconciliations=[{"id": 1}])

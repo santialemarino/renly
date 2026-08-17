@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from pydantic import ValidationError
 
-from app.domain import AccountCardExclusivityError, AccountCurrencyMismatchError
+from app.domain import AccountCardExclusivityError, AccountCurrencyMismatchError, NotFoundError
 from app.models.account import Account, AccountType
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
@@ -27,9 +27,13 @@ from app.services import (
 
 # Conveniences batch: an optional default funding account on a credit card (pre-fills the settlement's
 # "Paid from") and on each recurring plan (the scheduler links it onto every charge it emits, so an
-# auto-generated expense decrements the balance it really came from). Two rules everywhere: the account
-# must be denominated in the card's / plan's own currency, and a CARD-paid plan never names one — its
-# cash leg lands at the card settlement instead. Persistence is mocked.
+# auto-generated expense decrements the balance it really came from). A CARD-paid plan never names one —
+# its cash leg lands at the card settlement instead.
+#
+# The currency rule is deliberately ASYMMETRIC, and cross-currency card settlement is what split it: a
+# CARD's default may name any currency (a settlement records what left the account, so a peso account
+# funding a USD card is the case the feature exists for), while a PLAN's must still match, because a
+# plan's charge carries one amount and has no second figure to record. Persistence is mocked.
 
 USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 
@@ -164,13 +168,26 @@ class TestPlanSchemaAccountPairing:
 
 class TestCardDefaultAccount:
     @pytest.mark.asyncio
-    async def test_create_rejects_an_account_in_another_currency(self, monkeypatch):
-        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="USD")))
+    async def test_create_accepts_an_account_in_another_currency(self, monkeypatch):
+        # Reverses the original restriction (#173): it existed only because such a default could never be
+        # used, which stopped being true once a settlement could pay a bucket from a foreign-currency
+        # account. A USD card paid from a peso account is the most common Argentine arrangement.
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(credit_card_service.credit_card_repository, "create", AsyncMock(side_effect=lambda _s, card: card))
+
+        card = await credit_card_service.create_card(AsyncMock(), USER, name="Visa", closing_day=25, due_day=10, currency="USD", default_account_id=7)
+
+        assert card.default_account_id == 7
+
+    @pytest.mark.asyncio
+    async def test_create_still_rejects_an_account_the_user_does_not_own(self, monkeypatch):
+        # Widening the currency rule must not widen ownership (SEC-4): an unowned id is still a 404.
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=None))
         create_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "create", create_mock)
 
-        with pytest.raises(AccountCurrencyMismatchError):
-            await credit_card_service.create_card(AsyncMock(), USER, name="Visa", closing_day=25, due_day=10, currency="ARS", default_account_id=7)
+        with pytest.raises(NotFoundError):
+            await credit_card_service.create_card(AsyncMock(), USER, name="Visa", closing_day=25, due_day=10, currency="ARS", default_account_id=99)
 
         create_mock.assert_not_called()
 
@@ -184,23 +201,39 @@ class TestCardDefaultAccount:
         assert card.default_account_id == 7
 
     @pytest.mark.asyncio
-    async def test_changing_the_card_currency_with_a_stored_default_is_refused(self, monkeypatch):
-        # The effective pair is (new currency, stored default) — validating the request alone would let
-        # an ARS default survive on a USD card, i.e. a link the settlement dialog could never offer.
+    async def test_changing_the_card_currency_with_a_stored_default_is_allowed(self, monkeypatch):
+        # Nothing to re-validate: the default's currency is free, so re-denominating the card cannot
+        # invalidate it. The account is not even re-fetched, because only the ACCOUNT moving matters now.
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=7)))
-        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        get_by_id = AsyncMock(return_value=_account(currency="ARS"))
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", get_by_id)
         save_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "save", save_mock)
 
-        with pytest.raises(AccountCurrencyMismatchError):
-            await credit_card_service.update_card(AsyncMock(), 5, USER, currency="USD")
+        card = await credit_card_service.update_card(AsyncMock(), 5, USER, currency="USD")
+
+        assert (card.currency, card.default_account_id) == ("USD", 7)
+        get_by_id.assert_not_awaited()
+        save_mock.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_naming_a_new_default_still_verifies_ownership(self, monkeypatch):
+        # The one thing update_card must still check: an account the user does not own is a 404, even
+        # though its currency no longer matters.
+        monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=None)))
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=None))
+        save_mock = AsyncMock()
+        monkeypatch.setattr(credit_card_service.credit_card_repository, "save", save_mock)
+
+        with pytest.raises(NotFoundError):
+            await credit_card_service.update_card(AsyncMock(), 5, USER, default_account_id=99)
 
         save_mock.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_an_unrelated_edit_does_not_revalidate_the_stored_pair(self, monkeypatch):
-        # A stale stored default (its account's currency changed while nothing else referenced it) must
-        # not block a rename: the pair didn't move, so there is nothing new to validate.
+    async def test_an_unrelated_edit_does_not_revalidate_the_stored_default(self, monkeypatch):
+        # A stored default must not be re-touched by a rename: the account didn't move, so there is
+        # nothing new to validate.
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=7)))
         get_by_id = AsyncMock(return_value=_account(currency="USD"))
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", get_by_id)
@@ -561,7 +594,7 @@ class TestSettlementResponseNamesTheAccount:
     @pytest.mark.asyncio
     async def test_create_names_the_account_without_a_second_fetch(self, monkeypatch):
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card()))
-        monkeypatch.setattr(credit_card_service.account_service, "validate_account_link", AsyncMock(return_value=_account(name="Caja $")))
+        monkeypatch.setattr(credit_card_service.account_service, "load_linked_account", AsyncMock(return_value=_account(name="Caja $")))
         monkeypatch.setattr(
             credit_card_service.card_settlement_repository,
             "create",
@@ -575,5 +608,5 @@ class TestSettlementResponseNamesTheAccount:
             AsyncMock(), 5, USER, date=date(2026, 8, 1), amount=Decimal("700"), currency="ARS", account_id=7
         )
 
-        assert result.account_name == "Caja $"
-        get_by_ids.assert_not_awaited()  # validate_account_link already returned the account
+        assert (result.account_name, result.account_currency) == ("Caja $", "ARS")
+        get_by_ids.assert_not_awaited()  # load_linked_account already returned the account

@@ -66,6 +66,10 @@ class FkRef:
     field: str
     parent: str  # export key of the parent entity
     required: bool  # a required FK that can't be resolved makes the row unresolved (skipped)
+    # Fields that lose their meaning when this optional FK ends up NULL, and are nulled with it. A value
+    # denominated by the parent (a settlement's account_amount is in its funding ACCOUNT's currency) has
+    # nothing left to interpret it once the link is gone, and a DB CHECK may forbid the pairing outright.
+    dependents: tuple[str, ...] = ()
 
 
 # How to restore one entity: its model, foreign keys to remap, and fields to force-null on restore.
@@ -143,11 +147,17 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         null_fields=("reconciliation_id", "account_reconciliation_id"),
     ),
     # The card FK is required (NOT NULL, and a settlement means nothing without the card it paid);
-    # the funding account is optional and nulls out like any other unresolved optional link.
+    # the funding account is optional and nulls out like any other unresolved optional link — taking
+    # account_amount with it, because that figure is denominated in the account's currency and a CHECK
+    # forbids keeping it without the account. What survives is the card leg, so the restored settlement
+    # still clears the bucket correctly; only the cash side it can no longer attribute is dropped.
     RestoreSpec(
         "card_settlements",
         CardSettlement,
-        fks=(FkRef("credit_card_id", "credit_cards", True), FkRef("account_id", "accounts", False)),
+        fks=(
+            FkRef("credit_card_id", "credit_cards", True),
+            FkRef("account_id", "accounts", False, dependents=("account_amount",)),
+        ),
     ),
     # Both legs are NOT NULL and required: a transfer whose accounts can't both be resolved is dropped
     # rather than half-restored, because the balance union sums each leg independently — one surviving

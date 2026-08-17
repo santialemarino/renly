@@ -367,6 +367,12 @@ CREATE INDEX idx_income_entries_account_id
 -- Card settlements (credit card payments — not expenses).
 -- Reduces card liability and bank balance simultaneously (net-zero on patrimony).
 -- user_id is denormalized from the parent credit card for the row-level-security policy (SEC-15).
+-- amount/currency are the CARD leg: what the payment cleared off the bucket. account_amount is the
+--   CASH leg, in the funding account's own currency, and is set only when the two differ — paying a
+--   USD bucket with pesos clears US$100 while $130,000 leaves the account. The pair IS the record of
+--   the rate used (deliberately no stored rate: no single direction reads correctly both ways, the
+--   same reason transfers has no implied_rate), and the gap between the two is the real FX + tax
+--   cost, which correctly reduces net worth un-itemised.
 CREATE TABLE card_settlements (
   id              BIGSERIAL PRIMARY KEY,
   credit_card_id  BIGINT NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
@@ -376,9 +382,15 @@ CREATE TABLE card_settlements (
   currency        VARCHAR(3) NOT NULL,
   -- Optional cash/bank account the payment was drawn from (Bucket 3 #1, PR 2).
   account_id      BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  -- What left the funding account, in THAT account's currency. NULL = no conversion, so the cash leg
+  -- is `amount` itself; the cash sums read coalesce(account_amount, amount).
+  account_amount  NUMERIC(18, 2),
   notes           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT card_settlements_positive_account_amount CHECK (account_amount IS NULL OR account_amount > 0),
+  -- No cash leg means there is no account for a cash amount to be denominated in.
+  CONSTRAINT card_settlements_account_amount_needs_account CHECK (account_amount IS NULL OR account_id IS NOT NULL)
 );
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);

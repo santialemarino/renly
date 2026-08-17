@@ -8,6 +8,12 @@ from sqlmodel import select
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 
+# What the FUNDING ACCOUNT paid, which is only the same thing as what cleared the card when no conversion
+# happened. Defined once because three of this module's sums are cash-side and must all agree; the
+# card-side sums deliberately use CardSettlement.amount directly, and keeping the two spellings visibly
+# different is what makes a mistake in either one legible.
+_CASH_LEG = func.coalesce(CardSettlement.account_amount, CardSettlement.amount)
+
 
 # List all settlements for a credit card.
 async def list_by_card(session: AsyncSession, credit_card_id: int) -> list[CardSettlement]:
@@ -41,7 +47,11 @@ async def delete(session: AsyncSession, settlement: CardSettlement) -> None:
 
 
 # Sum of settlements drawn from each account, grouped by account_id. Returns {account_id: total}.
-# Every linked settlement is in the account's currency (enforced at link time), so no currency split.
+# Sums the CASH leg: coalesce(account_amount, amount). A settlement may pay a bucket from an account in a
+# DIFFERENT currency (paying a USD card with pesos), in which case `amount` is what cleared the bucket and
+# account_amount is what actually left the account — summing `amount` here would add dollars into a peso
+# balance. account_amount is NULL exactly when no conversion happened, so the coalesce falls back to the
+# single amount and needs no per-currency split either way.
 # as_of_date bounds the sum to rows dated on or before it (used by reconciliation's point-in-time balance).
 # The join bounds it BELOW by the account's own opening_date: opening_balance is by definition the balance
 # AT that date, so an earlier row is already inside it and summing it again double-counts.
@@ -55,7 +65,7 @@ async def sum_by_account_ids(
     if not account_ids:
         return {}
     stmt = (
-        select(CardSettlement.account_id, func.coalesce(func.sum(CardSettlement.amount), 0))
+        select(CardSettlement.account_id, func.coalesce(func.sum(_CASH_LEG), 0))
         .join(Account, Account.id == CardSettlement.account_id)
         .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
     )
@@ -73,15 +83,18 @@ async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: 
     return result.first() is not None
 
 
-# Monthly settlement totals drawn from each account, grouped by account_id, year, month (the
-# account's currency is fixed). Returns a list of (account_id, year, month, total).
+# Monthly settlement totals drawn from each account, grouped by account_id, year, month. Sums the CASH
+# leg for the same reason sum_by_account_ids does — this feeds the net-worth chart, so a cross-currency
+# settlement counted at its card amount would move the chart by dollars in a peso account. Nothing
+# cross-checks this path automatically, unlike the live balance, so it must be kept in step by hand.
+# Returns a list of (account_id, year, month, total).
 async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
     if not account_ids:
         return []
     year_col = func.extract("year", CardSettlement.date).label("year")
     month_col = func.extract("month", CardSettlement.date).label("month")
     result = await session.execute(
-        select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(CardSettlement.amount), 0))
+        select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(_CASH_LEG), 0))
         .join(Account, Account.id == CardSettlement.account_id)
         .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
         .group_by(CardSettlement.account_id, year_col, month_col)
@@ -91,6 +104,8 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
 
 # Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
 # Replaces the flat sum_by_card_ids — bucket balances need per-currency totals.
+# Sums `amount`, the CARD leg, and must NOT use _CASH_LEG: a bucket is cleared by what the bank applied to
+# it in the bucket's own currency, so a settlement paid in pesos still clears US$100 of a USD bucket.
 async def sum_by_card_ids_grouped(
     session: AsyncSession,
     credit_card_ids: list[int],
@@ -113,6 +128,7 @@ async def sum_by_card_ids_grouped(
 
 
 # Monthly settlement totals for given credit cards, grouped by card_id, year, month, and currency.
+# Sums the CARD leg (see sum_by_card_ids_grouped) — the card's own debt series, not what any account paid.
 # Returns a list of (card_id, year, month, currency, total) tuples.
 async def sum_by_card_ids_monthly(
     session: AsyncSession,
@@ -139,7 +155,10 @@ async def sum_by_card_ids_monthly(
 
 # Which of the given accounts have any linked settlement row at all. Drives the currency lock, so unlike
 # sum_by_account_ids it is NOT bounded by opening_date: a pre-opening row contributes nothing to the
-# balance but is still denominated in the account's currency.
+# balance but its cash leg is still denominated in the account's currency, and re-denominating the account
+# would silently reinterpret that stored figure. That holds for a cross-currency settlement too — there it
+# is account_amount rather than amount that is denominated in the account's currency, which is exactly why
+# the lock is still needed rather than being made redundant by recording both sides.
 async def linked_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> set[int]:
     if not account_ids:
         return set()

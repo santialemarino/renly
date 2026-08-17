@@ -17,7 +17,6 @@ from app.models.user import User
 from app.repositories import (
     account_repository,
     card_settlement_repository,
-    credit_card_repository,
     expense_repository,
     income_repository,
     installment_repository,
@@ -57,30 +56,44 @@ async def get_account(session: AsyncSession, account_id: int, user: User) -> Acc
     return account
 
 
-# Validates that an account link (from an expense / income / settlement, or a card / plan naming its
-# default funding account) is legal: the account must exist and belong to the user (SEC-4), and its
-# currency must match the linking row's — a cash balance stays exact, so mismatched-currency links are
-# rejected (mirrors the investment base-currency lock). A None account_id is a no-op (unlinked entries
-# are allowed and untouched). Returns the validated account so a caller that needs it (e.g. to
-# denormalize its name onto a response) doesn't re-fetch it; None when there was no link.
-async def validate_account_link(session: AsyncSession, user: User, account_id: int | None, currency: str) -> Account | None:
+# Loads a linked account and verifies ownership (SEC-4), applying NO currency rule. A None account_id is
+# a no-op (unlinked rows are allowed and untouched). Returns the account so a caller that needs it (e.g.
+# to denormalize its name onto a response) doesn't re-fetch it; None when there was no link.
+#
+# Separate from validate_account_link because two callers legitimately accept any currency: a card
+# SETTLEMENT (which records what left the account explicitly, so nothing has to be inferred from a
+# matching currency) and a card's standing DEFAULT funding account (which exists to prefill exactly that
+# settlement). Both are cases where the currencies genuinely may differ, not a relaxation of the hard
+# rule below — hence a distinct function rather than a flag that would let a caller opt out by accident.
+async def load_linked_account(session: AsyncSession, user: User, account_id: int | None) -> Account | None:
     if account_id is None:
         return None
     account = await account_repository.get_by_id(session, account_id, user.id)
     if account is None:
         raise NotFoundError("Account not found.")
-    if account.currency != currency:
+    return account
+
+
+# Validates that an account link (from an expense / income, or a recurring plan naming its default
+# funding account) is legal: ownership, plus the account's currency must match the linking row's — those
+# sums have only ONE amount, so a mismatched link would add a foreign-currency figure straight into the
+# balance (mirrors the investment base-currency lock). A None account_id is a no-op. Returns the
+# validated account, or None when there was no link.
+async def validate_account_link(session: AsyncSession, user: User, account_id: int | None, currency: str) -> Account | None:
+    account = await load_linked_account(session, user, account_id)
+    if account is not None and account.currency != currency:
         raise AccountCurrencyMismatchError(currency, account.currency)
     return account
 
 
-# Validates the EFFECTIVE default funding account of a card or a recurring plan on a partial update:
-# the request's fields merged over the stored row. Three services plus the card service need exactly
-# this, so it lives here beside the validator it wraps rather than being restated in each.
+# Validates the EFFECTIVE default funding account of a RECURRING PLAN on a partial update: the request's
+# fields merged over the stored row. The three plan services need exactly this, so it lives here beside
+# the validator it wraps rather than being restated in each. A credit card deliberately does NOT use
+# this — its default may name any currency, so only ownership is checked and none of the merge logic
+# below (which exists to keep a currency pair matching) applies.
 #
-# `effective_method` is the plan's merged payment method, or None for a credit card (which has no
-# method of its own). A card-paid plan never names a funding account — its cash leg lands at the card
-# settlement, so linking here as well would count one charge twice.
+# `effective_method` is the plan's merged payment method. A card-paid plan never names a funding account
+# — its cash leg lands at the card settlement, so linking here as well would count one charge twice.
 #
 # Re-validated ONLY when the (account, currency) pair actually moves. An unchanged pair was already
 # validated when it was attached, and re-checking it would let a stale stored default — its account's
@@ -106,9 +119,11 @@ async def validate_effective_default_link(
 
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,
 # derived at query time (one batch query per source): balance = opening_balance + linked income −
-# linked expenses − settlements paid from the account + transfers in − transfers out. Every linked row
-# is in the account's currency (validate_account_link enforces it) and each transfer leg is summed in
-# its own account's currency, so the sums need no per-currency conversion. Each sum is bounded below by
+# linked expenses − settlements paid from the account + transfers in − transfers out. Every term is
+# already denominated in the account's currency, so the sums need no per-currency conversion — but for
+# three different reasons: entries are validated to MATCH the account's currency, each transfer leg is
+# stored in its own account's, and a card settlement may cross currencies and therefore records what
+# left the account separately (the repository sums coalesce(account_amount, amount)). Each sum is bounded below by
 # the account's opening_date inside the repository — opening_balance IS the balance at that date, so an
 # earlier row is already inside it. The linked set is free from the same sums (a group is present only
 # when it has rows) and drives the currency lock in the response; a transfer counts as a link on either
@@ -200,14 +215,18 @@ async def account_has_links(session: AsyncSession, account_id: int, user_id: int
     )
 
 
-# Counts the cards and recurring plans naming this account as their default funding account. A default
-# is not a money link — nothing has moved — but it is a standing instruction, so it still constrains the
-# account's currency: the moment the two stop matching, every charge that default was meant to attribute
-# silently stops being attributed.
+# Counts the recurring PLANS naming this account as their default funding account. A default is not a
+# money link — nothing has moved — but a plan's is a standing instruction that constrains the account's
+# currency: a plan's charge carries one amount, so the moment the two stop matching every charge that
+# default was meant to attribute silently stops being attributed.
+#
+# CARDS are deliberately NOT counted, unlike plans. A card's default may now name an account in any
+# currency, because a cross-currency settlement records what left that account explicitly — so
+# re-denominating the account cannot make the default inert, and there is nothing to protect. The
+# asymmetry is the same one that lets a card's default cross currencies while a plan's may not.
 async def count_default_references(session: AsyncSession, account_id: int, user_id: int) -> int:
     return (
-        await credit_card_repository.count_by_default_account(session, account_id, user_id)
-        + await subscription_repository.count_by_default_account(session, account_id, user_id)
+        await subscription_repository.count_by_default_account(session, account_id, user_id)
         + await installment_repository.count_by_default_account(session, account_id, user_id)
         + await payment_obligation_repository.count_by_default_account(session, account_id, user_id)
     )

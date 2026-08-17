@@ -34,9 +34,10 @@ class MovementSource(StrEnum):
 
 # One movement in an account's ledger. `amount` is SIGNED in the account's own currency: positive
 # put money in, negative took it out. There is no per-row currency because there cannot be one —
-# every linked row is validated to match the account's currency and each transfer leg is stored in
-# its own account's, so the whole ledger is denominated in the account's currency (carried once on
-# the list response).
+# every income/expense row is validated to match the account's currency, each transfer leg is stored
+# in its own account's, and a card settlement carries what left the account separately from what it
+# cleared, so the whole ledger is denominated in the account's currency (carried once on the list
+# response).
 #
 # `balance_after` is the account's balance immediately after this movement, or None when a filter is
 # active: it stays arithmetically true under a filter, but consecutive visible rows would then differ
@@ -45,7 +46,10 @@ class MovementSource(StrEnum):
 # `counterparty` names the other side — the card a settlement paid, or the account a transfer moved
 # to/from. Resolved server-side, like CardSettlementResponse.account_name and TransferResponse's
 # names, so a row can still say what it is when the client's own lists fail to load or when the other
-# side has since been archived.
+# side has since been archived. `counterparty_amount`/`counterparty_currency` carry that side's own
+# figure for the two kinds that can span currencies (a transfer's far leg, a settlement's card leg);
+# a reader shows the pair only when the currency differs from the account's, because the two amounts
+# together ARE the record of the rate and neither alone says what happened.
 class AccountMovement(NamedTuple):
     source: MovementSource
     source_id: int

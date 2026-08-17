@@ -27,19 +27,23 @@ class AccountMovementResponse(BaseModel):
     counterparty: str | None = Field(default=None, description="Card paid, or the other account of a transfer.")
     counterparty_amount: Decimal | None = Field(
         default=None,
-        description="The other side's amount, for a transfer. Differs from `amount` only across currencies.",
+        description="The other side's amount: a transfer's far leg, or the card amount a settlement cleared.",
         max_digits=18,
         decimal_places=2,
     )
-    counterparty_currency: str | None = Field(default=None, description="The other account's currency, for a transfer.")
+    counterparty_currency: str | None = Field(
+        default=None,
+        description="That side's currency — the other account's, or the settled bucket's. Equals the ledger's currency when no conversion happened.",
+    )
     notes: str | None = Field(default=None, description="Optional notes carried by the underlying row.")
 
     model_config = {"from_attributes": True}
 
 
 # A page of the ledger. `currency` is carried once rather than per row because it cannot vary: every
-# linked entry is validated to match the account's currency, and each transfer leg is stored in its
-# own account's — so the whole ledger is denominated in the account's currency.
+# income/expense entry is validated to match the account's currency, each transfer leg is stored in its
+# own account's, and a card settlement records what left the account separately from what it cleared —
+# so the whole ledger is denominated in the account's currency however the movement arose.
 class AccountMovementListResponse(BaseModel):
     items: list[AccountMovementResponse] = Field(description="Movements on this page, newest first.")
     total: int = Field(description="Total movements matching the filter.")

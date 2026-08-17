@@ -137,6 +137,41 @@ class TestUnionMatchesTheBalance:
         assert await _assert_no_drift(session, usd, u) == Decimal("40.00")
 
     @pytest.mark.asyncio
+    async def test_a_cross_currency_settlement_reaches_the_balance_by_its_account_leg(self, session, fixtures):
+        # The case this whole feature turns on, and the one most able to drift: a USD bucket paid from a
+        # PESO account. `amount` clears the card in USD; `account_amount` is what actually left the
+        # account. Three separate sums read the cash leg (live balance, point-in-time, monthly chart) plus
+        # the ledger union — if ANY of them summed `amount` instead, the account would lose 100 rather
+        # than 130,000 and this assertion is what says so.
+        u, ars, card = fixtures["users"][0], fixtures["ars"], fixtures["card"]
+        await session.execute(
+            text(
+                "INSERT INTO card_settlements (credit_card_id, user_id, date, amount, currency, account_id, account_amount)"
+                " VALUES (:c, :u, '2026-07-18', 100, 'USD', :a, 130000)"
+            ),
+            {"c": card, "u": u, "a": ars},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE - Decimal("130000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_same_currency_settlement_still_sums_its_only_amount(self, session, fixtures):
+        # account_amount NULL means no conversion happened, so the coalesce must fall back to `amount`.
+        # Every settlement that existed before this feature is exactly this shape.
+        u, ars, card = fixtures["users"][0], fixtures["ars"], fixtures["card"]
+        await session.execute(
+            text(
+                "INSERT INTO card_settlements (credit_card_id, user_id, date, amount, currency, account_id, account_amount)"
+                " VALUES (:c, :u, '2026-07-18', 8000, 'ARS', :a, NULL)"
+            ),
+            {"c": card, "u": u, "a": ars},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE - Decimal("8000.00")
+
+    @pytest.mark.asyncio
     async def test_a_reconciliation_adjustment_counts_once(self, session, fixtures):
         u, ars = fixtures["users"][0], fixtures["ars"]
         rec = (

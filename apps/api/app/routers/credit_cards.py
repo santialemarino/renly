@@ -177,6 +177,7 @@ async def create_settlement(
         amount=body.amount,
         currency=body.currency,
         account_id=body.account_id,
+        account_amount=body.account_amount,
         notes=body.notes,
     )
 
