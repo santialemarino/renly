@@ -58,3 +58,12 @@ class AccountMovement(NamedTuple):
     counterparty_amount: Decimal | None = None
     counterparty_currency: str | None = None
     notes: str | None = None
+
+
+# A ledger row as the repository reads it: the movement, plus the running total the window function
+# computed alongside it — Σ amounts from the newest row through this one. The service turns that into
+# the `balance_after` the API exposes by undoing it against the account's current balance, so the
+# union's projection shape never has to be read positionally outside the repository that built it.
+class MovementRow(NamedTuple):
+    movement: AccountMovement
+    running_total: Decimal
