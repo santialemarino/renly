@@ -803,6 +803,7 @@
       "delete": {
         "title": "Delete settlement",
         "confirm": "Are you sure you want to delete the settlement of {amount} {currency}?",
+        "confirmCrossCurrency": "Are you sure you want to delete this settlement? It cleared {amount} {currency} off the card, and {accountAmount} {accountCurrency} will go back to the account it was paid from.",
         "confirmButton": "Delete",
         "deleting": "Deleting..."
       },
@@ -827,7 +828,7 @@
         "accountAmountPlaceholder": "0.00",
         "accountAmountHint": "This bucket is in {bucket} and the account is in {account}, so enter what your bank actually debited.",
         "impliedRate": "That works out to {rate} {account} per {bucket}.",
-        "estimatedRate": "Today’s card rate is around {rate}.",
+        "estimatedRate": "The card rate on {date} was around {rate}.",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }

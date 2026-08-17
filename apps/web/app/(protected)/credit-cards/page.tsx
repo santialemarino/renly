@@ -9,7 +9,7 @@ import { getLatestRates, getSupportedCurrencies } from '@/lib/api/exchange-rates
 import { getSettings } from '@/lib/api/settings';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
-import { rateForPair } from '@/lib/utils/settlement-rate';
+import { rateDateForPair, rateForPair } from '@/lib/utils/settlement-rate';
 
 export async function generateMetadata() {
   return await generatePageMetadata('creditCards');
@@ -59,6 +59,12 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
    * rather than a display choice.
    */
   const oficialRate = rateForPair(latestRates?.rates ?? [], 'USD_ARS_OFICIAL');
+  /*
+   * The date that rate is FOR, carried so the estimate can name it instead of claiming "today". The
+   * settlement being recorded is usually backdated (last month's statement), and the scheduler can be
+   * behind, so an undated benchmark contradicts correct entries — it has to say what it is.
+   */
+  const oficialRateDate = rateDateForPair(latestRates?.rates ?? [], 'USD_ARS_OFICIAL');
 
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
@@ -79,6 +85,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
         supportedCurrencies={supportedCurrencies}
         accounts={accounts}
         oficialRate={oficialRate}
+        oficialRateDate={oficialRateDate}
         firstRun={firstRun}
       />
     </div>

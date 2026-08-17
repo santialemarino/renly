@@ -45,8 +45,10 @@ export type AccountFieldFormValues = {
 interface AccountFieldProps<T extends AccountFieldFormValues & FieldValues> {
   control: Control<T>;
   setValue: UseFormSetValue<T>;
-  // Accounts to choose from. Only active accounts whose currency matches `currency` are offered —
-  // a cash balance stays exact, so a link's currency must match the account's.
+  // Accounts to choose from. When `currency` is set, only active accounts denominated in it are offered
+  // (an expense / income / plan link carries a single amount, so it must match). Pass `undefined` to
+  // offer every active account — the card-settlement and card-default cases, where the funding account
+  // may legitimately be denominated differently and each option then names its own currency.
   accounts: Account[];
   currency: string | undefined;
   label: string;
@@ -93,17 +95,26 @@ export function AccountField<T extends AccountFieldFormValues & FieldValues>({
     if (shouldClearAccountLink(selected, currency)) setValue(name, null);
   }, [selected, currency, setValue, name]);
 
-  // Localizes one option row; the sentinel names the currency when nothing matches, turning a
-  // dead-end disabled field into an explanation ("No ARS accounts" rather than a greyed-out "None").
+  /*
+   * Localizes one option row; the sentinel names the currency when nothing matches, turning a dead-end
+   * disabled field into an explanation ("No ARS accounts" rather than a greyed-out "None").
+   *
+   * An UNFILTERED picker appends each account's own currency, matching the transfer dialog's
+   * `name · currency`. Without it a mixed-currency list is labelled by name alone, and account names are
+   * not unique — the common "Brubank" pair in ARS and USD renders as two identical rows, so picking the
+   * wrong one silently debits a different balance in a different denomination. A filtered picker omits
+   * the code: every option there shares the field's currency, so repeating it is noise.
+   */
   function optionLabel(option: AccountOption): string {
     if (option.kind === 'none') {
       return option.noMatchingCurrency && currency
         ? t('accountField.noneForCurrency', { currency })
         : t('accountField.none');
     }
-    return option.account.isActive
+    const name = currency
       ? option.account.name
-      : t('accountField.archived', { name: option.account.name });
+      : `${option.account.name} · ${option.account.currency}`;
+    return option.account.isActive ? name : t('accountField.archived', { name });
   }
 
   if (options === null) return null;

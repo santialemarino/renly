@@ -58,6 +58,7 @@ function SettlementsSection({
   accounts,
   defaultAccountId,
   oficialRate,
+  oficialRateDate,
   expanded,
 }: {
   cardId: number;
@@ -65,8 +66,9 @@ function SettlementsSection({
   accounts?: Account[];
   // The card's optional funding account, pre-filled as the settlement's "Paid from".
   defaultAccountId: number | null;
-  // Today's USD_ARS_OFICIAL rate, for the settlement dialog's cross-currency estimate only.
+  // The latest stored USD_ARS_OFICIAL rate and its date, for the settlement dialog's estimate only.
   oficialRate: number | null;
+  oficialRateDate: string | null;
   expanded: boolean;
 }) {
   const fmt = useFormatters();
@@ -178,7 +180,13 @@ function SettlementsSection({
                                   here is a payment, so a sign would carry no information and would
                                   restyle a shipped column. */}
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {fmt.amount(s.amount, s.currency)}
+                                {/* The headline carries its own code ONLY when a second, differently
+                                    denominated figure sits under it. Uncoded (the Currency column names
+                                    it) the two lines read as one currency — "100" over "130.000 ARS" —
+                                    which is exactly the misreading the two-leg model exists to prevent. */}
+                                {s.accountAmount && s.accountCurrency
+                                  ? `${fmt.amount(s.amount, s.currency)} ${s.currency}`
+                                  : fmt.amount(s.amount, s.currency)}
                                 {s.accountAmount && s.accountCurrency && (
                                   <span className="block text-paragraph-xs text-muted-foreground">
                                     {t('settlements.table.paidWith', {
@@ -230,6 +238,7 @@ function SettlementsSection({
                   accounts={accounts}
                   defaultAccountId={defaultAccountId}
                   oficialRate={oficialRate}
+                  oficialRateDate={oficialRateDate}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -271,14 +280,17 @@ export function CreditCardsTable({
   supportedCurrencies,
   accounts,
   oficialRate,
+  oficialRateDate,
   firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   accounts?: Account[];
-  // Today's USD_ARS_OFICIAL rate, passed down to the settlement dialog's cross-currency estimate.
+  // The latest stored USD_ARS_OFICIAL rate and the date it is for, passed down to the settlement
+  // dialog's cross-currency estimate. The date is what stops the estimate claiming to be "today's".
   oficialRate: number | null;
+  oficialRateDate: string | null;
   firstRun?: boolean;
 }) {
   const fmt = useFormatters();
@@ -438,6 +450,7 @@ export function CreditCardsTable({
                       accounts={accounts}
                       defaultAccountId={card.defaultAccountId}
                       oficialRate={oficialRate}
+                      oficialRateDate={oficialRateDate}
                       expanded={isExpanded}
                     />
                   </Fragment>

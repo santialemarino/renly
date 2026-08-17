@@ -111,8 +111,9 @@ export async function createSettlement(
     },
   });
   if (!res.ok) {
-    // Reachable: the pre-filled default is in the card's currency, but on a multi-bucket card the
-    // user can settle a DIFFERENT bucket. The refusal has to say why.
+    // Reachable: the funding account may be in any currency, so the API refuses a settlement that
+    // crosses currencies without recording what left the account, or one that claims a different amount
+    // within a single currency. The refusal has to say which.
     const detail = isRefusal(res) ? await localizedApiError(res) : null;
     if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create settlement');

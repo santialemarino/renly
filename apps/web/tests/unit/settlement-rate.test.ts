@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { estimatedCardRate, impliedRate, rateForPair } from '@/lib/utils/settlement-rate';
+import {
+  estimatedCardRate,
+  impliedRate,
+  rateDateForPair,
+  rateDecimals,
+  rateForPair,
+} from '@/lib/utils/settlement-rate';
 
 /*
  * The cross-currency settlement dialog's read-back. These numbers are presentation only — the user's
@@ -59,6 +65,54 @@ describe('estimatedCardRate', () => {
     expect(estimatedCardRate('USD', 'ARS', null)).toBeNull();
     expect(estimatedCardRate('USD', 'ARS', 0)).toBeNull();
     expect(estimatedCardRate('USD', 'ARS', -5)).toBeNull();
+  });
+
+  it('estimates nothing when the rate itself overflows', () => {
+    // The multiplier is deploy-time env, so the PRODUCT is what has to be finite: an unbounded one
+    // rendered as "around ∞" next to the user's amount.
+    expect(estimatedCardRate('USD', 'ARS', Number.MAX_VALUE)).toBeNull();
+    expect(estimatedCardRate('USD', 'ARS', Infinity)).toBeNull();
+  });
+});
+
+describe('rateDecimals', () => {
+  it('keeps the usual two decimals for an ordinary rate', () => {
+    expect(rateDecimals(1300)).toBe(2);
+    expect(rateDecimals(1.3)).toBe(2);
+    expect(rateDecimals(1)).toBe(2);
+  });
+
+  it('keeps a sub-1 rate legible instead of collapsing it to zero', () => {
+    // An ARS bucket paid from a USD account implies ~0.00077. At a fixed 2 decimals that renders as "0"
+    // — and so does a genuine 10x typo, which makes the whole sanity check inert in that direction.
+    // Each case keeps ~3 significant figures, which is what makes a magnitude error visible.
+    expect(rateDecimals(0.000769)).toBe(6);
+    expect(rateDecimals(0.05)).toBe(4);
+    expect(rateDecimals(0.5)).toBe(3);
+  });
+
+  it('separates a right answer from a 10x typo in the sub-1 direction', () => {
+    // The regression that motivated this: both of these rendered as "0,01" at a fixed 2 decimals.
+    const right = impliedRate('130000', '100');
+    const typo = impliedRate('130000', '1000');
+    expect(right).not.toBeNull();
+    expect(typo).not.toBeNull();
+    expect(right!.toFixed(rateDecimals(right!))).not.toBe(typo!.toFixed(rateDecimals(typo!)));
+  });
+
+  it('bounds the pathological tail', () => {
+    expect(rateDecimals(1e-30)).toBe(10);
+  });
+});
+
+describe('rateDateForPair', () => {
+  it('reads the date the chosen pair is for', () => {
+    const rates = [
+      { pair: 'USD_ARS_OFICIAL', date: '2026-08-17' },
+      { pair: 'USD_ARS_MEP', date: '2026-08-16' },
+    ];
+    expect(rateDateForPair(rates, 'USD_ARS_OFICIAL')).toBe('2026-08-17');
+    expect(rateDateForPair(rates, 'USD_BRL')).toBeNull();
   });
 });
 

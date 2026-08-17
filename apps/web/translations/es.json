@@ -803,6 +803,7 @@
       "delete": {
         "title": "Eliminar pago",
         "confirm": "¿Seguro querés eliminar el pago de {amount} {currency}?",
+        "confirmCrossCurrency": "¿Seguro querés eliminar este pago? Canceló {amount} {currency} de la tarjeta, y {accountAmount} {accountCurrency} vuelven a la cuenta desde la que se pagó.",
         "confirmButton": "Eliminar",
         "deleting": "Eliminando..."
       },
@@ -827,7 +828,7 @@
         "accountAmountPlaceholder": "0,00",
         "accountAmountHint": "Este saldo está en {bucket} y la cuenta en {account}, así que ingresá lo que el banco debitó realmente.",
         "impliedRate": "Equivale a {rate} {account} por {bucket}.",
-        "estimatedRate": "Hoy el dólar tarjeta está alrededor de {rate}.",
+        "estimatedRate": "El dólar tarjeta del {date} estaba alrededor de {rate}.",
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
       }

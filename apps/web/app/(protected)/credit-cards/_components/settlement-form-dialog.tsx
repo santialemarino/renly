@@ -37,7 +37,7 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { Account } from '@/lib/api/accounts';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
-import { estimatedCardRate, impliedRate } from '@/lib/utils/settlement-rate';
+import { estimatedCardRate, impliedRate, rateDecimals } from '@/lib/utils/settlement-rate';
 
 interface SettlementFormDialogProps {
   open: boolean;
@@ -57,12 +57,15 @@ interface SettlementFormDialogProps {
   // must not invent a payment that did not happen.
   defaultAccountId: number | null;
   /*
-   * Today's USD_ARS_OFICIAL rate, or null when it isn't stored. Feeds ONLY the estimate shown beside the
-   * implied rate. It must be the oficial pair rather than the user's dollar-rate preference — dólar
-   * tarjeta is built on oficial even for someone viewing MEP, so reading the preference here would be a
-   * quiet correctness bug.
+   * The latest stored USD_ARS_OFICIAL rate and the date it is for, or null when none is stored. Feeds ONLY
+   * the estimate shown beside the implied rate. It must be the oficial pair rather than the user's
+   * dollar-rate preference — dólar tarjeta is built on oficial even for someone viewing MEP, so reading
+   * the preference here would be a quiet correctness bug. The date is rendered with it rather than
+   * dropped: a settlement is usually backdated (last month's statement) and the rate feed can be behind,
+   * so an undated benchmark would contradict a perfectly correct entry.
    */
   oficialRate: number | null;
+  oficialRateDate: string | null;
   onSuccess: () => void;
 }
 
@@ -74,6 +77,7 @@ export function SettlementFormDialog({
   accounts,
   defaultAccountId,
   oficialRate,
+  oficialRateDate,
   onSuccess,
 }: SettlementFormDialogProps) {
   const fmt = useFormatters();
@@ -151,13 +155,17 @@ export function SettlementFormDialog({
   }, [open, form, defaultCurrency, prefilledAccountId]);
 
   /*
-   * Drop a typed cash amount the moment it stops applying — the account changed to one in the bucket's
-   * own currency, or the bucket moved to the account's. Leaving it would submit a figure the field no
-   * longer shows, and the API would refuse a same-currency settlement whose two amounts differ.
+   * Drop a typed cash amount whenever the currency it was denominated in changes — not merely when the
+   * settlement stops crossing currencies. Keying this on `crossCurrency` alone left the figure in place
+   * when the user switched between two DIFFERENT foreign accounts (peso → dollar), so the label and the
+   * input's own currency flipped while the typed number stayed: 130,000 entered as pesos would submit as
+   * US$130,000, and both amounts are legal for any differing pair so nothing downstream could catch it.
+   * Keyed on the account's currency, every such switch clears the field and asks again.
    */
+  const fundingCurrency = crossCurrency ? selectedAccount.currency : null;
   useEffect(() => {
-    if (!crossCurrency && form.getValues('accountAmount')) form.setValue('accountAmount', '');
-  }, [crossCurrency, form]);
+    if (form.getValues('accountAmount')) form.setValue('accountAmount', '');
+  }, [fundingCurrency, watchedCurrency, form]);
 
   async function onSubmit(values: SettlementFormValues) {
     /*
@@ -312,13 +320,22 @@ export function SettlementFormDialog({
                             {typedRate !== null && (
                               <span className="block">
                                 {t('settlements.form.impliedRate', {
-                                  rate: fmt.value(typedRate, { maxDecimals: 2 }),
+                                  rate: fmt.value(typedRate, {
+                                    maxDecimals: rateDecimals(typedRate),
+                                  }),
                                   bucket: watchedCurrency,
                                   account: selectedAccount.currency,
                                 })}
+                                {/* Gated on the DATE as well as the value: a benchmark that can't say
+                                    which day it is for would contradict a correct backdated entry with
+                                    nothing on screen explaining why. */}
                                 {estimate !== null &&
+                                  oficialRateDate &&
                                   ` ${t('settlements.form.estimatedRate', {
-                                    rate: fmt.value(estimate, { maxDecimals: 2 }),
+                                    rate: fmt.value(estimate, {
+                                      maxDecimals: rateDecimals(estimate),
+                                    }),
+                                    date: fmt.date(oficialRateDate),
                                   })}`}
                               </span>
                             )}

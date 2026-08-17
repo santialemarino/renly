@@ -12,7 +12,18 @@ interface SettlementDeleteDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   cardId: number;
-  settlement: { id: number; amount: string; currency: string } | null;
+  /*
+   * The two legs, because deleting a cross-currency settlement undoes BOTH: the card leg it cleared and
+   * the (larger, differently-denominated) cash leg that returns to the funding account. Naming only the
+   * card leg understated a real ARS restoration by ~1300x.
+   */
+  settlement: {
+    id: number;
+    amount: string;
+    currency: string;
+    accountAmount: string | null;
+    accountCurrency: string | null;
+  } | null;
   onSuccess: () => void;
 }
 
@@ -49,10 +60,17 @@ export function SettlementDeleteDialog({
       entity={settlement}
       title={t('settlements.delete.title')}
       description={(s) =>
-        t('settlements.delete.confirm', {
-          amount: fmt.amount(s.amount, s.currency),
-          currency: s.currency,
-        })
+        s.accountAmount && s.accountCurrency
+          ? t('settlements.delete.confirmCrossCurrency', {
+              amount: fmt.amount(s.amount, s.currency),
+              currency: s.currency,
+              accountAmount: fmt.amount(s.accountAmount, s.accountCurrency),
+              accountCurrency: s.accountCurrency,
+            })
+          : t('settlements.delete.confirm', {
+              amount: fmt.amount(s.amount, s.currency),
+              currency: s.currency,
+            })
       }
       onConfirm={handleDelete}
       loading={deleting}
