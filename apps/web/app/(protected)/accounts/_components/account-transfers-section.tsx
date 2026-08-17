@@ -15,10 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
 import { deleteTransfer, fetchAccountTransfers } from '@/app/(protected)/accounts/account-actions';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { RowActionButton } from '@/components/row-action-button';
+import { SignedAmountCell } from '@/components/signed-amount-cell';
 import type { Account } from '@/lib/api/accounts';
 import type { Transfer } from '@/lib/api/transfers';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
@@ -196,26 +196,21 @@ export function AccountTransfersSection({
                                   </span>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  <span
-                                    className={cn(
-                                      'text-paragraph-sm tabular-nums',
-                                      outgoing ? 'text-muted-foreground' : 'text-foreground',
-                                    )}
-                                  >
-                                    {outgoing ? '−' : '+'}
-                                    {fmt.amount(amount, currency)}
-                                  </span>
-                                  {/* Both sides are shown only when they differ — that pair IS the
-                                      record of the rate, and one derived number can't read correctly
-                                      for both buying and selling. */}
-                                  {crossCurrency && (
-                                    <span className="block text-paragraph-xs text-muted-foreground">
-                                      {t('table.crossCurrency', {
+                                  <SignedAmountCell
+                                    amount={amount}
+                                    currency={currency}
+                                    outgoing={outgoing}
+                                    /* Both sides are shown only when they differ — that pair IS the
+                                       record of the rate, and one derived number can't read
+                                       correctly for both buying and selling. */
+                                    subLine={
+                                      crossCurrency &&
+                                      t('table.crossCurrency', {
                                         from: `${fmt.amount(transfer.fromAmount, transfer.fromCurrency)} ${transfer.fromCurrency}`,
                                         to: `${fmt.amount(transfer.toAmount, transfer.toCurrency)} ${transfer.toCurrency}`,
-                                      })}
-                                    </span>
-                                  )}
+                                      })
+                                    }
+                                  />
                                 </TableCell>
                                 <TableCell className="max-w-48 truncate text-paragraph-sm text-muted-foreground">
                                   {transfer.notes ?? '—'}

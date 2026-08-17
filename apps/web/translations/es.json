@@ -1104,8 +1104,6 @@
       },
       "rows": {
         "settlement": "Pago a {card}",
-        "transferOut": "Enviado a {account}",
-        "transferIn": "Recibido de {account}",
         "crossCurrency": "{amount} del otro lado"
       },
       "table": {

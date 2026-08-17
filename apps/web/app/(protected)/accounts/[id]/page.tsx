@@ -33,11 +33,6 @@ export default async function AccountLedgerPage({ params, searchParams }: Accoun
   const accountId = Number(id);
   if (!Number.isInteger(accountId) || accountId <= 0) notFound();
 
-  // Null covers both "no such account" and "someone else's", so the page's answer is identical
-  // either way and cannot be used to probe which accounts exist.
-  const account = await getAccount(accountId);
-  if (!account) notFound();
-
   /*
    * Both query params are sanitized rather than forwarded: a hand-edited URL should render the
    * ledger, not an API validation error this page has no error boundary to catch. An unknown kind
@@ -50,8 +45,19 @@ export default async function AccountLedgerPage({ params, searchParams }: Accoun
   const requestedPage = Math.trunc(Number(query.page));
   const page = Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1;
 
-  const { settings } = await getPageSettings();
-  const movements = await getAccountMovements(accountId, { kind, page });
+  /*
+   * Fetched together rather than in sequence — nothing here depends on the account row, so awaiting it
+   * first only adds a round trip. The movements request is allowed to fail: for an id that isn't the
+   * caller's it 404s alongside the account, and the null account below is what decides the page.
+   */
+  const [account, movements, { settings }] = await Promise.all([
+    getAccount(accountId),
+    getAccountMovements(accountId, { kind, page }).catch(() => null),
+    getPageSettings(),
+  ]);
+  // Null covers both "no such account" and "someone else's", so the page's answer is identical either
+  // way and cannot be used to probe which accounts exist.
+  if (!account || !movements) notFound();
 
   // Teach the empty state only during first-run and only when no filter is hiding existing rows —
   // the same rule every other list surface uses.

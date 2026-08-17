@@ -12,7 +12,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { SignedAmountCell } from '@/components/signed-amount-cell';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { accountLedgerPath } from '@/config/routes';
@@ -53,6 +53,9 @@ export function AccountLedgerTable({
 }: AccountLedgerTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('accounts.ledger');
+  // The direction phrasings and the cross-currency sub-line describe the same transfer rows the
+  // transfers sub-table renders, so they stay in one namespace rather than being restated here.
+  const tTransfers = useTranslations('accounts.transfers');
   const tCommon = useTranslations('common');
   const { navigate, isPending } = useSearchParamsNavigation(accountLedgerPath(accountId));
 
@@ -66,8 +69,8 @@ export function AccountLedgerTable({
       return t('rows.settlement', { card: movement.counterparty ?? '—' });
     }
     if (movement.kind === 'transfer') {
-      const key = Number(movement.amount) < 0 ? 'rows.transferOut' : 'rows.transferIn';
-      return t(key, { account: movement.counterparty ?? '—' });
+      const key = Number(movement.amount) < 0 ? 'table.sentTo' : 'table.receivedFrom';
+      return tTransfers(key, { account: movement.counterparty ?? '—' });
     }
     return t(`kinds.${movement.kind}`);
   }
@@ -101,10 +104,10 @@ export function AccountLedgerTable({
               items.map((movement) => {
                 const Icon = KIND_ICONS[movement.kind];
                 const outgoing = Number(movement.amount) < 0;
-                // Both sides are shown only when they differ — that pair IS the record of the rate,
-                // and one derived number can't read correctly for both buying and selling.
+                // Both sides are shown only when they differ — that pair IS the record of the rate.
                 const crossCurrency =
-                  movement.counterpartyCurrency !== null &&
+                  !!movement.counterpartyAmount &&
+                  !!movement.counterpartyCurrency &&
                   movement.counterpartyCurrency !== currency;
                 // Keyed on the SOURCE, not the kind: `adjustment` spans two tables with independent
                 // id sequences, so two adjustments really can share (kind, sourceId).
@@ -128,22 +131,17 @@ export function AccountLedgerTable({
                       {movement.notes ?? '—'}
                     </TableCell>
                     <TableCell className="text-right">
-                      <span
-                        className={cn(
-                          'text-paragraph-sm tabular-nums',
-                          outgoing ? 'text-muted-foreground' : 'text-foreground',
-                        )}
-                      >
-                        {outgoing ? '−' : '+'}
-                        {fmt.amount(movement.amount.replace(/^-/, ''), currency)}
-                      </span>
-                      {crossCurrency && movement.counterpartyAmount && (
-                        <span className="block text-paragraph-xs text-muted-foreground">
-                          {t('rows.crossCurrency', {
-                            amount: `${fmt.amount(movement.counterpartyAmount, movement.counterpartyCurrency ?? undefined)} ${movement.counterpartyCurrency}`,
-                          })}
-                        </span>
-                      )}
+                      <SignedAmountCell
+                        amount={movement.amount.replace(/^-/, '')}
+                        currency={currency}
+                        outgoing={outgoing}
+                        subLine={
+                          crossCurrency &&
+                          t('rows.crossCurrency', {
+                            amount: `${fmt.amount(movement.counterpartyAmount ?? '0', movement.counterpartyCurrency ?? undefined)} ${movement.counterpartyCurrency}`,
+                          })
+                        }
+                      />
                     </TableCell>
                     {showBalance && (
                       <TableCell className="text-right text-paragraph-sm tabular-nums">
