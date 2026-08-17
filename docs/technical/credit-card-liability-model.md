@@ -37,7 +37,7 @@ When you pay your credit card bill, you record a **settlement**:
 
 This is why settlements are stored in their own table (`card_settlements`), not as expenses.
 
-**Across currencies it is deliberately not zero.** Paying a USD bucket with pesos clears the bill at the bank's blended "dólar tarjeta" rate, so the settlement records two amounts: `amount` (what cleared the card, in the bucket's currency) and `account_amount` (what actually left the account, in the account's currency). The gap between them is the real FX + tax cost -- it genuinely reduces net worth, un-itemised, because the ~30% Ganancias perception is already inside the rate and has no separable figure to record. See `currency-handling.md` §12 for which sums read which leg.
+**Across currencies it is deliberately not zero.** Paying a USD bucket with pesos clears the bill at the bank's blended "dólar tarjeta" rate, so the settlement records two amounts: `amount` (what cleared the card, in the bucket's currency) and `account_amount` (what actually left the account, in the account's currency). The gap between them is the real FX + tax cost and is never itemised, because the ~30% Ganancias perception is already inside the rate with no separable figure to record. What it does to the reported net-worth _delta_ depends on the rate the debt was being marked at: clearing it reduces net worth when the debt was marked below the card rate (`oficial`) and can read as a gain when marked at or above it (`mep`, the default, or `blue`). That is consistent mark-to-market, not an error -- see `currency-handling.md` §12. See `currency-handling.md` §12 for which sums read which leg.
 
 ## Balance calculation
 

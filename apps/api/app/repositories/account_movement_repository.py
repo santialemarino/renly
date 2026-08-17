@@ -13,6 +13,7 @@ from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.transfer import Transfer
+from app.repositories.card_settlement_repository import settlement_cash_leg
 
 _CATEGORY = "category"
 _COUNTERPARTY = "counterparty"
@@ -99,7 +100,7 @@ def _settlement_branch(account_id: int, user_id: int, *, opening_date: date_type
             literal(MovementSource.settlement.value).label("source"),
             literal(MovementKind.settlement.value).label("kind"),
             CardSettlement.date.label("date"),
-            (-func.coalesce(CardSettlement.account_amount, CardSettlement.amount)).label("amount"),
+            (-settlement_cash_leg()).label("amount"),
             cast(null(), String).label(_CATEGORY),
             CreditCard.name.label(_COUNTERPARTY),
             CardSettlement.amount.label(_COUNTERPARTY_AMOUNT),
