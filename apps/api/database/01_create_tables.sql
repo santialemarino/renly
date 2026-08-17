@@ -371,8 +371,9 @@ CREATE INDEX idx_income_entries_account_id
 --   CASH leg, in the funding account's own currency, and is set only when the two differ — paying a
 --   USD bucket with pesos clears US$100 while $130,000 leaves the account. The pair IS the record of
 --   the rate used (deliberately no stored rate: no single direction reads correctly both ways, the
---   same reason transfers has no implied_rate), and the gap between the two is the real FX + tax
---   cost, which correctly reduces net worth un-itemised.
+--   same reason transfers has no implied_rate). The gap between the two is the real FX + tax cost and
+--   is never itemised; its effect on the reported net-worth delta depends on the rate the debt was
+--   marked at (see docs/technical/currency-handling.md 12).
 CREATE TABLE card_settlements (
   id              BIGSERIAL PRIMARY KEY,
   credit_card_id  BIGINT NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
@@ -388,9 +389,11 @@ CREATE TABLE card_settlements (
   notes           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT card_settlements_positive_account_amount CHECK (account_amount IS NULL OR account_amount > 0),
-  -- No cash leg means there is no account for a cash amount to be denominated in.
-  CONSTRAINT card_settlements_account_amount_needs_account CHECK (account_amount IS NULL OR account_id IS NOT NULL)
+  -- "No cash amount without the account it came from" is deliberately NOT a CHECK: account_id is
+  -- ON DELETE SET NULL, which Postgres runs as an UPDATE, so such a constraint would make any account
+  -- that funded a cross-currency settlement permanently undeletable. The service enforces the rule on
+  -- write and clears account_amount when it drops the link.
+  CONSTRAINT card_settlements_positive_account_amount CHECK (account_amount IS NULL OR account_amount > 0)
 );
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);

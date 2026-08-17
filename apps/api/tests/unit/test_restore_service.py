@@ -521,6 +521,35 @@ class TestAccountClusterRoundTrip:
         assert settlement.account_amount == Decimal("130000")
 
     @pytest.mark.asyncio
+    async def test_a_same_currency_cash_leg_is_normalized_away_after_restore(self, monkeypatch):
+        # Restore bulk-inserts without passing through the service that owns "a same-currency settlement
+        # must debit exactly what it clears", so a hand-edited export could pair a 700 ARS settlement with
+        # an ARS account and a 130,000 cash leg — and all three cash sums would then agree on debiting
+        # 130,000, wrong by 129,300 with the drift guard unable to see it (it only proves the readers agree
+        # with each other). One normalizing statement runs after the inserts to close that.
+        _mock_repo(monkeypatch)
+        _capture_inserts(monkeypatch)
+        normalize = AsyncMock()
+        monkeypatch.setattr(restore_service.card_settlement_repository, "clear_same_currency_account_amounts", normalize)
+        session = AsyncMock()
+        content = _export(card_settlements=[])
+
+        await restore_service.confirm_restore(session, USER, "x.json", content)
+
+        normalize.assert_awaited_once_with(session, USER.id)
+
+    @pytest.mark.asyncio
+    async def test_the_dry_run_preview_writes_nothing(self, monkeypatch):
+        # The normalizer is an UPDATE, so it must not run on the read-only preview path.
+        _mock_repo(monkeypatch)
+        normalize = AsyncMock()
+        monkeypatch.setattr(restore_service.card_settlement_repository, "clear_same_currency_account_amounts", normalize)
+
+        await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", _export(card_settlements=[]))
+
+        normalize.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_transfers_and_settlements_are_no_longer_reported_as_skipped(self, monkeypatch):
         _mock_repo(monkeypatch)
         content = _export(accounts=[], transfers=[], card_settlements=[], card_reconciliations=[{"id": 1}])

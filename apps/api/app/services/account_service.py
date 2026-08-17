@@ -271,8 +271,16 @@ async def update_account(
 
 # Delete an account. Linked expenses/income/settlements are un-attributed via ON DELETE SET NULL
 # (their history is preserved).
+#
+# A cross-currency settlement's recorded cash leg is cleared first, in the same transaction. That figure
+# is denominated in THIS account, so once the link is gone nothing can interpret it — and every reader
+# treats "account_amount is set" as "this settlement crossed currencies". The card leg survives, so the
+# settlement still clears its bucket exactly as before; only the cash side it can no longer attribute
+# goes. Deliberately done here rather than as a DB CHECK: the FK's own SET NULL is an UPDATE, so a
+# constraint pairing the two columns would make this delete impossible instead of merely tidy.
 async def delete_account(session: AsyncSession, account_id: int, user: User) -> None:
     account = await get_account(session, account_id, user)
+    await card_settlement_repository.clear_account_amounts(session, account_id, user.id)
     await account_repository.delete(session, account)
     await session.commit()
 

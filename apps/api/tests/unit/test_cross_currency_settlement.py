@@ -12,7 +12,7 @@ from app.domain import (
 )
 from app.models.account import Account, AccountType
 from app.models.user import User
-from app.repositories import card_settlement_repository
+from app.repositories import account_movement_repository, card_reconciliation_repository, card_settlement_repository
 from app.services import account_service, credit_card_service
 
 # Cross-currency card settlement (B4): paying a USD bucket with pesos. The settlement clears the bucket
@@ -20,9 +20,11 @@ from app.services import account_service, credit_card_service
 # amount from the funding account. Both amounts are recorded and the pair IS the rate — there is
 # deliberately no stored rate, the same conclusion transfers reached.
 #
-# The whole correctness surface is which leg each sum reads: three sums are cash-side and must read
-# coalesce(account_amount, amount), four are card-side and must NOT. Unit tests mock repositories, so the
-# SQL assertions below are what pins that split; test_account_ledger_drift.py proves it against a real DB.
+# The whole correctness surface is which leg each query reads: THREE are cash-side and must read
+# coalesce(account_amount, amount), SIX are card-side and must NOT. Unit tests mock repositories, so the
+# SQL assertions below are what pins that split; test_account_ledger_drift.py proves the cash side against
+# a real DB. Every one of the nine is compiled here — the four in card_reconciliation_repository are the
+# ones nothing else covers at all, because their own tests mock them and a mock cannot see SQL.
 
 USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 
@@ -204,17 +206,40 @@ class TestTheCurrencyRuleIsAsymmetric:
         assert await account_service.count_default_references(AsyncMock(), 7, USER.id) == 2
 
 
-# Which leg each sum reads is the entire correctness surface of this feature, and no unit test can see it
-# through a mocked repository — so these compile the real statements and assert on the SQL. A cash-side
-# sum that stopped coalescing would add dollars into a peso balance; a card-side sum that STARTED
-# coalescing would leave a USD bucket cleared by a peso figure.
+class TestUnlinkingClearsTheCashLeg:
+    @pytest.mark.asyncio
+    async def test_deleting_the_funding_account_clears_the_recorded_cash_leg(self, monkeypatch):
+        # The FK is ON DELETE SET NULL, and Postgres performs that as an UPDATE — so a DB CHECK pairing
+        # account_id with account_amount would make this delete IMPOSSIBLE (measured: a generic integrity
+        # 409, with the account permanently undeletable). The rule lives here instead: clear the cash leg
+        # in the same transaction, so the row keeps its card leg and loses only what it can't attribute.
+        monkeypatch.setattr(account_service, "get_account", AsyncMock(return_value=_account()))
+        monkeypatch.setattr(account_service.account_repository, "delete", AsyncMock())
+        clear = AsyncMock()
+        monkeypatch.setattr(account_service.card_settlement_repository, "clear_account_amounts", clear)
+        session = AsyncMock()
+
+        await account_service.delete_account(session, 7, USER)
+
+        clear.assert_awaited_once_with(session, 7, USER.id)
+        # One commit for the whole use case, so the clear and the delete are atomic.
+        session.commit.assert_awaited_once()
+
+
+# Which leg each query reads is the entire correctness surface of this feature, and no unit test can see
+# it through a mocked repository — so these compile the real statements and assert on the SQL. A cash-side
+# query that stopped coalescing would add dollars into a peso balance; a card-side one that STARTED
+# coalescing would clear a USD bucket with a peso figure.
 class TestTheCashAndCardLegsNeverSwap:
     @staticmethod
     async def _sql(coro_factory) -> str:
-        # An empty result set, so each repository's own row-mapping runs to completion and the statement
-        # it actually executed is what gets compiled.
+        # An empty result set in every shape a repository might read it (rows, a scalar total, ORM
+        # objects), so each one's own mapping runs to completion and the statement it actually executed is
+        # what gets compiled.
         session = AsyncMock()
-        session.execute = AsyncMock(return_value=Mock(all=Mock(return_value=[])))
+        result = Mock(all=Mock(return_value=[]), scalar_one=Mock(return_value=0), first=Mock(return_value=None))
+        result.scalars = Mock(return_value=Mock(all=Mock(return_value=[])))
+        session.execute = AsyncMock(return_value=result)
         await coro_factory(session)
         return str(session.execute.await_args.args[0].compile(dialect=postgresql.dialect())).lower()
 
@@ -235,9 +260,32 @@ class TestTheCashAndCardLegsNeverSwap:
         assert "coalesce(card_settlements.account_amount, card_settlements.amount)" in sql
 
     @pytest.mark.asyncio
-    async def test_the_card_side_sums_read_the_card_leg_only(self):
-        grouped = await self._sql(lambda s: card_settlement_repository.sum_by_card_ids_grouped(s, [5]))
-        monthly = await self._sql(lambda s: card_settlement_repository.sum_by_card_ids_monthly(s, [5]))
+    async def test_the_ledger_branch_reads_the_account_leg(self):
+        # The third cash-side reader, and the one that lives in another module — it imports the shared
+        # expression rather than re-spelling it, so this proves the import still resolves to the coalesce.
+        sql = await self._sql(lambda s: account_movement_repository.list_movements(s, 7, USER.id, opening_date=date(2026, 1, 1)))
 
-        for sql in (grouped, monthly):
-            assert "account_amount" not in sql, "a bucket is cleared by what the bank applied to it, not by what any account paid"
+        assert "coalesce(card_settlements.account_amount, card_settlements.amount)" in sql
+
+    # All SIX card-side queries, parametrized so adding a seventh has an obvious home. The four in
+    # card_reconciliation_repository are covered nowhere else: their own tests mock them, and switching any
+    # one to the cash leg would clear a USD bucket with a peso figure while the whole suite stayed green.
+    @pytest.mark.parametrize(
+        ("label", "call"),
+        [
+            ("sum_by_card_ids_grouped", lambda s: card_settlement_repository.sum_by_card_ids_grouped(s, [5])),
+            ("sum_by_card_ids_monthly", lambda s: card_settlement_repository.sum_by_card_ids_monthly(s, [5])),
+            ("sum_settlements_at", lambda s: card_reconciliation_repository.sum_settlements_at(s, 5, "USD", date(2026, 8, 17))),
+            (
+                "sum_settlements_between",
+                lambda s: card_reconciliation_repository.sum_settlements_between(s, 5, "USD", date(2026, 7, 20), date(2026, 8, 17)),
+            ),
+            ("list_settlement_daily_sums", lambda s: card_reconciliation_repository.list_settlement_daily_sums(s, 5, "USD", date(2026, 8, 17))),
+            ("sum_settlements_by_bucket_at", lambda s: card_reconciliation_repository.sum_settlements_by_bucket_at(s, [5], date(2026, 8, 17))),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_the_card_side_queries_read_the_card_leg_only(self, label, call):
+        sql = await self._sql(call)
+
+        assert "account_amount" not in sql, f"{label}: a bucket is cleared by what the bank applied to it, not by what any account paid"

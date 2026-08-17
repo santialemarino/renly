@@ -20,7 +20,7 @@ from sqlmodel import SQLModel
 from app.domain import InvalidImportFileError
 from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES, RestoreSpec
 from app.models.user import User
-from app.repositories import restore_repository
+from app.repositories import card_settlement_repository, restore_repository
 from app.schemas.restore import RestoreEntityStat, RestorePreviewResponse, RestoreResultResponse
 
 logger = logging.getLogger(__name__)
@@ -165,6 +165,8 @@ async def _run(session: AsyncSession, user: User, data: dict[str, Any], apply: b
         rows = data.get(spec.key)
         rows = rows if isinstance(rows, list) else []
         stats.append(await _restore_entity(session, user, spec, rows, id_maps, placeholder, apply))
+    if apply:
+        await card_settlement_repository.clear_same_currency_account_amounts(session, user.id)
     return stats
 
 
