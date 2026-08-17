@@ -1,15 +1,26 @@
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import String, cast, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.account import Account
 from app.models.income_entry import IncomeCategory, IncomeEntry
+from app.repositories.utils import apply_entry_sort
+
+# Sortable columns for the income list. `category` is sorted as TEXT, not as the enum: ORDER BY on a
+# Postgres enum follows its DECLARATION order, which differs between a database built from
+# 01_create_tables.sql and one built by migrations — the same rows would come back in a different
+# order per environment. The values are alphabetical anyway, so the cast costs nothing.
+_SORT_COLUMNS = {
+    "date": IncomeEntry.date,
+    "amount": IncomeEntry.amount,
+    "category": cast(IncomeEntry.category, String),
+}
 
 
-# List income entries for a user with optional filters and pagination.
+# List income entries for a user with optional filters, sorting, and pagination.
 async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
@@ -18,6 +29,8 @@ async def list_by_user_filtered(
     category: IncomeCategory | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[IncomeEntry], int]:
@@ -35,7 +48,14 @@ async def list_by_user_filtered(
     count_result = await session.execute(select(func.count()).select_from(base.subquery()))
     total = count_result.scalar_one()
 
-    query = base.order_by(IncomeEntry.date.desc(), IncomeEntry.id.desc())
+    query = apply_entry_sort(
+        base,
+        IncomeEntry,
+        sort_by,
+        sort_order,
+        sort_columns=_SORT_COLUMNS,
+        default_order=(IncomeEntry.date.desc(), IncomeEntry.id.desc()),
+    )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)
     return list(result.scalars().all()), total

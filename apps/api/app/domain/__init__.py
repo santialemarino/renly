@@ -1,5 +1,6 @@
 # Domain types: value objects, enums, errors used by services.
 
+from app.domain.account_movement import AccountMovement, MovementKind, MovementSource
 from app.domain.credit_card import CardBucketBalance
 from app.domain.currency import (
     SUPPORTED_CURRENCIES,
@@ -61,6 +62,7 @@ __all__ = [
     "AccountCurrencyChangeBlockedByDefaultError",
     "AccountCurrencyChangeBlockedError",
     "AccountCurrencyMismatchError",
+    "AccountMovement",
     "AccountOpeningDateChangeBlockedError",
     "AccountReconciliationBeforeLastError",
     "AccountReconciliationBeforeOpeningError",
@@ -84,6 +86,8 @@ __all__ = [
     "InvalidTokenError",
     "InvestmentCurrencyMismatchError",
     "InviteEmailTakenError",
+    "MovementKind",
+    "MovementSource",
     "NotFoundError",
     "PasswordBreachedError",
     "PaymentMethod",

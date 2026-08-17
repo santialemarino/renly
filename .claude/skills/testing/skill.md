@@ -46,9 +46,14 @@ pnpm test:e2e        # Playwright E2E
 
 **Integration test** (`tests/integration/` — a live database):
 
-- Tests that need a real Postgres (schema, roles, RLS). Today: `test_rls_isolation.py`, gated on
-  `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL` and skipped when unset, so the default
-  `pnpm test:api` run stays green without a DB.
+- Tests that need a real Postgres (schema, roles, RLS), each gated on its own env var and skipped
+  when unset, so the default `pnpm test:api` run stays green without a DB. Today:
+  - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
+  - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
+- **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
+  it cannot notice that two SQL statements which must describe the same row set have stopped
+  agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against
+  a real database instead, and prove the guard fails when you break one of them on purpose.
 
 **Don't test:**
 

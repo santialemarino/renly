@@ -2,12 +2,12 @@
 
 from collections import defaultdict
 
-from sqlalchemy import asc, desc
 from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.repositories.utils import apply_sort
 
 _SORT_COLUMNS = {
     "name": InvestmentGroup.name,
@@ -26,10 +26,7 @@ async def list_by_user(
     stmt = select(InvestmentGroup).where(InvestmentGroup.user_id == user_id)
     if search:
         stmt = stmt.where(InvestmentGroup.name.ilike(f"%{search}%"))
-    sort_col = _SORT_COLUMNS.get(sort_by or "") if sort_by else None
-    order_fn = desc if sort_order == "desc" else asc
-    order_clause = order_fn(sort_col) if sort_col is not None else InvestmentGroup.id
-    stmt = stmt.order_by(order_clause)
+    stmt = apply_sort(stmt, sort_by, sort_order, sort_columns=_SORT_COLUMNS, default_order=InvestmentGroup.id)
     result = await session.execute(stmt)
     return list(result.scalars().all())
 

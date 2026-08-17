@@ -339,7 +339,7 @@ Unlike account reconciliation, reconciling card statements **out of order is all
 
 ## Accounts
 
-Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time: `opening_balance + linked income − linked expenses − settlements paid from the account`. Expenses, income, and settlements each carry an optional `account_id` linking them to an account (a NULL link is unattributed and affects no balance); account-to-account transfers arrive in a later release. An account's currency is fixed once entries link to it (a change is rejected with 409), so the balance never mixes currencies.
+Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time: `opening_balance + linked income − linked expenses − settlements paid from the account + transfers in − transfers out`. Expenses, income, and settlements each carry an optional `account_id` linking them to an account (a NULL link is unattributed and affects no balance), and both legs of an account-to-account transfer count on their own side. An account's currency is fixed once entries link to it (a change is rejected with 409), so the balance never mixes currencies.
 
 | Method   | Path                       | Description                                                     |
 | -------- | -------------------------- | --------------------------------------------------------------- |
@@ -350,8 +350,21 @@ Cash / bank / wallet accounts — the asset side of net worth (the mirror of cre
 | `DELETE` | `/accounts/{id}`           | Delete an account (linked entries are un-attributed, not lost). |
 | `POST`   | `/accounts/{id}/archive`   | Archive an account (hide from active selection).                |
 | `POST`   | `/accounts/{id}/unarchive` | Restore an archived account.                                    |
+| `GET`    | `/accounts/{id}/movements` | The account's ledger: every movement that reached it.           |
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
+
+### Account ledger
+
+`GET /accounts/{id}/movements` returns every movement that reached one account — income, expenses, card settlements, both transfer legs, and the adjustments an account reconciliation posts — as one paginated list, newest first.
+
+**Query parameters:** `kind` (filter: `income`, `expense`, `transfer`, `settlement`, `adjustment`), `page` (1-based; a page past the end is clamped to the last page that has rows), `page_size` (default 25, max 100).
+
+**Response:** `items`, `total`, `page`, `page_size`, and `currency` — carried once for the whole page rather than per row, because it cannot vary: every linked entry is validated to match the account's currency and each transfer leg is stored in its own account's.
+
+**Movement fields:** `source` (the table it was read from: `income`, `expense`, `settlement`, `transfer` — with `source_id` it identifies the row, which `kind` alone cannot, since `adjustment` spans two tables), `source_id`, `kind` (what it is from the account's point of view; a reconciliation's adjustment reads as `adjustment` rather than as the income or expense row it is stored as, and a transfer is one kind in both directions), `date`, `amount` (**signed** in the account's currency: positive in, negative out), `balance_after` (the account's balance immediately after this movement — **null while a `kind` filter is active**, because consecutive visible rows would otherwise differ by amounts the filter hides), `category`, `counterparty` (the card a settlement paid, or the other account of a transfer), `counterparty_amount` / `counterparty_currency` (the other side of a transfer, which differ from `amount` only across currencies), and `notes`.
+
+Movements dated before the account's `opening_date` are excluded, because `opening_balance` is by definition the balance at that date and already contains them — the same bound every balance sum applies.
 
 **Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series; like `currency`, it is locked once entries link to the account, since every balance sum is bounded by it and `opening_balance` cannot be recomputed — 409 `account_opening_date_change_blocked`), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency: `opening_balance + linked income − linked expenses − settlements paid from it + transfers in − transfers out`, every term bounded below by `opening_date` because `opening_balance` already is the balance at that date), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
 

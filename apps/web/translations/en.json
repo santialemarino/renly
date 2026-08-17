@@ -205,6 +205,10 @@
     "lockedRow": {
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
       "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next"
     }
   },
   "login": {
@@ -512,10 +516,6 @@
       "edit": "Edit",
       "delete": "Delete"
     },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
-    },
     "form": {
       "titleCreate": "Add income",
       "titleEdit": "Edit income",
@@ -590,10 +590,6 @@
     "actions": {
       "edit": "Edit",
       "delete": "Delete"
-    },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
     },
     "paymentMethods": {
       "cash": "Cash",
@@ -926,7 +922,8 @@
       "archiveSuccess": "Account archived.",
       "archiveError": "Failed to archive account.",
       "unarchiveSuccess": "Account unarchived.",
-      "unarchiveError": "Failed to unarchive account."
+      "unarchiveError": "Failed to unarchive account.",
+      "viewLedger": "View ledger"
     },
     "form": {
       "titleCreate": "Add account",
@@ -1084,6 +1081,48 @@
         "deleting": "Deleting...",
         "success": "Transfer deleted.",
         "error": "Couldn't delete the transfer."
+      }
+    },
+    "ledger": {
+      "back": "Accounts",
+      "archived": "Archived",
+      "subtitle": "{type} · {currency}",
+      "stats": {
+        "balance": "Current balance",
+        "lastReconciled": "Last reconciled",
+        "opening": "Opening"
+      },
+      "filter": {
+        "all": "All movements"
+      },
+      "kinds": {
+        "income": "Income",
+        "expense": "Expense",
+        "transfer": "Transfer",
+        "settlement": "Card payment",
+        "adjustment": "Reconciliation"
+      },
+      "rows": {
+        "settlement": "Payment to {card}",
+        "crossCurrency": "{amount} on the other side"
+      },
+      "table": {
+        "date": "Date",
+        "movement": "Movement",
+        "notes": "Notes",
+        "total": "{total, plural, one {# movement} other {# movements}}",
+        "empty": "No movements yet.",
+        "emptyFiltered": "No movements of this kind.",
+        "emptyTitle": "Nothing has moved yet",
+        "emptyDescription": "Income, expenses, transfers and card payments linked to this account will appear here.",
+        "readOnlyNote": "Movements are edited where they were created — Expenses, Income, the card they paid, or this account's transfers.",
+        "filteredNote": "The running balance is shown on the unfiltered ledger, where every movement between two rows is visible.",
+        "amountIn": "Amount ({currency})",
+        "balanceIn": "Balance ({currency})"
+      },
+      "metadata": {
+        "title": "Account ledger",
+        "description": "Every movement that reached this account"
       }
     }
   },
@@ -1543,10 +1582,6 @@
       "edit": "Edit",
       "archive": "Archive",
       "unarchive": "Unarchive"
-    },
-    "pagination": {
-      "previous": "Previous",
-      "next": "Next"
     },
     "form": {
       "titleCreate": "Add investment",

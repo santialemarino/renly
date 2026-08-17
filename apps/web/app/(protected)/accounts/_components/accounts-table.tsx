@@ -9,6 +9,7 @@ import {
   Landmark,
   Pencil,
   Scale,
+  ScrollText,
   Trash2,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -26,7 +27,7 @@ import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/acc
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
-import { ROUTES } from '@/config/routes';
+import { accountLedgerPath, ROUTES } from '@/config/routes';
 import type { Account, AccountSortField } from '@/lib/api/accounts';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -128,7 +129,7 @@ export function AccountsTable({
                 onSort={handleSortChange}
               />
               <TableHead>{t('table.lastReconciled')}</TableHead>
-              <TableHead className="w-36 text-center">{t('table.actions')}</TableHead>
+              <TableHead className="w-44 text-center">{t('table.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -173,8 +174,39 @@ export function AccountsTable({
                           : t('table.neverReconciled')}
                       </TableCell>
                       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                        {!a.isActive ? (
-                          <div className="flex items-center justify-center gap-x-1">
+                        <div className="flex items-center justify-center gap-x-1">
+                          {/* Shared by both states — an archived account's history is still worth
+                              reading, and either state can be deleted. Only the middle differs. */}
+                          <RowActionButton
+                            icon={ScrollText}
+                            tooltip={t('actions.viewLedger')}
+                            ariaLabel="View ledger"
+                            href={accountLedgerPath(a.id)}
+                          />
+                          {a.isActive ? (
+                            <>
+                              <RowActionButton
+                                icon={Scale}
+                                tooltip={t('actions.reconcile')}
+                                ariaLabel="Reconcile"
+                                onClick={() => setReconcileAccount(a)}
+                              />
+                              <RowActionButton
+                                icon={Pencil}
+                                tooltip={t('actions.edit')}
+                                ariaLabel="Edit"
+                                onClick={() => setEditAccount(a)}
+                              />
+                              <RowActionButton
+                                icon={Archive}
+                                tooltip={t('actions.archive')}
+                                ariaLabel="Archive"
+                                variant="muted"
+                                onClick={() => handleArchive(a)}
+                                disabled={archivingId === a.id}
+                              />
+                            </>
+                          ) : (
                             <RowActionButton
                               icon={ArchiveRestore}
                               tooltip={t('actions.unarchive')}
@@ -182,45 +214,15 @@ export function AccountsTable({
                               onClick={() => handleUnarchive(a)}
                               disabled={archivingId === a.id}
                             />
-                            <RowActionButton
-                              icon={Trash2}
-                              tooltip={t('actions.delete')}
-                              ariaLabel="Delete"
-                              variant="destructive"
-                              onClick={() => setDeleteState(a)}
-                            />
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-x-1">
-                            <RowActionButton
-                              icon={Scale}
-                              tooltip={t('actions.reconcile')}
-                              ariaLabel="Reconcile"
-                              onClick={() => setReconcileAccount(a)}
-                            />
-                            <RowActionButton
-                              icon={Pencil}
-                              tooltip={t('actions.edit')}
-                              ariaLabel="Edit"
-                              onClick={() => setEditAccount(a)}
-                            />
-                            <RowActionButton
-                              icon={Archive}
-                              tooltip={t('actions.archive')}
-                              ariaLabel="Archive"
-                              variant="muted"
-                              onClick={() => handleArchive(a)}
-                              disabled={archivingId === a.id}
-                            />
-                            <RowActionButton
-                              icon={Trash2}
-                              tooltip={t('actions.delete')}
-                              ariaLabel="Delete"
-                              variant="destructive"
-                              onClick={() => setDeleteState(a)}
-                            />
-                          </div>
-                        )}
+                          )}
+                          <RowActionButton
+                            icon={Trash2}
+                            tooltip={t('actions.delete')}
+                            ariaLabel="Delete"
+                            variant="destructive"
+                            onClick={() => setDeleteState(a)}
+                          />
+                        </div>
                       </TableCell>
                     </TableRow>
 

@@ -1,6 +1,7 @@
 # Business logic
 
 from app.services import (
+    account_movement_service,
     account_reconciliation_service,
     account_service,
     api_key_service,
@@ -28,6 +29,7 @@ from app.services import (
 )
 
 __all__ = [
+    "account_movement_service",
     "account_reconciliation_service",
     "account_service",
     "api_key_service",

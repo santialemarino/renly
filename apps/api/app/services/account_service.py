@@ -117,11 +117,7 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
     account_ids = [a.id for a in accounts if a.id is not None]
     if not account_ids:
         return {}, set()
-    income = await income_repository.sum_by_account_ids(session, account_ids, user_id)
-    expenses = await expense_repository.sum_by_account_ids(session, account_ids, user_id)
-    settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
-    transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, user_id)
-    transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, user_id)
+    balances = await get_account_balances(session, accounts, user_id)
     # `linked` is computed from its own UNBOUNDED queries, not from the sums above: those are bounded
     # below by opening_date, so an account whose only rows predate its opening would read as unlinked
     # and the UI would offer a currency change the API then refuses. The lock is about denomination.
@@ -131,7 +127,22 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
         | await card_settlement_repository.linked_account_ids(session, account_ids, user_id)
         | await transfer_repository.linked_account_ids(session, account_ids, user_id)
     )
-    balances = {
+    return balances, linked
+
+
+# Returns {account_id: balance} for the given accounts. The money half of get_account_summaries, and
+# the one callers reach for when they don't need the currency-lock set — computing `linked` costs
+# four more existence queries, so a caller that only wants balances shouldn't pay for them.
+async def get_account_balances(session: AsyncSession, accounts: list[Account], user_id: int) -> dict[int, Decimal]:
+    account_ids = [a.id for a in accounts if a.id is not None]
+    if not account_ids:
+        return {}
+    income = await income_repository.sum_by_account_ids(session, account_ids, user_id)
+    expenses = await expense_repository.sum_by_account_ids(session, account_ids, user_id)
+    settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
+    transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, user_id)
+    transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, user_id)
+    return {
         a.id: (
             a.opening_balance
             + income.get(a.id, ZERO)
@@ -143,13 +154,13 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
         for a in accounts
         if a.id is not None
     }
-    return balances, linked
 
 
-# Returns {account_id: balance} for the given accounts (see get_account_summaries for the derivation).
-async def get_account_balances(session: AsyncSession, accounts: list[Account], user_id: int) -> dict[int, Decimal]:
-    balances, _ = await get_account_summaries(session, accounts, user_id)
-    return balances
+# The current balance of ONE account, for a caller holding the row already (the ledger's anchor).
+# Reuses the batch derivation with a single id, the way compute_account_balance_at reuses the sums.
+async def get_account_balance(session: AsyncSession, account: Account, user_id: int) -> Decimal:
+    balances = await get_account_balances(session, [account], user_id)
+    return balances.get(account.id, account.opening_balance)
 
 
 # Create a new account.

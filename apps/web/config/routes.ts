@@ -36,6 +36,14 @@ export const ROUTES = {
   adminFeedback: '/admin/feedback',
 } as const;
 
+/*
+ * The per-account ledger — the app's only dynamic route. Deliberately a helper rather than a member
+ * of ROUTES: ALL_ROUTE_PATHS flattens ROUTES' values as strings or objects of strings, so a function
+ * there would contribute nothing and silently drop out of PROTECTED_ROUTES. It needs no entry of its
+ * own anyway — the route gate matches by prefix, so `/accounts` already protects `/accounts/{id}`.
+ */
+export const accountLedgerPath = (accountId: number) => `${ROUTES.accounts}/${accountId}`;
+
 /** All auth routes — accessible without a session */
 export const AUTH_ROUTES = [
   ROUTES.auth.login,

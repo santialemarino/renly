@@ -205,6 +205,10 @@
     "lockedRow": {
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
       "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
+    },
+    "pagination": {
+      "previous": "Anterior",
+      "next": "Siguiente"
     }
   },
   "login": {
@@ -512,10 +516,6 @@
       "edit": "Editar",
       "delete": "Eliminar"
     },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
-    },
     "form": {
       "titleCreate": "Agregar ingreso",
       "titleEdit": "Editar ingreso",
@@ -590,10 +590,6 @@
     "actions": {
       "edit": "Editar",
       "delete": "Eliminar"
-    },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
     },
     "paymentMethods": {
       "cash": "Efectivo",
@@ -926,7 +922,8 @@
       "archiveSuccess": "Cuenta archivada.",
       "archiveError": "No se pudo archivar la cuenta.",
       "unarchiveSuccess": "Cuenta desarchivada.",
-      "unarchiveError": "No se pudo desarchivar la cuenta."
+      "unarchiveError": "No se pudo desarchivar la cuenta.",
+      "viewLedger": "Ver detalle"
     },
     "form": {
       "titleCreate": "Agregar cuenta",
@@ -1084,6 +1081,48 @@
         "deleting": "Eliminando...",
         "success": "Transferencia eliminada.",
         "error": "No se pudo eliminar la transferencia."
+      }
+    },
+    "ledger": {
+      "back": "Cuentas",
+      "archived": "Archivada",
+      "subtitle": "{type} · {currency}",
+      "stats": {
+        "balance": "Saldo actual",
+        "lastReconciled": "Última conciliación",
+        "opening": "Apertura"
+      },
+      "filter": {
+        "all": "Todos los movimientos"
+      },
+      "kinds": {
+        "income": "Ingreso",
+        "expense": "Gasto",
+        "transfer": "Transferencia",
+        "settlement": "Pago de tarjeta",
+        "adjustment": "Conciliación"
+      },
+      "rows": {
+        "settlement": "Pago a {card}",
+        "crossCurrency": "{amount} del otro lado"
+      },
+      "table": {
+        "date": "Fecha",
+        "movement": "Movimiento",
+        "notes": "Notas",
+        "total": "{total, plural, one {# movimiento} other {# movimientos}}",
+        "empty": "Todavía no hay movimientos.",
+        "emptyFiltered": "No hay movimientos de este tipo.",
+        "emptyTitle": "Todavía no se movió nada",
+        "emptyDescription": "Los ingresos, gastos, transferencias y pagos de tarjeta vinculados a esta cuenta van a aparecer acá.",
+        "readOnlyNote": "Los movimientos se editan donde se crearon: Gastos, Ingresos, la tarjeta que pagaron o las transferencias de esta cuenta.",
+        "filteredNote": "El saldo acumulado se muestra en el detalle sin filtrar, donde se ve cada movimiento entre dos filas.",
+        "amountIn": "Monto ({currency})",
+        "balanceIn": "Saldo ({currency})"
+      },
+      "metadata": {
+        "title": "Detalle de cuenta",
+        "description": "Todos los movimientos que llegaron a esta cuenta"
       }
     }
   },
@@ -1543,10 +1582,6 @@
       "edit": "Editar",
       "archive": "Archivar",
       "unarchive": "Desarchivar"
-    },
-    "pagination": {
-      "previous": "Anterior",
-      "next": "Siguiente"
     },
     "form": {
       "titleCreate": "Agregar inversión",
