@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -22,10 +23,21 @@ import {
 } from '@/app/(protected)/credit-cards/settlement-form-schema';
 import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { Account } from '@/lib/api/accounts';
+import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { useFormatters } from '@/lib/i18n/formatters';
+import { estimatedCardRate, impliedRate } from '@/lib/utils/settlement-rate';
 
 interface SettlementFormDialogProps {
   open: boolean;
@@ -34,13 +46,23 @@ interface SettlementFormDialogProps {
   // Primary currency first, then any other currencies with activity on this card.
   // Length 1 = single-bucket card (picker hidden). Length > 1 = multi-bucket (picker shown).
   bucketCurrencies: string[];
-  // Accounts the payment can be drawn from. Filtered to the settled bucket's currency by AccountField;
-  // omitted or empty hides the field entirely (cash-less users see no change).
+  /*
+   * Accounts the payment can be drawn from. Deliberately NOT filtered to the bucket's currency: a card
+   * bill can be settled from an account in any currency, and when the two differ the form asks for what
+   * actually left that account. Omitted or empty hides the field entirely (cash-less users see no change).
+   */
   accounts?: Account[];
   // The card's optional default funding account ("débito automático"), used only as the initial value
   // of "Paid from". It never creates a settlement on its own: a real auto-debit can fail, and Renly
   // must not invent a payment that did not happen.
   defaultAccountId: number | null;
+  /*
+   * Today's USD_ARS_OFICIAL rate, or null when it isn't stored. Feeds ONLY the estimate shown beside the
+   * implied rate. It must be the oficial pair rather than the user's dollar-rate preference — dólar
+   * tarjeta is built on oficial even for someone viewing MEP, so reading the preference here would be a
+   * quiet correctness bug.
+   */
+  oficialRate: number | null;
   onSuccess: () => void;
 }
 
@@ -51,8 +73,10 @@ export function SettlementFormDialog({
   bucketCurrencies,
   accounts,
   defaultAccountId,
+  oficialRate,
   onSuccess,
 }: SettlementFormDialogProps) {
+  const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const tCommon = useTranslations('common');
 
@@ -83,16 +107,36 @@ export function SettlementFormDialog({
       amount: '',
       currency: defaultCurrency,
       accountId: prefilledAccountId,
+      accountAmount: '',
       notes: '',
     },
   });
 
   const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
+  const watchedAmount = useWatch({ control: form.control, name: 'amount' });
+  const watchedAccountId = useWatch({ control: form.control, name: 'accountId' });
+  const watchedAccountAmount = useWatch({ control: form.control, name: 'accountAmount' });
+
+  // The chosen account, and whether settling this bucket from it converts. `crossCurrency` is what
+  // reveals the second amount field and what makes it required — the API refuses either way.
+  const selectedAccount = accounts?.find((a) => a.id === watchedAccountId);
+  const crossCurrency =
+    !!selectedAccount && !!watchedCurrency && selectedAccount.currency !== watchedCurrency;
+
+  /*
+   * The rate the two typed amounts imply, beside what today's dólar tarjeta suggests. A read-back, never
+   * a prefill: the user's figure stays authoritative because the whole model rests on recording what
+   * really left the account. The pair catches a 10× typo in either direction.
+   */
+  const typedRate = crossCurrency ? impliedRate(watchedAmount, watchedAccountAmount ?? '') : null;
+  const estimate = crossCurrency
+    ? estimatedCardRate(watchedCurrency, selectedAccount.currency, oficialRate)
+    : null;
 
   // Reset form when dialog opens — re-anchor currency to the card's primary bucket, and pre-fill the
-  // funding account from the card's default. The default is restricted to the card's own currency, so
-  // it matches the primary bucket the form opens on; switching to another bucket's currency clears it
-  // through AccountField's own mismatch effect rather than submitting a link the API would refuse.
+  // funding account from the card's default. The default may now be in ANY currency, so it survives the
+  // reset even for a bucket it doesn't match: that combination is legal, and the form simply asks for the
+  // second amount instead of clearing the link.
   useEffect(() => {
     if (open) {
       form.reset({
@@ -100,12 +144,31 @@ export function SettlementFormDialog({
         amount: '',
         currency: defaultCurrency,
         accountId: prefilledAccountId,
+        accountAmount: '',
         notes: '',
       });
     }
   }, [open, form, defaultCurrency, prefilledAccountId]);
 
+  /*
+   * Drop a typed cash amount the moment it stops applying — the account changed to one in the bucket's
+   * own currency, or the bucket moved to the account's. Leaving it would submit a figure the field no
+   * longer shows, and the API would refuse a same-currency settlement whose two amounts differ.
+   */
+  useEffect(() => {
+    if (!crossCurrency && form.getValues('accountAmount')) form.setValue('accountAmount', '');
+  }, [crossCurrency, form]);
+
   async function onSubmit(values: SettlementFormValues) {
+    /*
+     * Required-ness depends on the chosen ACCOUNT's currency, which the zod builder never sees, so it is
+     * checked here and surfaced on the field — same place and animation as any validation error, rather
+     * than only as a toast after a round-trip.
+     */
+    if (crossCurrency && !values.accountAmount) {
+      form.setError('accountAmount', { message: tCommon('form.errors.required') });
+      return;
+    }
     try {
       const result = await createSettlement(cardId, values);
       // The action returns a refusal as DATA (the Server Action boundary strips a thrown error's
@@ -195,14 +258,79 @@ export function SettlementFormDialog({
               />
             )}
 
+            {/* No currency filter: any account may settle any bucket, because a cross-currency
+                settlement records what left the account. buildAccountFieldOptions already treats an
+                absent currency as "offer every active account", and shouldClearAccountLink no-ops
+                without one, so the mismatch effect correctly stops firing here. */}
             <AccountField
               control={form.control}
               setValue={form.setValue}
               accounts={accounts ?? []}
-              currency={watchedCurrency || undefined}
+              currency={undefined}
               label={t('settlements.form.account')}
               name="accountId"
             />
+
+            {/* Height-reveal, like every sibling conditional field (see PaymentMethodFields): the
+                negative margin cancels the form's gap-y-4 while collapsed so nothing jumps. */}
+            <AnimatePresence initial={false}>
+              {crossCurrency && (
+                <motion.div
+                  key="account-amount"
+                  initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                  exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                  transition={{ duration: ANIMATION_DEFAULT }}
+                  style={{ marginTop: -16 }}
+                >
+                  <div className="pt-4">
+                    <FormField
+                      control={form.control}
+                      name="accountAmount"
+                      render={({ field }) => (
+                        <FormItem required>
+                          <FormLabel>
+                            {t('settlements.form.accountAmount', {
+                              currency: selectedAccount.currency,
+                            })}
+                          </FormLabel>
+                          <FormControl>
+                            <LocaleAmountInput
+                              {...field}
+                              value={field.value ?? ''}
+                              currency={selectedAccount.currency}
+                              placeholder={t('settlements.form.accountAmountPlaceholder')}
+                            />
+                          </FormControl>
+                          {/* FormDescription, never a bare <p> — FormControl already points
+                              aria-describedby at its id, so the read-back is announced. */}
+                          <FormDescription className="text-paragraph-xs">
+                            {t('settlements.form.accountAmountHint', {
+                              bucket: watchedCurrency,
+                              account: selectedAccount.currency,
+                            })}
+                            {typedRate !== null && (
+                              <span className="block">
+                                {t('settlements.form.impliedRate', {
+                                  rate: fmt.value(typedRate, { maxDecimals: 2 }),
+                                  bucket: watchedCurrency,
+                                  account: selectedAccount.currency,
+                                })}
+                                {estimate !== null &&
+                                  ` ${t('settlements.form.estimatedRate', {
+                                    rate: fmt.value(estimate, { maxDecimals: 2 }),
+                                  })}`}
+                              </span>
+                            )}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <FormField
               control={form.control}

@@ -57,6 +57,7 @@ function SettlementsSection({
   bucketCurrencies,
   accounts,
   defaultAccountId,
+  oficialRate,
   expanded,
 }: {
   cardId: number;
@@ -64,6 +65,8 @@ function SettlementsSection({
   accounts?: Account[];
   // The card's optional funding account, pre-filled as the settlement's "Paid from".
   defaultAccountId: number | null;
+  // Today's USD_ARS_OFICIAL rate, for the settlement dialog's cross-currency estimate only.
+  oficialRate: number | null;
   expanded: boolean;
 }) {
   const fmt = useFormatters();
@@ -167,8 +170,22 @@ function SettlementsSection({
                           {settlements.map((s) => (
                             <TableRow key={s.id}>
                               <TableCell>{fmt.date(s.date)}</TableCell>
+                              {/* The CARD leg — what this payment cleared off the bucket — stays the
+                                  headline, because that is what this table is about. When the funding
+                                  account was in another currency, what actually left it rides
+                                  underneath: the two amounts together ARE the rate record, and neither
+                                  alone says what happened. Deliberately not SignedAmountCell: every row
+                                  here is a payment, so a sign would carry no information and would
+                                  restyle a shipped column. */}
                               <TableCell className="text-paragraph-sm tabular-nums">
                                 {fmt.amount(s.amount, s.currency)}
+                                {s.accountAmount && s.accountCurrency && (
+                                  <span className="block text-paragraph-xs text-muted-foreground">
+                                    {t('settlements.table.paidWith', {
+                                      amount: `${fmt.amount(s.accountAmount, s.accountCurrency)} ${s.accountCurrency}`,
+                                    })}
+                                  </span>
+                                )}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
                               {/* Names the account the bill was paid from, so a mis-picked link is
@@ -212,6 +229,7 @@ function SettlementsSection({
                   bucketCurrencies={bucketCurrencies}
                   accounts={accounts}
                   defaultAccountId={defaultAccountId}
+                  oficialRate={oficialRate}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -252,12 +270,15 @@ export function CreditCardsTable({
   preferredCurrencies,
   supportedCurrencies,
   accounts,
+  oficialRate,
   firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   accounts?: Account[];
+  // Today's USD_ARS_OFICIAL rate, passed down to the settlement dialog's cross-currency estimate.
+  oficialRate: number | null;
   firstRun?: boolean;
 }) {
   const fmt = useFormatters();
@@ -416,6 +437,7 @@ export function CreditCardsTable({
                       bucketCurrencies={card.balances.map((b) => b.currency)}
                       accounts={accounts}
                       defaultAccountId={card.defaultAccountId}
+                      oficialRate={oficialRate}
                       expanded={isExpanded}
                     />
                   </Fragment>

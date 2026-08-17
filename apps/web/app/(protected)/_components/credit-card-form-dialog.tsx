@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 
 import {
   Button,
@@ -91,7 +91,6 @@ export function CreditCardFormDialog({
   });
 
   const isEdit = !!card;
-  const watchedCurrency = useWatch({ control: form.control, name: 'currency' });
 
   const { submitWithLifecycle } = useEntityFormDialog({
     open,
@@ -235,14 +234,14 @@ export function CreditCardFormDialog({
               )}
             />
 
-            {/* Only offered in the card's own currency: a settlement's account picker filters to the
-                settled bucket's currency, so a default in any other currency could only ever be a
-                link that dialog would refuse. */}
+            {/* Any currency is offered, not just the card's own: a settlement can pay a bucket from an
+                account denominated differently and record what left it, so a peso account funding a USD
+                card is the case this default exists for rather than a link the dialog would refuse. */}
             <AccountField
               control={form.control}
               setValue={form.setValue}
               accounts={accounts ?? []}
-              currency={watchedCurrency || undefined}
+              currency={undefined}
               label={t('form.defaultAccount.label')}
               hint={t('form.defaultAccount.hint')}
               name="defaultAccountId"
