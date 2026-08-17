@@ -250,6 +250,16 @@ Single-currency cards collapse to one bucket — visually identical to the pre-P
 
 **Front-end UX guards:** the settlement form shows a currency picker only when a card has > 1 bucket (otherwise it locks to primary silently). The expense form intercepts submit when a credit-card expense uses a currency the card hasn't seen before — the soft confirmation catches typos that would create phantom buckets.
 
+### 12. Cross-currency card settlement — two amounts, no stored rate
+
+Paying a bucket from an account in a **different** currency (the Argentine "dólar tarjeta" case: a USD bill paid with pesos) is the one place a single amount cannot describe what happened. The bank converts internally, so the bill is cleared in the **bucket's** currency while a different figure leaves the account.
+
+`card_settlements` therefore carries two amounts: `amount`/`currency` (the **card leg**, what cleared the bucket) and the nullable `account_amount` (the **cash leg**, in the funding account's own currency, set only when the two differ). **No rate is stored** — the same conclusion `transfers` reached with `from_amount`/`to_amount`: no single direction reads correctly both ways, and the division has unbounded precision. The pair _is_ the rate record, and the gap between the two legs is the real FX + tax cost, which reduces net worth un-itemised. The ~30% Ganancias perception is already baked into the blended rate the user sees, so there is nothing separable to model; reconciliation remains the generic tax/fee catch-all.
+
+**Which leg each sum reads is the whole correctness surface.** Three sums are cash-side and read `coalesce(account_amount, amount)` — `card_settlement_repository.sum_by_account_ids` (which serves both the live account balance and reconciliation's point-in-time balance), `sum_by_account_ids_monthly` (the net-worth chart), and `account_movement_repository._settlement_branch` (the per-account ledger). Four are card-side and read `amount` alone — `sum_by_card_ids_grouped`, `sum_by_card_ids_monthly`, and the bucket-balance sums in `card_reconciliation_repository`. Swapping either direction is a silent money bug: a cash sum reading the card leg would add dollars into a peso balance, and a card sum reading the cash leg would clear a USD bucket with a peso figure. `tests/unit/test_cross_currency_settlement.py` pins the split by compiling the real SQL, and the env-gated `tests/integration/test_account_ledger_drift.py` proves it against a real Postgres.
+
+**Display estimate only:** the settlement dialog reads back the rate the two typed amounts imply and compares it with `oficial × NEXT_PUBLIC_CARD_PERCEPTION_MULTIPLIER` (default 1.30), purely so a 10× typo is visible. It reads the `USD_ARS_OFICIAL` pair specifically, **not** the user's dollar-rate preference — dólar tarjeta is built on oficial even for a user viewing MEP. Nothing is prefilled and no stored value depends on the multiplier.
+
 ## Data model
 
 ```sql
