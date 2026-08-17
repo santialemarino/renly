@@ -12,84 +12,53 @@ from app.repositories.utils import apply_entry_sort
 # database — the rest is verified live.
 
 
+_SORT_COLUMNS = {ExpenseEntry: EXPENSE_SORT_COLUMNS, IncomeEntry: INCOME_SORT_COLUMNS}
+
+
 # The ORDER BY clause of a compiled statement, normalised to one line.
 def _order_by(stmt) -> str:
     sql = str(stmt.compile(compile_kwargs={"literal_binds": True}))
     return " ".join(sql.split("ORDER BY", 1)[1].split())
 
 
+# The ORDER BY a model's paginated list produces for the given sort request.
+def _order(model, sort_by: str | None, sort_order: str = "asc") -> str:
+    return _order_by(
+        apply_entry_sort(
+            select(model),
+            model,
+            sort_by,
+            sort_order,
+            sort_columns=_SORT_COLUMNS[model],
+            default_order=(model.date.desc(), model.id.desc()),
+        )
+    )
+
+
 class TestApplyEntrySort:
     def test_maps_the_requested_column(self):
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            "amount",
-            "asc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert "expense_entries.amount ASC" in _order_by(stmt)
+        assert "expense_entries.amount ASC" in _order(ExpenseEntry, "amount")
 
     def test_desc_is_honoured(self):
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            "amount",
-            "desc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert "expense_entries.amount DESC" in _order_by(stmt)
+        assert "expense_entries.amount DESC" in _order(ExpenseEntry, "amount", "desc")
 
     def test_a_sorted_query_still_breaks_ties_on_id(self):
         # Without this, a page of rows sharing one date or one category can repeat across pages or
         # be skipped entirely — the sort key alone is not a total order.
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            "category",
-            "asc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert _order_by(stmt).endswith("expense_entries.id DESC")
+        assert _order(ExpenseEntry, "category").endswith("expense_entries.id DESC")
 
     def test_category_sorts_as_text_not_as_the_enum(self):
         # ORDER BY on a Postgres enum follows its declaration order, which differs between a database
         # built from 01_create_tables.sql and one built by migrations.
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            "category",
-            "asc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert "CAST(expense_entries.category AS VARCHAR)" in _order_by(stmt)
+        assert "CAST(expense_entries.category AS VARCHAR)" in _order(ExpenseEntry, "category")
 
     def test_no_sort_by_falls_back_to_the_default_order(self):
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            None,
-            "desc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert _order_by(stmt) == "expense_entries.date DESC, expense_entries.id DESC"
+        assert _order(ExpenseEntry, None, "desc") == "expense_entries.date DESC, expense_entries.id DESC"
 
     def test_an_unmapped_column_falls_back_rather_than_raising(self):
         # The frontend picks the column from a typed union, so an unknown value is a hand-edited URL
         # — worth ignoring, not worth a 422.
-        stmt = apply_entry_sort(
-            select(ExpenseEntry),
-            ExpenseEntry,
-            "notes; drop table",
-            "asc",
-            sort_columns=EXPENSE_SORT_COLUMNS,
-            default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
-        )
-        assert _order_by(stmt) == "expense_entries.date DESC, expense_entries.id DESC"
+        assert _order(ExpenseEntry, "notes; drop table") == "expense_entries.date DESC, expense_entries.id DESC"
 
 
 class TestSortableColumns:
@@ -100,12 +69,4 @@ class TestSortableColumns:
         assert set(INCOME_SORT_COLUMNS) == {"date", "amount", "category"}
 
     def test_income_category_also_sorts_as_text(self):
-        stmt = apply_entry_sort(
-            select(IncomeEntry),
-            IncomeEntry,
-            "category",
-            "asc",
-            sort_columns=INCOME_SORT_COLUMNS,
-            default_order=(IncomeEntry.date.desc(), IncomeEntry.id.desc()),
-        )
-        assert "CAST(income_entries.category AS VARCHAR)" in _order_by(stmt)
+        assert "CAST(income_entries.category AS VARCHAR)" in _order(IncomeEntry, "category")
