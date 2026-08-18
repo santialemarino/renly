@@ -29,6 +29,7 @@ import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import type { OnboardingStatus } from '@/lib/api/onboarding';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { hasCompletedCoreSteps } from '@/lib/onboarding';
 
 interface OnboardingStepProps {
   icon: LucideIcon;
@@ -37,7 +38,7 @@ interface OnboardingStepProps {
   done: boolean;
   actionLabel: string;
   href: string;
-  optionalLabel?: string;
+  optional?: boolean;
   altLabel?: string;
   altHref?: string;
 }
@@ -53,7 +54,7 @@ function OnboardingStep({
   done,
   actionLabel,
   href,
-  optionalLabel,
+  optional,
   altLabel,
   altHref,
 }: OnboardingStepProps) {
@@ -78,8 +79,8 @@ function OnboardingStep({
         >
           {label}
           {done && <span className="sr-only">{t('stepDone')}</span>}
-          {optionalLabel && (
-            <span className="text-paragraph-xs text-muted-foreground">{optionalLabel}</span>
+          {optional && (
+            <span className="text-paragraph-xs text-muted-foreground">{t('optional')}</span>
           )}
         </span>
         <span className="text-paragraph-xs text-muted-foreground">{hint}</span>
@@ -126,10 +127,9 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
   const hasAccounts = status?.hasAccounts ?? false;
   const primaryCurrencySet = status?.primaryCurrencySet ?? false;
 
-  // Only finances and investments gate the finish; accounts and currencies are non-gating niceties,
-  // so "all set" appears once these two are done even with an optional step still open. Requiring an
-  // account to finish would turn the headline's cash input into a completeness demand.
-  const gatingDone = hasInvestments && hasFinances;
+  // Which steps gate the positive finish lives in one place next to the sidebar/tour's newcomer
+  // signal, so the two cannot drift on what counts as core data. Pinned by a vitest.
+  const gatingDone = hasCompletedCoreSteps(status);
 
   const steps: Array<OnboardingStepProps & { key: string }> = [
     {
@@ -162,7 +162,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       hint: t('steps.accounts.hint'),
       actionLabel: t('steps.accounts.action'),
       href: ROUTES.accounts,
-      optionalLabel: t('optional'),
+      optional: true,
     },
     {
       key: 'currencies',
@@ -172,7 +172,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       hint: t('steps.currencies.hint'),
       actionLabel: t('steps.currencies.action'),
       href: ROUTES.preferences,
-      optionalLabel: t('optional'),
+      optional: true,
     },
   ];
 
@@ -228,7 +228,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
                   done={step.done}
                   actionLabel={step.actionLabel}
                   href={step.href}
-                  optionalLabel={step.optionalLabel}
+                  optional={step.optional}
                   altLabel={step.altLabel}
                   altHref={step.altHref}
                 />

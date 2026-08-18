@@ -24,3 +24,15 @@ export function isFirstRunEmptyState(
 export function hasNoCoreData(status: OnboardingStatus | null): boolean {
   return !!status && !status.hasInvestments && !status.hasFinances;
 }
+
+/*
+ * Whether the first-run checklist has done enough to offer its positive finish instead of nagging.
+ * Only investments and finances count. The account and display-currency steps are deliberately
+ * OPTIONAL, so requiring either would turn an optional input into a completion demand — which is the
+ * completeness pressure the product holds. That is also why `hasAccounts` is absent from
+ * `hasNoCoreData` above: an account is deliberately not "core data", so the two definitions agree.
+ * Fails closed on a null status, so a failed fetch never claims the user is finished.
+ */
+export function hasCompletedCoreSteps(status: OnboardingStatus | null): boolean {
+  return !!status && status.hasInvestments && status.hasFinances;
+}

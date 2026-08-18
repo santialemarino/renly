@@ -36,7 +36,7 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
   return {
     hasInvestments: raw.has_investments,
     hasFinances: raw.has_finances,
-    hasAccounts: raw.has_accounts,
+    hasAccounts: raw.has_accounts === true,
     primaryCurrencySet: raw.primary_currency_set,
     sampleInvestments: raw.sample_investments,
     sampleExpenses: raw.sample_expenses,
