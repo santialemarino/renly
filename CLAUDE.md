@@ -1,6 +1,6 @@
 # Renly — Claude context
 
-Renly is a financial management app focused on investment tracking. Monorepo: `apps/web` (Next.js), `apps/api` (FastAPI), `packages/ui`. See `README.md` for all dev commands.
+Renly is a personal finance app that unifies investments, cash/bank accounts, and credit-card debt into one net-worth picture, alongside income and expense tracking. Monorepo: `apps/web` (Next.js), `apps/api` (FastAPI), `packages/ui`. See `README.md` for all dev commands.
 
 ## Start here
 

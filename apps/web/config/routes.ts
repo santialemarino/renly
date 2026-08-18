@@ -44,6 +44,24 @@ export const ROUTES = {
  */
 export const accountLedgerPath = (accountId: number) => `${ROUTES.accounts}/${accountId}`;
 
+/*
+ * Anchors on the public help page that the app deep-links to. A help section's id is part of a public
+ * URL, so it belongs here with the routes rather than as a string literal at each call site: a typo
+ * becomes a type error, and `translations-parity.test.ts` asserts every value still names a real
+ * section (renaming one otherwise breaks the link silently — the browser just does not scroll).
+ */
+export const HELP_ANCHORS = {
+  accuracy: 'accuracy',
+  snapshots: 'snapshots',
+  returns: 'returns',
+  currency: 'currency',
+} as const;
+
+export type HelpAnchor = (typeof HELP_ANCHORS)[keyof typeof HELP_ANCHORS];
+
+/** Deep link to one help section. */
+export const helpAnchorPath = (anchor: HelpAnchor) => `${ROUTES.help}#${anchor}`;
+
 /** All auth routes — accessible without a session */
 export const AUTH_ROUTES = [
   ROUTES.auth.login,

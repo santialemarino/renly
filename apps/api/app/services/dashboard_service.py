@@ -13,6 +13,7 @@ from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
+from app.repositories.investment_repository import investment_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.subscription_repository import subscription_repository
 from app.repositories.transfer_repository import transfer_repository
@@ -217,16 +218,33 @@ def compute_cash_total(
 
 
 # Loads accounts (including archived — like cards, they stay in net worth) plus their current
-# derived balances, then converts to the display currency. Returns (total, skipped, accounts).
+# derived balances, then converts to the display currency. Returns (total, skipped, whether the user
+# has any account at all — the caller needs existence, not the list).
 async def _load_cash_total(
     session: AsyncSession,
     user_id: int,
     currency: str | None,
     rate_map: dict[str, Decimal] | None,
-) -> tuple[Decimal, set[str]]:
+) -> tuple[Decimal, set[str], bool]:
     accounts = await account_repository.list_by_user(session, user_id, active_only=False)
     account_balances = await account_service.get_account_balances(session, accounts, user_id)
-    return compute_cash_total(accounts, account_balances, currency, rate_map)
+    total, skipped = compute_cash_total(accounts, account_balances, currency, rate_map)
+    return total, skipped, bool(accounts)
+
+
+# Whether the net-worth headline is derived from anything at all — NOT whether it is non-zero.
+# Offsetting holdings can net to exactly zero, and a new account's opening balance defaults to zero,
+# so a value test would report "nothing here" for users who hold plenty. The investment probe is the
+# ACTIVE-only one: an archived investment contributes nothing to portfolio value, unlike an archived
+# account or card, whose balance stays in net worth. `has_accounts` rides the list _load_cash_total
+# already fetched, and the two probes are indexed LIMIT 1 reads reached only when it is False — so a
+# user holding an account pays nothing extra and an empty account pays two cheap reads.
+async def _has_holdings(session: AsyncSession, user_id: int, *, has_accounts: bool) -> bool:
+    if has_accounts:
+        return True
+    if await investment_repository.exists_active_by_user(session, user_id):
+        return True
+    return await credit_card_repository.exists_by_user(session, user_id)
 
 
 # Aggregates investment portfolio metrics and finance overview into a single dashboard response.
@@ -264,9 +282,10 @@ async def get_overview(
 
     # Cash across all accounts, converted to the display currency at today's rate (fail-loud).
     rate_map_today = lookup.get_rate_map_at(today) if (lookup and today) else None
-    cash_total, cash_skipped = await _load_cash_total(session, user_id, currency, rate_map_today)
+    cash_total, cash_skipped, has_accounts = await _load_cash_total(session, user_id, currency, rate_map_today)
 
     net_worth = portfolio.total_value + cash_total - finance.credit_card_balance
+    has_holdings = await _has_holdings(session, user_id, has_accounts=has_accounts)
 
     # Net worth month-over-month: the latest vs prior month of the SAME monthly net-worth series the
     # evolution chart uses (investment + cash − card per month), so the delta reflects cash and card
@@ -307,6 +326,7 @@ async def get_overview(
         savings_rate=savings_rate,
         income_expense_ratio=income_expense_ratio,
         currency=currency,
+        has_holdings=has_holdings,
         # Fail-loud: surface every side's inconvertible currencies (finance/liability skips, any
         # investment base currency that couldn't reach the display currency, plus any account
         # currency the cash total had to exclude), so the summary flags everything its totals dropped.
@@ -474,7 +494,7 @@ async def get_composition(
     # Cash across accounts (asset side), converted at today's rate. A net-negative cash total
     # (overdrafts) can't be a donut slice, so it's excluded from the items/base like a net-credit
     # card balance is — the overview net-worth still reflects the true (signed) cash total.
-    cash_total, cash_skipped = await _load_cash_total(session, user_id, currency, rate_map)
+    cash_total, cash_skipped, _ = await _load_cash_total(session, user_id, currency, rate_map)
     cash_asset = cash_total if cash_total > ZERO else ZERO
 
     total_assets = allocation.total_value + cash_asset

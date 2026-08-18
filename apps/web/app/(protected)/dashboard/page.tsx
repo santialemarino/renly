@@ -8,9 +8,10 @@ import { DashboardEvolutionChart } from '@/app/(protected)/dashboard/_components
 import { DashboardFooter } from '@/app/(protected)/dashboard/_components/dashboard-footer';
 import { DashboardMetricCards } from '@/app/(protected)/dashboard/_components/dashboard-metric-cards';
 import { OnboardingWelcome } from '@/app/(protected)/dashboard/_components/onboarding-welcome';
+import { ConceptHint } from '@/components/concept-hint';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { WarningHint } from '@/components/styled-hint';
-import { ROUTES } from '@/config/routes';
+import { HELP_ANCHORS, ROUTES } from '@/config/routes';
 import {
   getDashboardComposition,
   getDashboardEvolution,
@@ -137,6 +138,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           bold: (chunks) => <strong>{chunks}</strong>,
         })}
       </WarningHint>
+
+      {/*
+       * Teaches the truth-snaps as one habit, where the number they protect is shown. Gated on
+       * holding something rather than on a non-zero figure (offsetting holdings net to zero, and a
+       * new account's opening balance defaults to zero), and withheld while the first-run welcome
+       * occupies this slot so the two teaching blocks never stack.
+       */}
+      <ConceptHint
+        storageKey="dashboard-truth-snap-hint-dismissed"
+        anchor={HELP_ANCHORS.accuracy}
+        show={!showWelcome && overview.hasHoldings}
+      >
+        {t('truthSnapHint')}
+      </ConceptHint>
 
       <DashboardMetricCards overview={overview} />
 

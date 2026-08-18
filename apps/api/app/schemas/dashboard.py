@@ -23,6 +23,13 @@ class DashboardOverviewResponse(BaseModel):
     savings_rate: Decimal | None = Field(default=None, description="(income - expenses) / income. Null when income is zero.")
     income_expense_ratio: Decimal | None = Field(default=None, description="income / expenses. Null when expenses are zero.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
+    has_holdings: bool = Field(
+        default=False,
+        description=(
+            "Whether the user holds any investment, account, or card — i.e. whether the net-worth "
+            "figure is derived from anything at all. True even when the figures net to zero."
+        ),
+    )
     skipped_currencies: list[str] = Field(
         default_factory=list,
         description="Original-currency codes excluded from converted totals because no exchange rate was stored.",

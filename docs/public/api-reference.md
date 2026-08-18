@@ -588,7 +588,7 @@ Aggregated endpoints combining investment portfolio and finance data for the hom
 
 **Query parameters (composition + liquidity):** `currency` only (no date filtering — shows current snapshot).
 
-**Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses). `net_worth_change` covers investments, cash, and card debt together; `investment_month_change` stays investment-only.
+**Overview response:** `net_worth`, `net_worth_change`, `net_worth_change_pct`, `investment_total`, `investment_gain`, `investment_gain_pct`, `investment_month_change`, `investment_month_change_pct`, `cash_total`, `credit_card_balance`, `total_income`, `total_expenses`, `savings_rate` (null when no income), `income_expense_ratio` (null when no expenses), `has_holdings`. `net_worth_change` covers investments, cash, and card debt together; `investment_month_change` stays investment-only. `has_holdings` reports whether the user holds any investment, account, or card — i.e. whether the net-worth figure is derived from anything at all; it stays `true` when the figures happen to net to zero, so it is not a `net_worth != 0` test.
 
 **Evolution response:** `points[]` with `date`, `investment_value`, `cash_balance`, `card_balance`, `net_worth` per month. The series runs through the current calendar month, forward-filling investments, so cash and card activity newer than your latest investment snapshot still shows.
 

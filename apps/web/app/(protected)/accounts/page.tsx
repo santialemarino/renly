@@ -3,7 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AccountsTable } from '@/app/(protected)/accounts/_components/accounts-table';
 import { AccountsToolbar } from '@/app/(protected)/accounts/_components/accounts-toolbar';
-import { DismissableHint } from '@/components/dismissable-hint';
+import { ConceptHint } from '@/components/concept-hint';
+import { HELP_ANCHORS } from '@/config/routes';
 import { getAccounts, type AccountSortField } from '@/lib/api/accounts';
 import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
@@ -58,9 +59,13 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
        * it points at reconciliation (the intended mechanism), never at "you should link more".
        * Shown only once there is an account to reconcile.
        */}
-      <DismissableHint storageKey="accounts-reconcile-hint-dismissed" show={accounts.length > 0}>
+      <ConceptHint
+        storageKey="accounts-reconcile-hint-dismissed"
+        anchor={HELP_ANCHORS.accuracy}
+        show={accounts.length > 0}
+      >
         {t('reconcileHint')}
-      </DismissableHint>
+      </ConceptHint>
       <AccountsToolbar preferredCurrencies={preferredCurrencies} />
       <AccountsTable
         accounts={accounts}

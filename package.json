@@ -1,7 +1,7 @@
 {
   "name": "renly",
   "version": "1.0.0",
-  "description": "Renly — personal finance app (investments, income/expenses)",
+  "description": "Renly — personal finance app (investments, cash, debt, income/expenses)",
   "private": true,
   "scripts": {
     "dev": "turbo run dev --parallel",
