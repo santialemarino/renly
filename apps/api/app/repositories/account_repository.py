@@ -44,6 +44,13 @@ async def get_by_id(session: AsyncSession, account_id: int, user_id: int) -> Acc
     return result.scalar_one_or_none()
 
 
+# Returns whether the user has any account (cheap existence check for the onboarding checklist;
+# counts archived accounts too, so archiving a lone account doesn't un-complete the step).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(Account.id).where(Account.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Get multiple accounts by id for a user (batch sibling of get_by_id).
 async def get_by_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> list[Account]:
     if not account_ids:
@@ -83,6 +90,7 @@ async def delete(session: AsyncSession, account: Account) -> None:
 class AccountRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
+    exists_by_user = staticmethod(exists_by_user)
     get_by_ids = staticmethod(get_by_ids)
     get_by_ids_across_users = staticmethod(get_by_ids_across_users)
     create = staticmethod(create)

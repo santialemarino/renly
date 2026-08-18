@@ -16,8 +16,9 @@ USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 _NONE_RETIRED = {"investments": False, "expenses": False, "income": False}
 
 
-def _patch(monkeypatch, *, investments, expenses, income, primary, retired=None, tour=False):
+def _patch(monkeypatch, *, investments, expenses, income, primary, accounts=False, retired=None, tour=False):
     monkeypatch.setattr(onboarding_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
+    monkeypatch.setattr(onboarding_service.account_repository, "exists_by_user", AsyncMock(return_value=accounts))
     monkeypatch.setattr(onboarding_service.expense_repository, "exists_by_user", AsyncMock(return_value=expenses))
     monkeypatch.setattr(onboarding_service.income_repository, "exists_by_user", AsyncMock(return_value=income))
     settings = {
@@ -41,6 +42,7 @@ class TestChecklist:
         assert result == {
             "has_investments": False,
             "has_finances": False,
+            "has_accounts": False,
             "primary_currency_set": False,
             "sample_investments": True,
             "sample_expenses": True,
@@ -79,6 +81,39 @@ class TestChecklist:
         result = await onboarding_service.get_status(AsyncMock(), USER)
 
         assert result["has_finances"] is False
+
+    @pytest.mark.asyncio
+    async def test_accounts_step_reflects_existence(self, monkeypatch):
+        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, accounts=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["has_accounts"] is True
+
+    @pytest.mark.asyncio
+    async def test_accounts_step_does_not_gate_the_other_steps(self, monkeypatch):
+        # The step is deliberately non-gating: holding an account must not mark investments or finances
+        # done, and lacking one must not hold them back. Requiring it to reach "all set" would be the
+        # completeness nudge the product deliberately holds.
+        _patch(monkeypatch, investments=True, expenses=True, income=False, primary=None, accounts=False)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["has_accounts"] is False
+        assert result["has_investments"] is True
+        assert result["has_finances"] is True
+
+    @pytest.mark.asyncio
+    async def test_accounts_step_does_not_retire_any_sample(self, monkeypatch):
+        # Accounts has no first-run sample section, so having one must not retire another entity's.
+        retire = _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, accounts=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        retire.assert_not_awaited()
+        assert result["sample_investments"] is True
+        assert result["sample_expenses"] is True
+        assert result["sample_income"] is True
 
     @pytest.mark.asyncio
     async def test_currency_step_reflects_stored_primary(self, monkeypatch):
