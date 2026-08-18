@@ -156,7 +156,7 @@ function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
     savingsRate: raw.savings_rate !== null ? Number(raw.savings_rate) : null,
     incomeExpenseRatio: raw.income_expense_ratio !== null ? Number(raw.income_expense_ratio) : null,
     currency: raw.currency,
-    hasHoldings: raw.has_holdings,
+    hasHoldings: raw.has_holdings === true,
   };
 }
 

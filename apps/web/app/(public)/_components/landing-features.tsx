@@ -15,7 +15,7 @@ interface FeatureItem {
   description: string;
 }
 
-const FEATURE_ICONS: Record<string, LucideIcon> = {
+export const FEATURE_ICONS: Record<string, LucideIcon> = {
   blocks: Blocks,
   globe: Globe,
   'line-chart': LineChart,
@@ -37,7 +37,7 @@ export function LandingFeatures() {
       <RevealGroup className="grid w-full grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <FeatureCard
-            key={item.icon}
+            key={item.title}
             icon={FEATURE_ICONS[item.icon] ?? Zap}
             title={item.title}
             description={item.description}

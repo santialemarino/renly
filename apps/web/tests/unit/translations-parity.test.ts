@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { FEATURE_ICONS } from '@/app/(public)/_components/landing-features';
 import type { ProseSectionData } from '@/app/(public)/_components/prose-section';
 import { HELP_ANCHORS } from '@/config/routes';
 import en from '../../translations/en.json';
@@ -13,7 +14,8 @@ import es from '../../translations/es.json';
  */
 function flattenKeys(value: unknown, prefix = ''): string[] {
   if (Array.isArray(value)) {
-    return value.flatMap((item, index) => flattenKeys(item, `${prefix}.${index}`));
+    // The array's own path is emitted too, so an empty array still registers as a key.
+    return [prefix, ...value.flatMap((item, index) => flattenKeys(item, `${prefix}.${index}`))];
   }
   if (value && typeof value === 'object') {
     return Object.entries(value).flatMap(([key, child]) =>
@@ -82,8 +84,16 @@ describe('landing feature icons', () => {
     expect(missing).toEqual([]);
   });
 
-  it('pairs each locale item with the same icon, so a reorder cannot mispair them', () => {
-    const byTitle = (items: { icon: string }[]) => items.map((item) => item.icon);
-    expect(byTitle(es.landing.features.items)).toEqual(byTitle(en.landing.features.items));
+  it('names an icon that the component can actually resolve', () => {
+    const known = new Set(Object.keys(FEATURE_ICONS));
+    const unknown = [...en.landing.features.items, ...es.landing.features.items]
+      .map((item) => item.icon)
+      .filter((icon) => !known.has(icon));
+    expect(unknown).toEqual([]);
+  });
+
+  it('gives each locale the same icons, so the two lists describe the same six cards', () => {
+    const icons = (items: { icon: string }[]) => items.map((item) => item.icon);
+    expect(icons(es.landing.features.items)).toEqual(icons(en.landing.features.items));
   });
 });
