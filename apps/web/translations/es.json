@@ -410,6 +410,7 @@
       "investmentValue": "Valor de Inversiones",
       "netCashFlow": "Flujo Neto",
       "creditCardBalance": "Saldo Tarjetas",
+      "creditCardBalanceHint": "Convertido a tu tipo de dólar",
       "vsLastMonth": "vs mes anterior",
       "netWorthHint": "Inversiones + efectivo − pasivos",
       "cash": "Efectivo",
@@ -2448,7 +2449,8 @@
         "paragraphs": [
           "Podés ver todo tu portafolio en cualquier moneda soportada usando el selector de la barra lateral. Renly convierte cada valor pasando por el dólar estadounidense detrás de escena.",
           "Todas las conversiones usan el tipo de cambio de hoy — no el de la fecha de cada snapshot. Un valor del año pasado mostrado en pesos usa el tipo de cambio dólar-peso de hoy. Es a propósito: responde cuánto vale esto para mí hoy, y mantiene todos los números comparables cuando los ves en una sola moneda.",
-          "Si Renly no puede convertir una inversión a la moneda elegida — por ejemplo, si el servicio de tipos de cambio no está disponible por un momento — esa inversión queda fuera de los totales en lugar de mostrarse con un valor incorrecto, y el dashboard señala cuáles se omitieron para que sepas que el total está incompleto."
+          "Si Renly no puede convertir una inversión a la moneda elegida — por ejemplo, si el servicio de tipos de cambio no está disponible por un momento — esa inversión queda fuera de los totales en lugar de mostrarse con un valor incorrecto, y el dashboard señala cuáles se omitieron para que sepas que el total está incompleto.",
+          "El saldo de una tarjeta en una moneda distinta a la tuya se convierte igual: a tu tipo de dólar elegido. Tené en cuenta que el tipo de cambio que te van a cobrar realmente cuando pagues ese resumen puede ser más alto: las tarjetas acá aplican el “dólar tarjeta”, que suma una percepción impositiva sobre el oficial. Un saldo de tarjeta en moneda extranjera es entonces una estimación de lo que debés hoy, no un presupuesto de lo que va a costar cancelarlo."
         ]
       }
     ]
