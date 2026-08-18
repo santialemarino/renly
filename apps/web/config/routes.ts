@@ -54,6 +54,7 @@ export const HELP_ANCHORS = {
   accuracy: 'accuracy',
   snapshots: 'snapshots',
   returns: 'returns',
+  currency: 'currency',
 } as const;
 
 export type HelpAnchor = (typeof HELP_ANCHORS)[keyof typeof HELP_ANCHORS];
