@@ -5,10 +5,11 @@ import { CreditCardsTable } from '@/app/(protected)/credit-cards/_components/cre
 import { CreditCardsToolbar } from '@/app/(protected)/credit-cards/_components/credit-cards-toolbar';
 import { getAccounts } from '@/lib/api/accounts';
 import { getCreditCards } from '@/lib/api/credit-cards';
-import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
+import { getLatestRates, getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getSettings } from '@/lib/api/settings';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
+import { rateDateForPair, rateForPair } from '@/lib/utils/settlement-rate';
 
 export async function generateMetadata() {
   return await generatePageMetadata('creditCards');
@@ -27,7 +28,7 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
   const t = await getTranslations('creditCards');
   const params = await searchParams;
 
-  const [cards, settings, accounts, supportedCurrencies] = await Promise.all([
+  const [cards, settings, accounts, supportedCurrencies, latestRates] = await Promise.all([
     getCreditCards({
       search: params.search,
       sortBy: params.sort_by as 'name' | 'closing_day' | 'due_day' | 'currency' | undefined,
@@ -45,9 +46,25 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
     // The card form restricts its currency picker to the convertible set, like every other money
     // form; on a fetch error it degrades to the full list and the API's 422 still guards.
     getSupportedCurrencies().catch(() => undefined),
+    // Only for the estimate beside a cross-currency settlement's implied rate. On error (or before any
+    // rate is stored) the estimate is simply omitted — the user's typed amount is still what's recorded,
+    // so nothing about the settlement depends on this succeeding.
+    getLatestRates().catch(() => null),
   ]);
 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
+  /*
+   * The OFICIAL pair specifically, never the user's dollar-rate preference: "dólar tarjeta" is built on
+   * oficial even for someone viewing MEP, so reading the preference here would be a quiet correctness bug
+   * rather than a display choice.
+   */
+  const oficialRate = rateForPair(latestRates?.rates ?? [], 'USD_ARS_OFICIAL');
+  /*
+   * The date that rate is FOR, carried so the estimate can name it instead of claiming "today". The
+   * settlement being recorded is usually backdated (last month's statement), and the scheduler can be
+   * behind, so an undated benchmark contradicts correct entries — it has to say what it is.
+   */
+  const oficialRateDate = rateDateForPair(latestRates?.rates ?? [], 'USD_ARS_OFICIAL');
 
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
@@ -67,6 +84,8 @@ export default async function CreditCardsPage({ searchParams }: CreditCardsPageP
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         accounts={accounts}
+        oficialRate={oficialRate}
+        oficialRateDate={oficialRateDate}
         firstRun={firstRun}
       />
     </div>

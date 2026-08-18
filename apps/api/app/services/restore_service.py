@@ -20,7 +20,7 @@ from sqlmodel import SQLModel
 from app.domain import InvalidImportFileError
 from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES, RestoreSpec
 from app.models.user import User
-from app.repositories import restore_repository
+from app.repositories import card_settlement_repository, restore_repository
 from app.schemas.restore import RestoreEntityStat, RestorePreviewResponse, RestoreResultResponse
 
 logger = logging.getLogger(__name__)
@@ -115,20 +115,19 @@ async def _restore_entity(
         unresolved = False
         for fk in spec.fks:
             old_fk = raw.get(fk.field)
-            if old_fk is None:
-                if fk.required:  # a required FK that is null in the file can't be restored
-                    unresolved = True
-                    break
-                prepared[fk.field] = None
-                continue
-            target = id_maps.get(fk.parent, {}).get(old_fk)
-            if target is None:
+            resolved = None if old_fk is None else id_maps.get(fk.parent, {}).get(old_fk)
+            if resolved is None:
+                # A required FK that is null in the file, or points at a parent that wasn't restored,
+                # can't be rebuilt at all; an optional one is dropped along with anything that only
+                # made sense while it pointed somewhere.
                 if fk.required:
                     unresolved = True
                     break
                 prepared[fk.field] = None
+                for dependent in fk.dependents:
+                    prepared[dependent] = None
             else:
-                prepared[fk.field] = target
+                prepared[fk.field] = resolved
         if unresolved:
             skipped_unresolved += 1
             continue
@@ -166,6 +165,8 @@ async def _run(session: AsyncSession, user: User, data: dict[str, Any], apply: b
         rows = data.get(spec.key)
         rows = rows if isinstance(rows, list) else []
         stats.append(await _restore_entity(session, user, spec, rows, id_maps, placeholder, apply))
+    if apply:
+        await card_settlement_repository.clear_same_currency_account_amounts(session, user.id)
     return stats
 
 

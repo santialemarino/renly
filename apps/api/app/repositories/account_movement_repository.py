@@ -13,6 +13,7 @@ from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.transfer import Transfer
+from app.repositories.card_settlement_repository import settlement_cash_leg
 
 _CATEGORY = "category"
 _COUNTERPARTY = "counterparty"
@@ -86,6 +87,12 @@ def _entry_branch(
 # leaving the client to join against a list that can fail to load. OUTER, so this branch can never be
 # stricter than the balance sum it has to agree with: a settlement whose card row became unreachable
 # would otherwise drop out of the ledger while still counting in the balance.
+#
+# The amount is the CASH leg — coalesce(account_amount, amount), the same expression the balance sums use,
+# because a settlement may clear a bucket in one currency while drawing another from this account. The
+# CARD leg rides along as the counterparty amount/currency, so a cross-currency settlement renders the
+# pair exactly like a cross-currency transfer row: the two amounts ARE the record of the rate, and neither
+# one alone says what happened.
 def _settlement_branch(account_id: int, user_id: int, *, opening_date: date_type):
     return (
         select(
@@ -93,11 +100,11 @@ def _settlement_branch(account_id: int, user_id: int, *, opening_date: date_type
             literal(MovementSource.settlement.value).label("source"),
             literal(MovementKind.settlement.value).label("kind"),
             CardSettlement.date.label("date"),
-            (-CardSettlement.amount).label("amount"),
+            (-settlement_cash_leg()).label("amount"),
             cast(null(), String).label(_CATEGORY),
             CreditCard.name.label(_COUNTERPARTY),
-            cast(null(), Numeric).label(_COUNTERPARTY_AMOUNT),
-            cast(null(), String).label(_COUNTERPARTY_CURRENCY),
+            CardSettlement.amount.label(_COUNTERPARTY_AMOUNT),
+            CardSettlement.currency.label(_COUNTERPARTY_CURRENCY),
             CardSettlement.notes.label("notes"),
         )
         .outerjoin(CreditCard, CreditCard.id == CardSettlement.credit_card_id)

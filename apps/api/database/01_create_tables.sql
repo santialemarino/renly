@@ -367,6 +367,13 @@ CREATE INDEX idx_income_entries_account_id
 -- Card settlements (credit card payments — not expenses).
 -- Reduces card liability and bank balance simultaneously (net-zero on patrimony).
 -- user_id is denormalized from the parent credit card for the row-level-security policy (SEC-15).
+-- amount/currency are the CARD leg: what the payment cleared off the bucket. account_amount is the
+--   CASH leg, in the funding account's own currency, and is set only when the two differ — paying a
+--   USD bucket with pesos clears US$100 while $130,000 leaves the account. The pair IS the record of
+--   the rate used (deliberately no stored rate: no single direction reads correctly both ways, the
+--   same reason transfers has no implied_rate). The gap between the two is the real FX + tax cost and
+--   is never itemised; its effect on the reported net-worth delta depends on the rate the debt was
+--   marked at (see docs/technical/currency-handling.md 12).
 CREATE TABLE card_settlements (
   id              BIGSERIAL PRIMARY KEY,
   credit_card_id  BIGINT NOT NULL REFERENCES credit_cards(id) ON DELETE CASCADE,
@@ -376,9 +383,17 @@ CREATE TABLE card_settlements (
   currency        VARCHAR(3) NOT NULL,
   -- Optional cash/bank account the payment was drawn from (Bucket 3 #1, PR 2).
   account_id      BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  -- What left the funding account, in THAT account's currency. NULL = no conversion, so the cash leg
+  -- is `amount` itself; the cash sums read coalesce(account_amount, amount).
+  account_amount  NUMERIC(18, 2),
   notes           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- "No cash amount without the account it came from" is deliberately NOT a CHECK: account_id is
+  -- ON DELETE SET NULL, which Postgres runs as an UPDATE, so such a constraint would make any account
+  -- that funded a cross-currency settlement permanently undeletable. The service enforces the rule on
+  -- write and clears account_amount when it drops the link.
+  CONSTRAINT card_settlements_positive_account_amount CHECK (account_amount IS NULL OR account_amount > 0)
 );
 
 CREATE INDEX idx_card_settlements_credit_card ON card_settlements(credit_card_id);

@@ -36,6 +36,8 @@ export interface CardSettlementRaw {
   currency: string;
   account_id: number | null;
   account_name: string | null;
+  account_currency: string | null;
+  account_amount: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -70,8 +72,17 @@ export interface CardSettlement {
   amount: string;
   currency: string;
   accountId: number | null;
-  // Denormalized by the API so an archived funding account still renders by name.
+  // Denormalized by the API so an archived funding account still renders by name — and so a row can say
+  // which currency it was paid in without a second fetch that can fail.
   accountName: string | null;
+  accountCurrency: string | null;
+  /*
+   * What actually left the funding account, in that account's currency. Null whenever no conversion
+   * happened, so the cash leg reads `accountAmount ?? amount` and the pair is shown only when the two
+   * genuinely differ. `amount`/`currency` above stay the CARD leg — what the payment cleared off the
+   * bucket — so a US$100 bill paid with $130,000 records both and derives no rate from either.
+   */
+  accountAmount: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -105,6 +116,8 @@ export function mapSettlement(raw: CardSettlementRaw): CardSettlement {
     currency: raw.currency,
     accountId: raw.account_id,
     accountName: raw.account_name,
+    accountCurrency: raw.account_currency,
+    accountAmount: raw.account_amount,
     notes: raw.notes,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

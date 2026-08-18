@@ -23,12 +23,13 @@ class CreditCardCreate(RequestBase):
     )
     default_account_id: int | None = Field(
         default=None,
-        description="Optional funding account, in the card's own currency. Pre-fills a settlement's 'Paid from'; never creates one.",
+        description="Optional funding account, in ANY currency. Pre-fills a settlement's 'Paid from'; never creates one.",
     )
 
-    # The card was the last money entity whose currency went unvalidated, which started to matter once
-    # that currency had to MATCH an account's: the validator also normalizes case, so an unnormalized
-    # "usd" card could never pair with a "USD" account. Same rule the other six request schemas carry.
+    # The card was the last money entity whose currency went unvalidated. Still required now that a
+    # funding account need not match it: the validator restricts the card to the supported set AND
+    # normalizes case, and an unnormalized "usd" bucket would not match its own settlements' "USD".
+    # Same rule the other six request schemas carry.
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
@@ -48,7 +49,7 @@ class CreditCardUpdate(RequestBase):
     )
     default_account_id: int | None = Field(
         default=None,
-        description="Optional funding account, in the card's own currency. Send null to clear.",
+        description="Optional funding account, in ANY currency. Send null to clear.",
     )
 
     _validate_currency = field_validator("currency")(validate_supported_currency)

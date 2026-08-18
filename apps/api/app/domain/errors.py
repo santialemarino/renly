@@ -39,10 +39,12 @@ class AccountCardExclusivityError(DomainError):
         super().__init__(self.message)
 
 
-# An account's currency cannot be changed because a credit card or a recurring plan names it as their
-# default funding account. Deliberately separate from AccountCurrencyChangeBlockedError: no money has
-# moved, so "has linked entries" would be false — what stands in the way is a standing default whose
-# charges would silently stop being attributed the moment the currencies stopped matching. Mapped to 409.
+# An account's currency cannot be changed because a recurring plan names it as its default funding
+# account. Deliberately separate from AccountCurrencyChangeBlockedError: no money has moved, so "has
+# linked entries" would be false — what stands in the way is a standing default whose charges would
+# silently stop being attributed the moment the currencies stopped matching. A CARD's default does not
+# raise this: it may name any currency, because a cross-currency settlement records what left the
+# account explicitly. Mapped to 409.
 class AccountCurrencyChangeBlockedByDefaultError(DomainError):
     code = "account_currency_change_blocked_by_default"
     status_code = 409
@@ -50,8 +52,7 @@ class AccountCurrencyChangeBlockedByDefaultError(DomainError):
     def __init__(self, referencing_count: int) -> None:
         self.referencing_count = referencing_count
         self.message = (
-            f"Currency cannot be changed because {referencing_count} card(s) or plan(s) use this account "
-            "as their default. Clear those defaults first."
+            f"Currency cannot be changed because {referencing_count} recurring plan(s) use this account as their default. Clear those defaults first."
         )
         super().__init__(self.message)
 
@@ -177,6 +178,71 @@ class CardReconciliationFuturePeriodError(DomainError):
 
     def __init__(self) -> None:
         self.message = "A statement period that has not closed yet cannot be reconciled."
+        super().__init__(self.message)
+
+
+# A settlement is dated before the funding account it draws from existed. Every cash sum is bounded below
+# by the account's opening_date (opening_balance already IS the balance at that date), so such a settlement
+# would clear the card while its cash leg was silently dropped from the balance — the one asymmetry a
+# settlement must never have. Worse across currencies, where the dropped figure is the account-currency
+# amount rather than the card's. Mapped to 400 by the API.
+class SettlementBeforeAccountOpenedError(DomainError):
+    code = "settlement_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A settlement must be dated on or after its funding account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# A settlement paying a bucket from an account in a DIFFERENT currency did not record what left that
+# account. The bank converted internally and only the user knows the blended rate it charged (the
+# "dólar tarjeta" already contains the perception), so inventing one would misstate the cash balance —
+# the exact reasoning behind TransferAmountRequiredError. Mapped to 400 by the API.
+class SettlementAccountAmountRequiredError(DomainError):
+    code = "settlement_account_amount_required"
+    status_code = 400
+
+    def __init__(self, bucket_currency: str, account_currency: str) -> None:
+        self.bucket_currency = bucket_currency
+        self.account_currency = account_currency
+        self.message = (
+            f"Paying a {bucket_currency} bucket from a {account_currency} account must record the {account_currency} "
+            "amount that left it, so the rate the bank charged is preserved."
+        )
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"bucket_currency": self.bucket_currency, "account_currency": self.account_currency}
+
+
+# A same-currency settlement recorded a cash amount different from what it cleared. No conversion
+# happened, so the account must be debited exactly what came off the bucket — a bank fee is its own
+# expense rather than a silently inflated payment. Mirrors TransferAmountsMustMatchError. Mapped to 400.
+class SettlementAmountsMustMatchError(DomainError):
+    code = "settlement_amounts_must_match"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Within one currency a settlement must debit exactly what it clears. Record a fee as its own expense."
+        super().__init__(self.message)
+
+
+# A settlement recorded a cash amount without naming the account it came from. There is no currency for
+# that amount to be denominated in, and no balance for it to move. The DB CHECK is the backstop; this is
+# the message. Mapped to 400 by the API.
+class SettlementAccountAmountWithoutAccountError(DomainError):
+    code = "settlement_account_amount_without_account"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "An amount drawn from an account needs the account it was drawn from."
         super().__init__(self.message)
 
 

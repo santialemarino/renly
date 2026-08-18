@@ -31,11 +31,13 @@ When you record an expense with `payment_method = credit_card` and link it to a 
 When you pay your credit card bill, you record a **settlement**:
 
 1. The settlement reduces the card's balance.
-2. Your bank balance decreases by the same amount.
-3. Net effect on patrimony: zero (asset decreased, liability decreased equally).
+2. If you link a funding account, its balance decreases too.
+3. Net effect on patrimony: zero **within one currency** (asset decreased, liability decreased equally).
 4. No new expense is created -- the expense was already recorded when you bought the item.
 
 This is why settlements are stored in their own table (`card_settlements`), not as expenses.
+
+**Across currencies it is deliberately not zero.** Paying a USD bucket with pesos clears the bill at the bank's blended "dólar tarjeta" rate, so the settlement records two amounts: `amount` (what cleared the card, in the bucket's currency) and `account_amount` (what actually left the account, in the account's currency). The gap between them is the real FX + tax cost and is never itemised, because the ~30% Ganancias perception is already inside the rate with no separable figure to record. What it does to the reported net-worth _delta_ depends on the rate the debt was being marked at: clearing it reduces net worth when the debt was marked below the card rate (`oficial`) and can read as a gain when marked at or above it (`mep`, the default, or `blue`). That is consistent mark-to-market, not an error -- see `currency-handling.md` §12. See `currency-handling.md` §12 for which sums read which leg.
 
 ## Balance calculation
 
@@ -49,7 +51,7 @@ The balance is **computed at query time**, not stored. This means:
 - Deleting a settlement automatically increases the balance.
 - No balance column to keep in sync -- it's always correct.
 
-The backend computes this in two batch queries (`expense_repository.sum_by_credit_card_ids()` + `card_settlement_repository.sum_by_card_ids()`) to avoid N+1 when listing multiple cards.
+The backend computes this in two batch queries (`expense_repository.sum_by_credit_card_ids_grouped()` + `card_settlement_repository.sum_by_card_ids_grouped()`) to avoid N+1 when listing multiple cards. Both are **card-side** sums, so they read the settlement's `amount` and never its `account_amount`: the bank cleared the bill in the bucket's own currency, whatever it debited you.
 
 ## Settlement matching
 

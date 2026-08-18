@@ -770,7 +770,7 @@
       },
       "defaultAccount": {
         "label": "Default funding account",
-        "hint": "Pre-fills “Paid from” when you record a payment on this card. Renly never records a payment on its own."
+        "hint": "Pre-fills “Paid from” when you record a payment on this card. Any currency — if it differs from the bucket you settle, Renly asks what was debited. Renly never records a payment on its own."
       },
       "cancel": "Cancel",
       "cta": {
@@ -803,12 +803,14 @@
       "delete": {
         "title": "Delete settlement",
         "confirm": "Are you sure you want to delete the settlement of {amount} {currency}?",
+        "confirmCrossCurrency": "Are you sure you want to delete this settlement? It cleared {amount} {currency} off the card, and {accountAmount} {accountCurrency} will go back to the account it was paid from.",
         "confirmButton": "Delete",
         "deleting": "Deleting..."
       },
       "table": {
         "date": "Date",
         "amount": "Amount",
+        "paidWith": "{amount} debited",
         "currency": "Currency",
         "account": "Paid from",
         "notes": "Notes"
@@ -822,6 +824,11 @@
         "bucket": "Bucket",
         "bucketPlaceholder": "Select bucket currency",
         "account": "Paid from",
+        "accountAmount": "Amount debited ({currency})",
+        "accountAmountPlaceholder": "0.00",
+        "accountAmountHint": "This bucket is in {bucket} and the account is in {account}, so enter what your bank actually debited.",
+        "impliedRate": "That works out to {rate} {account} per {bucket}.",
+        "estimatedRate": "The card rate on {date} was around {rate}.",
         "notes": "Notes",
         "notesPlaceholder": "Optional notes..."
       }
@@ -2648,13 +2655,17 @@
   "apiErrors": {
     "account_card_exclusivity": "A credit-card charge can't also be paid from an account.",
     "account_currency_change_blocked": "An account's currency can't be changed once it has linked entries.",
-    "account_currency_change_blocked_by_default": "An account's currency can't be changed while {referencing_count} card(s) or plan(s) use it as their default. Clear those first.",
+    "account_currency_change_blocked_by_default": "An account's currency can't be changed while {referencing_count} recurring plan(s) use it as their default. Clear those first.",
     "account_currency_mismatch": "Currency {entry_currency} doesn't match the account's currency ({account_currency}).",
     "account_reconciliation_before_last": "This account is already reconciled up to {last_reconciled_date}. Pick that date or later, or delete the later reconciliation first.",
     "account_reconciliation_before_opening": "The reconciliation date must be on or after the account's opening date ({opening_date}).",
     "account_reconciliation_future_date": "The reconciliation date can't be in the future.",
     "account_reconciliation_not_latest": "Delete the reconciliation dated {last_reconciled_date} first — later reconciliations build on this one.",
     "card_reconciliation_future_period": "This statement period hasn't closed yet, so there's nothing to reconcile against.",
+    "settlement_before_account_opened": "A settlement must be dated on or after its funding account's opening date ({opening_date}).",
+    "settlement_account_amount_required": "Paying a {bucket_currency} bucket from a {account_currency} account must record the {account_currency} amount debited, so the rate your bank charged is preserved.",
+    "settlement_amounts_must_match": "Within one currency a settlement must debit exactly what it clears. Record a fee as its own expense.",
+    "settlement_account_amount_without_account": "An amount debited from an account needs the account it came from.",
     "invalid_credentials": "The credentials you entered are incorrect.",
     "invalid_auth_token": "Your session is invalid or has expired. Please log in again.",
     "email_not_verified": "Please verify your email address before logging in.",

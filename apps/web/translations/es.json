@@ -770,7 +770,7 @@
       },
       "defaultAccount": {
         "label": "Cuenta de pago predeterminada",
-        "hint": "Precarga “Pagado desde” cuando registres un pago de esta tarjeta. Renly nunca registra un pago por su cuenta."
+        "hint": "Precarga “Pagado desde” cuando registres un pago de esta tarjeta. Puede ser de cualquier moneda: si difiere del saldo que pagás, Renly te pregunta cuánto se debitó. Renly nunca registra un pago por su cuenta."
       },
       "cancel": "Cancelar",
       "cta": {
@@ -803,12 +803,14 @@
       "delete": {
         "title": "Eliminar pago",
         "confirm": "¿Seguro querés eliminar el pago de {amount} {currency}?",
+        "confirmCrossCurrency": "¿Seguro querés eliminar este pago? Canceló {amount} {currency} de la tarjeta, y {accountAmount} {accountCurrency} vuelven a la cuenta desde la que se pagó.",
         "confirmButton": "Eliminar",
         "deleting": "Eliminando..."
       },
       "table": {
         "date": "Fecha",
         "amount": "Monto",
+        "paidWith": "{amount} debitados",
         "currency": "Moneda",
         "account": "Pagado desde",
         "notes": "Notas"
@@ -822,6 +824,11 @@
         "bucket": "Saldo",
         "bucketPlaceholder": "Elegí la moneda del saldo",
         "account": "Pagado desde",
+        "accountAmount": "Monto debitado ({currency})",
+        "accountAmountPlaceholder": "0,00",
+        "accountAmountHint": "Este saldo está en {bucket} y la cuenta en {account}, así que ingresá lo que el banco debitó realmente.",
+        "impliedRate": "Equivale a {rate} {account} por {bucket}.",
+        "estimatedRate": "El dólar tarjeta del {date} estaba alrededor de {rate}.",
         "notes": "Notas",
         "notesPlaceholder": "Notas opcionales..."
       }
@@ -2648,13 +2655,17 @@
   "apiErrors": {
     "account_card_exclusivity": "Un cargo con tarjeta de crédito no puede además pagarse desde una cuenta.",
     "account_currency_change_blocked": "No se puede cambiar la moneda de una cuenta que ya tiene entradas asociadas.",
-    "account_currency_change_blocked_by_default": "No se puede cambiar la moneda de una cuenta mientras {referencing_count} tarjeta(s) o plan(es) la usan como predeterminada. Quitá esos primero.",
+    "account_currency_change_blocked_by_default": "No se puede cambiar la moneda de una cuenta mientras {referencing_count} plan(es) recurrente(s) la usan como predeterminada. Quitá esos primero.",
     "account_currency_mismatch": "La moneda {entry_currency} no coincide con la moneda de la cuenta ({account_currency}).",
     "account_reconciliation_before_last": "Esta cuenta ya está conciliada hasta el {last_reconciled_date}. Elegí esa fecha o una posterior, o eliminá primero la conciliación posterior.",
     "account_reconciliation_before_opening": "La fecha de conciliación debe ser igual o posterior a la fecha de apertura de la cuenta ({opening_date}).",
     "account_reconciliation_future_date": "La fecha de conciliación no puede ser futura.",
     "account_reconciliation_not_latest": "Eliminá primero la conciliación del {last_reconciled_date} — las conciliaciones posteriores se apoyan en esta.",
     "card_reconciliation_future_period": "Este período de resumen todavía no cerró, así que no hay nada con qué conciliar.",
+    "settlement_before_account_opened": "Un pago debe tener fecha igual o posterior a la fecha de apertura de la cuenta desde la que se paga ({opening_date}).",
+    "settlement_account_amount_required": "Pagar un saldo en {bucket_currency} desde una cuenta en {account_currency} requiere registrar el monto debitado en {account_currency}, para preservar el tipo de cambio que te cobró el banco.",
+    "settlement_amounts_must_match": "Dentro de una misma moneda, un pago debe debitar exactamente lo que cancela. Registrá una comisión como un gasto aparte.",
+    "settlement_account_amount_without_account": "Un monto debitado de una cuenta necesita la cuenta de la que salió.",
     "invalid_credentials": "Los datos que ingresaste son incorrectos.",
     "invalid_auth_token": "Tu sesión no es válida o expiró. Iniciá sesión de nuevo.",
     "email_not_verified": "Verificá tu correo antes de iniciar sesión.",

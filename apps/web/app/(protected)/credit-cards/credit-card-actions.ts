@@ -99,14 +99,21 @@ export async function createSettlement(
   cardId: number,
   values: SettlementFormValues,
 ): Promise<CreateSettlementResult> {
-  const { accountId, ...rest } = values;
+  const { accountId, accountAmount, ...rest } = values;
   const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, {
     method: 'POST',
-    body: { ...rest, account_id: accountId ?? null },
+    body: {
+      ...rest,
+      account_id: accountId ?? null,
+      // Omitted rather than sent empty when no conversion happened: the API reads a null account_amount
+      // as "this settlement did not cross currencies", and an empty string would be a 422.
+      account_amount: accountAmount || null,
+    },
   });
   if (!res.ok) {
-    // Reachable: the pre-filled default is in the card's currency, but on a multi-bucket card the
-    // user can settle a DIFFERENT bucket. The refusal has to say why.
+    // Reachable: the funding account may be in any currency, so the API refuses a settlement that
+    // crosses currencies without recording what left the account, or one that claims a different amount
+    // within a single currency. The refusal has to say which.
     const detail = isRefusal(res) ? await localizedApiError(res) : null;
     if (detail) return { ok: false, conflictDetail: detail };
     throw new Error('Failed to create settlement');

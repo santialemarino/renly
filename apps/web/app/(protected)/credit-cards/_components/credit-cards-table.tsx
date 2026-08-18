@@ -57,6 +57,8 @@ function SettlementsSection({
   bucketCurrencies,
   accounts,
   defaultAccountId,
+  oficialRate,
+  oficialRateDate,
   expanded,
 }: {
   cardId: number;
@@ -64,6 +66,9 @@ function SettlementsSection({
   accounts?: Account[];
   // The card's optional funding account, pre-filled as the settlement's "Paid from".
   defaultAccountId: number | null;
+  // The latest stored USD_ARS_OFICIAL rate and its date, for the settlement dialog's estimate only.
+  oficialRate: number | null;
+  oficialRateDate: string | null;
   expanded: boolean;
 }) {
   const fmt = useFormatters();
@@ -167,8 +172,28 @@ function SettlementsSection({
                           {settlements.map((s) => (
                             <TableRow key={s.id}>
                               <TableCell>{fmt.date(s.date)}</TableCell>
+                              {/* The CARD leg — what this payment cleared off the bucket — stays the
+                                  headline, because that is what this table is about. When the funding
+                                  account was in another currency, what actually left it rides
+                                  underneath: the two amounts together ARE the rate record, and neither
+                                  alone says what happened. Deliberately not SignedAmountCell: every row
+                                  here is a payment, so a sign would carry no information and would
+                                  restyle a shipped column. */}
                               <TableCell className="text-paragraph-sm tabular-nums">
-                                {fmt.amount(s.amount, s.currency)}
+                                {/* The headline carries its own code ONLY when a second, differently
+                                    denominated figure sits under it. Uncoded (the Currency column names
+                                    it) the two lines read as one currency — "100" over "130.000 ARS" —
+                                    which is exactly the misreading the two-leg model exists to prevent. */}
+                                {s.accountAmount && s.accountCurrency
+                                  ? `${fmt.amount(s.amount, s.currency)} ${s.currency}`
+                                  : fmt.amount(s.amount, s.currency)}
+                                {s.accountAmount && s.accountCurrency && (
+                                  <span className="block text-paragraph-xs text-muted-foreground">
+                                    {t('settlements.table.paidWith', {
+                                      amount: `${fmt.amount(s.accountAmount, s.accountCurrency)} ${s.accountCurrency}`,
+                                    })}
+                                  </span>
+                                )}
                               </TableCell>
                               <TableCell>{s.currency}</TableCell>
                               {/* Names the account the bill was paid from, so a mis-picked link is
@@ -212,6 +237,8 @@ function SettlementsSection({
                   bucketCurrencies={bucketCurrencies}
                   accounts={accounts}
                   defaultAccountId={defaultAccountId}
+                  oficialRate={oficialRate}
+                  oficialRateDate={oficialRateDate}
                   onSuccess={() => {
                     loadSettlements();
                     router.refresh();
@@ -252,12 +279,18 @@ export function CreditCardsTable({
   preferredCurrencies,
   supportedCurrencies,
   accounts,
+  oficialRate,
+  oficialRateDate,
   firstRun,
 }: {
   cards: CreditCard[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   accounts?: Account[];
+  // The latest stored USD_ARS_OFICIAL rate and the date it is for, passed down to the settlement
+  // dialog's cross-currency estimate. The date is what stops the estimate claiming to be "today's".
+  oficialRate: number | null;
+  oficialRateDate: string | null;
   firstRun?: boolean;
 }) {
   const fmt = useFormatters();
@@ -416,6 +449,8 @@ export function CreditCardsTable({
                       bucketCurrencies={card.balances.map((b) => b.currency)}
                       accounts={accounts}
                       defaultAccountId={card.defaultAccountId}
+                      oficialRate={oficialRate}
+                      oficialRateDate={oficialRateDate}
                       expanded={isExpanded}
                     />
                   </Fragment>

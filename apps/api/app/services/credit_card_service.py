@@ -3,7 +3,15 @@ from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import CardBucketBalance, HasLinkedExpensesError, NotFoundError
+from app.domain import (
+    CardBucketBalance,
+    HasLinkedExpensesError,
+    NotFoundError,
+    SettlementAccountAmountRequiredError,
+    SettlementAccountAmountWithoutAccountError,
+    SettlementAmountsMustMatchError,
+    SettlementBeforeAccountOpenedError,
+)
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
@@ -100,9 +108,11 @@ async def cards_have_expenses(session: AsyncSession, card_ids: list[int], user_i
     return {card_id: counts.get(card_id, 0) > 0 for card_id in card_ids}
 
 
-# Create a new credit card. A default funding account must be owned and denominated in the card's own
-# currency — the settlement dialog filters the picker to the settled bucket's currency, so a default in
-# any other currency could only ever be a link that dialog would refuse.
+# Create a new credit card. A default funding account must be owned but may name ANY currency: a
+# settlement can now pay a bucket from an account denominated differently, recording what left that
+# account, so a peso account funding a USD card — the most common Argentine arrangement — is exactly the
+# case the default exists for. Only ownership is checked (a plan's default still must match, because a
+# plan's charge has no second amount to record).
 async def create_card(
     session: AsyncSession,
     user: User,
@@ -114,7 +124,7 @@ async def create_card(
     monthly_payment: Decimal | None = None,
     default_account_id: int | None = None,
 ) -> CreditCard:
-    await account_service.validate_account_link(session, user, default_account_id, currency)
+    await account_service.load_linked_account(session, user, default_account_id)
     card = CreditCard(
         user_id=user.id,
         name=name,
@@ -129,12 +139,11 @@ async def create_card(
     return card
 
 
-# Update an existing credit card. Only provided fields are changed. The default funding account is
-# re-validated against the EFFECTIVE currency (request field over the stored row), so changing the
-# card's currency while a default is set is refused rather than silently leaving a mismatched pair.
-# Only re-validated when that pair actually MOVES: an unchanged pair was already validated when it was
-# attached, and re-checking it would let a stale stored default (its account's currency changed while
-# nothing else referenced it) block an unrelated edit such as a rename.
+# Update an existing credit card. Only provided fields are changed. A newly-named default funding account
+# is checked for ownership only — its currency is free, so changing the card's currency can no longer
+# invalidate the default and nothing has to be re-validated against the merged pair. Validated only when
+# the account actually MOVES, so an unrelated edit (a rename, an archive) never re-touches a stored
+# default; `fields.get` falls back to the stored id so absence means "unchanged", not "clear".
 async def update_card(
     session: AsyncSession,
     card_id: int,
@@ -142,9 +151,9 @@ async def update_card(
     **fields: object,
 ) -> CreditCard:
     card = await get_card(session, card_id, user)
-    await account_service.validate_effective_default_link(
-        session, user, fields=fields, stored_account_id=card.default_account_id, stored_currency=card.currency
-    )
+    new_account_id = fields.get("default_account_id", card.default_account_id)
+    if new_account_id != card.default_account_id:
+        await account_service.load_linked_account(session, user, new_account_id)
     for key, value in fields.items():
         setattr(card, key, value)
     await credit_card_repository.save(session, card)
@@ -193,12 +202,48 @@ async def unarchive_card(session: AsyncSession, card_id: int, user: User) -> Cre
 # --- Settlements ---
 
 
-# Maps a settlement to its response, denormalizing the funding account's name so a client renders which
-# account paid without a second lookup — and so an archived account still reads by name.
+# Maps a settlement to its response, denormalizing the funding account's name and currency so a client
+# renders which account paid, and in what denomination, without a second lookup — and so an archived
+# account still reads by name. The currency is what lets a client tell a cross-currency row apart
+# without comparing against its own accounts list, which can fail to load.
 def _to_settlement_response(settlement: CardSettlement, account: Account | None) -> CardSettlementResponse:
     resp = CardSettlementResponse.model_validate(settlement)
     resp.account_name = account.name if account is not None else None
+    resp.account_currency = account.currency if account is not None else None
     return resp
+
+
+# Resolves the cash leg of a settlement, returning what to STORE in account_amount. None means "no
+# conversion happened", which is what keeps every pre-existing row correct and lets the cash sums read
+# coalesce(account_amount, amount).
+#
+# Mirrors transfer_service._resolve_to_amount, and for the same reason in both directions: across
+# currencies only the user knows the blended rate the bank charged (the "dólar tarjeta" already contains
+# the ~30% perception, so it is never a clean multiple of anything Renly can look up), while within one
+# currency no conversion happened at all, so the account must be debited exactly what came off the
+# bucket. A redundant-but-equal amount normalizes to None rather than being stored twice, so
+# "account_amount IS NOT NULL" always means "these currencies differ".
+# Rejects a settlement dated before the funding account existed. Every cash sum is bounded below by that
+# account's opening_date, so the cash leg would be dropped while the card leg still cleared the bucket —
+# a settlement that reduces debt and moves no money. Mirrors transfer_service._ensure_both_accounts_open;
+# an UNLINKED settlement has no account to be open, so there is nothing to check.
+def _ensure_account_open(account: Account | None, date: date_type) -> None:
+    if account is not None and date < account.opening_date:
+        raise SettlementBeforeAccountOpenedError(account.opening_date)
+
+
+def _resolve_account_amount(account: Account | None, currency: str, amount: Decimal, account_amount: Decimal | None) -> Decimal | None:
+    if account is None:
+        if account_amount is not None:
+            raise SettlementAccountAmountWithoutAccountError()
+        return None
+    if account.currency == currency:
+        if account_amount is not None and account_amount != amount:
+            raise SettlementAmountsMustMatchError()
+        return None
+    if account_amount is None:
+        raise SettlementAccountAmountRequiredError(currency, account.currency)
+    return account_amount
 
 
 # List settlements for a credit card (verifies card ownership first), each carrying its funding
@@ -211,7 +256,10 @@ async def list_settlements(session: AsyncSession, card_id: int, user: User) -> l
     return [_to_settlement_response(s, accounts.get(s.account_id) if s.account_id is not None else None) for s in settlements]
 
 
-# Record a new card settlement. Marks any reconciliation covering the settlement date stale (Phase 3, Step 5).
+# Record a new card settlement. The funding account may be denominated differently from the bucket being
+# cleared, in which case account_amount records what actually left it. Marks any reconciliation covering
+# the settlement date stale (Phase 3, Step 5) — keyed on the CARD leg's currency, which is what moves the
+# bucket a reconciliation reconciles.
 async def create_settlement(
     session: AsyncSession,
     card_id: int,
@@ -221,10 +269,13 @@ async def create_settlement(
     amount: Decimal,
     currency: str,
     account_id: int | None = None,
+    account_amount: Decimal | None = None,
     notes: str | None = None,
 ) -> CardSettlementResponse:
     await get_card(session, card_id, user)
-    account = await account_service.validate_account_link(session, user, account_id, currency)
+    account = await account_service.load_linked_account(session, user, account_id)
+    _ensure_account_open(account, date)
+    resolved_account_amount = _resolve_account_amount(account, currency, amount, account_amount)
     settlement = CardSettlement(
         credit_card_id=card_id,
         user_id=user.id,
@@ -232,6 +283,7 @@ async def create_settlement(
         amount=amount,
         currency=currency,
         account_id=account_id,
+        account_amount=resolved_account_amount,
         notes=notes,
     )
     settlement = await card_settlement_repository.create(session, settlement)
