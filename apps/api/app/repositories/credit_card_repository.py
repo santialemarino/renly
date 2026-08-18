@@ -44,6 +44,13 @@ async def get_by_id(session: AsyncSession, card_id: int, user_id: int) -> Credit
     return result.scalar_one_or_none()
 
 
+# Returns whether the user has any credit card (cheap existence check; counts archived cards too,
+# since an archived card's outstanding balance is still a liability in net worth).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(CreditCard.id).where(CreditCard.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Insert a new credit card.
 async def create(session: AsyncSession, card: CreditCard) -> CreditCard:
     session.add(card)
@@ -65,6 +72,7 @@ async def delete(session: AsyncSession, card: CreditCard) -> None:
 class CreditCardRepository:
     list_by_user = staticmethod(list_by_user)
     get_by_id = staticmethod(get_by_id)
+    exists_by_user = staticmethod(exists_by_user)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)

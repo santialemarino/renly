@@ -20,6 +20,7 @@ interface DashboardOverviewRaw {
   savings_rate: string | null;
   income_expense_ratio: string | null;
   currency: string | null;
+  has_holdings: boolean;
 }
 
 interface NetWorthEvolutionPointRaw {
@@ -84,6 +85,8 @@ export interface DashboardOverview {
   savingsRate: number | null;
   incomeExpenseRatio: number | null;
   currency: string | null;
+  // Whether the user holds any investment, account, or card — true even when the figures net to zero.
+  hasHoldings: boolean;
 }
 
 export interface NetWorthEvolutionPoint {
@@ -153,6 +156,7 @@ function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
     savingsRate: raw.savings_rate !== null ? Number(raw.savings_rate) : null,
     incomeExpenseRatio: raw.income_expense_ratio !== null ? Number(raw.income_expense_ratio) : null,
     currency: raw.currency,
+    hasHoldings: raw.has_holdings,
   };
 }
 

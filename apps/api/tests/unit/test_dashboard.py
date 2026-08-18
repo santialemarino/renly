@@ -8,7 +8,15 @@ from app.domain import CardBucketBalance
 from app.models.account import Account, AccountType
 from app.models.credit_card import CreditCard
 from app.models.investment import InvestmentCategory
-from app.schemas.metrics import AllocationItem, AllocationResponse, EvolutionPoint, PortfolioEvolutionResponse, SkippedInvestment
+from app.schemas.finance_metrics import FinanceOverviewResponse
+from app.schemas.metrics import (
+    AllocationItem,
+    AllocationResponse,
+    EvolutionPoint,
+    PortfolioEvolutionResponse,
+    PortfolioMetricsResponse,
+    SkippedInvestment,
+)
 from app.services import dashboard_service, exchange_rate_service, settings_service
 from app.services.dashboard_service import (
     compute_cash_total,
@@ -404,3 +412,75 @@ class TestNetWorthEvolutionCurrentMonth:
 
         # The current month already has a point, so none is appended.
         assert [p.date for p in points] == [date_type(2026, 7, 1)]
+
+
+# --- has_holdings: the "is this headline derived from anything" flag (honesty repositioning) ---
+
+
+# An all-zero finance overview, so the has_holdings tests vary only the existence signals.
+def _zero_finance_overview() -> FinanceOverviewResponse:
+    return FinanceOverviewResponse(
+        total_income=Decimal("0"),
+        total_expenses=Decimal("0"),
+        net=Decimal("0"),
+        credit_card_balance=Decimal("0"),
+    )
+
+
+class TestHasHoldings:
+    # Patches the overview's collaborators so only the three existence signals vary. Every money
+    # figure is zero, which is the whole point: has_holdings must not be a disguised value test.
+    def _patch(self, monkeypatch, *, accounts: list, investments: bool, cards: bool) -> None:
+        monkeypatch.setattr(
+            dashboard_service.metrics_service,
+            "get_portfolio_metrics",
+            AsyncMock(return_value=PortfolioMetricsResponse(total_value=Decimal("0"), total_invested=Decimal("0"), absolute_gain=Decimal("0"))),
+        )
+        monkeypatch.setattr(
+            dashboard_service.finance_metrics_service,
+            "get_overview",
+            AsyncMock(return_value=_zero_finance_overview()),
+        )
+        monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=accounts))
+        monkeypatch.setattr(dashboard_service.account_service, "get_account_balances", AsyncMock(return_value={}))
+        monkeypatch.setattr(dashboard_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
+        monkeypatch.setattr(dashboard_service.credit_card_repository, "exists_by_user", AsyncMock(return_value=cards))
+        monkeypatch.setattr(dashboard_service, "compute_net_worth_evolution", AsyncMock(return_value=([], [])))
+
+    @pytest.mark.asyncio
+    async def test_false_when_the_user_holds_nothing(self, monkeypatch):
+        self._patch(monkeypatch, accounts=[], investments=False, cards=False)
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.has_holdings is False
+
+    @pytest.mark.asyncio
+    async def test_true_for_a_zero_balance_account(self, monkeypatch):
+        # The regression this flag exists for: a new account's opening balance defaults to zero, so a
+        # "net worth != 0" gate would call this user empty while /accounts offers them Reconcile.
+        self._patch(monkeypatch, accounts=[_acct(1, "ARS", opening="0")], investments=False, cards=False)
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.has_holdings is True
+        assert result.net_worth == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_true_for_investments_alone(self, monkeypatch):
+        self._patch(monkeypatch, accounts=[], investments=True, cards=False)
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.has_holdings is True
+
+    @pytest.mark.asyncio
+    async def test_true_for_a_card_alone(self, monkeypatch):
+        # A card-only user has no account to reconcile and nothing to snapshot, but their card debt is
+        # still a net-worth input, so the dashboard must acknowledge them.
+        self._patch(monkeypatch, accounts=[], investments=False, cards=True)
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.has_holdings is True
+
+    @pytest.mark.asyncio
+    async def test_short_circuits_the_existence_queries_once_accounts_exist(self, monkeypatch):
+        # The account side rides the list _load_cash_total already fetched; the other two are only
+        # queried if it comes back empty, so holding an account costs no extra round trip.
+        self._patch(monkeypatch, accounts=[_acct(1, "ARS")], investments=False, cards=False)
+        await dashboard_service.get_overview(AsyncMock(), 1)
+        dashboard_service.investment_repository.exists_by_user.assert_not_called()
+        dashboard_service.credit_card_repository.exists_by_user.assert_not_called()
