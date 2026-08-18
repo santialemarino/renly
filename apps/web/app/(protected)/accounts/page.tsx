@@ -3,9 +3,8 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { AccountsTable } from '@/app/(protected)/accounts/_components/accounts-table';
 import { AccountsToolbar } from '@/app/(protected)/accounts/_components/accounts-toolbar';
-import { DismissableHint } from '@/components/dismissable-hint';
-import { InlineLink } from '@/components/inline-link';
-import { ROUTES } from '@/config/routes';
+import { ConceptHint } from '@/components/concept-hint';
+import { HELP_ANCHORS } from '@/config/routes';
 import { getAccounts, type AccountSortField } from '@/lib/api/accounts';
 import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
@@ -27,7 +26,6 @@ interface AccountsPageProps {
 
 export default async function AccountsPage({ searchParams }: AccountsPageProps) {
   const t = await getTranslations('accounts');
-  const tCommon = await getTranslations('common');
   const params = await searchParams;
 
   const { settings } = await getPageSettings();
@@ -59,16 +57,15 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       {/*
        * Sets the honest expectation for a derived balance without nudging toward completeness:
        * it points at reconciliation (the intended mechanism), never at "you should link more".
-       * Shown only once there is an account to reconcile. The Learn more link matches the other two
-       * concept hints (snapshots, investor metrics) and lands on Help's accuracy section, which
-       * explains reconciliation and snapshots as the one truth-snap idea.
+       * Shown only once there is an account to reconcile.
        */}
-      <DismissableHint storageKey="accounts-reconcile-hint-dismissed" show={accounts.length > 0}>
-        {t('reconcileHint')}{' '}
-        <InlineLink href={`${ROUTES.help}#accuracy`} color="brand">
-          {tCommon('learnMore')}
-        </InlineLink>
-      </DismissableHint>
+      <ConceptHint
+        storageKey="accounts-reconcile-hint-dismissed"
+        anchor={HELP_ANCHORS.accuracy}
+        show={accounts.length > 0}
+      >
+        {t('reconcileHint')}
+      </ConceptHint>
       <AccountsToolbar preferredCurrencies={preferredCurrencies} />
       <AccountsTable
         accounts={accounts}

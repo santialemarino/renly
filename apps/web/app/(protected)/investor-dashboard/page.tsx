@@ -14,11 +14,10 @@ import { InvestorDashboardMetricCards } from '@/app/(protected)/investor-dashboa
 import { InvestorDashboardSearch } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-search';
 import { InvestorDashboardSummaryTable } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-summary-table';
 import { InvestorDashboardToolbar } from '@/app/(protected)/investor-dashboard/_components/investor-dashboard-toolbar';
+import { ConceptHint } from '@/components/concept-hint';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
-import { DismissableHint } from '@/components/dismissable-hint';
-import { InlineLink } from '@/components/inline-link';
 import { WarningHint } from '@/components/styled-hint';
-import { ROUTES } from '@/config/routes';
+import { HELP_ANCHORS, ROUTES } from '@/config/routes';
 import { getGroups, getInvestments } from '@/lib/api/investments';
 import {
   getAllocation,
@@ -231,12 +230,13 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
       />
 
       {/* Concept nudge explaining the return metrics; shown once the user has investments to measure. */}
-      <DismissableHint storageKey="metrics-intro-dismissed" show={searchableInvestments.length > 0}>
-        {t('metricsIntro')}{' '}
-        <InlineLink href={`${ROUTES.help}#returns`} color="brand">
-          {tCommon('learnMore')}
-        </InlineLink>
-      </DismissableHint>
+      <ConceptHint
+        storageKey="metrics-intro-dismissed"
+        anchor={HELP_ANCHORS.returns}
+        show={searchableInvestments.length > 0}
+      >
+        {t('metricsIntro')}
+      </ConceptHint>
       <InvestorDashboardMetricCards metrics={metrics} hasPeriod={Boolean(startDate || endDate)} />
       <InvestorDashboardEvolution evolution={evolution} />
 

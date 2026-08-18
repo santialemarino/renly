@@ -8,11 +8,10 @@ import { DashboardEvolutionChart } from '@/app/(protected)/dashboard/_components
 import { DashboardFooter } from '@/app/(protected)/dashboard/_components/dashboard-footer';
 import { DashboardMetricCards } from '@/app/(protected)/dashboard/_components/dashboard-metric-cards';
 import { OnboardingWelcome } from '@/app/(protected)/dashboard/_components/onboarding-welcome';
+import { ConceptHint } from '@/components/concept-hint';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
-import { DismissableHint } from '@/components/dismissable-hint';
-import { InlineLink } from '@/components/inline-link';
 import { WarningHint } from '@/components/styled-hint';
-import { ROUTES } from '@/config/routes';
+import { HELP_ANCHORS, ROUTES } from '@/config/routes';
 import {
   getDashboardComposition,
   getDashboardEvolution,
@@ -49,7 +48,6 @@ interface DashboardPageProps {
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const cookieStore = await cookies();
   const t = await getTranslations('dashboard');
-  const tCommon = await getTranslations('common');
   const params = await searchParams;
 
   const savedCurrency = cookieStore.get(ACTIVE_CURRENCY_COOKIE)?.value ?? ORIGINAL_CURRENCY;
@@ -119,12 +117,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
-  // Whether the net-worth headline has any of its three inputs yet — the condition for teaching the
-  // truth-snap habit. Reads the same figures the metric cards render, so the hint can never appear
-  // above an empty headline; a negative cash total (an overdraft) still counts as an input.
-  const hasNetWorthInputs =
-    overview.investmentTotal !== 0 || overview.cashTotal !== 0 || overview.creditCardBalance !== 0;
-
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <div className="flex flex-col gap-y-4 sm:flex-row sm:items-start sm:justify-between">
@@ -148,20 +140,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       </WarningHint>
 
       {/*
-       * Teaches snapshot + reconcile as one habit, where the number they protect is shown. Held
-       * back until the headline has something in it — the two truth-snaps only mean anything once
-       * the user holds an investment, an account, or card debt — and while the first-run welcome
-       * occupies this slot, so the two teaching blocks never stack.
+       * Teaches the truth-snaps as one habit, where the number they protect is shown. Gated on
+       * holding something rather than on a non-zero figure (offsetting holdings net to zero, and a
+       * new account's opening balance defaults to zero), and withheld while the first-run welcome
+       * occupies this slot so the two teaching blocks never stack.
        */}
-      <DismissableHint
+      <ConceptHint
         storageKey="dashboard-truth-snap-hint-dismissed"
-        show={!showWelcome && hasNetWorthInputs}
+        anchor={HELP_ANCHORS.accuracy}
+        show={!showWelcome && overview.hasHoldings}
       >
-        {t('cards.truthSnapHint')}{' '}
-        <InlineLink href={`${ROUTES.help}#accuracy`} color="brand">
-          {tCommon('learnMore')}
-        </InlineLink>
-      </DismissableHint>
+        {t('truthSnapHint')}
+      </ConceptHint>
 
       <DashboardMetricCards overview={overview} />
 

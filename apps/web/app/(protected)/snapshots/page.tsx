@@ -4,10 +4,9 @@ import { getTranslations } from 'next-intl/server';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { SnapshotsGrid } from '@/app/(protected)/snapshots/_components/snapshots-grid';
 import { SnapshotsToolbar } from '@/app/(protected)/snapshots/_components/snapshots-toolbar';
+import { ConceptHint } from '@/components/concept-hint';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
-import { DismissableHint } from '@/components/dismissable-hint';
-import { InlineLink } from '@/components/inline-link';
-import { ROUTES } from '@/config/routes';
+import { HELP_ANCHORS } from '@/config/routes';
 import { getGroups } from '@/lib/api/investments';
 import { getSettings } from '@/lib/api/settings';
 import { getSnapshotGrid } from '@/lib/api/snapshots';
@@ -32,7 +31,6 @@ interface SnapshotsPageProps {
 
 export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps) {
   const t = await getTranslations('snapshots');
-  const tCommon = await getTranslations('common');
   const params = await searchParams;
   const cookieStore = await cookies();
 
@@ -77,12 +75,13 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
       <DismissableCurrencyHint show={!!currency} />
       <SnapshotsToolbar groups={groups} />
       {/* Concept nudge (shown once there are investments to snapshot; the empty state teaches the rest). */}
-      <DismissableHint storageKey="snapshots-intro-dismissed" show={grid.rows.length > 0}>
-        {t('intro')}{' '}
-        <InlineLink href={`${ROUTES.help}#snapshots`} color="brand">
-          {tCommon('learnMore')}
-        </InlineLink>
-      </DismissableHint>
+      <ConceptHint
+        storageKey="snapshots-intro-dismissed"
+        anchor={HELP_ANCHORS.snapshots}
+        show={grid.rows.length > 0}
+      >
+        {t('intro')}
+      </ConceptHint>
       <SnapshotsGrid grid={grid} firstRun={firstRun} />
     </div>
   );
