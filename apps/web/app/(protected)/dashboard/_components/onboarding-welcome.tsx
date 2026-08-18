@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Compass,
+  Landmark,
   Sparkles,
   TrendingUp,
   Wallet,
@@ -122,6 +123,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
 
   const hasInvestments = status?.hasInvestments ?? false;
   const hasFinances = status?.hasFinances ?? false;
+  const hasAccounts = status?.hasAccounts ?? false;
   const primaryCurrencySet = status?.primaryCurrencySet ?? false;
 
   // The two gating steps (currencies is a non-gating nicety); when both are done the welcome
@@ -150,6 +152,16 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       href: ROUTES.investments,
       altLabel: t('steps.investment.import'),
       altHref: `${ROUTES.data}?type=investments`,
+    },
+    {
+      key: 'accounts',
+      icon: Landmark,
+      done: hasAccounts,
+      label: t('steps.accounts.label'),
+      hint: t('steps.accounts.hint'),
+      actionLabel: t('steps.accounts.action'),
+      href: ROUTES.accounts,
+      optionalLabel: t('optional'),
     },
     {
       key: 'currencies',
