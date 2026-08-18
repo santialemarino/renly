@@ -18,12 +18,14 @@ logger = logging.getLogger(__name__)
 # that entity AND hasn't retired it (retired = created that entity once, or cleared the sample), so
 # each section teaches once, independently. The retire is latched primarily at creation time (see
 # the create services); this backstops data that entered outside those paths (import / restore /
-# scheduler) by retiring any entity that already has data.
+# scheduler) by retiring any SAMPLE entity that already has data. Accounts is deliberately not one of
+# them — it has no sample section (it teaches through the first-run empty state instead), so it must
+# stay out of `has_data` below, whose keys index the `samples_retired` map.
 async def get_status(session: AsyncSession, user: User) -> dict:
     has_investments = await investment_repository.exists_by_user(session, user.id)
-    has_accounts = await account_repository.exists_by_user(session, user.id)
     has_expenses = await expense_repository.exists_by_user(session, user.id)
     has_income = await income_repository.exists_by_user(session, user.id)
+    has_accounts = await account_repository.exists_by_user(session, user.id)
     current_settings = await settings_service.get_settings(session, user)
     retired = current_settings["samples_retired"]
 

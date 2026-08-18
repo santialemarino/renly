@@ -236,8 +236,10 @@ async def _load_cash_total(
 # Offsetting holdings can net to exactly zero, and a new account's opening balance defaults to zero,
 # so a value test would report "nothing here" for users who hold plenty. The investment probe is the
 # ACTIVE-only one: an archived investment contributes nothing to portfolio value, unlike an archived
-# account or card, whose balance stays in net worth. `has_accounts` rides the list _load_cash_total
-# already fetched, and the two probes are indexed LIMIT 1 reads reached only when it is False — so a
+# account or card, whose balance stays in net worth. The account side rides the list _load_cash_total
+# already fetched rather than calling `account_repository.exists_by_user` (which the onboarding
+# checklist does use): the rows are in hand here, and both answers must stay archived-inclusive to
+# agree. The other two are indexed LIMIT 1 reads reached only when the account side is False — so a
 # user holding an account pays nothing extra and an empty account pays two cheap reads.
 async def _has_holdings(session: AsyncSession, user_id: int, *, has_accounts: bool) -> bool:
     if has_accounts:
