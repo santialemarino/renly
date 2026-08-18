@@ -340,6 +340,7 @@
     },
     "title": "Dashboard",
     "subtitle": "Tus finanzas e inversiones de un vistazo.",
+    "truthSnapHint": "Renly refleja lo que cargás: hacé snapshots de tus inversiones y conciliá tus cuentas y tarjetas para que esta foto siga siendo fiel.",
     "onboarding": {
       "title": "Bienvenido a Renly",
       "subtitle": "Unos pasos para que tu panel empiece a trabajar para vos.",
@@ -413,7 +414,6 @@
       "creditCardBalanceHint": "Convertido a tu tipo de dólar",
       "vsLastMonth": "vs mes anterior",
       "netWorthHint": "Inversiones + efectivo − pasivos",
-      "truthSnapHint": "Renly refleja lo que cargás: hacé snapshots de tus inversiones y conciliá tus cuentas para que esta foto siga siendo fiel.",
       "cash": "Efectivo",
       "cashHint": "Saldos de efectivo y banco"
     },
@@ -2285,7 +2285,7 @@
     },
     "hero": {
       "title": "Inversiones, efectivo y deuda: un patrimonio honesto",
-      "subtitle": "Renly reúne tus brokers, tus cuentas bancarias y tus tarjetas en una sola foto. Vos registrás lo que pasó; Renly se encarga de las monedas, los retornos y las cuentas. Hecho para Argentina.",
+      "subtitle": "Renly reúne tus brokers, tus cuentas bancarias y tus tarjetas en una sola foto. Vos registrás lo que pasó; Renly se encarga de las monedas, los retornos y los cálculos. Hecho para Argentina.",
       "ctaPrimary": "Empezar",
       "ctaSecondary": "Iniciar sesión"
     },
@@ -2293,26 +2293,32 @@
       "title": "Por qué Renly",
       "items": [
         {
+          "icon": "wallet",
           "title": "Tu panorama completo",
-          "description": "Las inversiones, el efectivo y los saldos bancarios y la deuda de tarjeta se suman en una sola cifra de patrimonio — en vez de tres apps y una planilla que nunca coinciden."
+          "description": "Las inversiones, los saldos de efectivo y banco, y la deuda de tarjeta se suman en una sola cifra de patrimonio — en vez de tres apps y una planilla que nunca coinciden."
         },
         {
+          "icon": "globe",
           "title": "Contexto argentino real",
           "description": "CEDEARs, dólar (oficial, MEP, blue), precios de BYMA y bonos como AL30 y GD30 — nada de esto existe en las apps de Estados Unidos."
         },
         {
+          "icon": "shield-check",
           "title": "Honesto por diseño",
           "description": "El retorno ponderado por tiempo (TWR) y la tasa interna de retorno (TIR) están bien implementados, no aproximados. Renly refleja lo que cargás y lo dice de frente — los snapshots y las conciliaciones mantienen cada cifra atada a la realidad."
         },
         {
+          "icon": "zap",
           "title": "Fácil de mantener al día",
           "description": "Valores por defecto inteligentes, importación de CSV y Excel, precios automáticos y un Atajo de iOS para cargar sobre la marcha. Minutos al mes, no una tarde entera."
         },
         {
+          "icon": "line-chart",
           "title": "Claridad visual",
           "description": "Métricas accionables, gráficos claros y un panel que te muestra lo importante de un vistazo — mejor que cualquier planilla."
         },
         {
+          "icon": "blocks",
           "title": "Hecho para crecer",
           "description": "Inversiones, cuentas, tarjetas, ingresos, gastos, suscripciones y planificación — cada pieza se apoya en la anterior sin romper nada."
         }
@@ -2323,7 +2329,7 @@
       "steps": [
         {
           "title": "Cargá lo que tenés y lo que debés",
-          "description": "Inversiones, cuentas bancarias y de efectivo, y tarjetas de crédito — cargalas a mano o importá el CSV o Excel que ya venís usando."
+          "description": "Inversiones, cuentas bancarias y de efectivo, y tarjetas de crédito — cargalas a mano. Y si ya llevás tus inversiones, ingresos o gastos en una planilla, importá ese CSV o Excel en vez de volver a tipearlos."
         },
         {
           "title": "Los precios se actualizan solos",
@@ -2331,7 +2337,7 @@
         },
         {
           "title": "Hacé snapshots y conciliá",
-          "description": "Registrá cuánto valen tus inversiones y cargá el saldo que una cuenta muestra de verdad. Esos dos hábitos son los que mantienen fiel tu patrimonio."
+          "description": "Cada mes Renly toma solo el snapshot de cada inversión con ticker — completás el resto y cargás el saldo que tus cuentas y tarjetas muestran de verdad. Esos son los hábitos que mantienen fiel tu patrimonio."
         },
         {
           "title": "Mirá tu panel",
@@ -2405,9 +2411,9 @@
         "id": "accuracy",
         "heading": "Cómo hace Renly para que tus números sean fieles",
         "paragraphs": [
-          "Renly refleja lo que vos cargás. No se conecta con tu banco, tu billetera ni tu bróker: cada saldo, gasto y tenencia está en la app porque lo cargaste, lo importaste o lo registraste desde el Atajo de iOS. Es a propósito — Renly nunca te pide las credenciales de tu banco — pero también significa que una cifra está tan al día como lo último que le contaste a la app.",
-          "Por eso, en lugar de pedirte que registres cada movimiento a la perfección, Renly le da a cada tipo de número una forma de volver a la verdad. Para una inversión eso es un snapshot: registrás cuánto vale hoy la tenencia y el historial que hay detrás queda intacto. Para una cuenta de efectivo o bancaria es una conciliación: cargás el saldo que la cuenta muestra de verdad y Renly registra un único ajuste con fecha, así el saldo queda bien de ese día en adelante.",
-          "Esos dos hábitos son la misma idea aplicada a las dos cosas que tenés: hacé snapshots de tus inversiones, conciliá tu efectivo. Gracias a ellos, un movimiento que te olvidás de cargar deja un número apenas desactualizado en lugar de permanentemente incorrecto: el próximo snapshot o la próxima conciliación absorbe la diferencia. Los precios y los tipos de cambio son la excepción — esos los busca Renly por vos, y la sección de monedas más abajo explica cómo se aplican."
+          "Renly no se conecta con tu banco, tu billetera ni tu bróker, y nunca te pide esas credenciales. Casi todas las cifras están en la app porque las cargaste, las importaste o las registraste desde el Atajo de iOS. Las excepciones son las que configuraste vos mismo: Renly trae los precios y los tipos de cambio, registra un snapshot mensual de cada inversión que vinculaste a un ticker, y carga los cargos recurrentes de tus suscripciones y tus planes en cuotas.",
+          "Como una cifra está tan al día como lo último que le contaste a Renly, cada tipo de número tiene su propia forma de volver a la verdad. Para una inversión es un snapshot: registrás cuánto vale hoy la tenencia y el historial que hay detrás queda intacto. Para una cuenta de efectivo o bancaria es una conciliación: cargás el saldo que la cuenta muestra de verdad y Renly registra un único ajuste con fecha, así el saldo queda bien de ese día en adelante. Para una tarjeta de crédito es el resumen: cargás con cuánto cerró de verdad un período y Renly ajusta ese período de la misma forma.",
+          "Un ajuste así corrige el saldo, no el historial. El patrimonio, el saldo de una cuenta y el saldo de una tarjeta vuelven a estar bien con el próximo snapshot o la próxima conciliación. Dos cosas no. Una compra o una venta que nunca registraste sigue distorsionando los rendimientos de esa inversión, porque Renly no puede deducir después en qué período se movió la plata. Y una conciliación registra su ajuste el día en que conciliás, con la categoría “Ajuste de Cuenta”: el mes al que el gasto realmente pertenecía queda subestimado, y ese monto nunca aparece como supermercado o alquiler."
         ]
       },
       {
@@ -2475,7 +2481,7 @@
       "description": "Cómo Renly recopila, usa y protege tus datos personales y financieros."
     },
     "title": "Política de Privacidad",
-    "lastUpdated": "Última actualización: junio de 2026",
+    "lastUpdated": "Última actualización: agosto de 2026",
     "intro": "Esta Política de Privacidad explica cómo Renly (\"nosotros\") recopila, usa y protege tu información cuando usás la aplicación Renly. Al usar Renly, aceptás las prácticas descritas acá.",
     "sections": [
       {
@@ -2485,7 +2491,7 @@
         ],
         "items": [
           "Datos de la cuenta: tu nombre, correo electrónico y una contraseña almacenada de forma cifrada (hash).",
-          "Datos financieros que cargás: inversiones, snapshots, transacciones, ingresos, gastos y notas relacionadas.",
+          "Datos financieros que cargás: inversiones, snapshots, transacciones, cuentas de efectivo y bancarias, tarjetas de crédito, transferencias, conciliaciones, ingresos, gastos y notas relacionadas.",
           "Preferencias: moneda, idioma, zona horaria y configuración de visualización.",
           "Datos técnicos: registros básicos e informes de errores necesarios para mantener el servicio confiable y seguro."
         ]
@@ -2597,7 +2603,7 @@
       "description": "Renly es una herramienta informativa y no brinda asesoramiento financiero."
     },
     "title": "No es asesoramiento financiero",
-    "lastUpdated": "Última actualización: junio de 2026",
+    "lastUpdated": "Última actualización: agosto de 2026",
     "intro": "Renly es una herramienta para seguir y visualizar tus finanzas personales. No es un asesor financiero, broker ni servicio de inversión.",
     "sections": [
       {
@@ -2616,7 +2622,7 @@
         "heading": "Exactitud de los datos",
         "paragraphs": [
           "Los precios, tipos de cambio y métricas calculadas provienen de terceros y se computan automáticamente. Pueden estar demorados, incompletos o ser incorrectos. Renly no garantiza la exactitud, integridad ni vigencia de ningún dato y no es responsable por pérdidas derivadas de confiar en ellos.",
-          "Renly también refleja los datos que vos cargás: los saldos, las deudas y el patrimonio se calculan a partir de tus propias entradas, importaciones y snapshots, así que pueden estar incompletos o desactualizados y diferir de lo que muestra tu banco, billetera o bróker. Renly no es un registro oficial de tus cuentas: consultá los resúmenes de tu entidad antes de tomar una decisión basada en una cifra."
+          "Renly también refleja los datos que vos cargás: los saldos, las deudas y el patrimonio se calculan a partir de tus propias entradas, importaciones y snapshots, así que pueden estar incompletos o desactualizados y diferir de lo que muestra tu banco, billetera o bróker. Renly no es un registro oficial de tus cuentas: consultá los resúmenes de tu entidad antes de confiar en una cifra."
         ]
       },
       {

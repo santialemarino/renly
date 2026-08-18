@@ -340,6 +340,7 @@
     },
     "title": "Dashboard",
     "subtitle": "Your finances and investments at a glance.",
+    "truthSnapHint": "Renly reflects what you enter — snapshot your investments and reconcile your accounts and cards to keep this picture true.",
     "onboarding": {
       "title": "Welcome to Renly",
       "subtitle": "A few steps to get your dashboard working for you.",
@@ -413,7 +414,6 @@
       "creditCardBalanceHint": "Converted at your dollar rate",
       "vsLastMonth": "vs last month",
       "netWorthHint": "Investments + cash − liabilities",
-      "truthSnapHint": "Renly reflects what you enter — snapshot your investments and reconcile your accounts to keep this picture true.",
       "cash": "Cash",
       "cashHint": "Cash & bank balances"
     },
@@ -2293,26 +2293,32 @@
       "title": "Why Renly",
       "items": [
         {
+          "icon": "wallet",
           "title": "Your whole picture",
           "description": "Investments, cash and bank balances, and credit-card debt roll up into a single net-worth figure — instead of three apps and a spreadsheet that never agree."
         },
         {
+          "icon": "globe",
           "title": "Real Argentine context",
           "description": "CEDEARs, ARS rates (oficial, MEP, blue), BYMA prices, and government bonds like AL30 and GD30 — none of this exists in US apps."
         },
         {
+          "icon": "shield-check",
           "title": "Honest by design",
           "description": "Time-weighted return (TWR) and internal rate of return (IRR) are implemented properly, not approximated. Renly reflects what you enter and says so plainly — snapshots and reconciliation keep every figure anchored to reality."
         },
         {
+          "icon": "zap",
           "title": "Fast to keep current",
           "description": "Smart defaults, CSV and Excel import, automatic pricing, and an iOS Shortcut for logging on the go. Minutes a month, not an evening."
         },
         {
+          "icon": "line-chart",
           "title": "Visual clarity",
           "description": "Actionable metrics, clean charts, and a dashboard that tells you what matters at a glance — better than any spreadsheet."
         },
         {
+          "icon": "blocks",
           "title": "Built to grow",
           "description": "Investments, accounts, cards, income, expenses, subscriptions, and planning — each piece builds on the last without breaking anything."
         }
@@ -2323,7 +2329,7 @@
       "steps": [
         {
           "title": "Add what you own and owe",
-          "description": "Investments, bank and cash accounts, and credit cards — enter them by hand, or import the CSV or Excel file you already keep."
+          "description": "Investments, bank and cash accounts, and credit cards — add them by hand. If you already keep your investments, income, or expenses in a spreadsheet, import that CSV or Excel file instead of retyping them."
         },
         {
           "title": "Prices update automatically",
@@ -2331,7 +2337,7 @@
         },
         {
           "title": "Snapshot and reconcile",
-          "description": "Record what your investments are worth, and enter the balance an account actually shows. Those two habits are what keep your net worth true."
+          "description": "Each month Renly snapshots every ticker-linked investment on its own — you fill in the rest, and enter the balance your accounts and cards actually show. Those are the habits that keep your net worth true."
         },
         {
           "title": "See your dashboard",
@@ -2405,9 +2411,9 @@
         "id": "accuracy",
         "heading": "How Renly stays accurate",
         "paragraphs": [
-          "Renly reflects what you enter. It does not connect to your bank, wallet, or broker: every balance, expense, and holding is in the app because you added it, imported it, or logged it from the iOS Shortcut. That is deliberate — Renly never asks for your banking credentials — but it also means a figure is only as current as the last thing you told the app.",
-          "So instead of asking you to record every movement perfectly, Renly gives each kind of number a way to snap back to the truth. For an investment that is a snapshot: you record what the holding is worth today, and the history behind it stays intact. For a cash or bank account it is a reconciliation: you enter the balance the account actually shows, and Renly posts a single dated adjustment so the balance is right from that day onward.",
-          "Those two habits are the same idea applied to the two kinds of thing you hold — snapshot your investments, reconcile your cash. Because of them, a movement you forget to log leaves a number slightly stale rather than permanently wrong: the next snapshot or reconciliation absorbs the difference. Prices and exchange rates are the exception — Renly fetches those for you, and the currency section below explains how they are applied."
+          "Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is in the app because you entered it, imported it, or logged it from the iOS Shortcut. The exceptions are the ones you set up yourself: Renly fetches prices and exchange rates, records a monthly snapshot for any investment you linked to a ticker, and posts the recurring charges of your subscriptions and instalment plans.",
+          "Because a figure is only as current as the last thing you told Renly, each kind of number has its own way to snap back to the truth. For an investment it is a snapshot: you record what the holding is worth today, and the history behind it stays intact. For a cash or bank account it is a reconciliation: you enter the balance the account actually shows, and Renly posts one dated adjustment so the balance is right from that day onward. For a credit card it is the statement: you enter what a statement period really closed at, and Renly trues that period up the same way.",
+          "A truth-snap fixes the balance, not the history. Net worth, an account balance, and a card balance all come right again at the next snapshot or reconciliation. Two things do not. A purchase or sale you never recorded keeps skewing that investment's return figures, because Renly cannot work out after the fact which period the money moved in. And a reconciliation books its adjustment on the day you reconcile, under the “Account Adjustment” category — so the month the spending actually belonged to stays understated, and that amount never appears as groceries or rent."
         ]
       },
       {
@@ -2475,7 +2481,7 @@
       "description": "How Renly collects, uses, and protects your personal and financial data."
     },
     "title": "Privacy Policy",
-    "lastUpdated": "Last updated: June 2026",
+    "lastUpdated": "Last updated: August 2026",
     "intro": "This Privacy Policy explains how Renly (\"we\", \"us\") collects, uses, and protects your information when you use the Renly application. By using Renly, you agree to the practices described here.",
     "sections": [
       {
@@ -2485,7 +2491,7 @@
         ],
         "items": [
           "Account information: your name, email address, and a securely hashed password.",
-          "Financial data you enter: investments, snapshots, transactions, income, expenses, and related notes.",
+          "Financial data you enter: investments, snapshots, transactions, cash and bank accounts, credit cards, transfers, reconciliations, income, expenses, and related notes.",
           "Preferences: currency, language, timezone, and display settings.",
           "Technical data: basic logs and error reports needed to keep the service reliable and secure."
         ]
@@ -2597,7 +2603,7 @@
       "description": "Renly is an informational tool and does not provide financial advice."
     },
     "title": "Not Financial Advice",
-    "lastUpdated": "Last updated: June 2026",
+    "lastUpdated": "Last updated: August 2026",
     "intro": "Renly is a tool for tracking and visualizing your personal finances. It is not a financial advisor, broker, or investment service.",
     "sections": [
       {
