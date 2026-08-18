@@ -8,17 +8,13 @@ from sqlmodel import select
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 
+
 # What the FUNDING ACCOUNT paid, which is only the same thing as what cleared the card when no conversion
-# happened. Defined once because THREE queries are cash-side and must all agree — the two sums below plus
-# the per-account ledger's settlement branch, which lives in account_movement_repository and imports this
-# rather than re-spelling it. The card-side sums deliberately use CardSettlement.amount directly, and
-# keeping the two spellings visibly different is what makes a mistake in either one legible.
-_CASH_LEG = func.coalesce(CardSettlement.account_amount, CardSettlement.amount)
-
-
-# The cash-leg expression, for the one cash-side reader that lives in another module (the ledger union).
-# A function rather than the bare constant so the two modules cannot end up holding the same SQLAlchemy
-# element instance in two statements built at import time.
+# happened. THE one definition, because THREE queries are cash-side and must all agree: the two sums in
+# this module plus the per-account ledger's settlement branch, which lives in account_movement_repository
+# and imports this rather than re-spelling it. Public for that importer's sake. The card-side sums
+# deliberately use CardSettlement.amount directly, and keeping the two spellings visibly different is
+# what makes a mistake in either one legible.
 def settlement_cash_leg():
     return func.coalesce(CardSettlement.account_amount, CardSettlement.amount)
 
@@ -67,6 +63,9 @@ async def clear_account_amounts(session: AsyncSession, account_id: int, user_id:
 
 # Nulls account_amount on every settlement of this user whose funding account is denominated in the
 # settlement's OWN currency — i.e. where no conversion happened, so a second amount is meaningless.
+# Scoped to the USER, not to the rows just restored: it therefore repairs any pre-existing row in that
+# state too, which is the right blast radius because no legitimate row can match (a real cross-currency
+# settlement has differing currencies; a real same-currency one already has account_amount NULL).
 #
 # Exists for the restore path, which bulk-inserts rows without passing through the service that owns this
 # rule (_resolve_account_amount). A hand-edited export could otherwise pair a 700 ARS settlement with an
@@ -105,7 +104,7 @@ async def sum_by_account_ids(
     if not account_ids:
         return {}
     stmt = (
-        select(CardSettlement.account_id, func.coalesce(func.sum(_CASH_LEG), 0))
+        select(CardSettlement.account_id, func.coalesce(func.sum(settlement_cash_leg()), 0))
         .join(Account, Account.id == CardSettlement.account_id)
         .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
     )
@@ -134,7 +133,7 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
     year_col = func.extract("year", CardSettlement.date).label("year")
     month_col = func.extract("month", CardSettlement.date).label("month")
     result = await session.execute(
-        select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(_CASH_LEG), 0))
+        select(CardSettlement.account_id, year_col, month_col, func.coalesce(func.sum(settlement_cash_leg()), 0))
         .join(Account, Account.id == CardSettlement.account_id)
         .where(CardSettlement.account_id.in_(account_ids), CardSettlement.user_id == user_id, CardSettlement.date >= Account.opening_date)
         .group_by(CardSettlement.account_id, year_col, month_col)
@@ -144,7 +143,7 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
 
 # Sum of settlements grouped by credit card id and currency. Returns {card_id: {currency: total}}.
 # Replaces the flat sum_by_card_ids — bucket balances need per-currency totals.
-# Sums `amount`, the CARD leg, and must NOT use _CASH_LEG: a bucket is cleared by what the bank applied to
+# Sums `amount`, the CARD leg, and must NOT use settlement_cash_leg(): a bucket is cleared by what the bank applied to
 # it in the bucket's own currency, so a settlement paid in pesos still clears US$100 of a USD bucket.
 async def sum_by_card_ids_grouped(
     session: AsyncSession,

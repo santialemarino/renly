@@ -128,9 +128,18 @@ export function SettlementFormDialog({
     !!selectedAccount && !!watchedCurrency && selectedAccount.currency !== watchedCurrency;
 
   /*
-   * The rate the two typed amounts imply, beside what today's dólar tarjeta suggests. A read-back, never
-   * a prefill: the user's figure stays authoritative because the whole model rests on recording what
-   * really left the account. The pair catches a 10× typo in either direction.
+   * The picker offers exactly the range the API accepts, so a rejected date is unreachable rather than
+   * reported after the fact (transfers and the reconcile dialog do the same). Every cash sum is bounded
+   * below by the funding account's opening_date, so a settlement dated earlier would clear the card while
+   * its cash leg was silently dropped — and across currencies the dropped figure is the larger,
+   * account-denominated one. No bound when the settlement is unlinked: there is no account to be open.
+   */
+  const earliestDate = selectedAccount?.openingDate;
+
+  /*
+   * The rate the two typed amounts imply, beside what the latest known dólar tarjeta suggests. A
+   * read-back, never a prefill: the user's figure stays authoritative because the whole model rests on
+   * recording what really left the account. The pair catches a 10× typo in either direction.
    */
   const typedRate = crossCurrency ? impliedRate(watchedAmount, watchedAccountAmount ?? '') : null;
   const estimate = crossCurrency
@@ -219,6 +228,7 @@ export function SettlementFormDialog({
                         value={field.value || undefined}
                         onChange={field.onChange}
                         placeholder={t('settlements.form.datePlaceholder')}
+                        minDate={earliestDate}
                       />
                     </FormControl>
                     <FormMessage />

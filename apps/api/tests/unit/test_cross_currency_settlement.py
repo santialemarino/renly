@@ -9,6 +9,7 @@ from app.domain import (
     SettlementAccountAmountRequiredError,
     SettlementAccountAmountWithoutAccountError,
     SettlementAmountsMustMatchError,
+    SettlementBeforeAccountOpenedError,
 )
 from app.models.account import Account, AccountType
 from app.models.user import User
@@ -44,7 +45,15 @@ def _account(**overrides) -> Account:
 
 
 # Drives create_settlement with persistence mocked, returning the CardSettlement row it built.
-async def _create(monkeypatch, *, account: Account | None, amount: Decimal, currency: str, account_amount: Decimal | None):
+async def _create(
+    monkeypatch,
+    *,
+    account: Account | None,
+    amount: Decimal,
+    currency: str,
+    account_amount: Decimal | None,
+    on: date = date(2026, 8, 17),
+):
     monkeypatch.setattr(credit_card_service, "get_card", AsyncMock())
     monkeypatch.setattr(credit_card_service.account_service, "load_linked_account", AsyncMock(return_value=account))
     monkeypatch.setattr(credit_card_service.card_reconciliation_service, "mark_stale_for_date", AsyncMock())
@@ -59,7 +68,7 @@ async def _create(monkeypatch, *, account: Account | None, amount: Decimal, curr
         AsyncMock(),
         5,
         USER,
-        date=date(2026, 8, 17),
+        date=on,
         amount=amount,
         currency=currency,
         account_id=account.id if account is not None else None,
@@ -204,6 +213,49 @@ class TestTheCurrencyRuleIsAsymmetric:
             monkeypatch.setattr(getattr(account_service, repo), "count_by_default_account", AsyncMock(return_value=0))
 
         assert await account_service.count_default_references(AsyncMock(), 7, USER.id) == 2
+
+
+class TestTheFundingAccountMustBeOpen:
+    @pytest.mark.asyncio
+    async def test_a_settlement_before_the_account_opened_is_refused(self, monkeypatch):
+        # Every cash sum is bounded below by opening_date, so such a settlement would clear the card while
+        # its cash leg was silently dropped — debt reduced, no money moved. Across currencies the dropped
+        # figure is the account-denominated one, which is the larger of the two.
+        with pytest.raises(SettlementBeforeAccountOpenedError) as exc:
+            await _create(
+                monkeypatch,
+                account=_account(currency="ARS"),
+                amount=Decimal("100"),
+                currency="USD",
+                account_amount=Decimal("130000"),
+                on=date(2025, 12, 31),
+            )
+
+        assert exc.value.status_code == 400
+        assert exc.value.extra == {"opening_date": "2026-01-01"}
+
+    @pytest.mark.asyncio
+    async def test_the_opening_date_itself_is_allowed(self, monkeypatch):
+        # opening_balance IS the balance AT that date, and the sums bound with >=, so a row dated exactly
+        # on it counts. An off-by-one here would refuse a legitimate settlement.
+        row, _ = await _create(
+            monkeypatch,
+            account=_account(currency="ARS"),
+            amount=Decimal("100"),
+            currency="USD",
+            account_amount=Decimal("130000"),
+            on=date(2026, 1, 1),
+        )
+
+        assert row.date == date(2026, 1, 1)
+
+    @pytest.mark.asyncio
+    async def test_an_unlinked_settlement_has_no_date_bound(self, monkeypatch):
+        # No funding account means no cash leg to drop, so any date is recordable — the card side is not
+        # bounded by an account's opening date.
+        row, _ = await _create(monkeypatch, account=None, amount=Decimal("100"), currency="USD", account_amount=None, on=date(2020, 1, 1))
+
+        assert row.date == date(2020, 1, 1)
 
 
 class TestUnlinkingClearsTheCashLeg:

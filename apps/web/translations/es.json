@@ -2662,6 +2662,7 @@
     "account_reconciliation_future_date": "La fecha de conciliación no puede ser futura.",
     "account_reconciliation_not_latest": "Eliminá primero la conciliación del {last_reconciled_date} — las conciliaciones posteriores se apoyan en esta.",
     "card_reconciliation_future_period": "Este período de resumen todavía no cerró, así que no hay nada con qué conciliar.",
+    "settlement_before_account_opened": "Un pago debe tener fecha igual o posterior a la fecha de apertura de la cuenta desde la que se paga ({opening_date}).",
     "settlement_account_amount_required": "Pagar un saldo en {bucket_currency} desde una cuenta en {account_currency} requiere registrar el monto debitado en {account_currency}, para preservar el tipo de cambio que te cobró el banco.",
     "settlement_amounts_must_match": "Dentro de una misma moneda, un pago debe debitar exactamente lo que cancela. Registrá una comisión como un gasto aparte.",
     "settlement_account_amount_without_account": "Un monto debitado de una cuenta necesita la cuenta de la que salió.",

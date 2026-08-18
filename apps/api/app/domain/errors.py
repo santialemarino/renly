@@ -181,6 +181,25 @@ class CardReconciliationFuturePeriodError(DomainError):
         super().__init__(self.message)
 
 
+# A settlement is dated before the funding account it draws from existed. Every cash sum is bounded below
+# by the account's opening_date (opening_balance already IS the balance at that date), so such a settlement
+# would clear the card while its cash leg was silently dropped from the balance — the one asymmetry a
+# settlement must never have. Worse across currencies, where the dropped figure is the account-currency
+# amount rather than the card's. Mapped to 400 by the API.
+class SettlementBeforeAccountOpenedError(DomainError):
+    code = "settlement_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A settlement must be dated on or after its funding account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
 # A settlement paying a bucket from an account in a DIFFERENT currency did not record what left that
 # account. The bank converted internally and only the user knows the blended rate it charged (the
 # "dólar tarjeta" already contains the perception), so inventing one would misstate the cash balance —

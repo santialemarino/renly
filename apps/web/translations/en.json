@@ -2662,6 +2662,7 @@
     "account_reconciliation_future_date": "The reconciliation date can't be in the future.",
     "account_reconciliation_not_latest": "Delete the reconciliation dated {last_reconciled_date} first — later reconciliations build on this one.",
     "card_reconciliation_future_period": "This statement period hasn't closed yet, so there's nothing to reconcile against.",
+    "settlement_before_account_opened": "A settlement must be dated on or after its funding account's opening date ({opening_date}).",
     "settlement_account_amount_required": "Paying a {bucket_currency} bucket from a {account_currency} account must record the {account_currency} amount debited, so the rate your bank charged is preserved.",
     "settlement_amounts_must_match": "Within one currency a settlement must debit exactly what it clears. Record a fee as its own expense.",
     "settlement_account_amount_without_account": "An amount debited from an account needs the account it came from.",

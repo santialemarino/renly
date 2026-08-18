@@ -10,6 +10,7 @@ from app.domain import (
     SettlementAccountAmountRequiredError,
     SettlementAccountAmountWithoutAccountError,
     SettlementAmountsMustMatchError,
+    SettlementBeforeAccountOpenedError,
 )
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
@@ -222,6 +223,15 @@ def _to_settlement_response(settlement: CardSettlement, account: Account | None)
 # currency no conversion happened at all, so the account must be debited exactly what came off the
 # bucket. A redundant-but-equal amount normalizes to None rather than being stored twice, so
 # "account_amount IS NOT NULL" always means "these currencies differ".
+# Rejects a settlement dated before the funding account existed. Every cash sum is bounded below by that
+# account's opening_date, so the cash leg would be dropped while the card leg still cleared the bucket —
+# a settlement that reduces debt and moves no money. Mirrors transfer_service._ensure_both_accounts_open;
+# an UNLINKED settlement has no account to be open, so there is nothing to check.
+def _ensure_account_open(account: Account | None, date: date_type) -> None:
+    if account is not None and date < account.opening_date:
+        raise SettlementBeforeAccountOpenedError(account.opening_date)
+
+
 def _resolve_account_amount(account: Account | None, currency: str, amount: Decimal, account_amount: Decimal | None) -> Decimal | None:
     if account is None:
         if account_amount is not None:
@@ -264,6 +274,7 @@ async def create_settlement(
 ) -> CardSettlementResponse:
     await get_card(session, card_id, user)
     account = await account_service.load_linked_account(session, user, account_id)
+    _ensure_account_open(account, date)
     resolved_account_amount = _resolve_account_amount(account, currency, amount, account_amount)
     settlement = CardSettlement(
         credit_card_id=card_id,
