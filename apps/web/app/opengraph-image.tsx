@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { ImageResponse } from 'next/og';
 
-import { siteConfig } from '@/config/site';
+import { siteConfig, SOCIAL_CARD_IMAGE } from '@/config/site';
 import {
   BRAND_BLUE,
   BRAND_BLUE_GRADIENT_FROM,
@@ -13,9 +13,9 @@ import {
 // Social share card (og:image + twitter fallback) rendered on demand by next/og. Mirrors the app
 // brand: the gradient R monogram over the blue-800 wordmark and the product tagline, on white.
 export const runtime = 'nodejs';
-export const alt = `${siteConfig.name} — ${siteConfig.description}`;
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+export const alt = SOCIAL_CARD_IMAGE.alt;
+export const size = { width: SOCIAL_CARD_IMAGE.width, height: SOCIAL_CARD_IMAGE.height };
+export const contentType = SOCIAL_CARD_IMAGE.type;
 
 // Read a bundled font. The static `new URL(..., import.meta.url)` lets the bundler trace and emit
 // the .ttf next to the compiled route, so it resolves in both dev and a standalone production build.
