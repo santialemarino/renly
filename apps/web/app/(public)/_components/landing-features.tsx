@@ -1,6 +1,6 @@
 'use client';
 
-import { Blocks, Globe, LineChart, ShieldCheck, Zap } from 'lucide-react';
+import { Blocks, Globe, LineChart, ShieldCheck, Wallet, Zap } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { FeatureCard } from '@/app/(public)/_components/feature-card';
@@ -12,10 +12,11 @@ interface FeatureItem {
   description: string;
 }
 
-// Icons pair with the translated feature list by position (fast entry, clarity, trust, context, growth).
-const FEATURE_ICONS = [Zap, LineChart, ShieldCheck, Globe, Blocks];
+// Icons pair with the translated feature list by position (whole picture, Argentine context,
+// honesty, fast to keep current, clarity, growth).
+const FEATURE_ICONS = [Wallet, Globe, ShieldCheck, Zap, LineChart, Blocks];
 
-// "Why Renly" — the five core product values rendered as a responsive grid of icon cards.
+// "Why Renly" — the six core product values rendered as a responsive grid of icon cards.
 export function LandingFeatures() {
   const t = useTranslations('landing.features');
   const items = t.raw('items') as FeatureItem[];
