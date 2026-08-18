@@ -112,9 +112,9 @@ interface OnboardingWelcomeProps {
 
 // First-run welcome shown on the dashboard until onboarding is completed. It's a reactive
 // checklist: each step reflects the account's real data, so acting on a step (adding an
-// investment, an expense, choosing currencies) checks it off on the next dashboard load with no
-// per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps are
-// done — persists the completion flag server-side so the welcome never returns.
+// investment, an expense, an account, choosing currencies) checks it off on the next dashboard load
+// with no per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps
+// are done — persists the completion flag server-side so the welcome never returns.
 export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomeProps) {
   const t = useTranslations('dashboard.onboarding');
   const tTour = useTranslations('dashboard.tour');
@@ -126,8 +126,9 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
   const hasAccounts = status?.hasAccounts ?? false;
   const primaryCurrencySet = status?.primaryCurrencySet ?? false;
 
-  // The two gating steps (currencies is a non-gating nicety); when both are done the welcome
-  // offers a positive finish instead of nagging.
+  // Only finances and investments gate the finish; accounts and currencies are non-gating niceties,
+  // so "all set" appears once these two are done even with an optional step still open. Requiring an
+  // account to finish would turn the headline's cash input into a completeness demand.
   const gatingDone = hasInvestments && hasFinances;
 
   const steps: Array<OnboardingStepProps & { key: string }> = [
