@@ -2337,7 +2337,7 @@
         },
         {
           "title": "Snapshot and reconcile",
-          "description": "Each month Renly snapshots every ticker-linked investment on its own — you fill in the rest, and enter the balance your accounts and cards actually show. Those are the habits that keep your net worth true."
+          "description": "Renly can snapshot your ticker-linked investments for you each month; you fill in the rest, and enter the balance your accounts and cards actually show. Those are the habits that keep your net worth true."
         },
         {
           "title": "See your dashboard",
@@ -2411,9 +2411,9 @@
         "id": "accuracy",
         "heading": "How Renly stays accurate",
         "paragraphs": [
-          "Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is in the app because you entered it, imported it, or logged it from the iOS Shortcut. The exceptions are the ones you set up yourself: Renly fetches prices and exchange rates, records a monthly snapshot for any investment you linked to a ticker, and posts the recurring charges of your subscriptions and instalment plans.",
-          "Because a figure is only as current as the last thing you told Renly, each kind of number has its own way to snap back to the truth. For an investment it is a snapshot: you record what the holding is worth today, and the history behind it stays intact. For a cash or bank account it is a reconciliation: you enter the balance the account actually shows, and Renly posts one dated adjustment so the balance is right from that day onward. For a credit card it is the statement: you enter what a statement period really closed at, and Renly trues that period up the same way.",
-          "A truth-snap fixes the balance, not the history. Net worth, an account balance, and a card balance all come right again at the next snapshot or reconciliation. Two things do not. A purchase or sale you never recorded keeps skewing that investment's return figures, because Renly cannot work out after the fact which period the money moved in. And a reconciliation books its adjustment on the day you reconcile, under the “Account Adjustment” category — so the month the spending actually belonged to stays understated, and that amount never appears as groceries or rent."
+          "Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is in the app because you entered it, imported it, or logged it from the iOS Shortcut. Renly does fill in a few things itself: it fetches prices and exchange rates; it snapshots a ticker-linked investment each month once you have recorded one snapshot with a quantity, so it knows how many units you hold; and it posts the recurring charges of your subscriptions and installment plans, moving the balance of whichever account you told it to pay them from.",
+          "Because a figure is only as current as the last thing you told Renly, each kind of number has its own way to snap back to the truth. For an investment it is a snapshot: you record what the holding is worth today, and the history behind it stays intact. For a cash or bank account it is a reconciliation: you enter the balance the account actually shows and the date it showed it, and Renly posts one adjustment on that date, so the balance is right from there on. For a credit card it is the statement: you enter what a statement period really closed at, and Renly adjusts that period, dating the difference to the period's close.",
+          "A truth-snap fixes the balance, not the history. Net worth, an account balance, and a card balance all come right again at the next snapshot or reconciliation. Two things do not. A purchase or sale you never recorded keeps skewing that investment's return figures, because Renly cannot work out after the fact which period the money moved in. And a reconciliation files its adjustment under its own category — “Account Adjustment” for an account, a card-fee or card-refund category for a card — so the difference it absorbs never shows up as groceries or rent in your spending breakdown. Picking an earlier as-of date does at least put that difference in the month it belonged to."
         ]
       },
       {
@@ -2544,7 +2544,7 @@
       "description": "The terms governing your use of the Renly application."
     },
     "title": "Terms of Service",
-    "lastUpdated": "Last updated: June 2026",
+    "lastUpdated": "Last updated: August 2026",
     "intro": "These Terms of Service (\"Terms\") govern your access to and use of Renly. By creating an account or using the app, you agree to these Terms.",
     "sections": [
       {
@@ -2556,7 +2556,7 @@
       {
         "heading": "The service",
         "paragraphs": [
-          "Renly is a personal finance and investment-tracking tool. It helps you record and visualize your holdings, income, and expenses. Renly is provided on an \"as is\" and \"as available\" basis and may change over time, especially during its current beta period."
+          "Renly is a personal finance tool. It helps you record and visualize your investments, your cash and bank balances, your credit-card debt, and your income and expenses. Renly is provided on an \"as is\" and \"as available\" basis and may change over time, especially during its current beta period."
         ]
       },
       {

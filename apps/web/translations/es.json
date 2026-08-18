@@ -2337,7 +2337,7 @@
         },
         {
           "title": "Hacé snapshots y conciliá",
-          "description": "Cada mes Renly toma solo el snapshot de cada inversión con ticker — completás el resto y cargás el saldo que tus cuentas y tarjetas muestran de verdad. Esos son los hábitos que mantienen fiel tu patrimonio."
+          "description": "Renly puede tomarle el snapshot mensual a tus inversiones con ticker; completás el resto y cargás el saldo que tus cuentas y tarjetas muestran de verdad. Esos son los hábitos que mantienen fiel tu patrimonio."
         },
         {
           "title": "Mirá tu panel",
@@ -2411,9 +2411,9 @@
         "id": "accuracy",
         "heading": "Cómo hace Renly para que tus números sean fieles",
         "paragraphs": [
-          "Renly no se conecta con tu banco, tu billetera ni tu bróker, y nunca te pide esas credenciales. Casi todas las cifras están en la app porque las cargaste, las importaste o las registraste desde el Atajo de iOS. Las excepciones son las que configuraste vos mismo: Renly trae los precios y los tipos de cambio, registra un snapshot mensual de cada inversión que vinculaste a un ticker, y carga los cargos recurrentes de tus suscripciones y tus planes en cuotas.",
-          "Como una cifra está tan al día como lo último que le contaste a Renly, cada tipo de número tiene su propia forma de volver a la verdad. Para una inversión es un snapshot: registrás cuánto vale hoy la tenencia y el historial que hay detrás queda intacto. Para una cuenta de efectivo o bancaria es una conciliación: cargás el saldo que la cuenta muestra de verdad y Renly registra un único ajuste con fecha, así el saldo queda bien de ese día en adelante. Para una tarjeta de crédito es el resumen: cargás con cuánto cerró de verdad un período y Renly ajusta ese período de la misma forma.",
-          "Un ajuste así corrige el saldo, no el historial. El patrimonio, el saldo de una cuenta y el saldo de una tarjeta vuelven a estar bien con el próximo snapshot o la próxima conciliación. Dos cosas no. Una compra o una venta que nunca registraste sigue distorsionando los rendimientos de esa inversión, porque Renly no puede deducir después en qué período se movió la plata. Y una conciliación registra su ajuste el día en que conciliás, con la categoría “Ajuste de Cuenta”: el mes al que el gasto realmente pertenecía queda subestimado, y ese monto nunca aparece como supermercado o alquiler."
+          "Renly no se conecta con tu banco, tu billetera ni tu bróker, y nunca te pide esas credenciales. Casi todas las cifras están en la app porque las cargaste, las importaste o las registraste desde el Atajo de iOS. Renly sí completa algunas cosas por su cuenta: trae los precios y los tipos de cambio; le toma un snapshot mensual a una inversión con ticker una vez que registraste un snapshot con cantidad, así sabe cuántas unidades tenés; y carga los cargos recurrentes de tus suscripciones y tus planes en cuotas, moviendo el saldo de la cuenta con la que le dijiste que se pagan.",
+          "Como una cifra está tan al día como lo último que le contaste a Renly, cada tipo de número tiene su propia forma de volver a la verdad. Para una inversión es un snapshot: registrás cuánto vale hoy la tenencia y el historial que hay detrás queda intacto. Para una cuenta de efectivo o bancaria es una conciliación: cargás el saldo que la cuenta muestra de verdad y la fecha en que lo mostraba, y Renly registra un único ajuste con esa fecha, así el saldo queda bien de ahí en adelante. Para una tarjeta de crédito es el resumen: cargás con cuánto cerró de verdad un período y Renly ajusta ese período, fechando la diferencia al cierre.",
+          "Un ajuste así corrige el saldo, no el historial. El patrimonio, el saldo de una cuenta y el saldo de una tarjeta vuelven a estar bien con el próximo snapshot o la próxima conciliación. Dos cosas no. Una compra o una venta que nunca registraste sigue distorsionando los rendimientos de esa inversión, porque Renly no puede deducir después en qué período se movió la plata. Y una conciliación archiva su ajuste en su propia categoría — “Ajuste de Cuenta” para una cuenta, una categoría de comisiones o reintegros para una tarjeta — así que la diferencia que absorbe nunca aparece como supermercado o alquiler en tu desglose de gastos. Elegir una fecha anterior al menos deja esa diferencia en el mes al que pertenecía."
         ]
       },
       {
@@ -2544,7 +2544,7 @@
       "description": "Los términos que rigen tu uso de la aplicación Renly."
     },
     "title": "Términos del Servicio",
-    "lastUpdated": "Última actualización: junio de 2026",
+    "lastUpdated": "Última actualización: agosto de 2026",
     "intro": "Estos Términos del Servicio (\"Términos\") rigen tu acceso y uso de Renly. Al crear una cuenta o usar la app, aceptás estos Términos.",
     "sections": [
       {
@@ -2556,7 +2556,7 @@
       {
         "heading": "El servicio",
         "paragraphs": [
-          "Renly es una herramienta de finanzas personales y seguimiento de inversiones. Te ayuda a registrar y visualizar tus tenencias, ingresos y gastos. Renly se ofrece \"tal cual\" y \"según disponibilidad\", y puede cambiar con el tiempo, especialmente durante su etapa beta actual."
+          "Renly es una herramienta de finanzas personales. Te ayuda a registrar y visualizar tus inversiones, tus saldos de efectivo y banco, la deuda de tus tarjetas, y tus ingresos y gastos. Renly se ofrece \"tal cual\" y \"según disponibilidad\", y puede cambiar con el tiempo, especialmente durante su etapa beta actual."
         ]
       },
       {

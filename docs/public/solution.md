@@ -6,7 +6,7 @@ Renly is a personal web-based financial management app built for the Argentine r
 
 If you've ever tried to hold all of that in a spreadsheet, Renly replaces that spreadsheet with something faster, smarter, and better-looking.
 
-Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is there because you entered it, imported it, or logged it from the iOS Shortcut; the exceptions are the ones you set up yourself -- fetched prices and exchange rates, monthly snapshots of ticker-linked investments, and the recurring charges of your subscriptions and instalment plans. Rather than requiring you to record every movement perfectly, each kind of figure has a way to snap back to the truth: a **snapshot** for an investment, a **reconciliation** for a cash or bank account, a **statement** for a credit card. Those true up a balance, not the history behind it -- see the app's Help page for exactly what a forgotten movement does and does not affect.
+Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is there because you entered it, imported it, or logged it from the iOS Shortcut. Renly does fill in a few things itself: fetched prices and exchange rates, monthly snapshots of ticker-linked investments once one snapshot with a quantity exists, and the recurring charges of your subscriptions and installment plans (which also move the balance of the account you chose to pay them from). Rather than requiring you to record every movement perfectly, each kind of figure has a way to snap back to the truth: a **snapshot** for an investment, a **reconciliation** for a cash or bank account, a **statement** for a credit card. Those true up a balance, not the history behind it -- see the app's Help page for exactly what a forgotten movement does and does not affect.
 
 ## Who it's for
 
@@ -30,7 +30,7 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 | ----- | ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | Investments         | Built   | Track investments, automatic pricing for stocks/CEDEARs/crypto/bonds, multi-currency support, monthly snapshots, dashboard with returns and allocation |
 | 2     | Money Flow          | Built   | Income and expense tracking, financial dashboard, iOS Shortcut for quick expense entry                                                                 |
-| 3     | Structured Expenses | Built   | Subscriptions, installment payments, monthly budgets, alerts, iOS Shortcut v2 for logging subscriptions and installments                               |
+| 3     | Structured Expenses | Built   | Subscriptions, installment payments, upcoming-payment alerts, iOS Shortcut v2 for logging subscriptions and installments                               |
 | 4     | Accounts & Debt     | Built   | Cash, bank, and wallet accounts; credit cards and their statements; transfers between your own accounts; reconciliation; net worth across all three    |
 | 5     | Planning            | Planned | Savings goals, future commitments timeline, liquidity alerts                                                                                           |
 | 6     | Utilities           | Planned | Return calculators, goal simulators, scenario comparators                                                                                              |
