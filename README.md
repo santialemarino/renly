@@ -1,6 +1,6 @@
 # Renly
 
-Personal financial management app: investment tracking MVP (monthly snapshots, dashboard, ARS/USD), extensible to income/expenses, subscriptions, and automation. Turborepo monorepo.
+Personal finance app that unifies investments, cash, and credit-card debt into one net-worth picture, alongside income and expense tracking. Built for the Argentine retail investor; supports ARS, USD, BRL, EUR, and GBP. Turborepo monorepo.
 
 ## Setup
 
