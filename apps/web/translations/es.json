@@ -413,6 +413,7 @@
       "creditCardBalanceHint": "Convertido a tu tipo de dólar",
       "vsLastMonth": "vs mes anterior",
       "netWorthHint": "Inversiones + efectivo − pasivos",
+      "truthSnapHint": "Renly refleja lo que cargás: hacé snapshots de tus inversiones y conciliá tus cuentas para que esta foto siga siendo fiel.",
       "cash": "Efectivo",
       "cashHint": "Saldos de efectivo y banco"
     },
@@ -2171,7 +2172,7 @@
       "description": "Importá tus datos a Renly o exportá una copia"
     },
     "title": "Importar y exportar",
-    "subtitle": "Traé tus datos a Renly, o descargá una copia de todo.",
+    "subtitle": "Traé tus datos a Renly, o descargá una copia de ellos.",
     "types": {
       "investments": "Inversiones",
       "expenses": "Gastos",
@@ -2270,21 +2271,21 @@
     },
     "export": {
       "title": "Exportar",
-      "description": "Descargá una copia de todos tus datos de Renly.",
+      "description": "Descargá una copia de tus datos de Renly.",
       "json": {
         "title": "Exportar tus datos",
-        "description": "Descargá todos tus datos de Renly en un archivo JSON."
+        "description": "Descargá tus datos de Renly en un archivo JSON — todo excepto tus credenciales y los comentarios que nos enviaste."
       }
     }
   },
   "landing": {
     "metadata": {
-      "title": "Renly — Seguí tus inversiones y ordená tu plata",
-      "description": "Renly es una app de finanzas personales para inversores argentinos. Seguí tu portafolio entre brokers, mirá retornos precisos y administrá ingresos y gastos en un solo lugar."
+      "title": "Renly — Inversiones, efectivo y deuda en un patrimonio honesto",
+      "description": "Renly reúne tus brokers, tus cuentas bancarias y tus tarjetas en una sola foto de tu patrimonio. Hecho para Argentina: CEDEARs, dólar oficial/MEP/blue y retornos bien calculados."
     },
     "hero": {
-      "title": "Todo tu portafolio, por fin en un solo lugar",
-      "subtitle": "Renly reemplaza tu planilla por algo más rápido, más inteligente y mejor diseñado — pensado para inversores que manejan varios brokers argentinos.",
+      "title": "Inversiones, efectivo y deuda: un patrimonio honesto",
+      "subtitle": "Renly reúne tus brokers, tus cuentas bancarias y tus tarjetas en una sola foto. Vos registrás lo que pasó; Renly se encarga de las monedas, los retornos y las cuentas. Hecho para Argentina.",
       "ctaPrimary": "Empezar",
       "ctaSecondary": "Iniciar sesión"
     },
@@ -2292,24 +2293,28 @@
       "title": "Por qué Renly",
       "items": [
         {
-          "title": "Carga rápida de datos",
-          "description": "Carga por lotes, valores por defecto inteligentes y precios automáticos: con menos de 15 minutos al mes mantenés tu portafolio al día."
-        },
-        {
-          "title": "Claridad visual",
-          "description": "Métricas accionables, gráficos claros y un panel que te muestra lo importante de un vistazo — mejor que cualquier planilla."
-        },
-        {
-          "title": "Números confiables",
-          "description": "El retorno ponderado por tiempo (TWR) y la tasa interna de retorno (TIR) están bien implementados, no aproximados."
+          "title": "Tu panorama completo",
+          "description": "Las inversiones, el efectivo y los saldos bancarios y la deuda de tarjeta se suman en una sola cifra de patrimonio — en vez de tres apps y una planilla que nunca coinciden."
         },
         {
           "title": "Contexto argentino real",
           "description": "CEDEARs, dólar (oficial, MEP, blue), precios de BYMA y bonos como AL30 y GD30 — nada de esto existe en las apps de Estados Unidos."
         },
         {
+          "title": "Honesto por diseño",
+          "description": "El retorno ponderado por tiempo (TWR) y la tasa interna de retorno (TIR) están bien implementados, no aproximados. Renly refleja lo que cargás y lo dice de frente — los snapshots y las conciliaciones mantienen cada cifra atada a la realidad."
+        },
+        {
+          "title": "Fácil de mantener al día",
+          "description": "Valores por defecto inteligentes, importación de CSV y Excel, precios automáticos y un Atajo de iOS para cargar sobre la marcha. Minutos al mes, no una tarde entera."
+        },
+        {
+          "title": "Claridad visual",
+          "description": "Métricas accionables, gráficos claros y un panel que te muestra lo importante de un vistazo — mejor que cualquier planilla."
+        },
+        {
           "title": "Hecho para crecer",
-          "description": "De inversiones a ingresos, gastos, suscripciones y planificación — cada función se apoya en la anterior sin romper nada."
+          "description": "Inversiones, cuentas, tarjetas, ingresos, gastos, suscripciones y planificación — cada pieza se apoya en la anterior sin romper nada."
         }
       ]
     },
@@ -2317,26 +2322,26 @@
       "title": "Cómo funciona",
       "steps": [
         {
-          "title": "Cargá tus inversiones",
-          "description": "Creá entradas para acciones, CEDEARs, plazos fijos, cripto, fondos, bonos, posiciones en dólares, inmuebles o lo que tengas."
+          "title": "Cargá lo que tenés y lo que debés",
+          "description": "Inversiones, cuentas bancarias y de efectivo, y tarjetas de crédito — cargalas a mano o importá el CSV o Excel que ya venís usando."
         },
         {
           "title": "Los precios se actualizan solos",
           "description": "Renly trae los precios de acciones, CEDEARs, cripto y bonos, así no tenés que buscarlos a mano."
         },
         {
-          "title": "Tomá snapshots mensuales",
-          "description": "Cada mes la app registra el valor de cada tenencia — automáticamente para las que tienen ticker, a mano para el resto."
+          "title": "Hacé snapshots y conciliá",
+          "description": "Registrá cuánto valen tus inversiones y cargá el saldo que una cuenta muestra de verdad. Esos dos hábitos son los que mantienen fiel tu patrimonio."
         },
         {
           "title": "Mirá tu panel",
-          "description": "Una vista unificada de valor total, retornos en el tiempo y distribución. Cambiá entre ARS, USD, BRL, EUR y GBP con un clic."
+          "description": "Patrimonio, flujo de fondos, retornos en el tiempo y distribución en una sola vista. Cambiá entre ARS, USD, BRL, EUR y GBP con un clic."
         }
       ]
     },
     "cta": {
-      "title": "¿Listo para dejar la planilla?",
-      "subtitle": "Creá tu cuenta gratis y mirá todo tu panorama financiero en minutos.",
+      "title": "¿Listo para ver el panorama completo?",
+      "subtitle": "Creá tu cuenta gratis y poné tus inversiones, tu efectivo y tu deuda en un solo lugar.",
       "button": "Crear mi cuenta"
     }
   },
@@ -2394,6 +2399,15 @@
           "Renly reúne tus inversiones y tus finanzas del día a día en un solo lugar, para que veas qué tenés, qué debés y cómo va cambiando todo con el tiempo.",
           "Hay dos formas de empezar: cargar tu primera inversión, ingreso o gasto a mano, o importar lo que ya llevás en una planilla desde la página Importar y exportar — Renly lee archivos CSV y Excel y te guía para emparejar las columnas.",
           "También conviene configurar tus monedas desde el principio, en Localización, así cada pantalla muestra tus números como esperás."
+        ]
+      },
+      {
+        "id": "accuracy",
+        "heading": "Cómo hace Renly para que tus números sean fieles",
+        "paragraphs": [
+          "Renly refleja lo que vos cargás. No se conecta con tu banco, tu billetera ni tu bróker: cada saldo, gasto y tenencia está en la app porque lo cargaste, lo importaste o lo registraste desde el Atajo de iOS. Es a propósito — Renly nunca te pide las credenciales de tu banco — pero también significa que una cifra está tan al día como lo último que le contaste a la app.",
+          "Por eso, en lugar de pedirte que registres cada movimiento a la perfección, Renly le da a cada tipo de número una forma de volver a la verdad. Para una inversión eso es un snapshot: registrás cuánto vale hoy la tenencia y el historial que hay detrás queda intacto. Para una cuenta de efectivo o bancaria es una conciliación: cargás el saldo que la cuenta muestra de verdad y Renly registra un único ajuste con fecha, así el saldo queda bien de ese día en adelante.",
+          "Esos dos hábitos son la misma idea aplicada a las dos cosas que tenés: hacé snapshots de tus inversiones, conciliá tu efectivo. Gracias a ellos, un movimiento que te olvidás de cargar deja un número apenas desactualizado en lugar de permanentemente incorrecto: el próximo snapshot o la próxima conciliación absorbe la diferencia. Los precios y los tipos de cambio son la excepción — esos los busca Renly por vos, y la sección de monedas más abajo explica cómo se aplican."
         ]
       },
       {
@@ -2601,7 +2615,8 @@
       {
         "heading": "Exactitud de los datos",
         "paragraphs": [
-          "Los precios, tipos de cambio y métricas calculadas provienen de terceros y se computan automáticamente. Pueden estar demorados, incompletos o ser incorrectos. Renly no garantiza la exactitud, integridad ni vigencia de ningún dato y no es responsable por pérdidas derivadas de confiar en ellos."
+          "Los precios, tipos de cambio y métricas calculadas provienen de terceros y se computan automáticamente. Pueden estar demorados, incompletos o ser incorrectos. Renly no garantiza la exactitud, integridad ni vigencia de ningún dato y no es responsable por pérdidas derivadas de confiar en ellos.",
+          "Renly también refleja los datos que vos cargás: los saldos, las deudas y el patrimonio se calculan a partir de tus propias entradas, importaciones y snapshots, así que pueden estar incompletos o desactualizados y diferir de lo que muestra tu banco, billetera o bróker. Renly no es un registro oficial de tus cuentas: consultá los resúmenes de tu entidad antes de tomar una decisión basada en una cifra."
         ]
       },
       {

@@ -413,6 +413,7 @@
       "creditCardBalanceHint": "Converted at your dollar rate",
       "vsLastMonth": "vs last month",
       "netWorthHint": "Investments + cash − liabilities",
+      "truthSnapHint": "Renly reflects what you enter — snapshot your investments and reconcile your accounts to keep this picture true.",
       "cash": "Cash",
       "cashHint": "Cash & bank balances"
     },
@@ -2171,7 +2172,7 @@
       "description": "Import your data into Renly or export a copy"
     },
     "title": "Import & Export",
-    "subtitle": "Bring your data into Renly, or download a copy of everything.",
+    "subtitle": "Bring your data into Renly, or download a copy of it.",
     "types": {
       "investments": "Investments",
       "expenses": "Expenses",
@@ -2270,21 +2271,21 @@
     },
     "export": {
       "title": "Export",
-      "description": "Download a copy of all your Renly data.",
+      "description": "Download a copy of your Renly data.",
       "json": {
         "title": "Export your data",
-        "description": "Download all your Renly data as a JSON file."
+        "description": "Download your Renly data as a JSON file — everything except your credentials and the feedback you have sent us."
       }
     }
   },
   "landing": {
     "metadata": {
-      "title": "Renly — Track your investments and master your money",
-      "description": "Renly is a personal finance app for Argentine investors. Track your portfolio across brokers, see accurate returns, and manage income and expenses in one place."
+      "title": "Renly — Investments, cash, and debt in one honest net worth",
+      "description": "Renly brings your brokers, bank accounts, and credit cards into a single net-worth picture. Built for Argentina: CEDEARs, oficial/MEP/blue rates, and returns calculated properly."
     },
     "hero": {
-      "title": "Your whole portfolio, finally in one place",
-      "subtitle": "Renly replaces your spreadsheet with something faster, smarter, and better-looking — built for investors juggling multiple Argentine brokers.",
+      "title": "Investments, cash, and debt — one honest net worth",
+      "subtitle": "Renly brings your brokers, bank accounts, and credit cards into a single picture. You record what happened; Renly handles the currencies, the returns, and the arithmetic. Built for Argentina.",
       "ctaPrimary": "Get started",
       "ctaSecondary": "Log in"
     },
@@ -2292,24 +2293,28 @@
       "title": "Why Renly",
       "items": [
         {
-          "title": "Fast data entry",
-          "description": "Batch entry, smart defaults, and automatic pricing mean less than 15 minutes a month keeps your portfolio current."
-        },
-        {
-          "title": "Visual clarity",
-          "description": "Actionable metrics, clean charts, and a dashboard that tells you what matters at a glance — better than any spreadsheet."
-        },
-        {
-          "title": "Numbers you can trust",
-          "description": "Time-weighted return (TWR) and internal rate of return (IRR) are implemented properly, not approximated."
+          "title": "Your whole picture",
+          "description": "Investments, cash and bank balances, and credit-card debt roll up into a single net-worth figure — instead of three apps and a spreadsheet that never agree."
         },
         {
           "title": "Real Argentine context",
           "description": "CEDEARs, ARS rates (oficial, MEP, blue), BYMA prices, and government bonds like AL30 and GD30 — none of this exists in US apps."
         },
         {
+          "title": "Honest by design",
+          "description": "Time-weighted return (TWR) and internal rate of return (IRR) are implemented properly, not approximated. Renly reflects what you enter and says so plainly — snapshots and reconciliation keep every figure anchored to reality."
+        },
+        {
+          "title": "Fast to keep current",
+          "description": "Smart defaults, CSV and Excel import, automatic pricing, and an iOS Shortcut for logging on the go. Minutes a month, not an evening."
+        },
+        {
+          "title": "Visual clarity",
+          "description": "Actionable metrics, clean charts, and a dashboard that tells you what matters at a glance — better than any spreadsheet."
+        },
+        {
           "title": "Built to grow",
-          "description": "From investments to income, expenses, subscriptions, and planning — each feature builds on the last without breaking anything."
+          "description": "Investments, accounts, cards, income, expenses, subscriptions, and planning — each piece builds on the last without breaking anything."
         }
       ]
     },
@@ -2317,26 +2322,26 @@
       "title": "How it works",
       "steps": [
         {
-          "title": "Add your investments",
-          "description": "Create entries for stocks, CEDEARs, term deposits, crypto, mutual funds, bonds, dollar positions, real estate, or anything else."
+          "title": "Add what you own and owe",
+          "description": "Investments, bank and cash accounts, and credit cards — enter them by hand, or import the CSV or Excel file you already keep."
         },
         {
           "title": "Prices update automatically",
           "description": "Renly fetches prices for stocks, CEDEARs, crypto, and government bonds, so you never have to look them up yourself."
         },
         {
-          "title": "Capture monthly snapshots",
-          "description": "Each month the app records the value of every holding — automatically for ticker-linked investments, manually for the rest."
+          "title": "Snapshot and reconcile",
+          "description": "Record what your investments are worth, and enter the balance an account actually shows. Those two habits are what keep your net worth true."
         },
         {
           "title": "See your dashboard",
-          "description": "A unified view of total value, returns over time, and allocation. Switch between ARS, USD, BRL, EUR, and GBP with one click."
+          "description": "Net worth, cash flow, returns over time, and allocation in one view. Switch between ARS, USD, BRL, EUR, and GBP with one click."
         }
       ]
     },
     "cta": {
-      "title": "Ready to ditch the spreadsheet?",
-      "subtitle": "Create your free account and see your whole financial picture in minutes.",
+      "title": "Ready to see the whole picture?",
+      "subtitle": "Create your free account and put your investments, cash, and debt in one place.",
       "button": "Create your account"
     }
   },
@@ -2394,6 +2399,15 @@
           "Renly keeps your investments and your everyday finances in one place, so you can see what you own, what you owe, and how it all changes over time.",
           "There are two ways to begin: add your first investment, income, or expense by hand, or import what you already track in a spreadsheet from the Import & Export page — Renly reads CSV and Excel files and walks you through matching the columns.",
           "It also helps to set your currencies early, under Localization, so every screen shows your numbers the way you expect."
+        ]
+      },
+      {
+        "id": "accuracy",
+        "heading": "How Renly stays accurate",
+        "paragraphs": [
+          "Renly reflects what you enter. It does not connect to your bank, wallet, or broker: every balance, expense, and holding is in the app because you added it, imported it, or logged it from the iOS Shortcut. That is deliberate — Renly never asks for your banking credentials — but it also means a figure is only as current as the last thing you told the app.",
+          "So instead of asking you to record every movement perfectly, Renly gives each kind of number a way to snap back to the truth. For an investment that is a snapshot: you record what the holding is worth today, and the history behind it stays intact. For a cash or bank account it is a reconciliation: you enter the balance the account actually shows, and Renly posts a single dated adjustment so the balance is right from that day onward.",
+          "Those two habits are the same idea applied to the two kinds of thing you hold — snapshot your investments, reconcile your cash. Because of them, a movement you forget to log leaves a number slightly stale rather than permanently wrong: the next snapshot or reconciliation absorbs the difference. Prices and exchange rates are the exception — Renly fetches those for you, and the currency section below explains how they are applied."
         ]
       },
       {
@@ -2601,7 +2615,8 @@
       {
         "heading": "Accuracy of data",
         "paragraphs": [
-          "Prices, exchange rates, and calculated metrics are sourced from third parties and computed automatically. They may be delayed, incomplete, or incorrect. Renly does not guarantee the accuracy, completeness, or timeliness of any data and is not responsible for losses resulting from reliance on it."
+          "Prices, exchange rates, and calculated metrics are sourced from third parties and computed automatically. They may be delayed, incomplete, or incorrect. Renly does not guarantee the accuracy, completeness, or timeliness of any data and is not responsible for losses resulting from reliance on it.",
+          "Renly also reflects the data you enter: balances, debts, and net worth are computed from your own entries, imports, and snapshots, so they may be incomplete or out of date and may differ from what your bank, wallet, or broker shows. Renly is not an official record of your accounts — check your institution's own statements before relying on a figure."
         ]
       },
       {
