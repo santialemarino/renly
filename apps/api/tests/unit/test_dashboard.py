@@ -442,8 +442,12 @@ class TestHasHoldings:
             AsyncMock(return_value=_zero_finance_overview()),
         )
         monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=accounts))
-        monkeypatch.setattr(dashboard_service.account_service, "get_account_balances", AsyncMock(return_value={}))
-        monkeypatch.setattr(dashboard_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
+        monkeypatch.setattr(
+            dashboard_service.account_service,
+            "get_account_balances",
+            AsyncMock(return_value={a.id: a.opening_balance for a in accounts}),
+        )
+        monkeypatch.setattr(dashboard_service.investment_repository, "exists_active_by_user", AsyncMock(return_value=investments))
         monkeypatch.setattr(dashboard_service.credit_card_repository, "exists_by_user", AsyncMock(return_value=cards))
         monkeypatch.setattr(dashboard_service, "compute_net_worth_evolution", AsyncMock(return_value=([], [])))
 
@@ -469,6 +473,16 @@ class TestHasHoldings:
         assert result.has_holdings is True
 
     @pytest.mark.asyncio
+    async def test_false_when_the_only_investment_is_archived(self, monkeypatch):
+        # The probe is deliberately the active-only one. `exists_by_user` counts archived holdings for
+        # onboarding, but an archived investment contributes nothing to portfolio value — so reusing it
+        # here would claim the headline is derived from something when it is derived from nothing.
+        self._patch(monkeypatch, accounts=[], investments=False, cards=False)
+        monkeypatch.setattr(dashboard_service.investment_repository, "exists_by_user", AsyncMock(return_value=True))
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.has_holdings is False
+
+    @pytest.mark.asyncio
     async def test_true_for_a_card_alone(self, monkeypatch):
         # A card-only user has no account to reconcile and nothing to snapshot, but their card debt is
         # still a net-worth input, so the dashboard must acknowledge them.
@@ -482,5 +496,5 @@ class TestHasHoldings:
         # queried if it comes back empty, so holding an account costs no extra round trip.
         self._patch(monkeypatch, accounts=[_acct(1, "ARS")], investments=False, cards=False)
         await dashboard_service.get_overview(AsyncMock(), 1)
-        dashboard_service.investment_repository.exists_by_user.assert_not_called()
+        dashboard_service.investment_repository.exists_active_by_user.assert_not_called()
         dashboard_service.credit_card_repository.exists_by_user.assert_not_called()

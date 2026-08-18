@@ -218,7 +218,8 @@ def compute_cash_total(
 
 
 # Loads accounts (including archived — like cards, they stay in net worth) plus their current
-# derived balances, then converts to the display currency. Returns (total, skipped, accounts).
+# derived balances, then converts to the display currency. Returns (total, skipped, whether the user
+# has any account at all — the caller needs existence, not the list).
 async def _load_cash_total(
     session: AsyncSession,
     user_id: int,
@@ -229,6 +230,21 @@ async def _load_cash_total(
     account_balances = await account_service.get_account_balances(session, accounts, user_id)
     total, skipped = compute_cash_total(accounts, account_balances, currency, rate_map)
     return total, skipped, bool(accounts)
+
+
+# Whether the net-worth headline is derived from anything at all — NOT whether it is non-zero.
+# Offsetting holdings can net to exactly zero, and a new account's opening balance defaults to zero,
+# so a value test would report "nothing here" for users who hold plenty. The investment probe is the
+# ACTIVE-only one: an archived investment contributes nothing to portfolio value, unlike an archived
+# account or card, whose balance stays in net worth. `has_accounts` rides the list _load_cash_total
+# already fetched, and the two probes are indexed LIMIT 1 reads reached only when it is False — so a
+# user holding an account pays nothing extra and an empty account pays two cheap reads.
+async def _has_holdings(session: AsyncSession, user_id: int, *, has_accounts: bool) -> bool:
+    if has_accounts:
+        return True
+    if await investment_repository.exists_active_by_user(session, user_id):
+        return True
+    return await credit_card_repository.exists_by_user(session, user_id)
 
 
 # Aggregates investment portfolio metrics and finance overview into a single dashboard response.
@@ -269,13 +285,7 @@ async def get_overview(
     cash_total, cash_skipped, has_accounts = await _load_cash_total(session, user_id, currency, rate_map_today)
 
     net_worth = portfolio.total_value + cash_total - finance.credit_card_balance
-    # Whether the headline is derived from anything at all — NOT whether it is non-zero. Offsetting
-    # holdings can net to exactly zero, and a new account's opening balance defaults to zero, so a
-    # value test would report "nothing here" for users who hold plenty. Two cheap existence queries;
-    # the account side rides the list _load_cash_total already fetched.
-    has_holdings = (
-        has_accounts or await investment_repository.exists_by_user(session, user_id) or await credit_card_repository.exists_by_user(session, user_id)
-    )
+    has_holdings = await _has_holdings(session, user_id, has_accounts=has_accounts)
 
     # Net worth month-over-month: the latest vs prior month of the SAME monthly net-worth series the
     # evolution chart uses (investment + cash − card per month), so the delta reflects cash and card

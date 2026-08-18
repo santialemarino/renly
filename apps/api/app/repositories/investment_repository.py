@@ -112,6 +112,14 @@ async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
     return result.first() is not None
 
 
+# Returns whether the user has any ACTIVE investment. Distinct from exists_by_user, which counts
+# archived ones for onboarding: an archived investment contributes nothing to portfolio value, so a
+# caller asking "does the net-worth figure have an investment side" has to exclude them.
+async def exists_active_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(Investment.id).where(Investment.user_id == user_id, Investment.is_active.is_(True)).limit(1))
+    return result.first() is not None
+
+
 # Returns all active investments that have a ticker set.
 async def list_with_ticker(session: AsyncSession) -> list[Investment]:
     result = await session.execute(
@@ -178,6 +186,7 @@ class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
     exists_by_user = staticmethod(exists_by_user)
+    exists_active_by_user = staticmethod(exists_active_by_user)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
