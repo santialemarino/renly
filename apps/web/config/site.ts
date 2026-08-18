@@ -8,3 +8,12 @@ export const siteConfig = {
   name: 'Renly',
   description: 'Personal finance — investments, cash, and debt in one net worth',
 };
+
+/*
+ * The parts of the social card that describe the SITE rather than the page. Both the root layout and
+ * `generatePageMetadata` spread these, because Next REPLACES a segment's `openGraph`/`twitter` object
+ * instead of merging it into the layout's: a page returning only a title and description would ship
+ * without `og:type` or `og:site_name`.
+ */
+export const OG_SITE_DEFAULTS = { type: 'website', siteName: siteConfig.name } as const;
+export const TWITTER_SITE_DEFAULTS = { card: 'summary_large_image' } as const;

@@ -8,7 +8,7 @@ import { Toaster } from 'sonner';
 
 import { cn } from '@repo/ui/lib';
 import { CookieConsent } from '@/components/cookie-consent';
-import { siteConfig } from '@/config/site';
+import { OG_SITE_DEFAULTS, siteConfig, TWITTER_SITE_DEFAULTS } from '@/config/site';
 import { BRAND_SURFACE } from '@/lib/constants/brand';
 
 // Absolute base for resolving the favicon / Open Graph image URLs. Reuses NEXTAUTH_URL, the app's
@@ -24,13 +24,12 @@ export const metadata: Metadata = {
   applicationName: siteConfig.name,
   appleWebApp: { capable: true, title: siteConfig.name, statusBarStyle: 'default' },
   openGraph: {
-    type: 'website',
-    siteName: siteConfig.name,
+    ...OG_SITE_DEFAULTS,
     title: siteConfig.name,
     description: siteConfig.description,
   },
   twitter: {
-    card: 'summary_large_image',
+    ...TWITTER_SITE_DEFAULTS,
     title: siteConfig.name,
     description: siteConfig.description,
   },
