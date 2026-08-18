@@ -103,6 +103,13 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
           </p>
           {overview.creditCardBalance > 0 && <CreditCard className="size-5 text-red-500" />}
         </div>
+        {/* The last of the three money cards to get a hint, and the one that most needed it: a bucket
+            in another currency is valued at the user's chosen dollar rate, while the bill will be
+            settled at the "dólar tarjeta" rate — so this figure is what is owed today, not a quote for
+            clearing it. Help's currency section carries the full explanation. */}
+        <span className="text-paragraph-mini text-muted-foreground">
+          {t('cards.creditCardBalanceHint')}
+        </span>
       </Card>
     </div>
   );

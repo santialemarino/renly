@@ -410,6 +410,7 @@
       "investmentValue": "Investment Value",
       "netCashFlow": "Net Cash Flow",
       "creditCardBalance": "Card Balance",
+      "creditCardBalanceHint": "Converted at your dollar rate",
       "vsLastMonth": "vs last month",
       "netWorthHint": "Investments + cash − liabilities",
       "cash": "Cash",
@@ -2448,7 +2449,8 @@
         "paragraphs": [
           "You can view your whole portfolio in any supported currency using the switcher in the sidebar. Renly converts every value through the US dollar behind the scenes.",
           "All conversions use today's exchange rate — not the rate from the date of each snapshot. A value from last year shown in pesos uses today's dollar-to-peso rate. This is deliberate: it answers what is this worth to me today, and keeps every number comparable when you view them in a single currency.",
-          "If Renly cannot convert an investment to your chosen currency — for example the exchange-rate service is briefly unavailable — that investment is left out of the totals rather than shown with a wrong value, and the dashboard flags which ones were skipped so you know the total is incomplete."
+          "If Renly cannot convert an investment to your chosen currency — for example the exchange-rate service is briefly unavailable — that investment is left out of the totals rather than shown with a wrong value, and the dashboard flags which ones were skipped so you know the total is incomplete.",
+          "A credit-card balance in a currency other than your own is converted the same way — at your chosen dollar rate. Be aware that the rate you will actually be charged when you pay that bill may be higher: card issuers here apply the “dólar tarjeta” rate, which adds a tax perception on top of the official rate. So a foreign-currency card balance is an estimate of what you owe today, not a quote for what it will cost to settle."
         ]
       }
     ]
