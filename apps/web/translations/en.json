@@ -361,6 +361,11 @@
           "action": "Add expenses",
           "income": "or add income"
         },
+        "accounts": {
+          "label": "Add a bank or cash account",
+          "hint": "Set its opening balance so your net worth counts the money you hold.",
+          "action": "Add account"
+        },
         "currencies": {
           "label": "Set your display currencies",
           "hint": "Choose the currencies your dashboard converts to.",

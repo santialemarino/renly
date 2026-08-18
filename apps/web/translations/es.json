@@ -361,6 +361,11 @@
           "action": "Agregar gastos",
           "income": "o agregá ingresos"
         },
+        "accounts": {
+          "label": "Agregá una cuenta bancaria o de efectivo",
+          "hint": "Cargá su saldo inicial para que tu patrimonio cuente la plata que tenés.",
+          "action": "Agregar cuenta"
+        },
         "currencies": {
           "label": "Configurá tus monedas",
           "hint": "Elegí las monedas a las que tu panel convierte los montos.",

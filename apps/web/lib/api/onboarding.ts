@@ -9,6 +9,7 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 interface OnboardingStatusRaw {
   has_investments: boolean;
   has_finances: boolean;
+  has_accounts: boolean;
   primary_currency_set: boolean;
   sample_investments: boolean;
   sample_expenses: boolean;
@@ -21,6 +22,7 @@ interface OnboardingStatusRaw {
 export interface OnboardingStatus {
   hasInvestments: boolean;
   hasFinances: boolean;
+  hasAccounts: boolean;
   primaryCurrencySet: boolean;
   sampleInvestments: boolean;
   sampleExpenses: boolean;
@@ -34,6 +36,7 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
   return {
     hasInvestments: raw.has_investments,
     hasFinances: raw.has_finances,
+    hasAccounts: raw.has_accounts === true,
     primaryCurrencySet: raw.primary_currency_set,
     sampleInvestments: raw.sample_investments,
     sampleExpenses: raw.sample_expenses,

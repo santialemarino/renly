@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.models.user import User
+from app.schemas.onboarding import OnboardingStatusResponse
 from app.services import onboarding_service
 
 # Unit coverage for onboarding_service: the checklist derived from real data (an existence probe per
@@ -16,8 +17,9 @@ USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 _NONE_RETIRED = {"investments": False, "expenses": False, "income": False}
 
 
-def _patch(monkeypatch, *, investments, expenses, income, primary, retired=None, tour=False):
+def _patch(monkeypatch, *, investments, expenses, income, primary, accounts=False, retired=None, tour=False):
     monkeypatch.setattr(onboarding_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
+    monkeypatch.setattr(onboarding_service.account_repository, "exists_by_user", AsyncMock(return_value=accounts))
     monkeypatch.setattr(onboarding_service.expense_repository, "exists_by_user", AsyncMock(return_value=expenses))
     monkeypatch.setattr(onboarding_service.income_repository, "exists_by_user", AsyncMock(return_value=income))
     settings = {
@@ -41,6 +43,7 @@ class TestChecklist:
         assert result == {
             "has_investments": False,
             "has_finances": False,
+            "has_accounts": False,
             "primary_currency_set": False,
             "sample_investments": True,
             "sample_expenses": True,
@@ -79,6 +82,18 @@ class TestChecklist:
         result = await onboarding_service.get_status(AsyncMock(), USER)
 
         assert result["has_finances"] is False
+
+    @pytest.mark.asyncio
+    async def test_accounts_step_reflects_existence(self, monkeypatch):
+        # Accounts is a checklist step with no first-run sample section of its own, so an account must
+        # report on the step and retire nothing. (Whether the step GATES the welcome's finish is a
+        # frontend rule — see hasCompletedCoreSteps in apps/web/lib/onboarding.ts and its vitest.)
+        retire = _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, accounts=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["has_accounts"] is True
+        retire.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_currency_step_reflects_stored_primary(self, monkeypatch):
@@ -245,3 +260,18 @@ class TestTour:
         complete_mock.assert_awaited_once()
         assert complete_mock.await_args.args[1:] == (USER.id,)
         session.commit.assert_awaited_once()
+
+
+class TestResponseSchemaCoversTheService:
+    @pytest.mark.asyncio
+    async def test_every_returned_key_is_a_response_field(self, monkeypatch):
+        # OnboardingStatusResponse sets no model_config, so pydantic's default extra="ignore" silently
+        # DROPS any key the service returns that the schema forgot — the field would be missing from
+        # the HTTP response while the service tests, which only inspect the dict, all stayed green.
+        _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None)
+
+        data = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert set(data) == set(OnboardingStatusResponse.model_fields)
+        # And the round trip keeps every value, so the router's OnboardingStatusResponse(**data) is lossless.
+        assert OnboardingStatusResponse(**data).model_dump() == data

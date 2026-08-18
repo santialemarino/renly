@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   Compass,
+  Landmark,
   Sparkles,
   TrendingUp,
   Wallet,
@@ -28,6 +29,7 @@ import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import type { OnboardingStatus } from '@/lib/api/onboarding';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import { hasCompletedCoreSteps } from '@/lib/onboarding';
 
 interface OnboardingStepProps {
   icon: LucideIcon;
@@ -36,7 +38,7 @@ interface OnboardingStepProps {
   done: boolean;
   actionLabel: string;
   href: string;
-  optionalLabel?: string;
+  optional?: boolean;
   altLabel?: string;
   altHref?: string;
 }
@@ -52,7 +54,7 @@ function OnboardingStep({
   done,
   actionLabel,
   href,
-  optionalLabel,
+  optional,
   altLabel,
   altHref,
 }: OnboardingStepProps) {
@@ -77,8 +79,8 @@ function OnboardingStep({
         >
           {label}
           {done && <span className="sr-only">{t('stepDone')}</span>}
-          {optionalLabel && (
-            <span className="text-paragraph-xs text-muted-foreground">{optionalLabel}</span>
+          {optional && (
+            <span className="text-paragraph-xs text-muted-foreground">{t('optional')}</span>
           )}
         </span>
         <span className="text-paragraph-xs text-muted-foreground">{hint}</span>
@@ -111,9 +113,9 @@ interface OnboardingWelcomeProps {
 
 // First-run welcome shown on the dashboard until onboarding is completed. It's a reactive
 // checklist: each step reflects the account's real data, so acting on a step (adding an
-// investment, an expense, choosing currencies) checks it off on the next dashboard load with no
-// per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps are
-// done — persists the completion flag server-side so the welcome never returns.
+// investment, an expense, an account, choosing currencies) checks it off on the next dashboard load
+// with no per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps
+// are done — persists the completion flag server-side so the welcome never returns.
 export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomeProps) {
   const t = useTranslations('dashboard.onboarding');
   const tTour = useTranslations('dashboard.tour');
@@ -122,11 +124,12 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
 
   const hasInvestments = status?.hasInvestments ?? false;
   const hasFinances = status?.hasFinances ?? false;
+  const hasAccounts = status?.hasAccounts ?? false;
   const primaryCurrencySet = status?.primaryCurrencySet ?? false;
 
-  // The two gating steps (currencies is a non-gating nicety); when both are done the welcome
-  // offers a positive finish instead of nagging.
-  const gatingDone = hasInvestments && hasFinances;
+  // Which steps gate the positive finish lives in one place next to the sidebar/tour's newcomer
+  // signal, so the two cannot drift on what counts as core data. Pinned by a vitest.
+  const gatingDone = hasCompletedCoreSteps(status);
 
   const steps: Array<OnboardingStepProps & { key: string }> = [
     {
@@ -152,6 +155,16 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       altHref: `${ROUTES.data}?type=investments`,
     },
     {
+      key: 'accounts',
+      icon: Landmark,
+      done: hasAccounts,
+      label: t('steps.accounts.label'),
+      hint: t('steps.accounts.hint'),
+      actionLabel: t('steps.accounts.action'),
+      href: ROUTES.accounts,
+      optional: true,
+    },
+    {
       key: 'currencies',
       icon: CircleDollarSign,
       done: primaryCurrencySet,
@@ -159,7 +172,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       hint: t('steps.currencies.hint'),
       actionLabel: t('steps.currencies.action'),
       href: ROUTES.preferences,
-      optionalLabel: t('optional'),
+      optional: true,
     },
   ];
 
@@ -215,7 +228,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
                   done={step.done}
                   actionLabel={step.actionLabel}
                   href={step.href}
-                  optionalLabel={step.optionalLabel}
+                  optional={step.optional}
                   altLabel={step.altLabel}
                   altHref={step.altHref}
                 />

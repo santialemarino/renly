@@ -665,6 +665,7 @@ First-run onboarding state for the authenticated user, all derived from the acco
 | ---------------------- | ---- | ----------------------------------------------------------------- |
 | `has_investments`      | bool | The user has created at least one investment.                     |
 | `has_finances`         | bool | The user has recorded at least one income or expense entry.       |
+| `has_accounts`         | bool | The user has created at least one cash or bank account.           |
 | `primary_currency_set` | bool | The user has explicitly chosen a primary display currency.        |
 | `sample_investments`   | bool | Whether the investments section should show its first-run sample. |
 | `sample_expenses`      | bool | Whether the expenses section should show its first-run sample.    |

@@ -62,6 +62,13 @@ async def get_by_ids_across_users(session: AsyncSession, account_ids: list[int])
     return list(result.scalars().all())
 
 
+# Returns whether the user has any account (cheap existence check for the onboarding checklist;
+# counts archived accounts too, so archiving a lone account doesn't un-complete the step).
+async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(Account.id).where(Account.user_id == user_id).limit(1))
+    return result.first() is not None
+
+
 # Insert a new account.
 async def create(session: AsyncSession, account: Account) -> Account:
     session.add(account)
@@ -85,6 +92,7 @@ class AccountRepository:
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_by_ids_across_users = staticmethod(get_by_ids_across_users)
+    exists_by_user = staticmethod(exists_by_user)
     create = staticmethod(create)
     save = staticmethod(save)
     delete = staticmethod(delete)

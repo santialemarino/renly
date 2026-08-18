@@ -21,6 +21,9 @@ class OnboardingStatusResponse(BaseModel):
     has_finances: bool = Field(
         description="Whether the user has recorded at least one income or expense entry.",
     )
+    has_accounts: bool = Field(
+        description="Whether the user has created at least one cash or bank account.",
+    )
     primary_currency_set: bool = Field(
         description="Whether the user has explicitly chosen a primary display currency.",
     )
