@@ -1,3 +1,7 @@
+// Server-only types + mappers for investment collections — the allocation buckets an investment can
+// belong to. Reads go through `getCollections()`; mutations are server actions in the page's
+// `collections-actions.ts`.
+
 import 'server-only';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';

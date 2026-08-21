@@ -28,8 +28,10 @@ def upgrade() -> None:
     op.rename_table("investment_group_members", "investment_collection_members")
     op.alter_column("investment_collection_members", "group_id", new_column_name="collection_id")
 
-    # The id sequence behind investment_collections.id (referenced by OID in the column default, so
-    # this is cosmetic for the running DB but keeps it identical to a fresh build).
+    # The id sequence behind investment_collections.id. The column default resolves it by OID, so the
+    # running database keeps working either way — but the NAME is still part of the schema contract a
+    # fresh `db:init` produces, and any later migration that grants or alters this sequence by name
+    # (as 0014 does for transfers) would look for the new one. Not cosmetic; do not drop this line.
     op.execute("ALTER SEQUENCE investment_groups_id_seq RENAME TO investment_collections_id_seq")
 
     # Auto-named constraints: two primary keys, three foreign keys, one CHECK.
@@ -58,14 +60,19 @@ def upgrade() -> None:
     # The two settings JSONB keys move with the concept. One statement per key, guarded on the key
     # being present, so a stored JSON null is carried across as a JSON null rather than collapsed
     # into an absent key (both read as "use the env default", but a pure rename should not decide
-    # that for the row).
+    # that for the row). Side effect worth knowing: user_settings has an updated_at trigger, so every
+    # row that carried either key gets a fresh updated_at. That column is not exposed by any schema or
+    # endpoint, so nothing user-facing changes.
     op.execute("UPDATE user_settings SET settings = (settings - 'max_groups') || jsonb_build_object('max_collections', settings -> 'max_groups') WHERE settings ? 'max_groups'")
     op.execute(
         "UPDATE user_settings SET settings = (settings - 'group_warning_pct') || jsonb_build_object('collection_warning_pct', settings -> 'group_warning_pct') WHERE settings ? 'group_warning_pct'"
     )
 
 
-# Reverses every rename in the mirror order.
+# Reverses every rename in the mirror order. Restoring the OLD table and column names is load-bearing,
+# not tidiness: earlier migrations still refer to them (0003_rls drops its policy from
+# `investment_group_members` by name), so a downgrade chain that ran past this one would fail against
+# a table that no longer existed under that name.
 def downgrade() -> None:
     op.execute(
         "UPDATE user_settings SET settings = (settings - 'collection_warning_pct') || jsonb_build_object('group_warning_pct', settings -> 'collection_warning_pct') WHERE settings ? 'collection_warning_pct'"
