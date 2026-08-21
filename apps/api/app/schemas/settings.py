@@ -30,13 +30,13 @@ class SettingsResponse(BaseModel):
         default=None,
         description="Dashboard period presets (e.g. ['1M', '3M', '6M', 'YTD']). Null means use env defaults.",
     )
-    max_groups: int | None = Field(
+    max_collections: int | None = Field(
         default=None,
-        description="Maximum number of investment groups (soft limit). Null means use env default.",
+        description="Maximum number of investment collections (soft limit). Null means use env default.",
     )
-    group_warning_pct: int | None = Field(
+    collection_warning_pct: int | None = Field(
         default=None,
-        description="Percentage of max groups at which the approaching-limit warning appears.",
+        description="Percentage of max collections at which the approaching-limit warning appears.",
     )
     dollar_rate_preference: str | None = Field(
         default=None,
@@ -102,13 +102,13 @@ class SettingsUpdate(RequestBase):
         default=None,
         description="Dashboard period presets (up to 4 codes like '3M', '1Y', 'YTD').",
     )
-    max_groups: int | None = Field(
+    max_collections: int | None = Field(
         default=None,
-        description="Maximum number of investment groups.",
+        description="Maximum number of investment collections.",
     )
-    group_warning_pct: int | None = Field(
+    collection_warning_pct: int | None = Field(
         default=None,
-        description="Percentage of max groups for approaching-limit warning.",
+        description="Percentage of max collections for approaching-limit warning.",
     )
     dollar_rate_preference: str | None = Field(
         default=None,

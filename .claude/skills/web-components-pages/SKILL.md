@@ -146,7 +146,7 @@ All TypeScript identifiers use camelCase — interface properties, function para
 
 - **Uppercase constants** stay as-is (e.g. `INVESTMENT_CATEGORIES`, `FALLBACK_PRIMARY`).
 - **String values that are API enum values** stay as-is (e.g. `'real_estate'`, `'term_deposit'`) since they must match the backend enum.
-- **URL param name strings** passed to `URLSearchParams` / `searchParams.getAll(...)` stay snake_case since those are API contract strings (e.g. `qs.append('group_ids', ...)`, `searchParams.getAll('group_ids')`).
+- **URL param name strings** passed to `URLSearchParams` / `searchParams.getAll(...)` stay snake_case since those are API contract strings (e.g. `qs.append('collection_ids', ...)`, `searchParams.getAll('collection_ids')`).
 - **Request body object keys** sent to the API stay snake_case since FastAPI expects them (e.g. `{ base_currency: values.baseCurrency }`).
 
 ### Mapping at the API boundary
@@ -210,7 +210,7 @@ Actions (`actions.ts`) construct explicit snake_case request bodies:
 
 ```ts
 // app/(protected)/investments/actions.ts
-const { groupIds, baseCurrency, isActive, ...rest } = values;
+const { collectionIds, baseCurrency, isActive, ...rest } = values;
 await authenticatedFetch('/investments', {
   body: { ...rest, base_currency: baseCurrency, is_active: isActive },
 });
@@ -237,7 +237,7 @@ localizing. Success copy is owned by the frontend per action — don't render ba
 
 Use descriptive action phrases. The wording depends on the input type:
 
-- **Text inputs:** `"Enter the ..."` (e.g. `"Enter the group name"`, `"Enter the broker"`).
+- **Text inputs:** `"Enter the ..."` (e.g. `"Enter the collection name"`, `"Enter the broker"`).
 - **Search inputs:** `"Search ..."` (e.g. `"Search investments..."`, `"Search currencies..."`).
 - **Select inputs:** `"Select a ..."` (e.g. `"Select a category"`, `"Select a currency"`).
 - **Number inputs:** `"Enter the ..."` (e.g. `"Enter the target percentage"`).

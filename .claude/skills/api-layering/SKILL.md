@@ -27,7 +27,7 @@ Repositories call `session.add()` and optionally `session.flush()` (to get gener
 
 ### Multi-step operations must be atomic
 
-If a service function does multiple writes (e.g., create group + set members), they must all succeed or all fail. With repository-level commits removed, a single `session.commit()` at the end of the service function achieves this. If an error occurs, the session rolls back on exit.
+If a service function does multiple writes (e.g., create collection + set members), they must all succeed or all fail. With repository-level commits removed, a single `session.commit()` at the end of the service function achieves this. If an error occurs, the session rolls back on exit.
 
 ### Rollback is handled by the session teardown
 
@@ -82,14 +82,14 @@ target_currency, lookup, as_of_date)` — historical rows (expenses, income, cal
 If you need data for N items, fetch it in **one batch query** before the loop, then look up from a dict/set. Never call a repository method inside a `for` loop.
 
 ```python
-# BAD — N+1: one query per group
-for g in groups:
-    ids = await group_repository.get_investment_ids_by_group(session, g.id)
+# BAD — N+1: one query per collection
+for c in collections:
+    ids = await collection_repository.get_investment_ids_by_collection(session, c.id)
 
 # GOOD — batch load, then loop in memory
-ids_by_group = await group_repository.get_investment_ids_by_groups(session, [g.id for g in groups])
-for g in groups:
-    ids = ids_by_group.get(g.id, [])
+ids_by_collection = await collection_repository.get_investment_ids_by_collections(session, [c.id for c in collections])
+for c in collections:
+    ids = ids_by_collection.get(c.id, [])
 ```
 
 When adding a new repository method that will be called in a loop, **always add a batch variant** (accepts a list of IDs, returns a dict keyed by ID).

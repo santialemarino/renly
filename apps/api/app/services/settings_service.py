@@ -17,8 +17,8 @@ SETTINGS_KEY_PRIMARY = "primary_currency"
 SETTINGS_KEY_SECONDARY = "secondary_currency"
 SETTINGS_KEY_PREFERRED_CURRENCIES = "preferred_currencies"
 SETTINGS_KEY_PERIOD_PRESETS = "period_presets"
-SETTINGS_KEY_MAX_GROUPS = "max_groups"
-SETTINGS_KEY_GROUP_WARNING_PCT = "group_warning_pct"
+SETTINGS_KEY_MAX_COLLECTIONS = "max_collections"
+SETTINGS_KEY_COLLECTION_WARNING_PCT = "collection_warning_pct"
 SETTINGS_KEY_DOLLAR_RATE_PREFERENCE = "dollar_rate_preference"
 SETTINGS_KEY_SHORTCUT_CURRENCIES = "shortcut_currencies"
 SETTINGS_KEY_TIMEZONE = "timezone"
@@ -60,10 +60,10 @@ def _settings_to_response(settings: dict) -> dict:
     preferred_currencies = raw_preferred if isinstance(raw_preferred, list) else None
     raw_presets = settings.get(SETTINGS_KEY_PERIOD_PRESETS)
     period_presets = raw_presets if isinstance(raw_presets, list) else None
-    raw_max_groups = settings.get(SETTINGS_KEY_MAX_GROUPS)
-    max_groups = raw_max_groups if isinstance(raw_max_groups, int) else None
-    raw_warning_pct = settings.get(SETTINGS_KEY_GROUP_WARNING_PCT)
-    group_warning_pct = raw_warning_pct if isinstance(raw_warning_pct, int) else None
+    raw_max_collections = settings.get(SETTINGS_KEY_MAX_COLLECTIONS)
+    max_collections = raw_max_collections if isinstance(raw_max_collections, int) else None
+    raw_warning_pct = settings.get(SETTINGS_KEY_COLLECTION_WARNING_PCT)
+    collection_warning_pct = raw_warning_pct if isinstance(raw_warning_pct, int) else None
     raw_dollar_pref = settings.get(SETTINGS_KEY_DOLLAR_RATE_PREFERENCE)
     dollar_rate_preference = raw_dollar_pref if isinstance(raw_dollar_pref, str) and raw_dollar_pref else None
     raw_shortcut = settings.get(SETTINGS_KEY_SHORTCUT_CURRENCIES)
@@ -112,8 +112,8 @@ def _settings_to_response(settings: dict) -> dict:
         "secondary_currency": secondary_currency,
         "preferred_currencies": preferred_currencies,
         "period_presets": period_presets,
-        "max_groups": max_groups,
-        "group_warning_pct": group_warning_pct,
+        "max_collections": max_collections,
+        "collection_warning_pct": collection_warning_pct,
         "dollar_rate_preference": dollar_rate_preference,
         "shortcut_currencies": shortcut_currencies,
         "timezone": timezone,
@@ -149,8 +149,8 @@ async def update_settings(
     secondary_currency: str | None = _NOT_SET,
     preferred_currencies: list[str] | None = _NOT_SET,
     period_presets: list[str] | None = _NOT_SET,
-    max_groups: int | None = _NOT_SET,
-    group_warning_pct: int | None = _NOT_SET,
+    max_collections: int | None = _NOT_SET,
+    collection_warning_pct: int | None = _NOT_SET,
     dollar_rate_preference: str | None = _NOT_SET,
     shortcut_currencies: list[str] | None = _NOT_SET,
     timezone: str | None = _NOT_SET,
@@ -176,10 +176,10 @@ async def update_settings(
         settings[SETTINGS_KEY_PREFERRED_CURRENCIES] = preferred_currencies
     if period_presets is not _NOT_SET:
         settings[SETTINGS_KEY_PERIOD_PRESETS] = period_presets
-    if max_groups is not _NOT_SET:
-        settings[SETTINGS_KEY_MAX_GROUPS] = max_groups
-    if group_warning_pct is not _NOT_SET:
-        settings[SETTINGS_KEY_GROUP_WARNING_PCT] = group_warning_pct
+    if max_collections is not _NOT_SET:
+        settings[SETTINGS_KEY_MAX_COLLECTIONS] = max_collections
+    if collection_warning_pct is not _NOT_SET:
+        settings[SETTINGS_KEY_COLLECTION_WARNING_PCT] = collection_warning_pct
     if dollar_rate_preference is not _NOT_SET:
         settings[SETTINGS_KEY_DOLLAR_RATE_PREFERENCE] = dollar_rate_preference
     if shortcut_currencies is not _NOT_SET:

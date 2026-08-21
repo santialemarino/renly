@@ -31,7 +31,8 @@ import {
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
-import type { Investment, InvestmentGroup } from '@/lib/api/investments';
+import type { InvestmentCollection } from '@/lib/api/collections';
+import type { Investment } from '@/lib/api/investments';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
 import { CATEGORY_CAPABILITIES, type InvestmentCategory } from '@/lib/constants/categories';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
@@ -41,7 +42,7 @@ interface InvestmentFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   investment?: Investment;
-  groups: InvestmentGroup[];
+  collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   onSuccess: () => void;
@@ -51,7 +52,7 @@ export function InvestmentFormDialog({
   open,
   onOpenChange,
   investment,
-  groups,
+  collections,
   preferredCurrencies,
   supportedCurrencies,
   onSuccess,
@@ -74,7 +75,7 @@ export function InvestmentFormDialog({
       ticker: '',
       broker: '',
       notes: '',
-      groupIds: [],
+      collectionIds: [],
     },
   });
 
@@ -101,7 +102,7 @@ export function InvestmentFormDialog({
       ticker: inv?.ticker ?? '',
       broker: inv?.broker ?? '',
       notes: inv?.notes ?? '',
-      groupIds: inv?.groups.map((g) => g.id) ?? [],
+      collectionIds: inv?.collections.map((c) => c.id) ?? [],
     }),
     onSuccess,
   });
@@ -273,15 +274,15 @@ export function InvestmentFormDialog({
               </div>
             </LayoutGroup>
 
-            {groups.length > 0 && (
+            {collections.length > 0 && (
               <FormField
                 control={form.control}
-                name="groupIds"
+                name="collectionIds"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('form.groups.label')}</FormLabel>
+                    <FormLabel>{t('form.collections.label')}</FormLabel>
                     <ComboboxMultiSelect
-                      items={groups.map((g) => ({ id: g.id, label: g.name }))}
+                      items={collections.map((c) => ({ id: c.id, label: c.name }))}
                       selectedIds={field.value ?? []}
                       onToggle={(id) => {
                         const current = field.value ?? [];
@@ -289,9 +290,9 @@ export function InvestmentFormDialog({
                           current.includes(id) ? current.filter((i) => i !== id) : [...current, id],
                         );
                       }}
-                      placeholder={t('form.groups.placeholder')}
-                      searchPlaceholder={t('form.groups.placeholder')}
-                      emptyMessage={t('form.groups.empty')}
+                      placeholder={t('form.collections.placeholder')}
+                      searchPlaceholder={t('form.collections.placeholder')}
+                      emptyMessage={t('form.collections.empty')}
                       showChips
                     />
                     <FormMessage />

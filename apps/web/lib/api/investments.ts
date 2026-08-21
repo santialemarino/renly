@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { InvestmentCollectionInfo } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
@@ -17,7 +18,7 @@ interface InvestmentRaw {
   has_snapshots: boolean;
   created_at: string;
   updated_at: string;
-  groups: InvestmentGroupInfo[];
+  collections: InvestmentCollectionInfo[];
 }
 
 interface InvestmentListRaw {
@@ -27,19 +28,7 @@ interface InvestmentListRaw {
   page_size: number;
 }
 
-interface InvestmentGroupRaw {
-  id: number;
-  name: string;
-  target_percentage: number | null;
-  investment_ids: number[];
-}
-
 // --- Frontend types (camelCase) ---
-
-export interface InvestmentGroupInfo {
-  id: number;
-  name: string;
-}
 
 export interface Investment {
   id: number;
@@ -53,7 +42,7 @@ export interface Investment {
   hasSnapshots: boolean;
   createdAt: string;
   updatedAt: string;
-  groups: InvestmentGroupInfo[];
+  collections: InvestmentCollectionInfo[];
 }
 
 export interface InvestmentListResponse {
@@ -63,18 +52,11 @@ export interface InvestmentListResponse {
   pageSize: number;
 }
 
-export interface InvestmentGroup {
-  id: number;
-  name: string;
-  targetPercentage: number | null;
-  investmentIds: number[];
-}
-
 export type InvestmentSortField = 'name' | 'category' | 'base_currency' | 'broker';
 
 export interface GetInvestmentsParams {
   search?: string;
-  groupIds?: number[];
+  collectionIds?: number[];
   category?: string;
   activeOnly?: boolean;
   page?: number;
@@ -98,16 +80,7 @@ function mapInvestment(raw: InvestmentRaw): Investment {
     hasSnapshots: raw.has_snapshots,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
-    groups: raw.groups,
-  };
-}
-
-function mapGroup(raw: InvestmentGroupRaw): InvestmentGroup {
-  return {
-    id: raw.id,
-    name: raw.name,
-    targetPercentage: raw.target_percentage,
-    investmentIds: raw.investment_ids,
+    collections: raw.collections,
   };
 }
 
@@ -118,8 +91,8 @@ export async function getInvestments(
 ): Promise<InvestmentListResponse> {
   const qs = new URLSearchParams();
   if (params.search) qs.set('search', params.search);
-  if (params.groupIds?.length) {
-    params.groupIds.forEach((id) => qs.append('group_ids', String(id)));
+  if (params.collectionIds?.length) {
+    params.collectionIds.forEach((id) => qs.append('collection_ids', String(id)));
   }
   if (params.category) qs.set('category', params.category);
   if (params.activeOnly !== undefined) qs.set('active_only', String(params.activeOnly));
@@ -138,20 +111,4 @@ export async function getInvestments(
     page: raw.page,
     pageSize: raw.page_size,
   };
-}
-
-export async function getGroups(params?: {
-  search?: string;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}): Promise<InvestmentGroup[]> {
-  const qs = new URLSearchParams();
-  if (params?.search) qs.set('search', params.search);
-  if (params?.sortBy) qs.set('sort_by', params.sortBy);
-  if (params?.sortOrder) qs.set('sort_order', params.sortOrder);
-  const endpoint = qs.toString() ? `/groups?${qs.toString()}` : '/groups';
-  const res = await authenticatedFetch(endpoint, { method: 'GET' });
-  if (!res.ok) throw new Error('Failed to fetch groups');
-  const raw: InvestmentGroupRaw[] = await res.json();
-  return raw.map(mapGroup);
 }

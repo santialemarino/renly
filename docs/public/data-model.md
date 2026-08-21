@@ -51,17 +51,17 @@ Transactions record money movements -- when you buy more, sell some, deposit add
 
 Why are transactions separate from snapshots? Because you need to know whether your investment grew because the market went up or because you added more money. Without tracking transactions, a $1,000 deposit would look like a $1,000 gain, making your return numbers meaningless.
 
-### Groups
+### Collections
 
-Groups are labels you create to organize your investments however you want. Examples:
+Collections are labels you create to organize your investments however you want. Examples:
 
 - "Retirement" -- long-term holdings
 - "Trading" -- short-term positions
 - "Kids" -- investments earmarked for your children
 
-An investment can belong to **multiple groups** (or none at all). Groups let you filter your dashboard to see metrics for just a slice of your portfolio.
+An investment can belong to **multiple collections** (or none at all). Collections let you filter your dashboard to see metrics for just a slice of your portfolio.
 
-Each group can optionally have a **target allocation percentage** (e.g., "Retirement: 40%"). The dashboard shows how your actual allocation compares to your target -- helping you spot when you're over or under-exposed in a group.
+Each collection can optionally have a **target allocation percentage** (e.g., "Retirement: 40%"). The dashboard shows how your actual allocation compares to your target -- helping you spot when you're over or under-exposed in a collection.
 
 ### Exchange Rates
 
@@ -229,7 +229,7 @@ Each user has personal preferences that control how the app behaves:
 - Which currencies to show in the iOS Shortcut currency picker (defaults to primary + secondary)
 - The user's timezone (IANA name like `America/Argentina/Buenos_Aires`) plus a mode flag (`auto` or `manual`). In auto mode the browser-detected timezone is silently kept in sync on every page load; in manual mode the stored value sticks until the user changes it. The auto-expense scheduler uses this to fire recurring charges on the user's local calendar day instead of the server's UTC day.
 - The user's language (`en` or `es`) plus a mode flag (`auto` or `manual`) — mirrors the timezone pattern.
-- Account caps and warning thresholds: `max_groups`, `group_warning_pct` (when investment groups approach the cap, the UI warns).
+- Account caps and warning thresholds: `max_collections`, `collection_warning_pct` (when investment collections approach the cap, the UI warns).
 - The **dashboard health-indicator thresholds** — all user-configurable from the `/alerts` page, with sensible defaults when unset:
   - `liquidity_threshold_pct` (integer 1–99, default 40) — drives the Liquidity card.
   - `savings_rate_healthy_pct` (integer 1–99, default 20) — Savings Rate "healthy" cut-off.
@@ -302,11 +302,11 @@ User
  |                  |-- has many --> Transactions
  |                  |                (buys, sells, deposits, withdrawals)
  |                  |
- |                  |-- belongs to many --> Groups
+ |                  |-- belongs to many --> Collections
  |                                         (user-defined labels like "Retirement")
  |
- |-- has many --> Groups
- |                (each group can contain many investments)
+ |-- has many --> Collections
+ |                (each collection can contain many investments)
  |
  |-- has many --> API Keys
  |                (for iOS Shortcut / external tool access)

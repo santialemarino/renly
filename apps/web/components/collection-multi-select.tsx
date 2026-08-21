@@ -5,34 +5,35 @@ import { useTranslations } from 'next-intl';
 
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 
-interface GroupMultiSelectProps {
-  groups: { id: number; name: string }[];
+interface CollectionMultiSelectProps {
+  collections: { id: number; name: string }[];
   selectedIds: number[];
-  onToggle: (groupId: number) => void;
+  onToggle: (collectionId: number) => void;
   surface?: boolean;
   className?: string;
 }
 
-export function GroupMultiSelect({
-  groups,
+export function CollectionMultiSelect({
+  collections,
   selectedIds,
   onToggle,
   surface = false,
   className,
-}: GroupMultiSelectProps) {
+}: CollectionMultiSelectProps) {
   const tCommon = useTranslations('common');
 
   const count = selectedIds.length;
-  const label = count > 0 ? tCommon('groupFilter.selected', { count }) : tCommon('groupFilter.all');
+  const label =
+    count > 0 ? tCommon('collectionFilter.selected', { count }) : tCommon('collectionFilter.all');
 
   return (
     <ComboboxMultiSelect
-      items={groups.map((g) => ({ id: g.id, label: g.name }))}
+      items={collections.map((c) => ({ id: c.id, label: c.name }))}
       selectedIds={selectedIds}
       onToggle={onToggle}
       placeholder={label}
-      searchPlaceholder={tCommon('groupFilter.search')}
-      emptyMessage={tCommon('groupFilter.empty')}
+      searchPlaceholder={tCommon('collectionFilter.search')}
+      emptyMessage={tCommon('collectionFilter.empty')}
       icon={<FolderOpen className="size-4 shrink-0" />}
       surface={surface}
       className={className}

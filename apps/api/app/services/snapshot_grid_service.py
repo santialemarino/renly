@@ -27,7 +27,7 @@ async def get_snapshot_grid(
     user_id: int,
     *,
     search: str | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
     currency: str | None = None,
     sort_by: str | None = None,
@@ -41,12 +41,12 @@ async def get_snapshot_grid(
         investments = [i for i in investments if q in i.name.lower()]
     if category:
         investments = [i for i in investments if i.category == category]
-    if group_ids:
+    if collection_ids:
         from app.repositories.investment_repository import investment_repository
 
-        groups_map = await investment_repository.get_groups_by_investment_ids(session, [i.id for i in investments])
-        group_set = set(group_ids)
-        investments = [i for i in investments if any(gid in group_set for gid, _ in groups_map.get(i.id, []))]
+        collections_map = await investment_repository.get_collections_by_investment_ids(session, [i.id for i in investments])
+        collection_set = set(collection_ids)
+        investments = [i for i in investments if any(cid in collection_set for cid, _ in collections_map.get(i.id, []))]
 
     # Sort.
     if sort_by == "name":

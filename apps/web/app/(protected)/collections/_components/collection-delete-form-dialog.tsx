@@ -4,30 +4,30 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { deleteGroup } from '@/app/(protected)/groups/groups-actions';
+import { deleteCollection } from '@/app/(protected)/collections/collections-actions';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
-import type { InvestmentGroup } from '@/lib/api/groups';
+import type { InvestmentCollection } from '@/lib/api/collections';
 
-interface GroupDeleteFormDialogProps {
+interface CollectionDeleteFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  group: InvestmentGroup;
+  collection: InvestmentCollection;
   onSuccess: () => void;
 }
 
-export function GroupDeleteFormDialog({
+export function CollectionDeleteFormDialog({
   open,
   onOpenChange,
-  group,
+  collection,
   onSuccess,
-}: GroupDeleteFormDialogProps) {
-  const t = useTranslations('groups');
+}: CollectionDeleteFormDialogProps) {
+  const t = useTranslations('collections');
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
     setDeleting(true);
     try {
-      await deleteGroup(group.id);
+      await deleteCollection(collection.id);
       toast.success(t('delete.success'));
       onOpenChange(false);
       onSuccess();
@@ -42,10 +42,10 @@ export function GroupDeleteFormDialog({
     <TypeToConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      entity={group}
+      entity={collection}
       title={t('delete.title')}
-      description={(g) => t('delete.description', { name: g.name, count: g.investmentIds.length })}
-      confirmName={(g) => g.name}
+      description={(c) => t('delete.description', { name: c.name, count: c.investmentIds.length })}
+      confirmName={(c) => c.name}
       onConfirm={handleDelete}
       loading={deleting}
       loadingLabel={t('delete.deleting')}

@@ -7,34 +7,36 @@ import { LayoutGroup, motion } from 'motion/react';
 import { useTranslations } from 'next-intl';
 
 import { Button, SearchInput } from '@repo/ui/components';
-import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
+import { CollectionFormDialog } from '@/app/(protected)/collections/_components/collection-form-dialog';
 import { WarningHint } from '@/components/styled-hint';
 import { ROUTES } from '@/config/routes';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
-interface GroupsToolbarProps {
+interface CollectionsToolbarProps {
   investments: { id: number; name: string }[];
-  groupCount: number;
-  maxGroups: number;
-  groupWarningPct: number | null;
+  collectionCount: number;
+  maxCollections: number;
+  collectionWarningPct: number | null;
 }
 
-export function GroupsToolbar({
+export function CollectionsToolbar({
   investments,
-  groupCount,
-  maxGroups,
-  groupWarningPct,
-}: GroupsToolbarProps) {
-  const t = useTranslations('groups');
+  collectionCount,
+  maxCollections,
+  collectionWarningPct,
+}: CollectionsToolbarProps) {
+  const t = useTranslations('collections');
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { navigate } = useSearchParamsNavigation(ROUTES.groups);
+  const { navigate } = useSearchParamsNavigation(ROUTES.collections);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState(searchParams.get('search') ?? '');
 
-  const nearLimit = groupWarningPct !== null && groupCount >= maxGroups * (groupWarningPct / 100);
-  const atLimit = groupCount >= maxGroups;
+  const nearLimit =
+    collectionWarningPct !== null &&
+    collectionCount >= maxCollections * (collectionWarningPct / 100);
+  const atLimit = collectionCount >= maxCollections;
 
   useEffect(() => {
     const timer = setTimeout(() => navigate({ search }), DEBOUNCE_MS);
@@ -52,7 +54,7 @@ export function GroupsToolbar({
             className="min-w-0 flex-1"
           >
             <SearchInput
-              aria-label="Search groups"
+              aria-label="Search collections"
               placeholder={t('toolbar.searchPlaceholder')}
               value={search}
               surface
@@ -64,20 +66,20 @@ export function GroupsToolbar({
           <motion.div layout transition={{ duration: ANIMATION_DEFAULT }}>
             <Button blue onClick={() => setCreateOpen(true)} disabled={atLimit}>
               <Plus className="size-4" />
-              {t('toolbar.addGroup')}
+              {t('toolbar.addCollection')}
             </Button>
           </motion.div>
         </div>
       </LayoutGroup>
 
       <WarningHint show={nearLimit && !atLimit} parentGap={8}>
-        {t('softLimit.approaching', { count: groupCount, max: maxGroups })}
+        {t('softLimit.approaching', { count: collectionCount, max: maxCollections })}
       </WarningHint>
       <WarningHint show={atLimit} parentGap={8}>
-        {t('softLimit.reached', { max: maxGroups })}
+        {t('softLimit.reached', { max: maxCollections })}
       </WarningHint>
 
-      <GroupFormDialog
+      <CollectionFormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         investments={investments}

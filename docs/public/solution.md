@@ -50,7 +50,7 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 
 6. **See your dashboard** -- A unified view shows your net worth, cash flow, returns over time, allocation by category, and performance trends. Switch between ARS and USD (or BRL, EUR, GBP) with one click.
 
-7. **Organize with groups** -- Label investments however you want ("Retirement", "Trading", "Kids") and filter your dashboard by group.
+7. **Organize with collections** -- Label investments however you want ("Retirement", "Trading", "Kids") and filter your dashboard by collection.
 
 Renly supports five currencies: ARS, USD, BRL, EUR, and GBP. All values are stored in their original currency and converted on the fly using daily exchange rates.
 

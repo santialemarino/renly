@@ -5,22 +5,22 @@ import { revalidatePath } from 'next/cache';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 interface SaveAlertsParams {
-  maxGroups: number | null;
-  groupWarningPct: number | null;
+  maxCollections: number | null;
+  collectionWarningPct: number | null;
   liquidityThresholdPct: number | null;
   savingsRateHealthyPct: number | null;
   savingsRateModeratePct: number | null;
   incomeExpenseRatioHealthy: number | null;
 }
 
-// Persists the alerts-page subset of settings (group limit + warning + 4 health thresholds).
+// Persists the alerts-page subset of settings (collection limit + warning + 4 health thresholds).
 // Invalidates the layout so subsequent navigations re-read settings cleanly.
 export async function saveAlerts(params: SaveAlertsParams): Promise<void> {
   const res = await authenticatedFetch('/settings', {
     method: 'PUT',
     body: {
-      max_groups: params.maxGroups,
-      group_warning_pct: params.groupWarningPct,
+      max_collections: params.maxCollections,
+      collection_warning_pct: params.collectionWarningPct,
       liquidity_threshold_pct: params.liquidityThresholdPct,
       savings_rate_healthy_pct: params.savingsRateHealthyPct,
       savings_rate_moderate_pct: params.savingsRateModeratePct,

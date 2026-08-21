@@ -126,7 +126,7 @@ month, there is no previous month to compare against and the indicator is hidden
 
 ## Distribution and allocation
 
-**What it answers:** "What percentage of my portfolio is in each category or group?"
+**What it answers:** "What percentage of my portfolio is in each category or collection?"
 
 If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDEARs, and $3,000 in crypto, your allocation is:
 
@@ -134,7 +134,7 @@ If your portfolio is worth $10,000 and you have $4,000 in stocks, $3,000 in CEDE
 - CEDEARs: 30%
 - Crypto: 30%
 
-You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **group** (Retirement, Trading, Kids, etc.).
+You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **collection** (Retirement, Trading, Kids, etc.).
 
 ## Dashboard composition and finance comparisons
 

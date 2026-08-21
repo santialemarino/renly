@@ -217,10 +217,10 @@ CREATE TABLE exchange_rates (
 CREATE INDEX idx_exchange_rates_date ON exchange_rates(date DESC);
 CREATE INDEX idx_exchange_rates_pair_date ON exchange_rates(pair, date);
 
--- Investment groups
--- User-defined groups for aggregating investments (e.g. Retirement, Kids, Trading).
+-- Investment collections
+-- User-defined collections for aggregating investments (e.g. Retirement, Kids, Trading).
 -- target_percentage is the desired allocation % for dashboard over/under-exposure alerts.
-CREATE TABLE investment_groups (
+CREATE TABLE investment_collections (
   id                BIGSERIAL PRIMARY KEY,
   user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name              VARCHAR(255) NOT NULL,
@@ -229,16 +229,16 @@ CREATE TABLE investment_groups (
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_investment_groups_user_id ON investment_groups(user_id);
+CREATE INDEX idx_investment_collections_user_id ON investment_collections(user_id);
 
--- Many-to-many: an investment can belong to zero, one, or several groups.
-CREATE TABLE investment_group_members (
+-- Many-to-many: an investment can belong to zero, one, or several collections.
+CREATE TABLE investment_collection_members (
   investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
-  group_id      BIGINT NOT NULL REFERENCES investment_groups(id) ON DELETE CASCADE,
-  PRIMARY KEY (investment_id, group_id)
+  collection_id BIGINT NOT NULL REFERENCES investment_collections(id) ON DELETE CASCADE,
+  PRIMARY KEY (investment_id, collection_id)
 );
 
-CREATE INDEX idx_investment_group_members_group_id ON investment_group_members(group_id);
+CREATE INDEX idx_investment_collection_members_collection_id ON investment_collection_members(collection_id);
 
 -- Asset prices
 -- Historical prices for publicly traded assets, fetched from external APIs.
@@ -833,8 +833,8 @@ CREATE TRIGGER trg_exchange_rates_updated_at
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 
-CREATE TRIGGER trg_investment_groups_updated_at
-  BEFORE UPDATE ON investment_groups
+CREATE TRIGGER trg_investment_collections_updated_at
+  BEFORE UPDATE ON investment_collections
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_asset_prices_updated_at
@@ -954,8 +954,8 @@ ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY transactions_user_isolation ON transactions
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
-ALTER TABLE investment_groups ENABLE ROW LEVEL SECURITY;
-CREATE POLICY investment_groups_user_isolation ON investment_groups
+ALTER TABLE investment_collections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_collections_user_isolation ON investment_collections
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE credit_cards ENABLE ROW LEVEL SECURITY;
@@ -1039,23 +1039,23 @@ ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 CREATE POLICY feedback_user_isolation ON feedback
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
--- investment_group_members is a pure junction (composite PK, no surrogate user column).
+-- investment_collection_members is a pure junction (composite PK, no surrogate user column).
 -- Isolation is keyed through the parent investment via an EXISTS-join — both parents
 -- belong to the same user (enforced by the SEC-4 cross-tenant FK checks), so checking
 -- the investment side is sufficient and the lookup hits the investments primary key.
-ALTER TABLE investment_group_members ENABLE ROW LEVEL SECURITY;
-CREATE POLICY investment_group_members_isolation ON investment_group_members
+ALTER TABLE investment_collection_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_collection_members_isolation ON investment_collection_members
   USING (
     EXISTS (
       SELECT 1 FROM investments i
-      WHERE i.id = investment_group_members.investment_id
+      WHERE i.id = investment_collection_members.investment_id
         AND i.user_id = app_current_user_id()
     )
   )
   WITH CHECK (
     EXISTS (
       SELECT 1 FROM investments i
-      WHERE i.id = investment_group_members.investment_id
+      WHERE i.id = investment_collection_members.investment_id
         AND i.user_id = app_current_user_id()
     )
   );

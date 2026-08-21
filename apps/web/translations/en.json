@@ -113,11 +113,11 @@
       }
     },
     "allCategories": "All categories",
-    "groupFilter": {
-      "all": "All groups",
-      "selected": "Groups ({count})",
-      "search": "Search groups...",
-      "empty": "No groups found."
+    "collectionFilter": {
+      "all": "All collections",
+      "selected": "Collections ({count})",
+      "search": "Search collections...",
+      "empty": "No collections found."
     },
     "combobox": {
       "empty": "No results found."
@@ -302,7 +302,7 @@
       "paymentsCalendar": "Payments Calendar",
       "investorDashboard": "Dashboard",
       "investments": "Investments",
-      "groups": "Groups",
+      "collections": "Collections",
       "snapshots": "Snapshots",
       "preferences": "Preferences",
       "alerts": "Alerts & Limits",
@@ -403,7 +403,7 @@
         },
         "navigation": {
           "title": "Find your way around",
-          "text": "Move between Finances and Investments here. More tools — credit cards, commitments, groups — appear as your account grows."
+          "text": "Move between Finances and Investments here. More tools — credit cards, commitments, collections — appear as your account grows."
         },
         "currency": {
           "title": "Switch currencies anytime",
@@ -1525,8 +1525,8 @@
     "distribution": {
       "title": "Distribution",
       "byCategory": "By category",
-      "byGroup": "By group",
-      "ungrouped": "Ungrouped",
+      "byCollection": "By collection",
+      "unassigned": "Unassigned",
       "overAllocated": "Over target",
       "underAllocated": "Under target"
     },
@@ -1546,15 +1546,15 @@
     "filtered": {
       "subtitle": "Showing filtered results.",
       "investment": "Showing metrics for <bold>{name}</bold>:",
-      "group": "Showing investments in <bold>{name}</bold>:",
+      "collection": "Showing investments in <bold>{name}</bold>:",
       "category": "Showing investments of type <bold>{name}</bold>:"
     },
     "search": {
-      "placeholder": "Search investments, groups, or categories...",
+      "placeholder": "Search investments, collections, or categories...",
       "inputPlaceholder": "Type to search...",
       "noResults": "No results found.",
       "investments": "Investments",
-      "groups": "Groups",
+      "collections": "Collections",
       "categories": "Categories"
     },
     "detail": {
@@ -1581,7 +1581,7 @@
     "table": {
       "id": "ID",
       "name": "Name",
-      "groups": "Groups",
+      "collections": "Collections",
       "category": "Category",
       "currency": "Currency",
       "ticker": "Ticker",
@@ -1634,10 +1634,10 @@
         "label": "Broker",
         "placeholder": "Enter the broker"
       },
-      "groups": {
-        "label": "Groups",
-        "placeholder": "Search groups...",
-        "empty": "No groups found."
+      "collections": {
+        "label": "Collections",
+        "placeholder": "Search collections...",
+        "empty": "No collections found."
       },
       "notes": {
         "label": "Notes",
@@ -1665,16 +1665,16 @@
     "unarchiveSuccess": "Investment unarchived.",
     "unarchiveError": "Failed to unarchive investment."
   },
-  "groups": {
+  "collections": {
     "metadata": {
-      "title": "Groups",
-      "description": "Manage your investment groups"
+      "title": "Collections",
+      "description": "Manage your investment collections"
     },
-    "title": "Groups",
-    "subtitle": "Organize your investments into groups.",
+    "title": "Collections",
+    "subtitle": "Organize your investments into collections.",
     "toolbar": {
-      "searchPlaceholder": "Search groups...",
-      "addGroup": "New group"
+      "searchPlaceholder": "Search collections...",
+      "addCollection": "New collection"
     },
     "table": {
       "id": "ID",
@@ -1684,16 +1684,16 @@
       "noTarget": "—",
       "actions": "Actions",
       "noInvestments": "—",
-      "empty": "No groups found.",
-      "emptyTitle": "Organize your investments into groups",
-      "emptyDescription": "Group investments by strategy, account, or goal to track allocation targets and see breakdowns on your dashboard."
+      "empty": "No collections found.",
+      "emptyTitle": "Organize your investments into collections",
+      "emptyDescription": "Collect investments by strategy, account, or goal to track allocation targets and see breakdowns on your dashboard."
     },
     "form": {
-      "createTitle": "New group",
-      "editTitle": "Edit group",
+      "createTitle": "New collection",
+      "editTitle": "Edit collection",
       "name": {
         "label": "Name",
-        "placeholder": "Enter the group name"
+        "placeholder": "Enter the collection name"
       },
       "targetPercentage": {
         "label": "Target allocation (%)",
@@ -1711,26 +1711,26 @@
         "loading": "Saving..."
       },
       "success": {
-        "create": "Group created.",
-        "edit": "Group updated."
+        "create": "Collection created.",
+        "edit": "Collection updated."
       },
       "error": {
-        "create": "Failed to create group.",
-        "edit": "Failed to update group."
+        "create": "Failed to create collection.",
+        "edit": "Failed to update collection."
       }
     },
     "delete": {
-      "title": "Delete group",
-      "description": "Are you sure you want to delete {name}? {count, plural, =0 {No investments are linked to this group.} =1 {1 investment will be unlinked from this group.} other {# investments will be unlinked from this group.}} The investments themselves will not be deleted.",
+      "title": "Delete collection",
+      "description": "Are you sure you want to delete {name}? {count, plural, =0 {No investments are linked to this collection.} =1 {1 investment will be unlinked from this collection.} other {# investments will be unlinked from this collection.}} The investments themselves will not be deleted.",
       "cancel": "Cancel",
       "confirm": "Delete",
       "deleting": "Deleting...",
-      "success": "Group deleted.",
-      "error": "Failed to delete group."
+      "success": "Collection deleted.",
+      "error": "Failed to delete collection."
     },
     "softLimit": {
-      "approaching": "You have {count} of {max} groups. Consider consolidating before creating more.",
-      "reached": "You've reached the maximum of {max} groups. Delete or consolidate existing groups to create new ones."
+      "approaching": "You have {count} of {max} collections. Consider consolidating before creating more.",
+      "reached": "You've reached the maximum of {max} collections. Delete or consolidate existing collections to create new ones."
     }
   },
   "snapshots": {
@@ -1875,15 +1875,15 @@
     "form": {
       "sectionAccountLimits": "Account limits",
       "sectionFinancialHealth": "Financial health",
-      "maxGroups": {
-        "label": "Max groups",
-        "hint": "Maximum number of investment groups allowed.",
+      "maxCollections": {
+        "label": "Max collections",
+        "hint": "Maximum number of investment collections allowed.",
         "default": "Defaults to {value} if left empty.",
         "invalidRange": "Must be a whole number of 1 or more."
       },
-      "groupWarningPct": {
-        "label": "Group limit warning (%)",
-        "hint": "Show a warning when this percentage of max groups is reached.",
+      "collectionWarningPct": {
+        "label": "Collection limit warning (%)",
+        "hint": "Show a warning when this percentage of max collections is reached.",
         "default": "Defaults to {value}% if left empty.",
         "noDefault": "Leave empty to disable the warning.",
         "invalidRange": "Must be a whole number between 1 and 100."
@@ -2250,8 +2250,8 @@
       },
       "entities": {
         "investments": "Investments",
-        "investment_groups": "Groups",
-        "investment_group_members": "Group memberships",
+        "investment_collections": "Collections",
+        "investment_collection_members": "Collection memberships",
         "investment_snapshots": "Snapshots",
         "transactions": "Transactions",
         "credit_cards": "Credit cards",

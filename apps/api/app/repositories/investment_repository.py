@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment import Investment, InvestmentCategory
-from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.repositories.utils import apply_entry_sort
 
 # Sortable columns for the investments list. `category` is sorted as TEXT rather than as the enum:
@@ -26,7 +26,7 @@ async def list_by_user_filtered(
     user_id: int,
     *,
     search: str | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
     active_only: bool = True,
     page: int = 1,
@@ -41,8 +41,10 @@ async def list_by_user_filtered(
         stmt = stmt.where(Investment.name.ilike(f"%{search}%"))
     if category:
         stmt = stmt.where(Investment.category == category)
-    if group_ids:
-        stmt = stmt.where(Investment.id.in_(select(InvestmentGroupMember.investment_id).where(InvestmentGroupMember.group_id.in_(group_ids))))
+    if collection_ids:
+        stmt = stmt.where(
+            Investment.id.in_(select(InvestmentCollectionMember.investment_id).where(InvestmentCollectionMember.collection_id.in_(collection_ids)))
+        )
     count_stmt = select(func.count()).select_from(stmt.subquery())
     count_result = await session.execute(count_stmt)
     total = count_result.scalar_one()
@@ -77,24 +79,24 @@ async def get_by_id(
     return result.scalar_one_or_none()
 
 
-# Returns groups for each investment id as {investment_id: [(group_id, group_name)]}.
-async def get_groups_by_investment_ids(
+# Returns collections for each investment id as {investment_id: [(collection_id, collection_name)]}.
+async def get_collections_by_investment_ids(
     session: AsyncSession,
     investment_ids: list[int],
 ) -> dict[int, list[tuple[int, str]]]:
     if not investment_ids:
         return {}
     stmt = (
-        select(InvestmentGroupMember.investment_id, InvestmentGroup.id, InvestmentGroup.name)
-        .join(InvestmentGroup, InvestmentGroupMember.group_id == InvestmentGroup.id)
-        .where(InvestmentGroupMember.investment_id.in_(investment_ids))
-        .order_by(InvestmentGroup.id)
+        select(InvestmentCollectionMember.investment_id, InvestmentCollection.id, InvestmentCollection.name)
+        .join(InvestmentCollection, InvestmentCollectionMember.collection_id == InvestmentCollection.id)
+        .where(InvestmentCollectionMember.investment_id.in_(investment_ids))
+        .order_by(InvestmentCollection.id)
     )
     result = await session.execute(stmt)
-    groups_map: dict[int, list[tuple[int, str]]] = {}
-    for inv_id, group_id, group_name in result.all():
-        groups_map.setdefault(inv_id, []).append((group_id, group_name))
-    return groups_map
+    collections_map: dict[int, list[tuple[int, str]]] = {}
+    for inv_id, collection_id, collection_name in result.all():
+        collections_map.setdefault(inv_id, []).append((collection_id, collection_name))
+    return collections_map
 
 
 # Returns investments matching the given IDs owned by the user.
@@ -189,7 +191,7 @@ class InvestmentRepository:
     exists_active_by_user = staticmethod(exists_active_by_user)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
-    get_groups_by_investment_ids = staticmethod(get_groups_by_investment_ids)
+    get_collections_by_investment_ids = staticmethod(get_collections_by_investment_ids)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_identifiers_by_user = staticmethod(list_identifiers_by_user)
     list_names_by_user = staticmethod(list_names_by_user)

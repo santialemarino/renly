@@ -10,14 +10,14 @@ import { toast } from 'sonner';
 import { Button, SearchInput } from '@repo/ui/components';
 import { refreshPrices } from '@/app/(protected)/snapshots/snapshots-actions';
 import { CategorySelect } from '@/components/category-select';
-import { GroupMultiSelect } from '@/components/group-multi-select';
+import { CollectionMultiSelect } from '@/components/collection-multi-select';
 import { ROUTES } from '@/config/routes';
-import type { InvestmentGroup } from '@/lib/api/investments';
+import type { InvestmentCollection } from '@/lib/api/collections';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
-export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
+export function SnapshotsToolbar({ collections }: { collections: InvestmentCollection[] }) {
   const t = useTranslations('snapshots');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -38,7 +38,7 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
     }
   }
 
-  const selectedGroupIds = searchParams.getAll('group_ids').map(Number).filter(Boolean);
+  const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
 
   useEffect(() => {
@@ -47,11 +47,11 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
-  function handleGroupToggle(groupId: number) {
-    const next = selectedGroupIds.includes(groupId)
-      ? selectedGroupIds.filter((id) => id !== groupId)
-      : [...selectedGroupIds, groupId];
-    navigate({ group_ids: next.map(String) });
+  function handleCollectionToggle(collectionId: number) {
+    const next = selectedCollectionIds.includes(collectionId)
+      ? selectedCollectionIds.filter((id) => id !== collectionId)
+      : [...selectedCollectionIds, collectionId];
+    navigate({ collection_ids: next.map(String) });
   }
 
   function handleCategoryChange(cat: string) {
@@ -77,11 +77,11 @@ export function SnapshotsToolbar({ groups }: { groups: InvestmentGroup[] }) {
           transition={{ duration: ANIMATION_DEFAULT }}
           className="flex flex-wrap items-center gap-x-3 gap-y-2 basis-full lg:basis-auto"
         >
-          {groups.length > 0 && (
-            <GroupMultiSelect
-              groups={groups}
-              selectedIds={selectedGroupIds}
-              onToggle={handleGroupToggle}
+          {collections.length > 0 && (
+            <CollectionMultiSelect
+              collections={collections}
+              selectedIds={selectedCollectionIds}
+              onToggle={handleCollectionToggle}
               surface
               className="min-w-fit flex-1"
             />

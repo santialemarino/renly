@@ -16,60 +16,65 @@ import {
   DialogTitle,
   Input,
 } from '@repo/ui/components';
-import { createGroup, updateGroup } from '@/app/(protected)/groups/groups-actions';
 import {
-  buildGroupFormSchema,
-  type GroupFormValues,
-} from '@/app/(protected)/groups/groups-form-schema';
+  createCollection,
+  updateCollection,
+} from '@/app/(protected)/collections/collections-actions';
+import {
+  buildCollectionFormSchema,
+  type CollectionFormValues,
+} from '@/app/(protected)/collections/collections-form-schema';
 import { ComboboxMultiSelect } from '@/components/combobox-multi-select';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
-import type { InvestmentGroup } from '@/lib/api/groups';
+import type { InvestmentCollection } from '@/lib/api/collections';
 
-interface GroupFormDialogProps {
+interface CollectionFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  group?: InvestmentGroup;
+  collection?: InvestmentCollection;
   investments: { id: number; name: string }[];
   onSuccess?: () => void;
 }
 
-export function GroupFormDialog({
+export function CollectionFormDialog({
   open,
   onOpenChange,
-  group,
+  collection,
   investments,
   onSuccess,
-}: GroupFormDialogProps) {
-  const t = useTranslations('groups');
+}: CollectionFormDialogProps) {
+  const t = useTranslations('collections');
   const tCommon = useTranslations('common');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const isEdit = !!group;
+  const isEdit = !!collection;
 
-  const schema = buildGroupFormSchema(
+  const schema = buildCollectionFormSchema(
     tCommon('form.errors.required'),
     t('form.targetPercentage.invalidRange'),
   );
-  const form = useForm<GroupFormValues>({
+  const form = useForm<CollectionFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: group?.name ?? '',
-      targetPercentage: group?.targetPercentage != null ? String(group.targetPercentage) : '',
-      investmentIds: group?.investmentIds ?? [],
+      name: collection?.name ?? '',
+      targetPercentage:
+        collection?.targetPercentage != null ? String(collection.targetPercentage) : '',
+      investmentIds: collection?.investmentIds ?? [],
     },
   });
 
   useEffect(() => {
     if (open) {
       form.reset({
-        name: group?.name ?? '',
-        targetPercentage: group?.targetPercentage != null ? String(group.targetPercentage) : '',
-        investmentIds: group?.investmentIds ?? [],
+        name: collection?.name ?? '',
+        targetPercentage:
+          collection?.targetPercentage != null ? String(collection.targetPercentage) : '',
+        investmentIds: collection?.investmentIds ?? [],
       });
     }
-  }, [open, group, form]);
+  }, [open, collection, form]);
 
   const selectedIds = form.watch('investmentIds') ?? [];
 
@@ -81,14 +86,14 @@ export function GroupFormDialog({
     );
   }
 
-  function onSubmit(values: GroupFormValues) {
+  function onSubmit(values: CollectionFormValues) {
     startTransition(async () => {
       try {
         if (isEdit) {
-          await updateGroup(group.id, values);
+          await updateCollection(collection.id, values);
           toast.success(t('form.success.edit'));
         } else {
-          await createGroup(values);
+          await createCollection(values);
           toast.success(t('form.success.create'));
         }
         if (onSuccess) {

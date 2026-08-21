@@ -25,7 +25,7 @@ export const sampleInvestments: Investment[] = [
     hasSnapshots: true,
     createdAt: SAMPLE_TIMESTAMP,
     updatedAt: SAMPLE_TIMESTAMP,
-    groups: [],
+    collections: [],
   },
   {
     id: -2,
@@ -39,7 +39,7 @@ export const sampleInvestments: Investment[] = [
     hasSnapshots: true,
     createdAt: SAMPLE_TIMESTAMP,
     updatedAt: SAMPLE_TIMESTAMP,
-    groups: [],
+    collections: [],
   },
   {
     id: -3,
@@ -53,7 +53,7 @@ export const sampleInvestments: Investment[] = [
     hasSnapshots: false,
     createdAt: SAMPLE_TIMESTAMP,
     updatedAt: SAMPLE_TIMESTAMP,
-    groups: [],
+    collections: [],
   },
 ];
 

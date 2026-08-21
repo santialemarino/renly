@@ -88,7 +88,7 @@ export function FilterCombobox({
         >
           <Command>
             <CommandList>
-              <CommandEmpty>{tCommon('groupFilter.empty')}</CommandEmpty>
+              <CommandEmpty>{tCommon('combobox.empty')}</CommandEmpty>
               <CommandGroup>
                 {options.map((option) => {
                   const isSelected = value === option;

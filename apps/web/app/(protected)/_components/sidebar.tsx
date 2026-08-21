@@ -88,7 +88,7 @@ const COMMITMENTS_GROUP = [
 const PORTFOLIO_GROUP = [
   { key: 'investorDashboard', href: ROUTES.investorDashboard, icon: BarChart3 },
   { key: 'investments', href: ROUTES.investments, icon: Rows3 },
-  { key: 'groups', href: ROUTES.groups, icon: FolderOpen },
+  { key: 'collections', href: ROUTES.collections, icon: FolderOpen },
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
 ] as const;
 
@@ -113,7 +113,7 @@ const ADMIN_GROUP = [
  * have data OR reveal them via "Show more". Keyed by nav `key`; the Commitments subgroup is gated
  * as a whole via `advancedVisible`. The layout decides the initial state; the sidebar animates it.
  */
-const ADVANCED_NAV_KEYS = new Set<string>(['creditCards', 'groups']);
+const ADVANCED_NAV_KEYS = new Set<string>(['creditCards', 'collections']);
 
 // Every known route path, for the active-state check below: a sub-path that is itself a distinct
 // route is a sibling, not a child, so its parent (e.g. /admin vs /admin/feedback) shouldn't light up.

@@ -76,7 +76,7 @@ export interface SnapshotGridResponse {
 
 export interface GetSnapshotGridParams {
   search?: string;
-  groupIds?: number[];
+  collectionIds?: number[];
   category?: string;
   currency?: string;
   sortBy?: string;
@@ -126,8 +126,8 @@ export async function getSnapshotGrid(
   const qs = new URLSearchParams();
 
   if (params?.search) qs.append('search', params.search);
-  if (params?.groupIds) {
-    params.groupIds.forEach((id) => qs.append('group_ids', String(id)));
+  if (params?.collectionIds) {
+    params.collectionIds.forEach((id) => qs.append('collection_ids', String(id)));
   }
   if (params?.category) qs.append('category', params.category);
   if (params?.currency) qs.append('currency', params.currency);

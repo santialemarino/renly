@@ -6,14 +6,14 @@ import { useLocale, useTranslations } from 'next-intl';
 
 import { SmartSearch, type SmartSearchGroup } from '@/components/smart-search';
 import { ROUTES } from '@/config/routes';
-import type { InvestmentGroup } from '@/lib/api/investments';
+import type { InvestmentCollection } from '@/lib/api/collections';
 import { sortCategoriesByLabel } from '@/lib/utils/categories';
 
 const ICON_CLASS = 'size-4 shrink-0 text-muted-foreground';
 
 // Group indices used by onSelect to determine the navigation target.
 const GROUP_INVESTMENTS = 0;
-const GROUP_GROUPS = 1;
+const GROUP_COLLECTIONS = 1;
 const GROUP_CATEGORIES = 2;
 
 interface SearchableInvestment {
@@ -23,10 +23,13 @@ interface SearchableInvestment {
 
 interface InvestorDashboardSearchProps {
   investments: SearchableInvestment[];
-  groups: InvestmentGroup[];
+  collections: InvestmentCollection[];
 }
 
-export function InvestorDashboardSearch({ investments, groups }: InvestorDashboardSearchProps) {
+export function InvestorDashboardSearch({
+  investments,
+  collections,
+}: InvestorDashboardSearchProps) {
   const locale = useLocale();
   const t = useTranslations('investorDashboard');
   const tCommon = useTranslations('common');
@@ -42,10 +45,10 @@ export function InvestorDashboardSearch({ investments, groups }: InvestorDashboa
       })),
     },
     {
-      heading: t('search.groups'),
-      items: groups.map((group) => ({
-        id: String(group.id),
-        label: group.name,
+      heading: t('search.collections'),
+      items: collections.map((collection) => ({
+        id: String(collection.id),
+        label: collection.name,
         icon: <FolderOpen className={ICON_CLASS} />,
       })),
     },
@@ -72,7 +75,7 @@ export function InvestorDashboardSearch({ investments, groups }: InvestorDashboa
     if (endDate) qs.set('end_date', endDate);
 
     if (groupIndex === GROUP_INVESTMENTS) qs.set('investment_id', itemId);
-    else if (groupIndex === GROUP_GROUPS) qs.set('group_id', itemId);
+    else if (groupIndex === GROUP_COLLECTIONS) qs.set('collection_id', itemId);
     else if (groupIndex === GROUP_CATEGORIES) qs.set('category', itemId);
 
     router.push(`${ROUTES.investorDashboard}?${qs.toString()}`, { scroll: false });

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
 interface AlertsFormMessages {
-  maxGroupsInvalidMsg: string;
-  groupWarningPctInvalidMsg: string;
+  maxCollectionsInvalidMsg: string;
+  collectionWarningPctInvalidMsg: string;
   liquidityThresholdInvalidMsg: string;
   savingsRateInvalidMsg: string;
   incomeExpenseRatioInvalidMsg: string;
@@ -10,17 +10,17 @@ interface AlertsFormMessages {
 
 export function buildAlertsFormSchema(messages: AlertsFormMessages) {
   return z.object({
-    maxGroups: z
+    maxCollections: z
       .string()
       .optional()
       .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1), {
-        message: messages.maxGroupsInvalidMsg,
+        message: messages.maxCollectionsInvalidMsg,
       }),
-    groupWarningPct: z
+    collectionWarningPct: z
       .string()
       .optional()
       .refine((v) => !v || (Number.isInteger(Number(v)) && Number(v) >= 1 && Number(v) <= 100), {
-        message: messages.groupWarningPctInvalidMsg,
+        message: messages.collectionWarningPctInvalidMsg,
       }),
     liquidityThresholdPct: z
       .string()

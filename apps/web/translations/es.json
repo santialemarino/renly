@@ -113,11 +113,11 @@
       }
     },
     "allCategories": "Todas las categorías",
-    "groupFilter": {
-      "all": "Todos los grupos",
-      "selected": "Grupos ({count})",
-      "search": "Buscar grupos...",
-      "empty": "No se encontraron grupos."
+    "collectionFilter": {
+      "all": "Todas las colecciones",
+      "selected": "Colecciones ({count})",
+      "search": "Buscar colecciones...",
+      "empty": "No se encontraron colecciones."
     },
     "combobox": {
       "empty": "No se encontraron resultados."
@@ -302,7 +302,7 @@
       "paymentsCalendar": "Calendario de pagos",
       "investorDashboard": "Dashboard",
       "investments": "Inversiones",
-      "groups": "Grupos",
+      "collections": "Colecciones",
       "snapshots": "Snapshots",
       "preferences": "Preferencias",
       "alerts": "Alertas y límites",
@@ -403,7 +403,7 @@
         },
         "navigation": {
           "title": "Orientate en la app",
-          "text": "Cambiá entre Finanzas e Inversiones desde acá. Más herramientas — tarjetas, compromisos, grupos — aparecen a medida que tu cuenta crece."
+          "text": "Cambiá entre Finanzas e Inversiones desde acá. Más herramientas — tarjetas, compromisos, colecciones — aparecen a medida que tu cuenta crece."
         },
         "currency": {
           "title": "Cambiá de moneda cuando quieras",
@@ -1525,8 +1525,8 @@
     "distribution": {
       "title": "Distribución",
       "byCategory": "Por categoría",
-      "byGroup": "Por grupo",
-      "ungrouped": "Sin grupo",
+      "byCollection": "Por colección",
+      "unassigned": "Sin colección",
       "overAllocated": "Sobre el objetivo",
       "underAllocated": "Bajo el objetivo"
     },
@@ -1546,15 +1546,15 @@
     "filtered": {
       "subtitle": "Mostrando resultados filtrados.",
       "investment": "Mostrando métricas de <bold>{name}</bold>:",
-      "group": "Mostrando inversiones en <bold>{name}</bold>:",
+      "collection": "Mostrando inversiones en <bold>{name}</bold>:",
       "category": "Mostrando inversiones de tipo <bold>{name}</bold>:"
     },
     "search": {
-      "placeholder": "Buscar inversiones, grupos o categorías...",
+      "placeholder": "Buscar inversiones, colecciones o categorías...",
       "inputPlaceholder": "Escribí para buscar...",
       "noResults": "No se encontraron resultados.",
       "investments": "Inversiones",
-      "groups": "Grupos",
+      "collections": "Colecciones",
       "categories": "Categorías"
     },
     "detail": {
@@ -1581,7 +1581,7 @@
     "table": {
       "id": "ID",
       "name": "Nombre",
-      "groups": "Grupos",
+      "collections": "Colecciones",
       "category": "Categoría",
       "currency": "Moneda",
       "ticker": "Ticker",
@@ -1634,10 +1634,10 @@
         "label": "Broker",
         "placeholder": "Ingresá el broker"
       },
-      "groups": {
-        "label": "Grupos",
-        "placeholder": "Buscar grupos...",
-        "empty": "No se encontraron grupos."
+      "collections": {
+        "label": "Colecciones",
+        "placeholder": "Buscar colecciones...",
+        "empty": "No se encontraron colecciones."
       },
       "notes": {
         "label": "Notas",
@@ -1665,16 +1665,16 @@
     "unarchiveSuccess": "Inversión desarchivada.",
     "unarchiveError": "No se pudo desarchivar la inversión."
   },
-  "groups": {
+  "collections": {
     "metadata": {
-      "title": "Grupos",
-      "description": "Gestioná tus grupos de inversiones"
+      "title": "Colecciones",
+      "description": "Gestioná tus colecciones de inversiones"
     },
-    "title": "Grupos",
-    "subtitle": "Organizá tus inversiones en grupos.",
+    "title": "Colecciones",
+    "subtitle": "Organizá tus inversiones en colecciones.",
     "toolbar": {
-      "searchPlaceholder": "Buscar grupos...",
-      "addGroup": "Nuevo grupo"
+      "searchPlaceholder": "Buscar colecciones...",
+      "addCollection": "Nueva colección"
     },
     "table": {
       "id": "ID",
@@ -1684,16 +1684,16 @@
       "noTarget": "—",
       "actions": "Acciones",
       "noInvestments": "—",
-      "empty": "No se encontraron grupos.",
-      "emptyTitle": "Organizá tus inversiones en grupos",
-      "emptyDescription": "Agrupá inversiones por estrategia, cuenta o meta para seguir objetivos de asignación y ver desgloses en tu panel."
+      "empty": "No se encontraron colecciones.",
+      "emptyTitle": "Organizá tus inversiones en colecciones",
+      "emptyDescription": "Reuní inversiones por estrategia, cuenta o meta para seguir objetivos de asignación y ver desgloses en tu panel."
     },
     "form": {
-      "createTitle": "Nuevo grupo",
-      "editTitle": "Editar grupo",
+      "createTitle": "Nueva colección",
+      "editTitle": "Editar colección",
       "name": {
         "label": "Nombre",
-        "placeholder": "Ingresá el nombre del grupo"
+        "placeholder": "Ingresá el nombre de la colección"
       },
       "targetPercentage": {
         "label": "Objetivo de asignación (%)",
@@ -1711,26 +1711,26 @@
         "loading": "Guardando..."
       },
       "success": {
-        "create": "Grupo creado.",
-        "edit": "Grupo actualizado."
+        "create": "Colección creada.",
+        "edit": "Colección actualizada."
       },
       "error": {
-        "create": "No se pudo crear el grupo.",
-        "edit": "No se pudo actualizar el grupo."
+        "create": "No se pudo crear la colección.",
+        "edit": "No se pudo actualizar la colección."
       }
     },
     "delete": {
-      "title": "Eliminar grupo",
-      "description": "¿Estás seguro de que querés eliminar {name}? {count, plural, =0 {No hay inversiones vinculadas a este grupo.} =1 {1 inversión será desvinculada de este grupo.} other {# inversiones serán desvinculadas de este grupo.}} Las inversiones en sí no serán eliminadas.",
+      "title": "Eliminar colección",
+      "description": "¿Estás seguro de que querés eliminar {name}? {count, plural, =0 {No hay inversiones vinculadas a esta colección.} =1 {1 inversión será desvinculada de esta colección.} other {# inversiones serán desvinculadas de esta colección.}} Las inversiones en sí no serán eliminadas.",
       "cancel": "Cancelar",
       "confirm": "Eliminar",
       "deleting": "Eliminando...",
-      "success": "Grupo eliminado.",
-      "error": "No se pudo eliminar el grupo."
+      "success": "Colección eliminada.",
+      "error": "No se pudo eliminar la colección."
     },
     "softLimit": {
-      "approaching": "Tenés {count} de {max} grupos. Considerá consolidar antes de crear más.",
-      "reached": "Alcanzaste el máximo de {max} grupos. Eliminá o consolidá grupos existentes para crear nuevos."
+      "approaching": "Tenés {count} de {max} colecciones. Considerá consolidar antes de crear más.",
+      "reached": "Alcanzaste el máximo de {max} colecciones. Eliminá o consolidá colecciones existentes para crear nuevas."
     }
   },
   "snapshots": {
@@ -1875,15 +1875,15 @@
     "form": {
       "sectionAccountLimits": "Límites de la cuenta",
       "sectionFinancialHealth": "Salud financiera",
-      "maxGroups": {
-        "label": "Máximo de grupos",
-        "hint": "Cantidad máxima de grupos de inversiones permitidos.",
+      "maxCollections": {
+        "label": "Máximo de colecciones",
+        "hint": "Cantidad máxima de colecciones de inversiones permitidas.",
         "default": "Por defecto {value} si se deja vacío.",
         "invalidRange": "Debe ser un número entero mayor o igual a 1."
       },
-      "groupWarningPct": {
-        "label": "Advertencia de límite de grupos (%)",
-        "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de grupos.",
+      "collectionWarningPct": {
+        "label": "Advertencia de límite de colecciones (%)",
+        "hint": "Mostrar advertencia al alcanzar este porcentaje del máximo de colecciones.",
         "default": "Por defecto {value}% si se deja vacío.",
         "noDefault": "Dejá vacío para desactivar la advertencia.",
         "invalidRange": "Debe ser un número entero entre 1 y 100."
@@ -2250,8 +2250,8 @@
       },
       "entities": {
         "investments": "Inversiones",
-        "investment_groups": "Grupos",
-        "investment_group_members": "Membresías de grupos",
+        "investment_collections": "Colecciones",
+        "investment_collection_members": "Membresías de colecciones",
         "investment_snapshots": "Snapshots",
         "transactions": "Transacciones",
         "credit_cards": "Tarjetas de crédito",

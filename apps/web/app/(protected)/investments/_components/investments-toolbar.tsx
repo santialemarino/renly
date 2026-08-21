@@ -9,19 +9,19 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@repo/ui/components';
 import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/investment-form-dialog';
 import { CategorySelect } from '@/components/category-select';
+import { CollectionMultiSelect } from '@/components/collection-multi-select';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
-import { GroupMultiSelect } from '@/components/group-multi-select';
 import { ROUTES } from '@/config/routes';
-import type { InvestmentGroup } from '@/lib/api/investments';
+import type { InvestmentCollection } from '@/lib/api/collections';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 export function InvestmentsToolbar({
-  groups,
+  collections,
   preferredCurrencies,
   supportedCurrencies,
 }: {
-  groups: InvestmentGroup[];
+  collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
 }) {
@@ -31,14 +31,14 @@ export function InvestmentsToolbar({
   const { navigate } = useSearchParamsNavigation(ROUTES.investments, { resetPage: true });
   const [createOpen, setCreateOpen] = useState(false);
 
-  const selectedGroupIds = searchParams.getAll('group_ids').map(Number).filter(Boolean);
+  const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
 
-  function handleGroupToggle(groupId: number) {
-    const next = selectedGroupIds.includes(groupId)
-      ? selectedGroupIds.filter((id) => id !== groupId)
-      : [...selectedGroupIds, groupId];
-    navigate({ group_ids: next.map(String) });
+  function handleCollectionToggle(collectionId: number) {
+    const next = selectedCollectionIds.includes(collectionId)
+      ? selectedCollectionIds.filter((id) => id !== collectionId)
+      : [...selectedCollectionIds, collectionId];
+    navigate({ collection_ids: next.map(String) });
   }
 
   function handleCategoryChange(cat: string) {
@@ -56,11 +56,11 @@ export function InvestmentsToolbar({
       onAdd={() => setCreateOpen(true)}
       filters={
         <>
-          {groups.length > 0 && (
-            <GroupMultiSelect
-              groups={groups}
-              selectedIds={selectedGroupIds}
-              onToggle={handleGroupToggle}
+          {collections.length > 0 && (
+            <CollectionMultiSelect
+              collections={collections}
+              selectedIds={selectedCollectionIds}
+              onToggle={handleCollectionToggle}
               surface
               className="min-w-fit flex-1"
             />
@@ -85,7 +85,7 @@ export function InvestmentsToolbar({
       <InvestmentFormDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
-        groups={groups}
+        collections={collections}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         onSuccess={() => router.refresh()}

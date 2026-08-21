@@ -4,8 +4,9 @@ import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { InvestmentsDataTable } from '@/app/(protected)/investments/_components/investments-data-table';
 import { InvestmentsToolbar } from '@/app/(protected)/investments/_components/investments-toolbar';
 import { SampleInvestmentsTable } from '@/app/(protected)/investments/_components/sample-investments-table';
+import { getCollections } from '@/lib/api/collections';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
-import { getGroups, getInvestments } from '@/lib/api/investments';
+import { getInvestments } from '@/lib/api/investments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
@@ -18,7 +19,7 @@ export async function generateMetadata() {
 interface InvestmentsPageProps {
   searchParams: Promise<{
     search?: string;
-    group_ids?: string | string[];
+    collection_ids?: string | string[];
     category?: string;
     page?: string;
     sort_by?: string;
@@ -31,22 +32,24 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
   const t = await getTranslations('investments');
   const params = await searchParams;
 
-  const groupIdsRaw = params.group_ids;
-  const groupIds = groupIdsRaw
-    ? (Array.isArray(groupIdsRaw) ? groupIdsRaw : [groupIdsRaw]).map(Number).filter(Boolean)
+  const collectionIdsRaw = params.collection_ids;
+  const collectionIds = collectionIdsRaw
+    ? (Array.isArray(collectionIdsRaw) ? collectionIdsRaw : [collectionIdsRaw])
+        .map(Number)
+        .filter(Boolean)
     : undefined;
 
-  const [data, groups, settings, supportedCurrencies] = await Promise.all([
+  const [data, collections, settings, supportedCurrencies] = await Promise.all([
     getInvestments({
       search: params.search,
-      groupIds,
+      collectionIds,
       category: params.category,
       activeOnly: params.show_archived !== 'true',
       page: params.page ? Number(params.page) : 1,
       sortBy: params.sort_by as 'name' | 'category' | 'base_currency' | 'broker' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),
-    getGroups(),
+    getCollections(),
     getSettings().catch(() => null),
     getSupportedCurrencies().catch(() => undefined),
   ]);
@@ -63,14 +66,14 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
   // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
   // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
   const hasActiveFilters =
-    !!params.search || !!groupIds || !!params.category || params.show_archived === 'true';
+    !!params.search || !!collectionIds || !!params.category || params.show_archived === 'true';
   const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <InvestmentsToolbar
-        groups={groups}
+        collections={collections}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
       />
@@ -79,7 +82,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
       ) : (
         <InvestmentsDataTable
           data={data}
-          groups={groups}
+          collections={collections}
           preferredCurrencies={preferredCurrencies}
           supportedCurrencies={supportedCurrencies}
           firstRun={firstRun}
