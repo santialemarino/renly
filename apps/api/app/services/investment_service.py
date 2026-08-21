@@ -41,6 +41,15 @@ def _build_response(
     )
 
 
+# Assembles the response for a single investment, loading its collection membership and snapshot
+# presence. Shares _build_response with the list path so both carry the same fields.
+async def build_response(session: AsyncSession, investment: Investment) -> InvestmentResponse:
+    inv_ids = [investment.id] if investment.id is not None else []
+    collections_map = await investment_repository.get_collections_by_investment_ids(session, inv_ids)
+    snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, inv_ids)
+    return _build_response(investment, collections_map, snapshots_set)
+
+
 # Lists investments for the user with filters and pagination. Returns InvestmentListResponse.
 async def list_investments(
     session: AsyncSession,
@@ -190,11 +199,6 @@ async def set_investment_collections(
             raise NotFoundError(f"Collections not found: {sorted(invalid)}")
     await collection_repository.set_collections_for_investment(session, investment_id, collection_ids)
     await session.commit()
-
-
-# Returns True if the investment has at least one snapshot.
-async def has_snapshots(session: AsyncSession, investment_id: int) -> bool:
-    return await snapshot_repository.has_snapshots(session, investment_id)
 
 
 # Lists snapshots for an investment. Raises 404 if investment not found or not owned.

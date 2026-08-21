@@ -24,15 +24,6 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 
-# Builds InvestmentResponse from model, including has_snapshots check.
-async def _to_response(session: SessionDep, investment) -> InvestmentResponse:
-    has = await investment_service.has_snapshots(session, investment.id)
-    data = {c.name: getattr(investment, c.name) for c in investment.__table__.columns}
-    data["has_snapshots"] = has
-    data["collections"] = []
-    return InvestmentResponse(**data)
-
-
 # Lists investments for the user with optional search, collection, category filters and pagination.
 @router.get("", response_model=InvestmentListResponse)
 async def list_investments(
@@ -69,7 +60,7 @@ async def get_investment(
     session: SessionDep,
 ) -> InvestmentResponse:
     investment = await investment_service.get_investment(session, investment_id, current_user)
-    return await _to_response(session, investment)
+    return await investment_service.build_response(session, investment)
 
 
 # Creates a new investment for the user.
@@ -89,7 +80,7 @@ async def create_investment(
         broker=body.broker,
         notes=body.notes,
     )
-    return await _to_response(session, investment)
+    return await investment_service.build_response(session, investment)
 
 
 # Updates an investment. Only provided fields are updated. Returns 404 if not found.
@@ -102,7 +93,7 @@ async def update_investment(
 ) -> InvestmentResponse:
     payload = body.model_dump(exclude_unset=True)
     investment = await investment_service.update_investment(session, investment_id, current_user, **payload)
-    return await _to_response(session, investment)
+    return await investment_service.build_response(session, investment)
 
 
 # Archives an investment (sets is_active = false). Returns 204.
