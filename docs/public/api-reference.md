@@ -47,6 +47,8 @@ Registration requires a valid email address and a password of at least 12 charac
 | `PATCH` | `/investments/{id}/unarchive`   | Restore an archived investment.                                                        |
 | `PUT`   | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`. |
 
+Every investment response — list, get-by-id, create and update — carries its `collections` as `{ id, name }` objects, plus `has_snapshots`.
+
 **List query parameters:**
 
 | Parameter        | Type    | Default | Description                                                |
