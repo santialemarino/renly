@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
+import { COLLECTION_NAME_MAX } from '@/lib/constants/api-constants';
 
-export function buildGroupFormSchema(requiredMsg: string, invalidTargetMsg: string) {
+export function buildCollectionFormSchema(requiredMsg: string, invalidTargetMsg: string) {
   return z.object({
-    name: z.string().min(1, requiredMsg).max(GROUP_NAME_MAX),
+    name: z.string().min(1, requiredMsg).max(COLLECTION_NAME_MAX),
     targetPercentage: z
       .string()
       .optional()
@@ -20,4 +20,4 @@ export function buildGroupFormSchema(requiredMsg: string, invalidTargetMsg: stri
   });
 }
 
-export type GroupFormValues = z.infer<ReturnType<typeof buildGroupFormSchema>>;
+export type CollectionFormValues = z.infer<ReturnType<typeof buildCollectionFormSchema>>;

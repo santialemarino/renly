@@ -36,10 +36,10 @@ async def update_settings(
         kwargs["preferred_currencies"] = payload["preferred_currencies"]
     if "period_presets" in payload:
         kwargs["period_presets"] = payload["period_presets"]
-    if "max_groups" in payload:
-        kwargs["max_groups"] = payload["max_groups"]
-    if "group_warning_pct" in payload:
-        kwargs["group_warning_pct"] = payload["group_warning_pct"]
+    if "max_collections" in payload:
+        kwargs["max_collections"] = payload["max_collections"]
+    if "collection_warning_pct" in payload:
+        kwargs["collection_warning_pct"] = payload["collection_warning_pct"]
     if "dollar_rate_preference" in payload:
         kwargs["dollar_rate_preference"] = payload["dollar_rate_preference"]
     if "shortcut_currencies" in payload:

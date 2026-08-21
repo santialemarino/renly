@@ -18,10 +18,11 @@ import { ConceptHint } from '@/components/concept-hint';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { WarningHint } from '@/components/styled-hint';
 import { HELP_ANCHORS, ROUTES } from '@/config/routes';
-import { getGroups, getInvestments } from '@/lib/api/investments';
+import { getCollections } from '@/lib/api/collections';
+import { getInvestments } from '@/lib/api/investments';
 import {
   getAllocation,
-  getAllocationByGroup,
+  getAllocationByCollection,
   getInvestmentMetrics,
   getInvestmentsSummary,
   getPortfolioEvolution,
@@ -44,7 +45,7 @@ export async function generateMetadata() {
 interface InvestorDashboardPageProps {
   searchParams: Promise<{
     investment_id?: string;
-    group_id?: string;
+    collection_id?: string;
     category?: string;
     period?: string;
     start_date?: string;
@@ -82,7 +83,9 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   const investmentIds = params.investment_id
     ? [Number(params.investment_id)].filter(Boolean)
     : undefined;
-  const groupIds = params.group_id ? [Number(params.group_id)].filter(Boolean) : undefined;
+  const collectionIds = params.collection_id
+    ? [Number(params.collection_id)].filter(Boolean)
+    : undefined;
 
   const category = params.category || undefined;
 
@@ -100,15 +103,15 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   }
 
   const isSingleInvestment = investmentIds?.length === 1;
-  const isFiltered = !!(investmentIds || groupIds || category);
-  const isCategoryFilter = !!category && !investmentIds && !groupIds;
-  const isGroupFilter = !!groupIds && !investmentIds && !category;
+  const isFiltered = !!(investmentIds || collectionIds || category);
+  const isCategoryFilter = !!category && !investmentIds && !collectionIds;
+  const isCollectionFilter = !!collectionIds && !investmentIds && !category;
 
   // Build filter params.
   const filterParams: MetricsFilterParams = {
     currency,
     investmentIds,
-    groupIds,
+    collectionIds,
     category,
     startDate,
     endDate,
@@ -118,26 +121,26 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   let metrics,
     evolution,
     categoryAllocation,
-    groupAllocation,
+    collectionAllocation,
     investmentsSummary,
-    groups,
+    collections,
     investmentsList;
   try {
     [
       metrics,
       evolution,
       categoryAllocation,
-      groupAllocation,
+      collectionAllocation,
       investmentsSummary,
-      groups,
+      collections,
       investmentsList,
     ] = await Promise.all([
       getPortfolioMetrics(filterParams),
       getPortfolioEvolution(filterParams),
       getAllocation(filterParams),
-      getAllocationByGroup(filterParams),
+      getAllocationByCollection(filterParams),
       getInvestmentsSummary(filterParams),
-      getGroups(),
+      getCollections(),
       getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
     ]);
   } catch {
@@ -161,11 +164,11 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
   if (isSingleInvestment && investmentDetail) {
     filterName = investmentDetail.name;
     subtitleKey = 'filtered.investment';
-  } else if (groupIds?.length === 1) {
-    const group = groups.find((g) => g.id === groupIds[0]);
-    if (group) {
-      filterName = group.name;
-      subtitleKey = 'filtered.group';
+  } else if (collectionIds?.length === 1) {
+    const collection = collections.find((c) => c.id === collectionIds[0]);
+    if (collection) {
+      filterName = collection.name;
+      subtitleKey = 'filtered.collection';
     }
   } else if (category) {
     filterName = tCommon(`categories.${category}`);
@@ -219,7 +222,9 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
       <DismissableCurrencyHint show={!isOriginalSelected} />
       <InvestorDashboardAnimatedToolbar
         backButton={<InvestorDashboardToolbar isFiltered={isFiltered} />}
-        search={<InvestorDashboardSearch investments={searchableInvestments} groups={groups} />}
+        search={
+          <InvestorDashboardSearch investments={searchableInvestments} collections={collections} />
+        }
         periodPicker={
           <DashboardPeriodPicker
             routePath={ROUTES.investorDashboard}
@@ -246,8 +251,10 @@ export default async function InvestorDashboardPage({ searchParams }: InvestorDa
         <div className="flex flex-col gap-6 lg:flex-row">
           <InvestorDashboardDistribution
             categoryAllocation={categoryAllocation}
-            groupAllocation={groupAllocation}
-            forcedMode={isCategoryFilter ? 'group' : isGroupFilter ? 'category' : undefined}
+            collectionAllocation={collectionAllocation}
+            forcedMode={
+              isCategoryFilter ? 'collection' : isCollectionFilter ? 'category' : undefined
+            }
           />
           <InvestorDashboardSummaryTable summary={investmentsSummary} />
         </div>

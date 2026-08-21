@@ -2,7 +2,7 @@
 
 export const INVESTMENT_NAME_MAX = 255;
 export const INVESTMENT_BROKER_MAX = 100;
-export const GROUP_NAME_MAX = 255;
+export const COLLECTION_NAME_MAX = 255;
 
 // --- API pagination ---
 
@@ -15,5 +15,5 @@ export const CREDIT_CARD_NAME_MAX = 100;
 
 // --- API sentinel values ---
 
-export const UNGROUPED_LABEL = 'Ungrouped';
+export const UNASSIGNED_LABEL = 'Unassigned';
 export const CATEGORY_ALL = '__all__';

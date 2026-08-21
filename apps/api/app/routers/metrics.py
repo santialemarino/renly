@@ -9,7 +9,7 @@ from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.schemas.metrics import (
     AllocationResponse,
-    GroupAllocationResponse,
+    CollectionAllocationResponse,
     InvestmentMetricsResponse,
     InvestmentsSummaryResponse,
     PortfolioEvolutionResponse,
@@ -20,7 +20,7 @@ from app.services import metrics_service
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 INVESTMENT_IDS_DESC = "Filter to specific investment IDs."
-GROUP_IDS_DESC = "Filter to investments in these groups (union)."
+COLLECTION_IDS_DESC = "Filter to investments in these collections (union)."
 CATEGORY_DESC = "Filter to investments of this category."
 SEARCH_DESC = "Filter by investment name (case-insensitive)."
 START_DATE_DESC = "Start of date range (YYYY-MM-DD). Windows TWR/IRR and turns value/invested/gain into period metrics."
@@ -29,14 +29,14 @@ END_DATE_DESC = "End of date range (YYYY-MM-DD). Windows TWR/IRR and turns value
 
 # Returns portfolio-level metrics (total value, invested, gain, month change). With
 # start_date/end_date the value/invested/gain fields become period metrics over that window.
-# Supports filtering by investment IDs, group IDs, or category.
+# Supports filtering by investment IDs, collection IDs, or category.
 @router.get("/portfolio", response_model=PortfolioMetricsResponse)
 async def get_portfolio_metrics(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
-    group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
+    collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
@@ -47,7 +47,7 @@ async def get_portfolio_metrics(
         current_user.id,
         currency=currency,
         investment_ids=investment_ids,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         search=search,
         start_date=start_date,
@@ -56,14 +56,14 @@ async def get_portfolio_metrics(
 
 
 # Returns monthly portfolio value series for the evolution chart.
-# Supports filtering by investment IDs, group IDs, or category.
+# Supports filtering by investment IDs, collection IDs, or category.
 @router.get("/portfolio/evolution", response_model=PortfolioEvolutionResponse)
 async def get_portfolio_evolution(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
-    group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
+    collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
@@ -74,7 +74,7 @@ async def get_portfolio_evolution(
         current_user.id,
         currency=currency,
         investment_ids=investment_ids,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         search=search,
         start_date=start_date,
@@ -100,14 +100,14 @@ async def get_investment_metrics(
 
 
 # Returns portfolio allocation by investment category.
-# Supports filtering by investment IDs, group IDs, or category.
+# Supports filtering by investment IDs, collection IDs, or category.
 @router.get("/allocation", response_model=AllocationResponse)
 async def get_allocation(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
-    group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
+    collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
 ) -> AllocationResponse:
@@ -116,44 +116,44 @@ async def get_allocation(
         current_user.id,
         currency=currency,
         investment_ids=investment_ids,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         search=search,
     )
 
 
-# Returns portfolio allocation by investment group.
-# Supports filtering by investment IDs, group IDs, or category.
-@router.get("/allocation/by-group", response_model=GroupAllocationResponse)
-async def get_allocation_by_group(
+# Returns portfolio allocation by investment collection.
+# Supports filtering by investment IDs, collection IDs, or category.
+@router.get("/allocation/by-collection", response_model=CollectionAllocationResponse)
+async def get_allocation_by_collection(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
-    group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
+    collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
-) -> GroupAllocationResponse:
-    return await metrics_service.get_allocation_by_group(
+) -> CollectionAllocationResponse:
+    return await metrics_service.get_allocation_by_collection(
         session,
         current_user.id,
         currency=currency,
         investment_ids=investment_ids,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         search=search,
     )
 
 
 # Returns lightweight per-investment metrics for the dashboard compact table.
-# Supports filtering by investment IDs, group IDs, or category.
+# Supports filtering by investment IDs, collection IDs, or category.
 @router.get("/investments/summary", response_model=InvestmentsSummaryResponse)
 async def get_investments_summary(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
     investment_ids: list[int] | None = Query(default=None, description=INVESTMENT_IDS_DESC),
-    group_ids: list[int] | None = Query(default=None, description=GROUP_IDS_DESC),
+    collection_ids: list[int] | None = Query(default=None, description=COLLECTION_IDS_DESC),
     category: str | None = Query(default=None, description=CATEGORY_DESC),
     search: str | None = Query(default=None, description=SEARCH_DESC),
     start_date: date_type | None = Query(default=None, description=START_DATE_DESC),
@@ -164,7 +164,7 @@ async def get_investments_summary(
         current_user.id,
         currency=currency,
         investment_ids=investment_ids,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         search=search,
         start_date=start_date,

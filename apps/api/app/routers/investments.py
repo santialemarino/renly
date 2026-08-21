@@ -7,7 +7,7 @@ from app.schemas.investment import (
     InvestmentCreate,
     InvestmentListResponse,
     InvestmentResponse,
-    InvestmentSetGroupsBody,
+    InvestmentSetCollectionsBody,
     InvestmentUpdate,
 )
 from app.schemas.snapshot import SnapshotCreate, SnapshotResponse
@@ -29,17 +29,17 @@ async def _to_response(session: SessionDep, investment) -> InvestmentResponse:
     has = await investment_service.has_snapshots(session, investment.id)
     data = {c.name: getattr(investment, c.name) for c in investment.__table__.columns}
     data["has_snapshots"] = has
-    data["groups"] = []
+    data["collections"] = []
     return InvestmentResponse(**data)
 
 
-# Lists investments for the user with optional search, group, category filters and pagination.
+# Lists investments for the user with optional search, collection, category filters and pagination.
 @router.get("", response_model=InvestmentListResponse)
 async def list_investments(
     current_user: CurrentUser,
     session: SessionDep,
     search: str | None = Query(default=None, description="Filter by name (case-insensitive)."),
-    group_ids: list[int] | None = Query(default=None, description="Filter by group ids (union)."),
+    collection_ids: list[int] | None = Query(default=None, description="Filter by collection ids (union)."),
     category: InvestmentCategory | None = Query(default=None, description="Filter by category."),
     active_only: bool = Query(default=True, description="Return only active investments."),
     page: int = Query(default=1, ge=1, description="Page number (1-based)."),
@@ -51,7 +51,7 @@ async def list_investments(
         session,
         current_user,
         search=search,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         active_only=active_only,
         page=page,
@@ -125,15 +125,15 @@ async def unarchive_investment(
     await investment_service.unarchive_investment(session, investment_id, current_user)
 
 
-# Replaces group membership for the investment. Returns 204.
-@router.put("/{investment_id}/groups", status_code=status.HTTP_204_NO_CONTENT)
-async def set_investment_groups(
+# Replaces collection membership for the investment. Returns 204.
+@router.put("/{investment_id}/collections", status_code=status.HTTP_204_NO_CONTENT)
+async def set_investment_collections(
     investment_id: int,
-    body: InvestmentSetGroupsBody,
+    body: InvestmentSetCollectionsBody,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> None:
-    await investment_service.set_investment_groups(session, investment_id, current_user, body.group_ids)
+    await investment_service.set_investment_collections(session, investment_id, current_user, body.collection_ids)
 
 
 # --- Snapshots ---

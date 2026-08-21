@@ -6,13 +6,13 @@ from sqlmodel import Field, SQLModel
 from app.models.utils import utcnow
 
 
-# User-defined group for aggregating investments (e.g. Retirement, Kids, Trading).
-class InvestmentGroup(SQLModel, table=True):
-    __tablename__ = "investment_groups"
+# User-defined collection for aggregating investments (e.g. Retirement, Kids, Trading).
+class InvestmentCollection(SQLModel, table=True):
+    __tablename__ = "investment_collections"
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="users.id", description="Owner.")
-    name: str = Field(max_length=255, description="Display name of the group.")
+    name: str = Field(max_length=255, description="Display name of the collection.")
     target_percentage: Decimal | None = Field(
         default=None,
         max_digits=5,
@@ -25,17 +25,17 @@ class InvestmentGroup(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
-# Many-to-many: an investment can belong to zero, one, or several groups.
-class InvestmentGroupMember(SQLModel, table=True):
-    __tablename__ = "investment_group_members"
+# Many-to-many: an investment can belong to zero, one, or several collections.
+class InvestmentCollectionMember(SQLModel, table=True):
+    __tablename__ = "investment_collection_members"
 
     investment_id: int = Field(
         foreign_key="investments.id",
         primary_key=True,
-        description="Investment in this group.",
+        description="Investment in this collection.",
     )
-    group_id: int = Field(
-        foreign_key="investment_groups.id",
+    collection_id: int = Field(
+        foreign_key="investment_collections.id",
         primary_key=True,
-        description="Group this investment belongs to.",
+        description="Collection this investment belongs to.",
     )

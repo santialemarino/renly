@@ -8,10 +8,10 @@ from app.models.investment import InvestmentCategory
 from app.schemas.base import RequestBase, validate_supported_currency
 
 
-# Minimal group info embedded in investment responses.
-class InvestmentGroupInfo(BaseModel):
-    id: int = Field(description="Group id.")
-    name: str = Field(description="Group name.")
+# Minimal collection info embedded in investment responses.
+class InvestmentCollectionInfo(BaseModel):
+    id: int = Field(description="Collection id.")
+    name: str = Field(description="Collection name.")
 
     model_config = {"from_attributes": True}
 
@@ -40,10 +40,10 @@ class InvestmentUpdate(RequestBase):
     _validate_base_currency = field_validator("base_currency")(validate_supported_currency)
 
 
-# Body for PUT /investments/{id}/groups. Replaces group membership for this investment.
-class InvestmentSetGroupsBody(RequestBase):
-    group_ids: list[int] = Field(
-        description="Group ids to assign to this investment. Replaces existing membership.",
+# Body for PUT /investments/{id}/collections. Replaces collection membership for this investment.
+class InvestmentSetCollectionsBody(RequestBase):
+    collection_ids: list[int] = Field(
+        description="Collection ids to assign to this investment. Replaces existing membership.",
     )
 
 
@@ -60,9 +60,9 @@ class InvestmentResponse(BaseModel):
     has_snapshots: bool = Field(description="Whether the investment has any snapshots. Used to lock currency changes.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
-    groups: list[InvestmentGroupInfo] = Field(
+    collections: list[InvestmentCollectionInfo] = Field(
         default_factory=list,
-        description="Groups this investment belongs to.",
+        description="Collections this investment belongs to.",
     )
 
     model_config = {"from_attributes": True}

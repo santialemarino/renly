@@ -24,7 +24,7 @@ export const ROUTES = {
   paymentsCalendar: '/payments-calendar',
   investorDashboard: '/investor-dashboard',
   investments: '/investments',
-  groups: '/groups',
+  collections: '/collections',
   snapshots: '/snapshots',
   preferences: '/preferences',
   alerts: '/alerts',

@@ -15,9 +15,9 @@ import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
+import type { InvestmentCollection } from '@/lib/api/collections';
 import type {
   Investment,
-  InvestmentGroup,
   InvestmentListResponse,
   InvestmentSortField,
 } from '@/lib/api/investments';
@@ -25,13 +25,13 @@ import { useTableSort } from '@/lib/hooks/use-table-sort';
 
 function RowActions({
   investment,
-  groups,
+  collections,
   preferredCurrencies,
   supportedCurrencies,
   onSuccess,
 }: {
   investment: Investment;
-  groups: InvestmentGroup[];
+  collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   onSuccess: () => void;
@@ -97,7 +97,7 @@ function RowActions({
         open={editOpen}
         onOpenChange={setEditOpen}
         investment={investment}
-        groups={groups}
+        collections={collections}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         onSuccess={onSuccess}
@@ -115,13 +115,13 @@ function RowActions({
 
 export function InvestmentsDataTable({
   data,
-  groups,
+  collections,
   preferredCurrencies,
   supportedCurrencies,
   firstRun,
 }: {
   data: InvestmentListResponse;
-  groups: InvestmentGroup[];
+  collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   firstRun?: boolean;
@@ -157,7 +157,7 @@ export function InvestmentsDataTable({
                 sortOrder={sortOrder}
                 onSort={handleSortChange}
               />
-              <TableHead>{t('table.groups')}</TableHead>
+              <TableHead>{t('table.collections')}</TableHead>
               <SortableTableHead
                 label={t('table.category')}
                 column="category"
@@ -203,14 +203,14 @@ export function InvestmentsDataTable({
                   <TableCell className="text-muted-foreground">{investment.id}</TableCell>
                   <TableCell className="text-paragraph-sm-medium">{investment.name}</TableCell>
                   <TableCell>
-                    {investment.groups.length > 0 ? (
+                    {investment.collections.length > 0 ? (
                       <div className="flex flex-wrap gap-x-1 gap-y-1">
-                        {investment.groups.map((g) => (
+                        {investment.collections.map((c) => (
                           <span
-                            key={g.id}
+                            key={c.id}
                             className="px-1.5 py-0.5 rounded text-paragraph-xs bg-muted text-muted-foreground"
                           >
-                            {g.name}
+                            {c.name}
                           </span>
                         ))}
                       </div>
@@ -229,7 +229,7 @@ export function InvestmentsDataTable({
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                     <RowActions
                       investment={investment}
-                      groups={groups}
+                      collections={collections}
                       preferredCurrencies={preferredCurrencies}
                       supportedCurrencies={supportedCurrencies}
                       onSuccess={() => router.refresh()}

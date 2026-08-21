@@ -7,9 +7,9 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@repo/ui/components';
 import { PillToggleGroup } from '@/components/pill-toggle-group';
-import type { AllocationResponse, GroupAllocationResponse } from '@/lib/api/metrics';
+import type { AllocationResponse, CollectionAllocationResponse } from '@/lib/api/metrics';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
-import { UNGROUPED_LABEL } from '@/lib/constants/api-constants';
+import { UNASSIGNED_LABEL } from '@/lib/constants/api-constants';
 import {
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
@@ -27,17 +27,17 @@ import {
 } from '@/lib/constants/charts';
 import { useFormatters } from '@/lib/i18n/formatters';
 
-type Mode = 'category' | 'group';
+type Mode = 'category' | 'collection';
 
 interface InvestorDashboardDistributionProps {
   categoryAllocation: AllocationResponse;
-  groupAllocation: GroupAllocationResponse;
+  collectionAllocation: CollectionAllocationResponse;
   forcedMode?: Mode;
 }
 
 export function InvestorDashboardDistribution({
   categoryAllocation,
-  groupAllocation,
+  collectionAllocation,
   forcedMode,
 }: InvestorDashboardDistributionProps) {
   const fmt = useFormatters();
@@ -57,8 +57,11 @@ export function InvestorDashboardDistribution({
         targetPercentage: null as number | null,
         difference: null as number | null,
       }))
-    : groupAllocation.items.map((item) => ({
-        name: item.groupName === UNGROUPED_LABEL ? t('distribution.ungrouped') : item.groupName,
+    : collectionAllocation.items.map((item) => ({
+        name:
+          item.collectionName === UNASSIGNED_LABEL
+            ? t('distribution.unassigned')
+            : item.collectionName,
         value: item.value,
         percentage: item.percentage,
         targetPercentage: item.targetPercentage,
@@ -101,7 +104,7 @@ export function InvestorDashboardDistribution({
           <PillToggleGroup
             items={[
               { value: 'category', label: t('distribution.byCategory') },
-              { value: 'group', label: t('distribution.byGroup') },
+              { value: 'collection', label: t('distribution.byCollection') },
             ]}
             value={mode}
             onValueChange={(v) => setMode(v as Mode)}
@@ -201,7 +204,7 @@ export function InvestorDashboardDistribution({
                 </div>
               </div>
 
-              {/* Target color legend — only when groups have targets. */}
+              {/* Target color legend — only when collections have targets. */}
               <AnimatePresence initial={false}>
                 {hasTargets && (
                   <motion.div

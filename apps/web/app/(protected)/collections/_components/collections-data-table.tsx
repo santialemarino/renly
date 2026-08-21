@@ -6,34 +6,34 @@ import { FolderOpen, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
-import { GroupDeleteFormDialog } from '@/app/(protected)/groups/_components/group-delete-form-dialog';
-import { GroupFormDialog } from '@/app/(protected)/groups/_components/group-form-dialog';
+import { CollectionDeleteFormDialog } from '@/app/(protected)/collections/_components/collection-delete-form-dialog';
+import { CollectionFormDialog } from '@/app/(protected)/collections/_components/collection-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { ROUTES } from '@/config/routes';
-import type { InvestmentGroup } from '@/lib/api/groups';
+import type { InvestmentCollection } from '@/lib/api/collections';
 import type { SortOrder } from '@/lib/api/types';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 type SortField = 'id' | 'name';
 
-interface GroupsDataTableProps {
-  groups: InvestmentGroup[];
+interface CollectionsDataTableProps {
+  collections: InvestmentCollection[];
   investments: { id: number; name: string }[];
   sortBy?: string;
   sortOrder?: SortOrder;
   firstRun?: boolean;
 }
 
-export function GroupsDataTable({
-  groups,
+export function CollectionsDataTable({
+  collections,
   investments,
   sortBy,
   sortOrder,
   firstRun,
-}: GroupsDataTableProps) {
-  const t = useTranslations('groups');
+}: CollectionsDataTableProps) {
+  const t = useTranslations('collections');
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -56,7 +56,7 @@ export function GroupsDataTable({
       qs.set('sort_by', column);
       qs.set('sort_order', 'asc');
     }
-    router.push(`${ROUTES.groups}?${qs.toString()}`, { scroll: false });
+    router.push(`${ROUTES.collections}?${qs.toString()}`, { scroll: false });
   }
 
   return (
@@ -77,7 +77,7 @@ export function GroupsDataTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {groups.length === 0 ? (
+        {collections.length === 0 ? (
           <TableEmptyRow
             colSpan={5}
             firstRun={firstRun}
@@ -87,10 +87,10 @@ export function GroupsDataTable({
             plain={t('table.empty')}
           />
         ) : (
-          groups.map((group) => (
-            <GroupRow
-              key={group.id}
-              group={group}
+          collections.map((collection) => (
+            <CollectionRow
+              key={collection.id}
+              collection={collection}
               investmentMap={investmentMap}
               investments={investments}
               onSuccess={() => router.refresh()}
@@ -102,24 +102,24 @@ export function GroupsDataTable({
   );
 }
 
-function GroupRow({
-  group,
+function CollectionRow({
+  collection,
   investmentMap,
   investments,
   onSuccess,
 }: {
-  group: InvestmentGroup;
+  collection: InvestmentCollection;
   investmentMap: Map<number, string>;
   investments: { id: number; name: string }[];
   onSuccess: () => void;
 }) {
   const fmt = useFormatters();
-  const t = useTranslations('groups');
+  const t = useTranslations('collections');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const investmentNames = fmt.list(
-    group.investmentIds
+    collection.investmentIds
       .map((id) => investmentMap.get(id))
       .filter((name): name is string => name != null),
   );
@@ -127,10 +127,12 @@ function GroupRow({
   return (
     <>
       <TableRow>
-        <TableCell className="text-muted-foreground">{group.id}</TableCell>
-        <TableCell className="text-paragraph-sm-medium">{group.name}</TableCell>
+        <TableCell className="text-muted-foreground">{collection.id}</TableCell>
+        <TableCell className="text-paragraph-sm-medium">{collection.name}</TableCell>
         <TableCell className="text-paragraph-sm text-muted-foreground">
-          {group.targetPercentage != null ? `${group.targetPercentage}%` : t('table.noTarget')}
+          {collection.targetPercentage != null
+            ? `${collection.targetPercentage}%`
+            : t('table.noTarget')}
         </TableCell>
         <TableCell className="max-w-md text-paragraph-sm text-muted-foreground truncate">
           {investmentNames || t('table.noInvestments')}
@@ -154,17 +156,17 @@ function GroupRow({
         </TableCell>
       </TableRow>
 
-      <GroupFormDialog
+      <CollectionFormDialog
         open={editOpen}
         onOpenChange={setEditOpen}
-        group={group}
+        collection={collection}
         investments={investments}
         onSuccess={onSuccess}
       />
-      <GroupDeleteFormDialog
+      <CollectionDeleteFormDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        group={group}
+        collection={collection}
         onSuccess={onSuccess}
       />
     </>

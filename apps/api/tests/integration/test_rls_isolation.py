@@ -32,7 +32,7 @@ _OWNER_MATCH_TABLES = (
     "investments",
     "investment_snapshots",
     "transactions",
-    "investment_groups",
+    "investment_collections",
     "credit_cards",
     "income_entries",
     "card_settlements",
@@ -77,9 +77,9 @@ async def seeded():
                     {"u": uid},
                 )
             ).scalar_one()
-            grp = (
+            coll = (
                 await s.execute(
-                    text("INSERT INTO investment_groups (user_id, name) VALUES (:u, 'grp') RETURNING id"),
+                    text("INSERT INTO investment_collections (user_id, name) VALUES (:u, 'coll') RETURNING id"),
                     {"u": uid},
                 )
             ).scalar_one()
@@ -98,10 +98,10 @@ async def seeded():
                 {"c": card, "u": uid},
             )
             await s.execute(
-                text("INSERT INTO investment_group_members (investment_id, group_id) VALUES (:i, :g)"),
-                {"i": inv, "g": grp},
+                text("INSERT INTO investment_collection_members (investment_id, collection_id) VALUES (:i, :c)"),
+                {"i": inv, "c": coll},
             )
-            ids[key] = {"user": uid, "investment": inv, "card": card, "group": grp}
+            ids[key] = {"user": uid, "investment": inv, "card": card, "collection": coll}
         await s.commit()
 
     try:
@@ -119,7 +119,7 @@ async def seeded():
 @pytest.mark.asyncio
 async def test_no_context_reads_no_rows(seeded):
     async with seeded["sessionmaker"]() as s:
-        for table in _OWNER_MATCH_TABLES + ("investment_group_members",):
+        for table in _OWNER_MATCH_TABLES + ("investment_collection_members",):
             count = (await s.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one()  # noqa: S608 (fixed table list)
             assert count == 0, f"{table} leaked {count} rows with no user context set"
 
@@ -142,7 +142,7 @@ async def test_user_sees_only_own_rows(seeded):
             owners = (await s.execute(text(f"SELECT DISTINCT user_id FROM {table}"))).scalars().all()  # noqa: S608
             assert owners == [a["user"]], f"{table} exposed rows for another user: {owners}"
 
-        members = (await s.execute(text("SELECT investment_id FROM investment_group_members"))).scalars().all()
+        members = (await s.execute(text("SELECT investment_id FROM investment_collection_members"))).scalars().all()
         assert members == [a["investment"]]
 
         # B's specific rows are invisible to A even when addressed by primary key.

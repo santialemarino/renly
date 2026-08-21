@@ -14,7 +14,7 @@ from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Investment
-from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.payment_obligation import PaymentObligation
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
@@ -27,7 +27,7 @@ _USER_ID_MODELS = {
     "investments": Investment,
     "investment_snapshots": InvestmentSnapshot,
     "transactions": Transaction,
-    "investment_groups": InvestmentGroup,
+    "investment_collections": InvestmentCollection,
     "credit_cards": CreditCard,
     "income_entries": IncomeEntry,
     "card_settlements": CardSettlement,
@@ -44,7 +44,7 @@ _USER_ID_MODELS = {
 }
 
 
-# Returns all of a user's owned rows keyed by export name. investment_group_members has no user_id,
+# Returns all of a user's owned rows keyed by export name. investment_collection_members has no user_id,
 # so it joins through the parent investment; the rest filter on their direct user_id column.
 async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]:
     data: dict[str, list] = {}
@@ -53,9 +53,11 @@ async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]
         data[name] = list(result.scalars().all())
 
     members = await session.execute(
-        select(InvestmentGroupMember).join(Investment, Investment.id == InvestmentGroupMember.investment_id).where(Investment.user_id == user_id)
+        select(InvestmentCollectionMember)
+        .join(Investment, Investment.id == InvestmentCollectionMember.investment_id)
+        .where(Investment.user_id == user_id)
     )
-    data["investment_group_members"] = list(members.scalars().all())
+    data["investment_collection_members"] = list(members.scalars().all())
     return data
 
 

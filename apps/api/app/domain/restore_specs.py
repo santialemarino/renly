@@ -9,7 +9,7 @@
 #     rows (two same-priced coffees, two investments both named "Cash"). Because parents are always
 #     re-created with fresh ids, restored children attach only to those new parents and can never collide
 #     with the target's existing rows on a unique constraint (snapshots' UNIQUE(investment_id, date), the
-#     group-members composite PK). Restore is therefore additive but NOT idempotent: re-restoring the same
+#     collection-members composite PK). Restore is therefore additive but NOT idempotent: re-restoring the same
 #     file adds everything again, so restore into a fresh account (see docs/public/api-reference.md).
 #   - The circular reconciliation cluster (card_reconciliations and account_reconciliations, both ↔
 #     expense/income) and preference/secret rows are out of scope; see SKIPPED_ENTITIES.
@@ -46,7 +46,7 @@ from app.models.expense_entry import ExpenseEntry
 from app.models.income_entry import IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Investment
-from app.models.investment_group import InvestmentGroup, InvestmentGroupMember
+from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.payment_obligation import PaymentObligation
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
@@ -79,8 +79,8 @@ class RestoreSpec:
     model: type[SQLModel]
     fks: tuple[FkRef, ...] = ()
     null_fields: tuple[str, ...] = ()
-    has_user_id: bool = True  # investment_group_members is keyed via its parents, not a user_id column
-    has_id: bool = True  # investment_group_members has a composite PK, no surrogate id to remap
+    has_user_id: bool = True  # investment_collection_members is keyed via its parents, not a user_id column
+    has_id: bool = True  # investment_collection_members has a composite PK, no surrogate id to remap
 
 
 # Restore order matters: parents precede children so FK remaps resolve. Independent entities first —
@@ -88,7 +88,7 @@ class RestoreSpec:
 # accounts' id map has to exist by the time cards are rebuilt.
 RESTORE_SPECS: tuple[RestoreSpec, ...] = (
     RestoreSpec("investments", Investment),
-    RestoreSpec("investment_groups", InvestmentGroup),
+    RestoreSpec("investment_collections", InvestmentCollection),
     RestoreSpec("accounts", Account),
     RestoreSpec(
         "credit_cards",
@@ -96,9 +96,9 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         fks=(FkRef("default_account_id", "accounts", False),),
     ),
     RestoreSpec(
-        "investment_group_members",
-        InvestmentGroupMember,
-        fks=(FkRef("investment_id", "investments", True), FkRef("group_id", "investment_groups", True)),
+        "investment_collection_members",
+        InvestmentCollectionMember,
+        fks=(FkRef("investment_id", "investments", True), FkRef("collection_id", "investment_collections", True)),
         has_user_id=False,
         has_id=False,
     ),

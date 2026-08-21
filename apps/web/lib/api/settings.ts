@@ -12,8 +12,8 @@ interface SettingsRaw {
   secondary_currency: string | null;
   preferred_currencies: string[] | null;
   period_presets: string[] | null;
-  max_groups: number | null;
-  group_warning_pct: number | null;
+  max_collections: number | null;
+  collection_warning_pct: number | null;
   dollar_rate_preference: string | null;
   shortcut_currencies: string[] | null;
   timezone: string | null;
@@ -34,8 +34,8 @@ export interface SettingsData {
   secondaryCurrency: string | null;
   preferredCurrencies: string[] | null;
   periodPresets: string[] | null;
-  maxGroups: number | null;
-  groupWarningPct: number | null;
+  maxCollections: number | null;
+  collectionWarningPct: number | null;
   dollarRatePreference: string | null;
   shortcutCurrencies: string[] | null;
   timezone: string | null;
@@ -57,8 +57,8 @@ export function mapSettings(raw: SettingsRaw): SettingsData {
     secondaryCurrency: raw.secondary_currency,
     preferredCurrencies: raw.preferred_currencies,
     periodPresets: raw.period_presets,
-    maxGroups: raw.max_groups,
-    groupWarningPct: raw.group_warning_pct,
+    maxCollections: raw.max_collections,
+    collectionWarningPct: raw.collection_warning_pct,
     dollarRatePreference: raw.dollar_rate_preference,
     shortcutCurrencies: raw.shortcut_currencies,
     timezone: raw.timezone,

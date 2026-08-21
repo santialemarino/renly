@@ -41,7 +41,7 @@ No scope is used today (history has none). If a commit is clearly isolated to on
 ## Examples
 
 ```
-feat: implement investment groups crud
+feat: implement investment collections crud
 fix: use naive datetime for updated_at on session epoch bump
 enh: improve sidebar with logout button and active state
 docs: update api readme with check command

@@ -37,28 +37,28 @@ Registration requires a valid email address and a password of at least 12 charac
 
 ## Investments
 
-| Method  | Path                          | Description                                                                  |
-| ------- | ----------------------------- | ---------------------------------------------------------------------------- |
-| `GET`   | `/investments`                | List investments with filtering, search, and pagination.                     |
-| `POST`  | `/investments`                | Create a new investment.                                                     |
-| `GET`   | `/investments/{id}`           | Get a single investment by ID.                                               |
-| `PUT`   | `/investments/{id}`           | Update an investment. Only provided fields are changed.                      |
-| `PATCH` | `/investments/{id}/archive`   | Archive an investment (hides it from the active portfolio).                  |
-| `PATCH` | `/investments/{id}/unarchive` | Restore an archived investment.                                              |
-| `PUT`   | `/investments/{id}/groups`    | Replace group membership for this investment. Body: `{ group_ids: [1, 3] }`. |
+| Method  | Path                            | Description                                                                            |
+| ------- | ------------------------------- | -------------------------------------------------------------------------------------- |
+| `GET`   | `/investments`                  | List investments with filtering, search, and pagination.                               |
+| `POST`  | `/investments`                  | Create a new investment.                                                               |
+| `GET`   | `/investments/{id}`             | Get a single investment by ID.                                                         |
+| `PUT`   | `/investments/{id}`             | Update an investment. Only provided fields are changed.                                |
+| `PATCH` | `/investments/{id}/archive`     | Archive an investment (hides it from the active portfolio).                            |
+| `PATCH` | `/investments/{id}/unarchive`   | Restore an archived investment.                                                        |
+| `PUT`   | `/investments/{id}/collections` | Replace collection membership for this investment. Body: `{ collection_ids: [1, 3] }`. |
 
 **List query parameters:**
 
-| Parameter     | Type    | Default | Description                                                |
-| ------------- | ------- | ------- | ---------------------------------------------------------- |
-| `search`      | string  | --      | Filter by name (case-insensitive).                         |
-| `group_ids`   | int[]   | --      | Filter to investments in any of these groups.              |
-| `category`    | string  | --      | Filter by category (e.g., `cedears`, `stocks`).            |
-| `active_only` | boolean | `true`  | Whether to exclude archived investments.                   |
-| `page`        | int     | `1`     | Page number (1-based).                                     |
-| `page_size`   | int     | `20`    | Results per page (max 100).                                |
-| `sort_by`     | string  | --      | Sort field: `name`, `category`, `base_currency`, `broker`. |
-| `sort_order`  | string  | `asc`   | Sort direction: `asc` or `desc`.                           |
+| Parameter        | Type    | Default | Description                                                |
+| ---------------- | ------- | ------- | ---------------------------------------------------------- |
+| `search`         | string  | --      | Filter by name (case-insensitive).                         |
+| `collection_ids` | int[]   | --      | Filter to investments in any of these collections.         |
+| `category`       | string  | --      | Filter by category (e.g., `cedears`, `stocks`).            |
+| `active_only`    | boolean | `true`  | Whether to exclude archived investments.                   |
+| `page`           | int     | `1`     | Page number (1-based).                                     |
+| `page_size`      | int     | `20`    | Results per page (max 100).                                |
+| `sort_by`        | string  | --      | Sort field: `name`, `category`, `base_currency`, `broker`. |
+| `sort_order`     | string  | `asc`   | Sort direction: `asc` or `desc`.                           |
 
 ---
 
@@ -106,7 +106,7 @@ Rebuild your data from a **Renly export** (the JSON file from `GET /me/export`) 
 
 **Foreign keys are remapped.** Exported ids won't match the target account, so parents are inserted first and each child's reference is repointed to the newly inserted id. A row whose required parent can't be resolved (or whose data is invalid) is counted under `skipped_unresolved` and skipped; everything else is inserted in one transaction.
 
-**What is restored:** investments, groups (and memberships), snapshots, transactions, credit cards, cash/bank accounts, subscriptions, installments, payment obligations, expenses, income, card settlements, and transfers. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and both reconciliation types. Restored expenses/income keep their amount, date, category, notes **and the cash/bank account they were linked to** — their scheduler and reconciliation links are dropped, so they arrive as plain entries. An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+**What is restored:** investments, collections (and memberships), snapshots, transactions, credit cards, cash/bank accounts, subscriptions, installments, payment obligations, expenses, income, card settlements, and transfers. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and both reconciliation types. Restored expenses/income keep their amount, date, category, notes **and the cash/bank account they were linked to** — their scheduler and reconciliation links are dropped, so they arrive as plain entries. An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
 
 **Balances come back on their own.** Every balance in Renly is derived, never stored: an account's is its `opening_balance` plus the rows linked to it, and a card's is its charges minus the settlements paid against it. Restoring those rows and keeping their links intact therefore reproduces both figures with no extra step.
 
@@ -153,33 +153,33 @@ The grid view shows all investments as rows and months as columns, similar to a 
 
 **Query parameters:**
 
-| Parameter    | Type   | Default | Description                                                                       |
-| ------------ | ------ | ------- | --------------------------------------------------------------------------------- |
-| `search`     | string | --      | Filter by investment name.                                                        |
-| `group_ids`  | int[]  | --      | Filter by group IDs.                                                              |
-| `category`   | string | --      | Filter by category.                                                               |
-| `currency`   | string | --      | Display currency for conversion (e.g., `USD`, `ARS`). Omit for original currency. |
-| `sort_by`    | string | --      | Sort field: `name`.                                                               |
-| `sort_order` | string | `asc`   | Sort direction: `asc` or `desc`.                                                  |
+| Parameter        | Type   | Default | Description                                                                       |
+| ---------------- | ------ | ------- | --------------------------------------------------------------------------------- |
+| `search`         | string | --      | Filter by investment name.                                                        |
+| `collection_ids` | int[]  | --      | Filter by collection IDs.                                                         |
+| `category`       | string | --      | Filter by category.                                                               |
+| `currency`       | string | --      | Display currency for conversion (e.g., `USD`, `ARS`). Omit for original currency. |
+| `sort_by`        | string | --      | Sort field: `name`.                                                               |
+| `sort_order`     | string | `asc`   | Sort direction: `asc` or `desc`.                                                  |
 
 ---
 
-## Groups
+## Collections
 
-Groups are user-defined labels for organizing investments (e.g., "Retirement", "Trading", "Kids"). An investment can belong to multiple groups. Each group can have an optional target allocation percentage for the dashboard.
+Collections are user-defined labels for organizing investments (e.g., "Retirement", "Trading", "Kids"). An investment can belong to multiple collections. Each collection can have an optional target allocation percentage for the dashboard.
 
-| Method   | Path                       | Description                                                                        |
-| -------- | -------------------------- | ---------------------------------------------------------------------------------- |
-| `GET`    | `/groups`                  | List all groups. Each group includes its investment IDs and target percentage.     |
-| `POST`   | `/groups`                  | Create a new group. Optional: `target_percentage` (0-100).                         |
-| `GET`    | `/groups/{id}`             | Get a single group with its investment IDs.                                        |
-| `PUT`    | `/groups/{id}`             | Update a group. Fields: `name`, `target_percentage` (both optional).               |
-| `DELETE` | `/groups/{id}`             | Delete a group.                                                                    |
-| `PUT`    | `/groups/{id}/investments` | Replace the group's investment membership. Body: `{ investment_ids: [5, 12, 8] }`. |
+| Method   | Path                            | Description                                                                   |
+| -------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| `GET`    | `/collections`                  | List all collections. Each includes its investment IDs and target percentage. |
+| `POST`   | `/collections`                  | Create a new collection. Optional: `target_percentage` (0-100).               |
+| `GET`    | `/collections/{id}`             | Get a single collection with its investment IDs.                              |
+| `PUT`    | `/collections/{id}`             | Update a collection. Fields: `name`, `target_percentage` (both optional).     |
+| `DELETE` | `/collections/{id}`             | Delete a collection.                                                          |
+| `PUT`    | `/collections/{id}/investments` | Replace the collection's membership. Body: `{ investment_ids: [5, 12, 8] }`.  |
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`), `sort_order` (`asc`/`desc`).
 
-**Group allocation metrics** (`GET /metrics/allocation/by-group`) include `target_percentage` and `difference` (actual minus target) for each group that has a target set.
+**Collection allocation metrics** (`GET /metrics/allocation/by-collection`) include `target_percentage` and `difference` (actual minus target) for each collection that has a target set. Investments in no collection are bucketed under `Unassigned`.
 
 ---
 
@@ -633,8 +633,8 @@ User preferences stored as key-value pairs. All fields are optional on update --
 | `secondary_currency`           | string   | Secondary display currency (e.g., `ARS`).                                                                                                                                                                                           |
 | `preferred_currencies`         | string[] | Ordered list of currencies for the currency switcher.                                                                                                                                                                               |
 | `period_presets`               | object[] | Custom period presets for the dashboard date range selector.                                                                                                                                                                        |
-| `max_groups`                   | int      | Maximum number of groups the user can create.                                                                                                                                                                                       |
-| `group_warning_pct`            | number   | Percentage threshold that triggers a group allocation warning.                                                                                                                                                                      |
+| `max_collections`              | int      | Maximum number of collections the user can create.                                                                                                                                                                                  |
+| `collection_warning_pct`       | number   | Percentage threshold that triggers a collection-limit warning.                                                                                                                                                                      |
 | `dollar_rate_preference`       | string   | Which USD/ARS rate to use for conversions: `oficial`, `mep`, or `blue`.                                                                                                                                                             |
 | `shortcut_currencies`          | string[] | Currencies shown in the iOS Shortcut currency picker.                                                                                                                                                                               |
 | `timezone`                     | string   | User's IANA timezone (e.g. `America/Argentina/Buenos_Aires`). Used by the auto-expense scheduler to fire cycles on the user's local calendar day. Defaults to UTC when unset. Validated server-side; invalid IANA names return 400. |
@@ -691,24 +691,24 @@ All metric endpoints support currency conversion via the `currency` query parame
 
 Most endpoints also accept these common filters:
 
-| Parameter        | Type   | Description                           |
-| ---------------- | ------ | ------------------------------------- |
-| `currency`       | string | Display currency for conversion.      |
-| `investment_ids` | int[]  | Limit to specific investments.        |
-| `group_ids`      | int[]  | Limit to investments in these groups. |
-| `category`       | string | Limit to a specific category.         |
-| `search`         | string | Filter by investment name.            |
-| `start_date`     | date   | Start of date range (YYYY-MM-DD).     |
-| `end_date`       | date   | End of date range (YYYY-MM-DD).       |
+| Parameter        | Type   | Description                                |
+| ---------------- | ------ | ------------------------------------------ |
+| `currency`       | string | Display currency for conversion.           |
+| `investment_ids` | int[]  | Limit to specific investments.             |
+| `collection_ids` | int[]  | Limit to investments in these collections. |
+| `category`       | string | Limit to a specific category.              |
+| `search`         | string | Filter by investment name.                 |
+| `start_date`     | date   | Start of date range (YYYY-MM-DD).          |
+| `end_date`       | date   | End of date range (YYYY-MM-DD).            |
 
-| Method | Path                           | Description                                                                                           | Supports date range       |
-| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------- | ------------------------- |
-| `GET`  | `/metrics/portfolio`           | Portfolio-level metrics: total value, invested capital, gain/loss, TWR, IRR, month-over-month change. | Yes                       |
-| `GET`  | `/metrics/portfolio/evolution` | Monthly portfolio value series for the evolution chart.                                               | Yes                       |
-| `GET`  | `/metrics/investment/{id}`     | Detailed metrics for a single investment: TWR, IRR, period returns.                                   | No (uses `currency` only) |
-| `GET`  | `/metrics/allocation`          | Portfolio allocation by investment category (percentage breakdown).                                   | No                        |
-| `GET`  | `/metrics/allocation/by-group` | Portfolio allocation by group (percentage breakdown).                                                 | No                        |
-| `GET`  | `/metrics/investments/summary` | Compact per-investment metrics for the dashboard table: value, return, change.                        | Yes                       |
+| Method | Path                                | Description                                                                                           | Supports date range       |
+| ------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------- |
+| `GET`  | `/metrics/portfolio`                | Portfolio-level metrics: total value, invested capital, gain/loss, TWR, IRR, month-over-month change. | Yes                       |
+| `GET`  | `/metrics/portfolio/evolution`      | Monthly portfolio value series for the evolution chart.                                               | Yes                       |
+| `GET`  | `/metrics/investment/{id}`          | Detailed metrics for a single investment: TWR, IRR, period returns.                                   | No (uses `currency` only) |
+| `GET`  | `/metrics/allocation`               | Portfolio allocation by investment category (percentage breakdown).                                   | No                        |
+| `GET`  | `/metrics/allocation/by-collection` | Portfolio allocation by collection (percentage breakdown).                                            | No                        |
+| `GET`  | `/metrics/investments/summary`      | Compact per-investment metrics for the dashboard table: value, return, change.                        | Yes                       |
 
 ---
 

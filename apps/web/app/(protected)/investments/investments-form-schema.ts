@@ -13,7 +13,7 @@ export function buildInvestmentFormSchema(requiredMsg: string) {
     ticker: z.string().max(20).optional(),
     broker: z.string().max(INVESTMENT_BROKER_MAX).optional(),
     notes: z.string().optional(),
-    groupIds: z.array(z.number()).optional(),
+    collectionIds: z.array(z.number()).optional(),
   });
 }
 

@@ -95,18 +95,18 @@ class AllocationResponse(BaseModel):
     )
 
 
-# One slice of the allocation distribution by group.
-class GroupAllocationItem(BaseModel):
-    group_name: str = Field(description="Investment group name.")
-    value: Decimal = Field(description="Total value for this group.")
+# One slice of the allocation distribution by collection.
+class CollectionAllocationItem(BaseModel):
+    collection_name: str = Field(description="Investment collection name.")
+    value: Decimal = Field(description="Total value for this collection.")
     percentage: Decimal = Field(description="Percentage of total portfolio.")
     target_percentage: Decimal | None = Field(default=None, description="Target allocation % set by user.")
     difference: Decimal | None = Field(default=None, description="Actual minus target (positive = over-allocated).")
 
 
-# Distribution of portfolio by investment group.
-class GroupAllocationResponse(BaseModel):
-    items: list[GroupAllocationItem] = Field(description="Allocation per group.")
+# Distribution of portfolio by investment collection.
+class CollectionAllocationResponse(BaseModel):
+    items: list[CollectionAllocationItem] = Field(description="Allocation per collection.")
     total_value: Decimal = Field(description="Total portfolio value.")
     skipped_investments: list[SkippedInvestment] = Field(
         default_factory=list, description="Investments excluded because their currency can't be converted."

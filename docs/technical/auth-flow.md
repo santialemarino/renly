@@ -193,7 +193,7 @@ After authentication resolves the user id, `set_session_user()` (`app/db.py`) st
 
 ### Policies
 
-Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_group_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
+Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_collection_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
 
 ---
 

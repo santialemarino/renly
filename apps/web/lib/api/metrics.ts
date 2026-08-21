@@ -46,16 +46,16 @@ interface AllocationResponseRaw {
   skipped_investments: SkippedInvestmentRaw[];
 }
 
-interface GroupAllocationItemRaw {
-  group_name: string;
+interface CollectionAllocationItemRaw {
+  collection_name: string;
   value: string;
   percentage: string;
   target_percentage: string | null;
   difference: string | null;
 }
 
-interface GroupAllocationResponseRaw {
-  items: GroupAllocationItemRaw[];
+interface CollectionAllocationResponseRaw {
+  items: CollectionAllocationItemRaw[];
   total_value: string;
   skipped_investments: SkippedInvestmentRaw[];
 }
@@ -142,16 +142,16 @@ export interface AllocationResponse {
   skippedInvestments: SkippedInvestment[];
 }
 
-export interface GroupAllocationItem {
-  groupName: string;
+export interface CollectionAllocationItem {
+  collectionName: string;
   value: number;
   percentage: number;
   targetPercentage: number | null;
   difference: number | null;
 }
 
-export interface GroupAllocationResponse {
-  items: GroupAllocationItem[];
+export interface CollectionAllocationResponse {
+  items: CollectionAllocationItem[];
   totalValue: number;
   skippedInvestments: SkippedInvestment[];
 }
@@ -234,9 +234,9 @@ function mapAllocationItem(raw: AllocationItemRaw): AllocationItem {
   };
 }
 
-function mapGroupAllocationItem(raw: GroupAllocationItemRaw): GroupAllocationItem {
+function mapCollectionAllocationItem(raw: CollectionAllocationItemRaw): CollectionAllocationItem {
   return {
-    groupName: raw.group_name,
+    collectionName: raw.collection_name,
     value: Number(raw.value),
     percentage: Number(raw.percentage),
     targetPercentage: raw.target_percentage != null ? Number(raw.target_percentage) : null,
@@ -284,7 +284,7 @@ function mapInvestmentMetrics(raw: InvestmentMetricsRaw): InvestmentMetrics {
 export interface MetricsFilterParams {
   currency?: string;
   investmentIds?: number[];
-  groupIds?: number[];
+  collectionIds?: number[];
   category?: string;
   search?: string;
   startDate?: string;
@@ -297,8 +297,8 @@ function buildFilterQuery(params: MetricsFilterParams): string {
   if (params.investmentIds) {
     params.investmentIds.forEach((id) => qs.append('investment_ids', String(id)));
   }
-  if (params.groupIds) {
-    params.groupIds.forEach((id) => qs.append('group_ids', String(id)));
+  if (params.collectionIds) {
+    params.collectionIds.forEach((id) => qs.append('collection_ids', String(id)));
   }
   if (params.category) qs.append('category', params.category);
   if (params.search) qs.append('search', params.search);
@@ -354,18 +354,18 @@ export async function getAllocation(params: MetricsFilterParams = {}): Promise<A
   };
 }
 
-export async function getAllocationByGroup(
+export async function getAllocationByCollection(
   params: MetricsFilterParams = {},
-): Promise<GroupAllocationResponse> {
+): Promise<CollectionAllocationResponse> {
   const query = buildFilterQuery(params);
-  const url = `/metrics/allocation/by-group${query ? `?${query}` : ''}`;
+  const url = `/metrics/allocation/by-collection${query ? `?${query}` : ''}`;
 
   const res = await authenticatedFetch(url, { method: 'GET' });
-  if (!res.ok) throw new Error('Failed to fetch group allocation');
+  if (!res.ok) throw new Error('Failed to fetch collection allocation');
 
-  const raw: GroupAllocationResponseRaw = await res.json();
+  const raw: CollectionAllocationResponseRaw = await res.json();
   return {
-    items: raw.items.map(mapGroupAllocationItem),
+    items: raw.items.map(mapCollectionAllocationItem),
     totalValue: Number(raw.total_value),
     skippedInvestments: mapSkipped(raw.skipped_investments),
   };

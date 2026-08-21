@@ -9,11 +9,11 @@ from app.repositories.auth_token_repository import auth_token_repository
 from app.repositories.card_reconciliation_repository import card_reconciliation_repository
 from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.cedear_ratio_repository import cedear_ratio_repository
+from app.repositories.collection_repository import collection_repository
 from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.export_repository import export_repository
-from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
@@ -39,11 +39,11 @@ __all__ = [
     "card_reconciliation_repository",
     "card_settlement_repository",
     "cedear_ratio_repository",
+    "collection_repository",
     "credit_card_repository",
     "exchange_rate_repository",
     "expense_repository",
     "export_repository",
-    "group_repository",
     "income_repository",
     "installment_repository",
     "investment_repository",

@@ -16,7 +16,7 @@ import { IntegerInput } from '@/components/integer-input';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { InfoHint } from '@/components/styled-hint';
 import type { SettingsData } from '@/lib/api/settings';
-import { ENV_GROUP_WARNING_PCT, ENV_MAX_GROUPS } from '@/lib/constants/groups';
+import { ENV_COLLECTION_WARNING_PCT, ENV_MAX_COLLECTIONS } from '@/lib/constants/collections';
 import {
   ENV_INCOME_EXPENSE_RATIO_HEALTHY,
   ENV_SAVINGS_RATE_HEALTHY_PCT,
@@ -34,8 +34,8 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
   const router = useRouter();
 
   const schema = buildAlertsFormSchema({
-    maxGroupsInvalidMsg: t('form.maxGroups.invalidRange'),
-    groupWarningPctInvalidMsg: t('form.groupWarningPct.invalidRange'),
+    maxCollectionsInvalidMsg: t('form.maxCollections.invalidRange'),
+    collectionWarningPctInvalidMsg: t('form.collectionWarningPct.invalidRange'),
     liquidityThresholdInvalidMsg: t('form.liquidityThreshold.invalidRange'),
     savingsRateInvalidMsg: t('form.savingsRate.invalidRange'),
     incomeExpenseRatioInvalidMsg: t('form.incomeExpenseRatio.invalidRange'),
@@ -49,8 +49,8 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
   } = useForm<AlertsFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
-      maxGroups: initialSettings.maxGroups?.toString() ?? '',
-      groupWarningPct: initialSettings.groupWarningPct?.toString() ?? '',
+      maxCollections: initialSettings.maxCollections?.toString() ?? '',
+      collectionWarningPct: initialSettings.collectionWarningPct?.toString() ?? '',
       liquidityThresholdPct: initialSettings.liquidityThresholdPct?.toString() ?? '',
       savingsRateHealthyPct: initialSettings.savingsRateHealthyPct?.toString() ?? '',
       savingsRateModeratePct: initialSettings.savingsRateModeratePct?.toString() ?? '',
@@ -72,8 +72,8 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
       };
 
       await saveAlerts({
-        maxGroups: toIntOrNull(values.maxGroups),
-        groupWarningPct: toIntOrNull(values.groupWarningPct),
+        maxCollections: toIntOrNull(values.maxCollections),
+        collectionWarningPct: toIntOrNull(values.collectionWarningPct),
         liquidityThresholdPct: toIntOrNull(values.liquidityThresholdPct),
         savingsRateHealthyPct: toIntOrNull(values.savingsRateHealthyPct),
         savingsRateModeratePct: toIntOrNull(values.savingsRateModeratePct),
@@ -98,40 +98,46 @@ export function AlertsForm({ initialSettings }: AlertsFormProps) {
           </h3>
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.maxGroups.label')}</Label>
-            <Hint>{t('form.maxGroups.hint')}</Hint>
+            <Label>{t('form.maxCollections.label')}</Label>
+            <Hint>{t('form.maxCollections.hint')}</Hint>
             <Controller
-              name="maxGroups"
+              name="maxCollections"
               control={control}
               render={({ field }) => (
-                <IntegerInput {...field} surface placeholder={String(ENV_MAX_GROUPS)} />
+                <IntegerInput {...field} surface placeholder={String(ENV_MAX_COLLECTIONS)} />
               )}
             />
-            <InfoHint>{t('form.maxGroups.default', { value: String(ENV_MAX_GROUPS) })}</InfoHint>
+            <InfoHint>
+              {t('form.maxCollections.default', { value: String(ENV_MAX_COLLECTIONS) })}
+            </InfoHint>
           </div>
 
           <Separator />
 
           <div className="flex flex-col gap-y-2">
-            <Label>{t('form.groupWarningPct.label')}</Label>
-            <Hint>{t('form.groupWarningPct.hint')}</Hint>
+            <Label>{t('form.collectionWarningPct.label')}</Label>
+            <Hint>{t('form.collectionWarningPct.hint')}</Hint>
             <Controller
-              name="groupWarningPct"
+              name="collectionWarningPct"
               control={control}
               render={({ field }) => (
                 <IntegerInput
                   {...field}
                   surface
                   placeholder={
-                    ENV_GROUP_WARNING_PCT != null ? String(ENV_GROUP_WARNING_PCT) : undefined
+                    ENV_COLLECTION_WARNING_PCT != null
+                      ? String(ENV_COLLECTION_WARNING_PCT)
+                      : undefined
                   }
                 />
               )}
             />
             <InfoHint>
-              {ENV_GROUP_WARNING_PCT != null
-                ? t('form.groupWarningPct.default', { value: String(ENV_GROUP_WARNING_PCT) })
-                : t('form.groupWarningPct.noDefault')}
+              {ENV_COLLECTION_WARNING_PCT != null
+                ? t('form.collectionWarningPct.default', {
+                    value: String(ENV_COLLECTION_WARNING_PCT),
+                  })
+                : t('form.collectionWarningPct.noDefault')}
             </InfoHint>
           </div>
         </div>

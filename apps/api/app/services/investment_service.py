@@ -9,22 +9,22 @@ from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
 from app.repositories import (
-    group_repository,
+    collection_repository,
     investment_repository,
     snapshot_repository,
     transaction_repository,
 )
-from app.schemas.investment import InvestmentGroupInfo, InvestmentListResponse, InvestmentResponse
+from app.schemas.investment import InvestmentCollectionInfo, InvestmentListResponse, InvestmentResponse
 from app.services import settings_service
 
 
-# Assembles InvestmentResponse, enriching it with group info and snapshot presence.
+# Assembles InvestmentResponse, enriching it with collection info and snapshot presence.
 def _build_response(
     inv: Investment,
-    groups_map: dict[int, list[tuple[int, str]]],
+    collections_map: dict[int, list[tuple[int, str]]],
     snapshots_set: set[int],
 ) -> InvestmentResponse:
-    groups = [InvestmentGroupInfo(id=gid, name=gname) for gid, gname in groups_map.get(inv.id or 0, [])]
+    collections = [InvestmentCollectionInfo(id=cid, name=cname) for cid, cname in collections_map.get(inv.id or 0, [])]
     return InvestmentResponse(
         id=inv.id or 0,
         name=inv.name,
@@ -37,7 +37,7 @@ def _build_response(
         has_snapshots=(inv.id or 0) in snapshots_set,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
-        groups=groups,
+        collections=collections,
     )
 
 
@@ -47,7 +47,7 @@ async def list_investments(
     user: User,
     *,
     search: str | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
     active_only: bool = True,
     page: int = 1,
@@ -59,7 +59,7 @@ async def list_investments(
         session,
         user.id,
         search=search,
-        group_ids=group_ids,
+        collection_ids=collection_ids,
         category=category,
         active_only=active_only,
         page=page,
@@ -68,10 +68,10 @@ async def list_investments(
         sort_order=sort_order,
     )
     inv_ids = [inv.id for inv in items if inv.id is not None]
-    groups_map = await investment_repository.get_groups_by_investment_ids(session, inv_ids)
+    collections_map = await investment_repository.get_collections_by_investment_ids(session, inv_ids)
     snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, inv_ids)
     return InvestmentListResponse(
-        items=[_build_response(inv, groups_map, snapshots_set) for inv in items],
+        items=[_build_response(inv, collections_map, snapshots_set) for inv in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -174,21 +174,21 @@ async def unarchive_investment(
     await update_investment(session, investment_id, user, is_active=True)
 
 
-# Sets which groups this investment belongs to. Validates group ownership. Raises NotFoundError.
-async def set_investment_groups(
+# Sets which collections this investment belongs to. Validates collection ownership. Raises NotFoundError.
+async def set_investment_collections(
     session: AsyncSession,
     investment_id: int,
     user: User,
-    group_ids: list[int],
+    collection_ids: list[int],
 ) -> None:
     await get_investment(session, investment_id, user)
-    if group_ids:
-        user_groups = await group_repository.list_by_user(session, user.id)
-        user_group_ids = {g.id for g in user_groups}
-        invalid = set(group_ids) - user_group_ids
+    if collection_ids:
+        user_collections = await collection_repository.list_by_user(session, user.id)
+        user_collection_ids = {c.id for c in user_collections}
+        invalid = set(collection_ids) - user_collection_ids
         if invalid:
-            raise NotFoundError(f"Groups not found: {sorted(invalid)}")
-    await group_repository.set_groups_for_investment(session, investment_id, group_ids)
+            raise NotFoundError(f"Collections not found: {sorted(invalid)}")
+    await collection_repository.set_collections_for_investment(session, investment_id, collection_ids)
     await session.commit()
 
 

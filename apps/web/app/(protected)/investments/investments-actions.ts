@@ -4,26 +4,26 @@ import type { InvestmentFormValues } from '@/app/(protected)/investments/investm
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 export async function createInvestment(values: InvestmentFormValues): Promise<void> {
-  const { groupIds, baseCurrency, ...rest } = values;
+  const { collectionIds, baseCurrency, ...rest } = values;
   const res = await authenticatedFetch('/investments', {
     method: 'POST',
     body: { ...rest, base_currency: baseCurrency },
   });
   if (!res.ok) throw new Error('Failed to create investment');
   const raw: { id: number } = await res.json();
-  if (groupIds?.length) {
-    await setInvestmentGroups(raw.id, groupIds);
+  if (collectionIds?.length) {
+    await setInvestmentCollections(raw.id, collectionIds);
   }
 }
 
 export async function updateInvestment(id: number, values: InvestmentFormValues): Promise<void> {
-  const { groupIds, baseCurrency, ...rest } = values;
+  const { collectionIds, baseCurrency, ...rest } = values;
   const res = await authenticatedFetch(`/investments/${id}`, {
     method: 'PUT',
     body: { ...rest, base_currency: baseCurrency },
   });
   if (!res.ok) throw new Error('Failed to update investment');
-  await setInvestmentGroups(id, groupIds ?? []);
+  await setInvestmentCollections(id, collectionIds ?? []);
 }
 
 export async function archiveInvestment(id: number): Promise<void> {
@@ -36,10 +36,10 @@ export async function unarchiveInvestment(id: number): Promise<void> {
   if (!res.ok) throw new Error('Failed to unarchive investment');
 }
 
-async function setInvestmentGroups(id: number, groupIds: number[]): Promise<void> {
-  const res = await authenticatedFetch(`/investments/${id}/groups`, {
+async function setInvestmentCollections(id: number, collectionIds: number[]): Promise<void> {
+  const res = await authenticatedFetch(`/investments/${id}/collections`, {
     method: 'PUT',
-    body: { group_ids: groupIds },
+    body: { collection_ids: collectionIds },
   });
-  if (!res.ok) throw new Error('Failed to update investment groups');
+  if (!res.ok) throw new Error('Failed to update investment collections');
 }

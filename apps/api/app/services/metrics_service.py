@@ -10,15 +10,15 @@ from app.domain import ExchangeRateUnavailableError, NotFoundError
 from app.models.investment import Investment
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
-from app.repositories.group_repository import group_repository
+from app.repositories.collection_repository import collection_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.metrics import (
     AllocationItem,
     AllocationResponse,
+    CollectionAllocationItem,
+    CollectionAllocationResponse,
     EvolutionPoint,
-    GroupAllocationItem,
-    GroupAllocationResponse,
     InvestmentMetricsResponse,
     InvestmentsSummaryResponse,
     InvestmentSummaryItem,
@@ -70,7 +70,7 @@ async def _resolve_filtered_investments(
     session: AsyncSession,
     user_id: int,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
 ) -> list[Investment]:
@@ -83,10 +83,10 @@ async def _resolve_filtered_investments(
         allowed = set(investment_ids)
         investments = [i for i in investments if i.id in allowed]
 
-    # Filter by group membership (union of all groups) — batch query.
-    if group_ids:
-        ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
-        member_ids = {mid for ids in ids_by_group.values() for mid in ids}
+    # Filter by collection membership (union of all collections) — batch query.
+    if collection_ids:
+        ids_by_collection = await collection_repository.get_investment_ids_by_collections(session, collection_ids)
+        member_ids = {mid for ids in ids_by_collection.values() for mid in ids}
         investments = [i for i in investments if i.id in member_ids]
 
     # Filter by category.
@@ -134,13 +134,13 @@ async def get_portfolio_metrics(
     currency: str | None = None,
     lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> PortfolioMetricsResponse:
-    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, collection_ids, category, search)
     # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
     lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
     investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
@@ -310,13 +310,13 @@ async def get_portfolio_evolution(
     currency: str | None = None,
     lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> PortfolioEvolutionResponse:
-    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, collection_ids, category, search)
     # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
     lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
     investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
@@ -417,11 +417,11 @@ async def get_allocation(
     currency: str | None = None,
     lookup: mh.RateLookup | None = None,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
 ) -> AllocationResponse:
-    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, collection_ids, category, search)
     # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
     lookup = await _get_required_lookup(session, user_id, currency, all_investments, lookup)
     investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
@@ -454,23 +454,23 @@ async def get_allocation(
     return AllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
 
 
-# Computes allocation by investment group.
-# Investments not in any group are bucketed under "Ungrouped".
-async def get_allocation_by_group(
+# Computes allocation by investment collection.
+# Investments not in any collection are bucketed under "Unassigned".
+async def get_allocation_by_collection(
     session: AsyncSession,
     user_id: int,
     currency: str | None = None,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
-) -> GroupAllocationResponse:
-    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+) -> CollectionAllocationResponse:
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, collection_ids, category, search)
     # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
     lookup = await _get_required_lookup(session, user_id, currency, all_investments)
     investments, skipped = _split_by_convertibility(all_investments, currency, lookup)
     if not investments:
-        return GroupAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
+        return CollectionAllocationResponse(items=[], total_value=ZERO, skipped_investments=skipped)
 
     inv_ids = [i.id for i in investments]
     inv_currency = {i.id: i.base_currency for i in investments}
@@ -488,39 +488,39 @@ async def get_allocation_by_group(
             v = converted
         inv_values[inv_id] = v
 
-    # Load groups and their memberships — batch query.
-    groups = await group_repository.list_by_user(session, user_id)
-    group_ids = [g.id for g in groups if g.id is not None]
-    ids_by_group = await group_repository.get_investment_ids_by_groups(session, group_ids)
-    grouped_inv_ids: set[int] = set()
-    group_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
-    group_targets: dict[str, Decimal | None] = {}
+    # Load collections and their memberships — batch query.
+    collections = await collection_repository.list_by_user(session, user_id)
+    all_collection_ids = [c.id for c in collections if c.id is not None]
+    ids_by_collection = await collection_repository.get_investment_ids_by_collections(session, all_collection_ids)
+    assigned_inv_ids: set[int] = set()
+    collection_values: dict[str, Decimal] = defaultdict(lambda: ZERO)
+    collection_targets: dict[str, Decimal | None] = {}
 
-    for group in groups:
-        group_targets[group.name] = group.target_percentage
-        for mid in ids_by_group.get(group.id, []):
+    for collection in collections:
+        collection_targets[collection.name] = collection.target_percentage
+        for mid in ids_by_collection.get(collection.id, []):
             if mid in inv_values:
-                group_values[group.name] += inv_values[mid]
-                grouped_inv_ids.add(mid)
+                collection_values[collection.name] += inv_values[mid]
+                assigned_inv_ids.add(mid)
 
-    # Ungrouped bucket.
-    ungrouped = ZERO
+    # Unassigned bucket.
+    unassigned = ZERO
     for inv_id, val in inv_values.items():
-        if inv_id not in grouped_inv_ids:
-            ungrouped += val
-    if ungrouped > ZERO:
-        group_values["Ungrouped"] = ungrouped
+        if inv_id not in assigned_inv_ids:
+            unassigned += val
+    if unassigned > ZERO:
+        collection_values["Unassigned"] = unassigned
 
-    total_value = sum(group_values.values(), ZERO)
+    total_value = sum(collection_values.values(), ZERO)
 
     items = []
-    for name, value in sorted(group_values.items(), key=lambda x: x[1], reverse=True):
+    for name, value in sorted(collection_values.items(), key=lambda x: x[1], reverse=True):
         pct = (value / total_value * 100) if total_value != ZERO else ZERO
-        target = group_targets.get(name)
+        target = collection_targets.get(name)
         diff = pct - target if target is not None else None
         items.append(
-            GroupAllocationItem(
-                group_name=name,
+            CollectionAllocationItem(
+                collection_name=name,
                 value=value,
                 percentage=pct,
                 target_percentage=target,
@@ -528,7 +528,7 @@ async def get_allocation_by_group(
             )
         )
 
-    return GroupAllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
+    return CollectionAllocationResponse(items=items, total_value=total_value, skipped_investments=skipped)
 
 
 # Computes lightweight per-investment metrics for the dashboard compact table.
@@ -538,13 +538,13 @@ async def get_investments_summary(
     user_id: int,
     currency: str | None = None,
     investment_ids: list[int] | None = None,
-    group_ids: list[int] | None = None,
+    collection_ids: list[int] | None = None,
     category: str | None = None,
     search: str | None = None,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> InvestmentsSummaryResponse:
-    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, group_ids, category, search)
+    all_investments = await _resolve_filtered_investments(session, user_id, investment_ids, collection_ids, category, search)
     # Build the lookup BEFORE the split so convertibility can check actual rate data presence.
     lookup = await _get_required_lookup(session, user_id, currency, all_investments)
     investments, skipped = _split_by_convertibility(all_investments, currency, lookup)

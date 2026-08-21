@@ -62,12 +62,12 @@ When a service function iterates over a list and needs related data, load all re
 
 ```python
 # Load everything upfront
-ids_by_group = await group_repo.get_investment_ids_by_groups(session, group_ids)
+ids_by_collection = await collection_repo.get_investment_ids_by_collections(session, collection_ids)
 ratios = await cedear_repo.get_latest_by_tickers(session, tickers)
 
 # Then iterate in-memory only
-for group in groups:
-    member_ids = ids_by_group.get(group.id, [])
+for collection in collections:
+    member_ids = ids_by_collection.get(collection.id, [])
 ```
 
 ### Parallelize independent async calls
