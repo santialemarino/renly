@@ -41,12 +41,23 @@ def _build_response(
     )
 
 
-# Assembles the response for a single investment, loading its collection membership and snapshot
-# presence. Shares _build_response with the list path so both carry the same fields.
+# Loads everything _build_response enriches with, for a batch of investment ids. Both response paths
+# (single and list) go through this so a future enrichment cannot reach one and miss the other — which
+# is how `collections` came to be correct on the list and hardcoded empty on the single one.
+async def _load_response_context(
+    session: AsyncSession,
+    investment_ids: list[int],
+) -> tuple[dict[int, list[tuple[int, str]]], set[int]]:
+    collections_map = await investment_repository.get_collections_by_investment_ids(session, investment_ids)
+    snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, investment_ids)
+    return collections_map, snapshots_set
+
+
+# Assembles the response for a single investment. An unpersisted model queries no ids at all rather
+# than id 0, which would match a different row.
 async def build_response(session: AsyncSession, investment: Investment) -> InvestmentResponse:
     inv_ids = [investment.id] if investment.id is not None else []
-    collections_map = await investment_repository.get_collections_by_investment_ids(session, inv_ids)
-    snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, inv_ids)
+    collections_map, snapshots_set = await _load_response_context(session, inv_ids)
     return _build_response(investment, collections_map, snapshots_set)
 
 
@@ -77,8 +88,7 @@ async def list_investments(
         sort_order=sort_order,
     )
     inv_ids = [inv.id for inv in items if inv.id is not None]
-    collections_map = await investment_repository.get_collections_by_investment_ids(session, inv_ids)
-    snapshots_set = await snapshot_repository.get_ids_with_snapshots(session, inv_ids)
+    collections_map, snapshots_set = await _load_response_context(session, inv_ids)
     return InvestmentListResponse(
         items=[_build_response(inv, collections_map, snapshots_set) for inv in items],
         total=total,

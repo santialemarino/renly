@@ -186,8 +186,8 @@ class TestSetCollectionInvestments:
         session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
+    # The ownership guard: get_by_ids is user-scoped, so a foreign id simply does not come back.
     async def test_an_investment_the_caller_does_not_own_is_rejected_and_nothing_is_written(self, monkeypatch):
-        """The ownership guard: get_by_ids is user-scoped, so a foreign id simply does not come back."""
         set_members = AsyncMock()
         _patch_repo(monkeypatch, get_by_id=AsyncMock(return_value=_collection()), set_members=set_members)
         # Asked for 5 and 99; only 5 belongs to the caller.
