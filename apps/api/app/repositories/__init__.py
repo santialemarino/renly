@@ -14,6 +14,8 @@ from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.export_repository import export_repository
+from app.repositories.group_invite_repository import group_invite_repository
+from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
@@ -44,6 +46,8 @@ __all__ = [
     "exchange_rate_repository",
     "expense_repository",
     "export_repository",
+    "group_invite_repository",
+    "group_repository",
     "income_repository",
     "installment_repository",
     "investment_repository",

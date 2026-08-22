@@ -12,6 +12,8 @@ from app.models.credit_card import CreditCard
 from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.feedback import Feedback, FeedbackCategory
+from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.group_invite import GroupInvite
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
@@ -45,6 +47,11 @@ __all__ = [
     "ExpenseEntry",
     "Feedback",
     "FeedbackCategory",
+    "Group",
+    "GroupInvite",
+    "GroupKind",
+    "GroupMember",
+    "GroupMemberRole",
     "IncomeCategory",
     "IncomeEntry",
     "Installment",
