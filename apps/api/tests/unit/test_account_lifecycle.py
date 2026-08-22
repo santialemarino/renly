@@ -11,7 +11,8 @@ from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreac
 from app.models.auth_token import AuthToken, AuthTokenType
 from app.models.user import User
 from app.models.utils import utcnow
-from app.repositories.export_repository import _USER_ID_MODELS
+from app.repositories import export_repository as export_repository_module
+from app.repositories.export_repository import EXPORTED_TABLES
 from app.services import auth_service, settings_service, user_account_service
 
 # Coverage for the M2 account-lifecycle service flows: email verification (AUTH-1), password reset
@@ -34,6 +35,21 @@ class FakeSession:
 
     async def flush(self) -> None:
         return None
+
+    # Some flows now issue a query of their own through a real repository (account deletion resolves
+    # the groups that become unreachable). Returning an empty result keeps those flows exercisable here
+    # without stubbing each repository per test; the query's own correctness is proven against a real
+    # database in tests/integration/test_group_lifecycle.py.
+    async def execute(self, *_args, **_kwargs):
+        return _EmptyResult()
+
+
+class _EmptyResult:
+    def scalars(self):
+        return self
+
+    def all(self):
+        return []
 
 
 class FakeUserRepo:
@@ -428,6 +444,50 @@ class TestDeleteAccount:
         # (RLS hides it from the user's own session) — never the request session.
         assert invites.sessions == [admin_session]
 
+    @pytest.mark.asyncio
+    async def test_delete_collects_orphaned_groups_before_the_account_and_removes_them_after(self, wired, monkeypatch):
+        # Ordering is the whole rule, in both directions. The READ has to precede the account delete:
+        # afterwards the user's seats read user_id NULL and "was this the only account-holder" is
+        # unanswerable. The DELETE has to follow it, so that a failure there leaves unreachable rows
+        # (the state that existed before this cleanup) instead of destroying a live user's groups.
+        users, _tokens, _email = wired
+        calls: list[str] = []
+
+        class FakeGroupRepo:
+            def __init__(self):
+                self.sessions: list[object] = []
+
+            async def list_orphaned_group_ids(self, session, user_id):
+                calls.append("collect")
+                self.sessions.append(session)
+                return [41, 42]
+
+            async def delete_by_ids(self, session, group_ids):
+                calls.append(f"delete:{group_ids}")
+                self.sessions.append(session)
+
+        groups = FakeGroupRepo()
+        monkeypatch.setattr(user_account_service, "group_repository", groups)
+
+        class RecordingUserRepo:
+            def __init__(self, inner):
+                self._inner = inner
+
+            async def delete(self, session, user):
+                calls.append("delete-account")
+                await self._inner.delete(session, user)
+
+        monkeypatch.setattr(user_account_service, "user_repository", RecordingUserRepo(users))
+        user = User(id=7, name="S", email="u@example.com", password_hash=await auth_service.hash_password(_PASSWORD))
+        request_session, admin_session = FakeSession(), FakeSession()
+
+        await user_account_service.delete_account(request_session, admin_session, user, _PASSWORD, "u@example.com")
+
+        assert calls == ["collect", "delete-account", "delete:[41, 42]"]
+        # A group is reachable only through membership, and the leaving user's seat may not even be
+        # active, so both halves run privileged.
+        assert groups.sessions == [admin_session, admin_session]
+
 
 # --- Data export (AUTH-6) ---
 
@@ -458,12 +518,34 @@ class TestExport:
         # anything that authenticates. feedback is a support conversation with the operator rather
         # than the user's own financial records.
         deliberately_excluded = {"auth_tokens", "refresh_tokens", "feedback"}
-        exported = {model.__tablename__ for model in _USER_ID_MODELS.values()}
+        # EXPORTED_TABLES, not _USER_ID_MODELS: some tables are exported by a query of their own (the
+        # collection junction joins through its investment, the group tables are scoped by membership),
+        # and deriving the set from the user_id dict alone would call those uncovered.
+        exported = EXPORTED_TABLES
         user_owned = {name for name, table in SQLModel.metadata.tables.items() if "user_id" in table.columns}
 
         assert user_owned - exported - deliberately_excluded == set()
         # And the exclusion list itself can't rot: every name in it must still be a real table.
         assert deliberately_excluded <= user_owned
+
+    # EXPORTED_TABLES is declared, not derived, so it could claim coverage the queries do not provide
+    # (or miss a key they do). Driving the real dump against a stub session pins the two together: add
+    # a query without declaring it, or declare one without querying, and this reddens.
+    @pytest.mark.asyncio
+    async def test_the_declared_export_set_matches_what_the_dump_actually_returns(self):
+        class _StubResult:
+            def scalars(self):
+                return self
+
+            def all(self):
+                return []
+
+        class _StubSession:
+            async def execute(self, *_args, **_kwargs):
+                return _StubResult()
+
+        data = await export_repository_module.dump_user_data(_StubSession(), 1)
+        assert set(data) == EXPORTED_TABLES
 
 
 # --- Timing equalization (AUTH-5) ---
