@@ -64,6 +64,7 @@ export function GroupsTable({ groups, firstRun }: GroupsTableProps) {
 
 function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void }) {
   const t = useTranslations('shared');
+  const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -74,7 +75,7 @@ function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void })
       <TableRow>
         <TableCell className="text-paragraph-sm-medium">{group.name}</TableCell>
         <TableCell className="text-paragraph-sm text-muted-foreground">
-          {t(`kinds.${group.kind}`)}
+          {tCommon(`groupKinds.${group.kind}`)}
         </TableCell>
         <TableCell className="text-paragraph-sm tabular-nums text-muted-foreground">
           {group.activeMemberCount}

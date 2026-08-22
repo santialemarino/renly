@@ -20,6 +20,7 @@ interface GroupHubHeaderProps {
 export async function GroupHubHeader({ group }: GroupHubHeaderProps) {
   const fmt = await getFormatters();
   const t = await getTranslations('shared');
+  const tCommon = await getTranslations('common');
 
   const placeholderCount = group.members.filter((m) => m.isActive && !m.isLinked).length;
   const stats = [
@@ -35,7 +36,7 @@ export async function GroupHubHeader({ group }: GroupHubHeaderProps) {
     <div className="flex flex-col gap-y-4">
       <PageHeader
         title={group.name}
-        subtitle={t('hub.subtitle', { kind: t(`kinds.${group.kind}`) })}
+        subtitle={tCommon(`groupKinds.${group.kind}`)}
         trailing={
           <Badge variant={group.myRole === 'admin' ? 'default' : 'secondary'}>
             {t(`roles.${group.myRole}`)}

@@ -35,6 +35,7 @@ interface JoinCardProps {
 export function JoinCard({ token, preview, isLoggedIn, signupMode }: JoinCardProps) {
   const fmt = useFormatters();
   const t = useTranslations('join');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [failure, setFailure] = useState<string | null>(null);
@@ -78,17 +79,20 @@ export function JoinCard({ token, preview, isLoggedIn, signupMode }: JoinCardPro
         <CardContent className="flex flex-col gap-y-4">
           {preview ? (
             <>
+              {/* The group's kind is a LABEL, not part of the sentence. Interpolating it into prose
+                  forced a determiner that cannot agree with every value: Spanish "en esta {kind}" is
+                  correct for casa and pareja and wrong for viaje and grupo, and English "in this
+                  {kind}" reads badly for a trip. As its own line it needs no grammar in any language. */}
+              <p className="text-paragraph-xs text-center text-muted-foreground">
+                {t('kindLabel')} · {tCommon(`groupKinds.${preview.groupKind}`)}
+              </p>
               <p className="text-paragraph-sm text-center text-muted-foreground">
                 {preview.invitedByName
                   ? t('description', {
                       inviter: preview.invitedByName,
                       seat: preview.memberDisplayName,
-                      kind: t(`kinds.${preview.groupKind}`),
                     })
-                  : t('descriptionNoInviter', {
-                      seat: preview.memberDisplayName,
-                      kind: t(`kinds.${preview.groupKind}`),
-                    })}
+                  : t('descriptionNoInviter', { seat: preview.memberDisplayName })}
               </p>
               <p className="text-paragraph-xs text-center text-muted-foreground">
                 {t('expires', { date: fmt.timestampDate(preview.expiresAt) })}

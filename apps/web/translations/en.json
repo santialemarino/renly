@@ -129,6 +129,13 @@
     "currencyHint": {
       "message": "Values from past months are converted at today's exchange rate, not the historical rate. Amounts may differ from what they were worth at the time."
     },
+    "groupKinds": {
+      "household": "Household",
+      "couple": "Couple",
+      "trip": "Trip",
+      "flat": "Flat share",
+      "other": "Other"
+    },
     "currency": {
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
       "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
@@ -1816,13 +1823,6 @@
     },
     "title": "Groups",
     "subtitle": "The people you share money with. A group holds the roster; nothing is shared until you share it.",
-    "kinds": {
-      "household": "Household",
-      "couple": "Couple",
-      "trip": "Trip",
-      "flat": "Flat share",
-      "other": "Other"
-    },
     "roles": {
       "admin": "Admin",
       "member": "Member"
@@ -1886,7 +1886,6 @@
         "description": "A group's members, roles and pending invites."
       },
       "back": "Groups",
-      "subtitle": "{kind}",
       "stats": {
         "members": "Members",
         "placeholders": "Not on Renly yet",
@@ -2273,15 +2272,9 @@
     "title": "Join {group}",
     "invalidTitle": "This link no longer works",
     "invalidDescription": "It may have expired, already been used, or been cancelled. Ask whoever invited you for a new one.",
-    "description": "{inviter} kept a place for {seat} in this {kind}. Joining links your Renly account to it.",
-    "descriptionNoInviter": "A place is kept for {seat} in this {kind}. Joining links your Renly account to it.",
-    "kinds": {
-      "household": "household",
-      "couple": "couple",
-      "trip": "trip",
-      "flat": "flat share",
-      "other": "group"
-    },
+    "description": "{inviter} kept a place for {seat} here. Joining links your Renly account to it.",
+    "descriptionNoInviter": "A place is kept for {seat} here. Joining links your Renly account to it.",
+    "kindLabel": "Group",
     "expires": "The link works until {date}.",
     "needAccount": "You need a Renly account to join. Log in, or create one and then open this link again.",
     "needAccountInviteOnly": "You need a Renly account to join. Renly is invite-only right now, so log in if you already have one.",
@@ -2919,6 +2912,7 @@
     "transfer_amount_required": "Moving {from_currency} to {to_currency} must record the amount received, so the rate you got is preserved.",
     "group_admin_required": "Only a group admin can do this.",
     "group_last_admin": "A group needs at least one admin. Make someone else an admin first.",
-    "group_membership_exists": "You are already a member of this group."
+    "group_membership_exists": "You are already a member of this group.",
+    "group_seat_taken": "This person has already joined, so there is nothing to invite."
   }
 }

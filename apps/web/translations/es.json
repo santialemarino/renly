@@ -129,6 +129,13 @@
     "currencyHint": {
       "message": "Los valores de meses anteriores se convierten al tipo de cambio de hoy, no al histórico. Los montos pueden diferir de lo que valían en su momento."
     },
+    "groupKinds": {
+      "household": "Casa",
+      "couple": "Pareja",
+      "trip": "Viaje",
+      "flat": "Depto compartido",
+      "other": "Otro"
+    },
     "currency": {
       "unsupportedHint": "Monedas que no tienen soporte de tipo de cambio aún.\n<bold>La conversión estará disponible pronto.</bold>",
       "unsupportedSelect": "La conversión de tipo de cambio para {currency} no está disponible aún. Los valores se mostrarán en su moneda original. Soporte disponible pronto.",
@@ -1816,13 +1823,6 @@
     },
     "title": "Grupos",
     "subtitle": "Las personas con las que compartís dinero. El grupo guarda quiénes son; nada se comparte hasta que vos lo compartas.",
-    "kinds": {
-      "household": "Casa",
-      "couple": "Pareja",
-      "trip": "Viaje",
-      "flat": "Depto compartido",
-      "other": "Otro"
-    },
     "roles": {
       "admin": "Administrador",
       "member": "Miembro"
@@ -1886,7 +1886,6 @@
         "description": "Los miembros, roles e invitaciones pendientes de un grupo."
       },
       "back": "Grupos",
-      "subtitle": "{kind}",
       "stats": {
         "members": "Miembros",
         "placeholders": "Todavía no están en Renly",
@@ -2273,15 +2272,9 @@
     "title": "Unirse a {group}",
     "invalidTitle": "Este enlace ya no funciona",
     "invalidDescription": "Puede haber vencido, ya haberse usado o haberse cancelado. Pedile uno nuevo a quien te invitó.",
-    "description": "{inviter} te guardó un lugar como {seat} en esta {kind}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
-    "descriptionNoInviter": "Hay un lugar guardado para {seat} en esta {kind}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
-    "kinds": {
-      "household": "casa",
-      "couple": "pareja",
-      "trip": "viaje",
-      "flat": "convivencia",
-      "other": "grupo"
-    },
+    "description": "{inviter} te guardó un lugar como {seat}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
+    "descriptionNoInviter": "Hay un lugar guardado para {seat}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
+    "kindLabel": "Grupo",
     "expires": "El enlace funciona hasta el {date}.",
     "needAccount": "Necesitás una cuenta de Renly para unirte. Iniciá sesión, o creá una y volvé a abrir este enlace.",
     "needAccountInviteOnly": "Necesitás una cuenta de Renly para unirte. Por ahora Renly es solo por invitación, así que iniciá sesión si ya tenés una.",
@@ -2919,6 +2912,7 @@
     "transfer_amount_required": "Al mover {from_currency} a {to_currency} hay que registrar el monto recibido, para conservar la cotización que conseguiste.",
     "group_admin_required": "Solo un administrador del grupo puede hacer esto.",
     "group_last_admin": "Un grupo necesita al menos un administrador. Primero hacé administrador a otra persona.",
-    "group_membership_exists": "Ya sos miembro de este grupo."
+    "group_membership_exists": "Ya sos miembro de este grupo.",
+    "group_seat_taken": "Esta persona ya se unió, así que no hay nada que invitar."
   }
 }

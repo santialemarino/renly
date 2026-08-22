@@ -19,6 +19,14 @@ import {
 import { GroupInviteDialog } from '@/app/(protected)/shared/[groupId]/_components/group-invite-dialog';
 import { GroupMemberFormDialog } from '@/app/(protected)/shared/[groupId]/_components/group-member-form-dialog';
 import {
+  canEditMember,
+  canInviteMember,
+  canReactivateMember,
+  canRemoveMember,
+  canRevokeInvite,
+  memberStatus,
+} from '@/app/(protected)/shared/[groupId]/member-permissions';
+import {
   reactivateGroupMember,
   removeGroupMember,
   revokeGroupInvite,
@@ -153,10 +161,9 @@ function MemberRow({
   const [removeOpen, setRemoveOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
-  // Leaving is a member's own right, so it is never gated on admin. Removing anyone ELSE is.
-  const canRemove = isAdmin || member.isSelf;
-  // A seat someone already holds has nothing to invite; a former seat is reactivated, not invited.
-  const canInvite = isAdmin && member.isActive && !member.isLinked;
+  // Every one of these lives in member-permissions.ts, tested there: they are order-dependent rules
+  // whose wrong answer is a plausible-looking label or a control that should not be here.
+  const status = memberStatus(member);
 
   async function run(action: () => Promise<{ ok: boolean; conflictDetail?: string }>, ok: string) {
     setPending(true);
@@ -192,17 +199,11 @@ function MemberRow({
           </Badge>
         </TableCell>
         <TableCell className="text-paragraph-sm text-muted-foreground">
-          {!member.isActive
-            ? t('members.status.former')
-            : member.isLinked
-              ? t('members.status.joined')
-              : member.hasPendingInvite
-                ? t('members.status.invited')
-                : t('members.status.placeholder')}
+          {t(`members.status.${status}`)}
         </TableCell>
         <TableCell className="text-center">
           <div className="flex items-center justify-center gap-x-1">
-            {canInvite && (
+            {canInviteMember(member, isAdmin) && (
               <RowActionButton
                 icon={member.hasPendingInvite ? Mail : UserPlus}
                 tooltip={member.hasPendingInvite ? t('invite.resend') : t('invite.title')}
@@ -211,7 +212,7 @@ function MemberRow({
                 onClick={() => setInviteOpen(true)}
               />
             )}
-            {isAdmin && member.isActive && member.hasPendingInvite && (
+            {canRevokeInvite(member, isAdmin) && (
               <RowActionButton
                 icon={X}
                 tooltip={t('invite.revoke')}
@@ -223,7 +224,7 @@ function MemberRow({
                 }
               />
             )}
-            {isAdmin && member.isActive && (
+            {canEditMember(member, isAdmin) && (
               <RowActionButton
                 icon={Pencil}
                 tooltip={t('members.form.titleEdit')}
@@ -232,7 +233,7 @@ function MemberRow({
                 onClick={() => setEditOpen(true)}
               />
             )}
-            {isAdmin && !member.isActive && (
+            {canReactivateMember(member, isAdmin) && (
               <RowActionButton
                 icon={RotateCcw}
                 tooltip={t('members.reactivate')}
@@ -247,7 +248,7 @@ function MemberRow({
                 }
               />
             )}
-            {canRemove && member.isActive && (
+            {canRemoveMember(member, isAdmin) && (
               <RowActionButton
                 icon={member.isSelf ? LogOut : UserMinus}
                 tooltip={member.isSelf ? t('members.leave') : t('members.remove')}

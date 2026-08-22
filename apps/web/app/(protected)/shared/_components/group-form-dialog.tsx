@@ -59,7 +59,10 @@ export function GroupFormDialog({ open, onOpenChange, group, onSuccess }: GroupF
     onSuccess,
   });
 
-  const kindOptions = GROUP_KINDS.map((kind) => ({ value: kind, label: t(`kinds.${kind}`) }));
+  const kindOptions = GROUP_KINDS.map((kind) => ({
+    value: kind,
+    label: tCommon(`groupKinds.${kind}`),
+  }));
 
   async function onSubmit(values: GroupFormValues) {
     await submitWithLifecycle(
