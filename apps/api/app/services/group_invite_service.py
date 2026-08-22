@@ -28,7 +28,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.domain import GroupMembershipExistsError, InvalidTokenError, NotFoundError
+from app.domain import GroupMembershipExistsError, GroupSeatTakenError, InvalidTokenError, NotFoundError
 from app.models.group_invite import GroupInvite
 from app.models.user import User
 from app.models.utils import utcnow
@@ -71,8 +71,9 @@ async def _safe_send(message: EmailMessage) -> None:
 # Resolves a raw token to its invite, or raises InvalidTokenError for anything a user cannot act on:
 # unknown, already claimed, or past its window. One error for all three on purpose — telling a holder
 # WHICH it was would let them probe tokens, and the remedy ("ask for a new link") is the same.
-async def _require_live_invite(admin_session: AsyncSession, raw_token: str) -> GroupInvite:
-    invite = await group_invite_repository.get_by_hash(admin_session, _hash_token(raw_token))
+# `lock` is passed by the claim path only: see get_by_hash for why a shareable link needs it.
+async def _require_live_invite(admin_session: AsyncSession, raw_token: str, *, lock: bool = False) -> GroupInvite:
+    invite = await group_invite_repository.get_by_hash(admin_session, _hash_token(raw_token), for_update=lock)
     if invite is None or invite.consumed_at is not None or invite.expires_at <= utcnow():
         raise InvalidTokenError()
     return invite
@@ -94,9 +95,11 @@ async def create_invite(
     if member is None or not member.is_active:
         raise NotFoundError("Group member not found")
     # A seat someone already holds has nothing to claim, and re-inviting it would mint a token that
-    # could only ever fail. The supported move is to remove that member first.
+    # could only ever fail. The supported move is to remove that member first. Deliberately NOT
+    # GroupMembershipExistsError: that one tells the CALLER "you are already a member", which is the
+    # wrong sentence entirely for an admin inviting somebody else.
     if member.user_id is not None:
-        raise GroupMembershipExistsError()
+        raise GroupSeatTakenError()
 
     normalized_email = email.lower() if email else None
     raw_token = secrets.token_urlsafe(32)
@@ -169,7 +172,7 @@ async def preview_invite(admin_session: AsyncSession, raw_token: str) -> GroupIn
 # already holds a seat in that group (one person is one member per group, which is what makes a member
 # id a usable counterparty).
 async def accept_invite(admin_session: AsyncSession, raw_token: str, user: User) -> GroupInviteAcceptedResponse:
-    invite = await _require_live_invite(admin_session, raw_token)
+    invite = await _require_live_invite(admin_session, raw_token, lock=True)
     group = await group_repository.get_by_id(admin_session, invite.group_id)
     member = await group_repository.get_member(admin_session, invite.group_id, invite.member_id)
     # A seat that was deactivated or already linked after the link was sent cannot be claimed.

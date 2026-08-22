@@ -40,8 +40,17 @@ async def get_by_member(session: AsyncSession, member_id: int) -> GroupInvite | 
 
 # Fetches an invite by its SHA-256 token hash. Returns None when no invite matches. Runs on the
 # privileged session: the redeemer is not a member yet, so RLS would hide the row from them.
-async def get_by_hash(session: AsyncSession, token_hash: str) -> GroupInvite | None:
-    result = await session.execute(select(GroupInvite).where(GroupInvite.token_hash == token_hash))
+#
+# `for_update` takes a row lock, and the claim path must pass it. A link is deliberately shareable, so
+# two people can open the same one at once: without the lock both read consumed_at as NULL, both pass
+# the "seat is free" check, and the second UPDATE simply overwrites the first — two successful
+# responses, one person silently not in the group. With it the second transaction blocks, re-reads
+# after the first commits, sees consumed_at set and is refused. The read-only preview does not lock.
+async def get_by_hash(session: AsyncSession, token_hash: str, *, for_update: bool = False) -> GroupInvite | None:
+    stmt = select(GroupInvite).where(GroupInvite.token_hash == token_hash)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 

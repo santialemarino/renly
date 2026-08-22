@@ -1,6 +1,7 @@
 # Request/response schemas for group and membership endpoints (HTTP contract).
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -33,11 +34,19 @@ class GroupMemberCreate(RequestBase):
 
 
 # Body for PUT /groups/{id}/members/{member_id}. Partial update; only provided fields are updated.
-# Admin only. is_active reactivates a former member; deactivating one is DELETE on the same path.
+# Admin only.
+#
+# `is_active` is typed Literal[True] rather than bool on purpose: it exists ONLY to bring a former
+# member back. Removing someone is DELETE on this same path, which is the verb that also drops their
+# pending invite and is the one a member may use on their own seat. Allowing `false` here would be a
+# second, subtly different removal — and it had a real bug: an admin deactivating their own seat
+# committed the change and then got a 404, because the response is rebuilt by re-reading a group the
+# caller is no longer a member of. A `false` is now a 422 at the schema boundary, so there is no
+# branch to keep in step.
 class GroupMemberUpdate(RequestBase):
     display_name: str | None = Field(default=None, description="How this person is shown in the group.", max_length=255)
     role: GroupMemberRole | None = Field(default=None, description="Group administration role.")
-    is_active: bool | None = Field(default=None, description="Set true to reactivate a former member.")
+    is_active: Literal[True] | None = Field(default=None, description="Pass true to reactivate a former member. Use DELETE to remove one.")
 
 
 # Response for every member-carrying group endpoint. Exposes whether the seat is linked to an account

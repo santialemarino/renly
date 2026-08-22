@@ -17,6 +17,7 @@
 # the bootstrap runs as the owner, the same posture as the pre-auth invite and auth-token flows.
 
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,16 +103,6 @@ async def _ensure_admin_remains(session: AsyncSession, group: Group, member: Gro
         return
     if await group_repository.count_active_admins(session, group.id) <= 1:
         raise GroupLastAdminError()
-
-
-# Deactivates a seat and drops any invite outstanding for it. Both paths that remove someone — the
-# DELETE verb and a PUT carrying is_active=false — go through here, because leaving a live link on a
-# seat whose member was just removed would let it re-seat them, and two code paths doing the same thing
-# differently is how one of them silently stops doing half of it.
-async def _deactivate_seat(session: AsyncSession, member: GroupMember) -> None:
-    member.is_active = False
-    await group_repository.save_member(session, member)
-    await group_invite_repository.delete_by_member(session, member.id)
 
 
 # Lists the groups the user belongs to, each with its full roster. Members and invites are batch-loaded
@@ -217,7 +208,8 @@ async def add_member(
 
 
 # Renames a seat, changes its role, or reactivates a former member. Only provided fields are updated.
-# Admin only. Demoting the group's last active admin is refused, as is reactivating nothing.
+# Admin only. Demoting the group's last active admin is refused. Removing a member is DELETE, not
+# is_active=false here — see GroupMemberUpdate for why that is not merely a style choice.
 async def update_member(
     session: AsyncSession,
     group_id: int,
@@ -226,34 +218,31 @@ async def update_member(
     *,
     display_name: str | None = None,
     role: GroupMemberRole | None = None,
-    is_active: bool | None = None,
+    is_active: Literal[True] | None = None,
 ) -> GroupResponse:
     group, _ = await require_admin(session, group_id, user)
     member = await group_repository.get_member(session, group.id, member_id)
     if member is None:
         raise NotFoundError("Group member not found")
-    # Checked BEFORE mutating, and only when the change actually removes admin rights: demoting or
-    # deactivating the last admin leaves the group unmanageable.
-    if (role is not None and role != GroupMemberRole.admin) or is_active is False:
+    # Checked BEFORE mutating, and only when the change actually removes admin rights: demoting the
+    # last admin leaves the group unmanageable.
+    if role is not None and role != GroupMemberRole.admin:
         await _ensure_admin_remains(session, group, member)
     if display_name is not None:
         member.display_name = display_name
     if role is not None:
         member.role = role
-    if is_active is False:
-        await _deactivate_seat(session, member)
-    else:
-        if is_active is True:
-            member.is_active = True
-        await group_repository.save_member(session, member)
+    if is_active:
+        member.is_active = True
+    await group_repository.save_member(session, member)
     await session.commit()
     # expire_on_commit is False, so the trigger-set updated_at is stale in memory until refreshed.
     await session.refresh(member)
     return await get_group(session, group.id, user)
 
 
-# Removes a member (see _deactivate_seat). The seat itself stays, so the rows that reference it keep a
-# real counterparty and the group's history stays readable.
+# Removes a member: deactivates the seat and drops any invite outstanding for it. The seat itself stays,
+# so the rows that reference it keep a real counterparty and the group's history stays readable.
 # A member may always remove THEMSELVES (leaving the group); removing anyone else needs admin rights.
 # Either way the last active admin cannot go, or nobody could manage the group afterwards.
 async def remove_member(session: AsyncSession, group_id: int, member_id: int, user: User) -> None:
@@ -264,5 +253,9 @@ async def remove_member(session: AsyncSession, group_id: int, member_id: int, us
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
-    await _deactivate_seat(session, member)
+    member.is_active = False
+    await group_repository.save_member(session, member)
+    # Dropped in the same transaction: leaving a live link on the seat of someone who was just removed
+    # would let it re-seat them, and is_active is what the RLS predicate reads.
+    await group_invite_repository.delete_by_member(session, member.id)
     await session.commit()

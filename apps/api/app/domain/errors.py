@@ -318,6 +318,19 @@ class GroupMembershipExistsError(DomainError):
         super().__init__(self.message)
 
 
+# An admin invited a group seat that a Renly account already holds. There is nothing to claim, so the
+# link could only ever fail. Deliberately distinct from GroupMembershipExistsError, which says "you are
+# already a member of this group" — the right sentence for someone redeeming a link, and the wrong one
+# entirely for an admin inviting somebody else. Mapped to 409 by the API.
+class GroupSeatTakenError(DomainError):
+    code = "group_seat_taken"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This person has already joined, so there is nothing to invite."
+        super().__init__(self.message)
+
+
 # Operation conflicts with current state (e.g. deleting a card with linked expenses). Mapped to 409 by the API.
 class HasLinkedExpensesError(DomainError):
     code = "has_linked_expenses"
