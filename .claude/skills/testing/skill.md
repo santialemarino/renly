@@ -50,10 +50,17 @@ pnpm test:e2e        # Playwright E2E
   when unset, so the default `pnpm test:api` run stays green without a DB. Today:
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
+  - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (owner role only).
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against
   a real database instead, and prove the guard fails when you break one of them on purpose.
+- **Reach for one when a query DECIDES something destructive.** A correlated `EXISTS` / `NOT EXISTS`
+  pair, a `DELETE … WHERE`, or any predicate whose wrong answer removes a row rather than merely
+  hiding one cannot be validated by a mocked session at all — the mock returns whatever it was told
+  to. Drive the real repository function against a real database, cover the near-miss cases (not only
+  the ones that obviously qualify), and break the predicate one clause at a time: a case list that
+  only contains obvious qualifiers will pass even after a whole clause is deleted.
 
 **Don't test:**
 

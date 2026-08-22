@@ -7,6 +7,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -65,9 +66,14 @@ export function TypeToConfirmDialog<TEntity>({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-y-3">
-          <p className="text-paragraph-sm text-muted-foreground">
-            {display ? description(display) : ''}
-          </p>
+          {/* DialogDescription via asChild: Radix needs it to wire aria-describedby (and warns
+              "Missing `Description` or `aria-describedby={undefined}`" without it), while asChild keeps
+              this paragraph's own styling instead of adopting the primitive's flex + text-sm. */}
+          <DialogDescription asChild>
+            <p className="text-paragraph-sm text-muted-foreground">
+              {display ? description(display) : ''}
+            </p>
+          </DialogDescription>
           <div className="flex flex-col gap-y-1.5">
             <Label htmlFor="type-to-confirm">{t('typeToConfirm.label', { name })}</Label>
             <Input

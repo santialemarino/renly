@@ -12,7 +12,13 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 
-export function LoginForm() {
+interface LoginFormProps {
+  // Where to land after a successful login. Already validated by the page against the app's own
+  // routes, so it is used as-is here; null is the ordinary case and lands on the dashboard.
+  nextPath?: string | null;
+}
+
+export function LoginForm({ nextPath }: LoginFormProps) {
   const t = useTranslations('login');
   const tCommon = useTranslations('common');
   const router = useRouter();
@@ -43,7 +49,7 @@ export function LoginForm() {
         return;
       }
 
-      router.push(ROUTES.home);
+      router.push(nextPath ?? ROUTES.home);
     } catch {
       form.setError('password', { message: tCommon('form.errors.serverError') });
     }

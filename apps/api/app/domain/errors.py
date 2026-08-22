@@ -281,6 +281,56 @@ class ExchangeRateUnavailableError(DomainError):
         return {"currency": self.currency}
 
 
+# A group operation that only an admin may perform was attempted by a plain member. Group
+# administration is management, not access — this gates WRITES to membership, settings and invites, and
+# never widens what anyone can read. Mapped to 403 by the API.
+class GroupAdminRequiredError(DomainError):
+    code = "group_admin_required"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only a group admin can do this."
+        super().__init__(self.message)
+
+
+# Removing, deactivating or demoting the last active admin of a group. Someone must be able to manage
+# members and settings, and no other role can promote a replacement — so the group would be permanently
+# unadministrable, with no recovery path short of deleting it. Promote someone else first. Mapped to 409
+# by the API: the request is well-formed, it conflicts with the group's state.
+class GroupLastAdminError(DomainError):
+    code = "group_last_admin"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A group must keep at least one admin. Make someone else an admin first."
+        super().__init__(self.message)
+
+
+# An account tried to claim a second seat in a group it already belongs to. One person is one member per
+# group, which is what makes a member id a usable counterparty for balances and ownership units — two
+# seats for one account would split their history in half. Mapped to 409 by the API.
+class GroupMembershipExistsError(DomainError):
+    code = "group_membership_exists"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "You are already a member of this group."
+        super().__init__(self.message)
+
+
+# An admin invited a group seat that a Renly account already holds. There is nothing to claim, so the
+# link could only ever fail. Deliberately distinct from GroupMembershipExistsError, which says "you are
+# already a member of this group" — the right sentence for someone redeeming a link, and the wrong one
+# entirely for an admin inviting somebody else. Mapped to 409 by the API.
+class GroupSeatTakenError(DomainError):
+    code = "group_seat_taken"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This person has already joined, so there is nothing to invite."
+        super().__init__(self.message)
+
+
 # Operation conflicts with current state (e.g. deleting a card with linked expenses). Mapped to 409 by the API.
 class HasLinkedExpensesError(DomainError):
     code = "has_linked_expenses"
@@ -349,7 +399,9 @@ class InvalidRefreshTokenError(DomainError):
         super().__init__(self.message)
 
 
-# An account-lifecycle token is invalid, expired, or already used (AUTH-1/2/8). Mapped to 400 by the API.
+# A single-use link token is invalid, expired, or already used — the account-lifecycle tokens
+# (AUTH-1/2/8) and group-seat invites both raise this, because the condition and the message a user
+# needs are identical and the frontend should map the code once. Mapped to 400 by the API.
 class InvalidTokenError(DomainError):
     code = "invalid_token"
     status_code = 400

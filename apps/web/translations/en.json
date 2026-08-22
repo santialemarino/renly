@@ -129,6 +129,13 @@
     "currencyHint": {
       "message": "Values from past months are converted at today's exchange rate, not the historical rate. Amounts may differ from what they were worth at the time."
     },
+    "groupKinds": {
+      "household": "Household",
+      "couple": "Couple",
+      "trip": "Trip",
+      "flat": "Flat share",
+      "other": "Other"
+    },
     "currency": {
       "unsupportedHint": "Currencies that don't have exchange rate support yet.\n<bold>Conversion will be available soon.</bold>",
       "unsupportedSelect": "Exchange rate conversion for {currency} is not available yet. Values will be shown in their original currency. Support coming soon.",
@@ -304,6 +311,7 @@
       "investments": "Investments",
       "collections": "Collections",
       "snapshots": "Snapshots",
+      "groups": "Groups",
       "preferences": "Preferences",
       "alerts": "Alerts & Limits",
       "localization": "Localization",
@@ -319,6 +327,7 @@
       "finances": "Finances",
       "commitments": "Commitments",
       "portfolio": "Investor",
+      "shared": "Shared",
       "settings": "Settings",
       "administration": "Administration",
       "support": "Support"
@@ -1807,6 +1816,160 @@
       "transactionSaveError": "The snapshot was saved, but the transaction could not be saved. Open the snapshot again to retry the transaction."
     }
   },
+  "shared": {
+    "metadata": {
+      "title": "Groups",
+      "description": "The people you share money with, and who is in each group."
+    },
+    "title": "Groups",
+    "subtitle": "The people you share money with. A group holds the roster; nothing is shared until you share it.",
+    "roles": {
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "roleHints": {
+      "admin": "Manages members and settings. Sees exactly what a member sees.",
+      "member": "Can see everything the group shares."
+    },
+    "toolbar": {
+      "addGroup": "New group"
+    },
+    "table": {
+      "name": "Name",
+      "kind": "Kind",
+      "members": "Members",
+      "yourRole": "Your role",
+      "actions": "Actions",
+      "openHub": "Open group",
+      "memberOnly": "Only an admin can rename or delete this group.",
+      "empty": "No groups yet.",
+      "emptyTitle": "Share money with the people you share a life with",
+      "emptyDescription": "A group is just the people — a household, a couple, a trip. Create one, add who is in it, and nothing of yours becomes visible until you choose to share it."
+    },
+    "form": {
+      "titleCreate": "New group",
+      "titleEdit": "Edit group",
+      "descriptionCreate": "Name the group and say what it is for. You will be its first admin.",
+      "descriptionEdit": "Change what the group is called or what it is for.",
+      "name": {
+        "label": "Name",
+        "placeholder": "Enter the group name"
+      },
+      "kind": {
+        "label": "Kind",
+        "placeholder": "Select a kind"
+      },
+      "displayName": {
+        "label": "Your name in this group",
+        "placeholder": "Defaults to your account name"
+      },
+      "cancel": "Cancel",
+      "cta": {
+        "label": "Save",
+        "loading": "Saving..."
+      },
+      "createSuccess": "Group created.",
+      "updateSuccess": "Group updated.",
+      "saveError": "Failed to save group."
+    },
+    "delete": {
+      "title": "Delete group",
+      "description": "This deletes {name} for everyone in it, along with all {count} members and any pending invites. It cannot be undone.",
+      "confirm": "Delete group",
+      "loading": "Deleting...",
+      "success": "Group deleted.",
+      "error": "Failed to delete group."
+    },
+    "hub": {
+      "metadata": {
+        "title": "Group",
+        "description": "A group's members, roles and pending invites."
+      },
+      "back": "Groups",
+      "stats": {
+        "members": "Members",
+        "placeholders": "Not on Renly yet",
+        "created": "Created",
+        "none": "None"
+      }
+    },
+    "members": {
+      "title": "Members",
+      "description": "Everyone in this group. Someone with no Renly account still gets a place here.",
+      "add": "Add member",
+      "you": "(you)",
+      "emptyTitle": "No members yet",
+      "emptyDescription": "Add the people who are in this group. They do not need a Renly account.",
+      "formerTitle": "Former members",
+      "formerDescription": "Removed from the group. Their history stays, and an admin can bring them back.",
+      "table": {
+        "name": "Name",
+        "role": "Role",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "status": {
+        "joined": "On Renly",
+        "invited": "Invited",
+        "placeholder": "Not invited",
+        "former": "Removed"
+      },
+      "form": {
+        "titleCreate": "Add member",
+        "titleEdit": "Edit member",
+        "descriptionCreate": "Add someone to the group. Inviting them to Renly is a separate step.",
+        "descriptionEdit": "Change how this person is shown, or what they can manage.",
+        "displayName": {
+          "label": "Name",
+          "placeholder": "Enter the person's name"
+        },
+        "role": {
+          "label": "Role",
+          "placeholder": "Select a role"
+        },
+        "createSuccess": "Member added.",
+        "updateSuccess": "Member updated.",
+        "saveError": "Failed to save member."
+      },
+      "remove": "Remove from group",
+      "removeTitle": "Remove member",
+      "removeDescription": "Remove {name} from this group? Their history stays and you can bring them back later.",
+      "removeConfirm": "Remove",
+      "removeSuccess": "Member removed.",
+      "leave": "Leave group",
+      "leaveTitle": "Leave group",
+      "leaveDescription": "Leave {group}? You will stop seeing anything it shares. An admin can add you back.",
+      "leaveConfirm": "Leave",
+      "leaveSuccess": "You left the group.",
+      "removing": "Removing...",
+      "reactivate": "Bring back",
+      "reactivateSuccess": "Member is back in the group.",
+      "actionError": "Something went wrong. Please try again."
+    },
+    "invite": {
+      "title": "Invite to Renly",
+      "resend": "Send a new link",
+      "resendTitle": "Send a new link",
+      "description": "Send {name} a link that connects their Renly account to this place in the group.",
+      "resendDescription": "This replaces {name}'s current link — the old one stops working straight away.",
+      "email": {
+        "label": "Email",
+        "placeholder": "Enter their email address"
+      },
+      "emailHint": "Leave this empty to get a link you can share yourself.",
+      "linkLabel": "Invite link",
+      "shownOnce": "Copy this now — it is shown only once and stops working on {date}. You can always send a new one.",
+      "sentTo": "Also emailed to {email}.",
+      "cta": {
+        "label": "Create link",
+        "loading": "Creating..."
+      },
+      "done": "Done",
+      "revoke": "Cancel invite",
+      "revokeSuccess": "Invite cancelled.",
+      "error": "Failed to create the invite."
+    }
+  },
   "preferences": {
     "metadata": {
       "title": "Preferences",
@@ -2100,6 +2263,30 @@
         "description": "This link is invalid or has expired. Please request a new one."
       }
     }
+  },
+  "join": {
+    "metadata": {
+      "title": "Join a group",
+      "description": "Accept an invitation to a Renly group."
+    },
+    "title": "Join {group}",
+    "invalidTitle": "This link no longer works",
+    "invalidDescription": "It may have expired, already been used, or been cancelled. Ask whoever invited you for a new one.",
+    "description": "{inviter} kept a place for {seat} here. Joining links your Renly account to it.",
+    "descriptionNoInviter": "A place is kept for {seat} here. Joining links your Renly account to it.",
+    "kindLabel": "Group",
+    "expires": "The link works until {date}.",
+    "needAccount": "You need a Renly account to join. Log in, or create one and then open this link again.",
+    "needAccountInviteOnly": "You need a Renly account to join. Renly is invite-only right now, so log in if you already have one.",
+    "cta": {
+      "label": "Join the group",
+      "loading": "Joining...",
+      "login": "Log in to join"
+    },
+    "success": "You joined {group}.",
+    "error": "Something went wrong. Please try again.",
+    "goToDashboard": "Go to your dashboard",
+    "goToHome": "Learn about Renly"
   },
   "account": {
     "metadata": {
@@ -2722,6 +2909,10 @@
     "integrity_conflict": "That change conflicts with existing data.",
     "transfer_same_account": "A transfer must move money between two different accounts.",
     "transfer_amounts_must_match": "Within one currency a transfer must credit exactly what it debits. Record a fee as its own expense.",
-    "transfer_amount_required": "Moving {from_currency} to {to_currency} must record the amount received, so the rate you got is preserved."
+    "transfer_amount_required": "Moving {from_currency} to {to_currency} must record the amount received, so the rate you got is preserved.",
+    "group_admin_required": "Only a group admin can do this.",
+    "group_last_admin": "A group needs at least one admin. Make someone else an admin first.",
+    "group_membership_exists": "You are already a member of this group.",
+    "group_seat_taken": "This person has already joined, so there is nothing to invite."
   }
 }

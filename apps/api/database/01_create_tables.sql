@@ -114,6 +114,19 @@ CREATE TYPE account_type AS ENUM (
   'other'
 );
 
+CREATE TYPE group_kind AS ENUM (
+  'household',
+  'couple',
+  'trip',
+  'flat',
+  'other'
+);
+
+CREATE TYPE group_member_role AS ENUM (
+  'admin',
+  'member'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -799,6 +812,84 @@ CREATE TABLE feedback (
 CREATE INDEX idx_feedback_user_id ON feedback(user_id);
 
 -- ---------------------------------------------------------------------------
+-- Groups (shared money: the people entity)
+-- A group is a set of people who share money — a household, a couple, a trip, a flat. It is the
+-- ONLY multi-user entity in the schema: every other table is owned by exactly one user_id, whereas
+-- a group's rows are reachable by each of its members through the membership policies below.
+-- Deliberately entity-agnostic: it carries who the people are and nothing about what they share, so
+-- a non-money module could adopt the same membership kernel unchanged.
+-- created_by records who created the group (authorship, not ownership — a group has no single
+-- owner). ON DELETE SET NULL because the group belongs to its members, not its creator: deleting
+-- the creator's account must not delete a group other people are still using.
+CREATE TABLE groups (
+  id         BIGSERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL,
+  kind       group_kind NOT NULL,
+  created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_groups_created_by ON groups(created_by);
+
+-- One row per seat in a group. user_id is NULL for a name-only placeholder — someone tracked in the
+-- group who has no Renly account (and may never have one); accepting an invite fills it in, which is
+-- the whole of the "placeholder upgrades on join" mechanic: no migration, no recompute, and the
+-- member's history is already attached to this row.
+-- role is group administration ONLY: an admin manages members and settings and gains no additional
+-- visibility into any member's data.
+-- Removing a member DEACTIVATES the seat (is_active = false) rather than deleting it, so the rows
+-- that will later reference it (splits, settlements, ownership units) keep a real counterparty. The
+-- membership policies require is_active, so a deactivated member loses access immediately.
+-- ON DELETE SET NULL on user_id: deleting an account reverts the seat to a name-only placeholder and
+-- leaves the group's history intact, instead of cascading a shared group's rows away.
+CREATE TABLE group_members (
+  id           BIGSERIAL PRIMARY KEY,
+  group_id     BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  user_id      BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  display_name VARCHAR(255) NOT NULL,
+  role         group_member_role NOT NULL DEFAULT 'member',
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  joined_at    TIMESTAMPTZ,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_group_members_group_id ON group_members(group_id);
+-- Every membership policy resolves "which groups is this user in", so the lookup is by user_id with
+-- group_id and is_active covered, and the partial predicate skips every placeholder row.
+CREATE INDEX idx_group_members_user_active ON group_members(user_id, group_id, is_active)
+  WHERE user_id IS NOT NULL;
+-- One seat per account per group. Partial because placeholders all have user_id NULL, which a plain
+-- UNIQUE would not constrain but would also not usefully index.
+CREATE UNIQUE INDEX idx_group_members_group_user ON group_members(group_id, user_id)
+  WHERE user_id IS NOT NULL;
+
+-- A pending invitation to claim one seat. Same proven mechanism as `invites` (high-entropy raw token,
+-- only its SHA-256 hash stored, time-limited, single-use via consumed_at, rotate-on-resend) but a
+-- deliberately separate table: `invites` has a GLOBAL UNIQUE (email) because it gates platform signup
+-- ("one active invite per email"), while the same person may legitimately hold seats in several groups
+-- at once — and a group invite must never grant signup access, nor consuming one consume the other.
+-- The token is the credential: no account is created here, it only links an existing account to this
+-- seat, so whoever holds the link claims it (which is also what makes a shareable link possible).
+-- email is informational — the address the link was sent to, NULL for a link-only invite.
+-- UNIQUE (member_id): one live invite per seat. Revoking DELETES the row, leaving the seat as the
+-- name-only member it already was; there is no revoked state to read.
+CREATE TABLE group_invites (
+  id          BIGSERIAL PRIMARY KEY,
+  group_id    BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  member_id   BIGINT NOT NULL UNIQUE REFERENCES group_members(id) ON DELETE CASCADE,
+  email       VARCHAR(255),
+  token_hash  VARCHAR(64) NOT NULL UNIQUE,
+  expires_at  TIMESTAMP NOT NULL,
+  consumed_at TIMESTAMP,
+  created_by  BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMP NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')
+);
+
+CREATE INDEX idx_group_invites_group_id ON group_invites(group_id);
+
+-- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
 -- so we use a trigger function applied to every table that has updated_at.
@@ -891,6 +982,14 @@ CREATE TRIGGER trg_account_reconciliations_updated_at
 
 CREATE TRIGGER trg_transfers_updated_at
   BEFORE UPDATE ON transfers
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_groups_updated_at
+  BEFORE UPDATE ON groups
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_group_members_updated_at
+  BEFORE UPDATE ON group_members
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------------
@@ -1059,6 +1158,68 @@ CREATE POLICY investment_collection_members_isolation ON investment_collection_m
         AND i.user_id = app_current_user_id()
     )
   );
+
+-- Shared money (groups) — the ONE policy shape in this schema that is not an owner match.
+-- A group's rows belong to the group, so the predicate asks "is the requesting user an ACTIVE member
+-- of this group". That question is answered in exactly one place, app_is_group_member(), for two
+-- reasons:
+--   * a policy ON group_members that sub-queried group_members would be evaluated recursively and
+--     Postgres aborts it ("infinite recursion detected in policy for relation"). A SECURITY DEFINER
+--     function runs its body as the table owner, which is exempt from RLS, so the lookup terminates;
+--   * one helper cannot drift. Three tables (and, from the pot work on, more) ask the same question,
+--     and a predicate copy-pasted per table is a predicate that eventually disagrees with itself.
+-- Three properties make the shape safe:
+--   * `is_active` is inside the helper, so deactivating a seat revokes access in the same statement
+--     that removes the person — there is no second place to remember;
+--   * it fails closed exactly like the owner match: app_current_user_id() returns NULL for a
+--     context-less session, so the EXISTS finds nothing and every group reads as empty;
+--   * `role` appears NOWHERE in it. Group administration is management, not access: an admin sees
+--     precisely what any member sees. No role in Renly can see more than a member.
+-- The self-referential bootstrap: creating a group and accepting an invite both have to write the
+-- very membership row this predicate reads, so neither can satisfy it. Rather than widen the policy
+-- with an author-based escape hatch (which would outlive the author's own membership), those two use
+-- cases run on the privileged owner session — the same posture as the pre-auth invite and auth-token
+-- flows. Every other group operation runs on the request session under these policies.
+--
+-- SECURITY DEFINER, and why it leaks nothing: the function takes a group id and returns a boolean
+-- about the CALLING user's own membership, which the caller necessarily already knows. It exposes no
+-- row and no other user's data for any argument. search_path is pinned so a caller cannot shadow
+-- `group_members` with a temp table of their own.
+CREATE OR REPLACE FUNCTION app_is_group_member(p_group_id BIGINT) RETURNS BOOLEAN
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM group_members gm
+      WHERE gm.group_id = p_group_id
+        AND gm.user_id = app_current_user_id()
+        AND gm.is_active
+    )
+  $$;
+
+-- SECURITY DEFINER runs as the owner, so the default PUBLIC EXECUTE grant that every function gets
+-- is revoked before granting it deliberately. app_current_user_id() keeps the default because it is
+-- not SECURITY DEFINER — it reads a GUC and can do nothing its caller could not.
+REVOKE ALL ON FUNCTION app_is_group_member(BIGINT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_is_group_member(BIGINT) TO renly_app;
+
+ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY groups_member_isolation ON groups
+  USING (app_is_group_member(id)) WITH CHECK (app_is_group_member(id));
+
+-- Keyed through the group, NOT through the row's own user_id: a member must see every seat in their
+-- group, including the name-only placeholders, which have no user_id to match on at all. Matching on
+-- user_id would show each member only themselves, which is the opposite of a roster.
+ALTER TABLE group_members ENABLE ROW LEVEL SECURITY;
+CREATE POLICY group_members_member_isolation ON group_members
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- Same predicate: an invite is group state, so any member may see that a seat has been invited.
+-- Consuming one is the bootstrap case above — the accepter is not a member yet, so this policy hides
+-- the row from them and the accept runs on the privileged session.
+ALTER TABLE group_invites ENABLE ROW LEVEL SECURITY;
+CREATE POLICY group_invites_member_isolation ON group_invites
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
 -- pair/ticker (not by user) and are intentionally left without RLS so every request

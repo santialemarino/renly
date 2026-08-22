@@ -66,6 +66,16 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "expecting it, you can ignore this message."
             ),
         },
+        "group_invite": {
+            "subject": "{inviter} invited you to {group} on {product}",
+            "body": (
+                '{inviter} invited you to the group "{group}" on {product}.\n\n'
+                "Open this link to join:\n{link}\n\n"
+                "You need to be logged in to your {product} account — the link takes you to the login "
+                "page if you are not. It works once and expires soon. If you were not expecting this, "
+                "you can ignore this message."
+            ),
+        },
         "email_change_taken": {
             "subject": "This email already has a {product} account",
             "body": (
@@ -123,6 +133,16 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Creá tu cuenta acá:\n{link}\n\n"
                 "Esta invitación está asociada a tu dirección de correo y se puede usar una sola "
                 "vez. Si no la esperabas, podés ignorar este mensaje."
+            ),
+        },
+        "group_invite": {
+            "subject": "{inviter} te invitó a {group} en {product}",
+            "body": (
+                '{inviter} te invitó al grupo "{group}" en {product}.\n\n'
+                "Abrí este enlace para unirte:\n{link}\n\n"
+                "Necesitás estar conectado a tu cuenta de {product}: si no lo estás, el enlace te "
+                "lleva a la página de inicio de sesión. Se puede usar una sola vez y vence pronto. "
+                "Si no esperabas esta invitación, podés ignorar este mensaje."
             ),
         },
         "email_change_taken": {
@@ -203,6 +223,17 @@ def invite_email(to: str, link: str, locale: str = _DEFAULT_LOCALE) -> EmailMess
 # the response stays uniform and never reveals it (AUTH-8, anti-enumeration).
 def email_change_taken_email(to: str, login_link: str, locale: str = _DEFAULT_LOCALE) -> EmailMessage:
     return _link_email("email_change_taken", to, login_link, locale)
+
+
+# Invite email sent when a group admin invites someone to a seat (shared money). Distinct from
+# invite_email above: that one grants platform signup and locks the address, whereas this link only
+# links an EXISTING account to a group seat and grants no signup access. Localized to the sender's
+# language — the recipient may not have an account yet, so there is no stored preference to read.
+def group_invite_email(to: str, link: str, group_name: str, inviter_name: str, locale: str = _DEFAULT_LOCALE) -> EmailMessage:
+    strings = _strings("group_invite", locale)
+    text = strings["body"].format(product=_PRODUCT_NAME, link=link, group=group_name, inviter=inviter_name)
+    subject = strings["subject"].format(product=_PRODUCT_NAME, group=group_name, inviter=inviter_name)
+    return EmailMessage(to=to, subject=subject, html=_html(text), text=text)
 
 
 # Notifies an admin that a user submitted feedback from the in-app form (SHELL-7). to = the admin;

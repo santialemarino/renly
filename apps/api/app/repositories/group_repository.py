@@ -1,0 +1,153 @@
+# Data access for groups and their member seats.
+#
+# Unlike every other repository here, these queries are NOT filtered by user_id: a group's rows belong
+# to the group, and the membership RLS policies (app_is_group_member) are what scope them to the
+# requesting user. Two consequences worth keeping in mind while reading this file:
+#   * a lookup that returns None may mean "does not exist" OR "not visible to you" — indistinguishable
+#     by design, and the service maps both to NotFoundError so neither answer leaks the other;
+#   * the two RLS-bootstrap use cases (creating a group, claiming a seat) run these functions on the
+#     privileged session, because the membership row the policy reads does not exist yet.
+
+from collections import defaultdict
+
+from sqlalchemy import delete as sa_delete
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import func, select
+
+from app.models.group import Group, GroupMember, GroupMemberRole
+
+
+# Lists the groups visible to the session, newest first. RLS restricts this to the user's own groups.
+async def list_visible(session: AsyncSession) -> list[Group]:
+    result = await session.execute(select(Group).order_by(Group.created_at.desc(), Group.id.desc()))
+    return list(result.scalars().all())
+
+
+# Fetches a group by id. Returns None when it does not exist or is not visible to the session.
+async def get_by_id(session: AsyncSession, group_id: int) -> Group | None:
+    return await session.get(Group, group_id)
+
+
+# Persists a new group and flushes to get the id.
+async def create(session: AsyncSession, group: Group) -> Group:
+    session.add(group)
+    await session.flush()
+    return group
+
+
+# Persists changes to an existing group.
+async def save(session: AsyncSession, group: Group) -> None:
+    session.add(group)
+
+
+# Deletes a group. Members and invites go with it by FK CASCADE.
+async def delete(session: AsyncSession, group: Group) -> None:
+    await session.delete(group)
+
+
+# Ids of the groups that become unreachable once this user's account is gone: groups they hold a seat
+# in where no OTHER active, account-linked seat remains. Such a group can be read by nobody (the
+# membership policy needs an active linked seat), administered by nobody, and re-entered by nobody, so
+# nothing can ever remove it again — hence collecting the ids while the user still exists.
+# `is_active` is part of the test on purpose: a former member who still has an account cannot see the
+# group either, so leaving one behind would keep it just as unreachable.
+async def list_orphaned_group_ids(session: AsyncSession, user_id: int) -> list[int]:
+    others = (
+        select(GroupMember.id)
+        .where(
+            GroupMember.group_id == Group.id,
+            GroupMember.user_id.is_not(None),
+            GroupMember.user_id != user_id,
+            GroupMember.is_active,
+        )
+        .exists()
+    )
+    mine = select(GroupMember.id).where(GroupMember.group_id == Group.id, GroupMember.user_id == user_id).exists()
+    result = await session.execute(select(Group.id).where(mine, ~others))
+    return list(result.scalars().all())
+
+
+# Deletes groups by id, with their seats and invites (FK CASCADE). Takes ids rather than rows because
+# the account-deletion caller resolves them before the account goes and acts on them afterwards.
+async def delete_by_ids(session: AsyncSession, group_ids: list[int]) -> None:
+    if not group_ids:
+        return
+    await session.execute(sa_delete(Group).where(Group.id.in_(group_ids)))
+
+
+# Lists every seat in a group — active and former, placeholders included — newest seat last.
+async def list_members(session: AsyncSession, group_id: int) -> list[GroupMember]:
+    result = await session.execute(select(GroupMember).where(GroupMember.group_id == group_id).order_by(GroupMember.id))
+    return list(result.scalars().all())
+
+
+# Returns {group_id: [member, ...]} for all given group ids in a single query (list-page fan-out).
+async def list_members_by_groups(session: AsyncSession, group_ids: list[int]) -> dict[int, list[GroupMember]]:
+    if not group_ids:
+        return {}
+    result = await session.execute(select(GroupMember).where(GroupMember.group_id.in_(group_ids)).order_by(GroupMember.id))
+    members_by_group: dict[int, list[GroupMember]] = defaultdict(list)
+    for member in result.scalars().all():
+        members_by_group[member.group_id].append(member)
+    return dict(members_by_group)
+
+
+# Fetches one seat by id, scoped to its group. Returns None when it does not exist or is not visible.
+async def get_member(session: AsyncSession, group_id: int, member_id: int) -> GroupMember | None:
+    result = await session.execute(select(GroupMember).where(GroupMember.id == member_id, GroupMember.group_id == group_id))
+    return result.scalar_one_or_none()
+
+
+# Fetches the seat a user holds in a group, active or not. Returns None when they hold none.
+async def get_member_by_user(session: AsyncSession, group_id: int, user_id: int) -> GroupMember | None:
+    result = await session.execute(select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.user_id == user_id))
+    return result.scalar_one_or_none()
+
+
+# Counts the group's ACTIVE admin seats. The service uses this to refuse the change that would leave a
+# group with none — deleting, deactivating or demoting its last one.
+async def count_active_admins(session: AsyncSession, group_id: int) -> int:
+    result = await session.execute(
+        select(func.count())
+        .select_from(GroupMember)
+        .where(
+            GroupMember.group_id == group_id,
+            GroupMember.role == GroupMemberRole.admin,
+            GroupMember.is_active,
+        )
+    )
+    return result.scalar_one()
+
+
+# Persists a new seat and flushes to get the id.
+async def create_member(session: AsyncSession, member: GroupMember) -> GroupMember:
+    session.add(member)
+    await session.flush()
+    return member
+
+
+# Persists changes to an existing seat.
+async def save_member(session: AsyncSession, member: GroupMember) -> None:
+    session.add(member)
+
+
+# Namespace to call repository functions (e.g. group_repository.list_visible).
+class GroupRepository:
+    count_active_admins = staticmethod(count_active_admins)
+    create = staticmethod(create)
+    create_member = staticmethod(create_member)
+    delete = staticmethod(delete)
+    delete_by_ids = staticmethod(delete_by_ids)
+    get_by_id = staticmethod(get_by_id)
+    get_member = staticmethod(get_member)
+    get_member_by_user = staticmethod(get_member_by_user)
+    list_members = staticmethod(list_members)
+    list_members_by_groups = staticmethod(list_members_by_groups)
+    list_orphaned_group_ids = staticmethod(list_orphaned_group_ids)
+    list_visible = staticmethod(list_visible)
+    save = staticmethod(save)
+    save_member = staticmethod(save_member)
+
+
+# Singleton used by services to access group persistence.
+group_repository = GroupRepository()

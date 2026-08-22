@@ -11,6 +11,13 @@ export const ROUTES = {
     forgotPassword: '/forgot-password',
     resetPassword: '/reset-password',
     verifyEmail: '/verify-email',
+    /*
+     * The group-invite landing page. Unauthenticated on purpose, and grouped here for exactly that
+     * reason: most recipients open the link with no session, and a protected route would bounce them
+     * to /login and drop the token from the URL. Unlike its siblings it does NOT redirect a
+     * logged-in visitor away — accepting an invite is what a logged-in visitor came here to do.
+     */
+    joinGroup: '/join',
   },
   dashboard: '/dashboard',
   financeDashboard: '/finance-dashboard',
@@ -26,6 +33,7 @@ export const ROUTES = {
   investments: '/investments',
   collections: '/collections',
   snapshots: '/snapshots',
+  shared: '/shared',
   preferences: '/preferences',
   alerts: '/alerts',
   localization: '/localization',
@@ -43,6 +51,9 @@ export const ROUTES = {
  * own anyway — the route gate matches by prefix, so `/accounts` already protects `/accounts/{id}`.
  */
 export const accountLedgerPath = (accountId: number) => `${ROUTES.accounts}/${accountId}`;
+
+/** A group's hub. A helper for the same reason as accountLedgerPath — `/shared` already protects it. */
+export const sharedGroupPath = (groupId: number) => `${ROUTES.shared}/${groupId}`;
 
 /*
  * Anchors on the public help page that the app deep-links to. A help section's id is part of a public
@@ -69,6 +80,7 @@ export const AUTH_ROUTES = [
   ROUTES.auth.forgotPassword,
   ROUTES.auth.resetPassword,
   ROUTES.auth.verifyEmail,
+  ROUTES.auth.joinGroup,
 ] as const;
 
 /** Public, unauthenticated routes — the marketing landing, help, and legal pages. */

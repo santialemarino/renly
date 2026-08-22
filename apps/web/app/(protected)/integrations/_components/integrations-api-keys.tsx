@@ -17,8 +17,8 @@ import {
   Input,
   Label,
 } from '@repo/ui/components';
-import { CopyButton } from '@/app/(protected)/integrations/_components/copy-button';
 import { createApiKey, revokeApiKey } from '@/app/(protected)/integrations/integrations-actions';
+import { CopyButton } from '@/components/copy-button';
 import { TypeToConfirmDialog } from '@/components/type-to-confirm-dialog';
 import type { ApiKey } from '@/lib/api/api-keys';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -121,7 +121,7 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
                 <Label>{t('apiKeys.dialog.keyLabel')}</Label>
                 <div className="flex items-center gap-x-2">
                   <Input value={rawKey} readOnly className="font-mono text-paragraph-xs" />
-                  <CopyButton value={rawKey} />
+                  <CopyButton value={rawKey} ariaLabel="Copy API key" />
                 </div>
               </div>
             ) : (
