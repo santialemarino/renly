@@ -117,7 +117,7 @@ export function CollectionFormDialog({
 
         <Form {...form}>
           <form
-            id="group-form"
+            id="collection-form"
             noValidate
             onSubmit={form.handleSubmit(onSubmit)}
             className="flex flex-col gap-y-4"
@@ -173,7 +173,7 @@ export function CollectionFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('form.cancel')}
           </Button>
-          <Button blue type="submit" form="group-form" disabled={isPending}>
+          <Button blue type="submit" form="collection-form" disabled={isPending}>
             {isPending ? t('form.cta.loading') : t('form.cta.label')}
           </Button>
         </DialogFooter>

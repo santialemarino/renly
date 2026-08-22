@@ -304,6 +304,7 @@
       "investments": "Inversiones",
       "collections": "Colecciones",
       "snapshots": "Snapshots",
+      "groups": "Grupos",
       "preferences": "Preferencias",
       "alerts": "Alertas y límites",
       "localization": "Localización",
@@ -319,6 +320,7 @@
       "finances": "Finanzas",
       "commitments": "Compromisos",
       "portfolio": "Inversor",
+      "shared": "Compartido",
       "settings": "Configuración",
       "administration": "Administración",
       "support": "Soporte"
@@ -1807,6 +1809,168 @@
       "transactionSaveError": "Se guardó el snapshot, pero no se pudo guardar la transacción. Volvé a abrir el snapshot para reintentarla."
     }
   },
+  "shared": {
+    "metadata": {
+      "title": "Grupos",
+      "description": "Las personas con las que compartís dinero y quiénes están en cada grupo."
+    },
+    "title": "Grupos",
+    "subtitle": "Las personas con las que compartís dinero. El grupo guarda quiénes son; nada se comparte hasta que vos lo compartas.",
+    "kinds": {
+      "household": "Casa",
+      "couple": "Pareja",
+      "trip": "Viaje",
+      "flat": "Depto compartido",
+      "other": "Otro"
+    },
+    "roles": {
+      "admin": "Administrador",
+      "member": "Miembro"
+    },
+    "roleHints": {
+      "admin": "Gestiona miembros y ajustes. Ve exactamente lo mismo que un miembro.",
+      "member": "Ve todo lo que el grupo comparte."
+    },
+    "toolbar": {
+      "addGroup": "Nuevo grupo"
+    },
+    "table": {
+      "name": "Nombre",
+      "kind": "Tipo",
+      "members": "Miembros",
+      "yourRole": "Tu rol",
+      "actions": "Acciones",
+      "openHub": "Abrir grupo",
+      "memberOnly": "Solo un administrador puede renombrar o eliminar este grupo.",
+      "empty": "Todavía no hay grupos.",
+      "emptyTitle": "Compartí dinero con las personas con las que compartís la vida",
+      "emptyDescription": "Un grupo son solo las personas: una casa, una pareja, un viaje. Creá uno, agregá a quienes están y nada de lo tuyo se vuelve visible hasta que elijas compartirlo."
+    },
+    "form": {
+      "titleCreate": "Nuevo grupo",
+      "titleEdit": "Editar grupo",
+      "descriptionCreate": "Ponele nombre al grupo y decí para qué es. Vas a ser su primer administrador.",
+      "descriptionEdit": "Cambiá cómo se llama el grupo o para qué es.",
+      "name": {
+        "label": "Nombre",
+        "placeholder": "Ingresá el nombre del grupo"
+      },
+      "kind": {
+        "label": "Tipo",
+        "placeholder": "Seleccioná un tipo"
+      },
+      "displayName": {
+        "label": "Tu nombre en este grupo",
+        "placeholder": "Por defecto, el nombre de tu cuenta"
+      },
+      "cancel": "Cancelar",
+      "cta": {
+        "label": "Guardar",
+        "loading": "Guardando..."
+      },
+      "createSuccess": "Grupo creado.",
+      "updateSuccess": "Grupo actualizado.",
+      "saveError": "No se pudo guardar el grupo."
+    },
+    "delete": {
+      "title": "Eliminar grupo",
+      "description": "Esto elimina {name} para todos los que están en él, junto con sus {count} miembros y cualquier invitación pendiente. No se puede deshacer.",
+      "confirm": "Eliminar grupo",
+      "loading": "Eliminando...",
+      "success": "Grupo eliminado.",
+      "error": "No se pudo eliminar el grupo."
+    },
+    "hub": {
+      "metadata": {
+        "title": "Grupo",
+        "description": "Los miembros, roles e invitaciones pendientes de un grupo."
+      },
+      "back": "Grupos",
+      "subtitle": "{kind}",
+      "stats": {
+        "members": "Miembros",
+        "placeholders": "Todavía no están en Renly",
+        "created": "Creado",
+        "none": "Ninguno"
+      }
+    },
+    "members": {
+      "title": "Miembros",
+      "description": "Todos los que están en este grupo. Quien no tenga cuenta de Renly también tiene su lugar acá.",
+      "add": "Agregar miembro",
+      "you": "(vos)",
+      "emptyTitle": "Todavía no hay miembros",
+      "emptyDescription": "Agregá a las personas que están en este grupo. No necesitan una cuenta de Renly.",
+      "formerTitle": "Miembros anteriores",
+      "formerDescription": "Salieron del grupo. Su historial queda y un administrador puede volver a incluirlos.",
+      "table": {
+        "name": "Nombre",
+        "role": "Rol",
+        "status": "Estado",
+        "actions": "Acciones"
+      },
+      "status": {
+        "joined": "En Renly",
+        "invited": "Invitado",
+        "placeholder": "Sin invitar",
+        "former": "Fuera del grupo"
+      },
+      "form": {
+        "titleCreate": "Agregar miembro",
+        "titleEdit": "Editar miembro",
+        "descriptionCreate": "Agregá a alguien al grupo. Invitarlo a Renly es un paso aparte.",
+        "descriptionEdit": "Cambiá cómo se muestra esta persona o qué puede gestionar.",
+        "displayName": {
+          "label": "Nombre",
+          "placeholder": "Ingresá el nombre de la persona"
+        },
+        "role": {
+          "label": "Rol",
+          "placeholder": "Seleccioná un rol"
+        },
+        "createSuccess": "Miembro agregado.",
+        "updateSuccess": "Miembro actualizado.",
+        "saveError": "No se pudo guardar el miembro."
+      },
+      "remove": "Quitar del grupo",
+      "removeTitle": "Quitar miembro",
+      "removeDescription": "¿Querés quitar a {name} de este grupo? Su historial queda y podés volver a incluirlo más adelante.",
+      "removeConfirm": "Quitar",
+      "removeSuccess": "Miembro quitado.",
+      "leave": "Salir del grupo",
+      "leaveTitle": "Salir del grupo",
+      "leaveDescription": "¿Querés salir de {group}? Vas a dejar de ver todo lo que comparte. Un administrador puede volver a agregarte.",
+      "leaveConfirm": "Salir",
+      "leaveSuccess": "Saliste del grupo.",
+      "removing": "Quitando...",
+      "reactivate": "Volver a incluir",
+      "reactivateSuccess": "El miembro volvió al grupo.",
+      "actionError": "Algo salió mal. Intentá de nuevo."
+    },
+    "invite": {
+      "title": "Invitar a Renly",
+      "resend": "Enviar un enlace nuevo",
+      "resendTitle": "Enviar un enlace nuevo",
+      "description": "Enviale a {name} un enlace que conecta su cuenta de Renly con su lugar en el grupo.",
+      "resendDescription": "Esto reemplaza el enlace actual de {name}: el anterior deja de funcionar de inmediato.",
+      "email": {
+        "label": "Correo",
+        "placeholder": "Ingresá su dirección de correo"
+      },
+      "emailHint": "Dejalo vacío para obtener un enlace que compartas vos.",
+      "linkLabel": "Enlace de invitación",
+      "shownOnce": "Copialo ahora: se muestra una sola vez y deja de funcionar el {date}. Siempre podés enviar uno nuevo.",
+      "sentTo": "También se envió por correo a {email}.",
+      "cta": {
+        "label": "Crear enlace",
+        "loading": "Creando..."
+      },
+      "done": "Listo",
+      "revoke": "Cancelar invitación",
+      "revokeSuccess": "Invitación cancelada.",
+      "error": "No se pudo crear la invitación."
+    }
+  },
   "preferences": {
     "metadata": {
       "title": "Preferencias",
@@ -2100,6 +2264,36 @@
         "description": "Este enlace no es válido o expiró. Solicitá uno nuevo."
       }
     }
+  },
+  "join": {
+    "metadata": {
+      "title": "Unirse a un grupo",
+      "description": "Aceptá una invitación a un grupo de Renly."
+    },
+    "title": "Unirse a {group}",
+    "invalidTitle": "Este enlace ya no funciona",
+    "invalidDescription": "Puede haber vencido, ya haberse usado o haberse cancelado. Pedile uno nuevo a quien te invitó.",
+    "description": "{inviter} te guardó un lugar como {seat} en esta {kind}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
+    "descriptionNoInviter": "Hay un lugar guardado para {seat} en esta {kind}. Al unirte, tu cuenta de Renly queda conectada a ese lugar.",
+    "kinds": {
+      "household": "casa",
+      "couple": "pareja",
+      "trip": "viaje",
+      "flat": "convivencia",
+      "other": "grupo"
+    },
+    "expires": "El enlace funciona hasta el {date}.",
+    "needAccount": "Necesitás una cuenta de Renly para unirte. Iniciá sesión, o creá una y volvé a abrir este enlace.",
+    "needAccountInviteOnly": "Necesitás una cuenta de Renly para unirte. Por ahora Renly es solo por invitación, así que iniciá sesión si ya tenés una.",
+    "cta": {
+      "label": "Unirme al grupo",
+      "loading": "Uniéndote...",
+      "login": "Iniciar sesión para unirme"
+    },
+    "success": "Te uniste a {group}.",
+    "error": "Algo salió mal. Intentá de nuevo.",
+    "goToDashboard": "Ir a tu panel",
+    "goToHome": "Conocer Renly"
   },
   "account": {
     "metadata": {
@@ -2722,6 +2916,9 @@
     "integrity_conflict": "El cambio genera un conflicto con datos existentes.",
     "transfer_same_account": "Una transferencia tiene que mover dinero entre dos cuentas distintas.",
     "transfer_amounts_must_match": "Dentro de una misma moneda, una transferencia tiene que acreditar exactamente lo que debita. Registrá una comisión como un gasto aparte.",
-    "transfer_amount_required": "Al mover {from_currency} a {to_currency} hay que registrar el monto recibido, para conservar la cotización que conseguiste."
+    "transfer_amount_required": "Al mover {from_currency} a {to_currency} hay que registrar el monto recibido, para conservar la cotización que conseguiste.",
+    "group_admin_required": "Solo un administrador del grupo puede hacer esto.",
+    "group_last_admin": "Un grupo necesita al menos un administrador. Primero hacé administrador a otra persona.",
+    "group_membership_exists": "Ya sos miembro de este grupo."
   }
 }

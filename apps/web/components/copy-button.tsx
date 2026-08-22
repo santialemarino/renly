@@ -12,11 +12,16 @@ const COPY_RESET_MS = 2000;
 
 interface CopyButtonProps {
   value: string;
+  // Hardcoded English accessible name, matching the RowActionButton convention. Required because the
+  // button is icon-only: without it a screen reader announces an unnamed button, and there are now two
+  // call sites (a raw API key and a group-invite link) that copy different things.
+  ariaLabel: string;
   className?: string;
 }
 
-// Button that copies a value to clipboard with animated check feedback.
-export function CopyButton({ value, className }: CopyButtonProps) {
+// Button that copies a value to clipboard with animated check feedback. Shared by the integrations
+// page's one-time API key and the group-invite link — both values that are shown exactly once.
+export function CopyButton({ value, ariaLabel, className }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
@@ -31,6 +36,7 @@ export function CopyButton({ value, className }: CopyButtonProps) {
       variant="outline"
       size="icon"
       onClick={handleCopy}
+      aria-label={ariaLabel}
       className={cn(
         'transition-all duration-200',
         copied && 'hover:bg-background hover:text-foreground cursor-default',

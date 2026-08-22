@@ -35,6 +35,7 @@ import {
   TrendingUp,
   UserCog,
   UserPlus,
+  Users,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -91,6 +92,9 @@ const PORTFOLIO_GROUP = [
   { key: 'collections', href: ROUTES.collections, icon: FolderOpen },
   { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
 ] as const;
+
+// The Shared module. One item today; the group hub is reached from it, and settle-up joins it later.
+const SHARED_GROUP = [{ key: 'groups', href: ROUTES.shared, icon: Users }] as const;
 
 const SETTINGS_GROUP = [
   { key: 'account', href: ROUTES.account, icon: UserCog },
@@ -263,6 +267,7 @@ export function AppSidebar({
   // Finances "section" is active when any direct child or any nested Commitments child is active.
   const isFinancesActive = FINANCES_GROUP.some(({ href }) => isActive(href)) || isCommitmentsActive;
   const isPortfolioActive = PORTFOLIO_GROUP.some(({ href }) => isActive(href));
+  const isSharedActive = SHARED_GROUP.some(({ href }) => isActive(href));
   const isSettingsActive = SETTINGS_GROUP.some(({ href }) => isActive(href));
 
   // A newcomer's advanced items follow their toggle; everyone else always sees them.
@@ -432,6 +437,43 @@ export function AppSidebar({
                           advanced={ADVANCED_NAV_KEYS.has(key)}
                           advancedVisible={advancedVisible}
                           reduce={reduce}
+                        />
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {/* Shared collapsible group — the people side of the app (groups and, later, settle-up).
+                  NOT behind progressive disclosure: like Finances, Portfolio and Settings, a top-level
+                  group is always listed, and a module nobody can find is a module nobody uses. */}
+              <Collapsible asChild defaultOpen={isSharedActive} className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      size="lg"
+                      className={cn(
+                        '[&_svg]:size-5 text-paragraph-medium',
+                        NAV_ITEM_STYLES,
+                        !isSharedActive &&
+                          'hover:[&>svg:first-child]:rotate-12 focus-visible:[&>svg:first-child]:rotate-12',
+                        isSharedActive && 'bg-gray-100',
+                      )}
+                    >
+                      <Users />
+                      <span>{t('navGroups.shared')}</span>
+                      <ChevronRight className="ml-auto size-4! transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className={collapsibleContentClass}>
+                    <SidebarMenuSub className="mx-4 mt-1 px-0 gap-1 border-l-0">
+                      {SHARED_GROUP.map(({ key, href, icon }) => (
+                        <NavSubItem
+                          key={key}
+                          href={href}
+                          icon={icon}
+                          label={t(`nav.${key}`)}
+                          active={isActive(href)}
                         />
                       ))}
                     </SidebarMenuSub>

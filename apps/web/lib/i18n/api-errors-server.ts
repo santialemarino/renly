@@ -30,12 +30,18 @@ export async function localizedApiError(
 
 /*
  * The statuses a mutation can be refused with for a reason worth showing. 400 is the domain-rule
- * refusal (a mismatched funding account, a rejected transfer); 404 covers a link whose target has been
- * deleted in another tab, which `NotFoundError` answers with and which is otherwise indistinguishable
- * from a crash; 409 is the "conflicts with existing state" family (reconciliation-owned entries, a
- * currency lock). Anything else is a genuine failure and stays a throw.
+ * refusal (a mismatched funding account, a rejected transfer); 403 is a permission the caller's page
+ * thought they had and no longer does (a group admin demoted in another tab); 404 covers a link whose
+ * target has been deleted in another tab, which `NotFoundError` answers with and which is otherwise
+ * indistinguishable from a crash; 409 is the "conflicts with existing state" family
+ * (reconciliation-owned entries, a currency lock, a group's last admin). Anything else is a genuine
+ * failure and stays a throw.
+ *
+ * 403 is safe to surface because `localizedApiError` returns null unless the body carries a `code` or
+ * `detail`, so an auth-layer 403 with no domain payload still falls through to the caller's own generic
+ * message rather than leaking anything.
  */
-export const REFUSAL_STATUSES = [400, 404, 409];
+export const REFUSAL_STATUSES = [400, 403, 404, 409];
 
 // Whether a failed response is a refusal whose reason should be surfaced rather than thrown.
 export function isRefusal(res: Response): boolean {

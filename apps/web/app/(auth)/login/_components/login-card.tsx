@@ -15,7 +15,12 @@ const FADE_PROPS = {
   transition: { duration: ANIMATION_DEFAULT },
 };
 
-export function LoginCard() {
+interface LoginCardProps {
+  // Already validated against the app's own routes by the page; null falls back to the dashboard.
+  nextPath?: string | null;
+}
+
+export function LoginCard({ nextPath }: LoginCardProps) {
   const t = useTranslations('login');
 
   return (
@@ -25,7 +30,7 @@ export function LoginCard() {
           <CardTitle className="text-heading-4 text-center text-blue-800">{t('title')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <LoginForm />
+          <LoginForm nextPath={nextPath} />
         </CardContent>
         <CardFooter className="justify-center gap-x-1 px-6 text-paragraph-sm text-muted-foreground">
           <span>{t('form.signup.title')}</span>
