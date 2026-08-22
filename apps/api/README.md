@@ -41,6 +41,25 @@ Request flow: **router → service → repository → DB**. Routers are HTTP-onl
 From repo root: `pnpm test:api`
 From here: `uv run pytest tests/ -v`
 
+`tests/integration/` needs a real Postgres and is **skipped by default** — each file gates on its own
+env var, so a green `pnpm test:api` says nothing about it. Point them at a throwaway DB with the schema
+applied:
+
+```bash
+# RLS isolation — needs BOTH the restricted request role and the table owner
+RLS_TEST_DATABASE_URL=postgresql+asyncpg://renly_app:...@localhost:5432/<db> \
+RLS_TEST_ADMIN_DATABASE_URL=postgresql+asyncpg://renly:...@localhost:5432/<db> \
+  uv run pytest tests/integration/test_rls_isolation.py
+
+# Account-ledger drift, and group lifecycle — owner role only
+LEDGER_TEST_DATABASE_URL=postgresql+asyncpg://renly:...@localhost:5432/<db> \
+  uv run pytest tests/integration/test_account_ledger_drift.py
+GROUPS_TEST_DATABASE_URL=postgresql+asyncpg://renly:...@localhost:5432/<db> \
+  uv run pytest tests/integration/test_group_lifecycle.py
+```
+
+`renly_app`'s password is set by `database/01_create_tables.sql` and is **not** the owner's.
+
 ## Env
 
 `.env` with: `DATABASE_URL`, `DATABASE_ADMIN_URL`, `JWT_SECRET` (match Next.js `NEXTAUTH_SECRET`), `JWT_ALGORITHM=HS256`, `JWT_EXPIRE_MINUTES=30` (short access token; the web silently refreshes it — AUTH-7), `REFRESH_TOKEN_REMEMBER_DAYS=30` / `REFRESH_TOKEN_DEFAULT_HOURS=12` (refresh-token lifetimes for remembered vs ordinary logins), `ENVIRONMENT` (`development`/`production` — `production` disables docs and debug), `CORS_ORIGINS` (comma-separated allowed origins), `TRUSTED_PROXY_COUNT` (reverse-proxy hop count for client-IP rate limiting; `0` when reached directly), `WEB_BASE_URL` (web app URL used to build account-email links), `SIGNUP_MODE` (`invite` default / `open` — the invite-only access gate), and the transactional-email settings `EMAIL_PROVIDER` (`console`/`resend`), `EMAIL_API_KEY`, `EMAIL_FROM` (SHELL-3). Copy from `.env.example`. External API URLs (DolarApi, Frankfurter, CoinGecko, Comafi) are constants in the service layer.

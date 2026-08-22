@@ -219,6 +219,18 @@ On the Payments Calendar, paid cycles show with a "Paid" badge instead of the de
 
 API keys allow external tools (like iOS Shortcuts) to authenticate without a full login flow. Each key has a name, is tied to a user, and can be revoked. The raw key is shown only once at creation.
 
+### Groups, Group Members and Group Invites
+
+A **group** is a set of people who share money — a household, a couple, a trip, a flat share. It is the one entity in Renly that more than one account can reach; every other table belongs to exactly one person. It holds the people and nothing about what they share, which keeps it reusable for anything a household needs to do together.
+
+A **group member** is a seat in a group. A seat is either linked to a Renly account or a **name-only placeholder** for someone who has no account and may never want one — a roommate who will never use the app still needs a real place in the group for their share of things to attach to. Accepting an invite fills the account in on the seat that already exists, so nothing has to be migrated or recomputed and their history simply becomes visible to them.
+
+Removing someone **deactivates** their seat rather than deleting it: the group's history stays readable, the rows that reference them keep a real counterparty, and an admin can bring them back. Deleting an account reverts their seat to a placeholder rather than taking the group with it — the group belongs to its members, not to whoever created it.
+
+A group member's `role` is `admin` or `member`, and it is about **administration only**: an admin manages members, settings and invites and gains no additional visibility whatsoever. No role in Renly can see more than a member. A group always keeps at least one active admin, since no other role could promote a replacement.
+
+A **group invite** is a pending invitation to claim one seat. It uses the same mechanism as the platform signup invite — a high-entropy token whose SHA-256 hash is all that is stored, single-use, expiring after 7 days, revocable, and rotated on every resend — but it is a separate thing: it links an _existing_ account to a seat and never grants signup access. Sending it by email is optional; without an address it is simply a shareable link.
+
 ### Settings
 
 Each user has personal preferences that control how the app behaves:
@@ -315,6 +327,26 @@ User
               (currency preferences, display options)
 ```
 
+**Shared data** (the one branch that is not owned by a single user):
+
+```
+Group
+ |    (a household / couple / trip / flat — the people, not the money)
+ |
+ |-- has many --> Group Members
+ |                (one seat per person; linked to an account, or a name-only placeholder)
+ |                  |
+ |                  |-- optionally linked to --> User
+ |                                              (filled in when they accept an invite;
+ |                                               cleared, not cascaded, if that account is deleted)
+ |
+ |-- has many --> Group Invites
+                  (one live invite per seat; single-use, expiring, revocable.
+                   Links an EXISTING account to a seat — never creates one)
+```
+
+A group is reachable by every account holding an active seat in it, which is why it hangs off `Group` rather than off `User`. `created_by` records who made it and confers nothing.
+
 **Supporting data** (shared across all users):
 
 ```
@@ -332,5 +364,9 @@ CEDEAR Ratios ...... how many CEDEARs equal one underlying share
 **One snapshot per month.** Each investment gets exactly one snapshot per date. If you enter a value for March 2026 and later correct it, the old value is replaced. This keeps things simple -- one number per month, just like a spreadsheet column.
 
 **Transactions are separate from value.** Your portfolio value (snapshots) and your money movements (transactions) are tracked independently. This separation is what makes accurate return calculations possible.
+
+**Ownership is a property of the record, never of the login.** Everything answers to exactly one scope: it is yours alone, or it belongs to a group. Nothing blends the two into one unlabelled number. Groups are the first step of that model: they establish _who the people are_, and nothing of yours becomes visible to them until you deliberately share it.
+
+**Administration never grants visibility.** A group admin manages members, settings and permissions — and that gives them zero additional access to any member's data. No role in Renly can see everything. The database enforces this rather than trusting the application to: the membership policy that decides what a group's rows are visible to never looks at anyone's role.
 
 **Credit cards are liabilities, not expenses.** When you buy something with a credit card, the expense is recorded immediately and the card balance increases as a liability. When you pay the statement, you record a settlement that reduces both your bank and the liability. This avoids double-counting and keeps all metrics accurate. See [Credit Card Liability Model](../technical/credit-card-liability-model.md) for the full accounting details.

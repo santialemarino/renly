@@ -195,6 +195,21 @@ After authentication resolves the user id, `set_session_user()` (`app/db.py`) st
 
 Every user-owned table has `ENABLE ROW LEVEL SECURITY` plus a policy `USING`/`WITH CHECK` that the row's owner equals `app_current_user_id()` — a helper returning `NULLIF(current_setting('app.current_user_id', true), '')::bigint`, which is `NULL` when no context is set, so a context-less connection matches **no rows** (rather than erroring). `users` keys on its own `id`; the hot child tables (`transactions`, `investment_snapshots`, `card_settlements`) carry a denormalized `user_id` so their policy is a direct column check; `investment_collection_members` (a pure junction) uses an `EXISTS`-join to the parent investment. The global reference tables (`exchange_rates`, `asset_prices`, `cedear_ratios`) are keyed by pair/ticker, not by user, and are intentionally left without RLS.
 
+#### Group membership — the one non-owner policy shape
+
+`groups`, `group_members` and `group_invites` belong to a **group**, not to a person, so their policy asks a different question: is the requesting user an **active member** of the group this row belongs to. It is answered in exactly one place, `app_is_group_member(group_id)`, and all three policies are `USING (app_is_group_member(...)) WITH CHECK (app_is_group_member(...))`.
+
+Four properties are worth knowing:
+
+- **The helper is `SECURITY DEFINER`, and that is required rather than stylistic.** A policy on `group_members` that sub-queried `group_members` would be evaluated recursively, and Postgres aborts it outright (`infinite recursion detected in policy for relation "group_members"`). A `SECURITY DEFINER` function runs its body as the table owner, which is exempt from RLS, so the lookup terminates. `search_path` is pinned and the default `PUBLIC` `EXECUTE` grant is revoked; the function only ever reports on the **calling** user's own membership, so it discloses nothing for any argument.
+- **`role` appears nowhere in it.** Group administration is management, not access: an admin sees precisely what any member sees. This is the "administration never grants visibility" rule, enforced by the policy's shape rather than by convention.
+- **`is_active` is inside the helper**, so removing a member revokes their access in the same statement that removes them — there is no second place to remember.
+- **Two use cases bootstrap the very row the policy reads** and therefore run on the **privileged session**: creating a group (its first membership row cannot satisfy a predicate that requires it) and accepting an invite (the redeemer must _read_ the invite before joining, and no `WITH CHECK` widening helps a `SELECT`). Every other group operation runs on the request session under these policies. The alternative — widening the policy with an author-based escape hatch — was rejected because it would outlive the author's own membership.
+
+`group_members` is keyed through the **group**, not through its own `user_id`, because a member must see every seat in their group including the name-only placeholders, which have no `user_id` to match on at all.
+
+- **`group_invites` table** — the same proven mechanism as `invites` (only the **SHA-256 hash** of a `secrets.token_urlsafe(32)` raw token is stored, single-use via `consumed_at`, time-limited by `expires_at`, rotate-on-resend) in a deliberately separate table. `invites` is globally unique per email because it gates platform **signup**; the same person may hold seats in several groups at once, and a group invite grants **no** signup access. The token is the credential: nothing is created by redeeming one, it only links an existing account to a seat, which is also what makes a shareable link possible. `email` records where the link was sent and constrains nothing. Revoking **deletes** the row (there is no revoked state), and removing a member deletes their pending invite in the same transaction.
+
 ---
 
 ## Frontend auth (NextAuth.js)
