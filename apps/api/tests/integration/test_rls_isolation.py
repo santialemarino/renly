@@ -14,6 +14,9 @@ from sqlalchemy.orm import sessionmaker
 # app.db registers the after_begin listener that re-applies the per-transaction user GUC, so these
 # tests exercise the real isolation mechanism, not a reimplementation.
 from app.db import set_session_user
+from app.models.group import GroupKind
+from app.models.user import User
+from app.services import group_service
 
 APP_URL = os.getenv("RLS_TEST_DATABASE_URL")
 ADMIN_URL = os.getenv("RLS_TEST_ADMIN_DATABASE_URL")
@@ -364,3 +367,38 @@ async def test_membership_helper_answers_only_about_the_caller(seeded):
     async with seeded["sessionmaker"]() as s:
         # No user context at all: fails closed, exactly like the owner-match policies.
         assert (await s.execute(text("SELECT app_is_group_member(:g)"), {"g": a["group"]})).scalar_one() is False
+
+
+# The bootstrap decision, which nothing else covers: creating a group writes the very membership row
+# the policy reads, so it CANNOT run on the request session — the router hands it the privileged one.
+# That is a wiring choice with no other guard: switch the router to SessionDep and every unit test still
+# passes while the feature 500s in production. Verified to red exactly when the bootstrap stops needing
+# privilege — weakening ONE of the two WITH CHECKs still leaves the other refusing, and weakening both
+# makes this test fail. PR 3's pot creation has the identical shape.
+@pytest.mark.asyncio
+async def test_creating_a_group_requires_the_privileged_session(seeded):
+    a = seeded["ids"]["a"]
+    user = User(id=a["user"], name="A", email=_EMAIL_A, password_hash="h")
+
+    # On the restricted request role the group INSERT cannot satisfy its own WITH CHECK.
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        with pytest.raises(DBAPIError):
+            await group_service.create_group(s, user, name="rls_group_boot", kind=GroupKind.trip)
+
+    # On the owner session it succeeds, and the creator comes back as its admin.
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            response = await group_service.create_group(owner, user, name="rls_group_boot", kind=GroupKind.trip)
+            assert response.my_role.value == "admin"
+            assert response.active_member_count == 1
+            # And the row really is readable by its creator through the request session afterwards.
+            async with seeded["sessionmaker"]() as s:
+                set_session_user(s, a["user"])
+                visible = (await s.execute(text("SELECT count(*) FROM groups WHERE id = :g"), {"g": response.id})).scalar_one()
+                assert visible == 1
+            await owner.execute(text("DELETE FROM groups WHERE id = :g"), {"g": response.id})
+            await owner.commit()
+    finally:
+        await admin_engine.dispose()

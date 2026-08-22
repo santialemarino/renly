@@ -95,6 +95,14 @@ async def _flushed(_session, member: GroupMember) -> GroupMember:
     return member
 
 
+# The same for create(): the group's id comes from the flush, and the response cannot be built without
+# it. Returning the very object the service constructed is the point — that is what makes the create
+# assertions test the service rather than the fixture.
+async def _flushed_group(_session, group: Group) -> Group:
+    group.id = _GROUP_ID
+    return group
+
+
 class TestVisibilityGate:
     @pytest.mark.asyncio
     async def test_a_non_member_gets_not_found_rather_than_forbidden(self, monkeypatch):
@@ -274,20 +282,36 @@ class TestListGroups:
 class TestCreateGroup:
     @pytest.mark.asyncio
     async def test_the_creator_is_seated_as_the_first_admin(self, monkeypatch):
-        created_group = _group()
-        created_member = _member(1, user_id=ADMIN.id, display_name="Santi", role=GroupMemberRole.admin)
-        _patch_repo(
-            monkeypatch,
-            create=AsyncMock(return_value=created_group),
-            create_member=AsyncMock(return_value=created_member),
-        )
+        # Asserted on the ROWS THE SERVICE BUILT, not on a mock's return value. Handing back a
+        # hardcoded admin member made the earlier version of this test pass even with the service
+        # seating the creator as a plain member — it was checking the fixture, not the code.
+        create = AsyncMock(side_effect=_flushed_group)
+        create_member = AsyncMock(side_effect=_flushed)
+        _patch_repo(monkeypatch, create=create, create_member=create_member)
         _patch_invite_repo(monkeypatch)
         session = AsyncMock()
+
         response = await group_service.create_group(session, ADMIN, name="Casa", kind=GroupKind.household)
+
+        seat = create_member.await_args.args[1]
+        assert seat.user_id == ADMIN.id
+        assert seat.role == GroupMemberRole.admin
+        assert seat.is_active is True
+        assert seat.joined_at is not None
         assert response.my_role == GroupMemberRole.admin
         assert response.active_member_count == 1
         assert response.members[0].is_self is True
         session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_group_records_its_name_kind_and_author(self, monkeypatch):
+        # created_by is authorship and the only trace of who made the group; nothing else records it.
+        create = AsyncMock(side_effect=_flushed_group)
+        _patch_repo(monkeypatch, create=create, create_member=AsyncMock(side_effect=_flushed))
+        _patch_invite_repo(monkeypatch)
+        await group_service.create_group(AsyncMock(), ADMIN, name="Casa", kind=GroupKind.couple)
+        built = create.await_args.args[1]
+        assert (built.name, built.kind, built.created_by) == ("Casa", GroupKind.couple, ADMIN.id)
 
     @pytest.mark.asyncio
     async def test_the_seat_falls_back_to_the_account_name_when_none_is_given(self, monkeypatch):
@@ -488,29 +512,10 @@ class TestRemoveMember:
         assert delete_invite.await_args.args[1] == 3
 
     @pytest.mark.asyncio
-    async def test_deactivating_through_the_update_path_also_revokes_the_invite(self, monkeypatch):
-        # Two verbs can remove someone — DELETE, and a PUT carrying is_active=false — and they must not
-        # differ. Without the shared helper only the DELETE dropped the pending link.
-        admin_seat = _member(1, user_id=ADMIN.id, role=GroupMemberRole.admin)
-        target = _member(3, display_name="Nico")
-        delete_invite = AsyncMock()
-        _patch_repo(
-            monkeypatch,
-            get_by_id=AsyncMock(return_value=_group()),
-            get_member_by_user=AsyncMock(return_value=admin_seat),
-            get_member=AsyncMock(return_value=target),
-            list_members=AsyncMock(return_value=[admin_seat, target]),
-        )
-        _patch_invite_repo(monkeypatch, delete_by_member=delete_invite)
-        await group_service.update_member(AsyncMock(), _GROUP_ID, 3, ADMIN, is_active=False)
-        assert target.is_active is False
-        assert delete_invite.await_count == 1
-        assert delete_invite.await_args.args[1] == 3
-
-    @pytest.mark.asyncio
     async def test_reactivating_through_the_update_path_does_not_touch_any_invite(self, monkeypatch):
-        # The inverse must NOT run the removal helper: a returning member's seat has no invite to drop,
-        # and calling it would be a needless write on every reactivation.
+        # is_active on the PUT is reactivate-ONLY (Literal[True]); removal is the DELETE verb, which is
+        # what also drops the pending invite. A returning member's seat has no invite to drop, and
+        # calling the removal path here would be a needless write on every reactivation.
         admin_seat = _member(1, user_id=ADMIN.id, role=GroupMemberRole.admin)
         target = _member(3, display_name="Nico", is_active=False)
         delete_invite = AsyncMock()

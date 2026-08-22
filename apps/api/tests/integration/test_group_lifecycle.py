@@ -1,3 +1,5 @@
+import asyncio
+import hashlib
 import os
 
 import pytest
@@ -11,7 +13,10 @@ from sqlalchemy.orm import sessionmaker
 # NOT EXISTS pair, and it decides what gets DELETED — the one query in this PR whose wrong answer
 # destroys a live group instead of merely hiding one. It runs on the owner (privileged) connection,
 # because a group is reachable only through membership and the deleting user's seat may not be active.
+from app.domain import InvalidTokenError
+from app.models.user import User
 from app.repositories import group_repository
+from app.services import group_invite_service
 
 ADMIN_URL = os.getenv("GROUPS_TEST_DATABASE_URL")
 
@@ -183,3 +188,55 @@ class TestOrphanedGroupDeletion:
             await group_repository.delete_by_ids(s, [])
             await s.commit()
             assert (await s.execute(text("SELECT count(*) FROM groups WHERE id = :g"), {"g": group_id})).scalar_one() == 1
+
+
+class TestConcurrentInviteClaims:
+    # A group invite link is deliberately SHAREABLE, so two people can open the same one at once, and
+    # the claim path resolves the invite with SELECT ... FOR UPDATE for exactly that reason. This is the
+    # only place that can be proven: a mocked session ignores the lock entirely, so the unit suite is
+    # green either way. Verified by removing the lock — both callers then return success, the second
+    # UPDATE overwrites the first, and one person holds a success response for a group they are not in.
+    @pytest.mark.asyncio
+    async def test_two_people_racing_one_link_produce_exactly_one_member(self, db):
+        users, factory = db["users"], db["factory"]
+        raw_token = "race-token-for-one-seat"
+        async with factory() as s:
+            group_id = await _make_group(s, users, "grp_race", [("me", True), (None, True)])
+            seat = (
+                await s.execute(
+                    text("SELECT id FROM group_members WHERE group_id = :g AND user_id IS NULL"),
+                    {"g": group_id},
+                )
+            ).scalar_one()
+            await s.execute(
+                text(
+                    "INSERT INTO group_invites (group_id, member_id, token_hash, expires_at, created_by) "
+                    "VALUES (:g, :m, :h, NOW() AT TIME ZONE 'utc' + INTERVAL '7 days', :u)"
+                ),
+                {"g": group_id, "m": seat, "h": hashlib.sha256(raw_token.encode()).hexdigest(), "u": users["me"]},
+            )
+            await s.commit()
+
+        # Two DIFFERENT accounts, each on its own session, claiming the same link at the same moment.
+        async def claim(user_id: int):
+            async with factory() as s:
+                user = User(id=user_id, name="racer", email=f"racer{user_id}@test.local", password_hash="h")
+                return await group_invite_service.accept_invite(s, raw_token, user)
+
+        outcomes = await asyncio.gather(claim(users["other"]), claim(users["third"]), return_exceptions=True)
+        accepted = [o for o in outcomes if not isinstance(o, Exception)]
+        refused = [o for o in outcomes if isinstance(o, Exception)]
+        assert len(accepted) == 1, f"single-use was violated — both claims succeeded: {outcomes}"
+        assert len(refused) == 1 and isinstance(refused[0], InvalidTokenError), refused
+        assert accepted[0].member_id == seat
+
+        async with factory() as s:
+            holders = (await s.execute(text("SELECT user_id FROM group_members WHERE id = :m"), {"m": seat})).scalars().all()
+            assert len(holders) == 1 and holders[0] in (users["other"], users["third"])
+            consumed = (
+                await s.execute(
+                    text("SELECT count(*) FROM group_invites WHERE member_id = :m AND consumed_at IS NOT NULL"),
+                    {"m": seat},
+                )
+            ).scalar_one()
+            assert consumed == 1

@@ -13,7 +13,8 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app.domain import GroupMembershipExistsError, InvalidTokenError, NotFoundError
+from app.config import settings
+from app.domain import GroupAdminRequiredError, GroupMembershipExistsError, GroupSeatTakenError, InvalidTokenError, NotFoundError
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_invite import GroupInvite
 from app.models.user import User
@@ -72,6 +73,37 @@ def _patch_delivery(monkeypatch, send: AsyncMock | None = None):
     monkeypatch.setattr(group_invite_service.user_repository, "get_by_id", AsyncMock(return_value=ADMIN))
 
 
+class TestAdminGate:
+    # Every other test here stubs require_admin so it succeeds, which is exactly what hid this: with
+    # the stub in place, a service that stopped calling the gate at all still passed. These two let the
+    # real gate run and assert a plain member is refused.
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "call",
+        [
+            pytest.param(lambda s: group_invite_service.create_invite(s, _GROUP_ID, _MEMBER_ID, JOINER), id="create_invite"),
+            pytest.param(lambda s: group_invite_service.revoke_invite(s, _GROUP_ID, _MEMBER_ID, JOINER), id="revoke_invite"),
+        ],
+    )
+    async def test_a_plain_member_cannot_manage_invites(self, monkeypatch, call):
+        seat = GroupMember(id=2, group_id=_GROUP_ID, user_id=JOINER.id, display_name="Ana", role=GroupMemberRole.member)
+        monkeypatch.setattr(
+            group_invite_service.group_service.group_repository,
+            "get_by_id",
+            AsyncMock(return_value=_group()),
+        )
+        monkeypatch.setattr(
+            group_invite_service.group_service.group_repository,
+            "get_member_by_user",
+            AsyncMock(return_value=seat),
+        )
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch)
+        _patch_delivery(monkeypatch)
+        with pytest.raises(GroupAdminRequiredError):
+            await call(AsyncMock())
+
+
 class TestCreateInvite:
     @pytest.mark.asyncio
     async def test_only_the_hash_is_stored_and_it_matches_the_link_that_is_returned(self, monkeypatch):
@@ -101,6 +133,21 @@ class TestCreateInvite:
         # The exact path, not a substring: "/shared/join" contains "/join" and would be protected.
         assert parsed.path == "/join"
         assert parse_qs(parsed.query)["token"]
+        # And it must be built from the configured web origin — a hardcoded host would send every
+        # invite in production to the wrong place, silently.
+        assert response.invite_url.startswith(settings.web_base_url)
+
+    @pytest.mark.asyncio
+    async def test_the_invite_records_who_sent_it(self, monkeypatch):
+        # created_by is what the pre-membership preview resolves "X invited you" from, so losing it
+        # makes every join page anonymous.
+        created = AsyncMock(side_effect=lambda _s, invite: invite)
+        _allow_admin(monkeypatch)
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch, create=created)
+        _patch_delivery(monkeypatch)
+        await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN)
+        assert created.await_args.args[1].created_by == ADMIN.id
 
     @pytest.mark.asyncio
     async def test_omitting_the_email_sends_nothing_and_still_returns_a_link(self, monkeypatch):
@@ -163,12 +210,14 @@ class TestCreateInvite:
 
     @pytest.mark.asyncio
     async def test_a_seat_someone_already_holds_cannot_be_invited(self, monkeypatch):
-        # There would be nothing to claim, so the token could only ever fail.
+        # There would be nothing to claim, so the token could only ever fail. The error must be the
+        # seat-taken one, NOT GroupMembershipExistsError — that one says "you are already a member of
+        # this group", which is the wrong sentence to show an admin inviting somebody else.
         _allow_admin(monkeypatch)
         _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat(user_id=JOINER.id)))
         _patch_invite_repo(monkeypatch)
         _patch_delivery(monkeypatch)
-        with pytest.raises(GroupMembershipExistsError):
+        with pytest.raises(GroupSeatTakenError):
             await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN)
 
     @pytest.mark.asyncio
