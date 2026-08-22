@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import InvalidCredentialsError, PasswordBreachedError
 from app.models.user import User
 from app.models.utils import utcnow
-from app.repositories import export_repository, invite_repository, user_repository
+from app.repositories import export_repository, group_repository, invite_repository, user_repository
 from app.services import auth_service
 
 
@@ -65,20 +65,31 @@ async def export_user_data(session: AsyncSession, user: User) -> dict[str, Any]:
 
 
 # Permanently deletes the account after re-verifying the password and a typed email confirmation
-# (AUTH-6). FK ON DELETE CASCADE removes every owned row. Also clears the invite that created this
-# account (if any) so deletion leaves no orphaned "accepted" invite — the invite belongs to the
-# inviting admin, so it's only reachable on the privileged session (RLS scopes `session` to the user).
+# (AUTH-6). FK ON DELETE CASCADE removes every owned row. Two things survive the cascade on purpose and
+# are handled here: the invite that created this account (so deletion leaves no orphaned "accepted"
+# invite), and shared groups — `group_members.user_id` is ON DELETE SET NULL because a group belongs to
+# its members rather than to whoever created it, so a group the deleted account SHARED with someone
+# else must outlive them, reverting their seat to a name-only placeholder. Both live on the privileged
+# session: the invite is FK'd to the inviting admin, and a group is reachable only through membership.
 async def delete_account(session: AsyncSession, admin_session: AsyncSession, user: User, password: str, confirmation: str) -> None:
     if not await auth_service.verify_password(password, user.password_hash):
         raise InvalidCredentialsError()
     if confirmation.strip().lower() != user.email.lower():
         raise InvalidCredentialsError("Confirmation does not match your email.")
-    # Clear the invite first, on its own (privileged) transaction. The two deletes span two
-    # connections so they can't be atomic; ordering invite-first makes the only partial-failure
-    # state benign — an invite with no account self-heals on re-invite, whereas deleting the user
-    # first and then failing the invite delete would leave exactly the orphan this guards against.
     email = user.email
+    # Resolved BEFORE the account goes: once the user row is deleted their seats read user_id NULL, and
+    # "was this the group's only account-holder" stops being answerable.
+    orphan_group_ids = await group_repository.list_orphaned_group_ids(admin_session, user.id)
+    # Clear the invite first, on its own (privileged) transaction. The deletes span two connections so
+    # they can't be atomic; ordering invite-first makes the only partial-failure state benign — an
+    # invite with no account self-heals on re-invite, whereas deleting the user first and then failing
+    # the invite delete would leave exactly the orphan this guards against.
     await invite_repository.delete_by_email(admin_session, email)
     await admin_session.commit()
     await user_repository.delete(session, user)
     await session.commit()
+    # The orphaned groups go LAST, for the same fail-benign reason inverted: dropping them before the
+    # account and then failing the account delete would destroy a live user's groups, whereas failing
+    # here leaves unreachable rows — which is precisely the state that existed before this cleanup.
+    await group_repository.delete_by_ids(admin_session, orphan_group_ids)
+    await admin_session.commit()
