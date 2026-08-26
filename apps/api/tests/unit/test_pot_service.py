@@ -399,14 +399,16 @@ class TestAbsorbingPotsOnAccountDeletion:
     @pytest.mark.asyncio
     async def test_every_holding_in_an_orphaned_groups_pots_is_reassigned(self, monkeypatch):
         monkeypatch.setattr(pot_service.pot_repository, "list_by_group", AsyncMock(return_value=[_pot(id=5), _pot(id=6)]))
-        investments = AsyncMock(return_value=2)
-        accounts = AsyncMock(return_value=1)
-        monkeypatch.setattr(pot_service.investment_repository, "reassign_pot_to_user", investments)
-        monkeypatch.setattr(pot_service.account_repository, "reassign_pot_to_user", accounts)
+        investments = AsyncMock(return_value=4)
+        accounts = AsyncMock(return_value=2)
+        monkeypatch.setattr(pot_service.investment_repository, "reassign_pots_to_user", investments)
+        monkeypatch.setattr(pot_service.account_repository, "reassign_pots_to_user", accounts)
         moved = await pot_service.absorb_group_pots(AsyncMock(), [10], USER.id)
         assert moved == 6
-        assert investments.await_count == 2
-        assert accounts.await_count == 2
+        # Two statements for the whole set, not two per pot: the cost of deleting an account must not
+        # grow with how much the leaver happened to share.
+        assert (investments.await_count, accounts.await_count) == (1, 1)
+        assert investments.await_args.args[1:] == ([5, 6], USER.id)
 
     @pytest.mark.asyncio
     async def test_no_orphaned_groups_touches_nothing(self, monkeypatch):

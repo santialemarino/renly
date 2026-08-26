@@ -56,6 +56,8 @@ def _account(id: int, *, user_id: int | None = 1, pot_id: int | None = None, cur
 def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
     monkeypatch.setattr(svc.group_repository, "get_member", AsyncMock(side_effect=lambda _s, _g, mid: {100: SEAT, 101: OTHER_SEAT}.get(mid)))
+    # record_opening resolves the whole roster in one query rather than a seat at a time.
+    monkeypatch.setattr(svc.group_repository, "list_members", AsyncMock(return_value=[SEAT, OTHER_SEAT]))
     monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=events if events is not None else [_event()]))
     monkeypatch.setattr(svc.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=AsyncMock()))
     monkeypatch.setattr(svc.pot_service, "get_nav", AsyncMock(return_value=nav))
@@ -68,6 +70,14 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
 
     created = AsyncMock(side_effect=_persist)
     monkeypatch.setattr(svc.pot_ownership_repository, "create", created)
+
+    # The opening writes one row per owner in a single batch; every other event writes one row.
+    def _persist_many(_session, events):
+        for n, event in enumerate(events, start=900):
+            event.id = event.id or n
+        return events
+
+    monkeypatch.setattr(svc.pot_ownership_repository, "create_many", AsyncMock(side_effect=_persist_many))
     return created
 
 
@@ -99,10 +109,38 @@ class TestOpening:
         created.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_the_roster_is_loaded_ONCE_however_many_owners_the_opening_names(self, monkeypatch):
+        # An opening names every owner, so validating a seat at a time is an N+1 that grows with the
+        # group. Asserted by counting the calls, because the per-seat version returns the same rows
+        # and produces an identical result — only the query count differs.
+        _arrange(monkeypatch, events=[])
+        roster = AsyncMock(return_value=[SEAT, OTHER_SEAT])
+        per_seat = AsyncMock(side_effect=lambda _s, _g, mid: {100: SEAT, 101: OTHER_SEAT}.get(mid))
+        monkeypatch.setattr(svc.group_repository, "list_members", roster)
+        monkeypatch.setattr(svc.group_repository, "get_member", per_seat)
+        await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("60"), 101: Decimal("40")})
+        assert roster.await_count == 1
+        per_seat.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_deactivated_seat_cannot_be_given_units(self, monkeypatch):
+        # A removed member's seat survives so the rows referencing it keep a real counterparty — but
+        # it is not an owner, and issuing units to one would put a share of the pot somewhere nobody
+        # can reach or settle.
+        _arrange(monkeypatch, events=[])
+        removed = GroupMember(id=101, group_id=10, user_id=2, display_name="Ana", role=GroupMemberRole.member, is_active=False)
+        monkeypatch.setattr(svc.group_repository, "list_members", AsyncMock(return_value=[SEAT, removed]))
+        with pytest.raises(NotFoundError):
+            await svc.record_opening(
+                AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("60"), 101: Decimal("40")}
+            )
+        svc.pot_ownership_repository.create_many.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_units_are_issued_at_a_nominal_one_so_they_read_as_percentages(self, monkeypatch):
-        created = _arrange(monkeypatch, events=[])
+        _arrange(monkeypatch, events=[])
         await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("90"), 101: Decimal("10")})
-        written = [call.args[1] for call in created.await_args_list]
+        written = svc.pot_ownership_repository.create_many.await_args.args[1]
         assert [(e.member_id, e.units, e.unit_price) for e in written] == [
             (100, Decimal("90.000000"), Decimal("1")),
             (101, Decimal("10.000000"), Decimal("1")),
