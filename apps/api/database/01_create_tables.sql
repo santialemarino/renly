@@ -127,6 +127,24 @@ CREATE TYPE group_member_role AS ENUM (
   'member'
 );
 
+-- Who may see a pot, for a group member with no explicit pot_member_permissions row:
+-- 'members' = every active member of the group, 'owners' = only those holding an explicit
+-- permission row (which is what an ownership event writes). An explicit row always wins.
+CREATE TYPE pot_visibility AS ENUM (
+  'members',
+  'owners'
+);
+
+-- What an entry in a pot's ownership ledger records. 'opening' sets the division baseline,
+-- 'contribution' issues units for money moved in, 'withdrawal' redeems them for money moved out,
+-- and 'reagreement' moves units between two members with no money at all.
+CREATE TYPE ownership_event_type AS ENUM (
+  'opening',
+  'contribution',
+  'withdrawal',
+  'reagreement'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -152,9 +170,17 @@ CREATE TABLE users (
 -- Each distinct investment the user has or had (stock, term deposit, FCI, etc.).
 -- base_currency is the currency the investment is naturally measured in.
 -- Soft-deleted via is_active = false so history is preserved.
+-- user_id is the OWNER, not the author, and is NULL for a co-owned holding — which is what makes
+-- every pre-existing `user_id = me` query keep meaning "exactly my private holdings" instead of
+-- silently drifting to "authored by me". A query that forgets the pot branch under-reports; it can
+-- never surface someone else's money. created_by carries authorship and is nullable + SET NULL for
+-- the same reason groups.created_by is: a shared holding outlives the account that entered it.
+-- The FK on pot_id is declared below, after pots exists.
 CREATE TABLE investments (
   id            BIGSERIAL PRIMARY KEY,
-  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id       BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id        BIGINT,
+  created_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
   name          VARCHAR(255) NOT NULL,
   category      investment_category NOT NULL,
   base_currency VARCHAR(10) NOT NULL,
@@ -163,11 +189,14 @@ CREATE TABLE investments (
   notes         TEXT,
   is_active     BOOLEAN NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT investments_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 
 CREATE INDEX idx_investments_user_id ON investments(user_id);
 CREATE INDEX idx_investments_user_active ON investments(user_id, is_active);
+CREATE INDEX idx_investments_pot_id ON investments(pot_id) WHERE pot_id IS NOT NULL;
+CREATE INDEX idx_investments_created_by ON investments(created_by);
 
 -- Investment snapshots
 -- Total value of an investment at a point in time (typically end of month).
@@ -177,7 +206,8 @@ CREATE INDEX idx_investments_user_active ON investments(user_id, is_active);
 CREATE TABLE investment_snapshots (
   id            BIGSERIAL PRIMARY KEY,
   investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
-  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id       BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id        BIGINT,
   date          DATE NOT NULL,
   value         NUMERIC(18, 2) NOT NULL,
   quantity      NUMERIC(18, 6),
@@ -186,11 +216,13 @@ CREATE TABLE investment_snapshots (
   notes         TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (investment_id, date)
+  UNIQUE (investment_id, date),
+  CONSTRAINT investment_snapshots_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 
 CREATE INDEX idx_snapshots_investment_date ON investment_snapshots(investment_id, date DESC);
 CREATE INDEX idx_snapshots_user_id ON investment_snapshots(user_id);
+CREATE INDEX idx_snapshots_pot_id ON investment_snapshots(pot_id) WHERE pot_id IS NOT NULL;
 
 -- Transactions
 -- Every capital movement: buy, sell, deposit, withdrawal.
@@ -199,7 +231,8 @@ CREATE INDEX idx_snapshots_user_id ON investment_snapshots(user_id);
 CREATE TABLE transactions (
   id            BIGSERIAL PRIMARY KEY,
   investment_id BIGINT NOT NULL REFERENCES investments(id) ON DELETE CASCADE,
-  user_id       BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id       BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id        BIGINT,
   date          DATE NOT NULL,
   amount        NUMERIC(18, 2) NOT NULL,
   quantity      NUMERIC(18, 6),
@@ -207,11 +240,13 @@ CREATE TABLE transactions (
   type          transaction_type NOT NULL,
   notes         TEXT,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT transactions_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 
 CREATE INDEX idx_transactions_investment_date ON transactions(investment_id, date DESC);
 CREATE INDEX idx_transactions_user_id ON transactions(user_id);
+CREATE INDEX idx_transactions_pot_id ON transactions(pot_id) WHERE pot_id IS NOT NULL;
 
 -- Exchange rates
 -- Historical rate by pair and date. Auto-updated via scheduled job.
@@ -316,9 +351,13 @@ CREATE INDEX idx_credit_cards_user_id ON credit_cards(user_id);
 -- The running balance is DERIVED at query time (opening_balance plus linked income minus linked
 -- expenses/settlements plus/minus transfers), never stored. One currency per account; opening_date
 -- anchors the historical balance series. Archived (not deleted) via is_active = false.
+-- Scope columns mirror investments exactly: user_id is the OWNER (NULL when the account is
+-- co-owned through a pot), created_by is authorship. See the investments comment for why.
 CREATE TABLE accounts (
   id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id         BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id          BIGINT,
+  created_by      BIGINT REFERENCES users(id) ON DELETE SET NULL,
   name            VARCHAR(255) NOT NULL,
   type            account_type NOT NULL,
   currency        VARCHAR(3) NOT NULL,
@@ -327,11 +366,14 @@ CREATE TABLE accounts (
   is_active       BOOLEAN NOT NULL DEFAULT TRUE,
   notes           TEXT,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT accounts_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 
 CREATE INDEX idx_accounts_user_id ON accounts(user_id);
 CREATE INDEX idx_accounts_user_active ON accounts(user_id, is_active);
+CREATE INDEX idx_accounts_pot_id ON accounts(pot_id) WHERE pot_id IS NOT NULL;
+CREATE INDEX idx_accounts_created_by ON accounts(created_by);
 
 -- Forward FK from credit_cards to accounts (the default funding account).
 -- Declared via ALTER TABLE because accounts is created after credit_cards.
@@ -605,7 +647,8 @@ ALTER TABLE income_entries
 --   supported way to revise one.
 CREATE TABLE account_reconciliations (
   id                    BIGSERIAL PRIMARY KEY,
-  user_id               BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id               BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id                BIGINT,
   account_id            BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   as_of_date            DATE NOT NULL,
   statement_balance     NUMERIC(18, 2) NOT NULL,
@@ -615,10 +658,12 @@ CREATE TABLE account_reconciliations (
   adjustment_income_id  BIGINT REFERENCES income_entries(id) ON DELETE SET NULL,
   reconciled_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT account_reconciliations_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 
 CREATE INDEX idx_account_reconciliations_user_id ON account_reconciliations(user_id);
+CREATE INDEX idx_account_reconciliations_pot_id ON account_reconciliations(pot_id) WHERE pot_id IS NOT NULL;
 CREATE INDEX idx_account_reconciliations_account_date
   ON account_reconciliations(account_id, as_of_date DESC);
 
@@ -644,7 +689,8 @@ ALTER TABLE income_entries
 --   balance, which is the opposite of what deleting an account should do.
 CREATE TABLE transfers (
   id              BIGSERIAL PRIMARY KEY,
-  user_id         BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id         BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id          BIGINT,
   from_account_id BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   to_account_id   BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
   date            DATE NOT NULL,
@@ -656,9 +702,15 @@ CREATE TABLE transfers (
   -- A same-account transfer is a no-op that would double-count: the balance union sums each leg
   -- independently, so the row would be both added and subtracted on the same account.
   CONSTRAINT transfers_distinct_accounts CHECK (from_account_id <> to_account_id),
-  CONSTRAINT transfers_positive_amounts CHECK (from_amount > 0 AND to_amount > 0)
+  CONSTRAINT transfers_positive_amounts CHECK (from_amount > 0 AND to_amount > 0),
+  -- A transfer is net-worth-neutral by construction, which is only true within ONE scope: moving
+  -- joint money into a personal account takes value from the other owners. Crossing a scope boundary
+  -- is a contribution or a withdrawal instead. The scope columns are denormalized from the two legs,
+  -- which the service holds to the same scope, so this row can carry only one.
+  CONSTRAINT transfers_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
 );
 CREATE INDEX idx_transfers_user_id ON transfers(user_id);
+CREATE INDEX idx_transfers_pot_id ON transfers(pot_id) WHERE pot_id IS NOT NULL;
 -- The balance union filters one leg at a time by account and bounds by date, so each leg gets its own
 -- composite index rather than a bare FK index.
 CREATE INDEX idx_transfers_from_account_date ON transfers(from_account_id, date);
@@ -889,6 +941,141 @@ CREATE TABLE group_invites (
 
 CREATE INDEX idx_group_invites_group_id ON group_invites(group_id);
 
+-- A pot is the container co-ownership attaches to: holdings point at it, and ONE ownership ledger
+-- divides the whole of it. Ownership deliberately lives here and never on the holding — a rebalance
+-- inside the pot (sell A, buy B) would otherwise have to move ownership units between positions,
+-- which is meaningless and a silent source of wrong percentages.
+-- name is NULL for a group's default pot: the container is a concept the UI does not surface until a
+-- group has a second one to distinguish. base_currency is the currency all ownership math runs in;
+-- changing a display currency re-converts, it never moves ownership.
+-- visibility is only the DEFAULT for a member with no explicit pot_member_permissions row, so a
+-- member who joins the group after the pot exists is covered without any seeding step.
+CREATE TABLE pots (
+  id            BIGSERIAL PRIMARY KEY,
+  group_id      BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  name          VARCHAR(255),
+  base_currency VARCHAR(3) NOT NULL,
+  visibility    pot_visibility NOT NULL DEFAULT 'members',
+  is_default    BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_pots_group_id ON pots(group_id);
+-- At most one default pot per group; partial so the non-default rows are not indexed at all.
+CREATE UNIQUE INDEX idx_pots_group_default ON pots(group_id) WHERE is_default;
+
+-- Per-member overrides of a pot's visibility default, and the ONLY source of write access.
+-- Membership is not ownership (V3): a member holding 0% of a pot may still see all of it, which is
+-- why can_view is keyed to the seat and never to whether the member holds units.
+-- `role` appears nowhere here or in the helpers below: group administration is management, not
+-- access, and an admin sees precisely what any member sees.
+CREATE TABLE pot_member_permissions (
+  pot_id     BIGINT NOT NULL REFERENCES pots(id) ON DELETE CASCADE,
+  member_id  BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  can_view   BOOLEAN NOT NULL DEFAULT TRUE,
+  can_write  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (pot_id, member_id),
+  -- Writing something you cannot see is not a state the product has a meaning for, and allowing it
+  -- would make app_can_write_pot answer true where app_can_view_pot answers false.
+  CONSTRAINT pot_member_permissions_write_implies_view CHECK (can_view OR NOT can_write)
+);
+
+CREATE INDEX idx_pot_member_permissions_member_id ON pot_member_permissions(member_id);
+
+-- The pot's ownership ledger: dated events that are REPLAYED to derive unit balances. Nothing is
+-- stored as a running total, matching how every other balance in Renly is derived.
+-- 'opening' sets the baseline (value + percentages at a date, units issued at a nominal 1.00), and
+-- nothing before that date is in scope — the same anchor accounts.opening_balance/opening_date are.
+-- A contribution ISSUES units at that date's price (the mover's share rises, nobody loses value); a
+-- withdrawal redeems them; a reagreement TRANSFERS units between two members and carries no money.
+-- Conflating the last two would misstate the history: one is an investment, the other a gift.
+-- amount/amount_currency/base_amount store BOTH sides of a cross-currency move and never a derived
+-- rate, exactly as transfers and card_settlements already do. amount_currency is NULL when the money
+-- moved in the pot's own base currency.
+-- unit_price is kept for audit: it is derivable from NAV at the date, but NAV moves as later
+-- snapshots arrive, so the price actually used has to be recorded when it is used.
+-- from_account_id / to_account_id are what make the event a real MOVEMENT rather than a note about
+-- one: a contribution debits the mover's private account and credits an account the pot holds, a
+-- withdrawal reverses it, and the per-account balance union reads both legs. Without them the money
+-- would leave nowhere and arrive nowhere, so the mover's account would silently keep cash it no
+-- longer has and the pot would be priced against a NAV that never moved. Two columns rather than
+-- one for exactly the reason transfers has two — this IS the transfer mechanic at a different scope.
+-- Both are optional: money can legitimately arrive from outside Renly, or land in a holding that is
+-- an investment rather than a tracked account.
+CREATE TABLE pot_ownership_events (
+  id                     BIGSERIAL PRIMARY KEY,
+  pot_id                 BIGINT NOT NULL REFERENCES pots(id) ON DELETE CASCADE,
+  type                   ownership_event_type NOT NULL,
+  date                   DATE NOT NULL,
+  member_id              BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  counterparty_member_id BIGINT REFERENCES group_members(id) ON DELETE CASCADE,
+  amount                 NUMERIC(18, 2),
+  amount_currency        VARCHAR(3),
+  base_amount            NUMERIC(18, 2),
+  units                  NUMERIC(18, 6) NOT NULL,
+  unit_price             NUMERIC(18, 6) NOT NULL,
+  from_account_id        BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  to_account_id          BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  notes                  TEXT,
+  created_by             BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Only a reagreement names a second member, and it must name a different one: units moving from a
+  -- member to themselves is a no-op the replay would count on both sides.
+  CONSTRAINT pot_ownership_events_counterparty CHECK (
+    (type = 'reagreement') = (counterparty_member_id IS NOT NULL)
+    AND (counterparty_member_id IS NULL OR counterparty_member_id <> member_id)
+  ),
+  -- A unit price is a division by total units outstanding, which is never zero or negative: a pot
+  -- cannot be valued at <= 0 for ownership purposes.
+  CONSTRAINT pot_ownership_events_positive_price CHECK (unit_price > 0),
+  -- Only a contribution or a withdrawal moves money. An opening sets a division baseline and a
+  -- reagreement moves units between people; neither has a payment to record, so naming an account on
+  -- one would be recording a movement that did not happen.
+  CONSTRAINT pot_ownership_events_movement CHECK (
+    type IN ('contribution', 'withdrawal')
+    OR (from_account_id IS NULL AND to_account_id IS NULL AND amount IS NULL AND amount_currency IS NULL)
+  ),
+  -- Same reason transfers forbids it: the balance union sums each leg independently, so one account
+  -- on both sides would be added and subtracted at once and the row would be a silent no-op.
+  CONSTRAINT pot_ownership_events_distinct_accounts CHECK (
+    from_account_id IS NULL OR to_account_id IS NULL OR from_account_id <> to_account_id
+  )
+);
+
+CREATE INDEX idx_pot_ownership_events_pot_date ON pot_ownership_events(pot_id, date);
+CREATE INDEX idx_pot_ownership_events_member_id ON pot_ownership_events(member_id);
+CREATE INDEX idx_pot_ownership_events_counterparty_member_id
+  ON pot_ownership_events(counterparty_member_id) WHERE counterparty_member_id IS NOT NULL;
+-- The balance union filters one leg at a time by account and bounds by date, so each leg gets its
+-- own composite index rather than a bare FK index — the same shape transfers uses.
+CREATE INDEX idx_pot_ownership_events_from_account_date
+  ON pot_ownership_events(from_account_id, date) WHERE from_account_id IS NOT NULL;
+CREATE INDEX idx_pot_ownership_events_to_account_date
+  ON pot_ownership_events(to_account_id, date) WHERE to_account_id IS NOT NULL;
+
+-- Forward FKs from the scoped stock tables to pots, declared here because each of those tables is
+-- created before pots exists. ON DELETE RESTRICT on every one, and that is the whole safety story:
+-- CASCADE would let deleting a pot (or the group above it) destroy real holdings, and SET NULL would
+-- violate the single-owner CHECK by leaving a row with neither owner. A pot that still holds anything
+-- therefore cannot be deleted at all — the service refuses it first with a real error, and this is
+-- the backstop that makes a silent loss impossible rather than merely unlikely.
+ALTER TABLE investments
+  ADD CONSTRAINT investments_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+ALTER TABLE investment_snapshots
+  ADD CONSTRAINT investment_snapshots_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+ALTER TABLE transactions
+  ADD CONSTRAINT transactions_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+ALTER TABLE accounts
+  ADD CONSTRAINT accounts_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+ALTER TABLE account_reconciliations
+  ADD CONSTRAINT account_reconciliations_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+ALTER TABLE transfers
+  ADD CONSTRAINT transfers_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -992,6 +1179,18 @@ CREATE TRIGGER trg_group_members_updated_at
   BEFORE UPDATE ON group_members
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
+CREATE TRIGGER trg_pots_updated_at
+  BEFORE UPDATE ON pots
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_pot_member_permissions_updated_at
+  BEFORE UPDATE ON pot_member_permissions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_pot_ownership_events_updated_at
+  BEFORE UPDATE ON pot_ownership_events
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 -- ---------------------------------------------------------------------------
 -- Row-Level Security (SEC-15) — database-enforced per-user isolation
 --
@@ -1034,6 +1233,120 @@ GRANT EXECUTE ON FUNCTION app_current_user_id() TO renly_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO renly_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO renly_app;
 
+-- Shared money — the two pot-scope helpers, defined here because the stock-table policies below are
+-- the first thing that calls them. Same SECURITY DEFINER shape and the same reasons as
+-- app_is_group_member() further down: one place to answer the question so per-table copies cannot
+-- drift, the body runs as the owner (exempt from RLS) so a policy on a scoped table can consult
+-- pot_member_permissions without recursing, search_path is pinned, and the default PUBLIC EXECUTE
+-- grant is revoked.
+--
+-- What "may see this pot" means, in one predicate: an ACTIVE seat in the pot's group, plus permission.
+-- Permission is the member's explicit pot_member_permissions row if there is one, and otherwise the
+-- pot's own visibility default. That COALESCE is load-bearing — a member who joins the group after a
+-- pot was created has no permission row at all, and V4 says they should still see a 'members' pot.
+-- Reading the default from the pot means that works with no seeding step anywhere, and a pot set to
+-- 'owners' fails closed for exactly the same reason (no row, no access) until an ownership event
+-- writes them one.
+--
+-- `role` appears nowhere: administration never grants visibility, and that is enforced by the SHAPE
+-- of this function rather than by anyone remembering the rule. It fails closed with no GUC set,
+-- because app_current_user_id() is then NULL and the join matches nothing.
+CREATE OR REPLACE FUNCTION app_can_view_pot(p_pot_id BIGINT) RETURNS BOOLEAN
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM pots p
+      JOIN group_members gm ON gm.group_id = p.group_id
+      LEFT JOIN pot_member_permissions pmp ON pmp.pot_id = p.id AND pmp.member_id = gm.id
+      WHERE p.id = p_pot_id
+        AND gm.user_id = app_current_user_id()
+        AND gm.is_active
+        AND COALESCE(pmp.can_view, p.visibility = 'members')
+    )
+  $$;
+
+-- Write access has no visibility-style default: it is granted per member and nowhere else, so a pot
+-- with no permission rows is readable by its group and writable by nobody (V6 — a pot may name a
+-- single custodian with everyone else read-only). A CHECK on pot_member_permissions makes can_write
+-- imply can_view, so this can never answer true where app_can_view_pot answers false.
+CREATE OR REPLACE FUNCTION app_can_write_pot(p_pot_id BIGINT) RETURNS BOOLEAN
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$
+    SELECT EXISTS (
+      SELECT 1 FROM pots p
+      JOIN group_members gm ON gm.group_id = p.group_id
+      JOIN pot_member_permissions pmp ON pmp.pot_id = p.id AND pmp.member_id = gm.id
+      WHERE p.id = p_pot_id
+        AND gm.user_id = app_current_user_id()
+        AND gm.is_active
+        AND pmp.can_write
+    )
+  $$;
+
+REVOKE ALL ON FUNCTION app_can_view_pot(BIGINT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION app_can_write_pot(BIGINT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_can_view_pot(BIGINT) TO renly_app;
+GRANT EXECUTE ON FUNCTION app_can_write_pot(BIGINT) TO renly_app;
+
+-- Dual-scope tables: a row belongs EITHER to a user (user_id) or to a pot (pot_id), never both, and
+-- the single-owner CHECK on each table is what makes "never both" true rather than conventional.
+-- The predicate is therefore an owner match OR a visible pot, and a query that forgets the pot half
+-- returns FEWER rows — it cannot surface anyone else's money.
+--
+-- Each table gets TWO policies rather than one, and the split is not stylistic. Postgres applies
+-- WITH CHECK to the new row on INSERT/UPDATE but has no WITH CHECK for DELETE at all — a single
+-- FOR ALL policy whose USING clause named app_can_view_pot would therefore let a read-only member
+-- DELETE a shared holding. So reading is its own FOR SELECT policy and every write command is gated
+-- by app_can_write_pot on both sides. Multiple permissive policies are OR-ed, so SELECT still
+-- resolves to the view predicate (write implies view by CHECK, so the union adds nothing).
+--
+-- The children (investment_snapshots, transactions, account_reconciliations, transfers) carry the
+-- same two columns denormalized from their parent, exactly as their user_id already was — a policy
+-- that had to EXISTS-join to the parent would pay that join on every row of every read.
+ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investments_scope_read ON investments FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY investments_scope_write ON investments FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
+ALTER TABLE investment_snapshots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY investment_snapshots_scope_read ON investment_snapshots FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY investment_snapshots_scope_write ON investment_snapshots FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY transactions_scope_read ON transactions FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY transactions_scope_write ON transactions FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
+ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY accounts_scope_read ON accounts FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY accounts_scope_write ON accounts FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
+ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY account_reconciliations_scope_read ON account_reconciliations FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY account_reconciliations_scope_write ON account_reconciliations FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
+ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY transfers_scope_read ON transfers FOR SELECT
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY transfers_scope_write ON transfers FOR ALL
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+
 -- The users table keys on its own id (a user may read/write only its own row).
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY users_self_isolation ON users
@@ -1041,28 +1354,12 @@ CREATE POLICY users_self_isolation ON users
   WITH CHECK (id = app_current_user_id());
 
 -- Tables owned directly via a user_id column: identical owner-match policy on each.
-ALTER TABLE investments ENABLE ROW LEVEL SECURITY;
-CREATE POLICY investments_user_isolation ON investments
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
-ALTER TABLE investment_snapshots ENABLE ROW LEVEL SECURITY;
-CREATE POLICY investment_snapshots_user_isolation ON investment_snapshots
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY transactions_user_isolation ON transactions
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
 ALTER TABLE investment_collections ENABLE ROW LEVEL SECURITY;
 CREATE POLICY investment_collections_user_isolation ON investment_collections
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE credit_cards ENABLE ROW LEVEL SECURITY;
 CREATE POLICY credit_cards_user_isolation ON credit_cards
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
-ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
-CREATE POLICY accounts_user_isolation ON accounts
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE income_entries ENABLE ROW LEVEL SECURITY;
@@ -1087,14 +1384,6 @@ CREATE POLICY expense_entries_user_isolation ON expense_entries
 
 ALTER TABLE card_reconciliations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY card_reconciliations_user_isolation ON card_reconciliations
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
-ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY account_reconciliations_user_isolation ON account_reconciliations
-  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
-
-ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
-CREATE POLICY transfers_user_isolation ON transfers
   USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
 
 ALTER TABLE payment_obligations ENABLE ROW LEVEL SECURITY;
@@ -1220,6 +1509,68 @@ CREATE POLICY group_members_member_isolation ON group_members
 ALTER TABLE group_invites ENABLE ROW LEVEL SECURITY;
 CREATE POLICY group_invites_member_isolation ON group_invites
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- The pot tables. Membership alone is NOT the read predicate here, unlike the three tables above: a
+-- pot set to 'owners' visibility must be invisible to a member without permission, including the
+-- fact that it exists. So reading asks app_can_view_pot() and only writing asks membership.
+--
+-- The two policies are deliberately shaped so their union is still the view predicate: the write
+-- policy's USING clause carries app_can_view_pot too, because permissive policies are OR-ed and a
+-- bare membership USING would have quietly widened SELECT back to every member. It also means a pot
+-- you cannot see is a pot you cannot rename or delete.
+-- WITH CHECK stays membership-only: a pot's FIRST permission row does not exist yet while the pot is
+-- being created, so requiring view on the new row would refuse the very insert that establishes it.
+-- That is the same self-referential bootstrap group creation has, and it has the same answer — pot
+-- creation runs on the privileged session, and the admin gate lives in the service either way.
+ALTER TABLE pots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY pots_scope_read ON pots FOR SELECT
+  USING (app_can_view_pot(id));
+CREATE POLICY pots_scope_write ON pots FOR ALL
+  USING (app_can_view_pot(id) AND app_is_group_member(group_id))
+  WITH CHECK (app_is_group_member(group_id));
+
+-- Permissions are pot state, so they are visible to whoever may see the pot — including the rows
+-- describing other members, because V5 says a pot is seen in full or not at all.
+-- WITH CHECK is app_can_view_pot on the NEW row and that is the load-bearing half: without it, any
+-- authenticated user could insert a permission row naming any pot id and their own seat, and read
+-- themselves straight into someone else's shared money. Requiring view first means a permission row
+-- can only ever be written for a pot the writer can already see, so no row here widens the set of
+-- pots anyone can reach. Which member of that pot may write one is the group admin, and that gate
+-- lives in the service, exactly as it does for group_members — the same accepted split: RLS holds
+-- the confidentiality boundary, the service holds administration.
+ALTER TABLE pot_member_permissions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY pot_member_permissions_scope_read ON pot_member_permissions FOR SELECT
+  USING (app_can_view_pot(pot_id));
+CREATE POLICY pot_member_permissions_scope_write ON pot_member_permissions FOR ALL
+  USING (app_can_view_pot(pot_id))
+  WITH CHECK (app_can_view_pot(pot_id));
+
+-- The ownership ledger: readable by whoever may see the pot (V5 — every movement and every member's
+-- percentage), writable only with write permission. Unlike the two above, this one is genuine money
+-- movement rather than configuration, so app_can_write_pot is the right gate and the service does not
+-- have to be the only thing standing between a read-only custodian and the ledger.
+--
+-- The second read branch is not a widening of the visibility model, it is what keeps a PRIVATE
+-- balance correct. A contribution debits the mover's own account, so the event is a movement in that
+-- account's ledger; if the mover later leaves the group the pot branch stops matching, the event
+-- disappears from their balance query, and their private account silently gains back money it no
+-- longer holds. The branch matches only rows naming an account the caller OWNS — and the service
+-- requires the moving member to own the private leg, so such a row is always the caller's own
+-- movement. It therefore exposes nothing about any other member, and no row it returns is one the
+-- caller did not make themselves.
+ALTER TABLE pot_ownership_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY pot_ownership_events_scope_read ON pot_ownership_events FOR SELECT
+  USING (
+    app_can_view_pot(pot_id)
+    OR EXISTS (
+      SELECT 1 FROM accounts a
+      WHERE a.id IN (pot_ownership_events.from_account_id, pot_ownership_events.to_account_id)
+        AND a.user_id = app_current_user_id()
+    )
+  );
+CREATE POLICY pot_ownership_events_scope_write ON pot_ownership_events FOR ALL
+  USING (app_can_write_pot(pot_id))
+  WITH CHECK (app_can_write_pot(pot_id));
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
 -- pair/ticker (not by user) and are intentionally left without RLS so every request

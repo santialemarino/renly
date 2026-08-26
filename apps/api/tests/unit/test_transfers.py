@@ -50,6 +50,7 @@ def _wire(monkeypatch, accounts: dict[int, Account]) -> AsyncMock:
         return account
 
     monkeypatch.setattr(transfer_service.account_service, "get_account", AsyncMock(side_effect=get_account))
+    monkeypatch.setattr(transfer_service.account_service, "get_account_in_scope", AsyncMock(side_effect=get_account))
 
     # The real create flushes and the DB assigns the id; the response schema requires one.
     async def create_row(session, transfer):
@@ -238,6 +239,8 @@ class TestTransfersMoveTheBalance:
         monkeypatch.setattr(account_service.expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={1: Decimal("2500")}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={2: Decimal("2500")}))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
             monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))

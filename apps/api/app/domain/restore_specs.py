@@ -81,15 +81,22 @@ class RestoreSpec:
     null_fields: tuple[str, ...] = ()
     has_user_id: bool = True  # investment_collection_members is keyed via its parents, not a user_id column
     has_id: bool = True  # investment_collection_members has a composite PK, no surrogate id to remap
+    # Rows carrying a pot_id are SKIPPED rather than restored, for the tables where user_id means
+    # owner. Nulling the pot instead would be worse than dropping the row: it would hand the restoring
+    # user sole ownership of something several people own, inventing a transfer of value nobody agreed
+    # to — and the pot it belonged to is not restorable either (rebuilding it from one member's file
+    # would issue units to placeholders standing in for real people). Exporting the true record and
+    # refusing the false restore is the honest pair, the same asymmetry the group tables already have.
+    private_only: bool = False
 
 
 # Restore order matters: parents precede children so FK remaps resolve. Independent entities first —
 # and `accounts` precedes `credit_cards` because a card names its default funding account, so the
 # accounts' id map has to exist by the time cards are rebuilt.
 RESTORE_SPECS: tuple[RestoreSpec, ...] = (
-    RestoreSpec("investments", Investment),
+    RestoreSpec("investments", Investment, private_only=True),
     RestoreSpec("investment_collections", InvestmentCollection),
-    RestoreSpec("accounts", Account),
+    RestoreSpec("accounts", Account, private_only=True),
     RestoreSpec(
         "credit_cards",
         CreditCard,
@@ -106,11 +113,13 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         "investment_snapshots",
         InvestmentSnapshot,
         fks=(FkRef("investment_id", "investments", True),),
+        private_only=True,
     ),
     RestoreSpec(
         "transactions",
         Transaction,
         fks=(FkRef("investment_id", "investments", True),),
+        private_only=True,
     ),
     # Both optional links are remapped rather than nulled: the default funding account is what makes a
     # restored plan's future charges land on the right balance, and leaving the exported id verbatim
@@ -166,5 +175,6 @@ RESTORE_SPECS: tuple[RestoreSpec, ...] = (
         "transfers",
         Transfer,
         fks=(FkRef("from_account_id", "accounts", True), FkRef("to_account_id", "accounts", True)),
+        private_only=True,
     ),
 )

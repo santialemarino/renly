@@ -107,8 +107,20 @@ async def _restore_entity(
         old_id = raw.get("id") if spec.has_id else None
         prepared = dict(raw)
         prepared.pop("id", None)
+        # A co-owned row is dropped rather than restored. Nulling its pot would be worse than skipping
+        # it: it would hand the restoring user sole ownership of something several people own, and the
+        # pot it belonged to is not restorable either. Counted as unresolved, so the preview reports it
+        # instead of quietly returning a smaller number than the file contains.
+        if spec.private_only and raw.get("pot_id") is not None:
+            skipped_unresolved += 1
+            continue
+        prepared.pop("pot_id", None)
         if spec.has_user_id:
             prepared["user_id"] = user.id
+        # Authorship follows the restore: the rows are being entered by this user now, and the id in
+        # the file names an account that does not exist in this database.
+        if "created_by" in spec.model.model_fields:
+            prepared["created_by"] = user.id
         for null_field in spec.null_fields:
             prepared[null_field] = None
 

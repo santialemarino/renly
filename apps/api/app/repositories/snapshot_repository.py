@@ -41,15 +41,21 @@ async def get_ids_with_snapshot_on_date(session: AsyncSession, investment_ids: l
 
 
 # Returns {investment_id: latest InvestmentSnapshot} for each investment (max-date row per id).
-async def get_latest_by_investments(session: AsyncSession, investment_ids: list[int]) -> dict[int, InvestmentSnapshot]:
+async def get_latest_by_investments(
+    session: AsyncSession, investment_ids: list[int], *, as_of_date: date | None = None
+) -> dict[int, InvestmentSnapshot]:
     if not investment_ids:
         return {}
-    subq = (
-        select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date"))
-        .where(InvestmentSnapshot.investment_id.in_(investment_ids))
-        .group_by(InvestmentSnapshot.investment_id)
-        .subquery()
+    # as_of_date bounds the MAX, which is not the same as filtering the result afterwards: taking the
+    # latest snapshot and then discarding it for being too new drops the investment entirely, when
+    # what the caller asked for was its value on that date. A pot valued at a past date, or an
+    # ownership event back-dated into one, needs the latest snapshot ON OR BEFORE it.
+    latest = select(InvestmentSnapshot.investment_id, func.max(InvestmentSnapshot.date).label("max_date")).where(
+        InvestmentSnapshot.investment_id.in_(investment_ids)
     )
+    if as_of_date is not None:
+        latest = latest.where(InvestmentSnapshot.date <= as_of_date)
+    subq = latest.group_by(InvestmentSnapshot.investment_id).subquery()
     result = await session.execute(
         select(InvestmentSnapshot).join(
             subq,
@@ -107,7 +113,12 @@ async def bulk_upsert(session: AsyncSession, snapshots: list[InvestmentSnapshot]
     now = utcnow()
     values = [
         {
+            # Both halves of the scope, or a co-owned investment's bulk-written snapshot would carry
+            # neither owner and violate the single-owner CHECK. No caller reaches this with a shared
+            # parent today (the importer resolves investments through a user-filtered name lookup),
+            # which is exactly why it is worth writing down rather than relying on.
             "user_id": snapshot.user_id,
+            "pot_id": snapshot.pot_id,
             "investment_id": snapshot.investment_id,
             "date": snapshot.date,
             "value": snapshot.value,

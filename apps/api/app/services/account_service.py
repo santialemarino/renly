@@ -12,6 +12,7 @@ from app.domain import (
     NotFoundError,
     PaymentMethod,
 )
+from app.domain.pot import ensure_private_funding
 from app.models.account import Account, AccountType
 from app.models.user import User
 from app.repositories import (
@@ -21,6 +22,7 @@ from app.repositories import (
     income_repository,
     installment_repository,
     payment_obligation_repository,
+    pot_ownership_repository,
     subscription_repository,
     transfer_repository,
 )
@@ -56,6 +58,21 @@ async def get_account(session: AsyncSession, account_id: int, user: User) -> Acc
     return account
 
 
+# Loads an account in EITHER scope: the caller's own private one, or a co-owned one they may reach.
+# Distinct from get_account, which is the private-only lookup every existing caller wants — this one
+# exists for transfers, the single flow that legitimately operates on shared accounts.
+# Reachability is RLS's answer, not this function's: a shared account is returned when the policy
+# returns it, and whether the caller may WRITE it is settled by the write policy on the row being
+# inserted, which is gated on pot write access.
+async def get_account_in_scope(session: AsyncSession, account_id: int, user: User) -> Account:
+    account = await account_repository.get_by_id_any_scope(session, account_id)
+    if account is None:
+        raise NotFoundError("Account not found.")
+    if account.pot_id is None and account.user_id != user.id:
+        raise NotFoundError("Account not found.")
+    return account
+
+
 # Loads a linked account and verifies ownership (SEC-4), applying NO currency rule. A None account_id is
 # a no-op (unlinked rows are allowed and untouched). Returns the account so a caller that needs it (e.g.
 # to denormalize its name onto a response) doesn't re-fetch it; None when there was no link.
@@ -68,8 +85,16 @@ async def get_account(session: AsyncSession, account_id: int, user: User) -> Acc
 async def load_linked_account(session: AsyncSession, user: User, account_id: int | None) -> Account | None:
     if account_id is None:
         return None
-    account = await account_repository.get_by_id(session, account_id, user.id)
+    account = await account_repository.get_by_id_any_scope(session, account_id)
     if account is None:
+        raise NotFoundError("Account not found.")
+    # A co-owned account is reachable here (RLS shows it to every member) but must not fund a private
+    # entry: the money really leaves, so the pot's value drops and every co-owner's share falls with
+    # it — one person spending and everyone paying, with nothing recording it. Refused explicitly
+    # rather than left to the owner filter, which WOULD also refuse it but as a bare "not found" that
+    # tells the user nothing about what to do instead.
+    ensure_private_funding(account)
+    if account.user_id != user.id:
         raise NotFoundError("Account not found.")
     return account
 
@@ -157,6 +182,11 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
     settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, user_id)
     transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, user_id)
     transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, user_id)
+    # A contribution into a pot really debits the mover's private account and credits one the pot
+    # holds, so both legs belong here for exactly the reason a transfer's do. Without them the money
+    # would leave nowhere and arrive nowhere.
+    ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids)
+    ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids)
     return {
         a.id: (
             a.opening_balance
@@ -165,6 +195,44 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
             - settlements.get(a.id, ZERO)
             + transfers_in.get(a.id, ZERO)
             - transfers_out.get(a.id, ZERO)
+            + ownership_in.get(a.id, ZERO)
+            - ownership_out.get(a.id, ZERO)
+        )
+        for a in accounts
+        if a.id is not None
+    }
+
+
+# Returns {account_id: balance} as of a DATE, for the given accounts. The batch sibling of
+# account_reconciliation_service.compute_account_balance_at, added because the pot NAV query needs a
+# balance per holding and calling the single-account version in a loop is an N+1 over seven sums.
+# Each sum is scoped by the ACCOUNT's owner rather than the caller's, so a shared account reports the
+# same balance to every member who can see it.
+async def compute_account_balances_at(session: AsyncSession, accounts: list[Account], *, as_of_date: date_type) -> dict[int, Decimal]:
+    account_ids = [a.id for a in accounts if a.id is not None]
+    if not account_ids:
+        return {}
+    owners = {a.user_id for a in accounts}
+    # A pot's accounts share one scope, so one owner value covers the batch; a mixed batch would need
+    # a sum per owner, which no caller produces (holdings are listed per pot, or per user).
+    owner_id = next(iter(owners)) if len(owners) == 1 else None
+    income = await income_repository.sum_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
+    expenses = await expense_repository.sum_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
+    settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
+    transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
+    transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
+    ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    return {
+        a.id: (
+            (a.opening_balance if a.opening_date <= as_of_date else ZERO)
+            + income.get(a.id, ZERO)
+            - expenses.get(a.id, ZERO)
+            - settlements.get(a.id, ZERO)
+            + transfers_in.get(a.id, ZERO)
+            - transfers_out.get(a.id, ZERO)
+            + ownership_in.get(a.id, ZERO)
+            - ownership_out.get(a.id, ZERO)
         )
         for a in accounts
         if a.id is not None
@@ -192,6 +260,7 @@ async def create_account(
 ) -> Account:
     account = Account(
         user_id=user.id,
+        created_by=user.id,
         name=name,
         type=type,
         currency=currency,

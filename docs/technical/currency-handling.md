@@ -274,6 +274,14 @@ investment_snapshots.currency  -- same as investment.base_currency
 transactions.amount            -- always in base_currency
 transactions.currency          -- same as investment.base_currency
 
+-- A pot's base currency: the unit ALL its ownership maths runs in. Not updatable, because it is
+-- the unit of every figure already recorded in its ledger. Changing a DISPLAY currency re-converts
+-- what you see and never moves ownership.
+pots.base_currency             -- e.g. 'USD'
+pot_ownership_events.amount    -- what left, in the source account's currency
+pot_ownership_events.amount_currency  -- NULL when it equals the pot's base currency
+pot_ownership_events.base_amount      -- what was credited, in the pot's base currency
+
 -- Exchange rates fetched from DolarApi and Frankfurter
 exchange_rates.pair   -- USD_ARS_OFICIAL | USD_ARS_MEP | USD_ARS_BLUE | USD_BRL | USD_EUR | USD_GBP
 exchange_rates.rate   -- e.g. 1250.50 (1 USD = 1250.50 ARS)

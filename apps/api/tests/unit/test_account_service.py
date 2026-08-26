@@ -49,6 +49,8 @@ class TestBalances:
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))

@@ -32,6 +32,7 @@ from app.repositories import (
     card_settlement_repository,
     expense_repository,
     income_repository,
+    pot_ownership_repository,
     transfer_repository,
 )
 from app.services import account_service, settings_service
@@ -67,6 +68,8 @@ async def compute_account_balance_at(
     settlements = await card_settlement_repository.sum_by_account_ids(session, account_ids, account.user_id, as_of_date=as_of_date)
     transfers_in = await transfer_repository.sum_in_by_account_ids(session, account_ids, account.user_id, as_of_date=as_of_date)
     transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, account.user_id, as_of_date=as_of_date)
+    ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
     opening = account.opening_balance if account.opening_date <= as_of_date else ZERO
     return (
         opening
@@ -75,6 +78,8 @@ async def compute_account_balance_at(
         - settlements.get(account.id, ZERO)
         + transfers_in.get(account.id, ZERO)
         - transfers_out.get(account.id, ZERO)
+        + ownership_in.get(account.id, ZERO)
+        - ownership_out.get(account.id, ZERO)
     )
 
 

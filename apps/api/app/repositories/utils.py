@@ -1,5 +1,18 @@
 from sqlalchemy import asc, desc, or_
 
+from app.models.account import Account
+
+
+# The dual-scope predicate for a movement table joined to the Account it moves, mirroring the RLS
+# policies: the row belongs to the requesting user, OR it belongs to the same pot the account does.
+# The pot branch compares against the JOINED account rather than a passed-in id, which is what makes a
+# shared account's balance the same figure for every member who can see it — a balance that varied by
+# who asked would be worse than one that was simply wrong.
+# `model.pot_id == Account.pot_id` is never true when the account is private (NULL = NULL is not
+# true in SQL), so a private account reduces to exactly the owner match it had before 0019.
+def account_scope_matches(model, user_id: int):
+    return or_(model.user_id == user_id, model.pot_id == Account.pot_id)
+
 
 # Resolves a mapped sort request into an ORDER BY clause, or None when it names no mapped column —
 # the single place `sort_by` → column → direction lives. An unmapped or absent value falls back to the

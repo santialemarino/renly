@@ -231,6 +231,25 @@ A group member's `role` is `admin` or `member`, and it is about **administration
 
 A **group invite** is a pending invitation to claim one seat. It uses the same mechanism as the platform signup invite — a high-entropy token whose SHA-256 hash is all that is stored, single-use, expiring after 7 days, revocable, and rotated on every resend — but it is a separate thing: it links an _existing_ account to a seat and never grants signup access. Sending it by email is optional; without an address it is simply a shareable link.
 
+### Pots, Pot Permissions and the Ownership Ledger
+
+A **pot** is the container co-ownership attaches to. Investments and cash accounts can point at one instead of at a person, and a single ownership ledger divides the whole of it. Ownership lives on the pot and never on the individual holding, which is what makes an internal rebalance — sell one thing, buy another — leave everyone's share completely untouched.
+
+Every group gets a pot automatically and it needs no name; only a second pot in the same group ever needs one. A pot has a **base currency**, and all ownership maths runs in it: changing your display currency re-converts what you see and never moves ownership.
+
+A **pot permission** is one member's access to one pot, and there are two separate questions. Whether you may **see** it defaults to the pot's own setting — every member of the group, or only those explicitly granted access — with a per-member row overriding it either way. Whether you may **record movements** has no such default: it is granted per member and nowhere else, so a pot can name a single custodian who maintains the numbers while everyone else watches. Membership is not ownership: a member who owns **0%** still sees the whole pot, which is exactly what an adult child in a household needs.
+
+The **ownership ledger** is a list of dated events, and every balance is derived by replaying them — nothing is stored as a running total. Each owner holds **units** of the pot; the unit price is the pot's value divided by the units outstanding. That single idea is what makes the numbers behave correctly:
+
+- **Growth is pro-rata with no event at all.** If the pot rises from 100 to 110, a 90% owner simply goes from 90 to 99. Nobody records anything.
+- **Money in or out issues or redeems units at that date's price.** Someone adding 5 to a pot worth 110 buys `5 ÷ 1.10 = 4.5455` units. Everyone's _percentage_ moves; nobody's _value_ does. Percentages alone cannot express that, which is the whole reason for units.
+
+Four kinds of event: an **opening** sets the baseline (a value and each owner's percentage on a date — nothing before it is in scope, exactly like an account's opening balance); a **contribution** and a **withdrawal** move real money across the boundary, debiting one account and crediting another so both balances stay right; and a **re-agreement** transfers units between two people with no money at all, which is what a gift or a buy-out is. Conflating the last two would misstate the history: one is an investment, the other is a settlement between people.
+
+You always enter percentages and always read percentages and amounts back. A raw unit count appears nowhere. Percentages are shown to two decimals and always add to exactly 100, and each member's share always adds to exactly the pot's value — the rounding remainder goes to the largest holder rather than being left to make the parts visibly disagree.
+
+Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
+
 ### Settings
 
 Each user has personal preferences that control how the app behaves:

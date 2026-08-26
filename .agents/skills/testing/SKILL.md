@@ -51,6 +51,12 @@ pnpm test:e2e        # Playwright E2E
   - `test_rls_isolation.py` — `RLS_TEST_DATABASE_URL` + `RLS_TEST_ADMIN_DATABASE_URL`.
   - `test_account_ledger_drift.py` — `LEDGER_TEST_DATABASE_URL`.
   - `test_group_lifecycle.py` — `GROUPS_TEST_DATABASE_URL` (owner role only).
+  - `test_rls_pot_scope.py` — the same two `RLS_TEST_*` vars as `test_rls_isolation.py`, so the two
+    run together. Covers the dual-scope policies, whose service layer holds a second copy of the
+    same rules — the failure that matters is the two disagreeing, which only a real policy shows.
+  - `test_snapshot_scope_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Query
+    semantics, not visibility: an aggregate bounded before rather than after its filter, and a
+    bulk insert whose omitted column only a CHECK constraint rejects.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against

@@ -21,6 +21,7 @@ from app.domain import (
     TransferAmountsMustMatchError,
     TransferBeforeAccountOpenedError,
     TransferSameAccountError,
+    ensure_same_scope,
 )
 from app.models.account import Account
 from app.models.transfer import Transfer
@@ -80,8 +81,12 @@ def _ensure_both_accounts_open(source: Account, destination: Account, date: date
 async def _load_pair(session: AsyncSession, user: User, from_account_id: int, to_account_id: int) -> tuple[Account, Account]:
     if from_account_id == to_account_id:
         raise TransferSameAccountError()
-    source = await account_service.get_account(session, from_account_id, user)
-    destination = await account_service.get_account(session, to_account_id, user)
+    source = await account_service.get_account_in_scope(session, from_account_id, user)
+    destination = await account_service.get_account_in_scope(session, to_account_id, user)
+    # Both legs must sit in ONE scope. Checked here rather than by a CHECK constraint because no CHECK
+    # can span two FK'd rows, and checked before anything is written because the row's own scope
+    # columns are derived from this pair.
+    ensure_same_scope(source, destination)
     return source, destination
 
 
@@ -90,7 +95,9 @@ async def _load_pair(session: AsyncSession, user: User, from_account_id: int, to
 async def list_transfers(session: AsyncSession, user: User, *, account_id: int | None = None) -> TransferListResponse:
     transfers = await transfer_repository.list_by_user(session, user.id, account_id=account_id)
     referenced = {t.from_account_id for t in transfers} | {t.to_account_id for t in transfers}
-    accounts = {a.id: a for a in await account_repository.get_by_ids(session, sorted(referenced), user.id) if a.id is not None}
+    # Any-scope, because a transfer BETWEEN two accounts of the same pot is legal and neither carries
+    # a user_id to match on. RLS decides what is reachable; ensure_same_scope decides what is legal.
+    accounts = {a.id: a for a in await account_repository.get_by_ids_any_scope(session, sorted(referenced)) if a.id is not None}
     items = [_to_response(t, accounts) for t in transfers if t.from_account_id in accounts and t.to_account_id in accounts]
     return TransferListResponse(items=items, total=len(items))
 
@@ -126,7 +133,11 @@ async def create_transfer(
     _ensure_both_accounts_open(source, destination, date)
     resolved = _resolve_to_amount(source, destination, from_amount, to_amount)
     transfer = Transfer(
-        user_id=user.id,
+        # Denormalized from the pair, which _load_pair has already held to one scope. A shared
+        # transfer carries the pot and no user, so its RLS policy gates it on pot write access —
+        # which is what stops a read-only member moving money out of an account they can only see.
+        user_id=user.id if source.pot_id is None else None,
+        pot_id=source.pot_id,
         from_account_id=from_account_id,
         to_account_id=to_account_id,
         date=date,

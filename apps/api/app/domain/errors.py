@@ -12,6 +12,7 @@
 # override the `extra` property.
 
 from datetime import date as date_type
+from decimal import Decimal
 
 
 # Base for every service-raised error. Subclasses set `code` + `status_code` and assign `self.message`.
@@ -94,6 +95,26 @@ class AccountCurrencyMismatchError(DomainError):
 # date forward silently drops rows from the balance while opening_balance stays put, and money that left
 # one account would arrive nowhere. The pair cannot be recomputed (the app never knew the earlier
 # balance), so the date is locked, mirroring the currency lock. Mapped to 409.
+# An account cannot be moved into a pot because money entries already link to it. Its balance derives
+# from expenses, income, settlements and transfers owned by ONE user, so a shared account carrying
+# them would report a different balance to every member depending on whose rows they can see — and a
+# figure that changes with the reader is worse than one that is merely wrong. A transfer is the
+# sharpest case: it would end up with one leg in each scope, which no transfer may have.
+# Mapped to 409.
+class AccountHasLinkedEntriesError(DomainError):
+    code = "account_has_linked_entries"
+    status_code = 409
+
+    def __init__(self, account_ids: list[int]) -> None:
+        self.account_ids = account_ids
+        self.message = "An account with linked entries cannot be shared. Create a new account for the pot instead."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"account_ids": self.account_ids}
+
+
 class AccountOpeningDateChangeBlockedError(DomainError):
     code = "account_opening_date_change_blocked"
     status_code = 409
@@ -484,6 +505,163 @@ class PlanRequiredError(DomainError):
 # is ON DELETE SET NULL, so deleting the entry orphans the reconciliation instead of cleaning it up. The
 # supported change is to re-run or delete the reconciliation itself, which recomputes or cascade-drops
 # its adjustment. Mapped to 409 by the API — the request is well-formed, it conflicts with the row's state.
+# A pot already has an opening baseline, and there can only be one: the baseline IS the division
+# from which every later percentage is derived, so a second one would silently rewrite what everyone
+# agreed to. Changing the split after the fact is a re-agreement, a different event with a different
+# meaning. Mapped to 409.
+class PotAlreadyOpenedError(DomainError):
+    code = "pot_already_opened"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This pot already has an opening baseline. Record a re-agreement to change the split."
+        super().__init__(self.message)
+
+
+# A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
+# (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
+# message instead of an integrity error. Mapped to 409.
+# A holding cannot simply be taken out of a pot that has already been divided. Removing it drops the
+# pot's value by the whole of that holding while nobody's units change — so every co-owner's share
+# falls pro-rata and the holding lands wholly in one person's private scope. That is one member
+# taking joint assets, and unlike a private expense from a shared account there is no cap on it.
+# Before the opening baseline exists nothing has been divided, so nothing can be taken from anyone
+# and the move is free — which is also what keeps "undo a mistaken move-in" possible.
+# Taking value out of a divided pot is a withdrawal or a buy-out, both of which redeem units.
+# Mapped to 409.
+class PotAlreadyDividedError(DomainError):
+    code = "pot_already_divided"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This pot's ownership is already agreed, so a holding cannot be taken out directly. Record a withdrawal or a buy-out instead."
+        super().__init__(self.message)
+
+
+class PotHasHoldingsError(DomainError):
+    code = "pot_has_holdings"
+    status_code = 409
+
+    def __init__(self, holding_count: int) -> None:
+        self.holding_count = holding_count
+        self.message = f"This pot still holds {holding_count} item(s). Move them out before deleting it."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"holding_count": self.holding_count}
+
+
+# A withdrawal (or a re-agreement) would move more units than the member actually holds, leaving them
+# owning a negative share of the pot. Mapped to 400.
+class PotInsufficientUnitsError(DomainError):
+    code = "pot_insufficient_units"
+    status_code = 400
+
+    def __init__(self, held: Decimal, requested: Decimal) -> None:
+        self.held = held
+        self.requested = requested
+        self.message = f"That is more than this member holds ({requested} requested, {held} available)."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"held": str(self.held), "requested": str(self.requested)}
+
+
+# A movement was recorded against a pot with no opening baseline yet. Without one there are no units
+# outstanding and therefore no unit price, so there is nothing to issue against. Mapped to 400.
+class PotNotOpenedError(DomainError):
+    code = "pot_not_opened"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "This pot has no opening baseline yet, so there is no unit price to record against."
+        super().__init__(self.message)
+
+
+# The opening percentages do not total 100. Refused rather than normalised: quietly rescaling what
+# someone typed turns a 90/5 split into a 94.7/5.3 one without telling them. Mapped to 400.
+class PotPercentagesError(DomainError):
+    code = "pot_percentages_must_total_100"
+    status_code = 400
+
+    def __init__(self, total: Decimal) -> None:
+        self.total = total
+        self.message = f"Ownership percentages must add up to 100 (they add up to {total})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"total": str(self.total)}
+
+
+# A movement needs the pot's value on its date and no valuation is available at or before it, so the
+# unit price is undefined. Refused rather than guessed — the same posture as reconciliation refusing
+# to invent a figure. Mapped to 400.
+# A re-agreement names one member on both sides. It would be a no-op the replay counts twice, which
+# the database refuses too. Mapped to 400.
+class PotReagreementSameMemberError(DomainError):
+    code = "pot_reagreement_same_member"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A re-agreement needs two different members."
+        super().__init__(self.message)
+
+
+# A movement endpoint was given an event type it does not record. An opening and a re-agreement each
+# take different inputs and have their own endpoints, so this is a malformed request rather than a
+# domain rule being broken. Mapped to 400.
+class PotUnsupportedMovementError(DomainError):
+    code = "pot_unsupported_movement"
+    status_code = 400
+
+    def __init__(self, type: str) -> None:
+        self.type = type
+        self.message = f"{type} is not a movement; use the opening or re-agreement endpoint."
+        super().__init__(self.message)
+
+
+class PotValuationRequiredError(DomainError):
+    code = "pot_valuation_required"
+    status_code = 400
+
+    def __init__(self, as_of_date: date_type) -> None:
+        self.as_of_date = as_of_date
+        self.message = f"This pot has no known value on {as_of_date.isoformat()}, so units cannot be priced. Record its value on that date first."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"as_of_date": self.as_of_date.isoformat()}
+
+
+# The caller may see the pot but not change it. Deliberately distinct from a visibility failure,
+# which is a 404: this one confirms the pot exists, which is fine to reveal to someone already
+# looking at it. Mapped to 403.
+class PotWriteRequiredError(DomainError):
+    code = "pot_write_required"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "You have read-only access to this pot."
+        super().__init__(self.message)
+
+
+# A private expense or income names a funding account that belongs to a pot. The money really leaves
+# the shared account, so the pot's value drops and every co-owner's share falls with it — one person
+# spending, everyone paying, with nothing recording it. Refused for the same reason a cross-scope
+# transfer is: crossing a scope boundary is an ownership event, not a flow. Mapped to 400.
+class PrivateEntryFromSharedAccountError(DomainError):
+    code = "private_entry_from_shared_account"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A private entry cannot be paid from a shared account. Record a withdrawal from the pot first."
+        super().__init__(self.message)
+
+
 class ReconciliationOwnedEntryError(DomainError):
     code = "reconciliation_owned_entry"
     status_code = 409
@@ -553,6 +731,19 @@ class TransferAmountsMustMatchError(DomainError):
 
 # A transfer names the same account on both legs. It would move nothing and the balance union counts each
 # leg separately, so the row would be added and subtracted on one account. Mapped to 400 by the API.
+# A transfer names two accounts in different scopes. A transfer is net-worth-neutral BY
+# CONSTRUCTION, and that is only true within one scope: moving joint money into a personal account is
+# emphatically not neutral for the other owners, it takes value from them. Such a movement is a
+# contribution or a withdrawal instead. Mapped to 400.
+class TransferCrossScopeError(DomainError):
+    code = "transfer_cross_scope"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A transfer must stay within one scope. Moving money in or out of a pot is a contribution or a withdrawal."
+        super().__init__(self.message)
+
+
 class TransferSameAccountError(DomainError):
     code = "transfer_same_account"
     status_code = 400

@@ -181,6 +181,7 @@ class TestTheCurrencyRuleIsAsymmetric:
         # load_linked_account verifies ownership and applies no currency rule; the settlement's own
         # resolver owns the amount rules instead.
         monkeypatch.setattr(account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS")))
 
         account = await account_service.load_linked_account(AsyncMock(), USER, 7)
 
@@ -193,6 +194,7 @@ class TestTheCurrencyRuleIsAsymmetric:
         from app.domain import AccountCurrencyMismatchError
 
         monkeypatch.setattr(account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS")))
 
         with pytest.raises(AccountCurrencyMismatchError):
             await account_service.validate_account_link(AsyncMock(), USER, 7, "USD")

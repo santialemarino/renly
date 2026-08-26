@@ -1,11 +1,14 @@
 # Data access for investments.
 
 from sqlalchemy import String, cast, func
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.investment import Investment, InvestmentCategory
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
+from app.models.snapshot import InvestmentSnapshot
+from app.models.transaction import Transaction
 from app.repositories.utils import apply_entry_sort
 
 # Sortable columns for the investments list. `category` is sorted as TEXT rather than as the enum:
@@ -183,20 +186,77 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     session.add(investment)
 
 
+# Re-points everything the named pots hold to one user as private, returning how many moved. Called only
+# from account deletion, when the leaving account holds the group's last active linked seat: at that
+# moment nobody can ever see the pot again, so the honest outcome is that the holdings were always
+# this user's. Runs BEFORE the account row goes — afterwards there is no user id left to assign.
+async def reassign_pots_to_user(session: AsyncSession, pot_ids: list[int], user_id: int) -> int:
+    if not pot_ids:
+        return 0
+    result = await session.execute(
+        sa_update(Investment).where(Investment.pot_id.in_(pot_ids)).values(user_id=user_id, pot_id=None).execution_options(synchronize_session=False)
+    )
+    return int(result.rowcount or 0)
+
+
+# Moves investments between scopes, returning how many moved. `pot_id=None` moves them back to the
+# caller as private, which is the only direction that needs a user id.
+#
+# The RLS-denormalized children are re-pointed in the SAME statement set, and that is not tidiness:
+# investment_snapshots and transactions carry a copy of their parent's scope precisely so their policies do not
+# have to join back to it, so a parent whose children still name the old scope is a row its own
+# history has become invisible to. They are updated by PARENT id rather than by their own old scope,
+# so a child that had somehow drifted is corrected rather than left behind.
+async def move_to_scope(session: AsyncSession, ids: list[int], *, pot_id: int | None, user_id: int | None) -> int:
+    if not ids:
+        return 0
+    values = {"pot_id": pot_id, "user_id": user_id}
+    result = await session.execute(sa_update(Investment).where(Investment.id.in_(ids)).values(**values).execution_options(synchronize_session=False))
+    await session.execute(
+        sa_update(InvestmentSnapshot).where(InvestmentSnapshot.investment_id.in_(ids)).values(**values).execution_options(synchronize_session=False)
+    )
+    await session.execute(
+        sa_update(Transaction).where(Transaction.investment_id.in_(ids)).values(**values).execution_options(synchronize_session=False)
+    )
+    return int(result.rowcount or 0)
+
+
+# Get a single investment by id WITHOUT pre-filtering by owner, for callers that must reach a
+# co-owned one (whose user_id is NULL, so get_by_id can never match it). RLS decides what is
+# reachable at all; the caller decides which scope it needed.
+async def get_by_id_any_scope(session: AsyncSession, investment_id: int) -> Investment | None:
+    result = await session.execute(select(Investment).where(Investment.id == investment_id))
+    return result.scalar_one_or_none()
+
+
+# Batch sibling of get_by_ids that does NOT pre-filter by owner, for callers that must reach co-owned
+# rows (whose user_id is NULL, so the owner-filtered version can never match one). RLS still decides
+# what is reachable; the caller checks which scope it actually needed.
+async def get_by_ids_any_scope(session: AsyncSession, ids: list[int]) -> list[Investment]:
+    if not ids:
+        return []
+    result = await session.execute(select(Investment).where(Investment.id.in_(ids)))
+    return list(result.scalars().all())
+
+
 # Namespace to call repository functions (e.g. investment_repository.list_by_user_filtered).
 class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
-    exists_by_user = staticmethod(exists_by_user)
     exists_active_by_user = staticmethod(exists_active_by_user)
+    exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
+    get_by_id_any_scope = staticmethod(get_by_id_any_scope)
     get_by_ids = staticmethod(get_by_ids)
+    get_by_ids_any_scope = staticmethod(get_by_ids_any_scope)
     get_collections_by_investment_ids = staticmethod(get_collections_by_investment_ids)
     list_by_user_filtered = staticmethod(list_by_user_filtered)
     list_identifiers_by_user = staticmethod(list_identifiers_by_user)
     list_names_by_user = staticmethod(list_names_by_user)
     list_with_ticker = staticmethod(list_with_ticker)
     list_with_ticker_by_user = staticmethod(list_with_ticker_by_user)
+    move_to_scope = staticmethod(move_to_scope)
+    reassign_pots_to_user = staticmethod(reassign_pots_to_user)
     save = staticmethod(save)
 
 

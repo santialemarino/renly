@@ -9,7 +9,7 @@ from app.domain import InvalidCredentialsError, PasswordBreachedError
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import export_repository, group_repository, invite_repository, user_repository
-from app.services import auth_service
+from app.services import auth_service, pot_service
 
 
 # Changes the password after re-verifying the current one (AUTH-8). Rejects breached passwords
@@ -80,6 +80,19 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     # Resolved BEFORE the account goes: once the user row is deleted their seats read user_id NULL, and
     # "was this the group's only account-holder" stops being answerable.
     orphan_group_ids = await group_repository.list_orphaned_group_ids(admin_session, user.id)
+    # Everything those groups' pots hold is re-pointed to this user as PRIVATE, before anything is
+    # deleted. Three reasons it has to happen here and in this order:
+    #   * every pot_id foreign key is ON DELETE RESTRICT, so deleting an orphaned group that still
+    #     owns holdings would simply fail — and CASCADE would have been far worse, destroying real
+    #     money records to satisfy a cleanup;
+    #   * once the user row is gone there is no id left to assign the holdings to;
+    #   * when the last account-linked seat leaves, the remaining seats are placeholders with no way
+    #     to ever see the money again, so the honest reading is that it was always this user's — and
+    #     it then goes with the rest of their data on the cascade below.
+    # Not covered here: a group that survives (someone else still holds a seat) whose pots this user
+    # held units in. That is D24's balance check, which §10 assigns to PR 5 along with settle-up.
+    await pot_service.absorb_group_pots(admin_session, orphan_group_ids, user.id)
+    await admin_session.commit()
     # Clear the invite first, on its own (privileged) transaction. The deletes span two connections so
     # they can't be atomic; ordering invite-first makes the only partial-failure state benign — an
     # invite with no account self-heals on re-invite, whereas deleting the user first and then failing

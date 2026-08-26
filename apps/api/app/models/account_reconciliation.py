@@ -22,7 +22,10 @@ class AccountReconciliation(SQLModel, table=True):
     __tablename__ = "account_reconciliations"
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", description="Owner.")
+    user_id: int | None = Field(
+        default=None, foreign_key="users.id", description="Owner, denormalized from the parent for row-level security; NULL when a pot owns it."
+    )
+    pot_id: int | None = Field(default=None, foreign_key="pots.id", description="Pot that co-owns the parent; NULL when it is private.")
     account_id: int = Field(foreign_key="accounts.id", description="Account being reconciled.")
     as_of_date: date_type = Field(description="Date the real balance was read.")
     statement_balance: Decimal = Field(max_digits=18, decimal_places=2, description="Real balance the user read off the account.")

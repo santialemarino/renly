@@ -18,7 +18,10 @@ class Transfer(SQLModel, table=True):
     __tablename__ = "transfers"
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", description="Owner.")
+    user_id: int | None = Field(
+        default=None, foreign_key="users.id", description="Owner, denormalized from the two legs, which share one scope; NULL when a pot owns them."
+    )
+    pot_id: int | None = Field(default=None, foreign_key="pots.id", description="Pot that co-owns both legs; NULL when they are private.")
     from_account_id: int = Field(foreign_key="accounts.id", description="Account the money leaves.")
     to_account_id: int = Field(foreign_key="accounts.id", description="Account the money arrives in.")
     date: date_type = Field(description="Date the movement happened.")

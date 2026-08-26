@@ -40,18 +40,21 @@ class TestValidateAccountLink:
     @pytest.mark.asyncio
     async def test_missing_account_raises_not_found(self, monkeypatch):
         monkeypatch.setattr(account_service.account_repository, "get_by_id", AsyncMock(return_value=None))
+        monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=None))
         with pytest.raises(NotFoundError):
             await account_service.validate_account_link(AsyncMock(), USER, 7, "ARS")
 
     @pytest.mark.asyncio
     async def test_currency_mismatch_raises(self, monkeypatch):
         monkeypatch.setattr(account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS")))
         with pytest.raises(AccountCurrencyMismatchError):
             await account_service.validate_account_link(AsyncMock(), USER, 7, "USD")
 
     @pytest.mark.asyncio
     async def test_matching_currency_ok(self, monkeypatch):
         monkeypatch.setattr(account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS")))
         await account_service.validate_account_link(AsyncMock(), USER, 7, "ARS")
 
 
@@ -64,6 +67,8 @@ class TestBalanceUnion:
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("50")}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
@@ -82,6 +87,8 @@ class TestBalanceUnion:
         monkeypatch.setattr(account_service.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
@@ -111,6 +118,8 @@ class TestBalanceUnion:
             monkeypatch.setattr(getattr(account_service, repo), "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value={7}))
         monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
@@ -128,6 +137,8 @@ class TestBalanceUnion:
             monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value={7}))
 
         _, linked = await account_service.get_account_summaries(AsyncMock(), [_account(id=7)], USER.id)

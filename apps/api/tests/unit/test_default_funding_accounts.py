@@ -173,6 +173,9 @@ class TestCardDefaultAccount:
         # used, which stopped being true once a settlement could pay a bucket from a foreign-currency
         # account. A USD card paid from a peso account is the most common Argentine arrangement.
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(
+            credit_card_service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS"))
+        )
         monkeypatch.setattr(credit_card_service.credit_card_repository, "create", AsyncMock(side_effect=lambda _s, card: card))
 
         card = await credit_card_service.create_card(AsyncMock(), USER, name="Visa", closing_day=25, due_day=10, currency="USD", default_account_id=7)
@@ -183,6 +186,7 @@ class TestCardDefaultAccount:
     async def test_create_still_rejects_an_account_the_user_does_not_own(self, monkeypatch):
         # Widening the currency rule must not widen ownership (SEC-4): an unowned id is still a 404.
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=None))
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=None))
         create_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "create", create_mock)
 
@@ -194,6 +198,9 @@ class TestCardDefaultAccount:
     @pytest.mark.asyncio
     async def test_create_accepts_a_matching_account(self, monkeypatch):
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(
+            credit_card_service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS"))
+        )
         monkeypatch.setattr(credit_card_service.credit_card_repository, "create", AsyncMock(side_effect=lambda _s, card: card))
 
         card = await credit_card_service.create_card(AsyncMock(), USER, name="Visa", closing_day=25, due_day=10, currency="ARS", default_account_id=7)
@@ -207,6 +214,7 @@ class TestCardDefaultAccount:
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=7)))
         get_by_id = AsyncMock(return_value=_account(currency="ARS"))
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", get_by_id)
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id_any_scope", get_by_id)
         save_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "save", save_mock)
 
@@ -222,6 +230,7 @@ class TestCardDefaultAccount:
         # though its currency no longer matters.
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=None)))
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=None))
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=None))
         save_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "save", save_mock)
 
@@ -237,6 +246,7 @@ class TestCardDefaultAccount:
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=7)))
         get_by_id = AsyncMock(return_value=_account(currency="USD"))
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", get_by_id)
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id_any_scope", get_by_id)
         save_mock = AsyncMock()
         monkeypatch.setattr(credit_card_service.credit_card_repository, "save", save_mock)
 
@@ -251,6 +261,7 @@ class TestCardDefaultAccount:
         monkeypatch.setattr(credit_card_service, "get_card", AsyncMock(return_value=_card(currency="ARS", default_account_id=7)))
         get_by_id = AsyncMock()
         monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id", get_by_id)
+        monkeypatch.setattr(credit_card_service.account_service.account_repository, "get_by_id_any_scope", get_by_id)
         monkeypatch.setattr(credit_card_service.credit_card_repository, "save", AsyncMock())
 
         card = await credit_card_service.update_card(AsyncMock(), 5, USER, currency="USD", default_account_id=None)
@@ -319,6 +330,7 @@ class TestPlanDefaultAccountService:
     async def test_changing_the_plan_currency_with_a_stored_default_is_refused(self, monkeypatch, service, plan, get_name, repo_name):
         monkeypatch.setattr(service, get_name, AsyncMock(return_value=plan))
         monkeypatch.setattr(service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS")))
         save_mock = AsyncMock()
         monkeypatch.setattr(getattr(service, repo_name), "save", save_mock)
 
@@ -335,6 +347,7 @@ class TestPlanDefaultAccountService:
         monkeypatch.setattr(subscription_service, "get_subscription", AsyncMock(return_value=plan))
         get_by_id = AsyncMock(return_value=_account(currency="USD"))
         monkeypatch.setattr(subscription_service.account_service.account_repository, "get_by_id", get_by_id)
+        monkeypatch.setattr(subscription_service.account_service.account_repository, "get_by_id_any_scope", get_by_id)
         save_mock = AsyncMock()
         monkeypatch.setattr(subscription_service.subscription_repository, "save", save_mock)
 
@@ -351,6 +364,9 @@ class TestPlanDefaultAccountService:
         plan = _installment(current_installment=4)
         monkeypatch.setattr(installment_service, "get_installment", AsyncMock(return_value=plan))
         monkeypatch.setattr(installment_service.account_service.account_repository, "get_by_id", AsyncMock(return_value=_account(currency="ARS")))
+        monkeypatch.setattr(
+            installment_service.account_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(currency="ARS"))
+        )
         monkeypatch.setattr(installment_service.installment_repository, "save", AsyncMock())
 
         updated = await installment_service.update_installment(AsyncMock(), 4, USER, default_account_id=7)
