@@ -210,6 +210,31 @@ Four properties are worth knowing:
 
 - **`group_invites` table** — the same proven mechanism as `invites` (only the **SHA-256 hash** of a `secrets.token_urlsafe(32)` raw token is stored, single-use via `consumed_at`, time-limited by `expires_at`, rotate-on-resend) in a deliberately separate table. `invites` is globally unique per email because it gates platform **signup**; the same person may hold seats in several groups at once, and a group invite grants **no** signup access. The token is the credential: nothing is created by redeeming one, it only links an existing account to a seat, which is also what makes a shareable link possible. `email` records where the link was sent and constrains nothing. Revoking **deletes** the row (there is no revoked state), and removing a member deletes their pending invite in the same transaction. The claim path resolves the invite with `SELECT … FOR UPDATE`: a link is deliberately shareable, so two people can open the same one at once, and without the lock both read `consumed_at` as NULL, both pass the seat-is-free check, and the second `UPDATE` silently overwrites the first — two success responses, one person not in the group. The read-only preview does not lock.
 
+#### Pot scope — the dual-scope policy shape
+
+`investments`, `accounts` and their RLS-denormalized children (`investment_snapshots`, `transactions`, `account_reconciliations`, `transfers`) can belong **either** to a user or to a **pot** — a co-owned container. Their `user_id` therefore means _owner_ and is `NULL` for a co-owned row; a `CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))` on each table makes "exactly one owner" true by construction rather than by convention. The consequence worth internalising: `user_id = me` still means **exactly your private holdings**, so a query that forgets the pot branch returns _fewer_ rows and can never surface someone else's money.
+
+Each of those six tables carries **two** policies:
+
+```sql
+CREATE POLICY <t>_scope_read  ON <t> FOR SELECT USING (owner OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY <t>_scope_write ON <t> FOR ALL    USING (owner OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
+                                            WITH CHECK (owner OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+```
+
+Two rather than one, and the split is **not** stylistic: Postgres applies `WITH CHECK` to the new row on `INSERT`/`UPDATE` but has **no `WITH CHECK` for `DELETE` at all**, so a single `FOR ALL` policy whose `USING` named the _view_ helper would let a read-only member delete a shared holding. Permissive policies are OR-ed, so `SELECT` still resolves to the view predicate (`can_write` implies `can_view` by a table CHECK, so the union adds nothing).
+
+The two helpers follow `app_is_group_member`'s shape exactly — `SECURITY DEFINER`, pinned `search_path`, `PUBLIC EXECUTE` revoked, `role` nowhere in either:
+
+- **`app_can_view_pot(pot_id)`** — an active seat in the pot's group **and** permission, where permission is the member's explicit `pot_member_permissions` row if there is one and otherwise the pot's own `visibility` default. That `COALESCE` is load-bearing: a member who joins the group **after** a pot was created has no permission row at all, and reading the pot's default is what lets them see a `members` pot with no seeding step anywhere. A pot set to `owners` fails closed for the same reason — no row, no access — until an ownership event or an admin writes them one.
+- **`app_can_write_pot(pot_id)`** — no visibility-style default at all: write is granted per member and nowhere else, so a pot with no permission rows is readable by its group and writable by nobody (which is how a pot names a single custodian with everyone else read-only).
+
+`pots` itself is read through `app_can_view_pot(id)` and written through `app_can_view_pot(id) AND app_is_group_member(group_id)`; the write policy's `USING` carries the view helper too, because permissive policies are OR-ed and a bare membership `USING` would have quietly widened `SELECT` back to every member. `pot_member_permissions` uses `app_can_view_pot(pot_id)` on **both** sides, and the `WITH CHECK` half is the load-bearing one: without it a member of the group could insert a row naming a pot they cannot see and read straight into it. `pot_ownership_events` is read by anyone who may see the pot and written only with `app_can_write_pot`.
+
+**Creating a pot runs on the privileged session**, for the same bootstrap reason group creation does — and the precise mechanism is worth recording, because the bare insert is _not_ what fails. `WITH CHECK` on `pots` is membership-only, so `INSERT INTO pots …` succeeds on the request session; `INSERT … RETURNING id` does **not**, because a `SELECT` policy also applies to the row an insert returns and a brand-new pot has no permission row for `app_can_view_pot` to find. The service needs that id back to seed the creator's permissions, so it cannot use the request session.
+
+**One deliberate widening** on `pot_ownership_events`' read policy: it also matches rows naming an account the caller **owns**. That is not a widening of the visibility model but what keeps a _private_ balance correct — a contribution debits the mover's own account, so the event is a movement in that account's ledger, and if they later leave the group the pot branch stops matching and their private account would silently gain back money it no longer holds. The service requires the moving member to own the private leg, so every row the branch returns is the caller's own movement.
+
 ---
 
 ## Frontend auth (NextAuth.js)
