@@ -224,6 +224,7 @@ class TestMovingHoldings:
         for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
         monkeypatch.setattr(pot_service.transfer_repository, "linked_account_ids", AsyncMock(return_value={7}))
+        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
@@ -242,6 +243,7 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=True))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
@@ -257,6 +259,7 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
@@ -276,6 +279,49 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", AsyncMock(return_value=0))
         monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value="built"))
         await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=False)
+        assert move.await_args.kwargs == {"pot_id": None, "user_id": USER.id}
+
+    @pytest.mark.asyncio
+    async def test_an_account_carrying_a_pot_scoped_transfer_cannot_LEAVE_the_pot(self, monkeypatch):
+        # The mirror image of the move-in guard, and the reason it needed its own check: a transfer
+        # between two pot accounts is pot-scoped, so linked_account_ids — which filters by user_id —
+        # is structurally blind to it. Without the scope-free probe this move would succeed and leave
+        # the transfer with one leg in each scope, which no transfer may have, while the balance union
+        # silently stopped counting it against the account that just went private.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(
+            pot_service.account_repository,
+            "get_by_ids_any_scope",
+            AsyncMock(return_value=[self._account(7, user_id=None, pot_id=5)]),
+        )
+        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
+            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=True))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
+        with pytest.raises(AccountHasLinkedEntriesError):
+            await pot_service.move_holdings(AsyncMock(), 5, USER, account_ids=[7], into=False)
+        move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_clean_account_can_leave_the_pot(self, monkeypatch):
+        # The positive control for the guard above.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(
+            pot_service.account_repository,
+            "get_by_ids_any_scope",
+            AsyncMock(return_value=[self._account(7, user_id=None, pot_id=5)]),
+        )
+        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
+            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", AsyncMock(return_value=0))
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value="built"))
+        await pot_service.move_holdings(AsyncMock(), 5, USER, account_ids=[7], into=False)
         assert move.await_args.kwargs == {"pot_id": None, "user_id": USER.id}
 
     @pytest.mark.asyncio
@@ -327,12 +373,25 @@ class TestNav:
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
 
     @pytest.mark.asyncio
-    async def test_a_snapshot_after_the_date_is_not_counted(self, monkeypatch):
-        from app.models.snapshot import InvestmentSnapshot
-
-        future = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 9, 1), value=Decimal("100"), currency="USD")
+    async def test_the_valuation_date_is_pushed_DOWN_into_the_snapshot_query(self, monkeypatch):
+        # Not filtered in the service after the fact, which is the bug this replaced: taking each
+        # investment's latest snapshot and then discarding it for being too new DROPS the investment
+        # entirely, when what was asked for is its value on that date. Bounding the query's MAX
+        # returns the latest snapshot on or before it instead. Asserted on the argument the service
+        # passed, because a stub returns whatever it was told either way.
+        latest = AsyncMock(return_value={})
         monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
-        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: future}))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", latest)
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup)
+        assert latest.await_args.kwargs == {"as_of_date": date(2026, 6, 1)}
+
+    @pytest.mark.asyncio
+    async def test_a_pot_whose_holdings_have_no_snapshot_by_that_date_is_worth_zero(self, monkeypatch):
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
