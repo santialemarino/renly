@@ -8,6 +8,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.transfer import Transfer
+from app.repositories.utils import account_scope_matches
 
 
 # List a user's transfers, newest first. Optionally narrowed to one account, matching EITHER leg —
@@ -78,7 +79,7 @@ async def _sum_leg(
     stmt = (
         select(leg, func.coalesce(func.sum(amount), 0))
         .join(Account, Account.id == leg)
-        .where(leg.in_(account_ids), Transfer.user_id == user_id, Transfer.date >= Account.opening_date)
+        .where(leg.in_(account_ids), account_scope_matches(Transfer, user_id), Transfer.date >= Account.opening_date)
     )
     if as_of_date is not None:
         stmt = stmt.where(Transfer.date <= as_of_date)
@@ -126,7 +127,7 @@ async def _sum_leg_monthly(
     result = await session.execute(
         select(leg, year_col, month_col, func.coalesce(func.sum(amount), 0))
         .join(Account, Account.id == leg)
-        .where(leg.in_(account_ids), Transfer.user_id == user_id, Transfer.date >= Account.opening_date)
+        .where(leg.in_(account_ids), account_scope_matches(Transfer, user_id), Transfer.date >= Account.opening_date)
         .group_by(leg, year_col, month_col)
     )
     return [(row[0], int(row[1]), int(row[2]), Decimal(str(row[3]))) for row in result.all()]

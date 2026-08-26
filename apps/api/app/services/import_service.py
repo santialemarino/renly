@@ -228,6 +228,7 @@ async def _persist(session: AsyncSession, user: User, entity: ImportEntity, rows
         investments = [
             Investment(
                 user_id=user.id,
+                created_by=user.id,
                 name=row["name"],
                 category=row["category"],
                 base_currency=row["base_currency"],

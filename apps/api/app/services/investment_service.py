@@ -122,6 +122,7 @@ async def create_investment(
 ) -> Investment:
     investment = Investment(
         user_id=user.id,
+        created_by=user.id,
         name=name,
         category=category,
         base_currency=base_currency,
