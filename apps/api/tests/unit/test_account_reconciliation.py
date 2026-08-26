@@ -78,6 +78,8 @@ def _wire(
     monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value=settlements or {}))
     monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value=transfers_in or {}))
     monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value=transfers_out or {}))
+    monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+    monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
     monkeypatch.setattr(
         svc.account_reconciliation_repository,
         "get_latest_dates_by_account_ids",
@@ -125,6 +127,8 @@ class TestComputeBalanceAt:
         monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("150")}))
         monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(), date(2026, 6, 30))
 
@@ -137,6 +141,8 @@ class TestComputeBalanceAt:
         monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(opening_date=date(2026, 5, 1)), date(2026, 4, 30))
 
@@ -154,6 +160,8 @@ class TestComputeBalanceAt:
         monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", settlements)
         monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
 
         await svc.compute_account_balance_at(AsyncMock(), _account(), date(2026, 6, 30))
 
@@ -168,6 +176,8 @@ class TestComputeBalanceAt:
         monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(opening_date=date(2026, 5, 1)), date(2026, 5, 1))
 
@@ -180,6 +190,8 @@ class TestComputeBalanceAt:
         monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(), TODAY)
 
