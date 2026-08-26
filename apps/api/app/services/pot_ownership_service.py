@@ -170,29 +170,34 @@ async def record_opening(
     if total != ONE_HUNDRED:
         raise PotPercentagesError(total)
 
-    members_by_id = {}
+    # The whole roster in ONE query, then validated in memory — an opening names every owner, so a
+    # seat lookup per member is an N+1 that grows with the group.
+    members_by_id = {m.id: m for m in await group_repository.list_members(session, pot.group_id)}
     for member_id in shares:
-        members_by_id[member_id] = await _require_seat(session, pot, member_id)
+        member = members_by_id.get(member_id)
+        if member is None or not member.is_active:
+            raise NotFoundError("Group member not found")
 
     units_by_member = opening_units(value, shares)
-    created = []
-    for member_id, units in units_by_member.items():
-        created.append(
-            await pot_ownership_repository.create(
-                session,
-                PotOwnershipEvent(
-                    pot_id=pot.id,
-                    type=OwnershipEventType.opening,
-                    date=date,
-                    member_id=member_id,
-                    base_amount=amount_for_units(units, OPENING_UNIT_PRICE),
-                    units=units,
-                    unit_price=OPENING_UNIT_PRICE,
-                    notes=notes,
-                    created_by=user.id,
-                ),
+    # Built in memory and written in one batch: an opening is one row per owner, and flushing per row
+    # is a round trip per owner for what is a single indivisible act.
+    created = await pot_ownership_repository.create_many(
+        session,
+        [
+            PotOwnershipEvent(
+                pot_id=pot.id,
+                type=OwnershipEventType.opening,
+                date=date,
+                member_id=member_id,
+                base_amount=amount_for_units(units, OPENING_UNIT_PRICE),
+                units=units,
+                unit_price=OPENING_UNIT_PRICE,
+                notes=notes,
+                created_by=user.id,
             )
-        )
+            for member_id, units in units_by_member.items()
+        ],
+    )
     await session.commit()
     return [_build_response(e, members_by_id) for e in created]
 

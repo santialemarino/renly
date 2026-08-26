@@ -186,13 +186,15 @@ async def save(session: AsyncSession, investment: Investment) -> None:
     session.add(investment)
 
 
-# Re-points every investment a pot holds to one user as private, returning how many moved. Called only
+# Re-points everything the named pots hold to one user as private, returning how many moved. Called only
 # from account deletion, when the leaving account holds the group's last active linked seat: at that
 # moment nobody can ever see the pot again, so the honest outcome is that the holdings were always
 # this user's. Runs BEFORE the account row goes — afterwards there is no user id left to assign.
-async def reassign_pot_to_user(session: AsyncSession, pot_id: int, user_id: int) -> int:
+async def reassign_pots_to_user(session: AsyncSession, pot_ids: list[int], user_id: int) -> int:
+    if not pot_ids:
+        return 0
     result = await session.execute(
-        sa_update(Investment).where(Investment.pot_id == pot_id).values(user_id=user_id, pot_id=None).execution_options(synchronize_session=False)
+        sa_update(Investment).where(Investment.pot_id.in_(pot_ids)).values(user_id=user_id, pot_id=None).execution_options(synchronize_session=False)
     )
     return int(result.rowcount or 0)
 
@@ -254,7 +256,7 @@ class InvestmentRepository:
     list_with_ticker = staticmethod(list_with_ticker)
     list_with_ticker_by_user = staticmethod(list_with_ticker_by_user)
     move_to_scope = staticmethod(move_to_scope)
-    reassign_pot_to_user = staticmethod(reassign_pot_to_user)
+    reassign_pots_to_user = staticmethod(reassign_pots_to_user)
     save = staticmethod(save)
 
 

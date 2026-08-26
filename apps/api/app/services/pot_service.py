@@ -510,9 +510,10 @@ def _ensure_all_present(found: list, requested: list[int], pot: Pot, user: User,
 async def absorb_group_pots(session: AsyncSession, group_ids: list[int], user_id: int) -> int:
     if not group_ids:
         return 0
-    moved = 0
-    for group_id in group_ids:
-        for pot in await pot_repository.list_by_group(session, group_id):
-            moved += await investment_repository.reassign_pot_to_user(session, pot.id, user_id)
-            moved += await account_repository.reassign_pot_to_user(session, pot.id, user_id)
-    return moved
+    pot_ids = [pot.id for group_id in group_ids for pot in await pot_repository.list_by_group(session, group_id)]
+    if not pot_ids:
+        return 0
+    # Two statements for the whole set, not two per pot: account deletion is one use case and should
+    # cost a fixed number of queries rather than one that grows with how much the leaver shared.
+    moved = await investment_repository.reassign_pots_to_user(session, pot_ids, user_id)
+    return moved + await account_repository.reassign_pots_to_user(session, pot_ids, user_id)

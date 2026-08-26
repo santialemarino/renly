@@ -58,6 +58,16 @@ async def create(session: AsyncSession, event: PotOwnershipEvent) -> PotOwnershi
     return event
 
 
+# Persists several events and flushes ONCE to get their ids. The batch sibling of create, for the
+# opening baseline: it writes one row per owner, and flushing per row is a round trip per owner.
+async def create_many(session: AsyncSession, events: list[PotOwnershipEvent]) -> list[PotOwnershipEvent]:
+    if not events:
+        return []
+    session.add_all(events)
+    await session.flush()
+    return events
+
+
 # Deletes an event. Balances are derived, so removing one simply recomputes the series — there is no
 # stored total to correct afterwards.
 async def delete(session: AsyncSession, event: PotOwnershipEvent) -> None:
@@ -131,6 +141,7 @@ async def exists_for_accounts(session: AsyncSession, account_ids: list[int]) -> 
 # Namespace to call repository functions (e.g. pot_ownership_repository.list_by_pot).
 class PotOwnershipRepository:
     create = staticmethod(create)
+    create_many = staticmethod(create_many)
     delete = staticmethod(delete)
     exists_for_accounts = staticmethod(exists_for_accounts)
     get_by_id = staticmethod(get_by_id)
