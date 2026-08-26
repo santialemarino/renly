@@ -97,14 +97,24 @@ async def list_investments(
     )
 
 
-# Fetches one investment by id. Raises NotFoundError if not found or not owned by user.
+# Fetches one investment by id, in EITHER scope: the user's own private one, or a co-owned one they
+# may reach. Raises NotFoundError when it does not exist or is not theirs to see.
+#
+# Any-scope rather than owner-filtered, because a co-owned investment has user_id NULL and the owner
+# filter can never match one — which would leave a holding moved into a pot impossible to snapshot,
+# so the pot could never be valued at all. Reachability is RLS's answer (the dual-scope read policy),
+# and whether the caller may CHANGE it is settled by the write policy on the row being written, which
+# is gated on pot write access. The explicit owner check below only covers the private branch, where
+# there is no pot permission to consult.
 async def get_investment(
     session: AsyncSession,
     investment_id: int,
     user: User,
 ) -> Investment:
-    inv = await investment_repository.get_by_id(session, investment_id, user.id)
+    inv = await investment_repository.get_by_id_any_scope(session, investment_id)
     if inv is None:
+        raise NotFoundError("Investment not found")
+    if inv.pot_id is None and inv.user_id != user.id:
         raise NotFoundError("Investment not found")
     return inv
 
@@ -249,9 +259,13 @@ async def upsert_snapshot(
         await session.commit()
         await session.refresh(existing)
         return existing
+    # Scope is inherited from the PARENT, never from the caller: a snapshot of a co-owned investment
+    # belongs to the pot, and writing user_id=caller would both violate the single-owner CHECK and
+    # hide the row from every other member behind a policy that reads the child's own scope.
     snapshot = InvestmentSnapshot(
         investment_id=investment_id,
-        user_id=user.id,
+        user_id=inv.user_id,
+        pot_id=inv.pot_id,
         date=snapshot_date,
         value=value,
         quantity=quantity,
@@ -305,9 +319,11 @@ async def create_transaction(
     # metric downstream — reject instead of silently storing (fail-loud, no auto-convert).
     if currency != inv.base_currency:
         raise InvestmentCurrencyMismatchError(str(currency), str(inv.base_currency))
+    # Same inheritance as the snapshot above, and for the same two reasons.
     transaction = Transaction(
         investment_id=investment_id,
-        user_id=user.id,
+        user_id=inv.user_id,
+        pot_id=inv.pot_id,
         date=transaction_date,
         amount=amount,
         quantity=quantity,

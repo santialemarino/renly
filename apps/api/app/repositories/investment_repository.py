@@ -219,6 +219,14 @@ async def move_to_scope(session: AsyncSession, ids: list[int], *, pot_id: int | 
     return int(result.rowcount or 0)
 
 
+# Get a single investment by id WITHOUT pre-filtering by owner, for callers that must reach a
+# co-owned one (whose user_id is NULL, so get_by_id can never match it). RLS decides what is
+# reachable at all; the caller decides which scope it needed.
+async def get_by_id_any_scope(session: AsyncSession, investment_id: int) -> Investment | None:
+    result = await session.execute(select(Investment).where(Investment.id == investment_id))
+    return result.scalar_one_or_none()
+
+
 # Batch sibling of get_by_ids that does NOT pre-filter by owner, for callers that must reach co-owned
 # rows (whose user_id is NULL, so the owner-filtered version can never match one). RLS still decides
 # what is reachable; the caller checks which scope it actually needed.
@@ -236,6 +244,7 @@ class InvestmentRepository:
     exists_active_by_user = staticmethod(exists_active_by_user)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)
+    get_by_id_any_scope = staticmethod(get_by_id_any_scope)
     get_by_ids = staticmethod(get_by_ids)
     get_by_ids_any_scope = staticmethod(get_by_ids_any_scope)
     get_collections_by_investment_ids = staticmethod(get_collections_by_investment_ids)

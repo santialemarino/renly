@@ -22,6 +22,7 @@ class TestSnapshotCurrencyGuard:
     @pytest.mark.asyncio
     async def test_mismatched_currency_raises_before_write(self, monkeypatch):
         monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=_ars_investment()))
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=_ars_investment()))
         create_mock = AsyncMock()
         monkeypatch.setattr(investment_service.snapshot_repository, "get_by_investment_and_date", AsyncMock(return_value=None))
         monkeypatch.setattr(investment_service.snapshot_repository, "create", create_mock)
@@ -34,6 +35,7 @@ class TestSnapshotCurrencyGuard:
     @pytest.mark.asyncio
     async def test_matching_currency_passes(self, monkeypatch):
         monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=_ars_investment()))
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=_ars_investment()))
         monkeypatch.setattr(investment_service.snapshot_repository, "get_by_investment_and_date", AsyncMock(return_value=None))
         create_mock = AsyncMock(side_effect=lambda session, snapshot: snapshot)
         monkeypatch.setattr(investment_service.snapshot_repository, "create", create_mock)
@@ -47,6 +49,7 @@ class TestSnapshotCurrencyGuard:
         # A BRL investment + BRL snapshot must clear the guard now that the Currency enum covers the full set.
         brl_investment = Investment(id=1, user_id=1, name="ETF", category="stocks", base_currency=Currency.BRL)
         monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=brl_investment))
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=brl_investment))
         monkeypatch.setattr(investment_service.snapshot_repository, "get_by_investment_and_date", AsyncMock(return_value=None))
         create_mock = AsyncMock(side_effect=lambda session, snapshot: snapshot)
         monkeypatch.setattr(investment_service.snapshot_repository, "create", create_mock)
@@ -61,6 +64,7 @@ class TestTransactionCurrencyGuard:
     @pytest.mark.asyncio
     async def test_create_mismatch_raises_before_write(self, monkeypatch):
         monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=_ars_investment()))
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=_ars_investment()))
         create_mock = AsyncMock()
         monkeypatch.setattr(investment_service.transaction_repository, "create", create_mock)
         with pytest.raises(InvestmentCurrencyMismatchError):
@@ -81,6 +85,7 @@ class TestTransactionCurrencyGuard:
             id=9, investment_id=1, user_id=1, date=date(2026, 1, 5), amount=Decimal("100.00"), currency=Currency.ARS, type=TransactionType.buy
         )
         monkeypatch.setattr(investment_service.investment_repository, "get_by_id", AsyncMock(return_value=_ars_investment()))
+        monkeypatch.setattr(investment_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=_ars_investment()))
         monkeypatch.setattr(investment_service.transaction_repository, "get_by_id", AsyncMock(return_value=existing_tx))
         save_mock = AsyncMock()
         monkeypatch.setattr(investment_service.transaction_repository, "save", save_mock)
