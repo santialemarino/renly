@@ -122,10 +122,11 @@ async def get_nav(
 
     investment_ids = await pot_repository.list_investment_ids(session, pot.id)
     if investment_ids:
-        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids)
+        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
+        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
+        # a back-dated ownership event would be priced against that understated NAV.
+        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
         for snapshot in snapshots.values():
-            if snapshot.date > as_of_date:
-                continue
             if snapshot.currency == pot.base_currency:
                 total += snapshot.value
                 continue
@@ -432,26 +433,46 @@ async def move_holdings(
     if account_ids:
         accounts = await account_repository.get_by_ids_any_scope(session, account_ids)
         _ensure_all_present(accounts, account_ids, pot, user, into=into)
-        if into:
-            linked = (
-                await income_repository.linked_account_ids(session, account_ids, user.id)
-                | await expense_repository.linked_account_ids(session, account_ids, user.id)
-                | await card_settlement_repository.linked_account_ids(session, account_ids, user.id)
-                | await transfer_repository.linked_account_ids(session, account_ids, user.id)
-            )
-            # An ownership event names a PRIVATE account on one leg and a pot account on the other.
-            # Moving the private one into the pot would leave a movement whose two ends sit in the
-            # same scope — money that left the pot and arrived back in it — so the account carrying
-            # that history cannot be shared either.
-            if not linked and await pot_ownership_repository.exists_for_accounts(session, account_ids):
-                linked = set(account_ids)
-            if linked:
-                raise AccountHasLinkedEntriesError(sorted(linked))
+        await _ensure_account_carries_no_movements(session, account_ids, user)
 
     await investment_repository.move_to_scope(session, investment_ids, pot_id=pot.id if into else None, user_id=None if into else user.id)
     await account_repository.move_to_scope(session, account_ids, pot_id=pot.id if into else None, user_id=None if into else user.id)
     await session.commit()
     return await get_pot(session, pot.id, user)
+
+
+# Refuses to move an account across the scope boundary while anything references it.
+#
+# Applied in BOTH directions, which is the correction: guarding only the way in leaves the way out
+# open, and the way out is where the damage is worse. An account's balance derives from expenses,
+# income, settlements and transfers, so a shared one carrying rows owned by one person would report a
+# different figure to every member depending on whose rows they can see — a figure that changes with
+# the reader is worse than one that is merely wrong. Leaving a pot is the mirror image: a transfer
+# between two pot accounts would end up with one leg in each scope, which no transfer may have, and
+# the balance union would silently stop counting it.
+#
+# Three checks, because none of them sees what the others do:
+#   * linked_account_ids across the four movement tables — filtered by user_id, so it sees a PRIVATE
+#     account's history and is the right question on the way in;
+#   * transfer_repository.exists_for_accounts — scope-FREE, because the user_id filter above is
+#     structurally blind to a pot-scoped transfer, which is exactly the row that matters on the way
+#     out;
+#   * pot_ownership_repository.exists_for_accounts — an ownership event names a private account on
+#     one leg and a pot account on the other, so moving either would put both ends in one scope:
+#     money that left the pot and arrived back in it.
+async def _ensure_account_carries_no_movements(session: AsyncSession, account_ids: list[int], user: User) -> None:
+    linked = (
+        await income_repository.linked_account_ids(session, account_ids, user.id)
+        | await expense_repository.linked_account_ids(session, account_ids, user.id)
+        | await card_settlement_repository.linked_account_ids(session, account_ids, user.id)
+        | await transfer_repository.linked_account_ids(session, account_ids, user.id)
+    )
+    if not linked and await transfer_repository.exists_for_accounts(session, account_ids):
+        linked = set(account_ids)
+    if not linked and await pot_ownership_repository.exists_for_accounts(session, account_ids):
+        linked = set(account_ids)
+    if linked:
+        raise AccountHasLinkedEntriesError(sorted(linked))
 
 
 # Refuses the whole move when any named holding is missing, rather than moving the ones that were

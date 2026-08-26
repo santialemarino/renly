@@ -158,19 +158,32 @@ async def linked_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id for row in result.all() for account_id in row if account_id in wanted}
 
 
+# Whether ANY transfer names one of these accounts on either leg, in any scope. Distinct from
+# linked_account_ids, which filters by user_id and therefore cannot see a pot-scoped transfer at all
+# — the exact blind spot that matters when asking whether a SHARED account may leave its pot.
+async def exists_for_accounts(session: AsyncSession, account_ids: list[int]) -> bool:
+    if not account_ids:
+        return False
+    result = await session.execute(
+        select(Transfer.id).where(Transfer.from_account_id.in_(account_ids) | Transfer.to_account_id.in_(account_ids)).limit(1)
+    )
+    return result.scalars().first() is not None
+
+
 # Namespace to call repository functions (e.g. transfer_repository.list_by_user).
 class TransferRepository:
-    list_by_user = staticmethod(list_by_user)
-    get_by_id = staticmethod(get_by_id)
-    exists_by_account_id = staticmethod(exists_by_account_id)
-    linked_account_ids = staticmethod(linked_account_ids)
     create = staticmethod(create)
-    save = staticmethod(save)
     delete = staticmethod(delete)
-    sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
+    exists_by_account_id = staticmethod(exists_by_account_id)
+    exists_for_accounts = staticmethod(exists_for_accounts)
+    get_by_id = staticmethod(get_by_id)
+    linked_account_ids = staticmethod(linked_account_ids)
+    list_by_user = staticmethod(list_by_user)
+    save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
-    sum_out_by_account_ids_monthly = staticmethod(sum_out_by_account_ids_monthly)
     sum_in_by_account_ids_monthly = staticmethod(sum_in_by_account_ids_monthly)
+    sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
+    sum_out_by_account_ids_monthly = staticmethod(sum_out_by_account_ids_monthly)
 
 
 # Singleton used by services to access transfer persistence.
