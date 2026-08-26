@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import (
     AccountHasLinkedEntriesError,
     NotFoundError,
+    PotAlreadyDividedError,
     PotHasHoldingsError,
     PotWriteRequiredError,
     ownership_percentages,
@@ -426,6 +427,15 @@ async def move_holdings(
     pot, member = await require_writable(session, pot_id, user)
     investment_ids = investment_ids or []
     account_ids = account_ids or []
+
+    # Taking a holding OUT of a pot whose ownership is already agreed drops the pot's value by the
+    # whole of that holding while nobody's units change — so every co-owner's share falls pro-rata
+    # and the holding lands wholly in one person's private scope. That is one member taking joint
+    # assets, with no cap on the amount, and it is the same violation §4.1 refuses for a cross-scope
+    # transfer. Before the baseline exists nothing has been divided, so the move is free and undoing
+    # a mistaken move-in still works. Afterwards it is a withdrawal or a buy-out, which redeem units.
+    if not into and await pot_ownership_repository.list_by_pot(session, pot.id):
+        raise PotAlreadyDividedError()
 
     if investment_ids:
         found = await investment_repository.get_by_ids_any_scope(session, investment_ids)

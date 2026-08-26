@@ -521,6 +521,23 @@ class PotAlreadyOpenedError(DomainError):
 # A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
 # (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
 # message instead of an integrity error. Mapped to 409.
+# A holding cannot simply be taken out of a pot that has already been divided. Removing it drops the
+# pot's value by the whole of that holding while nobody's units change — so every co-owner's share
+# falls pro-rata and the holding lands wholly in one person's private scope. That is one member
+# taking joint assets, and unlike a private expense from a shared account there is no cap on it.
+# Before the opening baseline exists nothing has been divided, so nothing can be taken from anyone
+# and the move is free — which is also what keeps "undo a mistaken move-in" possible.
+# Taking value out of a divided pot is a withdrawal or a buy-out, both of which redeem units.
+# Mapped to 409.
+class PotAlreadyDividedError(DomainError):
+    code = "pot_already_divided"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This pot's ownership is already agreed, so a holding cannot be taken out directly. Record a withdrawal or a buy-out instead."
+        super().__init__(self.message)
+
+
 class PotHasHoldingsError(DomainError):
     code = "pot_has_holdings"
     status_code = 409
