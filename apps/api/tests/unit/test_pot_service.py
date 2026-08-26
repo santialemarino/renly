@@ -187,6 +187,7 @@ class TestMovingHoldings:
     @pytest.mark.asyncio
     async def test_moving_in_requires_pot_write_access(self, monkeypatch):
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         with pytest.raises(PotWriteRequiredError):
             await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1])
 
@@ -194,6 +195,7 @@ class TestMovingHoldings:
     async def test_a_holding_that_is_not_the_callers_own_private_one_is_refused(self, monkeypatch):
         # Naming someone else's id must not co-opt their money into a pot they never agreed to share.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1, user_id=OTHER.id)])
         )
@@ -208,6 +210,7 @@ class TestMovingHoldings:
         # A partial move is the worst outcome available: the caller is told nothing failed while some
         # of what they named stayed where it was.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1)]))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)
@@ -220,6 +223,7 @@ class TestMovingHoldings:
         # Its balance derives from rows owned by ONE user, so a shared version would report a
         # different figure to every member depending on whose rows they can see.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
@@ -240,6 +244,7 @@ class TestMovingHoldings:
         # money that left the pot and arrived back in it. The four linked_account_ids checks do not
         # cover this: an ownership event is none of income, expense, settlement or transfer.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
@@ -256,6 +261,7 @@ class TestMovingHoldings:
         # The positive control for both guards: without it, "raises" above would pass even if the
         # method refused every account unconditionally.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
@@ -271,6 +277,7 @@ class TestMovingHoldings:
     @pytest.mark.asyncio
     async def test_moving_out_takes_the_holding_back_to_the_caller_as_private(self, monkeypatch):
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1, user_id=None, pot_id=5)])
         )
@@ -282,6 +289,54 @@ class TestMovingHoldings:
         assert move.await_args.kwargs == {"pot_id": None, "user_id": USER.id}
 
     @pytest.mark.asyncio
+    async def test_a_holding_cannot_LEAVE_a_pot_whose_ownership_is_already_agreed(self, monkeypatch):
+        # The most serious hole this PR had: an unguarded move-out drops the pot's value by the whole
+        # holding while nobody's units change, so every co-owner's share falls pro-rata and the
+        # holding lands wholly in one person's private scope. One member taking joint assets, with no
+        # cap — strictly worse than the private-expense case O1 refuses.
+        from app.domain import PotAlreadyDividedError
+
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[object()]))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)
+        with pytest.raises(PotAlreadyDividedError):
+            await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=False)
+        move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_holding_CAN_leave_a_pot_that_has_not_been_divided_yet(self, monkeypatch):
+        # The positive control, and the case that matters in practice: undoing a mistaken move-in
+        # before the baseline exists takes nothing from anybody, because nothing has been divided.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
+        monkeypatch.setattr(
+            pot_service.investment_repository,
+            "get_by_ids_any_scope",
+            AsyncMock(return_value=[self._investment(1, user_id=None, pot_id=5)]),
+        )
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", AsyncMock(return_value=0))
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value="built"))
+        await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=False)
+        assert move.await_args.kwargs == {"pot_id": None, "user_id": USER.id}
+
+    @pytest.mark.asyncio
+    async def test_moving_IN_is_unaffected_by_the_ledger(self, monkeypatch):
+        # The guard is one-directional on purpose: adding to a divided pot takes nothing from anyone,
+        # it only dilutes percentages in the contributor's favour — which is what a contribution is.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[object()]))
+        monkeypatch.setattr(pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1)]))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", AsyncMock(return_value=0))
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value="built"))
+        await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=True)
+        assert move.await_args.kwargs == {"pot_id": 5, "user_id": None}
+
+    @pytest.mark.asyncio
     async def test_an_account_carrying_a_pot_scoped_transfer_cannot_LEAVE_the_pot(self, monkeypatch):
         # The mirror image of the move-in guard, and the reason it needed its own check: a transfer
         # between two pot accounts is pot-scoped, so linked_account_ids — which filters by user_id —
@@ -289,6 +344,7 @@ class TestMovingHoldings:
         # the transfer with one leg in each scope, which no transfer may have, while the balance union
         # silently stopped counting it against the account that just went private.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             pot_service.account_repository,
             "get_by_ids_any_scope",
@@ -308,6 +364,7 @@ class TestMovingHoldings:
     async def test_a_clean_account_can_leave_the_pot(self, monkeypatch):
         # The positive control for the guard above.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             pot_service.account_repository,
             "get_by_ids_any_scope",
@@ -327,6 +384,7 @@ class TestMovingHoldings:
     @pytest.mark.asyncio
     async def test_a_holding_from_another_pot_cannot_be_pulled_out(self, monkeypatch):
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1, user_id=None, pot_id=99)])
         )
