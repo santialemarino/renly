@@ -20,6 +20,7 @@ from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.invite import Invite, InviteStatus
 from app.models.payment_obligation import PaymentObligation
+from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.refresh_token import RefreshToken
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
@@ -62,7 +63,12 @@ __all__ = [
     "InvestmentSnapshot",
     "Invite",
     "InviteStatus",
+    "OwnershipEventType",
     "PaymentObligation",
+    "Pot",
+    "PotMemberPermission",
+    "PotOwnershipEvent",
+    "PotVisibility",
     "RefreshToken",
     "Subscription",
     "Transaction",

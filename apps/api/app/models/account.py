@@ -25,7 +25,9 @@ class Account(SQLModel, table=True):
     __tablename__ = "accounts"
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", description="Owner.")
+    user_id: int | None = Field(default=None, foreign_key="users.id", description="Owner; NULL when the row belongs to a pot instead.")
+    pot_id: int | None = Field(default=None, foreign_key="pots.id", description="Pot that co-owns the row; NULL when it is private.")
+    created_by: int | None = Field(default=None, foreign_key="users.id", description="Who entered it; NULL once that account is deleted.")
     name: str = Field(max_length=255, description="Account label (e.g. Caja de ahorro $, Efectivo).")
     type: AccountType = Field(sa_column=Column(SAEnum(AccountType, name="account_type"), nullable=False))
     currency: str = Field(max_length=3, description="Account currency (ISO 4217).")

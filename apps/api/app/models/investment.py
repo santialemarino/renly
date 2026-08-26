@@ -40,7 +40,9 @@ class Investment(SQLModel, table=True):
     __tablename__ = "investments"
 
     id: int | None = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="users.id", description="Owner.")
+    user_id: int | None = Field(default=None, foreign_key="users.id", description="Owner; NULL when the row belongs to a pot instead.")
+    pot_id: int | None = Field(default=None, foreign_key="pots.id", description="Pot that co-owns the row; NULL when it is private.")
+    created_by: int | None = Field(default=None, foreign_key="users.id", description="Who entered it; NULL once that account is deleted.")
     name: str = Field(max_length=255, description="Display name.")
     category: InvestmentCategory = Field(sa_column=Column(SAEnum(InvestmentCategory, name="investment_category"), nullable=False))
     base_currency: str = Field(max_length=10, description="Reporting currency (ISO 4217 code).")
