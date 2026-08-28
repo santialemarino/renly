@@ -219,6 +219,12 @@ On the Payments Calendar, paid cycles show with a "Paid" badge instead of the de
 
 API keys allow external tools (like iOS Shortcuts) to authenticate without a full login flow. Each key has a name, is tied to a user, and can be revoked. The raw key is shown only once at creation.
 
+### Feedback
+
+A **feedback** row is one message someone sent from the in-app form: a category (bug, idea, question or other) and up to 2,000 characters of free text. The submitter's email is attached server-side from their session rather than typed, so a message can always be replied to and can never claim to be from someone else.
+
+You own what you submit; **only an administrator can read the whole list**, which is the one place in Renly where an admin sees more than a member — and it exists because feedback is addressed to whoever runs the instance. Every admin is emailed when a message arrives, best-effort: a mail outage never loses the submission.
+
 ### Groups, Group Members and Group Invites
 
 A **group** is a set of people who share money — a household, a couple, a trip, a flat share. It is the one entity in Renly that more than one account can reach; every other table belongs to exactly one person. It holds the people and nothing about what they share, which keeps it reusable for anything a household needs to do together.
