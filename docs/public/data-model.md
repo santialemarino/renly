@@ -248,7 +248,7 @@ Four kinds of event: an **opening** sets the baseline (a value and each owner's 
 
 You always enter percentages and always read percentages and amounts back. A raw unit count appears nowhere. Percentages are shown to two decimals and always add to exactly 100, and each member's share always adds to exactly the pot's value — the rounding remainder goes to the largest holder rather than being left to make the parts visibly disagree.
 
-Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
+Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first — and "known" means the whole of it, because the value is a sum and a sum missing a term is not a smaller sum. A pot holding something nobody has valued yet reports no value at all rather than the total of the rest. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
 
 ### Settings
 
