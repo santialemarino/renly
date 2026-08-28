@@ -72,6 +72,23 @@ export function formatRatio(value: number, locale?: string): string {
   }).format(value);
 }
 
+/*
+ * An ownership percentage, at a FIXED two decimals (e.g. 13.91 → "13.91", 50 → "50.00"). No `%`
+ * suffix — callers append it, like formatPct.
+ *
+ * Distinct from formatPct, which caps at ONE decimal: a co-ownership split is computed to two, with the
+ * rounding remainder assigned to the largest holder so the displayed parts sum to exactly 100. Render
+ * it at one decimal and a three-way 33.33/33.33/33.34 split reads as 33.3/33.3/33.3 — parts that
+ * visibly fail to add up, which is the exact failure the remainder rule exists to prevent.
+ *
+ * Delegates to formatRatio because the two rules agree today, and stays a separate function because
+ * they are separate rules: a ratio is a unitless multiple, a share is a percentage that must total 100.
+ * A change to either must not silently move the other.
+ */
+export function formatSharePct(value: number, locale?: string): string {
+  return formatRatio(value, locale);
+}
+
 // Returns the color class: green for positive, red for negative, grey for zero/null.
 export function valueColor(value: number | null): string {
   if (value === null || value === 0) return 'text-muted-foreground';
