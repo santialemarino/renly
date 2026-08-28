@@ -2108,14 +2108,14 @@
           "labelIn": "Hacia tu cuenta",
           "placeholder": "Seleccioná una de tus cuentas",
           "empty": "Todavía no tenés cuentas",
-          "hint": "Opcional. Dejalo en blanco si el dinero se movió fuera de Renly."
+          "hint": "Opcional, y conviene indicarla: con una cuenta de cada lado Renly ve el dinero moverse de verdad, así que el valor de acá cambia con él. Dejala en blanco solo si el dinero se movió a algún lugar que Renly no registra."
         },
         "potLeg": {
           "labelIn": "Hacia la cuenta compartida",
           "labelOut": "Desde la cuenta compartida",
           "placeholder": "Seleccioná una cuenta compartida",
           "empty": "Esto no tiene ninguna cuenta compartida en {currency}",
-          "hint": "Opcional, y solo cuentas de acá en {currency}."
+          "hint": "Opcional, y solo cuentas de acá en {currency}. Indicar una es lo que hace que el valor de acá se mueva con el dinero — si la dejás en blanco, las partes cambian ahora y el valor espera su próxima actualización."
         },
         "amount": {
           "label": "Monto en {currency}",

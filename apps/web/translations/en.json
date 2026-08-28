@@ -2108,14 +2108,14 @@
           "labelIn": "Into your account",
           "placeholder": "Select one of your accounts",
           "empty": "You have no accounts yet",
-          "hint": "Optional. Leave it blank if the money moved outside Renly."
+          "hint": "Optional, and worth naming: with an account on both sides Renly sees the money actually move, so the value here changes with it. Leave it blank only if the money moved somewhere Renly does not track."
         },
         "potLeg": {
           "labelIn": "Into the shared account",
           "labelOut": "From the shared account",
           "placeholder": "Select a shared account",
           "empty": "This has no shared account in {currency}",
-          "hint": "Optional, and only accounts held here in {currency}."
+          "hint": "Optional, and only accounts held here in {currency}. Naming one is what makes the value here move with the money — leave it blank and the shares change now while the value waits for its next update."
         },
         "amount": {
           "label": "Amount in {currency}",
