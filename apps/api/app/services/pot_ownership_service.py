@@ -26,7 +26,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import (
     NotFoundError,
     PotAlreadyOpenedError,
+    PotBaseAmountRequiredError,
     PotInsufficientUnitsError,
+    PotMovementAccountInactiveError,
+    PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
     PotReagreementSameMemberError,
@@ -117,10 +120,22 @@ async def _require_price(session: AsyncSession, pot: Pot, user: User, as_of_date
 #   * the PRIVATE leg must belong to the moving member's own account, or one member could move money
 #     out of another's account by naming its id;
 #   * the POT leg must belong to THIS pot, or a contribution would credit a different pot entirely.
-# The pot leg is additionally required to be in the pot's base currency, which is what makes
-# base_amount unambiguous — otherwise the credited figure would be in a third currency and neither
-# stored amount would describe the account it landed in.
-async def _require_leg(session: AsyncSession, pot: Pot, user: User, account_id: int | None, *, expect_shared: bool) -> Account | None:
+#
+# EACH leg must also be in the currency of the figure that will move its balance, and the two figures
+# are different columns: the pot leg's is `base_amount` (so it must be in the pot's base currency,
+# which is what makes base_amount unambiguous) and the private leg's is `amount` (so it must be in
+# `private_currency`). Without the second half a movement could subtract an ARS figure from a USD
+# account — merged constraint (a), "entry currency = account currency", which the pot leg already had
+# and the private leg did not.
+async def _require_leg(
+    session: AsyncSession,
+    pot: Pot,
+    user: User,
+    account_id: int | None,
+    *,
+    expect_shared: bool,
+    private_currency: str,
+) -> Account | None:
     if account_id is None:
         return None
     account = await account_repository.get_by_id_any_scope(session, account_id)
@@ -129,11 +144,41 @@ async def _require_leg(session: AsyncSession, pot: Pot, user: User, account_id: 
     if expect_shared:
         if account.pot_id != pot.id:
             raise NotFoundError("Account not found")
+        # An archived pot account is excluded from the NAV but not from the balance union, so routing
+        # money through one moves the account and leaves the pot's value where it was — units issued
+        # against nothing. Refused here rather than at the holdings gate, because whether an archived
+        # holding may be SHARED at all is a separate question this does not answer.
+        if not account.is_active:
+            raise PotMovementAccountInactiveError(account.id)
         if account.currency != pot.base_currency:
-            raise AccountCurrencyMismatchError(account.currency, pot.base_currency)
-    elif account.user_id != user.id:
-        raise NotFoundError("Account not found")
+            # Arguments in the canonical order: the figure's currency first, the account's second. The
+            # reverse reports the pot's base currency AS the account's, which is a message that states
+            # something untrue about the very account the caller named.
+            raise AccountCurrencyMismatchError(pot.base_currency, account.currency)
+    else:
+        if account.user_id != user.id:
+            raise NotFoundError("Account not found")
+        if account.currency != private_currency:
+            raise AccountCurrencyMismatchError(private_currency, account.currency)
     return account
+
+
+# Refuses a movement dated before one of the accounts it names existed.
+#
+# Each leg of the balance union is bounded by its OWN account's opening_date, because opening_balance
+# already IS the balance at that date. So a movement dated earlier issues or redeems units while the
+# account it supposedly moved the money through never changes — value appearing in the pot from
+# nowhere. Exactly what _ensure_both_accounts_open does for transfers, and worse here because units
+# are issued against it.
+# Takes the resolved rows rather than ids, so it can only be called after both legs are validated, and
+# skips whichever legs were not named (money may legitimately arrive from outside Renly).
+def _ensure_accounts_open(accounts: list[Account | None], date: date_type) -> None:
+    openings = [a.opening_date for a in accounts if a is not None]
+    if not openings:
+        return
+    latest = max(openings)
+    if date < latest:
+        raise PotMovementBeforeAccountOpenedError(latest)
 
 
 # Lists a pot's ownership ledger in replay order. Visible to whoever may see the pot at all: a member
@@ -234,10 +279,13 @@ async def record_movement(
     currency = amount_currency or pot.base_currency
     credited = base_amount if currency != pot.base_currency else amount
     if credited is None:
-        raise AccountCurrencyMismatchError(currency, pot.base_currency)
+        # A missing field, not a mismatch: nothing here disagrees with anything, the caller simply has
+        # not said what the pot was credited — and deriving it would mean storing a rate.
+        raise PotBaseAmountRequiredError(currency, pot.base_currency)
 
-    await _require_leg(session, pot, user, from_account_id, expect_shared=not is_contribution)
-    await _require_leg(session, pot, user, to_account_id, expect_shared=is_contribution)
+    source = await _require_leg(session, pot, user, from_account_id, expect_shared=not is_contribution, private_currency=currency)
+    destination = await _require_leg(session, pot, user, to_account_id, expect_shared=is_contribution, private_currency=currency)
+    _ensure_accounts_open([source, destination], date)
 
     units = units_for_amount(credited, price)
     if not is_contribution:
@@ -319,10 +367,23 @@ async def record_reagreement(
 
 # Deletes an ownership event. Balances are derived, so removing one recomputes the series with no
 # stored total to correct — the same property that makes back-dating safe.
-async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> None:
+#
+# An OPENING takes the whole baseline with it, because the baseline is one act written as one row per
+# owner. Deleting a single row of it leaves a division summing to less than the value it recorded and
+# silently hands the remaining owners a share nobody agreed to — and it cannot be repaired, because
+# record_opening refuses while any opening row survives, so the only way back would be a re-agreement,
+# which records a gift that never happened. One act in, one act out.
+#
+# Returns how many events went, so a caller can say so.
+async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> int:
     pot, _ = await pot_service.require_writable(session, pot_id, user)
     event = await pot_ownership_repository.get_by_id(session, pot.id, event_id)
     if event is None:
         raise NotFoundError("Ownership event not found")
-    await pot_ownership_repository.delete(session, event)
+    if event.type == OwnershipEventType.opening:
+        deleted = await pot_ownership_repository.delete_openings(session, pot.id)
+    else:
+        await pot_ownership_repository.delete(session, event)
+        deleted = 1
     await session.commit()
+    return deleted

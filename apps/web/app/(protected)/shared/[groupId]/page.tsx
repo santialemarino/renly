@@ -4,9 +4,12 @@ import { getTranslations } from 'next-intl/server';
 
 import { GroupHubHeader } from '@/app/(protected)/shared/[groupId]/_components/group-hub-header';
 import { GroupMembersSection } from '@/app/(protected)/shared/[groupId]/_components/group-members-section';
+import { GroupPotsSection } from '@/app/(protected)/shared/[groupId]/_components/group-pots-section';
 import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { getGroup } from '@/lib/api/groups';
+import { getPots } from '@/lib/api/pots';
+import { getSettings } from '@/lib/api/settings';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 // Its own namespace rather than the list's, so a hub tab isn't titled "Groups".
@@ -31,12 +34,26 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
   const group = await getGroup(id);
   if (!group) notFound();
 
+  /*
+   * Only this group's pots, and only the ones the viewer may see — RLS decides that, so the list simply
+   * comes back shorter for a member the pot is hidden from rather than erroring.
+   *
+   * getSettings, not getPageSettings: the pot form needs the preferred-currency list and no credit
+   * cards, which the bundled helper would fetch anyway.
+   */
+  const [pots, settings] = await Promise.all([getPots(group.id), getSettings().catch(() => null)]);
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-6">
       <InlineLink href={ROUTES.shared} color="muted" icon={ArrowLeft}>
         {t('hub.back')}
       </InlineLink>
       <GroupHubHeader group={group} />
+      <GroupPotsSection
+        group={group}
+        pots={pots}
+        preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+      />
       <GroupMembersSection group={group} />
     </div>
   );

@@ -83,6 +83,34 @@ class PotResponse(BaseModel):
     updated_at: datetime = Field(description="When the pot was last changed.")
 
 
+# One thing a pot holds: an investment or a cash account, and what it is worth.
+#
+# `value` is in the holding's OWN currency; `base_value` is the same figure converted to the pot's
+# base currency, which is what makes it comparable to the NAV. Both are null when unknown rather than
+# zero — an investment with no snapshot yet, or a currency with no stored rate on the date — because
+# "we do not know" and "it is worth nothing" are different answers.
+#
+# Archived holdings are listed too, flagged by `is_active`. An archived holding still points at the
+# pot, so it still blocks deleting it and still has to be movable back out; it contributes nothing to
+# the NAV, so its figures are its own last-known value and not a claim about the pot's.
+class PotHoldingResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    id: int = Field(description="Investment or account id.")
+    name: str = Field(description="How the holding is shown.")
+    currency: str = Field(description="The holding's own currency.")
+    value: Decimal | None = Field(default=None, description="Latest known value in the holding's own currency; null when unknown.")
+    base_value: Decimal | None = Field(default=None, description="The same figure in the pot's base currency; null when unknown or unconvertible.")
+    is_active: bool = Field(description="Whether the holding is active; an archived one contributes nothing to the NAV.")
+
+
+# Response for GET /pots/{pot_id}/holdings. Split into the same two lists the move endpoints take as
+# input, so what a client reads back and what it posts have one shape rather than two.
+class PotHoldingsResponse(BaseModel):
+    investments: list[PotHoldingResponse] = Field(description="Investments the pot holds, by name.")
+    accounts: list[PotHoldingResponse] = Field(description="Cash accounts the pot holds, by name.")
+
+
 # Body for POST and DELETE /pots/{pot_id}/holdings — moving stock into or out of a pot.
 # Both lists are optional so one call can move investments, accounts, or both together; naming
 # neither is a no-op rather than an error, because the guided flows build the payload from what the

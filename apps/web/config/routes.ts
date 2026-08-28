@@ -56,6 +56,14 @@ export const accountLedgerPath = (accountId: number) => `${ROUTES.accounts}/${ac
 export const sharedGroupPath = (groupId: number) => `${ROUTES.shared}/${groupId}`;
 
 /*
+ * A pot's page. Same reasoning again, plus one thing worth knowing: `/shared/pots/[id]` and
+ * `/shared/[groupId]` are siblings, and Next resolves the STATIC segment first — so `/shared/pots/5`
+ * is the pot page while `/shared/12` stays the group hub. `/shared/pots` with no id falls through to
+ * the hub with groupId="pots", which is not a number and already renders notFound() there.
+ */
+export const sharedPotPath = (potId: number) => `${ROUTES.shared}/pots/${potId}`;
+
+/*
  * Anchors on the public help page that the app deep-links to. A help section's id is part of a public
  * URL, so it belongs here with the routes rather than as a string literal at each call site: a typo
  * becomes a type error, and `translations-parity.test.ts` asserts every value still names a real

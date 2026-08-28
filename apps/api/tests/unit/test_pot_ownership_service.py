@@ -12,7 +12,10 @@ import pytest
 from app.domain import (
     NotFoundError,
     PotAlreadyOpenedError,
+    PotBaseAmountRequiredError,
     PotInsufficientUnitsError,
+    PotMovementAccountInactiveError,
+    PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
     PotReagreementSameMemberError,
@@ -47,8 +50,15 @@ def _event(**kwargs) -> PotOwnershipEvent:
     return PotOwnershipEvent(**{**defaults, **kwargs})
 
 
-def _account(id: int, *, user_id: int | None = 1, pot_id: int | None = None, currency: str = "USD") -> Account:
-    return Account(id=id, user_id=user_id, pot_id=pot_id, name="A", type=AccountType.bank, currency=currency, opening_date=date(2026, 1, 1))
+def _account(
+    id: int,
+    *,
+    user_id: int | None = 1,
+    pot_id: int | None = None,
+    currency: str = "USD",
+    opening_date: date = date(2026, 1, 1),
+) -> Account:
+    return Account(id=id, user_id=user_id, pot_id=pot_id, name="A", type=AccountType.bank, currency=currency, opening_date=opening_date)
 
 
 # Wires the shared happy-path collaborators: write access granted, seats resolvable, one member
@@ -99,6 +109,24 @@ class TestOpening:
         created = _arrange(monkeypatch, events=[_event()])
         with pytest.raises(PotAlreadyOpenedError):
             await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("100")})
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_baseline_is_refused_under_a_CONTRIBUTION_too_and_the_message_says_so(self, monkeypatch):
+        """The rule is "the ledger is empty", not "no opening exists", and the difference is reachable:
+        deleting a baseline keeps the movements that followed it, so a pot can sit here with a
+        contribution and no opening at all. A baseline retro-fitted beneath movements already priced at
+        other rates would issue units at a nominal 1.00 alongside them, so the units would mean two
+        different things.
+
+        The message is asserted because the old one said "already has an opening baseline" — which in
+        exactly this state is untrue, and the only test covering the guard used an opening event.
+        """
+        created = _arrange(monkeypatch, events=[_event(type=OwnershipEventType.contribution, units=Decimal("100"))])
+        with pytest.raises(PotAlreadyOpenedError) as excinfo:
+            await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("100")})
+        assert "opening baseline" not in str(excinfo.value)
+        assert "ownership history" in str(excinfo.value)
         created.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -257,7 +285,7 @@ class TestMovements:
         created = _arrange(monkeypatch)
         shared_ars = _account(7, user_id=None, pot_id=5, currency="ARS")
         monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=shared_ars))
-        with pytest.raises(AccountCurrencyMismatchError):
+        with pytest.raises(AccountCurrencyMismatchError) as excinfo:
             await svc.record_movement(
                 AsyncMock(),
                 5,
@@ -268,7 +296,177 @@ class TestMovements:
                 amount=Decimal("5"),
                 to_account_id=7,
             )
+        # The message must name the account's REAL currency. Reversing the two arguments reports the
+        # pot's base currency AS the account's, which states something untrue about the very account
+        # the caller named — and reads as though ARS were the acceptable one.
+        assert excinfo.value.extra == {"entry_currency": "USD", "account_currency": "ARS"}
         created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_private_leg_must_be_in_the_movements_own_currency(self, monkeypatch):
+        # Merged constraint (a) — "entry currency = account currency" — on the leg that was missing it.
+        # `amount` is what moves the PRIVATE account's balance (the repository's CASE reads that column
+        # for a contribution's `from` leg), so a movement denominated in ARS against a USD account
+        # subtracts an ARS figure from a USD balance. Nothing else in the system notices.
+        created = _arrange(monkeypatch)
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(7, currency="USD")))
+        with pytest.raises(AccountCurrencyMismatchError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.contribution,
+                date=date(2026, 6, 1),
+                member_id=100,
+                amount=Decimal("5000"),
+                amount_currency="ARS",
+                base_amount=Decimal("5"),
+                from_account_id=7,
+            )
+        assert excinfo.value.extra == {"entry_currency": "ARS", "account_currency": "USD"}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_same_currency_private_leg_is_accepted(self, monkeypatch):
+        # The positive control for the guard above: a check comparing the wrong pair of currencies
+        # would refuse this too, and a test that only asserted the refusal would not notice.
+        created = _arrange(monkeypatch)
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(7, currency="USD")))
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(2026, 6, 1),
+            member_id=100,
+            amount=Decimal("5"),
+            from_account_id=7,
+        )
+        assert created.await_args.args[1].from_account_id == 7
+
+    @pytest.mark.asyncio
+    async def test_the_pot_leg_cannot_be_an_ARCHIVED_account(self, monkeypatch):
+        # Both NAV queries filter on is_active and the balance union does not, so crediting an archived
+        # pot account moves that account's balance and leaves the pot's value where it was. Units get
+        # issued against a NAV that never rises — every other owner diluted for nothing, from a
+        # movement that looks completely ordinary.
+        created = _arrange(monkeypatch)
+        archived = _account(7, user_id=None, pot_id=5)
+        archived.is_active = False
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=archived))
+        with pytest.raises(PotMovementAccountInactiveError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.contribution,
+                date=date(2026, 6, 1),
+                member_id=100,
+                amount=Decimal("5"),
+                to_account_id=7,
+            )
+        assert excinfo.value.extra == {"account_id": 7}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_archived_PRIVATE_leg_is_still_allowed(self, monkeypatch):
+        # The counterweight, and the reason the guard is on one leg only: a private account's balance
+        # IS moved by the union whether it is archived or not, so nothing is issued against nothing.
+        # Transfers take the same position — the API allows it and the pickers leave it out.
+        created = _arrange(monkeypatch)
+        archived = _account(7)
+        archived.is_active = False
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=archived))
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(2026, 6, 1),
+            member_id=100,
+            amount=Decimal("5"),
+            from_account_id=7,
+        )
+        created.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_movement_dated_before_its_private_account_opened_is_refused(self, monkeypatch):
+        # The balance union bounds each leg by its OWN account's opening_date, so an earlier movement
+        # issues units while the account it moved the money through never changes — value appearing in
+        # the pot from nowhere. The same failure transfers refuse, and worse here because of the units.
+        created = _arrange(monkeypatch)
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(7, opening_date=date(2026, 5, 1))))
+        with pytest.raises(PotMovementBeforeAccountOpenedError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.contribution,
+                date=date(2026, 4, 30),
+                member_id=100,
+                amount=Decimal("5"),
+                from_account_id=7,
+            )
+        assert excinfo.value.extra == {"opening_date": "2026-05-01"}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_movement_ON_the_opening_date_is_allowed(self, monkeypatch):
+        # The boundary is `date < opening`, not `<=`: opening_balance IS the balance at that date, and
+        # the sum's own bound is `>=`, so a movement dated exactly then is counted.
+        created = _arrange(monkeypatch)
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=_account(7, opening_date=date(2026, 5, 1))))
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(2026, 5, 1),
+            member_id=100,
+            amount=Decimal("5"),
+            from_account_id=7,
+        )
+        created.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_LATER_of_two_opening_dates_is_the_one_enforced(self, monkeypatch):
+        # Each leg is bounded by its own account, so respecting only one of them still drops the other.
+        created = _arrange(monkeypatch)
+        accounts = {
+            7: _account(7, opening_date=date(2026, 2, 1)),
+            8: _account(8, user_id=None, pot_id=5, opening_date=date(2026, 7, 1)),
+        }
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(side_effect=lambda _s, aid: accounts[aid]))
+        with pytest.raises(PotMovementBeforeAccountOpenedError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.contribution,
+                date=date(2026, 6, 1),
+                member_id=100,
+                amount=Decimal("5"),
+                from_account_id=7,
+                to_account_id=8,
+            )
+        assert excinfo.value.extra == {"opening_date": "2026-07-01"}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_movement_naming_no_account_has_no_opening_date_to_respect(self, monkeypatch):
+        # Money can arrive from outside Renly entirely, so a movement with neither leg is legal and must
+        # not be refused by a guard that has nothing to compare against.
+        created = _arrange(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(1999, 1, 1),
+            member_id=100,
+            amount=Decimal("5"),
+        )
+        created.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_a_cross_currency_move_stores_both_amounts_and_no_rate(self, monkeypatch):
@@ -307,8 +505,11 @@ class TestMovements:
 
     @pytest.mark.asyncio
     async def test_a_cross_currency_move_without_a_base_amount_is_refused(self, monkeypatch):
+        # And refused as a MISSING FIELD, not as a currency mismatch: nothing here disagrees with
+        # anything, the caller simply has not said what the pot was credited. Reporting a mismatch sent
+        # them looking for an account whose currency was wrong, when the fix is to supply base_amount.
         created = _arrange(monkeypatch)
-        with pytest.raises(AccountCurrencyMismatchError):
+        with pytest.raises(PotBaseAmountRequiredError) as excinfo:
             await svc.record_movement(
                 AsyncMock(),
                 5,
@@ -319,6 +520,8 @@ class TestMovements:
                 amount=Decimal("5000"),
                 amount_currency="ARS",
             )
+        assert excinfo.value.extra == {"amount_currency": "ARS", "base_currency": "USD"}
+        assert not isinstance(excinfo.value, AccountCurrencyMismatchError)
         created.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -329,6 +532,65 @@ class TestMovements:
                 AsyncMock(), 5, USER, type=OwnershipEventType.opening, date=date(2026, 6, 1), member_id=100, amount=Decimal("5")
             )
         created.assert_not_awaited()
+
+
+class TestDeletion:
+    @pytest.mark.asyncio
+    async def test_deleting_an_OPENING_takes_the_whole_baseline(self, monkeypatch):
+        """The baseline is ONE act written as one row per owner, so it can only be undone as one act.
+
+        Deleting a single row of it leaves a division summing to less than the value it recorded and
+        silently hands the remaining owners a share nobody agreed to — a 60/40 pot reads 100/0 — and it
+        cannot be repaired, because record_opening refuses while any opening row survives. The only way
+        back would be a re-agreement, which records a gift that never happened.
+        """
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.opening)))
+        delete_one = AsyncMock()
+        delete_all = AsyncMock(return_value=2)
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete_openings", delete_all)
+
+        assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 2
+        # Asserted on which repository call the service made, not on a count a stub handed back.
+        delete_one.assert_not_awaited()
+        assert delete_all.await_args.args[1] == 5
+
+    @pytest.mark.asyncio
+    async def test_every_other_event_type_deletes_only_itself(self, monkeypatch):
+        # The counterweight, and the reason the rule is scoped to openings: a contribution, a withdrawal
+        # and a re-agreement are each ONE event, so taking siblings with them would delete history the
+        # user did not touch.
+        for kind in (OwnershipEventType.contribution, OwnershipEventType.withdrawal, OwnershipEventType.reagreement):
+            _arrange(monkeypatch)
+            monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=kind)))
+            delete_one = AsyncMock()
+            delete_all = AsyncMock(return_value=9)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete_openings", delete_all)
+
+            assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 1, kind
+            delete_all.assert_not_awaited()
+            delete_one.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_deleting_needs_pot_write_access(self, monkeypatch):
+        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        with pytest.raises(PotWriteRequiredError):
+            await svc.delete_event(AsyncMock(), 5, 1, USER)
+        delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_event_id_from_another_pot_is_not_found(self, monkeypatch):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=None))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        with pytest.raises(NotFoundError):
+            await svc.delete_event(AsyncMock(), 5, 999, USER)
+        delete_one.assert_not_awaited()
 
 
 class TestReagreement:

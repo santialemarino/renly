@@ -90,6 +90,7 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 - **Metrics & snapshot grid** extend the data-presence-aware `skipped_investments` — an investment whose base or the display currency has no stored rates is excluded and surfaced.
 - **Per-row `converted_*` fields** (expense/income/plan/calendar rows, asset-price lookup) stay **null** on a missing rate, never the unconverted number.
 - **Single-investment metrics** raise `ExchangeRateUnavailableError` (503) rather than silently drop conversion.
+- **A pot's value (NAV)** is `null` unless it can be stated in full. It is a SUM, and a sum missing a term is not a smaller sum — so an unconvertible holding, a holding nobody has valued on or before the date, or no holdings at all all answer `null` rather than a partial figure. That matters beyond display: units are issued against this number, so a partial one moves real value between co-owners. An **archived** holding is excluded from the sum by design and so never makes it unknown.
 
 **Which date a value converts at, by use case:**
 

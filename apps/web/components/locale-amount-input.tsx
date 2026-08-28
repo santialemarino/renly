@@ -33,7 +33,16 @@ interface LocaleAmountInputProps {
   name?: string;
   placeholder?: string;
   disabled?: boolean;
+  // Styles the inner <input>. NOT its width: the base Input renders a `w-full` WRAPPER carrying the
+  // border and background, so a width here sizes the text box inside a full-width field and looks like
+  // it did nothing. Use containerClassName for that.
   className?: string;
+  /*
+   * Styles the base Input's WRAPPER — the element that actually has the field's width, border and
+   * background. Already reached `<Input>` through the rest spread; declaring it is what makes it
+   * usable, and what stops the next caller reaching for `className="w-28"` and watching it not work.
+   */
+  containerClassName?: string;
   // ISO 4217 currency code — when set, max fraction digits follows the currency's sub-unit precision (JPY=0, BHD=3, USD/EUR=2). Ignored when `maxDecimals` is set explicitly.
   currency?: string;
   // Explicit override for max fraction digits — takes priority over `currency`. Use `0` to forbid decimals entirely (rare; consider IntegerInput instead). Omit both this and `currency` to allow unlimited decimals (e.g. fractional share quantities).

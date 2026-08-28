@@ -252,9 +252,11 @@ The **ownership ledger** is a list of dated events, and every balance is derived
 
 Four kinds of event: an **opening** sets the baseline (a value and each owner's percentage on a date — nothing before it is in scope, exactly like an account's opening balance); a **contribution** and a **withdrawal** move real money across the boundary, debiting one account and crediting another so both balances stay right; and a **re-agreement** transfers units between two people with no money at all, which is what a gift or a buy-out is. Conflating the last two would misstate the history: one is an investment, the other is a settlement between people.
 
+Because the opening is one act recorded as one row per owner, **deleting it removes all of those rows together**. Half a division would leave the remaining owners holding a share nobody agreed to. Later movements are kept, and a new baseline can only be recorded once nothing else is on the ledger — it is only ever the first entry, because it issues units at a nominal 1.00 and movements after it are priced at whatever the pot was worth on their own dates.
+
 You always enter percentages and always read percentages and amounts back. A raw unit count appears nowhere. Percentages are shown to two decimals and always add to exactly 100, and each member's share always adds to exactly the pot's value — the rounding remainder goes to the largest holder rather than being left to make the parts visibly disagree.
 
-Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
+Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first — and "known" means the whole of it, because the value is a sum and a sum missing a term is not a smaller sum. A pot holding something nobody has valued yet reports no value at all rather than the total of the rest. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
 
 ### Settings
 

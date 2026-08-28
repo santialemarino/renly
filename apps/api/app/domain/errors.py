@@ -90,11 +90,6 @@ class AccountCurrencyMismatchError(DomainError):
         return {"entry_currency": self.entry_currency, "account_currency": self.account_currency}
 
 
-# An account's opening_date cannot be changed because money entries link to it. opening_balance is
-# defined as "the balance AT opening_date", and every balance sum is bounded below by it — so moving the
-# date forward silently drops rows from the balance while opening_balance stays put, and money that left
-# one account would arrive nowhere. The pair cannot be recomputed (the app never knew the earlier
-# balance), so the date is locked, mirroring the currency lock. Mapped to 409.
 # An account cannot be moved into a pot because money entries already link to it. Its balance derives
 # from expenses, income, settlements and transfers owned by ONE user, so a shared account carrying
 # them would report a different balance to every member depending on whose rows they can see — and a
@@ -115,6 +110,11 @@ class AccountHasLinkedEntriesError(DomainError):
         return {"account_ids": self.account_ids}
 
 
+# An account's opening_date cannot be changed because money entries link to it. opening_balance is
+# defined as "the balance AT opening_date", and every balance sum is bounded below by it — so moving the
+# date forward silently drops rows from the balance while opening_balance stays put, and money that left
+# one account would arrive nowhere. The pair cannot be recomputed (the app never knew the earlier
+# balance), so the date is locked, mirroring the currency lock. Mapped to 409.
 class AccountOpeningDateChangeBlockedError(DomainError):
     code = "account_opening_date_change_blocked"
     status_code = 409
@@ -499,28 +499,24 @@ class PlanRequiredError(DomainError):
         super().__init__(self.message)
 
 
-# A direct edit or delete was attempted on an expense / income row a reconciliation created. The row is
-# derived, not authored: its amount IS the reconciliation's recorded difference, so mutating it leaves
-# the reconciliation intact and lying — the reverse pointer (adjustment_expense_id / adjustment_income_id)
-# is ON DELETE SET NULL, so deleting the entry orphans the reconciliation instead of cleaning it up. The
-# supported change is to re-run or delete the reconciliation itself, which recomputes or cascade-drops
-# its adjustment. Mapped to 409 by the API — the request is well-formed, it conflicts with the row's state.
-# A pot already has an opening baseline, and there can only be one: the baseline IS the division
-# from which every later percentage is derived, so a second one would silently rewrite what everyone
-# agreed to. Changing the split after the fact is a re-agreement, a different event with a different
-# meaning. Mapped to 409.
+# A pot already has ownership history, so a baseline cannot be recorded under it. The baseline IS the
+# division every later percentage derives from and issues units at a nominal 1.00, so it is only ever
+# the FIRST entry: retro-fitting one beneath movements already priced at other rates would produce a
+# ledger whose units mean two different things. Changing the split after the fact is a re-agreement, a
+# different event with a different meaning. Mapped to 409.
+#
+# The guard is "any event exists", not "an opening exists", and the message says so: deleting a
+# baseline keeps the movements that followed it, so a pot can reach this refusal with no opening on
+# record at all — and the old wording ("already has an opening baseline") then stated something untrue.
 class PotAlreadyOpenedError(DomainError):
     code = "pot_already_opened"
     status_code = 409
 
     def __init__(self) -> None:
-        self.message = "This pot already has an opening baseline. Record a re-agreement to change the split."
+        self.message = "This pot already has ownership history, so a baseline cannot be added under it — a baseline is only ever the first entry."
         super().__init__(self.message)
 
 
-# A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
-# (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
-# message instead of an integrity error. Mapped to 409.
 # A holding cannot simply be taken out of a pot that has already been divided. Removing it drops the
 # pot's value by the whole of that holding while nobody's units change — so every co-owner's share
 # falls pro-rata and the holding lands wholly in one person's private scope. That is one member
@@ -538,6 +534,29 @@ class PotAlreadyDividedError(DomainError):
         super().__init__(self.message)
 
 
+# A cross-currency ownership movement did not record the amount credited to the pot. `amount` is in
+# the private account's currency and the pot's ownership maths runs in its base currency, so with the
+# two differing there is no honest way to derive the credited figure — a stored rate is exactly what
+# merged constraint (f) forbids. Refused rather than converted at whatever rate happens to be on file,
+# the same posture card settlements take (settlement_account_amount_required). Mapped to 400.
+class PotBaseAmountRequiredError(DomainError):
+    code = "pot_base_amount_required"
+    status_code = 400
+
+    def __init__(self, amount_currency: str, base_currency: str) -> None:
+        self.amount_currency = amount_currency
+        self.base_currency = base_currency
+        self.message = f"A movement in {amount_currency} must record the amount credited in the pot's currency ({base_currency})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"amount_currency": self.amount_currency, "base_currency": self.base_currency}
+
+
+# A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
+# (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
+# message instead of an integrity error. Mapped to 409.
 class PotHasHoldingsError(DomainError):
     code = "pot_has_holdings"
     status_code = 409
@@ -569,6 +588,46 @@ class PotInsufficientUnitsError(DomainError):
         return {"held": str(self.held), "requested": str(self.requested)}
 
 
+# An ownership movement names an ARCHIVED account on the pot's side of the boundary. Both NAV queries
+# filter on is_active, while the balance union does not — so crediting an archived pot account would
+# move that account's balance and NOT the pot's value. Units would then be issued against a NAV that
+# never rises, diluting every other owner for nothing: a real transfer of value, from a movement that
+# looks ordinary. The private leg has no such coupling (its balance simply moves), so this is the pot
+# leg's rule only. Mapped to 400.
+class PotMovementAccountInactiveError(DomainError):
+    code = "pot_movement_account_inactive"
+    status_code = 400
+
+    def __init__(self, account_id: int) -> None:
+        self.account_id = account_id
+        self.message = "That account is archived, so it is not counted in the pot's value. Restore it before routing money through it."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"account_id": self.account_id}
+
+
+# An ownership movement is dated before one of the accounts it names existed. Each leg of the balance
+# union is bounded by its OWN account's opening_date (opening_balance already IS the balance at that
+# date), so a movement dated earlier issues or redeems units while the account it moved the money
+# through never changes — value appearing in the pot from nowhere, or leaving it and arriving nowhere.
+# The same failure transfer_before_account_opened exists to prevent, and worse here because units are
+# issued against it. Mapped to 400.
+class PotMovementBeforeAccountOpenedError(DomainError):
+    code = "pot_movement_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A movement must be dated on or after its accounts' opening dates (the later one is {opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
 # A movement was recorded against a pot with no opening baseline yet. Without one there are no units
 # outstanding and therefore no unit price, so there is nothing to issue against. Mapped to 400.
 class PotNotOpenedError(DomainError):
@@ -596,9 +655,6 @@ class PotPercentagesError(DomainError):
         return {"total": str(self.total)}
 
 
-# A movement needs the pot's value on its date and no valuation is available at or before it, so the
-# unit price is undefined. Refused rather than guessed — the same posture as reconciliation refusing
-# to invent a figure. Mapped to 400.
 # A re-agreement names one member on both sides. It would be a no-op the replay counts twice, which
 # the database refuses too. Mapped to 400.
 class PotReagreementSameMemberError(DomainError):
@@ -623,6 +679,9 @@ class PotUnsupportedMovementError(DomainError):
         super().__init__(self.message)
 
 
+# A movement needs the pot's value on its date and no valuation is available at or before it, so the
+# unit price is undefined. Refused rather than guessed — the same posture as reconciliation refusing
+# to invent a figure. Mapped to 400.
 class PotValuationRequiredError(DomainError):
     code = "pot_valuation_required"
     status_code = 400
@@ -662,6 +721,12 @@ class PrivateEntryFromSharedAccountError(DomainError):
         super().__init__(self.message)
 
 
+# A direct edit or delete was attempted on an expense / income row a reconciliation created. The row is
+# derived, not authored: its amount IS the reconciliation's recorded difference, so mutating it leaves
+# the reconciliation intact and lying — the reverse pointer (adjustment_expense_id / adjustment_income_id)
+# is ON DELETE SET NULL, so deleting the entry orphans the reconciliation instead of cleaning it up. The
+# supported change is to re-run or delete the reconciliation itself, which recomputes or cascade-drops
+# its adjustment. Mapped to 409 by the API — the request is well-formed, it conflicts with the row's state.
 class ReconciliationOwnedEntryError(DomainError):
     code = "reconciliation_owned_entry"
     status_code = 409
@@ -729,8 +794,6 @@ class TransferAmountsMustMatchError(DomainError):
         super().__init__(self.message)
 
 
-# A transfer names the same account on both legs. It would move nothing and the balance union counts each
-# leg separately, so the row would be added and subtracted on one account. Mapped to 400 by the API.
 # A transfer names two accounts in different scopes. A transfer is net-worth-neutral BY
 # CONSTRUCTION, and that is only true within one scope: moving joint money into a personal account is
 # emphatically not neutral for the other owners, it takes value from them. Such a movement is a
@@ -744,6 +807,8 @@ class TransferCrossScopeError(DomainError):
         super().__init__(self.message)
 
 
+# A transfer names the same account on both legs. It would move nothing and the balance union counts each
+# leg separately, so the row would be added and subtracted on one account. Mapped to 400 by the API.
 class TransferSameAccountError(DomainError):
     code = "transfer_same_account"
     status_code = 400
