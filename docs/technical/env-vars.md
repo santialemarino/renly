@@ -40,6 +40,12 @@ All environment variables used by the Renly backend and frontend, with defaults 
 | `NEXT_PUBLIC_PERIOD_PRESET_4`              | No       | `YTD`   | Fourth dashboard period preset button                                                                                                                                                            |
 | `NEXT_PUBLIC_MAX_COLLECTIONS`              | No       | `50`    | Maximum investment collections per user (soft limit)                                                                                                                                             |
 | `NEXT_PUBLIC_COLLECTION_LIMIT_WARNING_PCT` | No       | —       | Percentage of max collections at which an approaching-limit warning appears. No warning if omitted                                                                                               |
+| `NEXT_PUBLIC_LIQUIDITY_THRESHOLD_PCT`      | No       | `40`    | Liquidity threshold (integer percent, 1–99). Above this share of monthly income committed to fixed obligations the card turns amber; +10 pp further turns it red                                 |
+| `NEXT_PUBLIC_SAVINGS_RATE_HEALTHY_PCT`     | No       | `20`    | Savings-rate healthy threshold (integer percent, 1–99). Saving at least this share of income turns the Savings Rate card green                                                                   |
+| `NEXT_PUBLIC_SAVINGS_RATE_MODERATE_PCT`    | No       | `10`    | Savings-rate moderate threshold (integer percent, 1–99). Between this and healthy renders amber; below it renders red                                                                            |
+| `NEXT_PUBLIC_INCOME_EXPENSE_RATIO_HEALTHY` | No       | `1.5`   | Income / expense healthy threshold (decimal, 0.1–10.0). At or above it the card turns green. Break-even (1.0) is the hardcoded amber pivot — below 1 is always red                               |
+
+**Health thresholds are deploy-time fallbacks, not fixed rules.** Each of the four above can be overridden per user on the **Alerts & Limits** settings page; the env value is what the settings form shows as its placeholder and what applies until someone changes it. They colour the finance-dashboard footer cards and nothing else — no stored figure depends on them.
 
 **Period preset format:** `NM` = N months, `NY` = N years, `YTD` = year to date. "All" is always appended as the last option. If all four are omitted, only "All" is shown.
 
