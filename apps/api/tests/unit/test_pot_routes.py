@@ -41,6 +41,10 @@ _POT_JSON = {
 }
 
 
+# What each stubbed service returns, for the endpoints whose response model is not a single pot.
+_STUB_RETURNS = {"list_pots": [], "list_holdings": {"investments": [], "accounts": []}}
+
+
 # Builds the real app with the DB and auth dependencies faked, so a request exercises the router's
 # own wiring. `sessions` records which override each endpoint actually resolved.
 def _client(sessions: dict) -> TestClient:
@@ -80,6 +84,7 @@ class TestSessionWiring:
             ("delete", "/pots/5", None),
             ("put", "/pots/5/permissions/100", {"can_view": True, "can_write": False}),
             ("delete", "/pots/5/permissions/100", None),
+            ("get", "/pots/5/holdings", None),
             ("post", "/pots/5/holdings", {"investment_ids": [1]}),
             ("post", "/pots/5/holdings/remove", {"investment_ids": [1]}),
         ],
@@ -88,8 +93,8 @@ class TestSessionWiring:
     async def test_every_other_pot_endpoint_stays_on_the_request_session(self, monkeypatch, method, path, body):
         # The counterweight to the test above. Without it, "use the privileged session" spreads.
         sessions: dict = {}
-        for name in ("list_pots", "get_pot", "update_pot", "delete_pot", "set_permission", "clear_permission", "move_holdings"):
-            monkeypatch.setattr(pot_service, name, AsyncMock(return_value=[] if name == "list_pots" else _POT_JSON))
+        for name in ("list_pots", "get_pot", "list_holdings", "update_pot", "delete_pot", "set_permission", "clear_permission", "move_holdings"):
+            monkeypatch.setattr(pot_service, name, AsyncMock(return_value=_STUB_RETURNS.get(name, _POT_JSON)))
         response = getattr(_client(sessions), method)(path, **({"json": body} if body is not None else {}))
         assert response.status_code in (200, 204)
         assert sessions["kind"] == "request"

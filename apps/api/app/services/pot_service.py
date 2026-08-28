@@ -36,8 +36,11 @@ from app.domain import (
     total_units,
     unit_price,
 )
+from app.models.account import Account
 from app.models.group import GroupMember
+from app.models.investment import Investment
 from app.models.pot import Pot, PotMemberPermission, PotVisibility
+from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.repositories import (
     account_repository,
@@ -51,7 +54,13 @@ from app.repositories import (
     snapshot_repository,
     transfer_repository,
 )
-from app.schemas.pot import PotMemberShareResponse, PotPermissionResponse, PotResponse
+from app.schemas.pot import (
+    PotHoldingResponse,
+    PotHoldingsResponse,
+    PotMemberShareResponse,
+    PotPermissionResponse,
+    PotResponse,
+)
 from app.services import account_service, exchange_rate_service
 from app.utils.metrics import RateLookup, convert_value
 
@@ -103,6 +112,20 @@ async def require_writable(session: AsyncSession, pot_id: int, user: User) -> tu
     return (pot, member)
 
 
+# One figure restated in the pot's base currency, or None when it cannot be stated there at all.
+#
+# One function because the NAV sum and the holdings read must agree about what a holding is worth;
+# what they do with a None is where they deliberately differ. The NAV abandons the whole sum (an
+# under-stated NAV would misprice every unit issued against it), while the holdings read leaves that
+# one row's base figure unknown and still lists the holding.
+def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_map) -> Decimal | None:
+    if currency == base_currency:
+        return value
+    if rate_map is None:
+        return None
+    return convert_value(value, currency, base_currency, rate_map)
+
+
 # The pot's value on a date, in its base currency: every holding it carries, converted at that date.
 # Investments contribute their latest snapshot on or before the date; accounts contribute their
 # derived balance. Both reuse the existing engines unchanged, which is the whole point of co-owning
@@ -128,12 +151,7 @@ async def get_nav(
         # a back-dated ownership event would be priced against that understated NAV.
         snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
         for snapshot in snapshots.values():
-            if snapshot.currency == pot.base_currency:
-                total += snapshot.value
-                continue
-            if rate_map is None:
-                return None
-            converted = convert_value(snapshot.value, snapshot.currency, pot.base_currency, rate_map)
+            converted = _to_base_currency(snapshot.value, snapshot.currency, pot.base_currency, rate_map)
             if converted is None:
                 return None
             total += converted
@@ -142,13 +160,7 @@ async def get_nav(
     if accounts:
         balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date)
         for account in accounts:
-            balance = balances.get(account.id, ZERO)
-            if account.currency == pot.base_currency:
-                total += balance
-                continue
-            if rate_map is None:
-                return None
-            converted = convert_value(balance, account.currency, pot.base_currency, rate_map)
+            converted = _to_base_currency(balances.get(account.id, ZERO), account.currency, pot.base_currency, rate_map)
             if converted is None:
                 return None
             total += converted
@@ -280,6 +292,73 @@ async def get_pot(session: AsyncSession, pot_id: int, user: User, *, as_of_date:
         viewer_member_id=viewer.id,
         permissions=permissions,
         can_write=_may_write(permission),
+    )
+
+
+# One holding's response row: its own figure, plus that figure restated in the pot's base currency.
+# `value is None` means nobody has valued it yet, so there is nothing to restate either — null both
+# ways rather than a zero that would read as "worth nothing".
+def _holding_response(
+    holding_id: int,
+    name: str,
+    currency: str,
+    value: Decimal | None,
+    is_active: bool,
+    *,
+    pot: Pot,
+    rate_map,
+) -> PotHoldingResponse:
+    return PotHoldingResponse(
+        id=holding_id,
+        name=name,
+        currency=currency,
+        value=value,
+        base_value=None if value is None else _to_base_currency(value, currency, pot.base_currency, rate_map),
+        is_active=is_active,
+    )
+
+
+# One investment's row, valued at its latest snapshot on or before today.
+# The figure is read in the SNAPSHOT's currency, not the investment's `base_currency`: the NAV
+# converts from that same column, and the two must not be able to disagree about which currency a
+# figure is in. They are enforced equal on write, which is not the same as being one column. With no
+# snapshot there is no value to state at all, and the investment's own currency says which currency it
+# would have been in.
+def _investment_holding(investment: Investment, snapshot: InvestmentSnapshot | None, *, pot: Pot, rate_map) -> PotHoldingResponse:
+    currency = investment.base_currency if snapshot is None else snapshot.currency
+    value = None if snapshot is None else snapshot.value
+    return _holding_response(investment.id, investment.name, currency, value, investment.is_active, pot=pot, rate_map=rate_map)
+
+
+# One account's row, valued at its derived balance today. An account always has a balance — its
+# opening figure at worst — so unlike an investment it is never unvalued.
+def _account_holding(account: Account, balance: Decimal, *, pot: Pot, rate_map) -> PotHoldingResponse:
+    return _holding_response(account.id, account.name, account.currency, balance, account.is_active, pot=pot, rate_map=rate_map)
+
+
+# Lists everything a pot holds, with each holding's own figure and the same figure in the pot's base
+# currency. Visible to whoever may see the pot at all, including a member holding 0% of it — partial
+# visibility of something you co-own is not a feature (V5).
+#
+# Reuses the same two engines the NAV does — the latest snapshot on or before today, and the derived
+# account balance — so a holding's figure here and its contribution to the NAV cannot disagree.
+# Archived holdings are included and flagged: one still points at the pot, so it still blocks deleting
+# it and still has to be movable back out.
+async def list_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHoldingsResponse:
+    pot, _, _ = await require_visible(session, pot_id, user)
+    investments, accounts = await pot_repository.list_holdings(session, pot.id)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    today = date_type.today()
+    rate_map = lookup.get_rate_map_at(today)
+
+    # Both batched: one snapshot query for every investment and one balance query set for every
+    # account, so a pot holding twenty things costs the same as one holding two.
+    snapshots = await snapshot_repository.get_latest_by_investments(session, [i.id for i in investments if i.id is not None], as_of_date=today)
+    balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=today)
+
+    return PotHoldingsResponse(
+        investments=[_investment_holding(i, snapshots.get(i.id), pot=pot, rate_map=rate_map) for i in investments],
+        accounts=[_account_holding(a, balances.get(a.id, ZERO), pot=pot, rate_map=rate_map) for a in accounts],
     )
 
 

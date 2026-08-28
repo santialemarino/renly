@@ -62,6 +62,20 @@ async def count_holdings(session: AsyncSession, pot_id: int) -> int:
     return int(investments.scalar_one()) + int(accounts.scalar_one())
 
 
+# Everything a pot holds, investments and accounts, ARCHIVED ONES INCLUDED — the read behind the pot
+# page's holdings list and the move-out picker.
+#
+# Deliberately unfiltered where the two NAV queries below filter on is_active. An archived holding
+# still points at the pot, so it still blocks deleting the pot (count_holdings counts it) and it still
+# has to be movable back out; a read that hid it would show an empty pot that refuses to be deleted,
+# with nothing on screen explaining why. It contributes nothing to the NAV either way, which is the
+# NAV queries' concern and not this one's.
+async def list_holdings(session: AsyncSession, pot_id: int) -> tuple[list[Investment], list[Account]]:
+    investments = await session.execute(select(Investment).where(Investment.pot_id == pot_id).order_by(Investment.name, Investment.id))
+    accounts = await session.execute(select(Account).where(Account.pot_id == pot_id).order_by(Account.name, Account.id))
+    return (list(investments.scalars().all()), list(accounts.scalars().all()))
+
+
 # Ids of the investments a pot holds, for the NAV query.
 async def list_investment_ids(session: AsyncSession, pot_id: int) -> list[int]:
     result = await session.execute(select(Investment.id).where(Investment.pot_id == pot_id, Investment.is_active.is_(True)))
@@ -125,6 +139,7 @@ class PotRepository:
     get_permission = staticmethod(get_permission)
     list_accounts = staticmethod(list_accounts)
     list_by_group = staticmethod(list_by_group)
+    list_holdings = staticmethod(list_holdings)
     list_investment_ids = staticmethod(list_investment_ids)
     list_permissions = staticmethod(list_permissions)
     list_permissions_by_pots = staticmethod(list_permissions_by_pots)

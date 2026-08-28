@@ -21,6 +21,7 @@ from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.investment import Investment, InvestmentCategory
 from app.models.pot import Pot, PotMemberPermission, PotVisibility
+from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.services import pot_service
 
@@ -423,8 +424,6 @@ class TestNav:
     async def test_an_unconvertible_holding_makes_the_nav_unknown_rather_than_understated(self, monkeypatch):
         # Fail-loud, and it matters more here than anywhere else: an understated NAV would silently
         # misprice every unit issued against it.
-        from app.models.snapshot import InvestmentSnapshot
-
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="BRL")
         monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
@@ -456,3 +455,146 @@ class TestNav:
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal(0)
+
+
+class TestHoldings:
+    def _investment(self, id: int, name: str, *, currency: str = "USD", is_active: bool = True) -> Investment:
+        return Investment(id=id, user_id=None, pot_id=5, name=name, category=InvestmentCategory.fci, base_currency=currency, is_active=is_active)
+
+    def _account(self, id: int, name: str, *, currency: str = "USD", is_active: bool = True) -> Account:
+        return Account(
+            id=id, user_id=None, pot_id=5, name=name, type=AccountType.bank, currency=currency, opening_date=date(2026, 1, 1), is_active=is_active
+        )
+
+    def _snapshot(self, investment_id: int, value: str, currency: str) -> InvestmentSnapshot:
+        return InvestmentSnapshot(
+            id=investment_id, investment_id=investment_id, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal(value), currency=currency
+        )
+
+    # Stubs everything list_holdings reaches except the visibility gate, so each test below varies one
+    # thing. `rates` is the rate map the conversion sees; an empty one converts nothing.
+    def _wire(self, monkeypatch, *, investments=(), accounts=(), snapshots=None, balances=None, rates=None):
+        monkeypatch.setattr(pot_service.pot_repository, "get_by_id", AsyncMock(return_value=_pot()))
+        monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=_permission(can_view=True)))
+        monkeypatch.setattr(pot_service.pot_repository, "list_holdings", AsyncMock(return_value=(list(investments), list(accounts))))
+        latest = AsyncMock(return_value=snapshots or {})
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", latest)
+        compute = AsyncMock(return_value=balances or {})
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", compute)
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)} if rates is None else rates
+        monkeypatch.setattr(pot_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=lookup))
+        return (latest, compute)
+
+    @pytest.mark.asyncio
+    async def test_a_read_only_member_owning_none_of_it_sees_every_holding(self, monkeypatch):
+        # V5: whoever may see a pot sees it in full. The gate is require_visible, NOT require_writable
+        # — reading the monitoring surface is not a write, and gating it on write access would hide the
+        # pot from exactly the custodian-and-observers arrangement V6 exists for.
+        self._wire(
+            monkeypatch,
+            investments=[self._investment(1, "Fondo")],
+            snapshots={1: self._snapshot(1, "100.00", "USD")},
+        )
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=_permission(can_view=True, can_write=False)))
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert [(h.name, h.value) for h in holdings.investments] == [("Fondo", Decimal("100.00"))]
+
+    @pytest.mark.asyncio
+    async def test_a_pot_the_caller_may_not_see_answers_404_rather_than_an_empty_list(self, monkeypatch):
+        self._wire(monkeypatch)
+        monkeypatch.setattr(pot_service.pot_repository, "get_by_id", AsyncMock(return_value=_pot(visibility=PotVisibility.owners)))
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=None))
+        with pytest.raises(NotFoundError):
+            await pot_service.list_holdings(AsyncMock(), 5, USER)
+
+    @pytest.mark.asyncio
+    async def test_an_investment_nobody_has_valued_yet_is_listed_with_no_figure_at_all(self, monkeypatch):
+        # Null both ways, not zero. A pot can legitimately hold something with no snapshot, and "worth
+        # nothing" is a claim the ledger has not made — the same distinction nav and unit_price draw.
+        self._wire(monkeypatch, investments=[self._investment(1, "Fondo")], snapshots={})
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert (holdings.investments[0].value, holdings.investments[0].base_value) == (None, None)
+
+    @pytest.mark.asyncio
+    async def test_one_unconvertible_holding_loses_only_its_own_base_figure(self, monkeypatch):
+        # Deliberately UNLIKE get_nav, which abandons the whole sum: an under-stated NAV misprices
+        # every unit issued against it, whereas a list that dropped a holding would hide something the
+        # pot demonstrably holds. Both figures still say what they know.
+        self._wire(
+            monkeypatch,
+            investments=[self._investment(1, "Local", currency="USD"), self._investment(2, "Brasil", currency="BRL")],
+            snapshots={1: self._snapshot(1, "100.00", "USD"), 2: self._snapshot(2, "500.00", "BRL")},
+            rates={},
+        )
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert [(h.name, h.value, h.base_value) for h in holdings.investments] == [
+            ("Local", Decimal("100.00"), Decimal("100.00")),
+            ("Brasil", Decimal("500.00"), None),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_figure_is_read_in_the_snapshots_currency_not_the_investments(self, monkeypatch):
+        # The NAV converts from the SNAPSHOT's currency column, so this must too or the two could
+        # disagree about which currency one figure is in. They are enforced equal on write, which is
+        # not the same as being one column.
+        self._wire(
+            monkeypatch,
+            investments=[self._investment(1, "Fondo", currency="USD")],
+            snapshots={1: self._snapshot(1, "500.00", "BRL")},
+            rates={},
+        )
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert (holdings.investments[0].currency, holdings.investments[0].base_value) == ("BRL", None)
+
+    @pytest.mark.asyncio
+    async def test_an_unvalued_investment_still_names_the_currency_it_would_be_in(self, monkeypatch):
+        # The fallback half of the rule above: with no snapshot there is no currency column to read,
+        # so the investment's own is what the row reports.
+        self._wire(monkeypatch, investments=[self._investment(1, "Fondo", currency="BRL")], snapshots={})
+        assert (await pot_service.list_holdings(AsyncMock(), 5, USER)).investments[0].currency == "BRL"
+
+    @pytest.mark.asyncio
+    async def test_an_account_with_no_computed_row_reads_zero_rather_than_unknown(self, monkeypatch):
+        # An account always has a balance — its opening figure at worst — so unlike an investment it is
+        # never unvalued, and a missing key means zero rather than "we do not know".
+        self._wire(monkeypatch, accounts=[self._account(9, "Conjunta")], balances={})
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert (holdings.accounts[0].value, holdings.accounts[0].base_value) == (Decimal(0), Decimal(0))
+
+    @pytest.mark.asyncio
+    async def test_an_archived_holding_is_listed_and_flagged(self, monkeypatch):
+        # It still points at the pot, so it still blocks deleting the pot and still has to be movable
+        # back out. Whether the QUERY returns it is asserted against a real database — a stub returns
+        # whatever it was told — so what this pins is that the flag reaches the response.
+        self._wire(
+            monkeypatch,
+            investments=[self._investment(1, "Vieja", is_active=False)],
+            accounts=[self._account(9, "Cerrada", is_active=False)],
+            snapshots={1: self._snapshot(1, "100.00", "USD")},
+            balances={9: Decimal("50.00")},
+        )
+        holdings = await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert (holdings.investments[0].is_active, holdings.accounts[0].is_active) == (False, False)
+
+    @pytest.mark.asyncio
+    async def test_todays_date_bounds_the_snapshot_query(self, monkeypatch):
+        # Asserted on the argument the service PASSED, not on what the stub returned. Without the
+        # bound the list would show a value the pot's NAV does not count.
+        latest, _ = self._wire(monkeypatch, investments=[self._investment(1, "Fondo")])
+        await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert latest.await_args.kwargs == {"as_of_date": date.today()}
+
+    @pytest.mark.asyncio
+    async def test_both_lookups_are_batched_however_much_the_pot_holds(self, monkeypatch):
+        # One snapshot query and one balance query for the whole pot, so a pot holding twenty things
+        # costs what one holding two does.
+        latest, compute = self._wire(
+            monkeypatch,
+            investments=[self._investment(i, f"F{i}") for i in (1, 2, 3)],
+            accounts=[self._account(i, f"A{i}") for i in (7, 8)],
+        )
+        await pot_service.list_holdings(AsyncMock(), 5, USER)
+        assert (latest.await_count, compute.await_count) == (1, 1)
+        assert latest.await_args.args[1] == [1, 2, 3]

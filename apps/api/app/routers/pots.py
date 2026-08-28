@@ -7,6 +7,7 @@ from app.deps.db import AdminSessionDep, SessionDep
 from app.schemas.pot import (
     PotCreate,
     PotHoldingsMove,
+    PotHoldingsResponse,
     PotMovementCreate,
     PotOpeningCreate,
     PotOwnershipEventResponse,
@@ -103,6 +104,14 @@ async def clear_permission(
     session: SessionDep,
 ) -> PotResponse:
     return await pot_service.clear_permission(session, pot_id, member_id, current_user)
+
+
+# Lists everything the pot holds, each with its own figure and the same figure in the pot's base
+# currency. Readable by whoever may see the pot at all, including a member holding 0% of it — the
+# monitoring surface is not gated on owning any of it (V5).
+@router.get("/{pot_id}/holdings", response_model=PotHoldingsResponse)
+async def list_holdings(pot_id: int, current_user: CurrentUser, session: SessionDep) -> PotHoldingsResponse:
+    return await pot_service.list_holdings(session, pot_id, current_user)
 
 
 # Moves holdings into the pot. Needs pot write access (403), and every named holding must be the
