@@ -11,6 +11,7 @@ describe('createFormatters', () => {
     expect(es.locale).toBe('es');
     expect(es.value(1000)).toBe('1.000');
     expect(es.ratio(1.5)).toBe('1,50');
+    expect(es.sharePct(13.91)).toBe('13,91');
     expect(es.list(['A', 'B'])).toBe('A y B');
     expect(es.amount('1234.5', 'USD')).toBe('1.234,5');
   });

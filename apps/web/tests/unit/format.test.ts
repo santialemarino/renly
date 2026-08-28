@@ -10,6 +10,7 @@ import {
   formatPct,
   formatRatePct,
   formatRatio,
+  formatSharePct,
   formatSignedPct,
   formatSignedValue,
   formatTimestampDate,
@@ -81,6 +82,21 @@ describe('formatRatio', () => {
     expect(formatRatio(1.5, 'es')).toBe('1,50');
     expect(formatRatio(2, 'en')).toBe('2.00');
     expect(formatRatio(1234.5, 'es')).toBe('1.234,50');
+  });
+});
+
+describe('formatSharePct', () => {
+  it('keeps two decimals so the parts of a split sum to exactly 100', () => {
+    // The reason it is not formatPct: at one decimal these three read 33.3 / 33.3 / 33.3 and visibly
+    // fail to add up, which is the failure the backend's remainder-to-the-largest-holder rule exists
+    // to prevent in the first place.
+    expect(['33.33', '33.33', '33.34'].map((v) => formatSharePct(Number(v), 'en'))).toEqual([
+      '33.33',
+      '33.33',
+      '33.34',
+    ]);
+    expect(formatSharePct(50, 'en')).toBe('50.00');
+    expect(formatSharePct(13.91, 'es')).toBe('13,91');
   });
 });
 
