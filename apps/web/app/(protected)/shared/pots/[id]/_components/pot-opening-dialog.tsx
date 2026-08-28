@@ -196,15 +196,18 @@ export function PotOpeningDialog({
                   {`${fmt.sharePct(total)}% / ${POT_PERCENTAGE_TOTAL}%`}
                 </span>
               </div>
-              <FormField
-                control={form.control}
-                name="shares"
-                render={() => (
-                  <FormItem>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+
+              {/*
+               * The rule in words, beside the total it is about. NOT a FormMessage: the zod refine's
+               * path is `shares`, which is RHF's ARRAY entry, and an array's `message` is undefined —
+               * so FormMessage renders nothing and the submit looks like it silently did nothing. Only
+               * the browser showed that. Shown after a submit attempt, like any other field error.
+               */}
+              {!balanced && form.formState.isSubmitted && (
+                <p className="text-paragraph-xs text-destructive">
+                  {t('pots.opening.totalError', { total: POT_PERCENTAGE_TOTAL })}
+                </p>
+              )}
             </div>
 
             <FormField
@@ -258,7 +261,12 @@ function ShareRow({
       render={({ field }) => (
         <FormItem>
           <div className="flex min-w-0 items-center gap-x-3">
-            <span className="flex-1 min-w-0 text-paragraph-sm text-foreground">
+            {/*
+             * truncate, and the input shrink-0: without both, a long display name wrapped and rendered
+             * behind the field. `min-w-0` alone is not enough — a flex item's text still forces its
+             * intrinsic width until something clips it.
+             */}
+            <span className="flex-1 min-w-0 truncate text-paragraph-sm text-foreground">
               {seat.displayName}
               {seat.isSelf && (
                 <span className="text-paragraph-xs text-muted-foreground"> {t('members.you')}</span>
@@ -267,11 +275,11 @@ function ShareRow({
             <FormControl>
               <LocaleAmountInput
                 {...field}
-                className="w-32"
+                containerClassName="w-28 shrink-0"
                 placeholder={t('pots.opening.shares.placeholder')}
               />
             </FormControl>
-            <span className="text-paragraph-sm text-muted-foreground">%</span>
+            <span className="shrink-0 text-paragraph-sm text-muted-foreground">%</span>
           </div>
           <FormMessage />
         </FormItem>

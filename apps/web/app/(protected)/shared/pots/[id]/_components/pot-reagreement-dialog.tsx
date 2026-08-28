@@ -203,7 +203,7 @@ export function PotReagreementDialog({
                   <FormControl>
                     <LocaleAmountInput
                       {...field}
-                      className="w-40"
+                      containerClassName="w-40"
                       placeholder={t('pots.reagreement.percentage.placeholder')}
                     />
                   </FormControl>

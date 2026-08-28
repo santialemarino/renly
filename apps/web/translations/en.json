@@ -3181,6 +3181,9 @@
     "pot_unsupported_movement": "That is not a movement in or out. Use the baseline or the split change instead.",
     "pot_valuation_required": "There is no known value here on {as_of_date}, so shares cannot be priced. Record what it was worth on that date first.",
     "pot_write_required": "You have read-only access to this. Ask a group admin for write access.",
-    "private_entry_from_shared_account": "A private entry cannot be paid from a shared account — the money would come out of everyone's share. Record a withdrawal first."
+    "private_entry_from_shared_account": "A private entry cannot be paid from a shared account — the money would come out of everyone's share. Record a withdrawal first.",
+    "account_opening_date_change_blocked": "The opening date cannot be changed because expenses, income or transfers already link to this account.",
+    "transfer_before_account_opened": "A transfer has to be dated on or after both accounts' opening dates — the later one is {opening_date}.",
+    "transfer_cross_scope": "A transfer has to stay on one side. Money moving into or out of shared money is a contribution or a withdrawal, because it changes what each person owns."
   }
 }

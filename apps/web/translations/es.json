@@ -3181,6 +3181,9 @@
     "pot_unsupported_movement": "Eso no es una entrada ni una salida. Usá el punto de partida o el cambio de reparto.",
     "pot_valuation_required": "No hay un valor conocido de acá al {as_of_date}, así que no se pueden valuar las partes. Registrá primero cuánto valía en esa fecha.",
     "pot_write_required": "Tenés acceso de solo lectura a esto. Pedile acceso de escritura a un administrador del grupo.",
-    "private_entry_from_shared_account": "Un movimiento privado no se puede pagar desde una cuenta compartida — el dinero saldría de la parte de todos. Registrá primero un retiro."
+    "private_entry_from_shared_account": "Un movimiento privado no se puede pagar desde una cuenta compartida — el dinero saldría de la parte de todos. Registrá primero un retiro.",
+    "account_opening_date_change_blocked": "La fecha de apertura no se puede cambiar porque ya hay gastos, ingresos o transferencias vinculados a esta cuenta.",
+    "transfer_before_account_opened": "Una transferencia tiene que tener fecha igual o posterior a las fechas de apertura de las dos cuentas — la más tardía es {opening_date}.",
+    "transfer_cross_scope": "Una transferencia tiene que quedar de un solo lado. El dinero que entra o sale del dinero compartido es un aporte o un retiro, porque cambia lo que le corresponde a cada uno."
   }
 }
