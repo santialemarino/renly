@@ -367,10 +367,23 @@ async def record_reagreement(
 
 # Deletes an ownership event. Balances are derived, so removing one recomputes the series with no
 # stored total to correct — the same property that makes back-dating safe.
-async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> None:
+#
+# An OPENING takes the whole baseline with it, because the baseline is one act written as one row per
+# owner. Deleting a single row of it leaves a division summing to less than the value it recorded and
+# silently hands the remaining owners a share nobody agreed to — and it cannot be repaired, because
+# record_opening refuses while any opening row survives, so the only way back would be a re-agreement,
+# which records a gift that never happened. One act in, one act out.
+#
+# Returns how many events went, so a caller can say so.
+async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> int:
     pot, _ = await pot_service.require_writable(session, pot_id, user)
     event = await pot_ownership_repository.get_by_id(session, pot.id, event_id)
     if event is None:
         raise NotFoundError("Ownership event not found")
-    await pot_ownership_repository.delete(session, event)
+    if event.type == OwnershipEventType.opening:
+        deleted = await pot_ownership_repository.delete_openings(session, pot.id)
+    else:
+        await pot_ownership_repository.delete(session, event)
+        deleted = 1
     await session.commit()
+    return deleted

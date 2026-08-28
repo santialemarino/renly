@@ -49,6 +49,10 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
+  // The title and confirm label sit outside ConfirmDialog's description callback, so they read the
+  // retained entity directly — which is also what keeps the copy stable through the close animation.
+  const isBaseline = pendingDelete?.type === 'opening';
+
   async function onDelete() {
     if (!pendingDelete) return;
     setPending(true);
@@ -58,7 +62,9 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
         toast.error(result.conflictDetail);
         return;
       }
-      toast.success(t('pots.ledger.deleteSuccess'));
+      toast.success(
+        t(isBaseline ? 'pots.ledger.deleteBaselineSuccess' : 'pots.ledger.deleteSuccess'),
+      );
       router.refresh();
     } catch {
       toast.error(t('pots.ledger.deleteError'));
@@ -109,18 +115,30 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
        * The entity is kept as state and never nulled on close, so the copy does not blank out while
        * the dialog animates away.
        */}
+      {/*
+       * Two whole strings rather than one with the event type interpolated in. The baseline is ONE act
+       * written as one row per owner, so deleting any of its rows deletes all of them — and a dialog
+       * that said "this entry" while removing three would be lying about what the button does. Whole
+       * strings also keep Spanish out of the gendered-determiner trap a label-in-prose creates.
+       */}
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         entity={pendingDelete}
-        title={t('pots.ledger.deleteTitle')}
+        title={t(isBaseline ? 'pots.ledger.deleteBaselineTitle' : 'pots.ledger.deleteTitle')}
         description={(event) =>
-          t('pots.ledger.deleteDescription', { type: t(`pots.eventTypes.${event.type}`) })
+          t(
+            event.type === 'opening'
+              ? 'pots.ledger.deleteBaselineDescription'
+              : 'pots.ledger.deleteDescription',
+          )
         }
         onConfirm={onDelete}
         loading={pending}
         loadingLabel={t('pots.ledger.deleteLoading')}
-        confirmLabel={t('pots.ledger.deleteConfirm')}
+        confirmLabel={t(
+          isBaseline ? 'pots.ledger.deleteBaselineConfirm' : 'pots.ledger.deleteConfirm',
+        )}
         cancelLabel={t('form.cancel')}
       />
     </div>

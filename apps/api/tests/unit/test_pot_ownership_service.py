@@ -112,6 +112,24 @@ class TestOpening:
         created.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_a_baseline_is_refused_under_a_CONTRIBUTION_too_and_the_message_says_so(self, monkeypatch):
+        """The rule is "the ledger is empty", not "no opening exists", and the difference is reachable:
+        deleting a baseline keeps the movements that followed it, so a pot can sit here with a
+        contribution and no opening at all. A baseline retro-fitted beneath movements already priced at
+        other rates would issue units at a nominal 1.00 alongside them, so the units would mean two
+        different things.
+
+        The message is asserted because the old one said "already has an opening baseline" — which in
+        exactly this state is untrue, and the only test covering the guard used an opening event.
+        """
+        created = _arrange(monkeypatch, events=[_event(type=OwnershipEventType.contribution, units=Decimal("100"))])
+        with pytest.raises(PotAlreadyOpenedError) as excinfo:
+            await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("100")})
+        assert "opening baseline" not in str(excinfo.value)
+        assert "ownership history" in str(excinfo.value)
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_a_seat_from_another_group_cannot_be_given_units(self, monkeypatch):
         created = _arrange(monkeypatch, events=[])
         with pytest.raises(NotFoundError):
@@ -514,6 +532,65 @@ class TestMovements:
                 AsyncMock(), 5, USER, type=OwnershipEventType.opening, date=date(2026, 6, 1), member_id=100, amount=Decimal("5")
             )
         created.assert_not_awaited()
+
+
+class TestDeletion:
+    @pytest.mark.asyncio
+    async def test_deleting_an_OPENING_takes_the_whole_baseline(self, monkeypatch):
+        """The baseline is ONE act written as one row per owner, so it can only be undone as one act.
+
+        Deleting a single row of it leaves a division summing to less than the value it recorded and
+        silently hands the remaining owners a share nobody agreed to — a 60/40 pot reads 100/0 — and it
+        cannot be repaired, because record_opening refuses while any opening row survives. The only way
+        back would be a re-agreement, which records a gift that never happened.
+        """
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.opening)))
+        delete_one = AsyncMock()
+        delete_all = AsyncMock(return_value=2)
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete_openings", delete_all)
+
+        assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 2
+        # Asserted on which repository call the service made, not on a count a stub handed back.
+        delete_one.assert_not_awaited()
+        assert delete_all.await_args.args[1] == 5
+
+    @pytest.mark.asyncio
+    async def test_every_other_event_type_deletes_only_itself(self, monkeypatch):
+        # The counterweight, and the reason the rule is scoped to openings: a contribution, a withdrawal
+        # and a re-agreement are each ONE event, so taking siblings with them would delete history the
+        # user did not touch.
+        for kind in (OwnershipEventType.contribution, OwnershipEventType.withdrawal, OwnershipEventType.reagreement):
+            _arrange(monkeypatch)
+            monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=kind)))
+            delete_one = AsyncMock()
+            delete_all = AsyncMock(return_value=9)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete_openings", delete_all)
+
+            assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 1, kind
+            delete_all.assert_not_awaited()
+            delete_one.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_deleting_needs_pot_write_access(self, monkeypatch):
+        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        with pytest.raises(PotWriteRequiredError):
+            await svc.delete_event(AsyncMock(), 5, 1, USER)
+        delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_event_id_from_another_pot_is_not_found(self, monkeypatch):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=None))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        with pytest.raises(NotFoundError):
+            await svc.delete_event(AsyncMock(), 5, 999, USER)
+        delete_one.assert_not_awaited()
 
 
 class TestReagreement:

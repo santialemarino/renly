@@ -62,6 +62,11 @@ pnpm test:e2e        # Playwright E2E
     `is_active` where the two NAV queries beside it are (an archived holding still blocks deleting
     the pot and still has to be movable out), and it IS filtered by `pot_id` (one pot must never
     read another's, nor a private holding). Both live entirely in the SQL.
+  - `test_pot_ownership_delete.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The
+    baseline-deletion statement, a `DELETE … WHERE` whose two predicates each fail differently:
+    without `type = 'opening'` it takes the pot's contributions and withdrawals too, and without
+    `pot_id` it takes every OTHER pot's baseline in the database. Seeded with two pots so a
+    too-wide predicate shows up as a deletion somewhere it was not asked for.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against

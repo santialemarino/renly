@@ -2203,7 +2203,11 @@
           "who": "Who",
           "amount": "Amount",
           "actions": "Actions"
-        }
+        },
+        "deleteBaselineTitle": "Delete the baseline",
+        "deleteBaselineDescription": "The baseline is one agreement written as one row per owner, so all of its rows go together — half a division would hand the rest of you a share nobody agreed to. Every later movement is kept, and a new baseline can only be recorded once nothing else is on the history.",
+        "deleteBaselineConfirm": "Delete the baseline",
+        "deleteBaselineSuccess": "Baseline deleted."
       },
       "permissions": {
         "title": "Who can see and change this",
@@ -3169,7 +3173,7 @@
     "group_seat_taken": "This person has already joined, so there is nothing to invite.",
     "account_has_linked_entries": "That account already has expenses, income or transfers on it, so it cannot be shared — its balance would read differently for each person. Create a fresh account for the group instead.",
     "pot_already_divided": "The shares here are already agreed, so something cannot simply be taken out. Record a withdrawal instead, which reduces the withdrawer's share.",
-    "pot_already_opened": "The baseline is already set. To change who owns what, change the split instead.",
+    "pot_already_opened": "This already has ownership history, so a baseline cannot be added under it — a baseline is only ever the first entry. To change who owns what, change the split instead.",
     "pot_base_amount_required": "A movement in {amount_currency} has to say how much was credited in {base_currency}. Rates are never assumed.",
     "pot_has_holdings": "There {holding_count, plural, one {is still # thing} other {are still # things}} in here. Move that out before deleting it.",
     "pot_insufficient_units": "That is more than that person holds.",

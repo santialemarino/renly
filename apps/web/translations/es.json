@@ -2203,7 +2203,11 @@
           "who": "Quién",
           "amount": "Monto",
           "actions": "Acciones"
-        }
+        },
+        "deleteBaselineTitle": "Eliminar el punto de partida",
+        "deleteBaselineDescription": "El punto de partida es un solo acuerdo escrito como una fila por titular, así que todas sus filas se van juntas — media división les dejaría a los demás una parte que nadie acordó. Todos los movimientos posteriores se mantienen, y un nuevo punto de partida solo se puede registrar cuando no queda nada más en el historial.",
+        "deleteBaselineConfirm": "Eliminar el punto de partida",
+        "deleteBaselineSuccess": "Punto de partida eliminado."
       },
       "permissions": {
         "title": "Quién puede ver y modificar esto",
@@ -3169,7 +3173,7 @@
     "group_seat_taken": "Esta persona ya se unió, así que no hay nada que invitar.",
     "account_has_linked_entries": "Esa cuenta ya tiene gastos, ingresos o transferencias, así que no se puede compartir — su saldo se leería distinto para cada persona. Creá una cuenta nueva para el grupo.",
     "pot_already_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente sacar algo. Registrá un retiro, que reduce la parte de quien retira.",
-    "pot_already_opened": "El punto de partida ya está definido. Para cambiar qué parte es de quién, cambiá el reparto.",
+    "pot_already_opened": "Esto ya tiene historial de titularidad, así que no se puede agregar un punto de partida por debajo — el punto de partida es siempre la primera entrada. Para cambiar qué parte es de quién, cambiá el reparto.",
     "pot_base_amount_required": "Un movimiento en {amount_currency} tiene que indicar cuánto se acreditó en {base_currency}. Nunca se asume una cotización.",
     "pot_has_holdings": "Todavía {holding_count, plural, one {hay # cosa} other {hay # cosas}} acá. Sacá eso antes de eliminarlo.",
     "pot_insufficient_units": "Eso es más de lo que tiene esa persona.",

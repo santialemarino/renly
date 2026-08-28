@@ -217,6 +217,8 @@ async def record_reagreement(
 
 
 # Deletes an ownership event. Balances are derived, so the series simply recomputes without it.
+# Deleting an OPENING takes the whole baseline with it — it is one act written as one row per owner,
+# and half a division is a share nobody agreed to.
 @router.delete("/{pot_id}/ownership/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ownership_event(pot_id: int, event_id: int, current_user: CurrentUser, session: SessionDep) -> None:
     await pot_ownership_service.delete_event(session, pot_id, event_id, current_user)

@@ -13,6 +13,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from sqlalchemy import case, or_
+from sqlalchemy import delete as delete_stmt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlmodel import func, select
@@ -72,6 +73,19 @@ async def create_many(session: AsyncSession, events: list[PotOwnershipEvent]) ->
 # stored total to correct afterwards.
 async def delete(session: AsyncSession, event: PotOwnershipEvent) -> None:
     await session.delete(event)
+
+
+# Deletes EVERY opening event of a pot, in one statement, and returns how many went.
+#
+# The baseline is one act written as one row per owner (see create_many), so it can only be undone as
+# one act: deleting a single row of it leaves a division that sums to less than the value it recorded
+# and hands the remaining owners a share nobody agreed to. Returned count so the service can tell an
+# opening apart from a no-op without a second query.
+async def delete_openings(session: AsyncSession, pot_id: int) -> int:
+    result = await session.execute(
+        delete_stmt(PotOwnershipEvent).where(PotOwnershipEvent.pot_id == pot_id, PotOwnershipEvent.type == OwnershipEventType.opening)
+    )
+    return int(result.rowcount or 0)
 
 
 # Which stored figure a leg is denominated in, and it is NOT the same column on both sides.
@@ -143,6 +157,7 @@ class PotOwnershipRepository:
     create = staticmethod(create)
     create_many = staticmethod(create_many)
     delete = staticmethod(delete)
+    delete_openings = staticmethod(delete_openings)
     exists_for_accounts = staticmethod(exists_for_accounts)
     get_by_id = staticmethod(get_by_id)
     list_by_pot = staticmethod(list_by_pot)

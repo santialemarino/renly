@@ -499,16 +499,21 @@ class PlanRequiredError(DomainError):
         super().__init__(self.message)
 
 
-# A pot already has an opening baseline, and there can only be one: the baseline IS the division
-# from which every later percentage is derived, so a second one would silently rewrite what everyone
-# agreed to. Changing the split after the fact is a re-agreement, a different event with a different
-# meaning. Mapped to 409.
+# A pot already has ownership history, so a baseline cannot be recorded under it. The baseline IS the
+# division every later percentage derives from and issues units at a nominal 1.00, so it is only ever
+# the FIRST entry: retro-fitting one beneath movements already priced at other rates would produce a
+# ledger whose units mean two different things. Changing the split after the fact is a re-agreement, a
+# different event with a different meaning. Mapped to 409.
+#
+# The guard is "any event exists", not "an opening exists", and the message says so: deleting a
+# baseline keeps the movements that followed it, so a pot can reach this refusal with no opening on
+# record at all — and the old wording ("already has an opening baseline") then stated something untrue.
 class PotAlreadyOpenedError(DomainError):
     code = "pot_already_opened"
     status_code = 409
 
     def __init__(self) -> None:
-        self.message = "This pot already has an opening baseline. Record a re-agreement to change the split."
+        self.message = "This pot already has ownership history, so a baseline cannot be added under it — a baseline is only ever the first entry."
         super().__init__(self.message)
 
 
