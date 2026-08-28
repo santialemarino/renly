@@ -177,14 +177,3 @@ export function buildPotReagreementFormSchema({
 }
 
 export type PotReagreementFormValues = z.infer<ReturnType<typeof buildPotReagreementFormSchema>>;
-
-/*
- * The per-member access row an admin sets. `canWrite` forces `canView` server-side (a CHECK on the
- * table as well), so the form sends the pair as chosen and lets the API resolve the implication rather
- * than the UI second-guessing it.
- */
-export function buildPotPermissionFormSchema() {
-  return z.object({ canView: z.boolean(), canWrite: z.boolean() });
-}
-
-export type PotPermissionFormValues = z.infer<ReturnType<typeof buildPotPermissionFormSchema>>;

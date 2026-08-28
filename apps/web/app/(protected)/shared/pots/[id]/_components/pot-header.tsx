@@ -12,7 +12,7 @@ import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dia
 import { deletePot } from '@/app/(protected)/shared/pot-actions';
 import { canDeletePot, potLabel } from '@/app/(protected)/shared/pot-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { ROUTES } from '@/config/routes';
+import { sharedGroupPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -64,8 +64,9 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
         return;
       }
       toast.success(t('pots.delete.success'));
-      // Back to the group hub: the page we are on no longer exists.
-      router.push(ROUTES.shared);
+      // Back to the GROUP HUB, not the groups list: the page we are on no longer exists, and the hub is
+      // where the group's remaining shared money is. The comment said hub and the code said list.
+      router.push(sharedGroupPath(pot.groupId));
     } catch {
       toast.error(t('pots.delete.error'));
     } finally {

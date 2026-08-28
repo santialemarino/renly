@@ -5,7 +5,6 @@ import type {
   PotFormValues,
   PotMovementFormValues,
   PotOpeningFormValues,
-  PotPermissionFormValues,
   PotReagreementFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
@@ -58,14 +57,17 @@ export async function deletePot(potId: number): Promise<SharedMutationResult> {
   return toResult(res, 'Failed to delete pot');
 }
 
+// Two booleans rather than a form: the permissions table sets them from switches, so there is nothing
+// for a zod schema to validate. `can_write` implies `can_view` server-side (a table CHECK enforces it
+// too), so the pair is sent as chosen and the API resolves the implication.
 export async function setPotPermission(
   potId: number,
   memberId: number,
-  values: PotPermissionFormValues,
+  access: { canView: boolean; canWrite: boolean },
 ): Promise<SharedMutationResult> {
   const res = await authenticatedFetch(`/pots/${potId}/permissions/${memberId}`, {
     method: 'PUT',
-    body: { can_view: values.canView, can_write: values.canWrite },
+    body: { can_view: access.canView, can_write: access.canWrite },
   });
   return toResult(res, 'Failed to set pot permission');
 }
