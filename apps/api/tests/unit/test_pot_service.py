@@ -448,13 +448,70 @@ class TestNav:
         assert latest.await_args.kwargs == {"as_of_date": date(2026, 6, 1)}
 
     @pytest.mark.asyncio
-    async def test_a_pot_whose_holdings_have_no_snapshot_by_that_date_is_worth_zero(self, monkeypatch):
+    async def test_a_pot_whose_holdings_have_no_snapshot_by_that_date_has_an_UNKNOWN_value(self, monkeypatch):
+        # Not zero. A pot holding something nobody has valued is not worth nothing, and reporting zero
+        # tells every co-owner their money is gone.
         monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
-        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal(0)
+        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
+
+    @pytest.mark.asyncio
+    async def test_ONE_unvalued_holding_makes_the_whole_nav_unknown(self, monkeypatch):
+        """The defect this replaced, and the worst of them: two holdings, one snapshotted, and the sum
+        came back as the valued one's figure alone. Complete-looking, incomplete, and a contribution
+        priced against it issues units against a value that is not the pot's — real value moving
+        between owners from a movement that looks ordinary. Same failure as a wrongly bounded snapshot
+        query, reached from the other direction."""
+        from app.models.snapshot import InvestmentSnapshot as Snapshot
+
+        snapshot = Snapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD")
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
+
+    @pytest.mark.asyncio
+    async def test_a_pot_holding_nothing_at_all_has_an_unknown_value_rather_than_zero(self, monkeypatch):
+        # A NAV is a valuation OF something. Null is also what PotResponse documents for this case, and
+        # a pot cannot be valued at <= 0 for ownership purposes anyway.
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
+
+    @pytest.mark.asyncio
+    async def test_a_fully_valued_pot_sums_to_its_holdings(self, monkeypatch):
+        # The positive control. Without it, "return None" for every input passes every test above.
+        from app.models.snapshot import InvestmentSnapshot as Snapshot
+
+        snapshots = {
+            1: Snapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD"),
+            2: Snapshot(id=2, investment_id=2, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("10.50"), currency="USD"),
+        }
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal("110.50")
+
+    @pytest.mark.asyncio
+    async def test_an_account_only_pot_is_valued_at_its_balance(self, monkeypatch):
+        # Accounts have no unvalued case — an account always has a balance, its opening figure at worst
+        # — so the completeness rule above must not accidentally require a snapshot for them.
+        account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) == Decimal("42.00")
 
 
 class TestHoldings:

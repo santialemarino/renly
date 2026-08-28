@@ -729,6 +729,8 @@ A **pot** is the container co-ownership attaches to. Investments and cash accoun
 
 Visibility and write access are separate questions, and both are per pot. `visibility` (`members` | `owners`) is the default for a member with no explicit permission row; a per-member row overrides it. **Write** has no such default — it is granted per member and nowhere else, so a pot can name one custodian with everyone else read-only. A member owning **0%** still sees the whole pot: membership is not ownership.
 
+**A pot's value is `null` unless it can be stated in full.** It is the sum of what the pot holds, and a sum missing a term is not a smaller sum — so a pot holding something nobody has snapshotted on or before the date, a holding in a currency with no stored rate, or nothing at all, all answer `null` rather than a partial figure. That matters beyond display: a contribution priced against an incomplete value issues units against a figure that is not the pot's, which moves real value between owners. An **archived** holding is excluded from the value by design and so never makes it unknown.
+
 | Method   | Path                                 | Description                                                                                                                  |
 | -------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/pots`                              | List every pot you may see, each with its value, unit price and ownership breakdown. Optional `?group_id=`.                  |

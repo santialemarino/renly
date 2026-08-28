@@ -131,9 +131,20 @@ def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_ma
 # derived balance. Both reuse the existing engines unchanged, which is the whole point of co-owning
 # stock in place rather than duplicating a metrics layer for shared money.
 #
-# Returns None when a holding's currency cannot be converted, rather than summing the unconverted
-# figure. That is the repo's standing fail-loud rule for conversion, and it matters more here than
-# anywhere else: an under-stated NAV would silently misprice every unit issued against it.
+# Returns None — never a partial total — in every case where the figure cannot be stated in full:
+#
+#   * a holding whose currency cannot be converted. The repo's standing fail-loud rule.
+#   * a holding with no valuation at all (an investment nobody has snapshotted on or before the date).
+#     Omitting it would report a complete-looking figure for an incomplete pot, and the harm is not
+#     cosmetic: a contribution priced against it issues units against a value that is not the pot's,
+#     which moves real value between owners. Same failure as bounding the snapshot query wrongly,
+#     reached from the other direction.
+#   * nothing to value at all. A NAV is a valuation OF something, and an empty sum is not "worth
+#     nothing" — a pot cannot be valued at <= 0 for ownership purposes anyway (spec 5.4), so zero was
+#     never a usable answer. Null is also what PotResponse documents for a pot with no holdings.
+#
+# An ARCHIVED holding is not counted by either query and so cannot make the NAV unknown: it
+# contributes nothing to the pot's value by design, which is a different thing from being unvalued.
 async def get_nav(
     session: AsyncSession,
     pot: Pot,
@@ -150,6 +161,10 @@ async def get_nav(
         # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
         # a back-dated ownership event would be priced against that understated NAV.
         snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
+        # One row per holding or the pot's value is unknown. The dict is keyed by investment id and the
+        # query filters on these ids, so a short result means exactly "some of them have no snapshot".
+        if len(snapshots) != len(investment_ids):
+            return None
         for snapshot in snapshots.values():
             converted = _to_base_currency(snapshot.value, snapshot.currency, pot.base_currency, rate_map)
             if converted is None:
@@ -158,6 +173,7 @@ async def get_nav(
 
     accounts = await pot_repository.list_accounts(session, pot.id)
     if accounts:
+        # No missing case here: an account always has a balance — its opening figure at worst.
         balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date)
         for account in accounts:
             converted = _to_base_currency(balances.get(account.id, ZERO), account.currency, pot.base_currency, rate_map)
@@ -165,6 +181,10 @@ async def get_nav(
                 return None
             total += converted
 
+    # Checked LAST so the two lookups keep their original order and neither runs when the other has
+    # already answered None — an unconvertible investment must not cost a balance query.
+    if not investment_ids and not accounts:
+        return None
     return total
 
 
