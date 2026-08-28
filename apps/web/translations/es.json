@@ -1968,6 +1968,259 @@
       "revoke": "Cancelar invitación",
       "revokeSuccess": "Invitación cancelada.",
       "error": "No se pudo crear la invitación."
+    },
+    "pots": {
+      "metadata": {
+        "title": "Dinero compartido",
+        "description": "Lo que un grupo tiene en conjunto, qué parte es de quién y todo lo que se movió."
+      },
+      "title": "Dinero compartido",
+      "description": "Lo que este grupo tiene en conjunto. Lo que crece o baja se reparte solo, en proporción — nadie tiene que registrarlo.",
+      "defaultLabel": "Dinero compartido",
+      "subtitle": "Dinero compartido en {group}",
+      "add": "Nuevo",
+      "edit": "Renombrar",
+      "readOnly": "Solo lectura",
+      "readOnlyNotice": "Podés ver todo esto pero no modificarlo. Pedile acceso de escritura a un administrador del grupo.",
+      "unvalued": "Sin valuar",
+      "backToGroup": "{group}",
+      "hint": "La parte de cada uno es un porcentaje del total, no un monto fijo. Cuando el valor sube o baja, todas las partes se mueven con él — sin registrar nada.",
+      "emptyTitle": "Todavía no hay nada compartido",
+      "emptyDescription": "Creá el dinero compartido del grupo y después mové ahí las inversiones y cuentas que le pertenecen.",
+      "emptyDescriptionMember": "En este grupo todavía no se compartió nada. Lo configura un administrador del grupo.",
+      "visibility": {
+        "members": "Todos los del grupo",
+        "owners": "Solo quien reciba acceso"
+      },
+      "eventTypes": {
+        "opening": "Punto de partida",
+        "contribution": "Aporte",
+        "withdrawal": "Retiro",
+        "reagreement": "Cambio de reparto"
+      },
+      "notes": {
+        "label": "Notas",
+        "placeholder": "Notas opcionales..."
+      },
+      "card": {
+        "value": "Valor",
+        "myShare": "Tu parte",
+        "members": "Titulares",
+        "created": "Creado",
+        "open": "Abrir"
+      },
+      "table": {
+        "name": "Nombre",
+        "value": "Valor",
+        "myShare": "Tu parte",
+        "actions": "Acciones"
+      },
+      "form": {
+        "titleCreate": "Nuevo dinero compartido",
+        "titleEdit": "Renombrar dinero compartido",
+        "descriptionCreate": "Un solo lugar para lo que este grupo tiene en conjunto. Vas a tener acceso total.",
+        "descriptionEdit": "Cambiá cómo se llama, o quién puede verlo.",
+        "mustBePositive": "Ingresá un monto mayor a cero.",
+        "name": {
+          "label": "Nombre",
+          "placeholder": "Ingresá un nombre",
+          "hint": "Solo hace falta cuando un grupo tiene más de uno."
+        },
+        "baseCurrency": {
+          "label": "Moneda",
+          "placeholder": "Seleccioná una moneda",
+          "searchPlaceholder": "Buscar monedas...",
+          "noResults": "No se encontraron monedas",
+          "hint": "Todas las partes se miden en esta moneda. Después no se puede cambiar."
+        },
+        "visibility": {
+          "label": "Quién puede verlo",
+          "placeholder": "Seleccioná quién puede verlo",
+          "hint": "Después podés dar o quitar acceso persona por persona."
+        },
+        "createSuccess": "Dinero compartido creado.",
+        "updateSuccess": "Cambios guardados.",
+        "saveError": "No se pudo guardar."
+      },
+      "delete": {
+        "cta": "Eliminar",
+        "title": "Eliminar dinero compartido",
+        "description": "Esto elimina {name} para todos los del grupo, junto con todo su historial. No se puede deshacer.",
+        "confirm": "Eliminar",
+        "loading": "Eliminando...",
+        "success": "Eliminado.",
+        "error": "No se pudo eliminar."
+      },
+      "ownership": {
+        "title": "Qué parte es de quién",
+        "description": "El porcentaje de cada persona y cuánto vale hoy. Las partes siempre suman el total.",
+        "you": "Vos",
+        "emptyTitle": "Todavía nadie tiene una parte",
+        "emptyDescription": "Definí el punto de partida para decir cuánto valía esto en una fecha y qué parte era de cada uno.",
+        "emptyDescriptionBoughtOut": "Todas las partes se retiraron o se compraron, así que ahora mismo nadie tiene ninguna.",
+        "table": {
+          "member": "Persona",
+          "share": "Parte",
+          "value": "Cuánto vale hoy"
+        }
+      },
+      "opening": {
+        "cta": "Definir el punto de partida",
+        "title": "Definir el punto de partida",
+        "description": "Cuánto valía esto en una fecha y qué parte era de cada uno. Acá empieza el historial — nada anterior cuenta, y se define una sola vez.",
+        "date": {
+          "label": "Al día",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "value": {
+          "label": "Valor en esa fecha",
+          "placeholder": "Ingresá el monto"
+        },
+        "shares": {
+          "label": "Qué parte era de cada uno",
+          "hint": "Porcentajes, y tienen que sumar 100. Dejá en blanco a quien no tenía ninguna parte.",
+          "placeholder": "0",
+          "total": "Total hasta ahora"
+        },
+        "totalError": "Los porcentajes tienen que sumar {total}.",
+        "success": "Punto de partida definido.",
+        "error": "No se pudo definir el punto de partida."
+      },
+      "movement": {
+        "cta": "Registrar entrada o salida",
+        "title": "Entrada o salida de dinero",
+        "description": "Dinero que entra o sale del conjunto. Quien pone dinero pasa a tener una parte más grande; nadie más pierde valor.",
+        "type": {
+          "label": "Qué pasó",
+          "placeholder": "Seleccioná qué pasó"
+        },
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "member": {
+          "label": "De quién cambia la parte",
+          "placeholder": "Seleccioná una persona",
+          "hint": "La persona cuyo dinero se movió."
+        },
+        "privateLeg": {
+          "labelOut": "Desde tu cuenta",
+          "labelIn": "Hacia tu cuenta",
+          "placeholder": "Seleccioná una de tus cuentas",
+          "empty": "Todavía no tenés cuentas",
+          "hint": "Opcional. Dejalo en blanco si el dinero se movió fuera de Renly."
+        },
+        "potLeg": {
+          "labelIn": "Hacia la cuenta compartida",
+          "labelOut": "Desde la cuenta compartida",
+          "placeholder": "Seleccioná una cuenta compartida",
+          "empty": "Esto no tiene ninguna cuenta compartida en {currency}",
+          "hint": "Opcional, y solo cuentas de acá en {currency}."
+        },
+        "amount": {
+          "label": "Monto en {currency}",
+          "placeholder": "Ingresá el monto"
+        },
+        "baseAmount": {
+          "label": "Monto acreditado en {currency}",
+          "placeholder": "Ingresá el monto"
+        },
+        "success": "Registrado.",
+        "error": "No se pudo registrar."
+      },
+      "reagreement": {
+        "cta": "Cambiar el reparto",
+        "title": "Cambiar el reparto",
+        "description": "Pasá parte de lo de una persona a otra, sin que se mueva dinero. Usá esto para un regalo o un arreglo entre personas — no para dinero que entra, que es un aporte.",
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "from": {
+          "label": "De",
+          "placeholder": "Seleccioná quién la cede"
+        },
+        "to": {
+          "label": "A",
+          "placeholder": "Seleccioná quién la recibe"
+        },
+        "percentage": {
+          "label": "Cuánto del total se mueve",
+          "placeholder": "0",
+          "hint": "En puntos porcentuales del total — 5 mueve cinco puntos, así que una parte del 40% pasa a 35%."
+        },
+        "rangeError": "Ingresá como máximo {total} puntos porcentuales.",
+        "sameMemberError": "Elegí dos personas distintas.",
+        "success": "Reparto cambiado.",
+        "error": "No se pudo cambiar el reparto."
+      },
+      "holdings": {
+        "title": "Qué hay acá",
+        "description": "Las inversiones y cuentas que esto tiene. La suma de su valor es el total que se reparte.",
+        "investments": "Inversiones",
+        "accounts": "Cuentas",
+        "archived": "Archivada",
+        "addCta": "Mover cosas acá",
+        "removeCta": "Sacar cosas",
+        "addTitle": "Mover cosas acá",
+        "addDescription": "Elegí lo que este grupo tiene en conjunto. Todos los que puedan ver esto van a ver estas cosas y todo su historial.",
+        "removeTitle": "Sacar cosas",
+        "removeDescription": "Volvé a tenerlas solo vos. Solo se puede antes de definir el punto de partida — después de eso, sacar valor es un retiro.",
+        "investmentsPlaceholder": "Seleccioná inversiones",
+        "investmentsSearch": "Buscar inversiones...",
+        "investmentsEmpty": "No hay inversiones para mover",
+        "accountsPlaceholder": "Seleccioná cuentas",
+        "accountsSearch": "Buscar cuentas...",
+        "accountsEmpty": "No hay cuentas para mover",
+        "accountsHint": "Una cuenta con gastos, ingresos o transferencias no se puede compartir — su saldo se leería distinto para cada persona. Creá una cuenta nueva en su lugar.",
+        "addSuccess": "Movido al dinero compartido.",
+        "removeSuccess": "Movido fuera del dinero compartido.",
+        "error": "No se pudo mover.",
+        "emptyTitle": "Todavía no hay nada acá",
+        "emptyDescription": "Mové acá las inversiones y cuentas que este grupo tiene en conjunto. Hasta entonces no hay nada que valuar.",
+        "emptyDescriptionReadOnly": "Todavía no se movió nada acá.",
+        "table": {
+          "name": "Nombre",
+          "value": "Valor",
+          "inBaseCurrency": "En {currency}"
+        }
+      },
+      "ledger": {
+        "title": "Historial",
+        "description": "Todo lo que se movió, de lo más viejo a lo más nuevo. Lo que crece o baja no figura acá — se reparte solo.",
+        "credited": "Acreditado: {amount} {currency}",
+        "emptyTitle": "Todavía no se movió nada",
+        "emptyDescription": "Definí el punto de partida y acá van a aparecer todos los aportes, retiros y cambios de reparto.",
+        "deleteTitle": "Eliminar esta entrada",
+        "deleteDescription": "Esto quita la entrada y recalcula todas las partes sin ella.",
+        "deleteConfirm": "Eliminar",
+        "deleteLoading": "Eliminando...",
+        "deleteSuccess": "Entrada eliminada.",
+        "deleteError": "No se pudo eliminar la entrada.",
+        "table": {
+          "date": "Fecha",
+          "type": "Qué",
+          "who": "Quién",
+          "amount": "Monto",
+          "actions": "Acciones"
+        }
+      },
+      "permissions": {
+        "title": "Quién puede ver y modificar esto",
+        "description": "Por defecto: {visibility}. Ser administrador del grupo te deja configurar esto y no te da ningún acceso por sí mismo.",
+        "explicit": "Definido acá",
+        "inherited": "Por defecto",
+        "reset": "Volver al valor por defecto",
+        "success": "Acceso actualizado.",
+        "error": "No se pudo actualizar el acceso.",
+        "table": {
+          "member": "Persona",
+          "view": "Puede ver",
+          "write": "Puede modificar",
+          "source": "Origen",
+          "actions": "Acciones"
+        }
+      }
     }
   },
   "preferences": {
@@ -2913,6 +3166,21 @@
     "group_admin_required": "Solo un administrador del grupo puede hacer esto.",
     "group_last_admin": "Un grupo necesita al menos un administrador. Primero hacé administrador a otra persona.",
     "group_membership_exists": "Ya sos miembro de este grupo.",
-    "group_seat_taken": "Esta persona ya se unió, así que no hay nada que invitar."
+    "group_seat_taken": "Esta persona ya se unió, así que no hay nada que invitar.",
+    "account_has_linked_entries": "Esa cuenta ya tiene gastos, ingresos o transferencias, así que no se puede compartir — su saldo se leería distinto para cada persona. Creá una cuenta nueva para el grupo.",
+    "pot_already_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente sacar algo. Registrá un retiro, que reduce la parte de quien retira.",
+    "pot_already_opened": "El punto de partida ya está definido. Para cambiar qué parte es de quién, cambiá el reparto.",
+    "pot_base_amount_required": "Un movimiento en {amount_currency} tiene que indicar cuánto se acreditó en {base_currency}. Nunca se asume una cotización.",
+    "pot_has_holdings": "Todavía {holding_count, plural, one {hay # cosa} other {hay # cosas}} acá. Sacá eso antes de eliminarlo.",
+    "pot_insufficient_units": "Eso es más de lo que tiene esa persona.",
+    "pot_movement_account_inactive": "Esa cuenta está archivada, así que no cuenta en el valor de acá. Restaurala antes de mover dinero por ella.",
+    "pot_movement_before_account_opened": "La fecha tiene que ser igual o posterior a las fechas de apertura de las cuentas — la más tardía es {opening_date}.",
+    "pot_not_opened": "Definí primero el punto de partida. Hasta que exista, no hay precio de referencia para registrar nada.",
+    "pot_percentages_must_total_100": "Los porcentajes tienen que sumar 100 — suman {total}.",
+    "pot_reagreement_same_member": "Un cambio de reparto necesita dos personas distintas.",
+    "pot_unsupported_movement": "Eso no es una entrada ni una salida. Usá el punto de partida o el cambio de reparto.",
+    "pot_valuation_required": "No hay un valor conocido de acá al {as_of_date}, así que no se pueden valuar las partes. Registrá primero cuánto valía en esa fecha.",
+    "pot_write_required": "Tenés acceso de solo lectura a esto. Pedile acceso de escritura a un administrador del grupo.",
+    "private_entry_from_shared_account": "Un movimiento privado no se puede pagar desde una cuenta compartida — el dinero saldría de la parte de todos. Registrá primero un retiro."
   }
 }

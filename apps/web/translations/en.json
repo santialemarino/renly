@@ -1968,6 +1968,259 @@
       "revoke": "Cancel invite",
       "revokeSuccess": "Invite cancelled.",
       "error": "Failed to create the invite."
+    },
+    "pots": {
+      "metadata": {
+        "title": "Shared money",
+        "description": "What a group owns together, whose share is whose, and everything that has moved."
+      },
+      "title": "Shared money",
+      "description": "What this group owns together. Growth is shared in proportion automatically — nobody has to record it.",
+      "defaultLabel": "Shared money",
+      "subtitle": "Shared money in {group}",
+      "add": "New",
+      "edit": "Rename",
+      "readOnly": "Read-only",
+      "readOnlyNotice": "You can see everything here but not change it. Ask a group admin for write access.",
+      "unvalued": "Not valued yet",
+      "backToGroup": "{group}",
+      "hint": "Everyone's share is a percentage of the whole, not a fixed amount. When the value goes up or down, every share moves with it — no entry needed.",
+      "emptyTitle": "Nothing shared yet",
+      "emptyDescription": "Create the group's shared money, then move in the investments and accounts it holds.",
+      "emptyDescriptionMember": "Nothing has been shared in this group yet. A group admin sets it up.",
+      "visibility": {
+        "members": "Everyone in the group",
+        "owners": "Only who is given access"
+      },
+      "eventTypes": {
+        "opening": "Baseline",
+        "contribution": "Contribution",
+        "withdrawal": "Withdrawal",
+        "reagreement": "Split change"
+      },
+      "notes": {
+        "label": "Notes",
+        "placeholder": "Optional notes..."
+      },
+      "card": {
+        "value": "Value",
+        "myShare": "Your share",
+        "members": "Owners",
+        "created": "Created",
+        "open": "Open"
+      },
+      "table": {
+        "name": "Name",
+        "value": "Value",
+        "myShare": "Your share",
+        "actions": "Actions"
+      },
+      "form": {
+        "titleCreate": "New shared money",
+        "titleEdit": "Rename shared money",
+        "descriptionCreate": "One place for what this group owns together. You get full access to it.",
+        "descriptionEdit": "Change what this is called, or who can see it.",
+        "mustBePositive": "Enter an amount greater than zero.",
+        "name": {
+          "label": "Name",
+          "placeholder": "Enter a name",
+          "hint": "Only needed once a group has more than one."
+        },
+        "baseCurrency": {
+          "label": "Currency",
+          "placeholder": "Select a currency",
+          "searchPlaceholder": "Search currencies...",
+          "noResults": "No currencies found",
+          "hint": "Every share is measured in this currency. It cannot be changed later."
+        },
+        "visibility": {
+          "label": "Who can see it",
+          "placeholder": "Select who can see it",
+          "hint": "You can still give or remove access per person afterwards."
+        },
+        "createSuccess": "Shared money created.",
+        "updateSuccess": "Changes saved.",
+        "saveError": "Failed to save."
+      },
+      "delete": {
+        "cta": "Delete",
+        "title": "Delete shared money",
+        "description": "This deletes {name} for everyone in the group, along with its whole history. It cannot be undone.",
+        "confirm": "Delete",
+        "loading": "Deleting...",
+        "success": "Deleted.",
+        "error": "Failed to delete."
+      },
+      "ownership": {
+        "title": "Whose share is whose",
+        "description": "Each person's percentage and what it is worth today. The parts always add up to the whole.",
+        "you": "You",
+        "emptyTitle": "Nobody owns a share yet",
+        "emptyDescription": "Set the baseline to say what this was worth on a date and who owned what part of it.",
+        "emptyDescriptionBoughtOut": "Every share has been withdrawn or bought out, so nobody holds one right now.",
+        "table": {
+          "member": "Person",
+          "share": "Share",
+          "value": "Worth today"
+        }
+      },
+      "opening": {
+        "cta": "Set the baseline",
+        "title": "Set the baseline",
+        "description": "What this was worth on a date, and who owned what part of it. This is where the history starts — nothing before it counts, and there is only ever one.",
+        "date": {
+          "label": "As of",
+          "placeholder": "Select a date"
+        },
+        "value": {
+          "label": "Worth on that date",
+          "placeholder": "Enter the amount"
+        },
+        "shares": {
+          "label": "Who owned what",
+          "hint": "Percentages, and they have to add up to 100. Leave someone blank if they owned none of it.",
+          "placeholder": "0",
+          "total": "Total so far"
+        },
+        "totalError": "The percentages have to add up to {total}.",
+        "success": "Baseline set.",
+        "error": "Failed to set the baseline."
+      },
+      "movement": {
+        "cta": "Record money in or out",
+        "title": "Money in or out",
+        "description": "Money joining or leaving the shared pool. Whoever puts money in gets a bigger share; nobody else loses any value.",
+        "type": {
+          "label": "What happened",
+          "placeholder": "Select what happened"
+        },
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "member": {
+          "label": "Whose share changes",
+          "placeholder": "Select a person",
+          "hint": "The person whose money moved."
+        },
+        "privateLeg": {
+          "labelOut": "From your account",
+          "labelIn": "Into your account",
+          "placeholder": "Select one of your accounts",
+          "empty": "You have no accounts yet",
+          "hint": "Optional. Leave it blank if the money moved outside Renly."
+        },
+        "potLeg": {
+          "labelIn": "Into the shared account",
+          "labelOut": "From the shared account",
+          "placeholder": "Select a shared account",
+          "empty": "This has no shared account in {currency}",
+          "hint": "Optional, and only accounts held here in {currency}."
+        },
+        "amount": {
+          "label": "Amount in {currency}",
+          "placeholder": "Enter the amount"
+        },
+        "baseAmount": {
+          "label": "Amount credited in {currency}",
+          "placeholder": "Enter the amount"
+        },
+        "success": "Recorded.",
+        "error": "Failed to record it."
+      },
+      "reagreement": {
+        "cta": "Change the split",
+        "title": "Change the split",
+        "description": "Move part of one person's share to another, with no money changing hands. Use this for a gift or a settlement between people — not for money going in, which is a contribution.",
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "from": {
+          "label": "From",
+          "placeholder": "Select who gives it up"
+        },
+        "to": {
+          "label": "To",
+          "placeholder": "Select who receives it"
+        },
+        "percentage": {
+          "label": "How much of the whole moves",
+          "placeholder": "0",
+          "hint": "In percentage points of the whole — 5 moves five points, so a 40% share becomes 35%."
+        },
+        "rangeError": "Enter at most {total} percentage points.",
+        "sameMemberError": "Pick two different people.",
+        "success": "Split changed.",
+        "error": "Failed to change the split."
+      },
+      "holdings": {
+        "title": "What is in here",
+        "description": "The investments and accounts this holds. Their combined value is the total that gets divided.",
+        "investments": "Investments",
+        "accounts": "Accounts",
+        "archived": "Archived",
+        "addCta": "Move things in",
+        "removeCta": "Take things out",
+        "addTitle": "Move things in",
+        "addDescription": "Pick what this group owns together. Everyone who can see it will see these and their whole history.",
+        "removeTitle": "Take things out",
+        "removeDescription": "Move these back to being yours alone. Only possible before the baseline is set — after that, taking value out is a withdrawal.",
+        "investmentsPlaceholder": "Select investments",
+        "investmentsSearch": "Search investments...",
+        "investmentsEmpty": "No investments to move",
+        "accountsPlaceholder": "Select accounts",
+        "accountsSearch": "Search accounts...",
+        "accountsEmpty": "No accounts to move",
+        "accountsHint": "An account with expenses, income or transfers on it cannot be shared — its balance would read differently for each person. Create a fresh account instead.",
+        "addSuccess": "Moved into the shared money.",
+        "removeSuccess": "Moved out of the shared money.",
+        "error": "The move failed.",
+        "emptyTitle": "Nothing in here yet",
+        "emptyDescription": "Move in the investments and accounts this group owns together. Until then there is nothing to value.",
+        "emptyDescriptionReadOnly": "Nothing has been moved in here yet.",
+        "table": {
+          "name": "Name",
+          "value": "Value",
+          "inBaseCurrency": "In {currency}"
+        }
+      },
+      "ledger": {
+        "title": "History",
+        "description": "Everything that has moved, oldest first. Growth and losses are not entries here — they are shared automatically.",
+        "credited": "Credited: {amount} {currency}",
+        "emptyTitle": "Nothing has moved yet",
+        "emptyDescription": "Set the baseline, then every contribution, withdrawal and change of split shows up here.",
+        "deleteTitle": "Delete this entry",
+        "deleteDescription": "This removes the entry and recalculates every share without it.",
+        "deleteConfirm": "Delete",
+        "deleteLoading": "Deleting...",
+        "deleteSuccess": "Entry deleted.",
+        "deleteError": "Failed to delete the entry.",
+        "table": {
+          "date": "Date",
+          "type": "What",
+          "who": "Who",
+          "amount": "Amount",
+          "actions": "Actions"
+        }
+      },
+      "permissions": {
+        "title": "Who can see and change this",
+        "description": "By default: {visibility}. Being a group admin lets you set this and gives you no access of its own.",
+        "explicit": "Set here",
+        "inherited": "Default",
+        "reset": "Back to the default",
+        "success": "Access updated.",
+        "error": "Failed to update access.",
+        "table": {
+          "member": "Person",
+          "view": "Can see",
+          "write": "Can change",
+          "source": "Source",
+          "actions": "Actions"
+        }
+      }
     }
   },
   "preferences": {
@@ -2913,6 +3166,21 @@
     "group_admin_required": "Only a group admin can do this.",
     "group_last_admin": "A group needs at least one admin. Make someone else an admin first.",
     "group_membership_exists": "You are already a member of this group.",
-    "group_seat_taken": "This person has already joined, so there is nothing to invite."
+    "group_seat_taken": "This person has already joined, so there is nothing to invite.",
+    "account_has_linked_entries": "That account already has expenses, income or transfers on it, so it cannot be shared — its balance would read differently for each person. Create a fresh account for the group instead.",
+    "pot_already_divided": "The shares here are already agreed, so something cannot simply be taken out. Record a withdrawal instead, which reduces the withdrawer's share.",
+    "pot_already_opened": "The baseline is already set. To change who owns what, change the split instead.",
+    "pot_base_amount_required": "A movement in {amount_currency} has to say how much was credited in {base_currency}. Rates are never assumed.",
+    "pot_has_holdings": "There {holding_count, plural, one {is still # thing} other {are still # things}} in here. Move that out before deleting it.",
+    "pot_insufficient_units": "That is more than that person holds.",
+    "pot_movement_account_inactive": "That account is archived, so it is not counted in the value here. Restore it before moving money through it.",
+    "pot_movement_before_account_opened": "The date has to be on or after the accounts' opening dates — the later one is {opening_date}.",
+    "pot_not_opened": "Set the baseline first. Until there is one, there is no share price to record against.",
+    "pot_percentages_must_total_100": "The percentages have to add up to 100 — they add up to {total}.",
+    "pot_reagreement_same_member": "A change of split needs two different people.",
+    "pot_unsupported_movement": "That is not a movement in or out. Use the baseline or the split change instead.",
+    "pot_valuation_required": "There is no known value here on {as_of_date}, so shares cannot be priced. Record what it was worth on that date first.",
+    "pot_write_required": "You have read-only access to this. Ask a group admin for write access.",
+    "private_entry_from_shared_account": "A private entry cannot be paid from a shared account — the money would come out of everyone's share. Record a withdrawal first."
   }
 }
