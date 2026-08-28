@@ -57,6 +57,11 @@ pnpm test:e2e        # Playwright E2E
   - `test_snapshot_scope_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). Query
     semantics, not visibility: an aggregate bounded before rather than after its filter, and a
     bulk insert whose omitted column only a CHECK constraint rejects.
+  - `test_pot_holdings_query.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The pot-holdings
+    read, whose two properties are decisions rather than accidents: it is NOT filtered on
+    `is_active` where the two NAV queries beside it are (an archived holding still blocks deleting
+    the pot and still has to be movable out), and it IS filtered by `pot_id` (one pot must never
+    read another's, nor a private holding). Both live entirely in the SQL.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against
