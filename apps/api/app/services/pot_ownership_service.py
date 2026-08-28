@@ -28,6 +28,7 @@ from app.domain import (
     PotAlreadyOpenedError,
     PotBaseAmountRequiredError,
     PotInsufficientUnitsError,
+    PotMovementAccountInactiveError,
     PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
@@ -143,6 +144,12 @@ async def _require_leg(
     if expect_shared:
         if account.pot_id != pot.id:
             raise NotFoundError("Account not found")
+        # An archived pot account is excluded from the NAV but not from the balance union, so routing
+        # money through one moves the account and leaves the pot's value where it was — units issued
+        # against nothing. Refused here rather than at the holdings gate, because whether an archived
+        # holding may be SHARED at all is a separate question this does not answer.
+        if not account.is_active:
+            raise PotMovementAccountInactiveError(account.id)
         if account.currency != pot.base_currency:
             # Arguments in the canonical order: the figure's currency first, the account's second. The
             # reverse reports the pot's base currency AS the account's, which is a message that states

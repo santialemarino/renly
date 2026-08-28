@@ -583,6 +583,26 @@ class PotInsufficientUnitsError(DomainError):
         return {"held": str(self.held), "requested": str(self.requested)}
 
 
+# An ownership movement names an ARCHIVED account on the pot's side of the boundary. Both NAV queries
+# filter on is_active, while the balance union does not — so crediting an archived pot account would
+# move that account's balance and NOT the pot's value. Units would then be issued against a NAV that
+# never rises, diluting every other owner for nothing: a real transfer of value, from a movement that
+# looks ordinary. The private leg has no such coupling (its balance simply moves), so this is the pot
+# leg's rule only. Mapped to 400.
+class PotMovementAccountInactiveError(DomainError):
+    code = "pot_movement_account_inactive"
+    status_code = 400
+
+    def __init__(self, account_id: int) -> None:
+        self.account_id = account_id
+        self.message = "That account is archived, so it is not counted in the pot's value. Restore it before routing money through it."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"account_id": self.account_id}
+
+
 # An ownership movement is dated before one of the accounts it names existed. Each leg of the balance
 # union is bounded by its OWN account's opening_date (opening_balance already IS the balance at that
 # date), so a movement dated earlier issues or redeems units while the account it moved the money

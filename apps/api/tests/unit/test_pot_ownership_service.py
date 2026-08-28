@@ -14,6 +14,7 @@ from app.domain import (
     PotAlreadyOpenedError,
     PotBaseAmountRequiredError,
     PotInsufficientUnitsError,
+    PotMovementAccountInactiveError,
     PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
@@ -324,6 +325,51 @@ class TestMovements:
             from_account_id=7,
         )
         assert created.await_args.args[1].from_account_id == 7
+
+    @pytest.mark.asyncio
+    async def test_the_pot_leg_cannot_be_an_ARCHIVED_account(self, monkeypatch):
+        # Both NAV queries filter on is_active and the balance union does not, so crediting an archived
+        # pot account moves that account's balance and leaves the pot's value where it was. Units get
+        # issued against a NAV that never rises — every other owner diluted for nothing, from a
+        # movement that looks completely ordinary.
+        created = _arrange(monkeypatch)
+        archived = _account(7, user_id=None, pot_id=5)
+        archived.is_active = False
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=archived))
+        with pytest.raises(PotMovementAccountInactiveError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.contribution,
+                date=date(2026, 6, 1),
+                member_id=100,
+                amount=Decimal("5"),
+                to_account_id=7,
+            )
+        assert excinfo.value.extra == {"account_id": 7}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_archived_PRIVATE_leg_is_still_allowed(self, monkeypatch):
+        # The counterweight, and the reason the guard is on one leg only: a private account's balance
+        # IS moved by the union whether it is archived or not, so nothing is issued against nothing.
+        # Transfers take the same position — the API allows it and the pickers leave it out.
+        created = _arrange(monkeypatch)
+        archived = _account(7)
+        archived.is_active = False
+        monkeypatch.setattr(svc.account_repository, "get_by_id_any_scope", AsyncMock(return_value=archived))
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(2026, 6, 1),
+            member_id=100,
+            amount=Decimal("5"),
+            from_account_id=7,
+        )
+        created.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_a_movement_dated_before_its_private_account_opened_is_refused(self, monkeypatch):
