@@ -2396,7 +2396,8 @@
       },
       "freshness": {
         "neverValued": "Hay algo acá que nunca se valuó, así que el fondo no tiene valor para repartir.",
-        "overdue": "Valuado por última vez el {date}. Falta una valuación nueva."
+        "overdue": "Valuado por última vez el {date}. Falta una valuación nueva.",
+        "badge": "Falta actualizar"
       },
       "series": {
         "title": "Valor a lo largo del tiempo",

@@ -2396,7 +2396,8 @@
       },
       "freshness": {
         "neverValued": "Something here has never been valued, so the pot has no value to divide.",
-        "overdue": "Last valued on {date}. A fresh valuation is overdue."
+        "overdue": "Last valued on {date}. A fresh valuation is overdue.",
+        "badge": "Needs an update"
       },
       "series": {
         "title": "Value over time",
