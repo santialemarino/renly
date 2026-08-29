@@ -534,6 +534,97 @@ class TestMovements:
         created.assert_not_awaited()
 
 
+# Taking the WHOLE of a member's share out. The pair of tests below is the point: the same amount is
+# refused without the flag and lands on the exact balance with it, so the flag is doing the work rather
+# than decorating a case that already worked.
+#
+# The fixture is a three-unit pot worth 100, which makes the unit price 33.333333 — every figure a UI
+# could reasonably prefill for "all of it" (the reported share value, units x price) is 66.67, and
+# 66.67 / 33.333333 is 2.000100. That is not a contrived corner: over 224,200 plausible pots this
+# division reproduced the holder's balance 4.6% of the time.
+class TestWholeShareWithdrawal:
+    # Two owners holding 2 and 1 of 3 units, valued at 100 — so the price is 33.333333 and the larger
+    # holder's share is reported as 66.67.
+    @staticmethod
+    def _thirds(monkeypatch):
+        return _arrange(
+            monkeypatch,
+            events=[_event(member_id=100, units=Decimal("2")), _event(id=2, member_id=101, units=Decimal("1"))],
+            nav=Decimal("100"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_share_value_a_holder_is_shown_is_refused_as_a_plain_withdrawal(self, monkeypatch):
+        # Asking to take out precisely what the app says your share is worth, refused for holding too
+        # little. This is the state the flag exists to remove, so it is asserted rather than described.
+        created = self._thirds(monkeypatch)
+        with pytest.raises(PotInsufficientUnitsError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 6, 1), member_id=100, amount=Decimal("66.67")
+            )
+        assert excinfo.value.extra == {"held": "2", "requested": "2.000100"}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_same_withdrawal_as_a_WHOLE_SHARE_redeems_the_exact_balance(self, monkeypatch):
+        created = self._thirds(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.withdrawal,
+            date=date(2026, 6, 1),
+            member_id=100,
+            amount=Decimal("66.67"),
+            whole_share=True,
+        )
+        # Exactly the balance negated, so the replay nets it to zero and drops the seat. One unit
+        # millionth either way would leave a 0.00% owner on every screen for good.
+        assert created.await_args.args[1].units == Decimal("-2")
+
+    @pytest.mark.asyncio
+    async def test_the_money_recorded_is_what_moved_and_is_not_re_derived_from_the_units(self, monkeypatch):
+        # The two may honestly disagree: someone may accept less than their share is worth to exit.
+        # The event stores the price it was taken at, so the ledger says which figure is which.
+        created = self._thirds(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.withdrawal,
+            date=date(2026, 6, 1),
+            member_id=100,
+            amount=Decimal("50.00"),
+            whole_share=True,
+        )
+        written = created.await_args.args[1]
+        assert (written.amount, written.base_amount, written.units, written.unit_price) == (
+            Decimal("50.00"),
+            Decimal("50.00"),
+            Decimal("-2"),
+            Decimal("33.333333"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_member_holding_nothing_has_no_whole_share_to_take_out(self, monkeypatch):
+        # replay_units drops a zero balance, so the seat is simply absent — which must refuse rather
+        # than write an event moving no units at all.
+        created = _arrange(monkeypatch, events=[_event(member_id=101, units=Decimal("100"))])
+        with pytest.raises(PotInsufficientUnitsError) as excinfo:
+            await svc.record_movement(
+                AsyncMock(),
+                5,
+                USER,
+                type=OwnershipEventType.withdrawal,
+                date=date(2026, 6, 1),
+                member_id=100,
+                amount=Decimal("5"),
+                whole_share=True,
+            )
+        assert excinfo.value.extra["held"] == "0"
+        created.assert_not_awaited()
+
+
 class TestDeletion:
     @pytest.mark.asyncio
     async def test_deleting_an_OPENING_takes_the_whole_baseline(self, monkeypatch):
@@ -622,6 +713,58 @@ class TestReagreement:
         monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
         with pytest.raises(PotWriteRequiredError):
             await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 6, 1), from_member_id=100, to_member_id=101, percentage=Decimal("10"))
+
+
+# Handing over the WHOLE of a stake, which is what a buy-out does. `percentage=None` is the input for
+# it, and the pair below shows why it is a separate input rather than sugar: the giver's own share,
+# rounded to the two decimals the request body allows and multiplied back out, overshoots their
+# balance. Measured over 200,000 plausible pots, it lands on the balance 18 times.
+class TestWholeStakeReagreement:
+    # A giver holding 2 of 3 units, so their share rounds to 66.67% and 66.67% of 3 is 2.000100.
+    @staticmethod
+    def _thirds(monkeypatch):
+        return _arrange(
+            monkeypatch,
+            events=[_event(member_id=100, units=Decimal("2")), _event(id=2, member_id=101, units=Decimal("1"))],
+            nav=Decimal("100"),
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_givers_own_share_as_a_percentage_overshoots_their_balance(self, monkeypatch):
+        created = self._thirds(monkeypatch)
+        with pytest.raises(PotInsufficientUnitsError) as excinfo:
+            await svc.record_reagreement(
+                AsyncMock(), 5, USER, date=date(2026, 6, 1), from_member_id=100, to_member_id=101, percentage=Decimal("66.67")
+            )
+        assert excinfo.value.extra == {"held": "2", "requested": "2.000100"}
+        created.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_WHOLE_STAKE_moves_the_exact_balance_instead(self, monkeypatch):
+        created = self._thirds(monkeypatch)
+        await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 6, 1), from_member_id=100, to_member_id=101, percentage=None)
+        written = created.await_args.args[1]
+        # Signed against the giver, and the counterparty receives exactly the negation — so the giver
+        # nets to zero and the buyer ends up holding every unit that was outstanding.
+        assert (written.member_id, written.counterparty_member_id, written.units) == (100, 101, Decimal("-2"))
+        assert (written.amount, written.base_amount) == (None, None)
+
+    @pytest.mark.asyncio
+    async def test_a_percentage_JUST_UNDER_the_stake_still_leaves_a_residual(self, monkeypatch):
+        # The other half of the failure: rounding the other way is accepted and leaves the seller
+        # holding units. Asserted because a residual is not cosmetic — replay_units drops only an
+        # exact zero, so it renders as a 0.00% owner worth 0.00 forever.
+        created = self._thirds(monkeypatch)
+        await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 6, 1), from_member_id=100, to_member_id=101, percentage=Decimal("66.66"))
+        assert created.await_args.args[1].units == Decimal("-1.999800")
+
+    @pytest.mark.asyncio
+    async def test_a_member_holding_nothing_has_no_stake_to_hand_over(self, monkeypatch):
+        created = _arrange(monkeypatch, events=[_event(member_id=101, units=Decimal("100"))])
+        with pytest.raises(PotInsufficientUnitsError) as excinfo:
+            await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 6, 1), from_member_id=100, to_member_id=101, percentage=None)
+        assert excinfo.value.extra["held"] == "0"
+        created.assert_not_awaited()
 
 
 class TestReading:

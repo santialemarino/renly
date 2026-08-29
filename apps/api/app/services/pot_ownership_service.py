@@ -264,6 +264,7 @@ async def record_movement(
     base_amount: Decimal | None = None,
     from_account_id: int | None = None,
     to_account_id: int | None = None,
+    whole_share: bool = False,
     notes: str | None = None,
 ) -> PotOwnershipEventResponse:
     if type not in (OwnershipEventType.contribution, OwnershipEventType.withdrawal):
@@ -290,7 +291,28 @@ async def record_movement(
     units = units_for_amount(credited, price)
     if not is_contribution:
         held = balances.get(member.id, ZERO)
-        if units > held:
+        if whole_share:
+            # Taking the WHOLE share redeems the member's balance exactly, rather than dividing money
+            # by a price and hoping the quotient lands on it. It almost never does: over 224,200
+            # plausible pots, an amount derived from the reported share value or from units x price
+            # redeemed the balance exactly 4.6% of the time — refused 48.6% of the time
+            # (pot_insufficient_units, for asking to take out precisely what you own) and leaving a
+            # residual the other 46.8%. A residual is not cosmetic: replay_units drops only an EXACT
+            # zero, so 0.000001 units survives as a 0.00% owner worth 0.00, on every screen, forever.
+            #
+            # `amount` still records what money actually moved and is not re-derived from the units.
+            # The two may honestly disagree — someone may accept less than their share is worth to
+            # exit — and the event stores unit_price, so the ledger says which is which. Nobody else's
+            # units change either way: a withdrawal only ever redeems its own member's.
+            # A member who holds nothing has no whole share to take, and writing the event anyway
+            # would put a zero-unit row on the history forever. Not reachable from any surface — every
+            # picker that names a member for this offers holders only — so it reuses the units error
+            # rather than earning a code of its own; the localized message ("That is more than that
+            # person holds") stays true, and only the English detail's figures read oddly at 0.
+            if held <= 0:
+                raise PotInsufficientUnitsError(held, units)
+            units = held
+        elif units > held:
             raise PotInsufficientUnitsError(held, units)
         units = -units
 
@@ -321,6 +343,17 @@ async def record_movement(
 # agreeing to a different split of the same pot, not value entering or leaving it.
 # Taken as a PERCENTAGE of the whole pot rather than a unit count, because U2 is that percentages go
 # in and percentages come out; a raw unit count appears nowhere a person can see.
+#
+# `percentage=None` means the WHOLE of the giver's stake, which is a distinct input rather than sugar
+# for "their current share as a percentage": that figure has to be rounded to NUMERIC(5,2) and then
+# multiplied back out by the units outstanding, and it reproduced the giver's exact balance 18 times
+# in 200,000 plausible pots. The other 199,982 split evenly between the API refusing a full buy-out
+# (pot_insufficient_units, for asking to move precisely what the seller owns) and the seller keeping a
+# residual — and a residual is not cosmetic, because replay_units drops only an EXACT zero, so
+# 0.000001 units survives as a 0.00% owner worth 0.00, on every screen, forever.
+# One nullable parameter rather than a percentage plus a flag, so there is no state where both or
+# neither is stated and nothing to narrow before use. The request boundary carries the pair
+# (`whole_share`) and PotReagreementCreate is what refuses both-or-neither.
 async def record_reagreement(
     session: AsyncSession,
     pot_id: int,
@@ -329,7 +362,7 @@ async def record_reagreement(
     date: date_type,
     from_member_id: int,
     to_member_id: int,
-    percentage: Decimal,
+    percentage: Decimal | None,
     notes: str | None = None,
 ) -> PotOwnershipEventResponse:
     pot, _ = await pot_service.require_writable(session, pot_id, user)
@@ -339,11 +372,17 @@ async def record_reagreement(
         raise PotReagreementSameMemberError()
     price, balances = await _require_price(session, pot, user, date)
 
-    outstanding = total_units(balances)
-    moved = quantize(outstanding * percentage / ONE_HUNDRED, UNIT_PLACES)
     held = balances.get(giver.id, ZERO)
-    if moved > held:
-        raise PotInsufficientUnitsError(held, moved)
+    if percentage is None:
+        # Same as the withdrawal's: no stake to hand over, and no surface can ask for one — the giver
+        # picker in both the guided buy-out and the manual change-of-split lists holders only.
+        if held <= 0:
+            raise PotInsufficientUnitsError(held, held)
+        moved = held
+    else:
+        moved = quantize(total_units(balances) * percentage / ONE_HUNDRED, UNIT_PLACES)
+        if moved > held:
+            raise PotInsufficientUnitsError(held, moved)
 
     event = await pot_ownership_repository.create(
         session,

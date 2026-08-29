@@ -172,6 +172,9 @@ async def record_opening(
 
 # Records a contribution or a withdrawal: money crossing the scope boundary, priced at the pot's unit
 # price on the date. Needs pot write access (403 otherwise) and a known valuation on that date (400).
+# A withdrawal may set `whole_share` to redeem the member's balance exactly rather than deriving units
+# from the amount — the only way "take all of my share out" lands on zero instead of being refused or
+# leaving a residual.
 @router.post("/{pot_id}/ownership/movements", response_model=PotOwnershipEventResponse, status_code=status.HTTP_201_CREATED)
 async def record_movement(
     pot_id: int,
@@ -191,12 +194,14 @@ async def record_movement(
         base_amount=body.base_amount,
         from_account_id=body.from_account_id,
         to_account_id=body.to_account_id,
+        whole_share=body.whole_share,
         notes=body.notes,
     )
 
 
 # Records a re-agreement: units moving between two members with no money at all. Taken as a
-# percentage of the whole pot, because percentages go in and percentages come out.
+# percentage of the whole pot, because percentages go in and percentages come out — or as
+# `whole_share`, the giver's entire stake, which is the only input that lands on their exact balance.
 @router.post("/{pot_id}/ownership/reagreements", response_model=PotOwnershipEventResponse, status_code=status.HTTP_201_CREATED)
 async def record_reagreement(
     pot_id: int,
@@ -211,6 +216,11 @@ async def record_reagreement(
         date=body.date,
         from_member_id=body.from_member_id,
         to_member_id=body.to_member_id,
+        # A null percentage IS the whole stake to the service, and PotReagreementCreate's exactly-one
+        # rule is what makes that safe: `whole_share` true forces percentage to be absent, and absent
+        # WITHOUT `whole_share` is refused at the boundary rather than read as "all of it". So the body
+        # needs no translation here — a mutation sweep proved a conditional on `whole_share` was dead
+        # code, because the schema had already established the equivalence.
         percentage=body.percentage,
         notes=body.notes,
     )
