@@ -20,7 +20,7 @@ from app.domain import (
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.investment import Investment, InvestmentCategory
-from app.models.pot import Pot, PotMemberPermission, PotVisibility
+from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.services import pot_service
@@ -655,3 +655,180 @@ class TestHoldings:
         await pot_service.list_holdings(AsyncMock(), 5, USER)
         assert (latest.await_count, compute.await_count) == (1, 1)
         assert latest.await_args.args[1] == [1, 2, 3]
+
+
+class TestValuationFreshness:
+    # `valued_as_of` answers a different question from `nav`, and the two are allowed to disagree.
+    # These name the rule rather than the function, because each one is a sentence a member reads on
+    # the pot page ("as of 3 June", "never valued", "needs an update").
+
+    def _snapshot(self, investment_id: int, on: date, *, currency: str = "USD") -> InvestmentSnapshot:
+        return InvestmentSnapshot(
+            id=investment_id, investment_id=investment_id, user_id=None, pot_id=5, date=on, value=Decimal("100"), currency=currency
+        )
+
+    def _lookup(self, rates=None):
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)} if rates is None else rates
+        return lookup
+
+    @pytest.mark.asyncio
+    async def test_a_pot_is_current_only_to_its_STALEST_holding(self, monkeypatch):
+        # The whole rule in one test: a total is only as current as the oldest term in it. One holding
+        # nobody has touched since March makes the pot a March figure however fresh the rest are, and
+        # reporting the newest date instead would call a half-stale pot up to date.
+        snapshots = {1: self._snapshot(1, date(2026, 3, 2)), 2: self._snapshot(2, date(2026, 6, 1))}
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
+        assert valuation.valued_as_of == date(2026, 3, 2)
+        assert valuation.is_stale is True
+
+    @pytest.mark.asyncio
+    async def test_a_holding_nobody_has_ever_valued_leaves_no_date_to_state(self, monkeypatch):
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(
+            pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 1))})
+        )
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
+        assert (valuation.nav, valuation.valued_as_of, valuation.is_stale) == (None, None, True)
+
+    @pytest.mark.asyncio
+    async def test_an_account_only_pot_is_current_by_construction(self, monkeypatch):
+        # An account's balance is DERIVED at the date asked for, so there is nothing to be behind on
+        # and no cadence can make it overdue.
+        account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
+        assert (valuation.valued_as_of, valuation.is_stale) == (date(2026, 6, 15), False)
+
+    @pytest.mark.asyncio
+    async def test_an_account_does_not_drag_a_stale_investment_forward(self, monkeypatch):
+        # The mirror of the test above, and the one a naive "accounts are current, so the pot is
+        # current" reading gets wrong: an account alongside a stale investment must not make the pot
+        # read fresh, because the NAV still contains the stale term.
+        account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(
+            pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 1, 5))})
+        )
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
+        assert (valuation.valued_as_of, valuation.is_stale) == (date(2026, 1, 5), True)
+
+    @pytest.mark.asyncio
+    async def test_an_unconvertible_pot_still_says_when_it_was_last_valued(self, monkeypatch):
+        # Two different problems, two different fields. The snapshots are fresh; this currency just
+        # cannot state them, so collapsing both into "unknown" would hide a fact the page has.
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(
+            pot_service.snapshot_repository,
+            "get_latest_by_investments",
+            AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 10), currency="BRL")}),
+        )
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup(rates={}))
+        assert (valuation.nav, valuation.valued_as_of, valuation.is_stale) == (None, date(2026, 6, 10), False)
+
+    @pytest.mark.asyncio
+    async def test_an_unconvertible_investment_still_costs_no_balance_query(self, monkeypatch):
+        # The ordering the two lookups have always had: abandoning the sum must not go on to pay for
+        # a balance union whose result cannot be used.
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(
+            pot_service.snapshot_repository,
+            "get_latest_by_investments",
+            AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 10), currency="BRL")}),
+        )
+        accounts = AsyncMock(return_value=[])
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", accounts)
+        await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup(rates={}))
+        accounts.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_pot_holding_nothing_is_not_reported_as_behind(self, monkeypatch):
+        # "No valuation" has two causes and only one is a problem. Demanding a valuation of a pot
+        # holding nothing is a demand nobody can satisfy.
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
+        assert (valuation.nav, valuation.valued_as_of, valuation.is_stale) == (None, None, False)
+
+    @pytest.mark.asyncio
+    async def test_the_pots_own_cadence_decides_and_ad_hoc_never_does(self, monkeypatch):
+        # The same pot, the same snapshot, three cadences: the setting is what makes the answer differ,
+        # which is the reason §9 made it a setting rather than a rule.
+        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(
+            pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 1))})
+        )
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
+        results = {}
+        for cadence in (PotCadence.weekly, PotCadence.monthly, PotCadence.ad_hoc):
+            valuation = await pot_service.get_valuation(
+                AsyncMock(), _pot(snapshot_cadence=cadence), as_of_date=date(2026, 6, 20), lookup=self._lookup()
+            )
+            results[cadence] = valuation.is_stale
+        assert results == {PotCadence.weekly: True, PotCadence.monthly: False, PotCadence.ad_hoc: False}
+
+
+class TestCadenceIsPersisted:
+    # The cadence is administration, gated like the name and the visibility. A mutation sweep found
+    # that nothing asserted the service actually WROTE it — the route test only proves which session
+    # the endpoint resolved, and a silently discarded setting is the kind of defect a user only finds
+    # when the freshness indicator never changes.
+
+    @pytest.mark.asyncio
+    async def test_update_pot_applies_a_new_cadence(self, monkeypatch):
+        pot = _pot(snapshot_cadence=PotCadence.monthly)
+        monkeypatch.setattr(pot_service.pot_repository, "get_by_id", AsyncMock(return_value=pot))
+        monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=_permission(can_view=True)))
+        monkeypatch.setattr(pot_service.pot_repository, "save", AsyncMock())
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value=None))
+        from app.services import group_service
+
+        monkeypatch.setattr(group_service, "require_admin", AsyncMock())
+        session = AsyncMock()
+        await pot_service.update_pot(session, 5, USER, snapshot_cadence=PotCadence.weekly)
+        assert pot.snapshot_cadence == PotCadence.weekly
+
+    @pytest.mark.asyncio
+    async def test_an_omitted_cadence_leaves_the_existing_one_alone(self, monkeypatch):
+        # A partial update: renaming a pot must not reset how often it is expected to be re-valued.
+        pot = _pot(snapshot_cadence=PotCadence.weekly)
+        monkeypatch.setattr(pot_service.pot_repository, "get_by_id", AsyncMock(return_value=pot))
+        monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=_permission(can_view=True)))
+        monkeypatch.setattr(pot_service.pot_repository, "save", AsyncMock())
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value=None))
+        from app.services import group_service
+
+        monkeypatch.setattr(group_service, "require_admin", AsyncMock())
+        await pot_service.update_pot(AsyncMock(), 5, USER, name="Casa")
+        assert pot.snapshot_cadence == PotCadence.weekly
+
+    @pytest.mark.asyncio
+    async def test_create_pot_records_the_cadence_it_was_given(self, monkeypatch):
+        # Asserted on the row the service BUILT, not on what a stub handed back.
+        created: list = []
+
+        async def capture(_session, pot):
+            created.append(pot)
+            pot.id = 5
+            return pot
+
+        from app.services import group_service
+
+        monkeypatch.setattr(group_service, "require_admin", AsyncMock(return_value=(GROUP, SEAT)))
+        monkeypatch.setattr(pot_service.pot_repository, "create", AsyncMock(side_effect=capture))
+        monkeypatch.setattr(pot_service.pot_repository, "save_permission", AsyncMock())
+        monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(return_value=SEAT))
+        monkeypatch.setattr(pot_service.pot_repository, "list_by_group", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service, "get_pot", AsyncMock(return_value=None))
+        await pot_service.create_pot(AsyncMock(), 10, USER, base_currency="USD", snapshot_cadence=PotCadence.ad_hoc)
+        assert created[0].snapshot_cadence == PotCadence.ad_hoc

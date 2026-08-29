@@ -28,9 +28,12 @@ _POT_JSON = {
     "group_id": 10,
     "name": None,
     "base_currency": "USD",
+    "snapshot_cadence": "monthly",
     "visibility": "members",
     "is_default": True,
     "nav": None,
+    "valued_as_of": None,
+    "is_stale": False,
     "unit_price": None,
     "total_units": "0",
     "my_percentage": "0",
@@ -43,7 +46,11 @@ _POT_JSON = {
 
 
 # What each stubbed service returns, for the endpoints whose response model is not a single pot.
-_STUB_RETURNS = {"list_pots": [], "list_holdings": {"investments": [], "accounts": []}}
+_STUB_RETURNS = {
+    "list_pots": [],
+    "list_holdings": {"investments": [], "accounts": []},
+    "get_value_series": {"interval": "monthly", "points": []},
+}
 
 
 # Builds the real app with the DB and auth dependencies faked, so a request exercises the router's
@@ -81,6 +88,7 @@ class TestSessionWiring:
         [
             ("get", "/pots", None),
             ("get", "/pots/5", None),
+            ("get", "/pots/5/series", None),
             ("put", "/pots/5", {"name": "Casa"}),
             ("delete", "/pots/5", None),
             ("put", "/pots/5/permissions/100", {"can_view": True, "can_write": False}),
@@ -94,7 +102,17 @@ class TestSessionWiring:
     async def test_every_other_pot_endpoint_stays_on_the_request_session(self, monkeypatch, method, path, body):
         # The counterweight to the test above. Without it, "use the privileged session" spreads.
         sessions: dict = {}
-        for name in ("list_pots", "get_pot", "list_holdings", "update_pot", "delete_pot", "set_permission", "clear_permission", "move_holdings"):
+        for name in (
+            "list_pots",
+            "get_pot",
+            "get_value_series",
+            "list_holdings",
+            "update_pot",
+            "delete_pot",
+            "set_permission",
+            "clear_permission",
+            "move_holdings",
+        ):
             monkeypatch.setattr(pot_service, name, AsyncMock(return_value=_STUB_RETURNS.get(name, _POT_JSON)))
         response = getattr(_client(sessions), method)(path, **({"json": body} if body is not None else {}))
         assert response.status_code in (200, 204)
