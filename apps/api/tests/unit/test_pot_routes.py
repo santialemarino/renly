@@ -7,6 +7,7 @@
 # The counterweight matters just as much: a plain read must STAY on the request session, or the
 # perimeter widens one endpoint at a time and RLS quietly stops being the thing enforcing visibility.
 
+from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
@@ -152,3 +153,91 @@ class TestRequestContract:
         monkeypatch.setattr(pot_service, "update_pot", update)
         response = _client({}).put("/pots/5", json={"name": "Casa", "base_currency": "ARS"})
         assert response.status_code == 200
+
+
+# How the request body's "the whole share" is stated, and what the router hands the service.
+#
+# Worth being here rather than only in the service tests: the service takes ONE nullable percentage
+# where None means the whole stake, and the router is the only place that translates the body's pair
+# into it. A wrong translation is a full buy-out silently becoming a percentage move, or the reverse —
+# and every service test would stay green.
+class TestWholeShare:
+    _EVENT = {
+        "id": 1,
+        "pot_id": 5,
+        "type": "reagreement",
+        "date": "2026-06-01",
+        "member_id": 100,
+        "member_name": "Santi",
+        "units": "-2",
+        "unit_price": "33.333333",
+        "created_at": "2026-08-28T00:00:00",
+    }
+
+    @pytest.mark.asyncio
+    async def test_a_whole_stake_reaches_the_service_as_a_null_percentage(self, monkeypatch):
+        record = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "record_reagreement", record)
+        response = _client({}).post(
+            "/pots/5/ownership/reagreements",
+            json={"date": "2026-06-01", "from_member_id": 100, "to_member_id": 101, "whole_share": True},
+        )
+        assert response.status_code == 201
+        assert record.await_args.kwargs["percentage"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_stated_percentage_reaches_the_service_unchanged(self, monkeypatch):
+        record = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "record_reagreement", record)
+        response = _client({}).post(
+            "/pots/5/ownership/reagreements",
+            json={"date": "2026-06-01", "from_member_id": 100, "to_member_id": 101, "percentage": "10"},
+        )
+        assert response.status_code == 201
+        assert record.await_args.kwargs["percentage"] == Decimal("10")
+
+    @pytest.mark.parametrize(
+        ("body", "why"),
+        [
+            ({"percentage": "10", "whole_share": True}, "two answers to one question"),
+            ({}, "no answer at all"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_reagreement_states_the_share_exactly_once(self, monkeypatch, body, why):
+        # Both refused at the request boundary, so the service never sees a body it would have to
+        # guess about. Silently preferring one would discard a figure the caller typed.
+        record = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "record_reagreement", record)
+        response = _client({}).post(
+            "/pots/5/ownership/reagreements",
+            json={"date": "2026-06-01", "from_member_id": 100, "to_member_id": 101, **body},
+        )
+        assert response.status_code == 422, why
+        record.assert_not_awaited()
+
+    @pytest.mark.parametrize("type", ["contribution", "opening", "reagreement"])
+    @pytest.mark.asyncio
+    async def test_only_a_withdrawal_can_take_a_whole_share(self, monkeypatch, type):
+        # A contribution issues units FROM money, so there is no share to take the whole of. Refused
+        # in the schema rather than as a coded refusal: it is a malformed body, not a rule about this
+        # pot, and nothing in the app can produce it.
+        record = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "record_movement", record)
+        response = _client({}).post(
+            "/pots/5/ownership/movements",
+            json={"type": type, "date": "2026-06-01", "member_id": 100, "amount": "5.00", "whole_share": True},
+        )
+        assert response.status_code == 422
+        record.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_withdrawal_may_take_a_whole_share(self, monkeypatch):
+        record = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "record_movement", record)
+        response = _client({}).post(
+            "/pots/5/ownership/movements",
+            json={"type": "withdrawal", "date": "2026-06-01", "member_id": 100, "amount": "5.00", "whole_share": True},
+        )
+        assert response.status_code == 201
+        assert record.await_args.kwargs["whole_share"] is True

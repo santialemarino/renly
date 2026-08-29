@@ -1986,7 +1986,7 @@
       "backToGroup": "{group}",
       "hint": "Everyone's share is a percentage of the whole, not a fixed amount. When the value goes up or down, every share moves with it — no entry needed.",
       "emptyTitle": "Nothing shared yet",
-      "emptyDescription": "Create the group's shared money, then move in the investments and accounts it holds.",
+      "emptyDescription": "Share something you already own, and say whose share is whose. Renly keeps every share right from there.",
       "emptyDescriptionMember": "Nothing has been shared in this group yet. A group admin sets it up.",
       "visibility": {
         "members": "Everyone in the group",
@@ -2058,6 +2058,10 @@
         "emptyTitle": "Nobody owns a share yet",
         "emptyDescription": "Set the baseline to say what this was worth on a date and who owned what part of it.",
         "emptyDescriptionBoughtOut": "Every share has been withdrawn or bought out, so nobody holds one right now.",
+        "manual": {
+          "title": "Record it manually",
+          "hint": "For what the guided flows do not cover: someone else's contribution, part of a share, or a correction."
+        },
         "table": {
           "member": "Person",
           "share": "Share",
@@ -2153,6 +2157,159 @@
         "sameMemberError": "Pick two different people.",
         "success": "Split changed.",
         "error": "Failed to change the split."
+      },
+      "wizard": {
+        "back": "Back",
+        "continueCta": "Continue",
+        "backToPot": "{name}",
+        "backToGroup": "Back to {group}",
+        "openShared": "Open the shared money",
+        "stepConfirm": "Check it over"
+      },
+      "share": {
+        "cta": "Share something you own",
+        "metadata": {
+          "title": "Share something you own",
+          "description": "Move what a group owns together into one place and say whose share is whose."
+        },
+        "title": "Share something you own",
+        "subtitle": "In {group}",
+        "steps": {
+          "pick": "What you're sharing",
+          "value": "What it's worth",
+          "shares": "Who owns what"
+        },
+        "pick": {
+          "title": "What are you sharing?",
+          "description": "Pick the investments and accounts this group owns together. Everyone who can see this will see them, and their whole history.",
+          "nothingSelected": "Pick at least one thing to share.",
+          "intoExisting": "These go into the shared money this group already has.",
+          "currencyHint": "Suggested because most of what you picked already uses it. Pick another only if you mean to — a shared account in a different currency can't take money in or out."
+        },
+        "value": {
+          "title": "What is it worth, and when?",
+          "description": "This is where the history starts. Nothing before this date counts, and there is only ever one starting point.",
+          "prefilled": "Filled in from what these are worth right now.",
+          "unvalued": "Nothing you moved in has a value on record, so enter what the whole thing was worth on that date.",
+          "recheck": "You changed the date. The figure was filled in from today, so check it still reads right for then."
+        },
+        "shares": {
+          "title": "Who owns what?",
+          "description": "Everyone's share is a percentage of the whole, so when the value moves every share moves with it. No entry needed."
+        },
+        "confirm": {
+          "title": "Does this look right?",
+          "description": "Nothing is recorded until you confirm.",
+          "sharing": "Sharing",
+          "worth": "Worth on {date}",
+          "thingCount": "{count, plural, one {# thing} other {# things}}",
+          "cta": "Share it"
+        },
+        "done": {
+          "title": "It's shared now",
+          "baseline": "The history starts on {date}. Nothing before it counts.",
+          "growth": "From here, growth and losses are split in the same proportions — nobody has to record them.",
+          "nextMoney": "When money goes in or out, record it so every share stays right."
+        },
+        "divided": {
+          "title": "This already has a history",
+          "description": "Ownership has already been agreed here, so there is no starting point left to set. Open it to record money in or out, or to change the split."
+        },
+        "createError": "Could not create the shared money.",
+        "moveError": "Could not move those in."
+      },
+      "takeOut": {
+        "cta": "Take a share out",
+        "metadata": {
+          "title": "Take a share out",
+          "description": "One person's whole share leaves the shared money, priced at what it is worth on the date."
+        },
+        "title": "Take a share out",
+        "subtitle": "From {name}",
+        "steps": {
+          "who": "Whose share",
+          "where": "Where it goes"
+        },
+        "who": {
+          "title": "Whose share is coming out?",
+          "description": "The whole of it. To take out only part of a share, record money out instead.",
+          "member": {
+            "label": "Whose share",
+            "placeholder": "Select a person"
+          },
+          "worth": "Their whole share is worth {amount} on that date.",
+          "unpriced": "There is no value on record for that date, so the share cannot be priced. Pick another date."
+        },
+        "where": {
+          "title": "Where does the money go?",
+          "description": "Naming an account on both sides is what makes the value here move with the money.",
+          "otherSeat": "This is recorded for someone else, so it cannot name one of your accounts — Renly only moves money into and out of your own.",
+          "amountLabel": "Money coming out, in {currency}",
+          "amountHint": "Filled in from what the share is worth. Change it if a different amount actually moved.",
+          "creditedLabel": "Taken from the shared money",
+          "creditedHint": "The share's own value, in the currency everything here is measured in."
+        },
+        "confirm": {
+          "title": "Does this look right?",
+          "description": "Nothing is recorded until you confirm.",
+          "taking": "Coming out",
+          "shareGivenUp": "Share given up",
+          "nobodyLeft": "Nobody will own a share of this afterwards.",
+          "oneHolderLeft": "After this, all of it is {name}'s.",
+          "severalHoldersLeft": "The rest of you keep the same proportions to each other, and nobody else's share loses value.",
+          "valueWaits": "No account is named on one of the sides, so the value here will not move with the money: the shares change now and the value waits for its next update.",
+          "cta": "Take it out"
+        },
+        "done": {
+          "title": "The share is out",
+          "took": "{name} took out {amount} and no longer owns a share.",
+          "valueWaits": "The value here has not moved, because no account was named on one of the sides — so the shares that remain read higher than they are until it is updated.",
+          "nobodyLeft": "Nobody owns a share of this right now."
+        }
+      },
+      "buyOut": {
+        "cta": "Buy out a share",
+        "metadata": {
+          "title": "Buy out a share",
+          "description": "One person takes over another's whole share of the shared money."
+        },
+        "title": "Buy out a share",
+        "subtitle": "In {name}",
+        "steps": {
+          "who": "Who and whose",
+          "recorded": "What's recorded"
+        },
+        "who": {
+          "title": "Who is taking over whose share?",
+          "description": "The whole share moves from one person to the other. No money is recorded — the next step says why.",
+          "from": {
+            "label": "Whose share moves",
+            "placeholder": "Select who is leaving"
+          },
+          "to": {
+            "label": "Who takes it over",
+            "placeholder": "Select who takes it"
+          },
+          "worth": "That share is worth {amount} on that date.",
+          "unpriced": "There is no value on record for that date, so the share cannot be priced. Pick another date."
+        },
+        "recorded": {
+          "title": "What gets recorded",
+          "description": "Nothing is recorded until you confirm.",
+          "moving": "Share moving",
+          "worth": "Worth on {date}",
+          "recordedHere": "Renly records the shares changing hands, and nothing else.",
+          "allTo": "After this, all of it is {name}'s.",
+          "othersUntouched": "Everyone else's share is untouched — this only moves what is between those two.",
+          "cashNotRecorded": "The money paid for it is not recorded. Renly cannot move money between two people's own accounts, so settle that between yourselves — you can write the agreed price into the notes.",
+          "cta": "Record it"
+        },
+        "done": {
+          "title": "The share has moved",
+          "moved": "{name} no longer owns a share of this.",
+          "cash": "The money between you is not recorded in Renly. Settle it between yourselves.",
+          "oneHolderLeft": "All of it is {name}'s now."
+        }
       },
       "holdings": {
         "title": "What is in here",

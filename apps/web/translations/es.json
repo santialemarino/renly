@@ -1986,7 +1986,7 @@
       "backToGroup": "{group}",
       "hint": "La parte de cada uno es un porcentaje del total, no un monto fijo. Cuando el valor sube o baja, todas las partes se mueven con él — sin registrar nada.",
       "emptyTitle": "Todavía no hay nada compartido",
-      "emptyDescription": "Creá el dinero compartido del grupo y después mové ahí las inversiones y cuentas que le pertenecen.",
+      "emptyDescription": "Compartí algo que ya tenés y definí qué parte es de cada uno. Desde ahí Renly mantiene cada parte al día.",
       "emptyDescriptionMember": "En este grupo todavía no se compartió nada. Lo configura un administrador del grupo.",
       "visibility": {
         "members": "Todos los del grupo",
@@ -2058,6 +2058,10 @@
         "emptyTitle": "Todavía nadie tiene una parte",
         "emptyDescription": "Definí el punto de partida para decir cuánto valía esto en una fecha y qué parte era de cada uno.",
         "emptyDescriptionBoughtOut": "Todas las partes se retiraron o se compraron, así que ahora mismo nadie tiene ninguna.",
+        "manual": {
+          "title": "Registrarlo a mano",
+          "hint": "Para lo que los pasos guiados no cubren: el aporte de otra persona, una porción de una parte, o una corrección."
+        },
         "table": {
           "member": "Persona",
           "share": "Parte",
@@ -2153,6 +2157,159 @@
         "sameMemberError": "Elegí dos personas distintas.",
         "success": "Reparto cambiado.",
         "error": "No se pudo cambiar el reparto."
+      },
+      "wizard": {
+        "back": "Atrás",
+        "continueCta": "Continuar",
+        "backToPot": "{name}",
+        "backToGroup": "Volver a {group}",
+        "openShared": "Abrir el dinero compartido",
+        "stepConfirm": "Revisar"
+      },
+      "share": {
+        "cta": "Compartir algo tuyo",
+        "metadata": {
+          "title": "Compartir algo tuyo",
+          "description": "Reuní en un solo lugar lo que un grupo tiene en común y definí qué parte es de cada uno."
+        },
+        "title": "Compartir algo tuyo",
+        "subtitle": "En {group}",
+        "steps": {
+          "pick": "Qué compartís",
+          "value": "Cuánto vale",
+          "shares": "Qué parte es de cada uno"
+        },
+        "pick": {
+          "title": "¿Qué querés compartir?",
+          "description": "Elegí las inversiones y cuentas que este grupo tiene en común. Todos los que puedan ver esto van a verlas, con todo su historial.",
+          "nothingSelected": "Elegí al menos una cosa para compartir.",
+          "intoExisting": "Esto va al dinero compartido que el grupo ya tiene.",
+          "currencyHint": "Sugerida porque la mayoría de lo que elegiste ya la usa. Cambiala solo si es a propósito — una cuenta compartida en otra moneda no puede recibir ni sacar dinero."
+        },
+        "value": {
+          "title": "¿Cuánto vale y desde cuándo?",
+          "description": "Acá empieza el historial. Nada anterior a esta fecha cuenta, y el punto de partida se define una sola vez.",
+          "prefilled": "Calculado con lo que valen ahora mismo.",
+          "unvalued": "Nada de lo que moviste tiene un valor registrado, así que ingresá cuánto valía el total en esa fecha.",
+          "recheck": "Cambiaste la fecha. El monto se completó con el valor de hoy, así que revisá que siga siendo correcto para entonces."
+        },
+        "shares": {
+          "title": "¿Qué parte es de cada uno?",
+          "description": "La parte de cada uno es un porcentaje del total, así que cuando el valor se mueve, todas las partes se mueven con él. No hay que registrar nada."
+        },
+        "confirm": {
+          "title": "¿Está todo bien?",
+          "description": "No se registra nada hasta que confirmes.",
+          "sharing": "Se comparte",
+          "worth": "Valor al {date}",
+          "thingCount": "{count, plural, one {# cosa} other {# cosas}}",
+          "cta": "Compartirlo"
+        },
+        "done": {
+          "title": "Ya está compartido",
+          "baseline": "El historial empieza el {date}. Nada anterior cuenta.",
+          "growth": "Desde acá, las subas y las bajas se reparten en las mismas proporciones — nadie tiene que registrarlas.",
+          "nextMoney": "Cuando entre o salga dinero, registralo para que cada parte siga estando bien."
+        },
+        "divided": {
+          "title": "Esto ya tiene historial",
+          "description": "Acá ya se acordó a quién le corresponde qué, así que no queda punto de partida por definir. Abrilo para registrar dinero que entra o sale, o para cambiar el reparto."
+        },
+        "createError": "No se pudo crear el dinero compartido.",
+        "moveError": "No se pudo mover eso."
+      },
+      "takeOut": {
+        "cta": "Sacar una parte",
+        "metadata": {
+          "title": "Sacar una parte",
+          "description": "La parte entera de una persona sale del dinero compartido, valuada según lo que vale en la fecha."
+        },
+        "title": "Sacar una parte",
+        "subtitle": "De {name}",
+        "steps": {
+          "who": "De quién",
+          "where": "A dónde va"
+        },
+        "who": {
+          "title": "¿Qué parte va a salir?",
+          "description": "La parte entera. Para sacar solo una porción, registrá dinero que sale.",
+          "member": {
+            "label": "De quién es la parte",
+            "placeholder": "Seleccioná una persona"
+          },
+          "worth": "Su parte entera vale {amount} en esa fecha.",
+          "unpriced": "No hay ningún valor registrado para esa fecha, así que no se puede valuar la parte. Elegí otra fecha."
+        },
+        "where": {
+          "title": "¿A dónde va el dinero?",
+          "description": "Indicar una cuenta de cada lado es lo que hace que el valor de acá se mueva con el dinero.",
+          "otherSeat": "Esto se registra para otra persona, así que no puede indicar una de tus cuentas — Renly solo mueve dinero desde y hacia las tuyas.",
+          "amountLabel": "Dinero que sale, en {currency}",
+          "amountHint": "Calculado con lo que vale la parte. Cambialo si en realidad se movió otro monto.",
+          "creditedLabel": "Se descuenta del dinero compartido",
+          "creditedHint": "El valor de la parte, en la moneda en la que se mide todo acá."
+        },
+        "confirm": {
+          "title": "¿Está todo bien?",
+          "description": "No se registra nada hasta que confirmes.",
+          "taking": "Sale",
+          "shareGivenUp": "Parte que se cede",
+          "nobodyLeft": "Después de esto, nadie va a tener una parte.",
+          "oneHolderLeft": "Después de esto, todo queda en manos de {name}.",
+          "severalHoldersLeft": "Entre el resto, las proporciones no cambian, y nadie más pierde valor en su parte.",
+          "valueWaits": "Falta indicar la cuenta de uno de los lados, así que el valor de acá no se va a mover con el dinero: las partes cambian ahora y el valor espera su próxima actualización.",
+          "cta": "Sacarla"
+        },
+        "done": {
+          "title": "La parte ya salió",
+          "took": "{name} sacó {amount} y ya no tiene una parte.",
+          "valueWaits": "El valor de acá no se movió, porque faltó indicar la cuenta de uno de los lados — así que las partes que quedan se leen más altas de lo que son hasta que se actualice.",
+          "nobodyLeft": "Ahora mismo nadie tiene una parte de esto."
+        }
+      },
+      "buyOut": {
+        "cta": "Comprar una parte",
+        "metadata": {
+          "title": "Comprar una parte",
+          "description": "Una persona se queda con la parte entera de otra dentro del dinero compartido."
+        },
+        "title": "Comprar una parte",
+        "subtitle": "En {name}",
+        "steps": {
+          "who": "Quién y de quién",
+          "recorded": "Lo que se registra"
+        },
+        "who": {
+          "title": "¿Quién se queda con la parte de quién?",
+          "description": "La parte entera pasa de una persona a la otra. No se registra dinero — el paso siguiente explica por qué.",
+          "from": {
+            "label": "De quién es la parte que se mueve",
+            "placeholder": "Seleccioná quién se va"
+          },
+          "to": {
+            "label": "Quién se queda con ella",
+            "placeholder": "Seleccioná quién la recibe"
+          },
+          "worth": "Esa parte vale {amount} en esa fecha.",
+          "unpriced": "No hay ningún valor registrado para esa fecha, así que no se puede valuar la parte. Elegí otra fecha."
+        },
+        "recorded": {
+          "title": "Qué se registra",
+          "description": "No se registra nada hasta que confirmes.",
+          "moving": "Parte que se mueve",
+          "worth": "Valor al {date}",
+          "recordedHere": "Renly registra el cambio de manos de la parte, y nada más.",
+          "allTo": "Después de esto, todo queda en manos de {name}.",
+          "othersUntouched": "La parte de los demás no se toca — esto solo mueve lo que hay entre esas dos personas.",
+          "cashNotRecorded": "El dinero que se paga por ella no se registra. Renly no puede mover dinero entre las cuentas propias de dos personas, así que arréglenlo entre ustedes — podés dejar el precio acordado en las notas.",
+          "cta": "Registrarlo"
+        },
+        "done": {
+          "title": "La parte cambió de manos",
+          "moved": "{name} ya no tiene una parte de esto.",
+          "cash": "El dinero entre ustedes no queda registrado en Renly. Arréglenlo entre ustedes.",
+          "oneHolderLeft": "Ahora todo queda en manos de {name}."
+        }
       },
       "holdings": {
         "title": "Qué hay acá",

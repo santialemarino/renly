@@ -143,6 +143,7 @@ export function PotHoldingsDialog({
               placeholder={t('pots.holdings.investmentsPlaceholder')}
               searchPlaceholder={t('pots.holdings.investmentsSearch')}
               emptyMessage={t('pots.holdings.investmentsEmpty')}
+              showChips
               icon={<Rows3 className="size-4" />}
             />
           </div>
@@ -156,6 +157,7 @@ export function PotHoldingsDialog({
               placeholder={t('pots.holdings.accountsPlaceholder')}
               searchPlaceholder={t('pots.holdings.accountsSearch')}
               emptyMessage={t('pots.holdings.accountsEmpty')}
+              showChips
               icon={<Landmark className="size-4" />}
             />
             {into && (
