@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, Pencil, Trash2 } from 'lucide-react';
+import { Clock, Eye, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -10,7 +10,12 @@ import { Badge, Button } from '@repo/ui/components';
 import { PageHeader } from '@/app/(protected)/_components/page-header';
 import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dialog';
 import { deletePot } from '@/app/(protected)/shared/pot-actions';
-import { canDeletePot, potLabel } from '@/app/(protected)/shared/pot-rules';
+import {
+  canDeletePot,
+  potFreshnessNotice,
+  potLabel,
+  potValueDisplay,
+} from '@/app/(protected)/shared/pot-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { sharedGroupPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
@@ -43,12 +48,32 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
   const isAdmin = group.myRole === 'admin';
   const label = potLabel(pot, t('pots.defaultLabel'));
 
+  /*
+   * The value stat carries its own as-of date, the way the account ledger's opening stat does: a
+   * figure and the date it is current to are one fact, and splitting them across two tiles invites
+   * reading the figure as today's.
+   *
+   * The date is appended only when there IS a figure. When the value cannot be stated at all, "not
+   * valued" is the whole answer — adding "as of 3 June" beside it would describe the freshness of
+   * numbers the tile is not showing.
+   */
+  const valueDisplay = potValueDisplay(pot);
+  const freshness = potFreshnessNotice(pot);
+  const valueStat =
+    valueDisplay.kind === 'unvalued'
+      ? t('pots.unvalued')
+      : valueDisplay.kind === 'value'
+        ? fmt.amount(valueDisplay.nav, pot.baseCurrency)
+        : `${fmt.amount(valueDisplay.nav, pot.baseCurrency)} · ${t('pots.asOf', {
+            date: fmt.date(valueDisplay.valuedAsOf),
+          })}`;
+
   const stats = [
     {
       label: t('pots.card.value'),
       // A null NAV is "not valued", never zero: a pot holding nothing and a pot worth nothing are
       // different answers and only one of them can price a unit.
-      value: pot.nav === null ? t('pots.unvalued') : fmt.amount(pot.nav, pot.baseCurrency),
+      value: valueStat,
     },
     { label: t('pots.card.myShare'), value: `${fmt.sharePct(Number(pot.myPercentage))}%` },
     { label: t('pots.card.members'), value: String(pot.shares.length) },
@@ -108,6 +133,23 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
           </div>
         )}
       </div>
+
+      {/*
+       * The cadence's own verdict, stated in words rather than as a colour on the figure above. Two
+       * whole sentences on purpose: a pot nobody has ever valued cannot be priced at all, while one
+       * that is merely behind still has a usable (if dated) figure — and "overdue" would be the wrong
+       * word for the first. Neither names the cadence: interpolating a label into a sentence is what
+       * produced "en esta grupo", and a third key per cadence would include one this line can never
+       * reach (an ad-hoc pot is never overdue).
+       */}
+      {freshness.kind !== 'none' && (
+        <p className="flex items-center gap-x-2 text-paragraph-sm text-muted-foreground">
+          <Clock className="size-4 shrink-0" />
+          {freshness.kind === 'neverValued'
+            ? t('pots.freshness.neverValued')
+            : t('pots.freshness.overdue', { date: fmt.date(freshness.valuedAsOf) })}
+        </p>
+      )}
 
       {/* One line for every withheld write control on the page, because they all have this one reason. */}
       {!pot.canWrite && (

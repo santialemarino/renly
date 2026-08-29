@@ -35,7 +35,12 @@ import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { Investment } from '@/lib/api/investments';
 import type { Pot } from '@/lib/api/pots';
-import { POT_PERCENTAGE_TOTAL, POT_VISIBILITIES, type PotVisibility } from '@/lib/constants/pots';
+import {
+  DEFAULT_POT_CADENCE,
+  POT_PERCENTAGE_TOTAL,
+  POT_VISIBILITIES,
+  type PotVisibility,
+} from '@/lib/constants/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { todayInTimezone } from '@/lib/utils/dates';
 
@@ -229,6 +234,9 @@ export function ShareWizard({
         const result = await createPot(group.id, {
           name,
           baseCurrency: chosenCurrency,
+          // Not asked for here on purpose: a fourth field on the first step of a guided flow, for a
+          // setting with a sane default that the pot page can change afterwards.
+          snapshotCadence: DEFAULT_POT_CADENCE,
           visibility,
         });
         if (!result.ok) {

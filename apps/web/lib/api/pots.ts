@@ -18,7 +18,12 @@
 import 'server-only';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { OwnershipEventType, PotVisibility } from '@/lib/constants/pots';
+import type {
+  OwnershipEventType,
+  PotCadence,
+  PotSeriesInterval,
+  PotVisibility,
+} from '@/lib/constants/pots';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
@@ -43,9 +48,12 @@ export interface PotRaw {
   group_id: number;
   name: string | null;
   base_currency: string;
+  snapshot_cadence: PotCadence;
   visibility: PotVisibility;
   is_default: boolean;
   nav: string | null;
+  valued_as_of: string | null;
+  is_stale: boolean;
   unit_price: string | null;
   total_units: string;
   my_percentage: string;
@@ -63,11 +71,23 @@ interface PotHoldingRaw {
   value: string | null;
   base_value: string | null;
   is_active: boolean;
+  valued_on: string | null;
 }
 
 interface PotHoldingsRaw {
   investments: PotHoldingRaw[];
   accounts: PotHoldingRaw[];
+}
+
+interface PotValueSeriesPointRaw {
+  date: string;
+  nav: string | null;
+  my_value: string | null;
+}
+
+interface PotValueSeriesRaw {
+  interval: PotSeriesInterval;
+  points: PotValueSeriesPointRaw[];
 }
 
 interface PotOwnershipEventRaw {
@@ -116,9 +136,21 @@ export interface Pot {
   // is a second one to tell apart.
   name: string | null;
   baseCurrency: string;
+  // How often the pot is expected to be re-valued. An expectation, not a schedule — it decides what
+  // counts as an overdue valuation and how far apart the value series' points sit, nothing else.
+  snapshotCadence: PotCadence;
   visibility: PotVisibility;
   isDefault: boolean;
   nav: string | null;
+  /*
+   * The date the value is current to, and whether the cadence considers it overdue. A different
+   * question from `nav`, and the three can honestly disagree: a pot whose holdings are all
+   * snapshotted but one of which cannot be converted has a real `valuedAsOf` and a null `nav`.
+   * `valuedAsOf` is null when nothing here has ever been valued, which is a state of its own — the
+   * page says "never valued" rather than showing a date.
+   */
+  valuedAsOf: string | null;
+  isStale: boolean;
   unitPrice: string | null;
   totalUnits: string;
   myPercentage: string;
@@ -138,11 +170,28 @@ export interface PotHolding {
   value: string | null;
   baseValue: string | null;
   isActive: boolean;
+  // The date this figure was recorded on. Null for an ACCOUNT, whose balance is derived at the date
+  // it is asked for rather than recorded on one — so there is no valuation date to state.
+  valuedOn: string | null;
 }
 
 export interface PotHoldings {
   investments: PotHolding[];
   accounts: PotHolding[];
+}
+
+export interface PotValueSeriesPoint {
+  date: string;
+  // Both null in the same case and for the same reason the NAV is. `myValue` is additionally null
+  // while no units are outstanding: before the baseline nobody owns any share of anything.
+  nav: string | null;
+  myValue: string | null;
+}
+
+export interface PotValueSeries {
+  // The grid the points sit on, which an `ad_hoc` pot's cadence does not name — it is plotted monthly.
+  interval: PotSeriesInterval;
+  points: PotValueSeriesPoint[];
 }
 
 export interface PotOwnershipEvent {
@@ -194,9 +243,12 @@ export function mapPot(raw: PotRaw): Pot {
     groupId: raw.group_id,
     name: raw.name,
     baseCurrency: raw.base_currency,
+    snapshotCadence: raw.snapshot_cadence,
     visibility: raw.visibility,
     isDefault: raw.is_default,
     nav: raw.nav,
+    valuedAsOf: raw.valued_as_of,
+    isStale: raw.is_stale,
     unitPrice: raw.unit_price,
     totalUnits: raw.total_units,
     myPercentage: raw.my_percentage,
@@ -216,6 +268,18 @@ function mapHolding(raw: PotHoldingRaw): PotHolding {
     value: raw.value,
     baseValue: raw.base_value,
     isActive: raw.is_active,
+    valuedOn: raw.valued_on,
+  };
+}
+
+function mapValueSeries(raw: PotValueSeriesRaw): PotValueSeries {
+  return {
+    interval: raw.interval,
+    points: raw.points.map((point) => ({
+      date: point.date,
+      nav: point.nav,
+      myValue: point.my_value,
+    })),
   };
 }
 
@@ -278,6 +342,25 @@ export async function getPotHoldings(potId: number): Promise<PotHoldings | null>
   if (!res.ok) throw new Error('Failed to fetch pot holdings');
   const raw: PotHoldingsRaw = await res.json();
   return { investments: raw.investments.map(mapHolding), accounts: raw.accounts.map(mapHolding) };
+}
+
+/*
+ * The pot's value at each point of its cadence's grid, plus the caller's own share value at each.
+ * Oldest first, the last point being today, and never starting before the pot's ownership anchor.
+ *
+ * Null for the same two reasons getPot is, so a page can fetch both and take one notFound() decision.
+ * A point's figures are null wherever the value cannot be stated in full on that date — which on a
+ * real pot is most of the early points, and drawing a zero there would read as growth from nothing.
+ */
+export async function getPotSeries(
+  potId: number,
+  periods?: number,
+): Promise<PotValueSeries | null> {
+  const query = periods === undefined ? '' : `?periods=${periods}`;
+  const res = await authenticatedFetch(`/pots/${potId}/series${query}`, { method: 'GET' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch pot value series');
+  return mapValueSeries(await res.json());
 }
 
 // The pot's ownership ledger in replay order — oldest first, which is the order the unit balances are

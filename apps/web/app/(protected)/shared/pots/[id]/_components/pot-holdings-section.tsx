@@ -140,6 +140,12 @@ export function PotHoldingsSection({
  * One kind of holding. Two figures per row because they answer different questions: what the holding is
  * worth in its own currency, and what it contributes to a pot denominated in another. The second column
  * only appears when at least one row is in a different currency — otherwise it repeats the first.
+ *
+ * The "valued" column is what the header's freshness line points AT. The pot is only as current as its
+ * stalest holding, so a pot reading overdue needs to say which row is responsible — otherwise the
+ * reader is told there is a problem and left to guess where. It appears only for rows that HAVE a
+ * valuation date, which is the investments: an account's balance is derived at the moment it is asked
+ * for, so it has no recorded date and can never be the stale one.
  */
 function HoldingsTable({
   caption,
@@ -154,6 +160,7 @@ function HoldingsTable({
   const t = useTranslations('shared');
 
   const showBase = holdings.some((holding) => holding.currency !== baseCurrency);
+  const showValuedOn = holdings.some((holding) => holding.valuedOn !== null);
 
   return (
     <div className="flex flex-col gap-y-2">
@@ -167,6 +174,9 @@ function HoldingsTable({
               <TableHead className="w-44 text-right">
                 {t('pots.holdings.table.inBaseCurrency', { currency: baseCurrency })}
               </TableHead>
+            )}
+            {showValuedOn && (
+              <TableHead className="w-36 text-right">{t('pots.holdings.table.valuedOn')}</TableHead>
             )}
           </TableRow>
         </TableHeader>
@@ -197,6 +207,16 @@ function HoldingsTable({
                   {holding.baseValue === null
                     ? t('pots.unvalued')
                     : fmt.amount(holding.baseValue, baseCurrency)}
+                </TableCell>
+              )}
+              {showValuedOn && (
+                <TableCell className="text-right text-paragraph-sm tabular-nums text-muted-foreground">
+                  {/* A null reaching a RENDERED cell always means "never valued": the column only
+                      appears when some holding in this table has a date, and only an investment ever
+                      has one — an account's balance is derived, so its table never shows the column
+                      at all. A dash rather than words, because the value cell beside it already
+                      says "not valued yet" and repeating it twice per row says nothing extra. */}
+                  {holding.valuedOn === null ? '—' : fmt.date(holding.valuedOn)}
                 </TableCell>
               )}
             </TableRow>

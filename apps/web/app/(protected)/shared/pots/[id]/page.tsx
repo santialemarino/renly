@@ -7,12 +7,13 @@ import { PotHoldingsSection } from '@/app/(protected)/shared/pots/[id]/_componen
 import { PotLedgerSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-ledger-section';
 import { PotOwnershipSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-ownership-section';
 import { PotPermissionsSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-permissions-section';
+import { PotValueSection } from '@/app/(protected)/shared/pots/[id]/_components/pot-value-section';
 import { InlineLink } from '@/components/inline-link';
 import { sharedGroupPath } from '@/config/routes';
 import { getAccounts } from '@/lib/api/accounts';
 import { getGroup } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
-import { getPot, getPotHoldings, getPotOwnershipEvents } from '@/lib/api/pots';
+import { getPot, getPotHoldings, getPotOwnershipEvents, getPotSeries } from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -27,12 +28,9 @@ interface PotPageProps {
 }
 
 /*
- * The monitoring surface for one co-owned pot (V5): what it holds, what it is worth, whose it is, and
- * everything that has moved. Whoever may see the pot sees all of it, including a member holding 0% —
- * partial visibility of something you co-own is not a feature.
- *
- * The value series and the freshness indicator are deliberately absent: they hang off the pot's
- * snapshot cadence, which is PR 4's.
+ * The monitoring surface for one co-owned pot (V5): what it holds, what it is worth over time, whose
+ * it is, and everything that has moved. Whoever may see the pot sees all of it, including a member
+ * holding 0% — partial visibility of something you co-own is not a feature.
  */
 export default async function PotPage({ params }: PotPageProps) {
   const t = await getTranslations('shared');
@@ -58,15 +56,16 @@ export default async function PotPage({ params }: PotPageProps) {
    * refuses an archived pot leg — an archived holding is excluded from the pot's value, so sharing one
    * or routing money through it would move a balance the NAV never sees.
    */
-  const [group, holdings, events, accounts, investments, settings] = await Promise.all([
+  const [group, holdings, events, series, accounts, investments, settings] = await Promise.all([
     getGroup(pot.groupId),
     getPotHoldings(potId),
     getPotOwnershipEvents(potId),
+    getPotSeries(potId),
     getAccounts(),
     getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
     getSettings().catch(() => null),
   ]);
-  if (!group || !holdings || !events) notFound();
+  if (!group || !holdings || !events || !series) notFound();
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-6">
@@ -82,6 +81,7 @@ export default async function PotPage({ params }: PotPageProps) {
         privateAccounts={accounts}
         timeZone={settings?.timezone ?? undefined}
       />
+      <PotValueSection series={series} baseCurrency={pot.baseCurrency} />
       <PotHoldingsSection
         pot={pot}
         holdings={holdings}

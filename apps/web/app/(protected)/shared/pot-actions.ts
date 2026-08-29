@@ -43,6 +43,7 @@ export async function createPot(
       group_id: groupId,
       name: values.name?.trim() || null,
       base_currency: values.baseCurrency,
+      snapshot_cadence: values.snapshotCadence,
       visibility: values.visibility,
     },
   });
@@ -57,7 +58,11 @@ export async function updatePot(
 ): Promise<SharedMutationResult> {
   const res = await authenticatedFetch(`/pots/${potId}`, {
     method: 'PUT',
-    body: { name: values.name?.trim() || null, visibility: values.visibility },
+    body: {
+      name: values.name?.trim() || null,
+      snapshot_cadence: values.snapshotCadence,
+      visibility: values.visibility,
+    },
   });
   return toResult(res, 'Failed to update pot');
 }

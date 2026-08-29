@@ -1979,7 +1979,7 @@
       "defaultLabel": "Shared money",
       "subtitle": "Shared money in {group}",
       "add": "New",
-      "edit": "Rename",
+      "edit": "Edit",
       "readOnly": "Read-only",
       "readOnlyNotice": "You can see everything here but not change it. Ask a group admin for write access.",
       "unvalued": "Not valued yet",
@@ -2017,9 +2017,9 @@
       },
       "form": {
         "titleCreate": "New shared money",
-        "titleEdit": "Rename shared money",
+        "titleEdit": "Edit shared money",
         "descriptionCreate": "One place for what this group owns together. You get full access to it.",
-        "descriptionEdit": "Change what this is called, or who can see it.",
+        "descriptionEdit": "Change what this is called, how often it is updated, or who can see it.",
         "mustBePositive": "Enter an amount greater than zero.",
         "name": {
           "label": "Name",
@@ -2040,7 +2040,12 @@
         },
         "createSuccess": "Shared money created.",
         "updateSuccess": "Changes saved.",
-        "saveError": "Failed to save."
+        "saveError": "Failed to save.",
+        "cadence": {
+          "label": "How often it is updated",
+          "placeholder": "Select how often it is updated",
+          "hint": "What everyone agreed to expect. Nothing is recorded automatically — this only decides when the pot reads as out of date."
+        }
       },
       "delete": {
         "cta": "Delete",
@@ -2339,7 +2344,8 @@
         "table": {
           "name": "Name",
           "value": "Value",
-          "inBaseCurrency": "In {currency}"
+          "inBaseCurrency": "In {currency}",
+          "valuedOn": "Last valued"
         }
       },
       "ledger": {
@@ -2380,6 +2386,28 @@
           "write": "Can change",
           "source": "Source",
           "actions": "Actions"
+        }
+      },
+      "asOf": "as of {date}",
+      "cadence": {
+        "weekly": "Weekly",
+        "monthly": "Monthly",
+        "ad_hoc": "No set rhythm"
+      },
+      "freshness": {
+        "neverValued": "Something here has never been valued, so the pot has no value to divide.",
+        "overdue": "Last valued on {date}. A fresh valuation is overdue."
+      },
+      "series": {
+        "title": "Value over time",
+        "description": "What the pot has been worth, and what your share of it was worth.",
+        "coverageWeekly": "Valued in {valued} of the last {total} weeks.",
+        "coverageMonthly": "Valued in {valued} of the last {total} months.",
+        "emptyTitle": "Nothing to plot yet",
+        "emptyDescription": "The pot has no value on record for any of these dates. Record a snapshot for what it holds and the chart fills in.",
+        "legend": {
+          "pot": "The pot",
+          "myShare": "Your share"
         }
       }
     }

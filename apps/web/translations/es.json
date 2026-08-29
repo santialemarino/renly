@@ -1979,7 +1979,7 @@
       "defaultLabel": "Dinero compartido",
       "subtitle": "Dinero compartido en {group}",
       "add": "Nuevo",
-      "edit": "Renombrar",
+      "edit": "Editar",
       "readOnly": "Solo lectura",
       "readOnlyNotice": "Podés ver todo esto pero no modificarlo. Pedile acceso de escritura a un administrador del grupo.",
       "unvalued": "Sin valuar",
@@ -2017,9 +2017,9 @@
       },
       "form": {
         "titleCreate": "Nuevo dinero compartido",
-        "titleEdit": "Renombrar dinero compartido",
+        "titleEdit": "Editar dinero compartido",
         "descriptionCreate": "Un solo lugar para lo que este grupo tiene en conjunto. Vas a tener acceso total.",
-        "descriptionEdit": "Cambiá cómo se llama, o quién puede verlo.",
+        "descriptionEdit": "Cambiá cómo se llama, cada cuánto se actualiza, o quién puede verlo.",
         "mustBePositive": "Ingresá un monto mayor a cero.",
         "name": {
           "label": "Nombre",
@@ -2040,7 +2040,12 @@
         },
         "createSuccess": "Dinero compartido creado.",
         "updateSuccess": "Cambios guardados.",
-        "saveError": "No se pudo guardar."
+        "saveError": "No se pudo guardar.",
+        "cadence": {
+          "label": "Cada cuánto se actualiza",
+          "placeholder": "Seleccioná cada cuánto se actualiza",
+          "hint": "Lo que acordaron esperar. No se registra nada automáticamente: esto solo decide cuándo el fondo figura como desactualizado."
+        }
       },
       "delete": {
         "cta": "Eliminar",
@@ -2339,7 +2344,8 @@
         "table": {
           "name": "Nombre",
           "value": "Valor",
-          "inBaseCurrency": "En {currency}"
+          "inBaseCurrency": "En {currency}",
+          "valuedOn": "Última valuación"
         }
       },
       "ledger": {
@@ -2380,6 +2386,28 @@
           "write": "Puede modificar",
           "source": "Origen",
           "actions": "Acciones"
+        }
+      },
+      "asOf": "al {date}",
+      "cadence": {
+        "weekly": "Semanal",
+        "monthly": "Mensual",
+        "ad_hoc": "Sin ritmo fijo"
+      },
+      "freshness": {
+        "neverValued": "Hay algo acá que nunca se valuó, así que el fondo no tiene valor para repartir.",
+        "overdue": "Valuado por última vez el {date}. Falta una valuación nueva."
+      },
+      "series": {
+        "title": "Valor a lo largo del tiempo",
+        "description": "Cuánto valió el fondo, y cuánto valió tu parte.",
+        "coverageWeekly": "Valuado en {valued} de las últimas {total} semanas.",
+        "coverageMonthly": "Valuado en {valued} de los últimos {total} meses.",
+        "emptyTitle": "Todavía no hay nada para graficar",
+        "emptyDescription": "El fondo no tiene valor registrado en ninguna de estas fechas. Cargá un snapshot de lo que tiene y el gráfico se completa.",
+        "legend": {
+          "pot": "El fondo",
+          "myShare": "Tu parte"
         }
       }
     }

@@ -6,6 +6,14 @@
 
 // oklch values — Recharts needs resolved CSS colors, not Tailwind classes.
 export const CHART_COLOR_PRIMARY = 'oklch(0.424 0.199 265.638)'; // blue-800
+/*
+ * The second series where two of them are the SAME measure at two scopes — a total and a part of it,
+ * like a pot's value and one member's share. Deliberately the same hue several steps lighter rather
+ * than a different one: a part-of-whole pair reads as related, and separating them by lightness is
+ * also the most colour-vision-robust axis there is (measured: deuteranopia ΔE 25.9, normal 28.5,
+ * against a target of 8). Two genuinely independent categories should not use this pair.
+ */
+export const CHART_COLOR_SECONDARY = 'oklch(0.707 0.165 254.624)'; // blue-400
 export const CHART_COLOR_POSITIVE = 'oklch(0.596 0.145 163.225)'; // emerald-600
 export const CHART_COLOR_NEGATIVE = 'oklch(0.637 0.237 25.331)'; // red-500
 
@@ -36,6 +44,21 @@ export const AREA_GRADIENT_START_OPACITY = 0.3;
 export const AREA_GRADIENT_END_OPACITY = 0.05;
 export const AREA_GRADIENT_START_OFFSET = '5%';
 export const AREA_GRADIENT_END_OFFSET = '95%';
+
+// Point markers. Needed wherever a series may legitimately have GAPS: a lone valued point between two
+// unknowns draws no line segment at all, so without a dot it is simply invisible.
+export const POINT_DOT_RADIUS = 4;
+export const POINT_DOT_RADIUS_ACTIVE = 6;
+
+// --- Legend ---
+
+export const LEGEND_FONT_SIZE = 12;
+/*
+ * Stated rather than measured. An unsized recharts <Legend> is laid out first and measured after, so
+ * the plot area above it reflows once the legend's real height is known — a layout shift on every
+ * chart that has one. Naming the height reserves the space up front instead.
+ */
+export const LEGEND_HEIGHT = 28;
 
 // --- Tooltip ---
 
