@@ -353,6 +353,20 @@ export function valuedPointCount(series: PotValueSeries): number {
 }
 
 /*
+ * Whether the section can state its coverage as "valued in x of the last y".
+ *
+ * Two ways it cannot. With nothing valued there is no chart to describe, and with a single period it
+ * is not a sentence — "valued in 1 of the last 1 months" is exactly what a pot created today
+ * produces, which is the FIRST thing anyone sees after the sharing flow rather than an edge case.
+ * Both fall back to the plain description, which is true whatever the window holds.
+ */
+export const MIN_COVERAGE_PERIODS = 2;
+
+export function showsCoverage(series: PotValueSeries): boolean {
+  return valuedPointCount(series) > 0 && series.points.length >= MIN_COVERAGE_PERIODS;
+}
+
+/*
  * Whether the viewer's own share is worth drawing as a second series.
  *
  * False for a member who holds none of the pot anywhere in the window — which is a real state (V3: a

@@ -14,7 +14,11 @@ import {
   YAxis,
 } from 'recharts';
 
-import { seriesHasShare, valuedPointCount } from '@/app/(protected)/shared/pot-rules';
+import {
+  seriesHasShare,
+  showsCoverage,
+  valuedPointCount,
+} from '@/app/(protected)/shared/pot-rules';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
 import type { PotValueSeries } from '@/lib/api/pots';
@@ -105,12 +109,12 @@ export function PotValueSection({ series, baseCurrency }: PotValueSectionProps) 
       <SectionHeader
         title={t('pots.series.title')}
         description={
-          valued === 0
-            ? t('pots.series.description')
-            : t(isWeekly ? 'pots.series.coverageWeekly' : 'pots.series.coverageMonthly', {
+          showsCoverage(series)
+            ? t(isWeekly ? 'pots.series.coverageWeekly' : 'pots.series.coverageMonthly', {
                 valued,
                 total: series.points.length,
               })
+            : t('pots.series.description')
         }
       />
 

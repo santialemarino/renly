@@ -22,6 +22,7 @@ import {
   potValueDisplay,
   seriesHasShare,
   shareWizardEntry,
+  showsCoverage,
   suggestedBaseCurrency,
   valuedPointCount,
   wholeExitOutcome,
@@ -606,6 +607,31 @@ describe('valuedPointCount', () => {
       { date: '2026-08-29', nav: '110.00', myValue: null },
     ];
     expect(valuedPointCount(series(points))).toBe(2);
+  });
+});
+
+describe('showsCoverage', () => {
+  it('states the coverage once there are at least two periods with something in them', () => {
+    const points = [
+      { date: '2026-07-31', nav: null, myValue: null },
+      { date: '2026-08-29', nav: '110.00', myValue: '66.00' },
+    ];
+    expect(showsCoverage(series(points))).toBe(true);
+  });
+
+  it('says nothing about coverage for a single-period window', () => {
+    // "Valued in 1 of the last 1 months" is not a sentence, and it is what a pot created TODAY
+    // produces — the first thing anyone sees after the sharing flow, not an edge case.
+    const points = [{ date: '2026-08-29', nav: '110.00', myValue: '66.00' }];
+    expect(showsCoverage(series(points))).toBe(false);
+  });
+
+  it('says nothing about coverage when no period could be valued', () => {
+    const points = [
+      { date: '2026-07-31', nav: null, myValue: null },
+      { date: '2026-08-29', nav: null, myValue: null },
+    ];
+    expect(showsCoverage(series(points))).toBe(false);
   });
 });
 
