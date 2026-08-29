@@ -239,6 +239,72 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
     }
 
 
+# Returns {account_id: [balance at each date]}, for the given accounts and an ASCENDING list of dates.
+#
+# The batch-over-time sibling of compute_account_balances_at, and the reason it exists is arithmetic:
+# that function costs seven queries per date, so a twelve-point series would cost eighty-four. This
+# costs seven for the whole series, because each sum is grouped by (account_id, date) once over the
+# window and accumulated here. §12's O3 is exactly this fan-out.
+#
+# Every term of the union appears, in the same order and with the same sign as the point-in-time
+# version, deliberately: three of the seven can only ever be empty for a pot's accounts (a shared
+# account cannot carry private entries at all), and dropping them for that reason would make this a
+# sum that agrees with the balance only for as long as that guard holds. Keeping all seven makes
+# `series[i] == compute_account_balances_at(dates[i])` true by construction, which is what
+# tests/unit/test_account_balance_series.py asserts.
+#
+# `dates` must be ascending; the caller builds it from a period grid, which is generated that way.
+async def compute_account_balance_series(session: AsyncSession, accounts: list[Account], *, dates: list[date_type]) -> dict[int, list[Decimal]]:
+    account_ids = [a.id for a in accounts if a.id is not None]
+    if not account_ids or not dates:
+        return {}
+    owners = {a.user_id for a in accounts}
+    # One owner value covers the batch, exactly as compute_account_balances_at resolves it.
+    owner_id = next(iter(owners)) if len(owners) == 1 else None
+    until = dates[-1]
+    income = await income_repository.sum_by_account_ids_dated(session, account_ids, owner_id, until=until)
+    expenses = await expense_repository.sum_by_account_ids_dated(session, account_ids, owner_id, until=until)
+    settlements = await card_settlement_repository.sum_by_account_ids_dated(session, account_ids, owner_id, until=until)
+    transfers_in = await transfer_repository.sum_in_by_account_ids_dated(session, account_ids, owner_id, until=until)
+    transfers_out = await transfer_repository.sum_out_by_account_ids_dated(session, account_ids, owner_id, until=until)
+    ownership_in = await pot_ownership_repository.sum_in_by_account_ids_dated(session, account_ids, until=until)
+    ownership_out = await pot_ownership_repository.sum_out_by_account_ids_dated(session, account_ids, until=until)
+
+    # One signed delta per (account, date), so the accumulation below is a single pass over dates
+    # rather than one pass per source.
+    deltas: dict[int, dict[date_type, Decimal]] = {account_id: {} for account_id in account_ids}
+    for rows, sign in (
+        (income, 1),
+        (expenses, -1),
+        (settlements, -1),
+        (transfers_in, 1),
+        (transfers_out, -1),
+        (ownership_in, 1),
+        (ownership_out, -1),
+    ):
+        for account_id, movement_date, total in rows:
+            per_account = deltas[account_id]
+            per_account[movement_date] = per_account.get(movement_date, ZERO) + total * sign
+
+    series: dict[int, list[Decimal]] = {}
+    for account in accounts:
+        if account.id is None:
+            continue
+        moved = sorted(deltas[account.id].items())
+        running = ZERO
+        cursor = 0
+        points: list[Decimal] = []
+        for point_date in dates:
+            while cursor < len(moved) and moved[cursor][0] <= point_date:
+                running += moved[cursor][1]
+                cursor += 1
+            # The opening figure only counts from its own date, the same bound the point-in-time
+            # version applies — before it the account did not exist and its balance is zero.
+            points.append((account.opening_balance if account.opening_date <= point_date else ZERO) + running)
+        series[account.id] = points
+    return series
+
+
 # The current balance of ONE account, for a caller holding the row already (the ledger's anchor).
 # Reuses the batch derivation with a single id, the way compute_account_balance_at reuses the sums.
 async def get_account_balance(session: AsyncSession, account: Account, user_id: int) -> Decimal:

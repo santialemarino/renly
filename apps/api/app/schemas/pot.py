@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from app.models.pot import OwnershipEventType, PotVisibility
+from app.domain.pot_monitoring import PotSeriesInterval
+from app.models.pot import OwnershipEventType, PotCadence, PotVisibility
 from app.schemas.base import RequestBase, validate_supported_currency
 
 
@@ -13,6 +14,9 @@ class PotCreate(RequestBase):
     group_id: int = Field(description="Group the pot belongs to; the caller must be one of its admins.")
     name: str | None = Field(default=None, description="Optional label; a group's first pot needs none.", max_length=255)
     base_currency: str = Field(description="Currency all ownership math runs in (ISO 4217).", max_length=3)
+    snapshot_cadence: PotCadence = Field(
+        default=PotCadence.monthly, description="How often the pot is expected to be re-valued; drives freshness and the value series."
+    )
     visibility: PotVisibility = Field(
         default=PotVisibility.members, description="Who sees it by default: every member, or only those granted access."
     )
@@ -25,6 +29,7 @@ class PotCreate(RequestBase):
 # ledger, so changing it would silently restate every past event at a rate nobody chose.
 class PotUpdate(RequestBase):
     name: str | None = Field(default=None, description="Optional label.", max_length=255)
+    snapshot_cadence: PotCadence | None = Field(default=None, description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility | None = Field(default=None, description="Who sees it by default.")
 
 
@@ -63,6 +68,13 @@ class PotPermissionResponse(BaseModel):
 # nav and unit_price are null when the pot has no valuation — a pot with no holdings, or one whose
 # currency cannot be converted. Null rather than zero: "we do not know" and "it is worth nothing" are
 # different answers, and only one of them is safe to price units against.
+#
+# valued_as_of and is_stale answer a DIFFERENT question from nav, and the three can disagree honestly.
+# valued_as_of is the date the figure is current to — the OLDEST of the pot's holdings' latest
+# snapshots, because a total is only as current as its stalest term — and is_stale says that date is
+# more than one cadence period old. A pot whose holdings are all snapshotted but one of which cannot
+# be converted reports a real valued_as_of and a null nav: the numbers are fresh, this currency just
+# cannot state them. An 'ad_hoc' pot is never stale, having declared no rhythm to be late against.
 class PotResponse(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -70,9 +82,12 @@ class PotResponse(BaseModel):
     group_id: int = Field(description="Group whose members can reach it.")
     name: str | None = Field(default=None, description="Label; null for a group's default pot.")
     base_currency: str = Field(description="Currency all ownership math runs in.")
+    snapshot_cadence: PotCadence = Field(description="How often the pot is expected to be re-valued.")
     visibility: PotVisibility = Field(description="Who sees it by default.")
     is_default: bool = Field(description="Whether this is the group's first pot.")
     nav: Decimal | None = Field(default=None, description="Value of everything the pot holds, in its base currency.")
+    valued_as_of: date_type | None = Field(default=None, description="Date the value is current to; null when nothing here has been valued.")
+    is_stale: bool = Field(description="Whether a fresh valuation is overdue against the declared cadence.")
     unit_price: Decimal | None = Field(default=None, description="NAV divided by units outstanding; null when either is unknown.")
     total_units: Decimal = Field(description="Units outstanding across every owner.")
     my_percentage: Decimal = Field(description="The requesting user's own share, to two decimals; zero when they own none.")
@@ -102,6 +117,7 @@ class PotHoldingResponse(BaseModel):
     value: Decimal | None = Field(default=None, description="Latest known value in the holding's own currency; null when unknown.")
     base_value: Decimal | None = Field(default=None, description="The same figure in the pot's base currency; null when unknown or unconvertible.")
     is_active: bool = Field(description="Whether the holding is active; an archived one contributes nothing to the NAV.")
+    valued_on: date_type | None = Field(default=None, description="Date this figure was recorded on; null for a derived balance.")
 
 
 # Response for GET /pots/{pot_id}/holdings. Split into the same two lists the move endpoints take as
@@ -109,6 +125,29 @@ class PotHoldingResponse(BaseModel):
 class PotHoldingsResponse(BaseModel):
     investments: list[PotHoldingResponse] = Field(description="Investments the pot holds, by name.")
     accounts: list[PotHoldingResponse] = Field(description="Cash accounts the pot holds, by name.")
+
+
+# One point of a pot's value series: what the whole pot was worth on that date, and what the
+# requesting member's own share of it was worth.
+#
+# Both are null in the same case and for the same reason the NAV is — a pot whose value cannot be
+# stated in full on that date has no share value either, and a partial figure would be worse than
+# none. `my_value` is additionally null while NO units are outstanding: before the ownership baseline
+# nobody owns any share of anything, so a zero would assert something the ledger has not said.
+class PotValueSeriesPoint(BaseModel):
+    date: date_type = Field(description="The date valued: a period end, or today for the last point.")
+    nav: Decimal | None = Field(default=None, description="The pot's value in its base currency; null when it cannot be stated in full.")
+    my_value: Decimal | None = Field(default=None, description="The requesting member's share value; null when unknown or undivided.")
+
+
+# Response for GET /pots/{pot_id}/series. Figures are in the pot's base currency.
+#
+# `interval` is the grid the points sit on, not the pot's cadence — an 'ad_hoc' pot declares no rhythm
+# and is plotted monthly, so echoing its cadence here would describe the points wrongly. The series
+# starts no earlier than the pot's ownership anchor and its last point is today.
+class PotValueSeriesResponse(BaseModel):
+    interval: PotSeriesInterval = Field(description="Spacing of the points: weekly or monthly.")
+    points: list[PotValueSeriesPoint] = Field(description="Oldest first; the last point is today.")
 
 
 # Body for POST and DELETE /pots/{pot_id}/holdings — moving stock into or out of a pot.

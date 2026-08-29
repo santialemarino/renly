@@ -182,6 +182,28 @@ async def sum_by_account_ids(
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Expense totals linked to each account, grouped by (account_id, date), for a caller deriving those
+# accounts' balances at MANY dates in one pass. Same bounds as the point-in-time sum — see the note
+# on income_repository.sum_by_account_ids_dated, which this mirrors term for term.
+async def sum_by_account_ids_dated(
+    session: AsyncSession, account_ids: list[int], user_id: int | None, *, until: date_type
+) -> list[tuple[int, date_type, Decimal]]:
+    if not account_ids:
+        return []
+    result = await session.execute(
+        select(ExpenseEntry.account_id, ExpenseEntry.date, func.coalesce(func.sum(ExpenseEntry.amount), 0))
+        .join(Account, Account.id == ExpenseEntry.account_id)
+        .where(
+            ExpenseEntry.account_id.in_(account_ids),
+            ExpenseEntry.user_id == user_id,
+            ExpenseEntry.date >= Account.opening_date,
+            ExpenseEntry.date <= until,
+        )
+        .group_by(ExpenseEntry.account_id, ExpenseEntry.date)
+    )
+    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+
+
 # Monthly expense totals linked to each account, grouped by account_id, year, month (the account's
 # currency is fixed, so no currency dimension). Returns a list of (account_id, year, month, total).
 async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
@@ -545,6 +567,7 @@ class ExpenseRepository:
     max_linked_obligation_dates = staticmethod(max_linked_obligation_dates)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_dated = staticmethod(sum_by_account_ids_dated)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
     sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)

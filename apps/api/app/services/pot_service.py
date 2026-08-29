@@ -29,9 +29,13 @@ from app.domain import (
     NotFoundError,
     PotAlreadyDividedError,
     PotHasHoldingsError,
+    PotValuation,
     PotWriteRequiredError,
+    is_valuation_overdue,
     ownership_percentages,
+    period_ends,
     replay_units,
+    series_interval,
     share_values,
     total_units,
     unit_price,
@@ -39,7 +43,7 @@ from app.domain import (
 from app.models.account import Account
 from app.models.group import GroupMember
 from app.models.investment import Investment
-from app.models.pot import Pot, PotMemberPermission, PotVisibility
+from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.repositories import (
@@ -60,6 +64,8 @@ from app.schemas.pot import (
     PotMemberShareResponse,
     PotPermissionResponse,
     PotResponse,
+    PotValueSeriesPoint,
+    PotValueSeriesResponse,
 )
 from app.services import account_service, exchange_rate_service
 from app.utils.metrics import RateLookup, convert_value
@@ -126,12 +132,31 @@ def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_ma
     return convert_value(value, currency, base_currency, rate_map)
 
 
+# Adds a set of holdings' figures to a running total in the pot's base currency, or answers None the
+# moment the total stops being statable in full. A `None` figure is a holding nobody has valued.
+#
+# THE one place the NAV's refusal rule lives, shared by the point-in-time valuation and the value
+# series — because a series whose points were computed by a second copy of this rule is a second
+# algorithm that has to agree with the first at every date, and the shape to watch for (§18) is
+# exactly a sum that drops a term instead of refusing.
+def _add_holdings(total: Decimal, figures: list[tuple[Decimal, str] | None], base_currency: str, rate_map) -> Decimal | None:
+    for figure in figures:
+        if figure is None:
+            return None
+        converted = _to_base_currency(figure[0], figure[1], base_currency, rate_map)
+        if converted is None:
+            return None
+        total += converted
+    return total
+
+
 # The pot's value on a date, in its base currency: every holding it carries, converted at that date.
 # Investments contribute their latest snapshot on or before the date; accounts contribute their
 # derived balance. Both reuse the existing engines unchanged, which is the whole point of co-owning
 # stock in place rather than duplicating a metrics layer for shared money.
 #
-# Returns None — never a partial total — in every case where the figure cannot be stated in full:
+# Returns (nav, valued_as_of, holds_anything). The NAV is None — never a partial total — in every case
+# where the figure cannot be stated in full:
 #
 #   * a holding whose currency cannot be converted. The repo's standing fail-loud rule.
 #   * a holding with no valuation at all (an investment nobody has snapshotted on or before the date).
@@ -145,6 +170,83 @@ def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_ma
 #
 # An ARCHIVED holding is not counted by either query and so cannot make the NAV unknown: it
 # contributes nothing to the pot's value by design, which is a different thing from being unvalued.
+async def _value_pot(
+    session: AsyncSession,
+    pot: Pot,
+    *,
+    as_of_date: date_type,
+    lookup: RateLookup,
+) -> tuple[Decimal | None, date_type | None, bool]:
+    rate_map = lookup.get_rate_map_at(as_of_date)
+
+    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
+    valued_as_of: date_type | None = None
+    total: Decimal | None = ZERO
+    if investment_ids:
+        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
+        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
+        # a back-dated ownership event would be priced against that understated NAV.
+        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
+        # The OLDEST of the latest snapshots, because the pot's value is only as current as its
+        # stalest term — one holding nobody has touched since March makes the whole figure a March
+        # figure, however fresh the rest are. None when any holding has no snapshot at all.
+        found = [snapshots[investment_id].date for investment_id in investment_ids if investment_id in snapshots]
+        valued_as_of = min(found) if len(found) == len(investment_ids) else None
+        figures = [
+            None if investment_id not in snapshots else (snapshots[investment_id].value, snapshots[investment_id].currency)
+            for investment_id in investment_ids
+        ]
+        total = _add_holdings(total, figures, pot.base_currency, rate_map)
+        # Returned here so the two lookups keep their original order and neither runs when the other
+        # has already answered None — an unconvertible investment must not cost a balance query.
+        if total is None:
+            return (None, valued_as_of, True)
+
+    accounts = await pot_repository.list_accounts(session, pot.id)
+    if accounts:
+        # An account's balance is DERIVED at the date asked about, so it is current by construction
+        # and never pulls valued_as_of backwards; only a snapshot can. A pot holding accounts alone is
+        # therefore known as of the date itself.
+        if not investment_ids:
+            valued_as_of = as_of_date
+        # No missing case here either: an account always has a balance — its opening figure at worst.
+        balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date)
+        total = _add_holdings(total, [(balances.get(a.id, ZERO), a.currency) for a in accounts], pot.base_currency, rate_map)
+        if total is None:
+            return (None, valued_as_of, True)
+
+    if not investment_ids and not accounts:
+        return (None, None, False)
+    return (total, valued_as_of, True)
+
+
+# The pot's value on a date plus how current that value is: see PotValuation for what each null means.
+#
+# Freshness is measured against `as_of_date` rather than against the wall clock, so a pot valued at a
+# past date answers "was it up to date then" instead of mixing two frames in one response. Every
+# surface that shows freshness asks about today, which is the parameter's default at every caller.
+async def get_valuation(
+    session: AsyncSession,
+    pot: Pot,
+    *,
+    as_of_date: date_type,
+    lookup: RateLookup,
+) -> PotValuation:
+    nav, valued_as_of, holds_anything = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
+    return PotValuation(
+        nav=nav,
+        valued_as_of=valued_as_of,
+        is_stale=is_valuation_overdue(
+            cadence=pot.snapshot_cadence,
+            valued_as_of=valued_as_of,
+            holds_anything=holds_anything,
+            today=as_of_date,
+        ),
+    )
+
+
+# The pot's value on a date, for a caller that needs only the figure — the ownership ledger prices
+# every movement against it. A thin read over get_valuation so there is one valuation engine.
 async def get_nav(
     session: AsyncSession,
     pot: Pot,
@@ -152,40 +254,7 @@ async def get_nav(
     as_of_date: date_type,
     lookup: RateLookup,
 ) -> Decimal | None:
-    rate_map = lookup.get_rate_map_at(as_of_date)
-    total = ZERO
-
-    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
-    if investment_ids:
-        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
-        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
-        # a back-dated ownership event would be priced against that understated NAV.
-        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
-        # One row per holding or the pot's value is unknown. The dict is keyed by investment id and the
-        # query filters on these ids, so a short result means exactly "some of them have no snapshot".
-        if len(snapshots) != len(investment_ids):
-            return None
-        for snapshot in snapshots.values():
-            converted = _to_base_currency(snapshot.value, snapshot.currency, pot.base_currency, rate_map)
-            if converted is None:
-                return None
-            total += converted
-
-    accounts = await pot_repository.list_accounts(session, pot.id)
-    if accounts:
-        # No missing case here: an account always has a balance — its opening figure at worst.
-        balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date)
-        for account in accounts:
-            converted = _to_base_currency(balances.get(account.id, ZERO), account.currency, pot.base_currency, rate_map)
-            if converted is None:
-                return None
-            total += converted
-
-    # Checked LAST so the two lookups keep their original order and neither runs when the other has
-    # already answered None — an unconvertible investment must not cost a balance query.
-    if not investment_ids and not accounts:
-        return None
-    return total
+    return (await get_valuation(session, pot, as_of_date=as_of_date, lookup=lookup)).nav
 
 
 # Builds a pot response from rows the caller already loaded, so the list path can batch-load
@@ -196,13 +265,14 @@ async def get_nav(
 def _build_response(
     pot: Pot,
     *,
-    nav: Decimal | None,
+    valuation: PotValuation,
     events,
     members_by_id: dict[int, GroupMember],
     viewer_member_id: int,
     permissions: list[PotMemberPermission],
     can_write: bool,
 ) -> PotResponse:
+    nav = valuation.nav
     balances = replay_units([e for e in _as_entries(events)])
     percentages = ownership_percentages(balances)
     values = share_values(balances, nav) if nav is not None else {}
@@ -225,9 +295,12 @@ def _build_response(
         group_id=pot.group_id,
         name=pot.name,
         base_currency=pot.base_currency,
+        snapshot_cadence=pot.snapshot_cadence,
         visibility=pot.visibility,
         is_default=pot.is_default,
         nav=nav,
+        valued_as_of=valuation.valued_as_of,
+        is_stale=valuation.is_stale,
         unit_price=price,
         total_units=outstanding,
         my_percentage=next((s.percentage for s in shares if s.is_self), ZERO),
@@ -280,11 +353,11 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
             continue
         permissions = permissions_by_pot.get(pot.id, [])
         mine = next((p for p in permissions if p.member_id == viewer.id), None)
-        nav = await get_nav(session, pot, as_of_date=today, lookup=lookup)
+        valuation = await get_valuation(session, pot, as_of_date=today, lookup=lookup)
         responses.append(
             _build_response(
                 pot,
-                nav=nav,
+                valuation=valuation,
                 events=events_by_pot.get(pot.id, []),
                 members_by_id={m.id: m for m in members},
                 viewer_member_id=viewer.id,
@@ -303,10 +376,10 @@ async def get_pot(session: AsyncSession, pot_id: int, user: User, *, as_of_date:
     permissions = await pot_repository.list_permissions(session, pot.id)
     events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=as_of_date)
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
-    nav = await get_nav(session, pot, as_of_date=as_of_date or date_type.today(), lookup=lookup)
+    valuation = await get_valuation(session, pot, as_of_date=as_of_date or date_type.today(), lookup=lookup)
     return _build_response(
         pot,
-        nav=nav,
+        valuation=valuation,
         events=events,
         members_by_id={m.id: m for m in members},
         viewer_member_id=viewer.id,
@@ -327,6 +400,7 @@ def _holding_response(
     *,
     pot: Pot,
     rate_map,
+    valued_on: date_type | None,
 ) -> PotHoldingResponse:
     return PotHoldingResponse(
         id=holding_id,
@@ -335,6 +409,7 @@ def _holding_response(
         value=value,
         base_value=None if value is None else _to_base_currency(value, currency, pot.base_currency, rate_map),
         is_active=is_active,
+        valued_on=valued_on,
     )
 
 
@@ -347,13 +422,24 @@ def _holding_response(
 def _investment_holding(investment: Investment, snapshot: InvestmentSnapshot | None, *, pot: Pot, rate_map) -> PotHoldingResponse:
     currency = investment.base_currency if snapshot is None else snapshot.currency
     value = None if snapshot is None else snapshot.value
-    return _holding_response(investment.id, investment.name, currency, value, investment.is_active, pot=pot, rate_map=rate_map)
+    return _holding_response(
+        investment.id,
+        investment.name,
+        currency,
+        value,
+        investment.is_active,
+        pot=pot,
+        rate_map=rate_map,
+        valued_on=None if snapshot is None else snapshot.date,
+    )
 
 
 # One account's row, valued at its derived balance today. An account always has a balance — its
 # opening figure at worst — so unlike an investment it is never unvalued.
+# `valued_on` is null for the same reason: the balance is DERIVED at the date it is asked for rather
+# than recorded on a date, so there is no valuation date to state and one would be an invented fact.
 def _account_holding(account: Account, balance: Decimal, *, pot: Pot, rate_map) -> PotHoldingResponse:
-    return _holding_response(account.id, account.name, account.currency, balance, account.is_active, pot=pot, rate_map=rate_map)
+    return _holding_response(account.id, account.name, account.currency, balance, account.is_active, pot=pot, rate_map=rate_map, valued_on=None)
 
 
 # Lists everything a pot holds, with each holding's own figure and the same figure in the pot's base
@@ -382,6 +468,94 @@ async def list_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHo
     )
 
 
+# The pot's value at each point of its cadence's grid, plus what the caller's own share was worth at
+# each — the monitoring surface's whole subject (V5/X4).
+#
+# THE COST is the design. Valuing a pot at one date is ten queries (two holdings reads, one snapshot
+# read and the seven-way account-balance union), so calling get_valuation once per point would make a
+# twelve-point series a hundred-and-twenty-query page — §12's O3, arrived at from the read side. Every
+# one of those reads is hoisted out of the loop instead: the holdings do not change per date, the
+# snapshots come back for the whole window in one query, and the balances are accumulated per account
+# over the window by compute_account_balance_series. The series therefore costs the same ten queries
+# as a single valuation, whatever `periods` is.
+#
+# What it does NOT do is re-implement the valuation rule. Each point folds its figures through
+# _add_holdings, the same function get_valuation uses, so a point is null in exactly the cases the NAV
+# is null — which is legitimately most of the early points on a pot whose newest holding was
+# snapshotted recently, and saying "we do not know" there is the whole reason that rule exists.
+#
+# Two bounds worth stating:
+#   * the holdings are TODAY's holdings. There is no membership history for what a pot held when, so
+#     the honest reading of an earlier point is "what the pot's current contents were worth then" —
+#     the same reading GET /pots/{id}?as_of_date= already carries.
+#   * the series starts at the pot's ANCHOR — its earliest ownership event, or its creation when the
+#     ledger is empty — because a shared investment brings its whole snapshot history with it, and
+#     without the bound a pot created yesterday would report years of "the pot's value" for a pot that
+#     did not exist. A back-dated opening moves the anchor earlier, which is right: that is the date
+#     the co-owners agreed their division began.
+#
+# `my_value` is null rather than zero while no units are outstanding. Before the baseline nobody owns
+# any share of anything, and a zero would assert something the ledger has not said — the same rule
+# ownership_percentages already applies to an undivided pot.
+async def get_value_series(session: AsyncSession, pot_id: int, user: User, *, periods: int) -> PotValueSeriesResponse:
+    pot, viewer, _ = await require_visible(session, pot_id, user)
+    interval = series_interval(pot.snapshot_cadence)
+    today = date_type.today()
+    events = await pot_ownership_repository.list_by_pot(session, pot.id)
+    anchor = min(events[0].date, pot.created_at.date(), today) if events else min(pot.created_at.date(), today)
+    dates = [d for d in period_ends(today, interval, periods) if d >= anchor]
+
+    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
+    accounts = [a for a in await pot_repository.list_accounts(session, pot.id) if a.id is not None]
+    holds_anything = bool(investment_ids or accounts)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    snapshots = await snapshot_repository.list_by_investments(session, investment_ids, until=dates[-1])
+    balances = await account_service.compute_account_balance_series(session, accounts, dates=dates)
+
+    # Both walks are merges over already-sorted inputs — snapshots by (investment_id, date), events by
+    # (date, id) — so each row is visited once across the whole series rather than once per point.
+    snapshots_by_investment: dict[int, list[InvestmentSnapshot]] = {investment_id: [] for investment_id in investment_ids}
+    for snapshot in snapshots:
+        snapshots_by_investment[snapshot.investment_id].append(snapshot)
+    cursors = dict.fromkeys(investment_ids, 0)
+    latest: dict[int, InvestmentSnapshot | None] = dict.fromkeys(investment_ids)
+    # Converted once for the whole series rather than per point: the ledger does not change between
+    # dates, only how much of it has happened yet.
+    entries = _as_entries(events)
+    event_cursor = 0
+    replayed: list = []
+
+    points = []
+    for index, point_date in enumerate(dates):
+        for investment_id in investment_ids:
+            rows = snapshots_by_investment[investment_id]
+            cursor = cursors[investment_id]
+            while cursor < len(rows) and rows[cursor].date <= point_date:
+                latest[investment_id] = rows[cursor]
+                cursor += 1
+            cursors[investment_id] = cursor
+        while event_cursor < len(events) and events[event_cursor].date <= point_date:
+            replayed.append(entries[event_cursor])
+            event_cursor += 1
+
+        rate_map = lookup.get_rate_map_at(point_date)
+        nav: Decimal | None = None
+        if holds_anything:
+            figures: list[tuple[Decimal, str] | None] = [
+                None if latest[investment_id] is None else (latest[investment_id].value, latest[investment_id].currency)
+                for investment_id in investment_ids
+            ]
+            nav = _add_holdings(ZERO, figures, pot.base_currency, rate_map)
+            if nav is not None:
+                nav = _add_holdings(nav, [(balances[a.id][index], a.currency) for a in accounts], pot.base_currency, rate_map)
+
+        unit_balances = replay_units(replayed)
+        my_value = None if nav is None or total_units(unit_balances) <= 0 else share_values(unit_balances, nav).get(viewer.id, ZERO)
+        points.append(PotValueSeriesPoint(date=point_date, nav=nav, my_value=my_value))
+
+    return PotValueSeriesResponse(interval=interval, points=points)
+
+
 # Creates a pot and seats its creator with full access, in one transaction. Runs on the PRIVILEGED
 # session — see the module comment: the permission row this needs is the one the RLS policy reads.
 # The creator always gets an explicit row rather than relying on the visibility default, because a
@@ -394,6 +568,7 @@ async def create_pot(
     *,
     base_currency: str,
     name: str | None = None,
+    snapshot_cadence: PotCadence = PotCadence.monthly,
     visibility: PotVisibility = PotVisibility.members,
 ) -> PotResponse:
     from app.services import group_service
@@ -404,6 +579,7 @@ async def create_pot(
         group_id=group.id,
         name=name,
         base_currency=base_currency,
+        snapshot_cadence=snapshot_cadence,
         visibility=visibility,
         # The first pot in a group is its default and needs no name; a second one always does.
         is_default=not existing,
@@ -414,15 +590,18 @@ async def create_pot(
     return await get_pot(admin_session, pot.id, user)
 
 
-# Renames a pot, changes its base currency or its visibility. Only provided fields are updated.
-# Group admin only — this is configuration, not money movement, so it follows the membership rules
-# rather than the pot's own write permission.
+# Renames a pot, or changes how often it is expected to be re-valued or who may see it by default.
+# Only provided fields are updated; base_currency is deliberately not among them, because it is the
+# unit of every figure already recorded in the ledger.
+# Group admin only — all three are configuration, not money movement, so they follow the membership
+# rules rather than the pot's own write permission.
 async def update_pot(
     session: AsyncSession,
     pot_id: int,
     user: User,
     *,
     name: str | None = None,
+    snapshot_cadence: PotCadence | None = None,
     visibility: PotVisibility | None = None,
 ) -> PotResponse:
     from app.services import group_service
@@ -431,6 +610,8 @@ async def update_pot(
     await group_service.require_admin(session, pot.group_id, user)
     if name is not None:
         pot.name = name
+    if snapshot_cadence is not None:
+        pot.snapshot_cadence = snapshot_cadence
     if visibility is not None:
         pot.visibility = visibility
     await pot_repository.save(session, pot)

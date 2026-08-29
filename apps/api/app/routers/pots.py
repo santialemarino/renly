@@ -15,10 +15,18 @@ from app.schemas.pot import (
     PotReagreementCreate,
     PotResponse,
     PotUpdate,
+    PotValueSeriesResponse,
 )
 from app.services import pot_ownership_service, pot_service
 
 router = APIRouter(prefix="/pots", tags=["pots"])
+
+# How many points a value series returns by default and at most. Twelve is a year of months or a
+# quarter of weeks — enough to read a trend without asking for history the pot may not have. The cap
+# bounds the work per request; the series costs a fixed number of queries either way, so what it
+# actually bounds is the arithmetic and the payload.
+DEFAULT_SERIES_PERIODS = 12
+MAX_SERIES_PERIODS = 52
 
 
 # Lists every pot the user may see, each with its ownership breakdown. Optionally narrowed to one
@@ -45,6 +53,19 @@ async def get_pot(
     return await pot_service.get_pot(session, pot_id, current_user, as_of_date=as_of_date)
 
 
+# Returns the pot's value at each point of its cadence's grid, plus the caller's own share value at
+# each. Readable by whoever may see the pot at all, including a member holding 0% of it — monitoring
+# is not gated on owning any of it (V5). Same 404 as GET /pots/{id} when it is hidden or missing.
+@router.get("/{pot_id}/series", response_model=PotValueSeriesResponse)
+async def get_value_series(
+    pot_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    periods: int = Query(default=DEFAULT_SERIES_PERIODS, ge=1, le=MAX_SERIES_PERIODS, description="How many points to return."),
+) -> PotValueSeriesResponse:
+    return await pot_service.get_value_series(session, pot_id, current_user, periods=periods)
+
+
 # Creates a pot in a group and seats its creator with full access. Group admin only (403 otherwise).
 # Takes the privileged session because the pot's first permission row is the one its own RLS policy
 # reads, so the insert cannot satisfy it — the same bootstrap group creation has.
@@ -60,11 +81,14 @@ async def create_pot(
         current_user,
         base_currency=body.base_currency,
         name=body.name,
+        snapshot_cadence=body.snapshot_cadence,
         visibility=body.visibility,
     )
 
 
-# Updates a pot's name or visibility. Group admin only (403 otherwise). Only provided fields change.
+# Updates a pot's name, snapshot cadence or visibility. Group admin only (403 otherwise). Only
+# provided fields change. Cadence is administration rather than money movement, which is why it is
+# gated the way name and visibility are: it sets the standard the group holds its custodian to.
 @router.put("/{pot_id}", response_model=PotResponse)
 async def update_pot(
     pot_id: int,
@@ -72,7 +96,9 @@ async def update_pot(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> PotResponse:
-    return await pot_service.update_pot(session, pot_id, current_user, name=body.name, visibility=body.visibility)
+    return await pot_service.update_pot(
+        session, pot_id, current_user, name=body.name, snapshot_cadence=body.snapshot_cadence, visibility=body.visibility
+    )
 
 
 # Deletes a pot. Group admin only; refused with 409 while it still holds anything.

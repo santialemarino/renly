@@ -110,6 +110,55 @@ async def sum_in_by_account_ids(
     return await _sum_leg(session, Transfer.to_account_id, Transfer.to_amount, account_ids, user_id, as_of_date=as_of_date)
 
 
+# Totals for one leg, grouped by (account_id, date), for a caller deriving those accounts' balances at
+# MANY dates in one pass. Same opening_date lower bound as the point-in-time sums plus an `until` upper
+# bound — see the note on income_repository.sum_by_account_ids_dated.
+#
+# Uses account_scope_matches because _sum_leg does, and the two must return the same rows or the series
+# and the balance disagree. Its scope branch is currently redundant for every caller and a mutation
+# sweep is what established that: `owner_id` is derived from the accounts, so a pot's batch resolves to
+# None, `Transfer.user_id == None` compiles to `IS NULL`, and a pot-scoped transfer (which has no
+# user_id) is matched by the owner branch alone. Written anyway, because agreement with _sum_leg should
+# come from using its predicate rather than from a coincidence that happens to hold in both.
+async def _sum_leg_dated(
+    session: AsyncSession,
+    leg: InstrumentedAttribute,
+    amount: InstrumentedAttribute,
+    account_ids: list[int],
+    user_id: int | None,
+    *,
+    until: date_type,
+) -> list[tuple[int, date_type, Decimal]]:
+    if not account_ids:
+        return []
+    result = await session.execute(
+        select(leg, Transfer.date, func.coalesce(func.sum(amount), 0))
+        .join(Account, Account.id == leg)
+        .where(
+            leg.in_(account_ids),
+            account_scope_matches(Transfer, user_id),
+            Transfer.date >= Account.opening_date,
+            Transfer.date <= until,
+        )
+        .group_by(leg, Transfer.date)
+    )
+    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+
+
+# Dated totals transferred OUT of each account.
+async def sum_out_by_account_ids_dated(
+    session: AsyncSession, account_ids: list[int], user_id: int | None, *, until: date_type
+) -> list[tuple[int, date_type, Decimal]]:
+    return await _sum_leg_dated(session, Transfer.from_account_id, Transfer.from_amount, account_ids, user_id, until=until)
+
+
+# Dated totals transferred INTO each account.
+async def sum_in_by_account_ids_dated(
+    session: AsyncSession, account_ids: list[int], user_id: int | None, *, until: date_type
+) -> list[tuple[int, date_type, Decimal]]:
+    return await _sum_leg_dated(session, Transfer.to_account_id, Transfer.to_amount, account_ids, user_id, until=until)
+
+
 # Monthly totals for one leg, grouped by (account_id, year, month), for the net-worth evolution chart's
 # cash series. Carries the same opening_date lower bound as the point-in-time sums, so the chart and the
 # headline balance agree. Returns a list of (account_id, year, month, total).
@@ -181,8 +230,10 @@ class TransferRepository:
     list_by_user = staticmethod(list_by_user)
     save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
+    sum_in_by_account_ids_dated = staticmethod(sum_in_by_account_ids_dated)
     sum_in_by_account_ids_monthly = staticmethod(sum_in_by_account_ids_monthly)
     sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
+    sum_out_by_account_ids_dated = staticmethod(sum_out_by_account_ids_dated)
     sum_out_by_account_ids_monthly = staticmethod(sum_out_by_account_ids_monthly)
 
 
