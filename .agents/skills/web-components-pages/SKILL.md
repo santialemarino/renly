@@ -37,6 +37,23 @@ description: How to create a component or a page in the Renly web app (Next.js A
 - **When you extract a shared component, share the STYLING — leave the copy with each caller.** Two surfaces rendering the same shape often word it differently on purpose, so unifying their strings while extracting is a silent product change, not a refactor. Give the component a slot (`SignedAmountCell`'s `subLine`) and let each call site pass its own words. Collapsing two strings into one is only safe when they are already byte-identical.
 - **Button as a link.** Use `<Button asChild>` wrapping an `<a>`/`<Link>` rather than a hand-rolled anchor, so it keeps the variant, ring, and states. Gotcha: the `default` variant carries an `[a]:hover:` rule, so when you also pass `blue`/custom hover on an anchor the anchor-scoped rule can win — confirm a link-button's hover matches the same button rendered as a real `<button>`.
 - **Dialogs.** Reuse the `@repo/ui` `Dialog` primitives (`Dialog` + `DialogContent` + `DialogHeader` + `DialogTitle` + `DialogDescription` + `DialogFooter`) — never hand-roll a modal. Always render a `DialogTitle` **and** a `DialogDescription` (Radix a11y warns without a description). The overlay, open/close animation, and the close ✕ (already styled to the icon-button focus convention) live in `DialogContent` — control behavior with its `showCloseButton` / `closeOnClickOutside` props; don't re-implement or re-style the ✕. Keep the dialog's data mounted through the close — pass it as a stable prop and toggle only `open` (see ux-motion's dialog exit rule), so the body doesn't blank out mid-animation.
+- **Charts: recharts through `lib/constants/charts.ts`, never ad-hoc values.** Every visual property
+  (colours, heights, margins, axis/tooltip/legend settings, animation) is a named const there, so a new
+  chart is composed rather than styled. Three rules the pot value series added, all of which the next
+  chart needs:
+  - **A series that can legitimately have GAPS must show them as gaps.** Keep `connectNulls={false}`
+    and give every point a `dot`, or a lone valued point between two unknowns draws a zero-length line
+    segment and is simply invisible. Never substitute 0 for "we do not know" — on a value series that
+    reads as growth from nothing.
+  - **Two or more series always carry a `<Legend>`,** because identity must never be colour alone; give
+    it an explicit `height` so the plot area does not reflow once the legend is measured. Where the two
+    series are the same measure at two scopes (a total and a part of it), use one hue at two steps
+    (`CHART_COLOR_PRIMARY` / `CHART_COLOR_SECONDARY`) rather than two unrelated colours — it encodes the
+    relationship, and separating by lightness is also the most colour-vision-robust axis there is.
+  - **A figure and the date it belongs to are one fact — and say which fact.** "As of {date}" claims the
+    figure IS that date's value. If the date is instead the oldest input behind a current figure, say
+    "updated through {date}": a tile reading "55,000 · as of 28 Feb" above a chart showing 38,000 that
+    February states something false.
 - **Payment method + card fields.** Any form offering a payment method reuses `PaymentMethodFields` (`apps/web/components/payment-method-fields.tsx`) — it owns the method select, the conditional card select (height-reveal), the clear-card-on-method-change effect, and the zero-cards inline "Add a card" empty state with the stacked `CreditCardFormDialog` + auto-select. Never re-implement the pair per dialog.
 
 ## Forms and inputs
