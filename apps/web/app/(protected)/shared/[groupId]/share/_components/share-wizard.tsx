@@ -209,7 +209,17 @@ export function ShareWizard({
    * reload would start over and make a second pot. Retrying skips the creation, `potId` being set.
    */
   async function onPickContinue() {
-    if (selectedCount === 0 || chosenCurrency === null) return;
+    if (chosenCurrency === null) return;
+    /*
+     * Nothing new to move, but the pot already holds what it needs — so this step is simply satisfied.
+     * That is the state Back from step 2 lands in: the selection was consumed by the move, and
+     * re-submitting it would ask the API to move holdings that are no longer private, which answers
+     * "Holding not found" about something the picker was still showing.
+     */
+    if (selectedCount === 0) {
+      if (sharedCount > 0) setStage('value');
+      return;
+    }
     setPending(true);
     // Declared out here so `finally` can see it on every exit — including a thrown one.
     let created: number | null = null;
@@ -238,6 +248,10 @@ export function ShareWizard({
       // What they turned out to be worth, from the write's own response rather than a second read.
       form.setValue('value', moved.data.nav ?? '');
       setValuePrefilled(moved.data.nav !== null);
+      // The selection has been consumed. Coming back to this step should offer an empty picker for
+      // anything MORE to add, not the same rows already sitting in the pot.
+      setInvestmentIds([]);
+      setAccountIds([]);
       setStage('value');
     } catch {
       toast.error(t('pots.share.moveError'));
@@ -306,7 +320,8 @@ export function ShareWizard({
       label: t('pots.wizard.continueCta'),
       loadingLabel: t('form.cta.loading'),
       onClick: onPickContinue,
-      disabled: selectedCount === 0 || chosenCurrency === null,
+      // Unavailable only when there is nothing at all — neither picked now nor already in the pot.
+      disabled: (selectedCount === 0 && sharedCount === 0) || chosenCurrency === null,
     },
     value: {
       label: t('pots.wizard.continueCta'),
@@ -395,7 +410,7 @@ export function ShareWizard({
            * Stated rather than left to a dead button: the primary is unavailable until something is
            * picked, and an unexplained disabled control is what this repo refuses everywhere else.
            */}
-          {selectedCount === 0 && (
+          {selectedCount === 0 && sharedCount === 0 && (
             <p className="text-paragraph-xs text-muted-foreground">
               {t('pots.share.pick.nothingSelected')}
             </p>
