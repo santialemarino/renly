@@ -132,6 +132,14 @@ export function ShareWizard({
 
   const form = useForm<PotOpeningFormValues>({
     resolver: zodResolver(schema),
+    /*
+     * Validated on change, which these flows need and the dialogs beside them do not: a dialog submits
+     * through `handleSubmit`, so react-hook-form flips `isSubmitted` and its default
+     * `reValidateMode: 'onChange'` starts clearing errors as fields are fixed. A step advances through
+     * `trigger()` instead, which never sets that flag — so without this a "This field is required"
+     * stayed on screen after the field was filled, for the rest of the flow.
+     */
+    mode: 'onChange',
     defaultValues: {
       date: today,
       // Prefilled on a resumed run for the same reason it is after the move: it is what the holdings
