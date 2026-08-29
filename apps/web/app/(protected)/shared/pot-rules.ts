@@ -4,6 +4,7 @@ import type {
   PotHoldings,
   PotMemberShare,
   PotOwnershipEvent,
+  PotValueSeries,
 } from '@/lib/api/pots';
 
 /*
@@ -296,4 +297,82 @@ function reagreementValue(event: PotOwnershipEvent): string {
  */
 export function isOutgoingEvent(event: PotOwnershipEvent): boolean {
   return event.type === 'withdrawal';
+}
+
+// --- Monitoring ---
+
+/*
+ * What the header's value tile says, as a state rather than a nested ternary.
+ *
+ * The as-of date is appended only when there IS a figure. When the value cannot be stated at all,
+ * "not valued" is the whole answer — a date beside it would describe the freshness of numbers the
+ * tile is not showing, which is the case a pot whose holdings are all snapshotted but one of which
+ * cannot be converted actually reaches (a real `valuedAsOf`, a null `nav`).
+ *
+ * Returns the figures rather than only a tag, so the caller formats what the rule selected instead of
+ * re-checking the same two nulls to satisfy the type — a second copy of the rule, and one free to
+ * drift from it.
+ */
+export type PotValueDisplay =
+  | { kind: 'unvalued' }
+  | { kind: 'value'; nav: string }
+  | { kind: 'valueAsOf'; nav: string; valuedAsOf: string };
+
+export function potValueDisplay(pot: Pot): PotValueDisplay {
+  if (pot.nav === null) return { kind: 'unvalued' };
+  if (pot.valuedAsOf === null) return { kind: 'value', nav: pot.nav };
+  return { kind: 'valueAsOf', nav: pot.nav, valuedAsOf: pot.valuedAsOf };
+}
+
+/*
+ * Which freshness sentence the header shows, if any.
+ *
+ * Two states rather than one, because "nobody has ever valued this" and "the last valuation is older
+ * than the cadence allows" are different problems: the first means the pot cannot be priced at all,
+ * so no contribution or withdrawal can be recorded against it, while the second still leaves a
+ * usable — if dated — figure. Calling the first one "overdue" would understate it.
+ *
+ * Carries the date for the same reason potValueDisplay carries the figure.
+ */
+export type PotFreshnessNotice =
+  | { kind: 'none' }
+  | { kind: 'neverValued' }
+  | { kind: 'overdue'; valuedAsOf: string };
+
+export function potFreshnessNotice(pot: Pot): PotFreshnessNotice {
+  if (!pot.isStale) return { kind: 'none' };
+  return pot.valuedAsOf === null
+    ? { kind: 'neverValued' }
+    : { kind: 'overdue', valuedAsOf: pot.valuedAsOf };
+}
+
+// How many points of the series carry a figure. Both the caption's subject and the gate on rendering a
+// chart at all: a window in which nothing could be valued has no line to draw, only a sentence.
+export function valuedPointCount(series: PotValueSeries): number {
+  return series.points.filter((point) => point.nav !== null).length;
+}
+
+/*
+ * Whether the section can state its coverage as "valued in x of the last y".
+ *
+ * Two ways it cannot. With nothing valued there is no chart to describe, and with a single period it
+ * is not a sentence — "valued in 1 of the last 1 months" is exactly what a pot created today
+ * produces, which is the FIRST thing anyone sees after the sharing flow rather than an edge case.
+ * Both fall back to the plain description, which is true whatever the window holds.
+ */
+export const MIN_COVERAGE_PERIODS = 2;
+
+export function showsCoverage(series: PotValueSeries): boolean {
+  return valuedPointCount(series) > 0 && series.points.length >= MIN_COVERAGE_PERIODS;
+}
+
+/*
+ * Whether the viewer's own share is worth drawing as a second series.
+ *
+ * False for a member who holds none of the pot anywhere in the window — which is a real state (V3: a
+ * member owning 0% still sees everything), and a legend entry for a line that is never drawn is a
+ * promise the chart does not keep.
+ */
+export function seriesHasShare(series: PotValueSeries): boolean {
+  return series.points.some((point) => point.myValue !== null);
 }

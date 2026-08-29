@@ -180,6 +180,35 @@ async def sum_by_account_ids(
     return {account_id: Decimal(str(total)) for account_id, total in result.all()}
 
 
+# Income totals linked to each account, grouped by (account_id, date), for a caller deriving those
+# accounts' balances at MANY dates in one pass — a pot's value series, which would otherwise ask the
+# database once per point.
+#
+# Carries the same opening_date lower bound and as-of upper bound as the point-in-time sum, because
+# the series has to agree with the headline balance exactly and the only way to guarantee that is for
+# the two to filter identically. `until` is the last date the caller will ask about.
+# `user_id` is nullable for the same reason it effectively is on sum_by_account_ids: a pot's accounts
+# have no owner, so the batch resolves to NULL and matches nothing — which is correct, since a shared
+# account cannot carry private entries at all.
+async def sum_by_account_ids_dated(
+    session: AsyncSession, account_ids: list[int], user_id: int | None, *, until: date_type
+) -> list[tuple[int, date_type, Decimal]]:
+    if not account_ids:
+        return []
+    result = await session.execute(
+        select(IncomeEntry.account_id, IncomeEntry.date, func.coalesce(func.sum(IncomeEntry.amount), 0))
+        .join(Account, Account.id == IncomeEntry.account_id)
+        .where(
+            IncomeEntry.account_id.in_(account_ids),
+            IncomeEntry.user_id == user_id,
+            IncomeEntry.date >= Account.opening_date,
+            IncomeEntry.date <= until,
+        )
+        .group_by(IncomeEntry.account_id, IncomeEntry.date)
+    )
+    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+
+
 # Monthly income totals linked to each account, grouped by account_id, year, month (the account's
 # currency is fixed, so no currency dimension). Returns a list of (account_id, year, month, total).
 async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[int], user_id: int) -> list[tuple[int, int, int, Decimal]]:
@@ -280,6 +309,7 @@ class IncomeRepository:
     list_dedup_keys_by_user = staticmethod(list_dedup_keys_by_user)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_dated = staticmethod(sum_by_account_ids_dated)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)

@@ -65,6 +65,24 @@ async def get_latest_by_investments(
     return {s.investment_id: s for s in result.scalars().all()}
 
 
+# Every snapshot for these investments dated on or before `until`, oldest first, so a caller valuing
+# them at MANY dates can walk the rows once instead of asking the database per date.
+#
+# `until` is not optional, and bounding above matters as much as it does in get_latest_by_investments:
+# a snapshot dated in the future is not a valuation of today, so a series that included one would
+# report a figure nothing has reached yet — and would disagree with the point-in-time NAV, which
+# bounds by its own as_of_date.
+async def list_by_investments(session: AsyncSession, investment_ids: list[int], *, until: date) -> list[InvestmentSnapshot]:
+    if not investment_ids:
+        return []
+    result = await session.execute(
+        select(InvestmentSnapshot)
+        .where(InvestmentSnapshot.investment_id.in_(investment_ids), InvestmentSnapshot.date <= until)
+        .order_by(InvestmentSnapshot.investment_id, InvestmentSnapshot.date)
+    )
+    return list(result.scalars().all())
+
+
 # Lists snapshots for an investment, most recent first.
 async def list_by_investment(
     session: AsyncSession,
@@ -156,6 +174,7 @@ class SnapshotRepository:
     get_latest_by_investments = staticmethod(get_latest_by_investments)
     has_snapshots = staticmethod(has_snapshots)
     list_by_investment = staticmethod(list_by_investment)
+    list_by_investments = staticmethod(list_by_investments)
     save = staticmethod(save)
 
 

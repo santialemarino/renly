@@ -122,6 +122,28 @@ async def exists_by_account_id(session: AsyncSession, account_id: int, user_id: 
     return result.first() is not None
 
 
+# Settlement cash totals drawn from each account, grouped by (account_id, date), for a caller deriving
+# those accounts' balances at MANY dates in one pass. Same bounds and the same CASH leg as the
+# point-in-time sum — see the note on income_repository.sum_by_account_ids_dated.
+async def sum_by_account_ids_dated(
+    session: AsyncSession, account_ids: list[int], user_id: int | None, *, until: date_type
+) -> list[tuple[int, date_type, Decimal]]:
+    if not account_ids:
+        return []
+    result = await session.execute(
+        select(CardSettlement.account_id, CardSettlement.date, func.coalesce(func.sum(settlement_cash_leg()), 0))
+        .join(Account, Account.id == CardSettlement.account_id)
+        .where(
+            CardSettlement.account_id.in_(account_ids),
+            CardSettlement.user_id == user_id,
+            CardSettlement.date >= Account.opening_date,
+            CardSettlement.date <= until,
+        )
+        .group_by(CardSettlement.account_id, CardSettlement.date)
+    )
+    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+
+
 # Monthly settlement totals drawn from each account, grouped by account_id, year, month. Sums the CASH
 # leg for the same reason sum_by_account_ids does — this feeds the net-worth chart, so a cross-currency
 # settlement counted at its card amount would move the chart by dollars in a peso account. Nothing
@@ -220,6 +242,7 @@ class CardSettlementRepository:
     exists_by_account_id = staticmethod(exists_by_account_id)
     linked_account_ids = staticmethod(linked_account_ids)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
+    sum_by_account_ids_dated = staticmethod(sum_by_account_ids_dated)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
     sum_by_card_ids_grouped = staticmethod(sum_by_card_ids_grouped)
     sum_by_card_ids_monthly = staticmethod(sum_by_card_ids_monthly)

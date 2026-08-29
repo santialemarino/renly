@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { GROUP_NAME_MAX } from '@/lib/constants/api-constants';
 import {
+  POT_CADENCES,
   POT_MOVEMENT_TYPES,
   POT_PERCENTAGE_DECIMALS,
   POT_PERCENTAGE_TOTAL,
@@ -54,6 +55,7 @@ export function buildPotFormSchema(requiredMsg: string) {
     // a second one to tell apart.
     name: z.string().max(GROUP_NAME_MAX).optional(),
     baseCurrency: z.string().min(1, { message: requiredMsg }),
+    snapshotCadence: z.enum(POT_CADENCES, { message: requiredMsg }),
     visibility: z.enum(POT_VISIBILITIES, { message: requiredMsg }),
   });
 }

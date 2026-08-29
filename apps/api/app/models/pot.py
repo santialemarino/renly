@@ -10,6 +10,15 @@ from sqlmodel import Field, SQLModel
 from app.models.utils import utcnow
 
 
+# How often a pot is expected to be re-valued. An expectation, never a schedule: nothing writes
+# snapshots on its account, and all it decides is what counts as an overdue valuation and how the
+# value series is bucketed. 'ad_hoc' declares no rhythm at all, so such a pot is never overdue.
+class PotCadence(StrEnum):
+    ad_hoc = "ad_hoc"
+    monthly = "monthly"
+    weekly = "weekly"
+
+
 # Who may see a pot, for a member with no explicit permission row of their own.
 class PotVisibility(StrEnum):
     members = "members"
@@ -34,6 +43,10 @@ class Pot(SQLModel, table=True):
     group_id: int = Field(foreign_key="groups.id", description="Group whose members can reach this pot.")
     name: str | None = Field(default=None, max_length=255, description="NULL for a group's default pot, which the UI does not name.")
     base_currency: str = Field(max_length=3, description="Currency all ownership math runs in (ISO 4217).")
+    snapshot_cadence: PotCadence = Field(
+        default=PotCadence.monthly,
+        sa_column=Column(SAEnum(PotCadence, name="pot_cadence"), nullable=False, server_default="monthly"),
+    )
     visibility: PotVisibility = Field(
         default=PotVisibility.members,
         sa_column=Column(SAEnum(PotVisibility, name="pot_visibility"), nullable=False, server_default="members"),

@@ -138,6 +138,42 @@ async def sum_in_by_account_ids(session: AsyncSession, account_ids: list[int], *
     return await _sum_leg(session, PotOwnershipEvent.to_account_id, _TO_AMOUNT, account_ids, as_of_date=as_of_date)
 
 
+# Totals for one leg, grouped by (account_id, date), for a caller deriving those accounts' balances at
+# MANY dates in one pass. Mirrors _sum_leg above — the same CASE per leg and the same opening_date lower
+# bound, plus an `until` upper bound — so the series and the point-in-time balance cannot disagree.
+async def _sum_leg_dated(
+    session: AsyncSession,
+    leg: InstrumentedAttribute,
+    amount,
+    account_ids: list[int],
+    *,
+    until: date_type,
+) -> list[tuple[int, date_type, Decimal]]:
+    if not account_ids:
+        return []
+    result = await session.execute(
+        select(leg, PotOwnershipEvent.date, func.coalesce(func.sum(amount), 0))
+        .join(Account, Account.id == leg)
+        .where(
+            leg.in_(account_ids),
+            PotOwnershipEvent.date >= Account.opening_date,
+            PotOwnershipEvent.date <= until,
+        )
+        .group_by(leg, PotOwnershipEvent.date)
+    )
+    return [(row[0], row[1], Decimal(str(row[2]))) for row in result.all()]
+
+
+# Dated totals moved OUT of each account by an ownership event.
+async def sum_out_by_account_ids_dated(session: AsyncSession, account_ids: list[int], *, until: date_type) -> list[tuple[int, date_type, Decimal]]:
+    return await _sum_leg_dated(session, PotOwnershipEvent.from_account_id, _FROM_AMOUNT, account_ids, until=until)
+
+
+# Dated totals moved INTO each account by an ownership event.
+async def sum_in_by_account_ids_dated(session: AsyncSession, account_ids: list[int], *, until: date_type) -> list[tuple[int, date_type, Decimal]]:
+    return await _sum_leg_dated(session, PotOwnershipEvent.to_account_id, _TO_AMOUNT, account_ids, until=until)
+
+
 # Whether any ownership event names one of these accounts on either leg. Used before an account is
 # moved into (or out of) a pot: a movement already recorded against it would otherwise end up in a
 # different scope than the account it belongs to.
@@ -163,7 +199,9 @@ class PotOwnershipRepository:
     list_by_pot = staticmethod(list_by_pot)
     list_by_pots = staticmethod(list_by_pots)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
+    sum_in_by_account_ids_dated = staticmethod(sum_in_by_account_ids_dated)
     sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)
+    sum_out_by_account_ids_dated = staticmethod(sum_out_by_account_ids_dated)
 
 
 # Singleton used by services to access ownership-ledger persistence.

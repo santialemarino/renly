@@ -21,7 +21,7 @@ import { buildPotFormSchema, type PotFormValues } from '@/app/(protected)/shared
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import type { Pot } from '@/lib/api/pots';
-import { POT_VISIBILITIES } from '@/lib/constants/pots';
+import { DEFAULT_POT_CADENCE, POT_CADENCES, POT_VISIBILITIES } from '@/lib/constants/pots';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface PotFormDialogProps {
@@ -56,7 +56,12 @@ export function PotFormDialog({
 
   const form = useForm<PotFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: '', baseCurrency: '', visibility: 'members' },
+    defaultValues: {
+      name: '',
+      baseCurrency: '',
+      snapshotCadence: DEFAULT_POT_CADENCE,
+      visibility: 'members',
+    },
   });
 
   const isEdit = !!pot;
@@ -69,10 +74,16 @@ export function PotFormDialog({
     toValues: (p) => ({
       name: p?.name ?? '',
       baseCurrency: p?.baseCurrency ?? '',
+      snapshotCadence: p?.snapshotCadence ?? DEFAULT_POT_CADENCE,
       visibility: p?.visibility ?? 'members',
     }),
     onSuccess,
   });
+
+  const cadenceOptions = POT_CADENCES.map((cadence) => ({
+    value: cadence,
+    label: t(`pots.cadence.${cadence}`),
+  }));
 
   const visibilityOptions = POT_VISIBILITIES.map((visibility) => ({
     value: visibility,
@@ -151,6 +162,29 @@ export function PotFormDialog({
                 )}
               />
             )}
+
+            <FormField
+              control={form.control}
+              name="snapshotCadence"
+              render={({ field }) => (
+                <FormItem required>
+                  <FormLabel>{t('pots.form.cadence.label')}</FormLabel>
+                  <FormControl>
+                    <FormCombobox
+                      value={field.value ?? ''}
+                      onValueChange={field.onChange}
+                      options={cadenceOptions}
+                      placeholder={t('pots.form.cadence.placeholder')}
+                      className="w-full"
+                    />
+                  </FormControl>
+                  <p className="text-paragraph-xs text-muted-foreground">
+                    {t('pots.form.cadence.hint')}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

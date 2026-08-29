@@ -16,13 +16,24 @@ import {
   isOutgoingEvent,
   isPriceable,
   ownershipEventAmount,
+  potFreshnessNotice,
   potLabel,
   potLegAccounts,
+  potValueDisplay,
+  seriesHasShare,
   shareWizardEntry,
+  showsCoverage,
   suggestedBaseCurrency,
+  valuedPointCount,
   wholeExitOutcome,
 } from '@/app/(protected)/shared/pot-rules';
-import type { Pot, PotHolding, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
+import type {
+  Pot,
+  PotHolding,
+  PotHoldings,
+  PotOwnershipEvent,
+  PotValueSeries,
+} from '@/lib/api/pots';
 
 /*
  * The rules that decide what a pot's surface shows and offers. Each one mirrors a rule the API also
@@ -39,9 +50,12 @@ function pot(over: Partial<Pot> = {}): Pot {
     groupId: 10,
     name: null,
     baseCurrency: 'USD',
+    snapshotCadence: 'monthly',
     visibility: 'members',
     isDefault: true,
     nav: '110.00',
+    valuedAsOf: '2026-08-01',
+    isStale: false,
     unitPrice: '1.100000',
     totalUnits: '100.000000',
     myPercentage: '90.00',
@@ -93,6 +107,7 @@ function holding(over: Partial<PotHolding> = {}): PotHolding {
     currency: 'USD',
     value: '100.00',
     baseValue: '100.00',
+    valuedOn: '2026-08-01',
     isActive: true,
     ...over,
   };
@@ -506,5 +521,138 @@ describe('suggestedBaseCurrency', () => {
 
   it('has nothing to suggest for an empty selection', () => {
     expect(suggestedBaseCurrency([])).toBeNull();
+  });
+});
+
+function series(
+  points: PotValueSeries['points'],
+  interval: PotValueSeries['interval'] = 'monthly',
+) {
+  return { interval, points };
+}
+
+describe('potValueDisplay', () => {
+  it('states the figure with the date it is current to', () => {
+    expect(potValueDisplay(pot({ nav: '110.00', valuedAsOf: '2026-08-01' }))).toEqual({
+      kind: 'valueAsOf',
+      nav: '110.00',
+      valuedAsOf: '2026-08-01',
+    });
+  });
+
+  it('says "not valued" and nothing else when there is no figure', () => {
+    // Including the case where a date IS known: a pot whose holdings are all snapshotted but one of
+    // which cannot be converted has a real valuedAsOf and no nav, and putting the date beside "not
+    // valued" would describe the freshness of numbers the tile is not showing.
+    expect(potValueDisplay(pot({ nav: null, valuedAsOf: '2026-08-01' }))).toEqual({
+      kind: 'unvalued',
+    });
+  });
+
+  it('states a figure with no date when there is none to state', () => {
+    expect(potValueDisplay(pot({ nav: '110.00', valuedAsOf: null }))).toEqual({
+      kind: 'value',
+      nav: '110.00',
+    });
+  });
+});
+
+describe('potFreshnessNotice', () => {
+  it('says nothing at all when the cadence is satisfied', () => {
+    expect(potFreshnessNotice(pot({ isStale: false, valuedAsOf: '2026-08-01' }))).toEqual({
+      kind: 'none',
+    });
+  });
+
+  it('separates "never valued" from "overdue", because only one of them can still be priced', () => {
+    // A pot nobody has valued cannot price a contribution at all; one that is merely behind still has
+    // a usable, dated figure. Calling the first "overdue" would understate it.
+    expect(potFreshnessNotice(pot({ isStale: true, valuedAsOf: null }))).toEqual({
+      kind: 'neverValued',
+    });
+    expect(potFreshnessNotice(pot({ isStale: true, valuedAsOf: '2026-01-05' }))).toEqual({
+      kind: 'overdue',
+      valuedAsOf: '2026-01-05',
+    });
+  });
+
+  it('stays silent for a pot with no valuation that the cadence does not ask for one of', () => {
+    // An ad-hoc pot and an empty one both arrive here with isStale false — the API decides that, and
+    // this must not second-guess it by reading the null date as a problem of its own.
+    expect(potFreshnessNotice(pot({ isStale: false, valuedAsOf: null }))).toEqual({ kind: 'none' });
+  });
+});
+
+describe('valuedPointCount', () => {
+  it('counts only the points that carry a figure', () => {
+    // The caption's subject and the gate on drawing a chart at all. Most early points of a real pot
+    // are null, because a holding moved in last month has no valuation for the months before it.
+    const points = [
+      { date: '2026-06-30', nav: null, myValue: null },
+      { date: '2026-07-31', nav: '100.00', myValue: '60.00' },
+      { date: '2026-08-29', nav: '110.00', myValue: '66.00' },
+    ];
+    expect(valuedPointCount(series(points))).toBe(2);
+  });
+
+  it('is zero for a window in which nothing could be valued', () => {
+    expect(valuedPointCount(series([{ date: '2026-08-29', nav: null, myValue: null }]))).toBe(0);
+  });
+
+  it("counts the POT's value, not the viewer's share of it", () => {
+    // The two diverge before the ownership baseline: the pot is worth something and nobody owns any
+    // of it yet. Counting shares there would call a perfectly readable chart empty.
+    const points = [
+      { date: '2026-07-31', nav: '100.00', myValue: null },
+      { date: '2026-08-29', nav: '110.00', myValue: null },
+    ];
+    expect(valuedPointCount(series(points))).toBe(2);
+  });
+});
+
+describe('showsCoverage', () => {
+  it('states the coverage once there are at least two periods with something in them', () => {
+    const points = [
+      { date: '2026-07-31', nav: null, myValue: null },
+      { date: '2026-08-29', nav: '110.00', myValue: '66.00' },
+    ];
+    expect(showsCoverage(series(points))).toBe(true);
+  });
+
+  it('says nothing about coverage for a single-period window', () => {
+    // "Valued in 1 of the last 1 months" is not a sentence, and it is what a pot created TODAY
+    // produces — the first thing anyone sees after the sharing flow, not an edge case.
+    const points = [{ date: '2026-08-29', nav: '110.00', myValue: '66.00' }];
+    expect(showsCoverage(series(points))).toBe(false);
+  });
+
+  it('says nothing about coverage when no period could be valued', () => {
+    const points = [
+      { date: '2026-07-31', nav: null, myValue: null },
+      { date: '2026-08-29', nav: null, myValue: null },
+    ];
+    expect(showsCoverage(series(points))).toBe(false);
+  });
+});
+
+describe('seriesHasShare', () => {
+  it('is true as soon as ONE point states a share', () => {
+    // The share only exists from the baseline onward, so a pot divided partway through the window has
+    // nulls before it — and dropping the line for that would hide the half that is real.
+    const points = [
+      { date: '2026-07-31', nav: '100.00', myValue: null },
+      { date: '2026-08-29', nav: '110.00', myValue: '66.00' },
+    ];
+    expect(seriesHasShare(series(points))).toBe(true);
+  });
+
+  it('is false for a member who holds none of it anywhere in the window', () => {
+    // A real state — V3: a member owning 0% still sees everything — and a legend entry for a line
+    // that is never drawn is a promise the chart does not keep.
+    const points = [
+      { date: '2026-07-31', nav: '100.00', myValue: null },
+      { date: '2026-08-29', nav: '110.00', myValue: null },
+    ];
+    expect(seriesHasShare(series(points))).toBe(false);
   });
 });

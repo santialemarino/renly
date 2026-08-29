@@ -112,6 +112,42 @@ class TestTheValuationDateBound:
         assert found == {}
 
 
+class TestTheWindowedListTheSeriesWalks:
+    # list_by_investments is what makes a value series cost one query instead of one per point, and
+    # both of its properties live in the SQL: the upper bound, and the ORDER. The service walks the
+    # rows as a merge against an ascending grid, so a descending result would carry the OLDEST
+    # snapshot forward at every point instead of the latest — the same figure, silently wrong.
+
+    @pytest.mark.asyncio
+    async def test_it_returns_every_snapshot_on_or_before_the_window_end(self, seeded):
+        async with seeded["maker"]() as s:
+            rows = await snapshot_repository.list_by_investments(s, [seeded["private"]], until=date(2026, 6, 1))
+        assert [row.date for row in rows] == [date(2026, 1, 1), date(2026, 3, 1)]
+
+    @pytest.mark.asyncio
+    async def test_a_snapshot_after_the_window_is_excluded(self, seeded):
+        # A future-dated snapshot is not a valuation of today. Without the bound the series' last point
+        # would disagree with the pot header, which bounds by its own as_of_date.
+        async with seeded["maker"]() as s:
+            rows = await snapshot_repository.list_by_investments(s, [seeded["private"]], until=date(2026, 12, 31))
+        assert [row.date for row in rows] == [date(2026, 1, 1), date(2026, 3, 1), date(2026, 9, 1)]
+
+    @pytest.mark.asyncio
+    async def test_rows_come_back_oldest_first_within_each_investment(self, seeded):
+        # The merge walk depends on it: it advances a cursor while `row.date <= point`, keeping the
+        # last row it passed. Reversed, the row it keeps is the earliest rather than the latest.
+        async with seeded["maker"]() as s:
+            rows = await snapshot_repository.list_by_investments(s, [seeded["private"]], until=date(2026, 12, 31))
+        dates = [row.date for row in rows]
+        assert dates == sorted(dates)
+
+    @pytest.mark.asyncio
+    async def test_an_investment_nobody_asked_about_is_not_returned(self, seeded):
+        async with seeded["maker"]() as s:
+            rows = await snapshot_repository.list_by_investments(s, [seeded["shared"]], until=date(2026, 12, 31))
+        assert rows == []
+
+
 class TestBulkUpsertCarriesTheScope:
     @pytest.mark.asyncio
     async def test_a_co_owned_investments_snapshot_survives_the_single_owner_check(self, seeded):

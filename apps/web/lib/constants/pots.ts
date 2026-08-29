@@ -9,6 +9,33 @@
  */
 
 /*
+ * How often a pot is expected to be re-valued, in the order a picker should offer them: most often
+ * first, with "no agreed rhythm" last because it is the opt-out rather than a third frequency.
+ *
+ * An EXPECTATION, never a schedule. Nothing writes snapshots because a pot asked for one; all the
+ * setting decides is how old a valuation has to be before the pot reads as behind, and how far apart
+ * its value series' points sit. `ad_hoc` declares no rhythm, so such a pot is never behind.
+ */
+export const POT_CADENCES = ['weekly', 'monthly', 'ad_hoc'] as const;
+
+export type PotCadence = (typeof POT_CADENCES)[number];
+
+/*
+ * What a pot declares when nobody has chosen. Monthly because that is the rhythm Renly itself keeps —
+ * auto-snapshots fire on the last day of the month — so a weekly default would mark every
+ * ticker-linked pot overdue on the day it is created. Mirrors the API's own default and the column's,
+ * and named here so the guided flow (which deliberately does not ask) and the form agree.
+ */
+export const DEFAULT_POT_CADENCE: PotCadence = 'monthly';
+
+/*
+ * The grid a value series' points actually sit on, which is NOT the same set as the cadences: an
+ * `ad_hoc` pot has no rhythm of its own and is plotted monthly. The API says which one it used rather
+ * than leaving the caller to re-derive the mapping.
+ */
+export type PotSeriesInterval = 'weekly' | 'monthly';
+
+/*
  * Who can see a pot by default. It is only the DEFAULT — an explicit per-member permission row wins
  * in both directions, and `owners` fails closed: no row, no access.
  */

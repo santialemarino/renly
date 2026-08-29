@@ -134,6 +134,12 @@ function SinglePotCard({ pot }: { pot: Pot }) {
             {potLabel(pot, t('pots.defaultLabel'))}
           </span>
           <Badge variant="secondary">{pot.baseCurrency}</Badge>
+          {/*
+           * The glance version of the pot page's freshness line. It belongs HERE as well as there,
+           * because an indicator you only see once you have gone looking cannot prompt anyone to go
+           * looking — the hub is where a household notices a pot has fallen behind.
+           */}
+          {pot.isStale && <Badge variant="outline">{t('pots.freshness.badge')}</Badge>}
           {!pot.canWrite && <Badge variant="secondary">{t('pots.readOnly')}</Badge>}
         </span>
         <Button variant="outline" asChild>
@@ -179,6 +185,7 @@ function PotsTable({ pots }: { pots: Pot[] }) {
               <span className="flex flex-wrap items-center gap-x-2">
                 {potLabel(pot, t('pots.defaultLabel'))}
                 <Badge variant="secondary">{pot.baseCurrency}</Badge>
+                {pot.isStale && <Badge variant="outline">{t('pots.freshness.badge')}</Badge>}
                 {!pot.canWrite && <Badge variant="secondary">{t('pots.readOnly')}</Badge>}
               </span>
             </TableCell>

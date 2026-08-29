@@ -135,6 +135,17 @@ CREATE TYPE pot_visibility AS ENUM (
   'owners'
 );
 
+-- How often a pot is expected to be re-valued, which is the standard its freshness indicator is
+-- measured against: 'weekly' for a pot someone else holds and reports on often, 'monthly' for one
+-- you control (and the default, because auto-snapshots run monthly), 'ad_hoc' for a pot with no
+-- agreed rhythm — which is never reported as overdue, since there is nothing to be late against.
+-- Ordered by frequency rather than alphabetically; the Python StrEnum stays alphabetical.
+CREATE TYPE pot_cadence AS ENUM (
+  'weekly',
+  'monthly',
+  'ad_hoc'
+);
+
 -- What an entry in a pot's ownership ledger records. 'opening' sets the division baseline,
 -- 'contribution' issues units for money moved in, 'withdrawal' redeems them for money moved out,
 -- and 'reagreement' moves units between two members with no money at all.
@@ -950,15 +961,19 @@ CREATE INDEX idx_group_invites_group_id ON group_invites(group_id);
 -- changing a display currency re-converts, it never moves ownership.
 -- visibility is only the DEFAULT for a member with no explicit pot_member_permissions row, so a
 -- member who joins the group after the pot exists is covered without any seeding step.
+-- snapshot_cadence declares how often the pot is expected to be re-valued. It is an expectation, not
+-- a schedule: nothing writes snapshots on its account, and the only thing it changes is what counts
+-- as an overdue valuation and how the value series is bucketed.
 CREATE TABLE pots (
-  id            BIGSERIAL PRIMARY KEY,
-  group_id      BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-  name          VARCHAR(255),
-  base_currency VARCHAR(3) NOT NULL,
-  visibility    pot_visibility NOT NULL DEFAULT 'members',
-  is_default    BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  id               BIGSERIAL PRIMARY KEY,
+  group_id         BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  name             VARCHAR(255),
+  base_currency    VARCHAR(3) NOT NULL,
+  snapshot_cadence pot_cadence NOT NULL DEFAULT 'monthly',
+  visibility       pot_visibility NOT NULL DEFAULT 'members',
+  is_default       BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_pots_group_id ON pots(group_id);
