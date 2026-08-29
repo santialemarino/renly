@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -103,6 +103,14 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
 
   const form = useForm<PotBuyOutFormValues>({
     resolver: zodResolver(schema),
+    /*
+     * Validated on change, which these flows need and the dialogs beside them do not: a dialog submits
+     * through `handleSubmit`, so react-hook-form flips `isSubmitted` and its default
+     * `reValidateMode: 'onChange'` starts clearing errors as fields are fixed. A step advances through
+     * `trigger()` instead, which never sets that flag — so without this a "This field is required"
+     * stayed on screen after the field was filled, for the rest of the flow.
+     */
+    mode: 'onChange',
     defaultValues: { date: asOfDate ?? today, fromMemberId: '', toMemberId: '', notes: '' },
   });
 
@@ -120,6 +128,18 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
   // The only holder left, if exactly one is — for the closing panel. Withheld until a refresh lands,
   // because until then `pot` still describes the split from BEFORE the write.
   const soleHolder = !isNavigating && pot.shares.length === 1 ? pot.shares[0] : undefined;
+
+  /*
+   * Clears a seller the re-read no longer knows about. Someone holding a share today may have held
+   * none on an earlier date, and the selection survived the re-read pointing at nobody — which reached
+   * the second step with an empty panel and a "Record it" that silently did nothing, because both are
+   * guarded on a seller that no longer exists. The picker goes back to its placeholder instead.
+   */
+  useEffect(() => {
+    if (holderShare(pot, Number(form.getValues('fromMemberId'))) === undefined) {
+      form.setValue('fromMemberId', '');
+    }
+  }, [pot, form]);
 
   /*
    * Changing the date re-reads the pot on the server rather than re-valuing here, so what the share is

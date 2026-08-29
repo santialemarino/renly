@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -129,6 +129,14 @@ export function TakeOutWizard({
 
   const form = useForm<PotTakeOutFormValues>({
     resolver: zodResolver(schema),
+    /*
+     * Validated on change, which these flows need and the dialogs beside them do not: a dialog submits
+     * through `handleSubmit`, so react-hook-form flips `isSubmitted` and its default
+     * `reValidateMode: 'onChange'` starts clearing errors as fields are fixed. A step advances through
+     * `trigger()` instead, which never sets that flag — so without this a "This field is required"
+     * stayed on screen after the field was filled, for the rest of the flow.
+     */
+    mode: 'onChange',
     defaultValues: {
       memberId: defaultHolder === undefined ? '' : String(defaultHolder.memberId),
       date: asOfDate ?? today,
@@ -166,6 +174,36 @@ export function TakeOutWizard({
     () => privateAccounts.filter((a) => a.isActive),
     [privateAccounts],
   );
+
+  /*
+   * Reconciles the form with a pot that has just been re-read at a different date. Both halves are
+   * defects this removes rather than tidiness:
+   *
+   *   * the amount is a PREFILL OF the share's value, so it has to follow it. Without this, back-dating
+   *     kept the figure the share is worth TODAY and recorded that much money against a share that was
+   *     worth something else — the units stay exact (`whole_share`), so only the money went wrong,
+   *     silently. Deliberately not guarded on "the user edited it": changing the date is itself a
+   *     statement that a different figure applies.
+   *   * a member who held a share today may have held NONE on an earlier date, and the selection would
+   *     survive the re-read pointing at nobody — leaving the flow with no share to describe and a
+   *     primary disabled with nothing on screen explaining why. Clearing it puts the picker back to its
+   *     placeholder, where the ordinary required-field rule takes over.
+   */
+  useEffect(() => {
+    const selected = holderShare(pot, Number(form.getValues('memberId')));
+    if (selected === undefined) {
+      form.setValue('memberId', '');
+      return;
+    }
+    if (form.getValues('amountCurrency') === pot.baseCurrency) {
+      form.setValue('amount', selected.value ?? '');
+    } else {
+      // Across currencies the pot-side figure is the share's value and the arriving amount has to be
+      // restated, because it depends on it and no rate is ever stored.
+      form.setValue('baseAmount', selected.value ?? '');
+      form.setValue('amount', '');
+    }
+  }, [pot, form]);
 
   /*
    * Changing the date re-reads the pot on the server rather than re-pricing here, so the share value
