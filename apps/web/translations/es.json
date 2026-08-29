@@ -2254,7 +2254,7 @@
           "description": "No se registra nada hasta que confirmes.",
           "taking": "Sale",
           "shareGivenUp": "Parte que se cede",
-          "nobodyLeft": "Después de esto nadie va a tener una parte de esto.",
+          "nobodyLeft": "Después de esto, nadie va a tener una parte.",
           "oneHolderLeft": "Después de esto, todo queda en manos de {name}.",
           "severalHoldersLeft": "Entre el resto, las proporciones no cambian, y nadie más pierde valor en su parte.",
           "valueWaits": "Falta indicar la cuenta de uno de los lados, así que el valor de acá no se va a mover con el dinero: las partes cambian ahora y el valor espera su próxima actualización.",
