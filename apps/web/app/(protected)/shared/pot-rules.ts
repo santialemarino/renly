@@ -1,4 +1,10 @@
-import type { Pot, PotHolding, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
+import type {
+  Pot,
+  PotHolding,
+  PotHoldings,
+  PotMemberShare,
+  PotOwnershipEvent,
+} from '@/lib/api/pots';
 
 /*
  * What a pot's surface shows and offers, as pure functions over the API's own response.
@@ -119,6 +125,114 @@ export function canNamePrivateLeg(memberId: number, myMemberId: number | null): 
  */
 export function potLegAccounts(holdings: PotHoldings, baseCurrency: string): PotHolding[] {
   return holdings.accounts.filter((a) => a.isActive && a.currency === baseCurrency);
+}
+
+// --- The guided flows ---
+
+/*
+ * Which panel "share something you own" opens on. DERIVED from what the server already has, never
+ * remembered, and that is the whole design: the flow makes three writes that no transaction spans
+ * (create the pot, move the holdings in, record the baseline), so a failure or a closed tab after any
+ * of them has to be recoverable. Re-entering reads the same three facts and lands on the first thing
+ * still missing, so there is no half-made pot the app cannot talk about — and no wizard state to
+ * persist or invalidate.
+ *
+ * The order the writes happen in is what makes that safe, and it is not interchangeable: holdings can
+ * still leave a pot while its ownership has NOT been agreed (409 pot_already_divided afterwards), so
+ * the baseline goes last and everything before it is still undoable by hand.
+ *
+ * `divided` is not a step. A pot with any ownership history cannot take a baseline at all
+ * (409 pot_already_opened), so the flow says so and points at the pot instead of offering a form that
+ * would be refused.
+ */
+export type SharePotStage = 'pick' | 'value' | 'shares' | 'confirm' | 'done' | 'divided';
+
+export interface SharePotProgress {
+  holdings: PotHoldings;
+  events: PotOwnershipEvent[];
+}
+
+/*
+ * `null` is "there is no pot yet", which is the only way the three facts can be partly absent: the
+ * page fetches them together, so it either has all of them or none. Taking one nullable argument
+ * rather than three says that, and it removed two clauses that no caller could ever falsify — a
+ * mutation sweep proved both survived being deleted.
+ */
+export function shareWizardEntry(progress: SharePotProgress | null): SharePotStage {
+  if (progress === null) return 'pick';
+  if (hasLedger(progress.events)) return 'divided';
+  const holdsNothing =
+    progress.holdings.investments.length === 0 && progress.holdings.accounts.length === 0;
+  return holdsNothing ? 'pick' : 'value';
+}
+
+/*
+ * Whether a share can be taken out of the pot. A movement's own conditions, plus somebody actually
+ * holding a share to take — which the flow needs and a plain movement does not, because it opens on
+ * "whose share" rather than on an amount.
+ */
+export function canTakeShareOut(pot: Pot): boolean {
+  return canRecordMovement(pot) && pot.shares.length > 0;
+}
+
+// One member's share row, or undefined when they hold none. Every guided flow branches on this, and
+// "holds nothing" is a real state: a bought-out member keeps their seat and loses their row.
+export function holderShare(pot: Pot, memberId: number): PotMemberShare | undefined {
+  return pot.shares.find((share) => share.memberId === memberId);
+}
+
+/*
+ * What the pot looks like after one member's whole share leaves, in the only terms the flow can state
+ * honestly WITHOUT reproducing the backend's rounding.
+ *
+ * The resulting percentages are computed server-side and carry their rounding remainder to the largest
+ * holder, so predicting them here would be a second copy of an algorithm that has to agree exactly —
+ * and the one figure a second copy gets wrong is the one a person checks. These three cases need no
+ * arithmetic at all: nobody is left, exactly one person is left (so they own all of it, which is 100%
+ * by definition rather than by calculation), or several are (so they keep the same proportions to each
+ * other, which is what pro-rata means). The real figures come from the refreshed pot afterwards.
+ */
+export type WholeExitOutcome = 'nobodyLeft' | 'oneHolderLeft' | 'severalHoldersLeft';
+
+export function wholeExitOutcome(pot: Pot, memberId: number): WholeExitOutcome {
+  const remaining = pot.shares.filter((share) => share.memberId !== memberId);
+  if (remaining.length === 0) return 'nobodyLeft';
+  return remaining.length === 1 ? 'oneHolderLeft' : 'severalHoldersLeft';
+}
+
+/*
+ * Whether buying this seller out leaves the buyer holding the whole pot.
+ *
+ * Deliberately NOT wholeExitOutcome. That one answers "who is left after a share leaves", which is the
+ * question a withdrawal asks; a buy-out's units do not leave — the buyer receives them — so its answer
+ * turns on whether anyone OTHER than those two holds a share. Reusing the withdrawal's three cases here
+ * produced a sentence about nobody being left, on a flow where somebody always is.
+ */
+export function buyOutLeavesOneHolder(pot: Pot, sellerId: number, buyerId: number): boolean {
+  return pot.shares.every((share) => share.memberId === sellerId || share.memberId === buyerId);
+}
+
+/*
+ * The base currency to offer for a pot about to hold these things: the one most of them are already
+ * denominated in.
+ *
+ * Not a convenience. Every ownership figure is measured in the pot's base currency, and a movement's
+ * pot-side leg must be an account in it (potLegAccounts, and the API refuses otherwise) — so a pot
+ * created in a currency none of its accounts use has no usable cash leg at all, and the first
+ * contribution someone tries is refused for a reason nothing on screen explains.
+ *
+ * Ties break on first appearance rather than alphabetically, so the answer follows the order the user
+ * sees their own holdings in rather than an ordering they have no view of.
+ */
+export function suggestedBaseCurrency(currencies: string[]): string | null {
+  const counts = new Map<string, number>();
+  currencies.forEach((currency) => counts.set(currency, (counts.get(currency) ?? 0) + 1));
+  // A Map iterates in insertion order, so `>` alone leaves the first-seen currency holding a tie.
+  const winner = [...counts.entries()].reduce<[string, number] | null>(
+    (best, entry) => (best === null || entry[1] > best[1] ? entry : best),
+    null,
+  );
+  return winner === null ? null : winner[0];
 }
 
 // --- Ledger rows ---

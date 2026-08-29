@@ -38,7 +38,7 @@ interface PotPermissionRaw {
   can_write: boolean;
 }
 
-interface PotRaw {
+export interface PotRaw {
   id: number;
   group_id: number;
   name: string | null;
@@ -188,7 +188,7 @@ function mapPermission(raw: PotPermissionRaw): PotPermission {
   };
 }
 
-function mapPot(raw: PotRaw): Pot {
+export function mapPot(raw: PotRaw): Pot {
   return {
     id: raw.id,
     groupId: raw.group_id,
@@ -253,11 +253,18 @@ export async function getPots(groupId?: number): Promise<Pot[]> {
   return raw.map(mapPot);
 }
 
-// One pot with its ownership breakdown. Returns null for a pot that does not exist OR that the caller
-// may not see — the API answers 404 for both, so the page renders notFound() either way and an id
-// cannot be used to discover which pots exist.
-export async function getPot(potId: number): Promise<Pot | null> {
-  const res = await authenticatedFetch(`/pots/${potId}`, { method: 'GET' });
+/*
+ * One pot with its ownership breakdown. Returns null for a pot that does not exist OR that the caller
+ * may not see — the API answers 404 for both, so the page renders notFound() either way and an id
+ * cannot be used to discover which pots exist.
+ *
+ * `asOfDate` values it at a past date, which is what a back-dated guided flow needs: the share it is
+ * about is worth what it was worth THEN, and pricing the confirmation step at today's figure would
+ * state a number the event will not be recorded at.
+ */
+export async function getPot(potId: number, asOfDate?: string): Promise<Pot | null> {
+  const query = asOfDate === undefined ? '' : `?as_of_date=${asOfDate}`;
+  const res = await authenticatedFetch(`/pots/${potId}${query}`, { method: 'GET' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch pot');
   return mapPot(await res.json());

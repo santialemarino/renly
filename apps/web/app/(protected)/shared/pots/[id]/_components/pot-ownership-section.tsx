@@ -1,13 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Scale, Shuffle, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, HandCoins, Scale, Shuffle, TrendingUp, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
   Badge,
   Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Table,
   TableBody,
   TableCell,
@@ -19,13 +23,16 @@ import {
   canRecordMovement,
   canRecordOpening,
   canRecordReagreement,
+  canTakeShareOut,
   hasLedger,
 } from '@/app/(protected)/shared/pot-rules';
 import { PotMovementDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-movement-dialog';
 import { PotOpeningDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-opening-dialog';
 import { PotReagreementDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-reagreement-dialog';
+import { ComboboxChevron } from '@/components/combobox-chevron';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
+import { sharedBuyOutPath, sharedSharePath, sharedTakeOutPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
@@ -51,9 +58,15 @@ interface PotOwnershipSectionProps {
  * backend assigns its rounding remainder to the largest holder. They are rendered at two decimals for
  * the same reason: at one, a three-way split reads 33.3 / 33.3 / 33.3 and visibly fails to add up.
  *
- * The three write controls are separately gated because they are separately possible: the baseline
- * exists exactly once and is impossible afterwards, a movement needs a price, and a re-agreement needs
- * a holder and someone to give to. One flag for all three would offer at least one of them wrongly.
+ * The guided flows LEAD and the raw actions sit behind a disclosure, which is U6's whole point: the
+ * things people actually want to do — share something, take a share out, buy someone out — should not
+ * be a sequence of primitives they assemble. The primitives stay reachable because several real cases
+ * have no guided form: recording someone ELSE's contribution, moving only part of a share, correcting
+ * a mistake. Removing them would take those away rather than simplify them.
+ *
+ * Every control is separately gated because each is separately possible: the baseline exists exactly
+ * once and is impossible afterwards, a movement needs a price, and a re-agreement needs a holder and
+ * someone to give to. One flag for all of them would offer at least one wrongly.
  */
 export function PotOwnershipSection({
   pot,
@@ -69,9 +82,17 @@ export function PotOwnershipSection({
   const [openingOpen, setOpeningOpen] = useState(false);
   const [movementOpen, setMovementOpen] = useState(false);
   const [reagreementOpen, setReagreementOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const activeSeats = group.members.filter((m) => m.isActive).length;
   const refresh = () => router.refresh();
+
+  // Whether the disclosure has anything to disclose. Without this it would open onto nothing for a
+  // read-only viewer, who has no write controls at all.
+  const hasManualActions =
+    canRecordOpening(pot, events) ||
+    canRecordMovement(pot) ||
+    canRecordReagreement(pot, activeSeats);
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -80,23 +101,33 @@ export function PotOwnershipSection({
           title={t('pots.ownership.title')}
           description={t('pots.ownership.description')}
         />
+        {/*
+         * The guided flows, as links rather than dialogs: they are routes, which is what lets each one
+         * resume from what the server already has after a failure or a closed tab.
+         */}
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
           {canRecordOpening(pot, events) && (
-            <Button blue onClick={() => setOpeningOpen(true)}>
-              <Scale className="size-4" />
-              {t('pots.opening.cta')}
+            <Button blue asChild>
+              <Link href={sharedSharePath(pot.groupId, pot.id)}>
+                <HandCoins className="size-4" />
+                {t('pots.share.cta')}
+              </Link>
             </Button>
           )}
-          {canRecordMovement(pot) && (
-            <Button blue onClick={() => setMovementOpen(true)}>
-              <TrendingUp className="size-4" />
-              {t('pots.movement.cta')}
+          {canTakeShareOut(pot) && (
+            <Button blue asChild>
+              <Link href={sharedTakeOutPath(pot.id)}>
+                <ArrowRight className="size-4" />
+                {t('pots.takeOut.cta')}
+              </Link>
             </Button>
           )}
           {canRecordReagreement(pot, activeSeats) && (
-            <Button variant="outline" onClick={() => setReagreementOpen(true)}>
-              <Shuffle className="size-4" />
-              {t('pots.reagreement.cta')}
+            <Button variant="outline" asChild>
+              <Link href={sharedBuyOutPath(pot.id)}>
+                <Shuffle className="size-4" />
+                {t('pots.buyOut.cta')}
+              </Link>
             </Button>
           )}
         </div>
@@ -144,6 +175,49 @@ export function PotOwnershipSection({
             ))}
           </TableBody>
         </Table>
+      )}
+
+      {/*
+       * The raw actions, one level down. Same three controls, same gates — only their prominence
+       * changes, because assembling them is what U6 says a person should not have to do.
+       */}
+      {hasManualActions && (
+        <Collapsible open={manualOpen} onOpenChange={setManualOpen}>
+          <CollapsibleTrigger className="group/manual flex items-center gap-x-2 outline-none transition-colors hover:text-foreground focus-visible:text-foreground text-paragraph-sm-medium text-muted-foreground">
+            <ComboboxChevron
+              open={manualOpen}
+              className="group-focus-visible/manual:text-foreground"
+            />
+            {t('pots.ownership.manual.title')}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
+            <div className="flex flex-col mt-3 gap-y-3">
+              <p className="text-paragraph-xs text-muted-foreground">
+                {t('pots.ownership.manual.hint')}
+              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                {canRecordOpening(pot, events) && (
+                  <Button variant="outline" onClick={() => setOpeningOpen(true)}>
+                    <Scale className="size-4" />
+                    {t('pots.opening.cta')}
+                  </Button>
+                )}
+                {canRecordMovement(pot) && (
+                  <Button variant="outline" onClick={() => setMovementOpen(true)}>
+                    <TrendingUp className="size-4" />
+                    {t('pots.movement.cta')}
+                  </Button>
+                )}
+                {canRecordReagreement(pot, activeSeats) && (
+                  <Button variant="outline" onClick={() => setReagreementOpen(true)}>
+                    <Shuffle className="size-4" />
+                    {t('pots.reagreement.cta')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       <PotOpeningDialog

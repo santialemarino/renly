@@ -32,6 +32,22 @@ function positiveField(requiredMsg: string, positiveMsg: string) {
     .refine((v) => Number(v) > 0, { message: positiveMsg });
 }
 
+/*
+ * The cross-currency rule shared by every schema that moves money across the pot boundary: the two
+ * legs are denominated differently and no rate is ever stored, so the credited figure has to be
+ * stated separately. Within one currency it IS the amount, and the API stores it that way.
+ *
+ * One predicate rather than a copy per schema, because it mirrors one API refusal
+ * (400 pot_base_amount_required) and two copies of that would be two things that can disagree with it.
+ */
+function baseAmountStated(
+  values: { amountCurrency: string; baseAmount?: string },
+  baseCurrency: string,
+): boolean {
+  if (values.amountCurrency === baseCurrency) return true;
+  return !!values.baseAmount && Number(values.baseAmount) > 0;
+}
+
 export function buildPotFormSchema(requiredMsg: string) {
   return z.object({
     // Optional on purpose: a group's first pot needs no name (A4), and the UI labels it until there is
@@ -128,12 +144,10 @@ export function buildPotMovementFormSchema({
       potAccountId: z.string().optional(),
       notes: z.string().optional(),
     })
-    .refine(
-      (values) =>
-        values.amountCurrency === baseCurrency ||
-        (!!values.baseAmount && Number(values.baseAmount) > 0),
-      { message: requiredMsg, path: ['baseAmount'] },
-    );
+    .refine((values) => baseAmountStated(values, baseCurrency), {
+      message: requiredMsg,
+      path: ['baseAmount'],
+    });
 }
 
 export type PotMovementFormValues = z.infer<ReturnType<typeof buildPotMovementFormSchema>>;
@@ -177,3 +191,79 @@ export function buildPotReagreementFormSchema({
 }
 
 export type PotReagreementFormValues = z.infer<ReturnType<typeof buildPotReagreementFormSchema>>;
+
+interface BuildPotTakeOutFormSchemaArgs {
+  baseCurrency: string;
+  requiredMsg: string;
+  positiveMsg: string;
+}
+
+/*
+ * Taking a member's WHOLE share out — the guided flow's own shape, not a movement with a flag.
+ *
+ * Two things it does not have, and both are the point. There is no percentage or fraction: the flow
+ * exists because "all of it" is the case a money amount cannot express (an amount divided by the unit
+ * price lands on the holder's exact balance 4.6% of the time, and misses either way it rounds), so it
+ * sends `whole_share` and the API redeems the balance itself. And there is no type: it is always a
+ * withdrawal, which is also the only movement `whole_share` applies to.
+ *
+ * `amount` is what money actually moved and is prefilled with the share's value, editable because the
+ * two may honestly differ — someone may accept less than their share is worth in order to exit. Both
+ * account legs stay optional for the same reason a movement's are: the money may have moved somewhere
+ * Renly does not track, and the flow states that consequence rather than forbidding it.
+ */
+export function buildPotTakeOutFormSchema({
+  baseCurrency,
+  requiredMsg,
+  positiveMsg,
+}: BuildPotTakeOutFormSchemaArgs) {
+  return z
+    .object({
+      memberId: z.string().min(1, { message: requiredMsg }),
+      date: z.string().min(1, { message: requiredMsg }),
+      amount: positiveField(requiredMsg, positiveMsg),
+      amountCurrency: z.string().min(1, { message: requiredMsg }),
+      baseAmount: z.string().optional(),
+      privateAccountId: z.string().optional(),
+      potAccountId: z.string().optional(),
+      notes: z.string().optional(),
+    })
+    .refine((values) => baseAmountStated(values, baseCurrency), {
+      message: requiredMsg,
+      path: ['baseAmount'],
+    });
+}
+
+export type PotTakeOutFormValues = z.infer<ReturnType<typeof buildPotTakeOutFormSchema>>;
+
+interface BuildPotBuyOutFormSchemaArgs {
+  requiredMsg: string;
+  sameMemberMsg: string;
+}
+
+/*
+ * Buying a member out: their WHOLE share moving to somebody else, with no money recorded.
+ *
+ * No percentage, for the same reason the take-out has no amount — a stake stated as a percentage of the
+ * pot cannot land on the seller's exact balance (18 times in 200,000), and a buy-out that leaves a
+ * residual leaves the seller reading 0.00% forever. Buying only PART of someone's share is a different
+ * thing and stays with the manual "change the split" form, which takes a percentage on purpose.
+ */
+export function buildPotBuyOutFormSchema({
+  requiredMsg,
+  sameMemberMsg,
+}: BuildPotBuyOutFormSchemaArgs) {
+  return z
+    .object({
+      date: z.string().min(1, { message: requiredMsg }),
+      fromMemberId: z.string().min(1, { message: requiredMsg }),
+      toMemberId: z.string().min(1, { message: requiredMsg }),
+      notes: z.string().optional(),
+    })
+    .refine((values) => values.fromMemberId !== values.toMemberId, {
+      message: sameMemberMsg,
+      path: ['toMemberId'],
+    });
+}
+
+export type PotBuyOutFormValues = z.infer<ReturnType<typeof buildPotBuyOutFormSchema>>;

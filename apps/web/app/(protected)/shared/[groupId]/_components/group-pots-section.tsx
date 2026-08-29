@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Coins, Plus } from 'lucide-react';
+import { ArrowRight, Coins, HandCoins, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -21,7 +21,7 @@ import { potLabel } from '@/app/(protected)/shared/pot-rules';
 import { DismissableHint } from '@/components/dismissable-hint';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
-import { sharedPotPath } from '@/config/routes';
+import { sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -41,6 +41,11 @@ interface GroupPotsSectionProps {
  *
  * Every member sees the identical section. Only the create control is gated, on group admin, which is
  * the API's rule too — and administration grants no additional visibility anywhere.
+ *
+ * The guided flow is offered only while the group has NOTHING shared, which is the case it is for:
+ * starting from a private holding. Once shared money exists, the flows live on ITS page, where the
+ * ownership history is known — from here they could only guess whether adding to it is safe, and
+ * putting a holding into an already-divided pot hands its value to every owner pro-rata.
  */
 export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPotsSectionProps) {
   const t = useTranslations('shared');
@@ -54,12 +59,20 @@ export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPots
     <div className="flex flex-col gap-y-4">
       <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
         <SectionHeader title={t('pots.title')} description={t('pots.description')} />
-        {isAdmin && (
-          <Button blue onClick={() => setCreateOpen(true)}>
-            <Plus className="size-4" />
-            {t('pots.add')}
-          </Button>
-        )}
+        {isAdmin &&
+          (pots.length === 0 ? (
+            <Button blue asChild>
+              <Link href={sharedSharePath(group.id)}>
+                <HandCoins className="size-4" />
+                {t('pots.share.cta')}
+              </Link>
+            </Button>
+          ) : (
+            <Button blue onClick={() => setCreateOpen(true)}>
+              <Plus className="size-4" />
+              {t('pots.add')}
+            </Button>
+          ))}
       </div>
 
       {/*

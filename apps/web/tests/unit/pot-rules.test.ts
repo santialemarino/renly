@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buyOutLeavesOneHolder,
   canDeletePot,
   canMoveHoldingsIn,
   canMoveHoldingsOut,
@@ -8,13 +9,18 @@ import {
   canRecordMovement,
   canRecordOpening,
   canRecordReagreement,
+  canTakeShareOut,
   hasLedger,
+  holderShare,
   isDivided,
   isOutgoingEvent,
   isPriceable,
   ownershipEventAmount,
   potLabel,
   potLegAccounts,
+  shareWizardEntry,
+  suggestedBaseCurrency,
+  wholeExitOutcome,
 } from '@/app/(protected)/shared/pot-rules';
 import type { Pot, PotHolding, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
 
@@ -300,5 +306,205 @@ describe('isOutgoingEvent', () => {
     expect(isOutgoingEvent(event({ type: 'contribution' }))).toBe(false);
     expect(isOutgoingEvent(event({ type: 'opening' }))).toBe(false);
     expect(isOutgoingEvent(event({ type: 'reagreement' }))).toBe(false);
+  });
+});
+
+/*
+ * The rules the three guided flows are built on. Two of them decide something no other layer can:
+ * which step a resumed flow opens on, and which whole sentence a confirmation states about everyone
+ * else. Both would be silently plausible if wrong.
+ */
+describe('shareWizardEntry', () => {
+  const holdsInvestment: PotHoldings = { investments: [holding()], accounts: [] };
+  const holdsAccount: PotHoldings = { investments: [], accounts: [holding({ id: 7 })] };
+
+  it('starts at the beginning when no pot exists yet', () => {
+    expect(shareWizardEntry(null)).toBe('pick');
+  });
+
+  it('starts at the beginning when the pot exists but holds nothing', () => {
+    // The pot was created and the move failed, or the tab was closed between them. Re-entering has to
+    // offer the selection again rather than a value step for a pot with nothing in it.
+    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: [] })).toBe('pick');
+  });
+
+  it('resumes at the value step for EITHER kind of holding', () => {
+    // The recovery case the whole design exists for: two of the three writes landed. Both kinds are
+    // asserted because a pot holding only a cash account is an ordinary case, and a check that looked
+    // at investments alone would send it back to the picker — which a mutation sweep caught.
+    expect(shareWizardEntry({ holdings: holdsInvestment, events: [] })).toBe('value');
+    expect(shareWizardEntry({ holdings: holdsAccount, events: [] })).toBe('value');
+  });
+
+  it('refuses outright once ANY ownership history exists', () => {
+    // Not just an opening. A pot can reach this with movements and no baseline (deleting a baseline
+    // keeps them), and the API refuses a second baseline on the LEDGER being non-empty
+    // (409 pot_already_opened), not on an opening existing.
+    expect(
+      shareWizardEntry({ holdings: holdsInvestment, events: [event({ type: 'contribution' })] }),
+    ).toBe('divided');
+    expect(shareWizardEntry({ holdings: NO_HOLDINGS, events: [event()] })).toBe('divided');
+  });
+});
+
+describe('canTakeShareOut', () => {
+  it('needs a price and somebody holding a share', () => {
+    expect(canTakeShareOut(pot())).toBe(true);
+    // No price: the API cannot value the units to redeem (400 pot_valuation_required).
+    expect(canTakeShareOut(pot({ nav: null }))).toBe(false);
+    // Nobody holds one, so there is nothing for the flow to open on.
+    expect(canTakeShareOut(pot({ shares: [] }))).toBe(false);
+    expect(canTakeShareOut(pot({ canWrite: false }))).toBe(false);
+  });
+});
+
+describe('holderShare', () => {
+  it("finds a member's row, and returns nothing for a member who holds none", () => {
+    // "Holds nothing" is a real state rather than an error: a bought-out member keeps their seat and
+    // loses their row, so every flow has to branch on it.
+    expect(holderShare(pot(), 100)?.percentage).toBe('90.00');
+    expect(holderShare(pot(), 101)).toBeUndefined();
+  });
+});
+
+describe('wholeExitOutcome', () => {
+  const two = pot({
+    shares: [
+      {
+        memberId: 100,
+        displayName: 'Santi',
+        units: '60',
+        percentage: '60.00',
+        value: '60.00',
+        isSelf: true,
+      },
+      {
+        memberId: 101,
+        displayName: 'Ana',
+        units: '40',
+        percentage: '40.00',
+        value: '40.00',
+        isSelf: false,
+      },
+    ],
+  });
+
+  it('says nobody is left when the only holder goes', () => {
+    expect(wholeExitOutcome(pot(), 100)).toBe('nobodyLeft');
+  });
+
+  it('says one holder is left, which is 100% by definition rather than by arithmetic', () => {
+    expect(wholeExitOutcome(two, 100)).toBe('oneHolderLeft');
+    expect(wholeExitOutcome(two, 101)).toBe('oneHolderLeft');
+  });
+
+  it('says several are left, so the flow states pro-rata instead of predicting figures', () => {
+    const three = pot({
+      shares: [
+        ...two.shares,
+        {
+          memberId: 102,
+          displayName: 'Leo',
+          units: '20',
+          percentage: '20.00',
+          value: '20.00',
+          isSelf: false,
+        },
+      ],
+    });
+    expect(wholeExitOutcome(three, 100)).toBe('severalHoldersLeft');
+  });
+
+  it('counts every other holder when the named member holds nothing', () => {
+    // A member with no row cannot exit, but the predicate must not report the pot as emptied.
+    expect(wholeExitOutcome(two, 999)).toBe('severalHoldersLeft');
+  });
+});
+
+describe('buyOutLeavesOneHolder', () => {
+  const three = pot({
+    shares: [
+      {
+        memberId: 100,
+        displayName: 'Santi',
+        units: '50',
+        percentage: '50.00',
+        value: '50.00',
+        isSelf: true,
+      },
+      {
+        memberId: 101,
+        displayName: 'Ana',
+        units: '30',
+        percentage: '30.00',
+        value: '30.00',
+        isSelf: false,
+      },
+      {
+        memberId: 102,
+        displayName: 'Leo',
+        units: '20',
+        percentage: '20.00',
+        value: '20.00',
+        isSelf: false,
+      },
+    ],
+  });
+
+  const twoHolders = pot({
+    shares: [
+      {
+        memberId: 100,
+        displayName: 'Santi',
+        units: '60',
+        percentage: '60.00',
+        value: '60.00',
+        isSelf: true,
+      },
+      {
+        memberId: 101,
+        displayName: 'Ana',
+        units: '40',
+        percentage: '40.00',
+        value: '40.00',
+        isSelf: false,
+      },
+    ],
+  });
+
+  it('is true only when nobody outside the two holds a share', () => {
+    // Deliberately NOT wholeExitOutcome: a buy-out's units do not leave, the buyer receives them, so
+    // the question is whether a THIRD holder exists rather than who survives the exit.
+    expect(buyOutLeavesOneHolder(three, 101, 102)).toBe(false);
+    expect(buyOutLeavesOneHolder(pot(), 100, 101)).toBe(true);
+  });
+
+  it('is true when the buyer is the only OTHER holder', () => {
+    // The case that makes the buyer's half of the predicate load-bearing, and the one a sweep found
+    // missing: every other case here is decided by the seller's clause alone, so dropping the buyer's
+    // stayed green. After this buy-out one person holds the whole pot.
+    expect(buyOutLeavesOneHolder(twoHolders, 100, 101)).toBe(true);
+    expect(buyOutLeavesOneHolder(twoHolders, 101, 100)).toBe(true);
+  });
+
+  it('is true when the buyer holds nothing yet and buys the only other holder out', () => {
+    expect(buyOutLeavesOneHolder(pot(), 100, 999)).toBe(true);
+  });
+});
+
+describe('suggestedBaseCurrency', () => {
+  it('offers whichever currency most of the selection already uses', () => {
+    // Not cosmetic: a movement's pot-side leg must be an account in the pot's base currency, so a pot
+    // created in a currency none of its accounts use has no usable cash leg at all.
+    expect(suggestedBaseCurrency(['USD', 'ARS', 'USD'])).toBe('USD');
+  });
+
+  it('leaves a tie with whichever appeared first, so the answer follows the list the user sees', () => {
+    expect(suggestedBaseCurrency(['ARS', 'USD'])).toBe('ARS');
+    expect(suggestedBaseCurrency(['USD', 'ARS'])).toBe('USD');
+  });
+
+  it('has nothing to suggest for an empty selection', () => {
+    expect(suggestedBaseCurrency([])).toBeNull();
   });
 });

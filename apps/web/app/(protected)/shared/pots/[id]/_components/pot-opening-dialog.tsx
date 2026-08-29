@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 
 import {
   Button,
@@ -14,23 +14,20 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Label,
 } from '@repo/ui/components';
-import { cn } from '@repo/ui/lib';
+import { PotShareRows } from '@/app/(protected)/shared/_components/pot-share-rows';
 import { recordPotOpening } from '@/app/(protected)/shared/pot-actions';
 import {
   buildPotOpeningFormSchema,
-  openingSharesTotal,
   type PotOpeningFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
-import type { Group, GroupMember } from '@/lib/api/groups';
+import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
 import { POT_PERCENTAGE_TOTAL } from '@/lib/constants/pots';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
-import { useFormatters } from '@/lib/i18n/formatters';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 interface PotOpeningDialogProps {
@@ -61,7 +58,6 @@ export function PotOpeningDialog({
   timeZone,
   onSuccess,
 }: PotOpeningDialogProps) {
-  const fmt = useFormatters();
   const t = useTranslations('shared');
   const tCommon = useTranslations('common');
 
@@ -98,10 +94,6 @@ export function PotOpeningDialog({
     }),
     onSuccess,
   });
-
-  const watchedShares = useWatch({ control: form.control, name: 'shares' });
-  const total = openingSharesTotal(watchedShares ?? []);
-  const balanced = total === POT_PERCENTAGE_TOTAL;
 
   async function onSubmit(values: PotOpeningFormValues) {
     await submitWithLifecycle(
@@ -165,50 +157,11 @@ export function PotOpeningDialog({
               />
             </div>
 
-            <div className="flex flex-col gap-y-2">
-              {/*
-               * The base Label, not FormLabel: this heads the whole shares block rather than one
-               * field, and FormLabel outside a FormField has no field context to read.
-               */}
-              <Label required>{t('pots.opening.shares.label')}</Label>
-              <p className="text-paragraph-xs text-muted-foreground">
-                {t('pots.opening.shares.hint')}
-              </p>
-
-              {seats.map((seat, index) => (
-                <ShareRow key={seat.id} seat={seat} index={index} form={form} />
-              ))}
-
-              {/*
-               * The live total, which is the whole affordance: the percentages ARE the agreement and are
-               * never rescaled, so the user has to be able to see where they stand before submitting.
-               */}
-              <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-lg">
-                <span className="text-paragraph-sm text-muted-foreground">
-                  {t('pots.opening.shares.total')}
-                </span>
-                <span
-                  className={cn(
-                    'text-paragraph-sm-medium tabular-nums',
-                    balanced ? 'text-emerald-600' : 'text-amber-600',
-                  )}
-                >
-                  {`${fmt.sharePct(total)}% / ${POT_PERCENTAGE_TOTAL}%`}
-                </span>
-              </div>
-
-              {/*
-               * The rule in words, beside the total it is about. NOT a FormMessage: the zod refine's
-               * path is `shares`, which is RHF's ARRAY entry, and an array's `message` is undefined —
-               * so FormMessage renders nothing and the submit looks like it silently did nothing. Only
-               * the browser showed that. Shown after a submit attempt, like any other field error.
-               */}
-              {!balanced && form.formState.isSubmitted && (
-                <p className="text-paragraph-xs text-destructive">
-                  {t('pots.opening.totalError', { total: POT_PERCENTAGE_TOTAL })}
-                </p>
-              )}
-            </div>
+            {/*
+             * Shared with the guided flow's own share step, so the two cannot state the rule
+             * differently. The error shows after a submit attempt here, like any other field error.
+             */}
+            <PotShareRows form={form} seats={seats} showTotalError={form.formState.isSubmitted} />
 
             <FormField
               control={form.control}
@@ -236,54 +189,5 @@ export function PotOpeningDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/*
- * One owner's percentage. A blank field means "owns none of it" rather than 0 — the action drops those
- * rows, so an opening never writes an event granting nobody anything.
- */
-function ShareRow({
-  seat,
-  index,
-  form,
-}: {
-  seat: GroupMember;
-  index: number;
-  form: ReturnType<typeof useForm<PotOpeningFormValues>>;
-}) {
-  const t = useTranslations('shared');
-
-  return (
-    <FormField
-      control={form.control}
-      name={`shares.${index}.percentage`}
-      render={({ field }) => (
-        <FormItem>
-          <div className="flex min-w-0 items-center gap-x-3">
-            {/*
-             * truncate, and the input shrink-0: without both, a long display name wrapped and rendered
-             * behind the field. `min-w-0` alone is not enough — a flex item's text still forces its
-             * intrinsic width until something clips it.
-             */}
-            <span className="flex-1 min-w-0 truncate text-paragraph-sm text-foreground">
-              {seat.displayName}
-              {seat.isSelf && (
-                <span className="text-paragraph-xs text-muted-foreground"> {t('members.you')}</span>
-              )}
-            </span>
-            <FormControl>
-              <LocaleAmountInput
-                {...field}
-                containerClassName="w-28 shrink-0"
-                placeholder={t('pots.opening.shares.placeholder')}
-              />
-            </FormControl>
-            <span className="shrink-0 text-paragraph-sm text-muted-foreground">%</span>
-          </div>
-          <FormMessage />
-        </FormItem>
-      )}
-    />
   );
 }

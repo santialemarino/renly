@@ -1,12 +1,20 @@
 'use server';
 
-import { toResult, type SharedMutationResult } from '@/app/(protected)/shared/mutation-result';
+import {
+  toDataResult,
+  toResult,
+  type SharedDataResult,
+  type SharedMutationResult,
+} from '@/app/(protected)/shared/mutation-result';
 import type {
+  PotBuyOutFormValues,
   PotFormValues,
   PotMovementFormValues,
   PotOpeningFormValues,
   PotReagreementFormValues,
+  PotTakeOutFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
+import { mapPot, type Pot, type PotRaw } from '@/lib/api/pots';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 /*
@@ -23,10 +31,12 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
  * gets refused by a `decimal_places=2` validator for a reason the user cannot act on.
  */
 
+// Returns the created pot rather than only success: the guided flow's next step moves holdings into
+// the very pot this call made, so the id has to come back with it.
 export async function createPot(
   groupId: number,
   values: PotFormValues,
-): Promise<SharedMutationResult> {
+): Promise<SharedDataResult<Pot>> {
   const res = await authenticatedFetch('/pots', {
     method: 'POST',
     body: {
@@ -36,7 +46,7 @@ export async function createPot(
       visibility: values.visibility,
     },
   });
-  return toResult(res, 'Failed to create pot');
+  return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to create pot');
 }
 
 // base_currency is deliberately absent: it is the unit of every figure already in the ledger, and the
@@ -91,12 +101,15 @@ export async function movePotHoldings(
   investmentIds: number[],
   accountIds: number[],
   into: boolean,
-): Promise<SharedMutationResult> {
+): Promise<SharedDataResult<Pot>> {
   const res = await authenticatedFetch(`/pots/${potId}/holdings${into ? '' : '/remove'}`, {
     method: 'POST',
     body: { investment_ids: investmentIds, account_ids: accountIds },
   });
-  return toResult(res, 'Failed to move pot holdings');
+  // The pot comes back rather than a bare success because its `nav` is the answer to the question the
+  // guided flow asks next — what the things just moved in are actually worth. Re-reading for it would
+  // be a second round trip for a figure this response already carries.
+  return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to move pot holdings');
 }
 
 /*
@@ -121,38 +134,53 @@ export async function recordPotOpening(
 }
 
 /*
- * Records a contribution or a withdrawal, mapping the form's two account fields onto the API's
- * directional legs. The form asks "which private account" and "which pot account" because that is what
- * the user knows; the API stores `from` and `to`, and which is which depends on the direction — a
- * contribution runs private → pot and a withdrawal the other way.
+ * The movements endpoint's request body, built in ONE place because two callers send it: the manual
+ * movement form and the guided take-a-share-out flow. They differ in exactly two things — the type,
+ * and whether the units come from the money or from the member's whole balance — so hand-building the
+ * body twice would be two places for the wire shape to drift, and the second one would be the one
+ * that misses the next field.
+ *
+ * The form asks "which private account" and "which pot account" because that is what the user knows;
+ * the API stores `from` and `to`, and which is which depends on the direction — a contribution runs
+ * private → pot and a withdrawal the other way.
  *
  * `amount_currency` is sent only when it differs from the pot's base currency, matching what the API
  * stores: it keeps the column null whenever the movement is single-currency, so a row with a currency
  * set always means a real conversion happened.
  */
-export async function recordPotMovement(
-  potId: number,
+function movementBody(
   baseCurrency: string,
-  values: PotMovementFormValues,
-): Promise<SharedMutationResult> {
+  values: PotMovementFormValues | (PotTakeOutFormValues & { type: 'withdrawal' }),
+  wholeShare: boolean,
+) {
   const isContribution = values.type === 'contribution';
   const privateLeg = values.privateAccountId ? Number(values.privateAccountId) : null;
   const potLeg = values.potAccountId ? Number(values.potAccountId) : null;
   const crossCurrency = values.amountCurrency !== baseCurrency;
 
+  return {
+    type: values.type,
+    date: values.date,
+    member_id: Number(values.memberId),
+    amount: values.amount,
+    amount_currency: crossCurrency ? values.amountCurrency : null,
+    base_amount: crossCurrency ? values.baseAmount : null,
+    from_account_id: isContribution ? privateLeg : potLeg,
+    to_account_id: isContribution ? potLeg : privateLeg,
+    whole_share: wholeShare,
+    notes: values.notes || null,
+  };
+}
+
+// Records a contribution or a withdrawal for an amount the user stated.
+export async function recordPotMovement(
+  potId: number,
+  baseCurrency: string,
+  values: PotMovementFormValues,
+): Promise<SharedMutationResult> {
   const res = await authenticatedFetch(`/pots/${potId}/ownership/movements`, {
     method: 'POST',
-    body: {
-      type: values.type,
-      date: values.date,
-      member_id: Number(values.memberId),
-      amount: values.amount,
-      amount_currency: crossCurrency ? values.amountCurrency : null,
-      base_amount: crossCurrency ? values.baseAmount : null,
-      from_account_id: isContribution ? privateLeg : potLeg,
-      to_account_id: isContribution ? potLeg : privateLeg,
-      notes: values.notes || null,
-    },
+    body: movementBody(baseCurrency, values, false),
   });
   return toResult(res, 'Failed to record the movement');
 }
@@ -172,6 +200,51 @@ export async function recordPotReagreement(
     },
   });
   return toResult(res, 'Failed to record the re-agreement');
+}
+
+/*
+ * Takes a member's whole share out: the same withdrawal body, with `whole_share` set — so the API
+ * redeems the balance the member holds rather than dividing the money by the unit price and landing
+ * near it. That is the only difference, which is why it shares the builder above.
+ */
+export async function takePotShareOut(
+  potId: number,
+  baseCurrency: string,
+  values: PotTakeOutFormValues,
+): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/ownership/movements`, {
+    method: 'POST',
+    body: movementBody(baseCurrency, { ...values, type: 'withdrawal' }, true),
+  });
+  return toResult(res, 'Failed to take the share out');
+}
+
+/*
+ * Buys a member out: their whole stake moves to another member, and no money is recorded at all.
+ *
+ * `whole_share` rather than a percentage because the seller has to end on exactly zero — a percentage
+ * of the pot leaves them holding a residual that renders as a 0.00% owner and never goes away. The
+ * body omits `percentage` entirely, which the API's schema requires when the flag is set.
+ *
+ * The cash the buyer pays the seller is NOT recorded, because it cannot be: it moves between two
+ * different people's private accounts, and no Renly movement spans those. The flow says so in words
+ * rather than silently recording half of what happened.
+ */
+export async function buyPotShareOut(
+  potId: number,
+  values: PotBuyOutFormValues,
+): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/ownership/reagreements`, {
+    method: 'POST',
+    body: {
+      date: values.date,
+      from_member_id: Number(values.fromMemberId),
+      to_member_id: Number(values.toMemberId),
+      whole_share: true,
+      notes: values.notes || null,
+    },
+  });
+  return toResult(res, 'Failed to buy the share out');
 }
 
 // Deletes a ledger entry. Unit balances are derived, so the series simply recomputes without it —

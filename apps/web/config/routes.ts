@@ -64,6 +64,22 @@ export const sharedGroupPath = (groupId: number) => `${ROUTES.shared}/${groupId}
 export const sharedPotPath = (potId: number) => `${ROUTES.shared}/pots/${potId}`;
 
 /*
+ * The three guided flows (U6). Routes rather than dialogs, which is what makes them resumable: each
+ * derives the step it opens on from what the server already has, so re-entering the URL after a
+ * failure — or after closing the tab — continues rather than restarting.
+ *
+ * "Share something you own" hangs off the GROUP, not a pot, because it may have no pot yet: it creates
+ * one. `?pot=` targets an existing one instead, which is both how the pot page hands the flow off and
+ * how an interrupted run resumes. The other two hang off the pot whose ownership they change.
+ */
+export const sharedSharePath = (groupId: number, potId?: number) =>
+  `${sharedGroupPath(groupId)}/share${potId === undefined ? '' : `?pot=${potId}`}`;
+
+export const sharedTakeOutPath = (potId: number) => `${sharedPotPath(potId)}/take-out`;
+
+export const sharedBuyOutPath = (potId: number) => `${sharedPotPath(potId)}/buy-out`;
+
+/*
  * Anchors on the public help page that the app deep-links to. A help section's id is part of a public
  * URL, so it belongs here with the routes rather than as a string literal at each call site: a typo
  * becomes a type error, and `translations-parity.test.ts` asserts every value still names a real
