@@ -2388,7 +2388,7 @@
           "actions": "Actions"
         }
       },
-      "asOf": "updated through {date}",
+      "updatedThrough": "updated through {date}",
       "cadence": {
         "weekly": "Weekly",
         "monthly": "Monthly",

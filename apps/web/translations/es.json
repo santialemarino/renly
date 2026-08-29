@@ -2388,7 +2388,7 @@
           "actions": "Acciones"
         }
       },
-      "asOf": "actualizado hasta el {date}",
+      "updatedThrough": "actualizado hasta el {date}",
       "cadence": {
         "weekly": "Semanal",
         "monthly": "Mensual",

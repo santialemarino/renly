@@ -70,7 +70,7 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
       ? t('pots.unvalued')
       : valueDisplay.kind === 'value'
         ? fmt.amount(valueDisplay.nav, pot.baseCurrency)
-        : `${fmt.amount(valueDisplay.nav, pot.baseCurrency)} · ${t('pots.asOf', {
+        : `${fmt.amount(valueDisplay.nav, pot.baseCurrency)} · ${t('pots.updatedThrough', {
             date: fmt.date(valueDisplay.valuedAsOf),
           })}`;
 
