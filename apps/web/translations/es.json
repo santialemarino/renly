@@ -2388,7 +2388,7 @@
           "actions": "Acciones"
         }
       },
-      "asOf": "al {date}",
+      "asOf": "actualizado hasta el {date}",
       "cadence": {
         "weekly": "Semanal",
         "monthly": "Mensual",
@@ -2396,7 +2396,7 @@
       },
       "freshness": {
         "neverValued": "Hay algo acá que nunca se valuó, así que el fondo no tiene valor para repartir.",
-        "overdue": "Valuado por última vez el {date}. Falta una valuación nueva.",
+        "overdue": "Estas cifras solo llegan hasta el {date}. Falta una valuación nueva.",
         "badge": "Falta actualizar"
       },
       "series": {

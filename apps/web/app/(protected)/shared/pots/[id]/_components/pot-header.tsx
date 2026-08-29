@@ -49,13 +49,19 @@ export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
   const label = potLabel(pot, t('pots.defaultLabel'));
 
   /*
-   * The value stat carries its own as-of date, the way the account ledger's opening stat does: a
-   * figure and the date it is current to are one fact, and splitting them across two tiles invites
-   * reading the figure as today's.
+   * The value stat carries its own date, the way the account ledger's opening stat does: a figure and
+   * how current it is are one fact, and splitting them across two tiles invites reading the figure as
+   * fully up to date.
+   *
+   * "UPDATED THROUGH", never "as of", and the difference is not pedantry. `valuedAsOf` is the OLDEST
+   * of the holdings' latest snapshots, so the figure beside it is today's best estimate whose stalest
+   * input dates from then — it is emphatically NOT what the pot was worth on that date. A tile reading
+   * "55,000 · as of 28 Feb" above a chart showing 38,000 that February states something false, which
+   * is exactly what it did before this wording.
    *
    * The date is appended only when there IS a figure. When the value cannot be stated at all, "not
-   * valued" is the whole answer — adding "as of 3 June" beside it would describe the freshness of
-   * numbers the tile is not showing.
+   * valued" is the whole answer — a date beside it would describe the freshness of numbers the tile is
+   * not showing.
    */
   const valueDisplay = potValueDisplay(pot);
   const freshness = potFreshnessNotice(pot);
