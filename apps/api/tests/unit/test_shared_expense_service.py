@@ -216,6 +216,70 @@ class TestASharedAccountFrontsIt:
         assert shared_expense_service.pot_ownership_repository.list_by_pot.await_args.kwargs == {"as_of_date": date(2026, 3, 15)}
 
     @pytest.mark.asyncio
+    async def test_a_pot_with_ONE_owner_still_names_no_payer(self, monkeypatch):
+        """The case that reading the splits alone gets wrong.
+
+        A single owner fronts the whole amount, which is indistinguishable from a member paying out of
+        their own pocket — and a pot with exactly one owner is a supported state, since it is where a
+        buy-out ends. Deriving the payer from the split SHAPE reported that owner as the payer, so the
+        response said "Santi paid" about money that came out of the joint account. It is the FUNDING
+        that decides, not the shape.
+        """
+        written = _wire(monkeypatch, account=_account(5, user_id=None, pot_id=9), pot=self._POT, events=[_event(11, "100")])
+        response = await _create(written, payer_member_id=None, paid_from_account_id=5)
+
+        assert (response.payer_member_id, response.payer_display_name) == (None, None)
+        # The one owner did front all of it, and the split still says so — the other participants hold
+        # a consumed figure and nothing fronted.
+        assert {s.member_id: s.paid_amount for s in written["splits"] if s.paid_amount > 0} == {11: Decimal("90.00")}
+
+    @pytest.mark.asyncio
+    async def test_a_member_paying_from_their_OWN_account_is_still_named(self, monkeypatch):
+        # The control for the case above: same single-payer split shape, private funding, and here the
+        # payer genuinely is a person rather than a pot.
+        written = _wire(monkeypatch, account=_account(5, user_id=1))
+        response = await _create(written, paid_from_account_id=5, payer_member_id=11)
+
+        assert (response.payer_member_id, response.payer_display_name) == (11, "M11")
+
+    @pytest.mark.asyncio
+    async def test_an_owner_who_has_LEFT_the_group_still_fronts_their_share(self, monkeypatch):
+        """Deliberately not subject to the active-seat check the named seats get.
+
+        A seat named in the request is a choice; a pot owner is a fact on the ownership ledger. Someone
+        removed from the group while still holding units still owns that share of the money, so
+        spending it really does take theirs — and excluding them would break the identity the feature
+        rests on, leaving the fronted figures short of the total.
+        """
+        departed = _member(12, user_id=2, is_active=False)
+        written = _wire(
+            monkeypatch,
+            account=_account(5, user_id=None, pot_id=9),
+            pot=self._POT,
+            events=[_event(11, "60"), _event(12, "40")],
+            members=[_member(11, user_id=1), departed],
+        )
+        await _create(
+            written,
+            amount=Decimal("100.00"),
+            splits=[SharedExpenseSplitInput(member_id=11)],
+            payer_member_id=None,
+            paid_from_account_id=5,
+        )
+
+        rows = {s.member_id: s.paid_amount for s in written["splits"]}
+        assert rows == {11: Decimal("60.00"), 12: Decimal("40.00")}
+        assert sum(rows.values()) == Decimal("100.00")
+
+    @pytest.mark.asyncio
+    async def test_but_a_departed_seat_still_cannot_be_NAMED(self, monkeypatch):
+        # The other half of the asymmetry, so the two rules stay visibly distinct rather than one
+        # quietly widening into the other.
+        _wire(monkeypatch, members=[_member(11, user_id=1), _member(12, user_id=2, is_active=False)])
+        with pytest.raises(NotFoundError):
+            await _create({}, splits=[SharedExpenseSplitInput(member_id=11)], payer_member_id=12)
+
+    @pytest.mark.asyncio
     async def test_naming_a_payer_as_well_is_refused(self, monkeypatch):
         # Joint money is fronted by everyone who owns it, so one named payer would assert something
         # the ownership ledger contradicts. Refused rather than ignored: silently dropping a field the

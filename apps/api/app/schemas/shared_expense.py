@@ -85,9 +85,14 @@ class SharedExpenseSplitResponse(BaseModel):
 
 # Response for the shared-expense list and for POST / PUT.
 #
-# `payer_display_name` is DERIVED from the splits rather than stored, and is null when no single member
-# fronted it — which is exactly the shared-account case, where the pot's owners did, in their own
-# proportions. A stored payer column could not express that, which is why there is not one.
+# `payer_member_id` / `payer_display_name` are DERIVED rather than stored, and are null whenever a
+# SHARED account fronted it — the pot's owners did, in their own proportions, and a stored payer column
+# could not express that, which is why there is not one.
+#
+# Decided by the funding rather than by the shape of the splits, because a pot with exactly ONE owner
+# (where a buy-out ends) has that owner fronting the whole amount — indistinguishable from a member
+# paying out of their own pocket, and reporting them as the payer would say somebody paid personally
+# for money that came out of the joint account.
 class SharedExpenseResponse(BaseModel):
     model_config = {"from_attributes": True}
 

@@ -66,9 +66,15 @@ class _Funding:
 # client rendering the group's expenses needs the names, and a round trip per row would be an N+1
 # pushed onto the frontend.
 #
-# `payer_member_id` / `payer_display_name` are DERIVED here from the splits — the one member who
-# fronted the whole amount, or nobody when several did, which is exactly the shared-account case. There
-# is no payer column precisely because that case exists.
+# `payer_member_id` / `payer_display_name` are DERIVED here rather than stored — there is no payer
+# column precisely because money from a shared account has no single payer.
+#
+# `pot_funded` is what decides it, NOT the shape of the splits. Reading the splits alone gets a
+# single-owner pot wrong: its one owner fronts the whole amount, which is indistinguishable from a
+# member paying out of their own pocket — and a pot with exactly one owner is a state the design
+# explicitly supports (it is where a buy-out ends). Saying "Nico paid" for money that came out of the
+# joint account reads as Nico paying personally, which is a different claim about a different pot of
+# money.
 def _build_response(
     expense: SharedExpense,
     splits: list[SharedExpenseSplit],
@@ -76,11 +82,12 @@ def _build_response(
     viewer_member_id: int,
     *,
     account_name: str | None,
+    pot_funded: bool,
     currency: str | None,
     lookup: RateLookup | None,
 ) -> SharedExpenseResponse:
     payers = [split for split in splits if split.paid_amount > ZERO]
-    sole_payer = payers[0] if len(payers) == 1 and payers[0].paid_amount == expense.amount else None
+    sole_payer = None if pot_funded else next((p for p in payers if len(payers) == 1 and p.paid_amount == expense.amount), None)
     my_split = next((split for split in splits if split.member_id == viewer_member_id), None)
     return SharedExpenseResponse(
         id=expense.id,
@@ -131,7 +138,7 @@ async def list_expenses(session: AsyncSession, group_id: int, user: User, *, cur
         return []
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
     splits_by_expense = await shared_expense_repository.list_splits_by_expense_ids(session, [expense.id for expense in expenses])
-    account_names = await _account_names(session, expenses)
+    accounts = await _funding_accounts(session, expenses)
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
     return [
         _build_response(
@@ -139,7 +146,8 @@ async def list_expenses(session: AsyncSession, group_id: int, user: User, *, cur
             splits_by_expense.get(expense.id, []),
             members_by_id,
             viewer.id,
-            account_name=account_names.get(expense.paid_from_account_id),
+            account_name=_account_of(accounts, expense) and _account_of(accounts, expense).name,
+            pot_funded=bool(_account_of(accounts, expense) and _account_of(accounts, expense).pot_id),
             currency=currency,
             lookup=lookup,
         )
@@ -147,15 +155,23 @@ async def list_expenses(session: AsyncSession, group_id: int, user: User, *, cur
     ]
 
 
-# The names of every funding account the given expenses draw from, in one query. Denormalized onto the
-# response for the reason CardSettlementResponse denormalizes its account name: a row has to say what
-# it is even when the client's own account list fails to load, or when the account has been archived.
-async def _account_names(session: AsyncSession, expenses: list[SharedExpense]) -> dict[int, str]:
+# Every funding account the given expenses draw from, in one query, keyed by id.
+#
+# The NAME is denormalized onto the response for the reason CardSettlementResponse denormalizes its
+# own: a row has to say what it is even when the client's account list fails to load, or when the
+# account has been archived. The row itself is kept rather than just the name because the response
+# also needs to know whether that account belongs to a POT, which is what decides there is no payer.
+async def _funding_accounts(session: AsyncSession, expenses: list[SharedExpense]) -> dict[int, Account]:
     account_ids = [expense.paid_from_account_id for expense in expenses if expense.paid_from_account_id is not None]
     if not account_ids:
         return {}
-    accounts = await account_repository.get_by_ids_any_scope(session, account_ids)
-    return {account.id: account.name for account in accounts}
+    return {account.id: account for account in await account_repository.get_by_ids_any_scope(session, account_ids)}
+
+
+# The funding account of one expense, or None when it names none — or names one the caller cannot see,
+# which a private account belonging to another member is.
+def _account_of(accounts: dict[int, Account], expense: SharedExpense) -> Account | None:
+    return accounts.get(expense.paid_from_account_id) if expense.paid_from_account_id is not None else None
 
 
 # Loads a shared expense and the caller's seat in its group, or raises NotFoundError. The expense's own
@@ -229,6 +245,7 @@ async def create_expense(
         members_by_id,
         viewer.id,
         account_name=funding.account.name if funding.account else None,
+        pot_funded=bool(funding.account and funding.account.pot_id),
         currency=None,
         lookup=None,
     )
@@ -305,6 +322,7 @@ async def update_expense(
         members_by_id,
         viewer.id,
         account_name=funding.account.name if funding.account else None,
+        pot_funded=bool(funding.account and funding.account.pot_id),
         currency=None,
         lookup=None,
     )
@@ -430,6 +448,16 @@ def _ensure_account_open(account: Account, date: date_type) -> None:
 #
 # Two refusals rather than one, because they are different problems: a pot in another group has owners
 # this group could never settle with, and an undivided pot has no owners on record at all.
+#
+# ▸ This path deliberately does NOT apply _require_active_seats, and the asymmetry is the point. A seat
+# NAMED in the request is a choice the user is making now, so a departed one is refused. A pot owner is
+# a FACT already on the ownership ledger: a member who left while still holding units still owns that
+# share of the money, so spending it really does take theirs. Excluding them would be the dishonest
+# option and would break the identity the whole feature rests on — the fronted figures would no longer
+# sum to the total, and the group's balances would no longer sum to zero.
+#
+# What they get is exactly what a name-only placeholder gets: a real position the remaining members can
+# see and settle unilaterally, since the roster read here includes inactive seats.
 async def _pot_owner_shares(session: AsyncSession, pot_id: int, group_id: int, *, total: Decimal, date: date_type) -> dict[int, Decimal]:
     pot = await pot_repository.get_by_id(session, pot_id)
     if pot is None or pot.group_id != group_id:

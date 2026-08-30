@@ -837,6 +837,10 @@ The **flow** half of shared money. A pot divides what a household _holds_; this 
 
 There is deliberately **no payer column**. Money can come from a **shared account**, in which case the pot's owners fronted it in their own ownership proportions and no single member is the payer — something one column could not say. Those proportions are read from the ownership ledger **at the expense's date and pinned onto the split rows**, because the ledger is replayed: derived on every read, a back-dated ownership event would silently rewrite a balance two people had already agreed on.
 
+The response's `payer_member_id` / `payer_display_name` are derived from the **funding**, and are null for any shared-account expense — including a pot with exactly one owner, where that owner does front the whole amount. Naming them would say somebody paid personally for money that came out of the joint account.
+
+A pot owner who has since **left the group** still fronts their share, and is deliberately not subject to the active-seat check a named participant or payer gets: a named seat is a choice being made now, while a pot owner is a fact already on the ownership ledger. Excluding them would leave the fronted figures short of the total. They hold a real position the remaining members can see and settle, exactly as a name-only member does.
+
 | Method   | Path                                 | Description                                                                                              |
 | -------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/groups/{id}/expenses`              | The group's shared expenses, newest first, each with every member's position in it. Optional `currency`. |
