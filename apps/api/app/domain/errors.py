@@ -233,7 +233,7 @@ class SettlementAccountAmountRequiredError(DomainError):
         self.bucket_currency = bucket_currency
         self.account_currency = account_currency
         self.message = (
-            f"Paying a {bucket_currency} bucket from a {account_currency} account must record the {account_currency} "
+            f"Paying a {bucket_currency} bucket from an account in {account_currency} must record the {account_currency} "
             "amount that left it, so the rate the bank charged is preserved."
         )
         super().__init__(self.message)
@@ -314,6 +314,25 @@ class GroupAdminRequiredError(DomainError):
         super().__init__(self.message)
 
 
+# A member still holds an open balance in the group, in at least one currency, and the operation would
+# leave it stranded — removing the seat, or deleting the account behind it. The balance is real money
+# between real people, so it has to be settled or explicitly written off first; silently discarding it
+# would take one side's claim away without either of them agreeing to it. Mapped to 409 by the API.
+class GroupBalanceOutstandingError(DomainError):
+    code = "group_balance_outstanding"
+    status_code = 409
+
+    def __init__(self, group_names: list[str]) -> None:
+        self.group_names = sorted(group_names)
+        joined = ", ".join(self.group_names)
+        self.message = f"There is still an unsettled balance in {joined}. Settle it or write it off first."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"groups": self.group_names}
+
+
 # Removing, deactivating or demoting the last active admin of a group. Someone must be able to manage
 # members and settings, and no other role can promote a replacement — so the group would be permanently
 # unadministrable, with no recovery path short of deleting it. Promote someone else first. Mapped to 409
@@ -349,6 +368,152 @@ class GroupSeatTakenError(DomainError):
 
     def __init__(self) -> None:
         self.message = "This person has already joined, so there is nothing to invite."
+        super().__init__(self.message)
+
+
+# A settlement is dated before one of the accounts it moves through existed. Each leg of the balance
+# union is bounded by its own account's opening_date — opening_balance already IS the balance at that
+# date — so a settlement dated earlier would clear a balance while the account it supposedly moved
+# through never changes. Mapped to 400 by the API.
+class GroupSettlementBeforeAccountOpenedError(DomainError):
+    code = "group_settlement_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A settlement must be dated on or after its account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# A settlement that has already been confirmed was edited, deleted, or written off. Confirmation is the
+# payee's acknowledgement that they received the money, so it is the one state the payer cannot undo
+# alone: the payee un-confirms it first, which is a deliberate second act rather than a silent
+# overwrite of somebody else's word. Mapped to 409 by the API.
+class GroupSettlementConfirmedError(DomainError):
+    code = "group_settlement_confirmed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This settlement is confirmed. The person who received the money has to un-confirm it first."
+        super().__init__(self.message)
+
+
+# A settlement's cash leg names an account belonging to the OTHER party. The two legs belong to two
+# different people, and neither can see the other's accounts at all — the row-level policies hide
+# them — so a request naming both could only ever come from a client that had guessed an id.
+#
+# Refused explicitly rather than left to the ownership check, which WOULD also refuse it but as a bare
+# "not found" that tells the user nothing about what to do instead: each side records their own leg.
+# Mapped to 400 by the API.
+class GroupSettlementForeignLegError(DomainError):
+    code = "group_settlement_foreign_leg"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "You can only record which of your own accounts the money moved through. The other person records theirs."
+        super().__init__(self.message)
+
+
+# A settlement's cash leg crosses currencies but does not say what actually moved through the account.
+# The bucket amount is in the balance's currency, so without the account's own figure the balance would
+# be reduced by a number that never left anyone's account. Mapped to 400 by the API.
+class GroupSettlementLegAmountRequiredError(DomainError):
+    code = "group_settlement_leg_amount_required"
+    status_code = 400
+
+    def __init__(self, account_currency: str, bucket_currency: str) -> None:
+        self.account_currency = account_currency
+        self.bucket_currency = bucket_currency
+        self.message = (
+            # No indefinite article before a currency code: "a USD" and "an ARS" are both wrong for some
+            # of the five supported ones, and nothing in the sentence needs one.
+            f"This settlement clears {bucket_currency} through an account in {account_currency}, so it must say how much {account_currency} moved."
+        )
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"account_currency": self.account_currency, "bucket_currency": self.bucket_currency}
+
+
+# A same-currency settlement leg recorded a cash amount different from what it cleared. No conversion
+# happened, so the account moved exactly what came off the bucket — a bank fee is its own expense
+# rather than a silently inflated payment. Distinct from SettlementAmountsMustMatchError, whose wording
+# is about DEBITING: a group settlement has two legs, and "debit" would be wrong on the receiving one.
+# Mapped to 400 by the API.
+class GroupSettlementLegAmountsMustMatchError(DomainError):
+    code = "group_settlement_leg_amounts_must_match"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Within one currency a settlement moves exactly what it clears. Record a fee as its own expense."
+        super().__init__(self.message)
+
+
+# A settlement's cash leg names an amount but no account to draw it from (or pay it into). The figure is
+# denominated in THAT account's currency, so with no account there is nothing to interpret it against.
+# Enforced here rather than as a CHECK for the reason 0016 recorded: account_id is ON DELETE SET NULL,
+# so a constraint pairing the two would make any account that ever funded a cross-currency settlement
+# permanently undeletable. Mapped to 400 by the API.
+class GroupSettlementLegWithoutAccountError(DomainError):
+    code = "group_settlement_leg_without_account"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A settlement's cash amount needs the account it moved through."
+        super().__init__(self.message)
+
+
+# A write-off was recorded by someone other than the creditor. Writing off is giving up a claim, and
+# only the person holding it can give it up — a debtor writing off their own debt would be deciding on
+# somebody else's behalf. Mapped to 403 by the API.
+class GroupSettlementNotCreditorError(DomainError):
+    code = "group_settlement_not_creditor"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the person who is owed can write a balance off."
+        super().__init__(self.message)
+
+
+# Someone other than the payee tried to confirm or un-confirm a settlement. Confirming is the trust
+# anchor for real money — it means "I received this" — so only the seat that received it can say so.
+# Mapped to 403 by the API.
+class GroupSettlementNotPayeeError(DomainError):
+    code = "group_settlement_not_payee"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "Only the person who received the money can confirm a settlement."
+        super().__init__(self.message)
+
+
+# A cash leg was attached to a written-off balance. Nothing moved — that is what a write-off IS — so an
+# account leg would record a payment nobody made, and a DB CHECK refuses the row outright. Refused here
+# with something the user can act on: undo the write-off and record a real payment instead.
+# Mapped to 409 by the API — the request is well-formed, it conflicts with the row's state.
+class GroupSettlementWriteOffHasNoLegError(DomainError):
+    code = "group_settlement_write_off_has_no_leg"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "A written-off balance moved no money, so no account can be attached to it."
+        super().__init__(self.message)
+
+
+# A settlement or write-off names a member who is not a real, active seat in the group — or names the
+# same seat on both sides, which would move one balance in two directions and clear nothing. Mapped to
+# 400 by the API.
+class GroupSettlementSameMemberError(DomainError):
+    code = "group_settlement_same_member"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A settlement moves money between two different people."
         super().__init__(self.message)
 
 
@@ -744,6 +909,130 @@ class ReconciliationPeriodMismatchError(DomainError):
     def __init__(self, message: str = "Reconciliation period is invalid.") -> None:
         self.message = message
         super().__init__(self.message)
+
+
+# A shared expense is dated before the account funding it existed. Same reason a transfer or a
+# settlement cannot be: the balance sums are bounded below by the account's opening_date, so the
+# expense would reduce a balance the account never had. Mapped to 400 by the API.
+class SharedExpenseBeforeAccountOpenedError(DomainError):
+    code = "shared_expense_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"A shared expense must be dated on or after its account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# A shared expense funded from a SHARED account whose pot nobody has divided yet. The money left a pool
+# whose owners are not on record, so there is no honest answer to who fronted it — and inventing one
+# (splitting it equally, or crediting nobody) would either assert an ownership nobody agreed or leave
+# the group's balances not summing to zero. Agree the pot's division first. Mapped to 400 by the API.
+class SharedExpenseFundingPotNotDividedError(DomainError):
+    code = "shared_expense_funding_pot_not_divided"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Nobody has agreed who owns this shared account's money yet, so there is no way to record who paid. Divide the pot first."
+        super().__init__(self.message)
+
+
+# A shared expense names a funding account that belongs to a pot in a DIFFERENT group. Its owners are
+# not members here, so the money they fronted could not be recorded against anyone this group can
+# settle with. Mapped to 400 by the API.
+class SharedExpenseFundingScopeError(DomainError):
+    code = "shared_expense_funding_scope"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That shared account belongs to another group, so this group cannot spend from it."
+        super().__init__(self.message)
+
+
+# A shared expense names both a shared funding account and a payer. Joint money is fronted by the pot's
+# owners in their own proportions, so naming one member as the payer would assert something the
+# ownership ledger contradicts. Refused rather than ignored: silently dropping a field the user filled
+# in is how a form ends up recording something other than what it showed. Mapped to 400 by the API.
+class SharedExpenseSharedAccountPayerError(DomainError):
+    code = "shared_expense_shared_account_payer"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Money from a shared account is fronted by everyone who owns it, so this expense cannot also name one payer."
+        super().__init__(self.message)
+
+
+# A shared expense names no payer and no shared funding account, so nothing says who fronted the money.
+# Without that the group's balances cannot sum to zero: the shares would add up to the total while
+# nobody had paid it. Mapped to 400 by the API.
+class SharedExpensePayerRequiredError(DomainError):
+    code = "shared_expense_payer_required"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Say who paid for this — the balance is what they fronted minus what they used."
+        super().__init__(self.message)
+
+
+# A split names nobody. An expense divided between no one has no share to attribute and no balance to
+# create; a self-only expense is a private expense, which is a different table. Mapped to 400.
+class SharedExpenseNoParticipantsError(DomainError):
+    code = "shared_expense_no_participants"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A shared expense needs at least one person taking part in it."
+        super().__init__(self.message)
+
+
+# A percentage split's figures do not total 100. Never rescaled, for the same reason a pot's opening
+# split is not: quietly turning a 90/5 split into 94.7/5.3 is worse than refusing it. Mapped to 400.
+class SharedExpensePercentagesError(DomainError):
+    code = "shared_expense_percentages"
+    status_code = 400
+
+    def __init__(self, stated: Decimal) -> None:
+        self.stated = stated
+        self.message = f"The split percentages add up to {stated}%, not 100%."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"stated": str(self.stated)}
+
+
+# A shares split's weights are negative or all zero. Weights are relative parts, so unlike percentages
+# they have no total to hit — only the requirement that there is something to divide by, and that no
+# part is negative (which would hand one member a share of less than nothing). Mapped to 400.
+class SharedExpenseSharesError(DomainError):
+    code = "shared_expense_shares"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Shares must not be negative, and at least one person needs a share above zero."
+        super().__init__(self.message)
+
+
+# An exact split's amounts do not add up to the expense's total. There is nothing to round and nothing
+# to distribute for this method — the figures are taken as given — so a mismatch is refused rather than
+# silently absorbed onto somebody. Mapped to 400 by the API.
+class SharedExpenseSplitTotalError(DomainError):
+    code = "shared_expense_split_total"
+    status_code = 400
+
+    def __init__(self, stated: Decimal, expected: Decimal) -> None:
+        self.stated = stated
+        self.expected = expected
+        self.message = f"The split amounts add up to {stated}, not {expected}."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"stated": str(self.stated), "expected": str(self.expected)}
 
 
 # A transfer is dated before one of its accounts existed. The balance union bounds each leg by its own

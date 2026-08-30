@@ -14,6 +14,7 @@ import pytest
 
 from app.domain import NotFoundError, PrivateEntryFromSharedAccountError
 from app.models.account import Account, AccountType
+from app.models.group import GroupMember
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.transaction import TransactionType
 from app.models.user import User
@@ -292,6 +293,15 @@ class TestAccountDeletionAcrossTheBoundary:
         monkeypatch.setattr(svc.group_repository, "delete_by_ids", AsyncMock(side_effect=lambda *a, **k: calls.append("delete_groups")))
         absorb = AsyncMock(side_effect=lambda *a, **k: calls.append("absorb"))
         monkeypatch.setattr(svc.pot_service, "absorb_group_pots", absorb)
+        # Two seats: one in the group being orphaned, one in a group that survives. Only the second is
+        # the balance guard's business — nobody is left to be owed anything in the first.
+        seats = [
+            GroupMember(id=1, group_id=10, user_id=1, display_name="S"),
+            GroupMember(id=2, group_id=11, user_id=1, display_name="S"),
+        ]
+        monkeypatch.setattr(svc.group_repository, "list_active_members", AsyncMock(return_value=seats))
+        guard = AsyncMock(side_effect=lambda *a, **k: calls.append("balance-guard"))
+        monkeypatch.setattr(svc.group_settlement_service, "ensure_no_outstanding_balance", guard)
 
         user = User(id=1, name="S", email="u@test", password_hash="x", session_epoch=0)
         await svc.delete_account(AsyncMock(), AsyncMock(), user, "pw", "u@test")
@@ -299,3 +309,8 @@ class TestAccountDeletionAcrossTheBoundary:
         assert "absorb" in calls, "an orphaned group's holdings were never absorbed"
         assert calls.index("absorb") < calls.index("delete_user"), calls
         assert absorb.await_args.args[1:] == ([10], 1)
+        # D24's balance check runs on the SURVIVING seats only, and before the account goes. Asserted
+        # on the seats it was handed rather than on the call alone: passing every seat would refuse a
+        # deletion over a balance in a group nobody is left in, which nothing could ever settle.
+        assert guard.await_args.args[1] == [seats[1]]
+        assert calls.index("balance-guard") < calls.index("delete_user"), calls

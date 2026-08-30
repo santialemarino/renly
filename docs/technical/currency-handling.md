@@ -265,6 +265,20 @@ Paying a bucket from an account in a **different** currency (the Argentine "dól
 
 **Display estimate only:** the settlement dialog reads back the rate the two typed amounts imply and compares it with `oficial × NEXT_PUBLIC_CARD_PERCEPTION_MULTIPLIER` (default 1.30), purely so a 10× typo is visible. It reads the `USD_ARS_OFICIAL` pair specifically, **not** the user's dollar-rate preference — dólar tarjeta is built on oficial even for a user viewing MEP. Nothing is prefilled and no stored value depends on the multiplier.
 
+### 13. Shared balances — per-currency buckets that never net
+
+A group's balances are kept in **per-currency buckets**, exactly as a card's are, and for the same reason: owing dollars while being owed pesos is a real state, and merging the two would invent a rate nobody agreed to. Each bucket is its own settle line and its own zero-sum. A member can be a creditor in one and a debtor in another simultaneously, which `GET /groups/{id}/balances` returns as separate entries rather than one netted figure.
+
+The converted figure beside a bucket (`my_converted_balance`) is a **display convenience only** — a mark at the viewer's own dollar-rate preference, never what anybody settles. It is computed at TODAY's rate rather than at each contributing expense's, because a balance is a live position rather than a historical row: the expenses behind it have already been reduced to one figure per bucket, and there is no single date to convert it at. A bucket with no usable rate reports `null` and its currency appears in `skipped_currencies`, matching how the expenses list flags an unconvertible row.
+
+**A settlement carries up to three amounts, and each answers a different question.** `amount`/`currency` is the **bucket leg** — which balance it cleared and by how much. `from_amount` is the **payer's cash leg** in that account's own currency, and `to_amount` the **payee's**, each set only when that side crossed currencies. Same conclusion `card_settlements` and `transfers` reached: **no rate is stored**, because no single direction reads correctly both ways, and the pair of amounts is the record of it.
+
+Three legs rather than two because a settlement moves money between **two different people's** accounts, and the two can cross currencies independently — Nico pays a 40 USD balance out of his peso account into my dollar account, and all three figures differ. It is also why neither side can fill in the other's: the row-level policies hide each member's accounts from the other, so each records their own (`400 group_settlement_foreign_leg`).
+
+**Which leg each sum reads is the whole correctness surface,** the same way it is for card settlements. Both cash-side sums read `coalesce(<leg>_amount, amount)` — `group_settlement_repository._sum_leg` (the live account balance and the point-in-time one) and `_sum_leg_dated` (the balance series) — while the balance derivation reads `amount` alone, because that is what cleared the bucket. A cash sum reading the bucket leg would take pesos out of a dollar account; the balance reading a cash leg would clear a USD bucket with a peso figure. `tests/integration/test_shared_flow_queries.py` drives both against a real Postgres, with one cross-currency settlement whose three figures all differ so a query reading the wrong column shows up as the two accounts moving by each other's amount.
+
+**A shared expense is single-currency by construction.** Its amount, its splits and its balance bucket are all the same currency, and its funding account must match it (`400 account_currency_mismatch`) — the account sum carries one amount, so a mismatched link would subtract a foreign figure straight from the balance. Only the **settlement** crosses currencies, which is where the conversion belongs: it is the moment somebody actually agreed a rate.
+
 ## Data model
 
 ```sql
@@ -284,6 +298,14 @@ pots.base_currency             -- e.g. 'USD'
 pot_ownership_events.amount    -- what left, in the source account's currency
 pot_ownership_events.amount_currency  -- NULL when it equals the pot's base currency
 pot_ownership_events.base_amount      -- what was credited, in the pot's base currency
+
+-- A shared expense is single-currency: amount, splits and balance bucket all agree, and the funding
+-- account must match. Only a SETTLEMENT crosses currencies, which is where a rate is actually agreed.
+shared_expenses.currency          -- the expense, its splits, and the bucket it lands in
+group_settlements.amount          -- the bucket leg: what balance was cleared, and by how much
+group_settlements.currency        -- the bucket's currency, not either account's
+group_settlements.from_amount     -- the payer's cash leg; NULL when their account matched the bucket
+group_settlements.to_amount       -- the payee's cash leg; NULL when theirs did
 
 -- Exchange rates fetched from DolarApi and Frankfurter
 exchange_rates.pair   -- USD_ARS_OFICIAL | USD_ARS_MEP | USD_ARS_BLUE | USD_BRL | USD_EUR | USD_GBP

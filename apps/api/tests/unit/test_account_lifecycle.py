@@ -9,6 +9,7 @@ import app.models  # noqa: F401  (registers every table on SQLModel.metadata for
 from app.config import SignupMode, settings
 from app.domain import InvalidCredentialsError, InvalidTokenError, PasswordBreachedError
 from app.models.auth_token import AuthToken, AuthTokenType
+from app.models.group import GroupMember
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import export_repository as export_repository_module
@@ -461,6 +462,11 @@ class TestDeleteAccount:
                 calls.append("collect")
                 self.sessions.append(session)
                 return [41, 42]
+
+            # Every seat sits in one of the orphaned groups here, so the balance guard has nothing
+            # left to check — which is the point: nobody is owed anything in a group nobody is left in.
+            async def list_active_members(self, session, user_id):
+                return [GroupMember(id=1, group_id=41, user_id=user_id, display_name="S")]
 
             async def delete_by_ids(self, session, group_ids):
                 calls.append(f"delete:{group_ids}")

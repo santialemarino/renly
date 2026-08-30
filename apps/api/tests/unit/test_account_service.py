@@ -51,10 +51,11 @@ class TestBalances:
         monkeypatch.setattr(account_service.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(account_service.transfer_repository, "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(account_service.income_repository, "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(account_service.expense_repository, "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(account_service.card_settlement_repository, "linked_account_ids", AsyncMock(return_value=set()))
+        monkeypatch.setattr(account_service.shared_expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.group_settlement_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.group_settlement_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        for repo in ("transfer_repository", "income_repository", "expense_repository", "card_settlement_repository"):
+            monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
         accounts = [_account(id=1, opening_balance=Decimal("100")), _account(id=2, opening_balance=Decimal("-40"))]
         balances = await account_service.get_account_balances(AsyncMock(), accounts, 1)
         assert balances == {1: Decimal("100"), 2: Decimal("-40")}
@@ -98,6 +99,7 @@ class TestMutations:
         monkeypatch.setattr(account_service, "get_account", AsyncMock(return_value=_account()))
         delete_mock = AsyncMock()
         monkeypatch.setattr(account_service.account_repository, "delete", delete_mock)
+        monkeypatch.setattr(account_service.group_settlement_repository, "clear_account_amounts", AsyncMock())
         session = AsyncMock()
 
         await account_service.delete_account(session, 7, USER)

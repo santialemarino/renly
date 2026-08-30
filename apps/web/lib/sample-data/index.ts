@@ -57,9 +57,15 @@ export const sampleInvestments: Investment[] = [
   },
 ];
 
+// Every sample expense is private: the sample set teaches the personal list, and belonging to a group
+// is not something a first-run user has.
 export const sampleExpenses: Expense[] = [
   {
     id: -1,
+    scope: 'private',
+    groupId: null,
+    groupName: null,
+    fullAmount: null,
     date: '2026-01-05',
     amount: '45000.00',
     currency: 'ARS',
@@ -80,6 +86,10 @@ export const sampleExpenses: Expense[] = [
   },
   {
     id: -2,
+    scope: 'private',
+    groupId: null,
+    groupName: null,
+    fullAmount: null,
     date: '2026-01-03',
     amount: '12.99',
     currency: 'USD',
@@ -100,6 +110,10 @@ export const sampleExpenses: Expense[] = [
   },
   {
     id: -3,
+    scope: 'private',
+    groupId: null,
+    groupName: null,
+    fullAmount: null,
     date: '2026-01-01',
     amount: '320000.00',
     currency: 'ARS',

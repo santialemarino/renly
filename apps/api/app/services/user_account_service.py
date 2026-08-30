@@ -9,7 +9,7 @@ from app.domain import InvalidCredentialsError, PasswordBreachedError
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import export_repository, group_repository, invite_repository, user_repository
-from app.services import auth_service, pot_service
+from app.services import auth_service, group_settlement_service, pot_service
 
 
 # Changes the password after re-verifying the current one (AUTH-8). Rejects breached passwords
@@ -89,9 +89,18 @@ async def delete_account(session: AsyncSession, admin_session: AsyncSession, use
     #   * when the last account-linked seat leaves, the remaining seats are placeholders with no way
     #     to ever see the money again, so the honest reading is that it was always this user's — and
     #     it then goes with the rest of their data on the cascade below.
-    # Not covered here: a group that survives (someone else still holds a seat) whose pots this user
-    # held units in. That is D24's balance check, which §10 assigns to PR 5 along with settle-up.
     await pot_service.absorb_group_pots(admin_session, orphan_group_ids, user.id)
+    # D24's balance check, on the groups that SURVIVE this deletion. An orphaned group is excluded on
+    # purpose: nobody is left to be owed anything in it, and its money has just been absorbed above.
+    # A surviving group is the case that matters — deleting the account would revert the seat to a
+    # name-only placeholder while the person on the other side still holds a real claim against it, and
+    # no settlement could ever clear it. Settle or write it off first.
+    # Runs on the privileged session because the user's own seats are being read while their account is
+    # still present, and because everything else in this flow already does.
+    surviving_seats = [
+        seat for seat in await group_repository.list_active_members(admin_session, user.id) if seat.group_id not in set(orphan_group_ids)
+    ]
+    await group_settlement_service.ensure_no_outstanding_balance(admin_session, surviving_seats)
     await admin_session.commit()
     # Clear the invite first, on its own (privileged) transaction. The deletes span two connections so
     # they can't be atomic; ordering invite-first makes the only partial-failure state benign — an

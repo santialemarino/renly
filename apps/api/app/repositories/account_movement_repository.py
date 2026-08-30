@@ -11,7 +11,11 @@ from app.models.account import Account
 from app.models.card_settlement import CardSettlement
 from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
+from app.models.group import Group, GroupMember
+from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.income_entry import IncomeEntry
+from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
+from app.models.shared_expense import SharedExpense
 from app.models.transfer import Transfer
 from app.repositories.card_settlement_repository import settlement_cash_leg
 
@@ -149,6 +153,126 @@ def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool, opening_d
     )
 
 
+# A group's shared expense drawn from this account: money out, and the WHOLE amount rather than the
+# caller's share. The money really left this account; who owed whom afterwards is the splits' business
+# and never the account's — the same reason the balance sum reads the parent's amount.
+#
+# The group is joined for its name so the row can say what it was, exactly as the settlement branch
+# joins the card. INNER rather than outer because a shared expense's group_id is NOT NULL and cascades,
+# so the row cannot outlive its group.
+#
+# No user filter: the row belongs to the group, the membership policy scopes it, and the account leg's
+# own read branch keeps it visible to whoever owns the account. A shared account's ledger must not
+# depend on who is asking, for the same reason its balance must not.
+def _shared_expense_branch(account_id: int, *, opening_date: date_type):
+    return (
+        select(
+            SharedExpense.id.label("source_id"),
+            literal(MovementSource.shared_expense.value).label("source"),
+            literal(MovementKind.expense.value).label("kind"),
+            SharedExpense.date.label("date"),
+            (-SharedExpense.amount).label("amount"),
+            cast(SharedExpense.category, String).label(_CATEGORY),
+            Group.name.label(_COUNTERPARTY),
+            cast(null(), Numeric).label(_COUNTERPARTY_AMOUNT),
+            cast(null(), String).label(_COUNTERPARTY_CURRENCY),
+            SharedExpense.notes.label("notes"),
+        )
+        .join(Group, Group.id == SharedExpense.group_id)
+        .where(
+            SharedExpense.paid_from_account_id == account_id,
+            SharedExpense.date >= opening_date,
+        )
+    )
+
+
+# One leg of a group settlement. It can never name the same account twice (a DB CHECK enforces it), so
+# an account sees at most one leg and the two branches cannot collide — which is what lets both share
+# the source 'group_settlement', exactly as the two transfer legs share theirs.
+#
+# The amount is the CASH leg, coalesce(<leg>_amount, amount) — the same expression the balance sums
+# use, because a settlement may clear a bucket in one currency while moving another through this
+# account. The BUCKET leg rides along as the counterparty amount/currency, so a cross-currency settle
+# renders the pair the way a cross-currency transfer does.
+#
+# A written-off balance never moved money, so it is excluded here for the same reason the balance sums
+# exclude it: a ledger row for a payment nobody made would have to be a zero, or a lie.
+#
+# Like that one, the predicate is unreachable by construction — a write-off cannot carry an account leg
+# at all (a CHECK refuses the row), so `leg == account_id` never matches one and no test can tell this
+# clause from its absence. Kept for the same reason: it states what these rows mean rather than relying
+# on a constraint declared somewhere else.
+def _group_settlement_branch(account_id: int, *, outgoing: bool, opening_date: date_type):
+    leg = GroupSettlement.from_account_id if outgoing else GroupSettlement.to_account_id
+    leg_amount = GroupSettlement.from_amount if outgoing else GroupSettlement.to_amount
+    counterpart_seat = GroupSettlement.to_member_id if outgoing else GroupSettlement.from_member_id
+    cash = func.coalesce(leg_amount, GroupSettlement.amount)
+    return (
+        select(
+            GroupSettlement.id.label("source_id"),
+            literal(MovementSource.group_settlement.value).label("source"),
+            literal(MovementKind.group_settlement.value).label("kind"),
+            GroupSettlement.date.label("date"),
+            (-cash if outgoing else cash).label("amount"),
+            cast(null(), String).label(_CATEGORY),
+            GroupMember.display_name.label(_COUNTERPARTY),
+            GroupSettlement.amount.label(_COUNTERPARTY_AMOUNT),
+            GroupSettlement.currency.label(_COUNTERPARTY_CURRENCY),
+            GroupSettlement.notes.label("notes"),
+        )
+        .join(GroupMember, GroupMember.id == counterpart_seat)
+        .where(
+            leg == account_id,
+            GroupSettlement.status != GroupSettlementStatus.written_off,
+            GroupSettlement.date >= opening_date,
+        )
+    )
+
+
+# One leg of an ownership event — a contribution into a co-owned pot or a withdrawal out of one.
+#
+# This branch is what makes the ledger and the balance describe the same row set. Without it an
+# account that funded a contribution reports a balance no visible row explains, and every
+# `balance_after` above that point is wrong by the contribution — measured on a real database before
+# this was written: an account with 100,000 opening and one 5,000 contribution read 95,000 from the
+# balance and 100,000 from the ledger.
+#
+# The two legs are denominated differently and the CASE per leg is the same one the balance sums use:
+# a contribution runs private -> pot, so its `from` leg moves `amount` (the private account's currency)
+# and its `to` leg moves `base_amount` (the pot's); a withdrawal reverses both. Summing one column on
+# both legs would credit a cross-currency contribution with the source currency's figure.
+#
+# The counterparty is the pot, falling back to its group's name — A4 leaves a group's default pot
+# unnamed, so the group's name is the only thing there is to call it, and it is what the UI shows too.
+def _ownership_branch(account_id: int, *, outgoing: bool, opening_date: date_type):
+    leg = PotOwnershipEvent.from_account_id if outgoing else PotOwnershipEvent.to_account_id
+    is_contribution = PotOwnershipEvent.type == OwnershipEventType.contribution
+    near = case((is_contribution, PotOwnershipEvent.amount), else_=PotOwnershipEvent.base_amount)
+    far = case((is_contribution, PotOwnershipEvent.base_amount), else_=PotOwnershipEvent.amount)
+    this_leg = near if outgoing else far
+    other_leg = far if outgoing else near
+    return (
+        select(
+            PotOwnershipEvent.id.label("source_id"),
+            literal(MovementSource.ownership.value).label("source"),
+            literal(MovementKind.ownership.value).label("kind"),
+            PotOwnershipEvent.date.label("date"),
+            (-this_leg if outgoing else this_leg).label("amount"),
+            cast(null(), String).label(_CATEGORY),
+            func.coalesce(Pot.name, Group.name).label(_COUNTERPARTY),
+            other_leg.label(_COUNTERPARTY_AMOUNT),
+            func.coalesce(PotOwnershipEvent.amount_currency, Pot.base_currency).label(_COUNTERPARTY_CURRENCY),
+            PotOwnershipEvent.notes.label("notes"),
+        )
+        .join(Pot, Pot.id == PotOwnershipEvent.pot_id)
+        .join(Group, Group.id == Pot.group_id)
+        .where(
+            leg == account_id,
+            PotOwnershipEvent.date >= opening_date,
+        )
+    )
+
+
 # The branches a kind filter admits. None means the whole ledger. 'income' and 'expense' deliberately
 # EXCLUDE adjustments — a true-up is not money the user earned or spent, and filtering to it is what
 # the 'adjustment' kind is for.
@@ -172,11 +296,21 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
     if kind == MovementKind.income:
         return [entry(income, adjustments=False)]
     if kind == MovementKind.expense:
-        return [entry(expense, adjustments=False)]
+        return [entry(expense, adjustments=False), _shared_expense_branch(account_id, opening_date=opening_date)]
     if kind == MovementKind.adjustment:
         return [entry(income, adjustments=True), entry(expense, adjustments=True)]
     if kind == MovementKind.settlement:
         return [_settlement_branch(account_id, user_id, opening_date=opening_date)]
+    if kind == MovementKind.group_settlement:
+        return [
+            _group_settlement_branch(account_id, outgoing=True, opening_date=opening_date),
+            _group_settlement_branch(account_id, outgoing=False, opening_date=opening_date),
+        ]
+    if kind == MovementKind.ownership:
+        return [
+            _ownership_branch(account_id, outgoing=True, opening_date=opening_date),
+            _ownership_branch(account_id, outgoing=False, opening_date=opening_date),
+        ]
     if kind == MovementKind.transfer:
         return [
             _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date),
@@ -185,7 +319,12 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
     return [
         entry(income, adjustments=None),
         entry(expense, adjustments=None),
+        _shared_expense_branch(account_id, opening_date=opening_date),
         _settlement_branch(account_id, user_id, opening_date=opening_date),
+        _group_settlement_branch(account_id, outgoing=True, opening_date=opening_date),
+        _group_settlement_branch(account_id, outgoing=False, opening_date=opening_date),
+        _ownership_branch(account_id, outgoing=True, opening_date=opening_date),
+        _ownership_branch(account_id, outgoing=False, opening_date=opening_date),
         _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date),
         _transfer_branch(account_id, user_id, outgoing=False, opening_date=opening_date),
     ]

@@ -13,10 +13,26 @@ from typing import NamedTuple
 # kind in both directions — direction is the sign of the amount, the same way the transfers sub-table
 # derives it — because a transfer can never touch the same account twice (from_account_id <>
 # to_account_id), so an account sees at most one of its legs.
+#
+# 'ownership' is the sixth kind, and it exists because a movement across a SCOPE boundary is neither
+# an expense nor a transfer: a contribution into a co-owned pot leaves this account and buys units, so
+# net worth does not change (unlike an expense) while the money crosses between scopes (unlike a
+# transfer, which is neutral only within one). Both legs read as this kind, direction by sign.
+#
+# A group's shared expense drawn from this account reads as 'expense', because from the ACCOUNT's
+# point of view that is exactly what it is: money out, for something bought.
+#
+# Clearing a group balance gets its OWN kind rather than joining 'settlement', which is a card bill.
+# Both are "paying off something you owe", so one kind would have been defensible — but the shipped
+# label for 'settlement' is "Card payment", and a kind that covered both would make that label a lie
+# about half its rows. Paying your Visa and paying back a flatmate are also different activities to
+# filter by, and MovementSource distinguishes them regardless, so merging saved nothing.
 class MovementKind(StrEnum):
     adjustment = "adjustment"
     expense = "expense"
+    group_settlement = "group_settlement"
     income = "income"
+    ownership = "ownership"
     settlement = "settlement"
     transfer = "transfer"
 
@@ -27,8 +43,11 @@ class MovementKind(StrEnum):
 # (kind, source_id). Also the anchor anything wanting to link back to the owning record would need.
 class MovementSource(StrEnum):
     expense = "expense"
+    group_settlement = "group_settlement"
     income = "income"
+    ownership = "ownership"
     settlement = "settlement"
+    shared_expense = "shared_expense"
     transfer = "transfer"
 
 

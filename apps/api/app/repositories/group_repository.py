@@ -28,6 +28,15 @@ async def get_by_id(session: AsyncSession, group_id: int) -> Group | None:
     return await session.get(Group, group_id)
 
 
+# Fetches several groups by id, for a caller naming them on a list it already has. The batch sibling of
+# get_by_id, because the expenses list needs a name per shared row and a lookup per row is the N+1.
+async def get_by_ids(session: AsyncSession, group_ids: list[int]) -> list[Group]:
+    if not group_ids:
+        return []
+    result = await session.execute(select(Group).where(Group.id.in_(group_ids)))
+    return list(result.scalars().all())
+
+
 # Persists a new group and flushes to get the id.
 async def create(session: AsyncSession, group: Group) -> Group:
     session.add(group)
@@ -98,6 +107,24 @@ async def get_member(session: AsyncSession, group_id: int, member_id: int) -> Gr
     return result.scalar_one_or_none()
 
 
+# Every ACTIVE seat this user holds, as rows. Used by the guards that run before a seat or an account
+# goes away and need the group each seat belongs to, not only its id.
+# Deliberately a second query rather than the source of list_active_member_ids below: that one runs on
+# the expenses list for every request and wants the narrowest projection there is.
+async def list_active_members(session: AsyncSession, user_id: int) -> list[GroupMember]:
+    result = await session.execute(select(GroupMember).where(GroupMember.user_id == user_id, GroupMember.is_active))
+    return list(result.scalars().all())
+
+
+# Every ACTIVE seat this user holds, across every group. The /expenses union needs the ids to find the
+# caller's own shares, and resolving them here rather than joining group_members inside that union is
+# what lets the splits' member index do the work — measured at roughly half the time on a 55,000-row
+# list, because the join makes Postgres scan every split in the database instead.
+async def list_active_member_ids(session: AsyncSession, user_id: int) -> list[int]:
+    result = await session.execute(select(GroupMember.id).where(GroupMember.user_id == user_id, GroupMember.is_active))
+    return [row[0] for row in result.all()]
+
+
 # Fetches the seat a user holds in a group, active or not. Returns None when they hold none.
 async def get_member_by_user(session: AsyncSession, group_id: int, user_id: int) -> GroupMember | None:
     result = await session.execute(select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.user_id == user_id))
@@ -139,8 +166,11 @@ class GroupRepository:
     delete = staticmethod(delete)
     delete_by_ids = staticmethod(delete_by_ids)
     get_by_id = staticmethod(get_by_id)
+    get_by_ids = staticmethod(get_by_ids)
     get_member = staticmethod(get_member)
     get_member_by_user = staticmethod(get_member_by_user)
+    list_active_member_ids = staticmethod(list_active_member_ids)
+    list_active_members = staticmethod(list_active_members)
     list_members = staticmethod(list_members)
     list_members_by_groups = staticmethod(list_members_by_groups)
     list_orphaned_group_ids = staticmethod(list_orphaned_group_ids)

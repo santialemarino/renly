@@ -14,6 +14,8 @@ from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.feedback import Feedback, FeedbackCategory
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_invite import GroupInvite
+from app.models.group_money_settings import GroupMoneySettings, SplitMethod
+from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
@@ -22,6 +24,7 @@ from app.models.invite import Invite, InviteStatus
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.refresh_token import RefreshToken
+from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction, TransactionType
@@ -53,6 +56,9 @@ __all__ = [
     "GroupKind",
     "GroupMember",
     "GroupMemberRole",
+    "GroupMoneySettings",
+    "GroupSettlement",
+    "GroupSettlementStatus",
     "IncomeCategory",
     "IncomeEntry",
     "Installment",
@@ -70,6 +76,9 @@ __all__ = [
     "PotOwnershipEvent",
     "PotVisibility",
     "RefreshToken",
+    "SharedExpense",
+    "SharedExpenseSplit",
+    "SplitMethod",
     "Subscription",
     "Transaction",
     "TransactionType",

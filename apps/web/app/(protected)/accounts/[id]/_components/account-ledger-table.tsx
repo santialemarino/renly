@@ -5,8 +5,10 @@ import {
   ArrowLeftRight,
   ArrowUpRight,
   CreditCard,
+  HandCoins,
   Scale,
   ScrollText,
+  Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -26,11 +28,15 @@ const COLUMN_COUNT = 5;
 // One icon per kind. Direction is carried by the amount's sign and colour, so these say WHAT the
 // movement was rather than which way it went — except the two entry kinds, where the arrow is the
 // clearest thing an icon can say. `Scale` is the same icon the Reconcile row action uses.
+// The two shared kinds are deliberately not both `Users`: paying a person back is a hand of coins,
+// while money crossing into or out of something jointly owned is about the people who own it.
 const KIND_ICONS: Record<MovementKind, LucideIcon> = {
   income: ArrowDownLeft,
   expense: ArrowUpRight,
   transfer: ArrowLeftRight,
   settlement: CreditCard,
+  group_settlement: HandCoins,
+  ownership: Users,
   adjustment: Scale,
 };
 
@@ -42,9 +48,10 @@ interface AccountLedgerTableProps {
   firstRun?: boolean;
 }
 
-// The account's movements, newest first. Read-only by design — the five kinds are owned by four
-// different surfaces with four different edit affordances, and two of them (adjustments, and any
-// entry in a reserved category) are not editable anywhere. A footnote points at where each lives.
+// The account's movements, newest first. Read-only by design — the kinds are owned by several
+// different surfaces with different edit affordances, and some of them (adjustments, any entry in a
+// reserved category, and anything belonging to a group) are not editable from here at all. A footnote
+// points at where each lives.
 export function AccountLedgerTable({
   accountId,
   data,
@@ -63,14 +70,36 @@ export function AccountLedgerTable({
   const totalPages = Math.ceil(total / pageSize);
   const showBalance = !filtered;
 
-  // The row's headline: what happened, naming the other side when there is one.
+  /*
+   * The row's headline: what happened, naming the other side when there is one. The counterparty is
+   * resolved server-side for exactly this — a row has to say what it was even when the client's own
+   * lists fail to load, or when the other side has since been archived.
+   *
+   * Direction comes from the sign, which reads correctly here because this page only ever shows a
+   * PRIVATE account (the API's own lookup is the owner-scoped one). Money leaving it for a pot is a
+   * contribution; money arriving from one is a withdrawal.
+   */
   function describe(movement: AccountMovement) {
+    const other = movement.counterparty ?? '—';
+    const outgoing = Number(movement.amount) < 0;
     if (movement.kind === 'settlement') {
-      return t('rows.settlement', { card: movement.counterparty ?? '—' });
+      return t('rows.settlement', { card: other });
     }
     if (movement.kind === 'transfer') {
-      const key = Number(movement.amount) < 0 ? 'table.sentTo' : 'table.receivedFrom';
-      return tTransfers(key, { account: movement.counterparty ?? '—' });
+      return tTransfers(outgoing ? 'table.sentTo' : 'table.receivedFrom', { account: other });
+    }
+    if (movement.source === 'shared_expense') {
+      return t('rows.sharedExpense', { group: other });
+    }
+    if (movement.kind === 'group_settlement') {
+      return t(outgoing ? 'rows.settleUpPaid' : 'rows.settleUpReceived', { person: other });
+    }
+    if (movement.kind === 'ownership') {
+      // Named from the POT's side, which is where the words come from: money leaving this account
+      // is a contribution INTO it. Keying them 'in'/'out' would invert against `outgoing` here.
+      return t(outgoing ? 'rows.ownershipContribution' : 'rows.ownershipWithdrawal', {
+        pot: other,
+      });
     }
     return t(`kinds.${movement.kind}`);
   }

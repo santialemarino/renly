@@ -19,10 +19,12 @@ from app.repositories import (
     account_repository,
     card_settlement_repository,
     expense_repository,
+    group_settlement_repository,
     income_repository,
     installment_repository,
     payment_obligation_repository,
     pot_ownership_repository,
+    shared_expense_repository,
     subscription_repository,
     transfer_repository,
 )
@@ -144,11 +146,13 @@ async def validate_effective_default_link(
 
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,
 # derived at query time (one batch query per source): balance = opening_balance + linked income −
-# linked expenses − settlements paid from the account + transfers in − transfers out. Every term is
+# linked expenses − card settlements paid from the account + transfers in − transfers out + ownership
+# movements in − out − shared expenses drawn from it + group settlements received − paid. Every term is
 # already denominated in the account's currency, so the sums need no per-currency conversion — but for
-# three different reasons: entries are validated to MATCH the account's currency, each transfer leg is
-# stored in its own account's, and a card settlement may cross currencies and therefore records what
-# left the account separately (the repository sums coalesce(account_amount, amount)). Each sum is bounded below by
+# four different reasons: entries (private and shared alike) are validated to MATCH the account's
+# currency, each transfer leg is stored in its own account's, an ownership event stores both sides and
+# the repository picks the right one per leg, and a card or group settlement may cross currencies and
+# therefore records what left the account separately (those sums read coalesce(leg, amount)). Each sum is bounded below by
 # the account's opening_date inside the repository — opening_balance IS the balance at that date, so an
 # earlier row is already inside it. The linked set is free from the same sums (a group is present only
 # when it has rows) and drives the currency lock in the response; a transfer counts as a link on either
@@ -166,6 +170,8 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
         | await expense_repository.linked_account_ids(session, account_ids, user_id)
         | await card_settlement_repository.linked_account_ids(session, account_ids, user_id)
         | await transfer_repository.linked_account_ids(session, account_ids, user_id)
+        | await shared_expense_repository.linked_account_ids(session, account_ids)
+        | await group_settlement_repository.linked_account_ids(session, account_ids)
     )
     return balances, linked
 
@@ -187,6 +193,13 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
     # would leave nowhere and arrive nowhere.
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids)
+    # A group's shared expense drawn from this account takes the WHOLE amount out of it, not anyone's
+    # share: the money really left. Who owed whom afterwards is the splits' business, never the
+    # account's. A settlement clearing one of those balances moves cash on both sides, so both of its
+    # legs are here for exactly the reason a transfer's two are.
+    shared_expenses = await shared_expense_repository.sum_by_account_ids(session, account_ids)
+    group_settlements_in = await group_settlement_repository.sum_in_by_account_ids(session, account_ids)
+    group_settlements_out = await group_settlement_repository.sum_out_by_account_ids(session, account_ids)
     return {
         a.id: (
             a.opening_balance
@@ -197,6 +210,9 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
             - transfers_out.get(a.id, ZERO)
             + ownership_in.get(a.id, ZERO)
             - ownership_out.get(a.id, ZERO)
+            - shared_expenses.get(a.id, ZERO)
+            + group_settlements_in.get(a.id, ZERO)
+            - group_settlements_out.get(a.id, ZERO)
         )
         for a in accounts
         if a.id is not None
@@ -223,6 +239,9 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
     transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, owner_id, as_of_date=as_of_date)
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    shared_expenses = await shared_expense_repository.sum_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    group_settlements_in = await group_settlement_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    group_settlements_out = await group_settlement_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
     return {
         a.id: (
             (a.opening_balance if a.opening_date <= as_of_date else ZERO)
@@ -233,6 +252,9 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
             - transfers_out.get(a.id, ZERO)
             + ownership_in.get(a.id, ZERO)
             - ownership_out.get(a.id, ZERO)
+            - shared_expenses.get(a.id, ZERO)
+            + group_settlements_in.get(a.id, ZERO)
+            - group_settlements_out.get(a.id, ZERO)
         )
         for a in accounts
         if a.id is not None
@@ -269,6 +291,9 @@ async def compute_account_balance_series(session: AsyncSession, accounts: list[A
     transfers_out = await transfer_repository.sum_out_by_account_ids_dated(session, account_ids, owner_id, until=until)
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids_dated(session, account_ids, until=until)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids_dated(session, account_ids, until=until)
+    shared_expenses = await shared_expense_repository.sum_by_account_ids_dated(session, account_ids, until=until)
+    group_settlements_in = await group_settlement_repository.sum_in_by_account_ids_dated(session, account_ids, until=until)
+    group_settlements_out = await group_settlement_repository.sum_out_by_account_ids_dated(session, account_ids, until=until)
 
     # One signed delta per (account, date), so the accumulation below is a single pass over dates
     # rather than one pass per source.
@@ -281,6 +306,9 @@ async def compute_account_balance_series(session: AsyncSession, accounts: list[A
         (transfers_out, -1),
         (ownership_in, 1),
         (ownership_out, -1),
+        (shared_expenses, -1),
+        (group_settlements_in, 1),
+        (group_settlements_out, -1),
     ):
         for account_id, movement_date, total in rows:
             per_account = deltas[account_id]
@@ -347,6 +375,11 @@ async def account_has_links(session: AsyncSession, account_id: int, user_id: int
         or await income_repository.exists_by_account_id(session, account_id, user_id)
         or await card_settlement_repository.exists_by_account_id(session, account_id, user_id)
         or await transfer_repository.exists_by_account_id(session, account_id, user_id)
+        # No user filter on the two group sums: the rows belong to the group, and RLS scopes them.
+        # An account a group has spent from or settled through is denominated just as firmly as one
+        # its owner used privately, so it has to lock the currency too.
+        or bool(await shared_expense_repository.linked_account_ids(session, [account_id]))
+        or bool(await group_settlement_repository.linked_account_ids(session, [account_id]))
     )
 
 
@@ -416,6 +449,10 @@ async def update_account(
 async def delete_account(session: AsyncSession, account_id: int, user: User) -> None:
     account = await get_account(session, account_id, user)
     await card_settlement_repository.clear_account_amounts(session, account_id, user.id)
+    # A group settlement's cash legs are denominated in THIS account, so once the link is gone nothing
+    # can interpret them — and every reader treats "a leg amount is set" as "this crossed currencies".
+    # The bucket leg survives, so the settlement still clears its balance exactly as before.
+    await group_settlement_repository.clear_account_amounts(session, account_id)
     await account_repository.delete(session, account)
     await session.commit()
 

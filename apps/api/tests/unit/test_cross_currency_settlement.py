@@ -271,11 +271,17 @@ class TestUnlinkingClearsTheCashLeg:
         monkeypatch.setattr(account_service.account_repository, "delete", AsyncMock())
         clear = AsyncMock()
         monkeypatch.setattr(account_service.card_settlement_repository, "clear_account_amounts", clear)
+        clear_group = AsyncMock()
+        monkeypatch.setattr(account_service.group_settlement_repository, "clear_account_amounts", clear_group)
         session = AsyncMock()
 
         await account_service.delete_account(session, 7, USER)
 
         clear.assert_awaited_once_with(session, 7, USER.id)
+        # A group settlement's two cash legs are denominated in THIS account for exactly the same
+        # reason, so they are cleared in the same transaction. No user id: the row belongs to the
+        # group, and RLS is what scopes it.
+        clear_group.assert_awaited_once_with(session, 7)
         # One commit for the whole use case, so the clear and the delete are atomic.
         session.commit.assert_awaited_once()
 

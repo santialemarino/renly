@@ -1,13 +1,15 @@
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import NamedTuple
 
-from sqlalchemy import String, cast, func
+from sqlalchemy import String, cast, func, literal, null, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.account import Account
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
+from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.repositories.utils import apply_entry_sort
 
 # Sortable columns for the expenses list. `category` is sorted as TEXT, not as the enum: ORDER BY on
@@ -21,11 +23,103 @@ _SORT_COLUMNS = {
     "payment_method": ExpenseEntry.payment_method,
 }
 
+# The two things a row in the unioned expenses list can be. A private expense_entries row of the
+# caller's own, or the caller's SHARE of a shared expense their group recorded.
+SCOPE_PRIVATE = "private"
+SCOPE_SHARED = "shared"
 
-# List expenses for a user with optional filters, sorting, and pagination.
+# What a shared row reports as its origin. `source` means "how did this get into Renly", and for a row
+# that is one member's share of a group's expense there is no truer answer.
+SOURCE_SHARED = "shared"
+
+
+# One row of the unioned expenses list, in the projection both branches produce.
+#
+# It is a flat projection rather than an ORM row because the two branches read different tables and
+# neither is a superset of the other — hydrating each side back into its model would cost two more
+# queries and hand the service two shapes to reconcile.
+#
+# Three fields carry the whole difference between the branches:
+#   * `scope` says which table the row came from. It is also half the identity: `id` is unique within
+#     each table but NOT across the union, so (scope, id) is the key and (scope, id) is the tie-break.
+#   * `amount` is the caller's own figure either way — the whole expense when it is private, their
+#     SHARE when it is shared, which is the one rule the flow half rests on (your share is your expense).
+#   * `full_amount` is the shared expense's total, so a reader can say "your 30 of 90" without a second
+#     request. Null on a private row, where the two would be the same number twice.
+#
+# `account_id` and `credit_card_id` are deliberately null on a shared row. They identify the PAYER's
+# instrument, which is frequently another member's, and a row describing your share should not carry
+# somebody else's card id. `payment_method` is kept, because it describes the expense rather than
+# naming anyone's account.
+class ExpenseListRow(NamedTuple):
+    scope: str
+    id: int
+    date: date_type
+    amount: Decimal
+    currency: str
+    category: ExpenseCategory | None
+    notes: str | None
+    payment_method: str | None
+    credit_card_id: int | None
+    account_id: int | None
+    source: str
+    payment_obligation_id: int | None
+    subscription_id: int | None
+    installment_id: int | None
+    reconciliation_id: int | None
+    account_reconciliation_id: int | None
+    created_at: datetime
+    updated_at: datetime
+    group_id: int | None
+    full_amount: Decimal | None
+
+
+# The filters both branches of the list share, applied to whichever model carries them. Written once
+# so a filter added to the private list cannot silently miss the shared one — the failure that a
+# second copy of this block would eventually produce.
+def _apply_list_filters(
+    stmt,
+    model,
+    *,
+    search: str | None,
+    category: ExpenseCategory | None,
+    payment_method: str | None,
+    date_from: date_type | None,
+    date_to: date_type | None,
+):
+    if search:
+        stmt = stmt.where(model.notes.ilike(f"%{search}%"))
+    if category is not None:
+        stmt = stmt.where(model.category == category)
+    if payment_method is not None:
+        stmt = stmt.where(model.payment_method == payment_method)
+    if date_from is not None:
+        stmt = stmt.where(model.date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(model.date <= date_to)
+    return stmt
+
+
+# Lists the caller's expenses: their own private rows, plus their SHARE of every shared expense their
+# group seats take part in, as one paginated, sorted, filtered list.
+#
+# `member_ids` are the caller's own active group seats. When it is empty the shared branch is not built
+# at all and the statement is exactly the private query this function has always run — a solo user (who
+# is every user at launch) pays nothing for a union with no rows in it. The filters are applied by one
+# helper to each branch, so the branches cannot drift even though only one of them is always present.
+#
+# The seats are resolved by the caller rather than joined here for a measured reason: joining
+# group_members to filter the splits makes Postgres scan every split in the database, while an
+# `IN (seat ids)` predicate uses the splits' member index. On a 55,000-row list that was the difference
+# between ~20 ms and ~50 ms for one page.
+#
+# The tie-break is (id, scope) rather than id alone, because ids are unique per TABLE and this list
+# spans two — without the scope a private row and a shared row sharing a date and an id would have no
+# total order, and Postgres may then repeat one across pages or skip it entirely.
 async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     search: str | None = None,
     category: ExpenseCategory | None = None,
@@ -36,34 +130,97 @@ async def list_by_user_filtered(
     sort_order: str = "asc",
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[ExpenseEntry], int]:
-    base = select(ExpenseEntry).where(ExpenseEntry.user_id == user_id)
+) -> tuple[list[ExpenseListRow], int]:
+    private = _apply_list_filters(
+        select(
+            literal(SCOPE_PRIVATE).label("scope"),
+            ExpenseEntry.id.label("id"),
+            ExpenseEntry.date.label("date"),
+            ExpenseEntry.amount.label("amount"),
+            ExpenseEntry.currency.label("currency"),
+            ExpenseEntry.category.label("category"),
+            ExpenseEntry.notes.label("notes"),
+            ExpenseEntry.payment_method.label("payment_method"),
+            ExpenseEntry.credit_card_id.label("credit_card_id"),
+            ExpenseEntry.account_id.label("account_id"),
+            ExpenseEntry.source.label("source"),
+            ExpenseEntry.payment_obligation_id.label("payment_obligation_id"),
+            ExpenseEntry.subscription_id.label("subscription_id"),
+            ExpenseEntry.installment_id.label("installment_id"),
+            ExpenseEntry.reconciliation_id.label("reconciliation_id"),
+            ExpenseEntry.account_reconciliation_id.label("account_reconciliation_id"),
+            ExpenseEntry.created_at.label("created_at"),
+            ExpenseEntry.updated_at.label("updated_at"),
+            null().label("group_id"),
+            null().label("full_amount"),
+        ).where(ExpenseEntry.user_id == user_id),
+        ExpenseEntry,
+        search=search,
+        category=category,
+        payment_method=payment_method,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
-    if search:
-        base = base.where(ExpenseEntry.notes.ilike(f"%{search}%"))
-    if category is not None:
-        base = base.where(ExpenseEntry.category == category)
-    if payment_method is not None:
-        base = base.where(ExpenseEntry.payment_method == payment_method)
-    if date_from is not None:
-        base = base.where(ExpenseEntry.date >= date_from)
-    if date_to is not None:
-        base = base.where(ExpenseEntry.date <= date_to)
+    if member_ids:
+        shared = _apply_list_filters(
+            select(
+                literal(SCOPE_SHARED).label("scope"),
+                SharedExpense.id.label("id"),
+                SharedExpense.date.label("date"),
+                SharedExpenseSplit.amount.label("amount"),
+                SharedExpense.currency.label("currency"),
+                SharedExpense.category.label("category"),
+                SharedExpense.notes.label("notes"),
+                SharedExpense.payment_method.label("payment_method"),
+                null().label("credit_card_id"),
+                null().label("account_id"),
+                literal(SOURCE_SHARED).label("source"),
+                null().label("payment_obligation_id"),
+                null().label("subscription_id"),
+                null().label("installment_id"),
+                null().label("reconciliation_id"),
+                null().label("account_reconciliation_id"),
+                SharedExpense.created_at.label("created_at"),
+                SharedExpense.updated_at.label("updated_at"),
+                SharedExpense.group_id.label("group_id"),
+                SharedExpense.amount.label("full_amount"),
+            )
+            .join(SharedExpense, SharedExpense.id == SharedExpenseSplit.shared_expense_id)
+            # A split of zero is a payer who took no part in the expense (legal, per D33). It is not
+            # spending, so it does not belong in a spending list.
+            .where(SharedExpenseSplit.member_id.in_(member_ids), SharedExpenseSplit.amount > 0),
+            SharedExpense,
+            search=search,
+            category=category,
+            payment_method=payment_method,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        rows = union_all(private, shared).subquery()
+    else:
+        rows = private.subquery()
 
-    count_result = await session.execute(select(func.count()).select_from(base.subquery()))
+    count_result = await session.execute(select(func.count()).select_from(rows))
     total = count_result.scalar_one()
 
+    sort_columns = {
+        "date": rows.c.date,
+        "amount": rows.c.amount,
+        "category": cast(rows.c.category, String),
+        "payment_method": rows.c.payment_method,
+    }
     query = apply_entry_sort(
-        base,
-        ExpenseEntry,
+        select(rows),
         sort_by,
         sort_order,
-        sort_columns=_SORT_COLUMNS,
-        default_order=(ExpenseEntry.date.desc(), ExpenseEntry.id.desc()),
+        sort_columns=sort_columns,
+        default_order=(rows.c.date.desc(), rows.c.id.desc(), rows.c.scope),
+        tie_break=(rows.c.id.desc(), rows.c.scope),
     )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)
-    return list(result.scalars().all()), total
+    return [ExpenseListRow(*row) for row in result.all()], total
 
 
 # Get a single expense by id and user_id.

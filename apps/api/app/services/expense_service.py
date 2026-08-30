@@ -19,10 +19,12 @@ from app.models.user import User
 from app.repositories import (
     credit_card_repository,
     expense_repository,
+    group_repository,
     installment_repository,
     payment_obligation_repository,
     subscription_repository,
 )
+from app.repositories.expense_repository import ExpenseListRow
 from app.schemas.expense import ExpenseListResponse, ExpenseResponse
 from app.services import (
     account_service,
@@ -67,7 +69,56 @@ def _to_response(entry: ExpenseEntry, currency: str | None, lookup: RateLookup |
     return resp
 
 
-# List expenses for a user with optional filters, pagination, and display-currency conversion.
+# Maps one row of the UNIONED list — a private expense of the caller's own, or their share of a shared
+# one — to the same response shape, converted at the row's own date exactly as above.
+#
+# `scope` is what tells the two apart, and it is half the identity as well: the ids are unique within
+# each table and not across them, so a client acting on a row needs both.
+def _list_row_to_response(row: ExpenseListRow, currency: str | None, lookup: RateLookup | None) -> ExpenseResponse:
+    return ExpenseResponse(
+        id=row.id,
+        scope=row.scope,
+        date=row.date,
+        amount=row.amount,
+        currency=row.currency,
+        converted_amount=convert_optional(row.amount, row.currency, currency, lookup, row.date),
+        category=row.category,
+        notes=row.notes,
+        payment_method=row.payment_method,
+        credit_card_id=row.credit_card_id,
+        account_id=row.account_id,
+        source=row.source,
+        payment_obligation_id=row.payment_obligation_id,
+        subscription_id=row.subscription_id,
+        installment_id=row.installment_id,
+        reconciliation_id=row.reconciliation_id,
+        account_reconciliation_id=row.account_reconciliation_id,
+        group_id=row.group_id,
+        group_name=None,
+        full_amount=row.full_amount,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# The names of every group represented on this page, in one query. Denormalized onto the response so a
+# shared row can say which group it belongs to without the client joining against a list of its own —
+# the same reason a card settlement carries its account's name.
+async def _group_names(session: AsyncSession, rows: list[ExpenseListRow]) -> dict[int, str]:
+    group_ids = sorted({row.group_id for row in rows if row.group_id is not None})
+    if not group_ids:
+        return {}
+    groups = await group_repository.get_by_ids(session, group_ids)
+    return {group.id: group.name for group in groups}
+
+
+# Lists the user's expenses — their own, plus their SHARE of every shared expense their groups record
+# — as one filtered, sorted, paginated list with display-currency conversion.
+#
+# One list rather than two because that is the whole point: "what did I spend" has one answer, and a
+# share of a group dinner is spending exactly as much as a solo one. The share is read from the shared
+# tables at query time and never mirrored into expense_entries, so an edit to the group's expense has
+# nothing to chase.
 async def list_expenses(
     session: AsyncSession,
     user: User,
@@ -83,9 +134,15 @@ async def list_expenses(
     page: int = 1,
     page_size: int = 25,
 ) -> ExpenseListResponse:
-    entries, total = await expense_repository.list_by_user_filtered(
+    # The caller's own active seats, resolved before the union rather than joined inside it: an
+    # `IN (seat ids)` predicate uses the splits' member index, while the join makes Postgres scan every
+    # split in the database — measured at roughly twice the time on a 55,000-row list. An empty list
+    # also means the shared branch is not built at all, so a user in no group pays nothing for it.
+    member_ids = await group_repository.list_active_member_ids(session, user.id)
+    rows, total = await expense_repository.list_by_user_filtered(
         session,
         user.id,
+        member_ids,
         search=search,
         category=category,
         payment_method=payment_method,
@@ -97,13 +154,15 @@ async def list_expenses(
         page_size=page_size,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    group_names = await _group_names(session, rows)
     items: list[ExpenseResponse] = []
     skipped: set[str] = set()
-    for e in entries:
-        resp = _to_response(e, currency, lookup)
+    for row in rows:
+        resp = _list_row_to_response(row, currency, lookup)
+        resp.group_name = group_names.get(row.group_id)
         # A requested conversion that yielded null means the rate was missing — flag the row's currency.
-        if currency and e.currency != currency and resp.converted_amount is None:
-            skipped.add(e.currency)
+        if currency and row.currency != currency and resp.converted_amount is None:
+            skipped.add(row.currency)
         items.append(resp)
     return ExpenseListResponse(
         items=items,

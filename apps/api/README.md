@@ -56,6 +56,11 @@ LEDGER_TEST_DATABASE_URL=postgresql+asyncpg://renly:...@localhost:5432/<db> \
   uv run pytest tests/integration/test_account_ledger_drift.py
 GROUPS_TEST_DATABASE_URL=postgresql+asyncpg://renly:...@localhost:5432/<db> \
   uv run pytest tests/integration/test_group_lifecycle.py
+
+# All of them at once
+RLS_TEST_DATABASE_URL=... RLS_TEST_ADMIN_DATABASE_URL=... \
+LEDGER_TEST_DATABASE_URL=... GROUPS_TEST_DATABASE_URL=... \
+  uv run pytest tests/integration
 ```
 
 `renly_app`'s password is set by `database/01_create_tables.sql` and is **not** the owner's.

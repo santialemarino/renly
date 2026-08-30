@@ -208,6 +208,15 @@ class ExpenseResponse(BaseModel):
             "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
         ),
     )
+    scope: str = Field(default="private", description="'private' for the user's own row, 'shared' for their share of a group's expense.")
+    group_id: int | None = Field(default=None, description="Group the shared expense belongs to; null on a private row.")
+    group_name: str | None = Field(default=None, description="That group's name, so a row reads without a second request.")
+    full_amount: Decimal | None = Field(
+        default=None,
+        description="The shared expense's whole total, of which `amount` is this user's share. Null on a private row.",
+        max_digits=18,
+        decimal_places=2,
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
     advance_change: PlanCursorChange | None = Field(

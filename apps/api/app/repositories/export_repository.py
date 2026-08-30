@@ -14,12 +14,15 @@ from app.models.credit_card import CreditCard
 from app.models.expense_entry import ExpenseEntry
 from app.models.group import Group, GroupMember
 from app.models.group_invite import GroupInvite
+from app.models.group_money_settings import GroupMoneySettings
+from app.models.group_settlement import GroupSettlement
 from app.models.income_entry import IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Investment
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import Pot, PotMemberPermission, PotOwnershipEvent
+from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction
@@ -60,7 +63,19 @@ _USER_ID_MODELS = {
 # investment_collection_members joins through its parent investment, and the three group tables are
 # not owned by anyone and are scoped by membership.
 _MEMBERSHIP_SCOPED_TABLES = frozenset(
-    {"investment_collection_members", "groups", "group_members", "group_invites", "pots", "pot_member_permissions", "pot_ownership_events"}
+    {
+        "investment_collection_members",
+        "groups",
+        "group_members",
+        "group_invites",
+        "group_money_settings",
+        "pots",
+        "pot_member_permissions",
+        "pot_ownership_events",
+        "shared_expenses",
+        "shared_expense_splits",
+        "group_settlements",
+    }
 )
 
 # Every export key dump_user_data() produces. The coverage guard in tests/unit/test_account_lifecycle.py
@@ -118,6 +133,19 @@ async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]
     data["group_members"] = list(group_members.scalars().all())
     group_invites = await session.execute(select(GroupInvite).where(GroupInvite.group_id.in_(group_ids_stmt)))
     data["group_invites"] = list(group_invites.scalars().all())
+    # The flow half of those groups: what they spent together, how each expense divided, and every
+    # settlement recorded against the resulting balances. Exported for the same reason the rest of the
+    # group is — a shared expense you took part in is part of what Renly holds about you — and NOT
+    # restorable for the same reason either: rebuilding a group's ledger from one member's file would
+    # stand every other member up as a placeholder bearing a real person's name and owing real money.
+    money_settings = await session.execute(select(GroupMoneySettings).where(GroupMoneySettings.group_id.in_(group_ids_stmt)))
+    data["group_money_settings"] = list(money_settings.scalars().all())
+    shared_expenses = await session.execute(select(SharedExpense).where(SharedExpense.group_id.in_(group_ids_stmt)))
+    data["shared_expenses"] = list(shared_expenses.scalars().all())
+    shared_splits = await session.execute(select(SharedExpenseSplit).where(SharedExpenseSplit.group_id.in_(group_ids_stmt)))
+    data["shared_expense_splits"] = list(shared_splits.scalars().all())
+    settlements = await session.execute(select(GroupSettlement).where(GroupSettlement.group_id.in_(group_ids_stmt)))
+    data["group_settlements"] = list(settlements.scalars().all())
 
     # The pots the user may see, with their permissions and full ownership ledger. Exported for the
     # same reason the group tables are — a portfolio you co-own is part of what Renly holds about you

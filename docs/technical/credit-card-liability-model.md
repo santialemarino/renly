@@ -51,7 +51,9 @@ The balance is **computed at query time**, not stored. This means:
 - Deleting a settlement automatically increases the balance.
 - No balance column to keep in sync -- it's always correct.
 
-The backend computes this in two batch queries (`expense_repository.sum_by_credit_card_ids_grouped()` + `card_settlement_repository.sum_by_card_ids_grouped()`) to avoid N+1 when listing multiple cards. Both are **card-side** sums, so they read the settlement's `amount` and never its `account_amount`: the bank cleared the bill in the bucket's own currency, whatever it debited you.
+The backend computes this in three batch queries (`expense_repository.sum_by_credit_card_ids_grouped()` + `shared_expense_repository.sum_by_credit_card_ids_grouped()` + `card_settlement_repository.sum_by_card_ids_grouped()`) to avoid N+1 when listing multiple cards. Both settlement sums are **card-side**, so they read the settlement's `amount` and never its `account_amount`: the bank cleared the bill in the bucket's own currency, whatever it debited you.
+
+**A group's shared expense charged to the card raises the same liability a private one does,** and is added into the same buckets. The whole amount hit the card — who owes whom for it afterwards is the split's business, and it is settled between people rather than with the issuer. This is what makes the additional-cardholder case work without co-owning a card at all: the cardholder is the payer and the person who actually spent it is the sole participant, so their share is 100% their expense and the cardholder holds the receivable. True joint liability to the issuer is a different thing and is deliberately not modelled.
 
 ## Settlement matching
 
@@ -104,7 +106,7 @@ Cards can be **archived** (set `is_active = false`) to hide them from the expens
 
 **Archive is a UI filter, not an accounting event.** An archived card's outstanding balance stays a liability in every aggregation — net worth, the finance overview `credit_card_balance`, dashboard composition, the net-worth evolution series, and Payments Calendar `card_due` events all include archived cards. Archiving only hides the card from pickers and list pages. (The single exception is the liquidity indicator, which measures forward-looking monthly commitments from _active_ entities — an archived card's `monthly_payment` is no longer a commitment.)
 
-Cards can only be **deleted** when they have no linked expenses. Attempting to delete a card with expenses returns 409 Conflict (`HasLinkedExpensesError`). Settlements cascade on delete. The `has_expenses` field on the response tells the frontend whether the delete button should be available.
+Cards can only be **deleted** when they have no linked expenses — a group's shared expenses included, which the refusal names separately ("shared expenses") because the fix is different: the user has to go to the group, not to their own list. Attempting to delete a card with either returns 409 Conflict (`HasLinkedExpensesError`). Settlements cascade on delete. The `has_expenses` field on the response tells the frontend whether the delete button should be available.
 
 ## Statement-period scoping (running-balance snapshots)
 

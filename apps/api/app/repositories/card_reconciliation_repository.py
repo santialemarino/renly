@@ -1,13 +1,14 @@
 from datetime import date as date_type
 from decimal import Decimal
 
-from sqlalchemy import func, update
+from sqlalchemy import func, union_all, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.card_reconciliation import CardReconciliation
 from app.models.card_settlement import CardSettlement
 from app.models.expense_entry import ExpenseEntry
+from app.models.shared_expense import SharedExpense
 
 
 # List all reconciliations for a card, optionally filtered to a single bucket. Ordered by period_end desc.
@@ -105,20 +106,34 @@ async def mark_stale(session: AsyncSession, reconciliation_ids: list[int]) -> No
 
 # Sum of expenses for a card+currency bucket dated at or before as_of_date.
 # Used by compute_bucket_balance_at — the running-balance snapshot at a statement's closing date.
+#
+# Both tables, and that is not optional: a group's shared expense charged to this card raises the same
+# liability a private one does and is already inside the card's RUNNING balance. Reading only
+# expense_entries here would make a statement's balance disagree with the card's by exactly the
+# group's charges — a reconcile dialog showing a figure the card page contradicts, and a Payments
+# Calendar card_due short by the same amount.
+#
+# Card-side on both sides: it reads `amount`, never a cash leg. The bank cleared the bill in the
+# bucket's own currency whatever it debited anyone.
 async def sum_expenses_at(
     session: AsyncSession,
     card_id: int,
     currency: str,
     as_of_date: date_type,
 ) -> Decimal:
-    result = await session.execute(
-        select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(
-            ExpenseEntry.credit_card_id == card_id,
-            ExpenseEntry.currency == currency,
-            ExpenseEntry.date <= as_of_date,
-        )
+    private = select(func.coalesce(func.sum(ExpenseEntry.amount), 0)).where(
+        ExpenseEntry.credit_card_id == card_id,
+        ExpenseEntry.currency == currency,
+        ExpenseEntry.date <= as_of_date,
     )
-    return Decimal(str(result.scalar_one()))
+    shared = select(func.coalesce(func.sum(SharedExpense.amount), 0)).where(
+        SharedExpense.credit_card_id == card_id,
+        SharedExpense.currency == currency,
+        SharedExpense.date <= as_of_date,
+    )
+    result = await session.execute(private)
+    shared_result = await session.execute(shared)
+    return Decimal(str(result.scalar_one())) + Decimal(str(shared_result.scalar_one()))
 
 
 # Sum of settlements for a card+currency bucket dated at or before as_of_date.
@@ -163,22 +178,29 @@ async def sum_settlements_between(
 # Per-day expense sums for a card+currency bucket up to a date, ascending. One grouped query
 # replaces the per-closing SUM round-trips in list_recent_statements; the service cumulative-sums
 # the daily rows to get the running balance at each statement closing.
+#
+# Unioned over both expense tables for the same reason sum_expenses_at is, and the union happens in
+# SQL rather than by merging two lists here: the caller cumulative-sums these in order, so two rows
+# for one date would each be added to the running total and the statement would read correctly only by
+# accident of ordering. One row per date is what the caller's contract actually is.
 async def list_expense_daily_sums(
     session: AsyncSession,
     card_id: int,
     currency: str,
     up_to: date_type,
 ) -> list[tuple[date_type, Decimal]]:
-    result = await session.execute(
-        select(ExpenseEntry.date, func.sum(ExpenseEntry.amount))
-        .where(
-            ExpenseEntry.credit_card_id == card_id,
-            ExpenseEntry.currency == currency,
-            ExpenseEntry.date <= up_to,
-        )
-        .group_by(ExpenseEntry.date)
-        .order_by(ExpenseEntry.date)
+    private = select(ExpenseEntry.date.label("date"), ExpenseEntry.amount.label("amount")).where(
+        ExpenseEntry.credit_card_id == card_id,
+        ExpenseEntry.currency == currency,
+        ExpenseEntry.date <= up_to,
     )
+    shared = select(SharedExpense.date.label("date"), SharedExpense.amount.label("amount")).where(
+        SharedExpense.credit_card_id == card_id,
+        SharedExpense.currency == currency,
+        SharedExpense.date <= up_to,
+    )
+    charges = union_all(private, shared).subquery()
+    result = await session.execute(select(charges.c.date, func.sum(charges.c.amount)).group_by(charges.c.date).order_by(charges.c.date))
     return [(row[0], Decimal(str(row[1]))) for row in result.all()]
 
 
