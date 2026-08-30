@@ -7,7 +7,7 @@
 #   * administration never grants visibility — the admin role gates WRITES to membership, settings and
 #     invites, and appears in no read path. An admin sees exactly what any member sees.
 #
-# Membership is therefore checked in two distinct steps, never one: `_require_member` answers "may you
+# Membership is therefore checked in two distinct steps, never one: `require_member` answers "may you
 # see this group at all" (and maps invisible to NotFoundError, so a non-member cannot tell an existing
 # group from a missing one), while `require_admin` answers "may you change it".
 #
@@ -75,7 +75,9 @@ def _build_response(group: Group, members: list[GroupMember], invited_member_ids
 # Resolves the caller's own ACTIVE seat in a group, or raises NotFoundError. Used as the visibility
 # gate: a non-member (or a former member) gets the same 404 as a group that does not exist, so
 # probing ids reveals nothing. RLS already hides the rows; this keeps the service honest on its own.
-async def _require_member(session: AsyncSession, group_id: int, user: User) -> tuple[Group, GroupMember]:
+# Public for the same reason require_admin is: the shared-expense and settlement services gate on this
+# exact rule, and two copies of a permission check are two things that can disagree.
+async def require_member(session: AsyncSession, group_id: int, user: User) -> tuple[Group, GroupMember]:
     group = await group_repository.get_by_id(session, group_id)
     if group is None:
         raise NotFoundError("Group not found")
@@ -85,12 +87,12 @@ async def _require_member(session: AsyncSession, group_id: int, user: User) -> t
     return (group, member)
 
 
-# Resolves the caller's own seat and requires it to be an admin one. Separate from _require_member on
+# Resolves the caller's own seat and requires it to be an admin one. Separate from require_member on
 # purpose: "can you see it" and "can you change it" are different questions, and collapsing them into
 # one check is how an admin-only rule ends up gating a read. Public because group_invite_service gates
 # on the same rule, and two copies of a permission check are two things that can disagree.
 async def require_admin(session: AsyncSession, group_id: int, user: User) -> tuple[Group, GroupMember]:
-    group, member = await _require_member(session, group_id, user)
+    group, member = await require_member(session, group_id, user)
     if member.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     return (group, member)
@@ -131,7 +133,7 @@ async def list_groups(session: AsyncSession, user: User) -> list[GroupResponse]:
 # Fetches one group with its roster. Raises NotFoundError when it does not exist or the caller is not
 # an active member of it.
 async def get_group(session: AsyncSession, group_id: int, user: User) -> GroupResponse:
-    group, viewer = await _require_member(session, group_id, user)
+    group, viewer = await require_member(session, group_id, user)
     members = await group_repository.list_members(session, group.id)
     invites = await group_invite_repository.list_by_group(session, group.id)
     now = utcnow()
@@ -159,6 +161,14 @@ async def create_group(
         joined_at=utcnow(),
     )
     member = await group_repository.create_member(admin_session, member)
+    # Every group has exactly one money-settings row, so no reader needs an "or the default" branch.
+    # Written here on the same privileged session and in the same transaction: the table shares the
+    # membership policy, whose row does not exist yet either.
+    # Imported inside the function because the money services gate on require_member above — the same
+    # cycle pot_service breaks the same way.
+    from app.services import group_money_service
+
+    await group_money_service.seed_settings(admin_session, group.id)
     await admin_session.commit()
     return _build_response(group, [member], set(), member)
 
@@ -246,13 +256,19 @@ async def update_member(
 # A member may always remove THEMSELVES (leaving the group); removing anyone else needs admin rights.
 # Either way the last active admin cannot go, or nobody could manage the group afterwards.
 async def remove_member(session: AsyncSession, group_id: int, member_id: int, user: User) -> None:
-    group, viewer = await _require_member(session, group_id, user)
+    group, viewer = await require_member(session, group_id, user)
     member = await group_repository.get_member(session, group.id, member_id)
     if member is None:
         raise NotFoundError("Group member not found")
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
+    # A seat with money still owed either way cannot simply be deactivated: the membership policy is
+    # what makes the group's rows readable, so the moment the seat goes inactive the person on the
+    # other side of that balance loses the record of it. Settle it or write it off first.
+    from app.services import group_settlement_service
+
+    await group_settlement_service.ensure_no_outstanding_balance(session, [member])
     member.is_active = False
     await group_repository.save_member(session, member)
     # Dropped in the same transaction: leaving a live link on the seat of someone who was just removed

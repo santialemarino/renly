@@ -16,15 +16,13 @@
 # that a user reads three numbers that visibly fail to add up and correctly stops trusting all three.
 
 from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
+
+from app.domain.money import MONEY_PLACES, ONE_HUNDRED, PERCENT_PLACES, quantize
 
 # NUMERIC(18,6) on pot_ownership_events.units and .unit_price — the precedent snapshots and
 # transactions already set for quantity.
 UNIT_PLACES = Decimal("0.000001")
-# NUMERIC(18,2), the width every money column in the schema uses.
-MONEY_PLACES = Decimal("0.01")
-PERCENT_PLACES = Decimal("0.01")
-ONE_HUNDRED = Decimal("100")
 # The nominal price the opening baseline issues units at, so opening units read as the percentages
 # they were entered as (90% of 100 is 90 units) instead of an arbitrary scaled count.
 OPENING_UNIT_PRICE = Decimal("1")
@@ -41,12 +39,6 @@ class OwnershipEntry:
     member_id: int
     units: Decimal
     counterparty_member_id: int | None = None
-
-
-# Rounds a value half-up to the given places. Half-up rather than Decimal's banker's-rounding default
-# because these are money and percentage figures a person reads and checks by hand.
-def quantize(value: Decimal, places: Decimal) -> Decimal:
-    return value.quantize(places, rounding=ROUND_HALF_UP)
 
 
 # Spreads a rounding remainder over already-rounded parts so they sum to `target` exactly. The whole

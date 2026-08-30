@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 #
 # Skipped unless LEDGER_TEST_DATABASE_URL points at a database with the schema applied, so the default
 # `pnpm test:api` run stays unit-only — the same contract test_rls_isolation.py uses.
+from app.domain.account_movement import MovementKind, MovementSource
 from app.repositories import account_movement_repository, account_repository
 from app.services import account_service
 
@@ -78,7 +79,30 @@ async def fixtures(session: AsyncSession):
         "INSERT INTO credit_cards (user_id, name, currency, closing_day, due_day) VALUES (:u, 'Ledger card', 'ARS', 20, 10) RETURNING id",
         u=users[0],
     )
-    return {"users": users, "ars": ars, "usd": usd, "other": other, "card": card}
+
+    # A group both users hold a seat in, with a pot holding one joint account. Present so the three
+    # movement kinds the flow half and the ownership ledger add have somewhere to happen: a shared
+    # expense drawn from a private account, a settlement between the two seats, and a contribution
+    # crossing the scope boundary.
+    group = await scalar("INSERT INTO groups (name, kind, created_by) VALUES ('Ledger group', 'household', :u) RETURNING id", u=users[0])
+    seats = [
+        await scalar(
+            "INSERT INTO group_members (group_id, user_id, display_name, role) VALUES (:g, :u, 'A', 'admin') RETURNING id", g=group, u=users[0]
+        ),
+        await scalar(
+            "INSERT INTO group_members (group_id, user_id, display_name, role) VALUES (:g, :u, 'B', 'member') RETURNING id", g=group, u=users[1]
+        ),
+    ]
+    pot = await scalar(
+        "INSERT INTO pots (group_id, base_currency, is_default) VALUES (:g, 'ARS', TRUE) RETURNING id",
+        g=group,
+    )
+    joint = await scalar(
+        "INSERT INTO accounts (pot_id, name, type, currency, opening_balance, opening_date) VALUES (:p, 'Joint', 'bank', 'ARS', 0, :d) RETURNING id",
+        p=pot,
+        d=_OPENING,
+    )
+    return {"users": users, "ars": ars, "usd": usd, "other": other, "card": card, "group": group, "seats": seats, "pot": pot, "joint": joint}
 
 
 # Asserts the ledger's own sum and the accounts page's balance agree for the given account.
@@ -223,6 +247,238 @@ class TestUnionMatchesTheBalance:
         )
         await session.flush()
         assert await _assert_no_drift(session, fixtures["ars"], fixtures["users"][0]) == _OPENING_BALANCE
+
+
+class TestTheScopeCrossingMovements:
+    """The three kinds that reach an account without being an income, an expense or a transfer.
+
+    Each was, or would have been, invisible to the ledger while counting in the balance — which reads
+    on the account page as a figure no visible row explains, and as a wrong `balance_after` on every
+    row above it. The ownership case was a REAL defect on main before this PR: measured on a live
+    database, an account with 100,000 opening and one 5,000 contribution reported 95,000 from the
+    balance and 100,000 from the ledger.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_contribution_leaves_the_private_account_and_arrives_in_the_pots(self, session, fixtures):
+        u, ars, joint, pot, seat = fixtures["users"][0], fixtures["ars"], fixtures["joint"], fixtures["pot"], fixtures["seats"][0]
+        await session.execute(
+            text(
+                "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, units, unit_price, base_amount)"
+                " VALUES (:p, 'opening', '2026-07-02', :m, 100, 1, 100)"
+            ),
+            {"p": pot, "m": seat},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO pot_ownership_events"
+                " (pot_id, type, date, member_id, units, unit_price, amount, base_amount, from_account_id, to_account_id)"
+                " VALUES (:p, 'contribution', '2026-07-20', :m, 50, 100, 5000, 5000, :f, :t)"
+            ),
+            {"p": pot, "m": seat, "f": ars, "t": joint},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE - Decimal("5000.00")
+        # And the far leg, which is what makes the pot's value actually move.
+        joint_account = await account_repository.get_by_id_any_scope(session, joint)
+        assert (await account_service.get_account_balances(session, [joint_account], u))[joint] == Decimal("5000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_cross_currency_contribution_moves_each_account_by_its_own_figure(self, session, fixtures):
+        # The two legs are denominated DIFFERENTLY, and reading one column on both is the whole way
+        # this goes wrong: a contribution runs private -> pot, so its `from` leg moves `amount` (the
+        # private account's currency) and its `to` leg `base_amount` (the pot's).
+        #
+        # The same-currency case above cannot see it — there the two figures are equal, so a leg
+        # reading the wrong column produces the right answer. A mutation sweep survived on exactly
+        # that flatness, which is why this fixture makes them differ by three orders of magnitude.
+        u, usd, joint, pot, seat = fixtures["users"][0], fixtures["usd"], fixtures["joint"], fixtures["pot"], fixtures["seats"][0]
+        await session.execute(
+            text(
+                "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, units, unit_price, base_amount)"
+                " VALUES (:p, 'opening', '2026-07-02', :m, 100, 1, 100)"
+            ),
+            {"p": pot, "m": seat},
+        )
+        # 40 dollars out of the USD account arriving as 60,000 pesos in the pot's ARS account.
+        await session.execute(
+            text(
+                "INSERT INTO pot_ownership_events"
+                " (pot_id, type, date, member_id, units, unit_price, amount, amount_currency, base_amount, from_account_id, to_account_id)"
+                " VALUES (:p, 'contribution', '2026-07-20', :m, 600, 100, 40, 'USD', 60000, :f, :t)"
+            ),
+            {"p": pot, "m": seat, "f": usd, "t": joint},
+        )
+        await session.flush()
+
+        # The private leg moved DOLLARS...
+        assert await _assert_no_drift(session, usd, u) == Decimal("-40.00")
+        # ...and the pot's leg PESOS. A leg reading the other column would show -60,000 and +40.
+        joint_account = await account_repository.get_by_id_any_scope(session, joint)
+        assert (await account_service.get_account_balances(session, [joint_account], u))[joint] == Decimal("60000.00")
+
+        # And the LEDGER's own figure for the far leg, which the drift helper cannot reach: it reads
+        # through the account service's owner-scoped lookup, and the pot's account has no owner. Without
+        # this the incoming branch's CASE is unasserted — a mutation making both legs read the same
+        # column survived on exactly that, because the outgoing leg happens to read it either way.
+        rows, _ = await account_movement_repository.list_movements(session, joint, u, opening_date=_OPENING)
+        arriving = next(row.movement for row in rows if row.movement.source == MovementSource.ownership)
+        assert arriving.amount == Decimal("60000.00")
+        # The pair IS the rate record, so the other side rides along rather than being derived.
+        assert (arriving.counterparty_amount, arriving.counterparty_currency) == (Decimal("40.00"), "USD")
+
+    @pytest.mark.asyncio
+    async def test_a_shared_expense_takes_the_whole_amount_from_the_account_that_paid(self, session, fixtures):
+        # The WHOLE amount, not the payer's share: the money really left. Who owed whom afterwards is
+        # the splits' business and never the account's.
+        u, ars, group, seats = fixtures["users"][0], fixtures["ars"], fixtures["group"], fixtures["seats"]
+        expense = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses (group_id, date, amount, currency, category, split_method, paid_from_account_id)"
+                    " VALUES (:g, '2026-07-12', 9000, 'ARS', 'dining', 'equal', :a) RETURNING id"
+                ),
+                {"g": group, "a": ars},
+            )
+        ).scalar_one()
+        for seat, amount, paid in ((seats[0], 4500, 9000), (seats[1], 4500, 0)):
+            await session.execute(
+                text("INSERT INTO shared_expense_splits (shared_expense_id, group_id, member_id, amount, paid_amount) VALUES (:e, :g, :m, :a, :p)"),
+                {"e": expense, "g": group, "m": seat, "a": amount, "p": paid},
+            )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE - Decimal("9000.00")
+
+    @pytest.mark.asyncio
+    async def test_both_legs_of_a_settlement_move_real_cash(self, session, fixtures):
+        # D15: settling MOVES money. The payer's account falls and the payee's rises, and a settlement
+        # that only cleared a balance would leave both accounts stating figures nobody holds.
+        users, ars, other, group, seats = fixtures["users"], fixtures["ars"], fixtures["other"], fixtures["group"], fixtures["seats"]
+        await session.execute(
+            text(
+                "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency, from_account_id, to_account_id)"
+                " VALUES (:g, :f, :t, '2026-07-18', 2500, 'ARS', :fa, :ta)"
+            ),
+            {"g": group, "f": seats[0], "t": seats[1], "fa": ars, "ta": other},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, users[0]) == _OPENING_BALANCE - Decimal("2500.00")
+        assert await _assert_no_drift(session, other, users[1]) == Decimal("5000.00") + Decimal("2500.00")
+
+    @pytest.mark.asyncio
+    async def test_a_cross_currency_settlement_reaches_each_account_by_its_own_leg(self, session, fixtures):
+        # The bucket is cleared in ARS while the money leaves a USD account. Reading `amount` on both
+        # legs would take 2,500 pesos out of a dollar account.
+        users, usd, other, group, seats = fixtures["users"], fixtures["usd"], fixtures["other"], fixtures["group"], fixtures["seats"]
+        await session.execute(
+            text(
+                "INSERT INTO group_settlements"
+                " (group_id, from_member_id, to_member_id, date, amount, currency, from_account_id, from_amount, to_account_id)"
+                " VALUES (:g, :f, :t, '2026-07-18', 2500, 'ARS', :fa, 2, :ta)"
+            ),
+            {"g": group, "f": seats[0], "t": seats[1], "fa": usd, "ta": other},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, usd, users[0]) == Decimal("-2.00")
+        # The payee's side had no conversion, so it moves the bucket amount.
+        assert await _assert_no_drift(session, other, users[1]) == Decimal("7500.00")
+
+    @pytest.mark.asyncio
+    async def test_a_written_off_balance_moves_no_cash_at_all(self, session, fixtures):
+        # It clears the bucket and nothing else. A ledger row for a payment nobody made would have to
+        # be a zero, or a lie.
+        users, ars, group, seats = fixtures["users"], fixtures["ars"], fixtures["group"], fixtures["seats"]
+        await session.execute(
+            text(
+                "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency, status)"
+                " VALUES (:g, :f, :t, '2026-07-18', 2500, 'ARS', 'written_off')"
+            ),
+            {"g": group, "f": seats[0], "t": seats[1]},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, users[0]) == _OPENING_BALANCE
+
+    @pytest.mark.asyncio
+    async def test_a_pre_opening_shared_expense_is_excluded_by_both(self, session, fixtures):
+        # opening_balance IS the balance at opening_date, so an earlier row is already inside it.
+        # The bound has to hold on BOTH sides or the ledger lists a row the balance does not count.
+        u, ars, group, seats = fixtures["users"][0], fixtures["ars"], fixtures["group"], fixtures["seats"]
+        expense = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses (group_id, date, amount, currency, split_method, paid_from_account_id)"
+                    " VALUES (:g, '2026-06-01', 4000, 'ARS', 'equal', :a) RETURNING id"
+                ),
+                {"g": group, "a": ars},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_expense_splits (shared_expense_id, group_id, member_id, amount, paid_amount) VALUES (:e, :g, :m, 4000, 4000)"),
+            {"e": expense, "g": group, "m": seats[0]},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE
+
+    @pytest.mark.asyncio
+    async def test_every_new_source_lands_on_the_kind_its_filter_promises(self, session, fixtures):
+        # The ledger's kind filter is a partition: a row the unfiltered list shows and no filter
+        # matches is a row the user cannot reach. Driven through the real filter rather than asserted
+        # on the branch list, so a kind wired into the union but not into the dispatch reddens.
+        u, ars, joint, pot, group, seats = (
+            fixtures["users"][0],
+            fixtures["ars"],
+            fixtures["joint"],
+            fixtures["pot"],
+            fixtures["group"],
+            fixtures["seats"],
+        )
+        expense = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses (group_id, date, amount, currency, split_method, paid_from_account_id)"
+                    " VALUES (:g, '2026-07-12', 900, 'ARS', 'equal', :a) RETURNING id"
+                ),
+                {"g": group, "a": ars},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_expense_splits (shared_expense_id, group_id, member_id, amount, paid_amount) VALUES (:e, :g, :m, 900, 900)"),
+            {"e": expense, "g": group, "m": seats[0]},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency, from_account_id)"
+                " VALUES (:g, :f, :t, '2026-07-18', 250, 'ARS', :a)"
+            ),
+            {"g": group, "f": seats[0], "t": seats[1], "a": ars},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO pot_ownership_events"
+                " (pot_id, type, date, member_id, units, unit_price, amount, base_amount, from_account_id, to_account_id)"
+                " VALUES (:p, 'contribution', '2026-07-20', :m, 50, 100, 5000, 5000, :f, :t)"
+            ),
+            {"p": pot, "m": seats[0], "f": ars, "t": joint},
+        )
+        await session.flush()
+
+        account = await account_repository.get_by_id(session, ars, u)
+        unfiltered, _ = await account_movement_repository.list_movements(session, ars, u, opening_date=account.opening_date, page_size=100)
+        by_kind: dict[str, int] = {}
+        for kind in MovementKind:
+            rows, _ = await account_movement_repository.list_movements(session, ars, u, opening_date=account.opening_date, kind=kind, page_size=100)
+            by_kind[kind.value] = len(rows)
+        assert {source.value for source in (m.movement.source for m in unfiltered)} == {"shared_expense", "group_settlement", "ownership"}
+        assert by_kind["expense"] == 1 and by_kind["group_settlement"] == 1 and by_kind["ownership"] == 1
+        # And the CARD settlement kind stays what its shipped label says it is: no group row landed in it.
+        assert by_kind["settlement"] == 0
+        assert sum(by_kind.values()) == len(unfiltered)
 
 
 class TestLedgerWalksBackToOpening:

@@ -15,7 +15,9 @@ from app.repositories.exchange_rate_repository import exchange_rate_repository
 from app.repositories.expense_repository import expense_repository
 from app.repositories.export_repository import export_repository
 from app.repositories.group_invite_repository import group_invite_repository
+from app.repositories.group_money_settings_repository import group_money_settings_repository
 from app.repositories.group_repository import group_repository
+from app.repositories.group_settlement_repository import group_settlement_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
@@ -26,6 +28,7 @@ from app.repositories.pot_ownership_repository import pot_ownership_repository
 from app.repositories.pot_repository import pot_repository
 from app.repositories.refresh_token_repository import refresh_token_repository
 from app.repositories.restore_repository import restore_repository
+from app.repositories.shared_expense_repository import shared_expense_repository
 from app.repositories.snapshot_repository import snapshot_repository
 from app.repositories.subscription_repository import subscription_repository
 from app.repositories.transaction_repository import transaction_repository
@@ -49,7 +52,9 @@ __all__ = [
     "expense_repository",
     "export_repository",
     "group_invite_repository",
+    "group_money_settings_repository",
     "group_repository",
+    "group_settlement_repository",
     "income_repository",
     "installment_repository",
     "investment_repository",
@@ -60,6 +65,7 @@ __all__ = [
     "pot_repository",
     "refresh_token_repository",
     "restore_repository",
+    "shared_expense_repository",
     "snapshot_repository",
     "subscription_repository",
     "transaction_repository",

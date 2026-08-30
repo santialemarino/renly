@@ -61,11 +61,15 @@ def apply_listing_filters(
 
 
 # Mapped sorting for a PAGINATED list (expenses / income / investments), which needs one thing the
-# unpaginated version doesn't: an id tie-break. A whole page of rows can share one date or one
-# category, and without a total order Postgres may repeat a row across pages or skip it entirely. The
-# tie-break is derived from the model rather than passed in, so a caller cannot forget it.
-def apply_entry_sort(stmt, model, sort_by: str | None, sort_order: str, *, sort_columns: dict, default_order):
+# unpaginated version doesn't: a tie-break. A whole page of rows can share one date or one category,
+# and without a TOTAL order Postgres may repeat a row across pages or skip it entirely.
+#
+# `tie_break` is a sequence rather than a single clause because one column is not always enough. A list
+# over one table is totally ordered by its id; the unioned expenses list spans two tables whose ids are
+# each unique only within themselves, so it needs the scope alongside the id. Passing it explicitly is
+# what keeps the rule in one place while letting each list state the key it actually has.
+def apply_entry_sort(stmt, sort_by: str | None, sort_order: str, *, sort_columns: dict, default_order, tie_break):
     clause = _resolve_sort(sort_by, sort_order, sort_columns)
     if clause is None:
         return stmt.order_by(*default_order)
-    return stmt.order_by(clause, model.id.desc())
+    return stmt.order_by(clause, *tie_break)

@@ -50,11 +50,11 @@ async def list_by_user_filtered(
 
     query = apply_entry_sort(
         base,
-        IncomeEntry,
         sort_by,
         sort_order,
         sort_columns=_SORT_COLUMNS,
         default_order=(IncomeEntry.date.desc(), IncomeEntry.id.desc()),
+        tie_break=(IncomeEntry.id.desc(),),
     )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)

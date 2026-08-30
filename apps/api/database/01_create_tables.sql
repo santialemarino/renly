@@ -156,6 +156,33 @@ CREATE TYPE ownership_event_type AS ENUM (
   'reagreement'
 );
 
+-- How a shared expense's total is divided between the members taking part. The method is a record of
+-- what the user ASKED for, never of the result: the per-member figures are stored on the splits, so a
+-- rounding rule or a member leaving can never re-derive an expense into different amounts than the
+-- ones everybody agreed. 'equal' divides by the number of participants, 'exact' takes each figure as
+-- given, 'shares' takes parts (2 shares to 1), 'percentage' takes percentages of the total.
+CREATE TYPE split_method AS ENUM (
+  'equal',
+  'exact',
+  'shares',
+  'percentage'
+);
+
+-- Where a recorded settlement stands. 'pending' is money one member says they paid another, which
+-- COUNTS against the balance immediately — it really moved — and which either named member may still
+-- delete. 'confirmed' is the payee acknowledging receipt (D28's trust anchor); it locks the row until
+-- the payee un-confirms it. 'written_off' is a debt the creditor has given up on: it clears the same
+-- bucket a payment would, moves no cash at all, and is the other exit D24 requires before a member
+-- with an open balance can be removed.
+-- There is deliberately no 'reversed': reversing a settlement DELETES it, exactly as revoking a group
+-- invite deletes its row, because until the audit log exists there is nothing that would ever read a
+-- reversed state back.
+CREATE TYPE group_settlement_status AS ENUM (
+  'pending',
+  'confirmed',
+  'written_off'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -1091,6 +1118,180 @@ ALTER TABLE account_reconciliations
 ALTER TABLE transfers
   ADD CONSTRAINT transfers_pot_id_fkey FOREIGN KEY (pot_id) REFERENCES pots(id) ON DELETE RESTRICT;
 
+-- Money settings the group holds in common: the split it proposes by default, and whether a
+-- settlement one member records needs the other to confirm it. A SIBLING table rather than columns on
+-- `groups` on purpose — `groups` is the membership kernel and carries who the people are and nothing
+-- about what they share, which is what lets a non-money module adopt it unchanged. Money settings
+-- would be the first thing to break that, permanently.
+-- One row per group, created with the group, so every read is a plain join with no "or the default"
+-- branch to keep in step with the column defaults.
+-- The group's balance display currency §6.2 once sketched is deliberately ABSENT: balances are held in
+-- per-currency buckets that never net across currencies, the unified figure beside them converts to
+-- each VIEWER's own display currency, and a cross-currency settlement names the currency it was
+-- actually paid in. There is no question a group-level one would answer.
+CREATE TABLE group_money_settings (
+  group_id                  BIGINT PRIMARY KEY REFERENCES groups(id) ON DELETE CASCADE,
+  default_split_method      split_method NOT NULL DEFAULT 'equal',
+  auto_finalise_settlements BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- One expense a group shares. It is deliberately NOT a scoped expense_entries row: an expense with one
+-- funding source and an N-way split cannot be one flat row, and expense_entries keeps its simple
+-- owner-only RLS while everything here is reachable by every member of the group.
+-- Each member's own share appears in their normal /expenses list by a read-time UNION over the splits
+-- below — never a mirrored expense_entries row, because an edit here would then have to chase every
+-- copy and the copies are what drift.
+-- There is NO payer column. Who fronted the money lives on the splits as `paid_amount`, for a reason
+-- that is not stylistic: money can come from a SHARED account, in which case the pot's owners fronted
+-- it in their own proportions and no single member is the payer. One column cannot say that, and a
+-- payer column plus per-member figures would be two records of one fact.
+-- The funding source is at most one of the two: an account draws cash on the spot, a card raises a
+-- liability now and draws cash later at settlement, and naming both would count one payment twice.
+-- Naming NEITHER is legal and common — an expense somebody paid in cash outside Renly still splits.
+CREATE TABLE shared_expenses (
+  id                   BIGSERIAL PRIMARY KEY,
+  group_id             BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  date                 DATE NOT NULL,
+  amount               NUMERIC(18, 2) NOT NULL,
+  currency             VARCHAR(3) NOT NULL,
+  category             expense_category,
+  split_method         split_method NOT NULL,
+  paid_from_account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  payment_method       VARCHAR(20),
+  credit_card_id       BIGINT REFERENCES credit_cards(id),
+  notes                TEXT,
+  created_by           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- A shared expense of nothing has nothing to divide, and a negative one is a refund the split
+  -- methods have no meaning for (a percentage of a negative total inverts who owes whom).
+  CONSTRAINT shared_expenses_positive_amount CHECK (amount > 0),
+  -- The cash leg and the card leg are exclusive, the same rule ensure_account_pairing enforces on a
+  -- private expense. Both set would subtract the amount from an account AND add it to a card bucket.
+  CONSTRAINT shared_expenses_single_funding CHECK (paid_from_account_id IS NULL OR credit_card_id IS NULL)
+);
+
+CREATE INDEX idx_shared_expenses_group_date ON shared_expenses(group_id, date DESC);
+-- The balance union filters by account and bounds by date, so the leg gets a composite index rather
+-- than a bare FK index — the same shape transfers and the ownership ledger use.
+CREATE INDEX idx_shared_expenses_account_date
+  ON shared_expenses(paid_from_account_id, date) WHERE paid_from_account_id IS NOT NULL;
+CREATE INDEX idx_shared_expenses_credit_card
+  ON shared_expenses(credit_card_id) WHERE credit_card_id IS NOT NULL;
+
+-- One member's two sides of one shared expense, and the row the whole feature balances on.
+--   * `amount` is what this member CONSUMED — their share, which is the figure that lands in their own
+--     /expenses list and their own spending analytics. Sums to the expense's total.
+--   * `paid_amount` is what this member FRONTED. Sums to the same total.
+-- A member's balance is therefore Σ paid_amount − Σ amount across every split they hold, and the sum
+-- over all members is zero in every currency BY CONSTRUCTION rather than by a rule anyone has to
+-- remember. That one identity is what makes §4.2's four cases one implementation:
+--   * one member pays for a group dinner -> their paid_amount is the total, everyone's amount is their
+--     share, and the difference is the receivable;
+--   * a SHARED account pays -> the pot's owners front it in their ownership proportions at that date,
+--     pinned here as several paid_amounts. Pinned rather than derived because the ownership ledger is
+--     replayable, so a back-dated ownership event would otherwise silently rewrite an old balance;
+--   * a shared account pays for ONE member's own purchase (the private-expense-from-joint-money case)
+--     -> that member's amount is the whole total and the other owners' paid_amounts are what they are
+--     owed. No special case anywhere.
+-- A row with amount = 0 is a payer who took no part (legal, if uncommon); one with paid_amount = 0 is
+-- an ordinary participant. Both zero cannot happen — the service never writes such a row — but it is
+-- harmless rather than wrong, so it is not constrained.
+-- group_id is denormalized from the parent for RLS, the same way the scoped stock tables carry theirs:
+-- a policy that had to join shared_expenses to answer "may I see this" would evaluate that join for
+-- every row of every query.
+CREATE TABLE shared_expense_splits (
+  id                BIGSERIAL PRIMARY KEY,
+  shared_expense_id BIGINT NOT NULL REFERENCES shared_expenses(id) ON DELETE CASCADE,
+  group_id          BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  member_id         BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  amount            NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  paid_amount       NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- One row per member per expense: the two figures above are that member's whole position in it, so a
+  -- second row would be a second opinion about the same fact.
+  CONSTRAINT shared_expense_splits_member_once UNIQUE (shared_expense_id, member_id),
+  -- Negative figures would let a split "un-consume" or "un-pay", inverting who owes whom while still
+  -- summing to the total.
+  CONSTRAINT shared_expense_splits_nonnegative CHECK (amount >= 0 AND paid_amount >= 0)
+);
+
+CREATE INDEX idx_shared_expense_splits_expense ON shared_expense_splits(shared_expense_id);
+-- The /expenses union reads a member's own shares, and the balance reads a group's, so both lookups
+-- start here rather than at the parent.
+CREATE INDEX idx_shared_expense_splits_member ON shared_expense_splits(member_id);
+CREATE INDEX idx_shared_expense_splits_group ON shared_expense_splits(group_id);
+
+-- One recorded payment against a group's balances, and the only thing that clears them.
+-- Named apart from card_settlements deliberately: the two are different acts on different ledgers, and
+-- the per-account movement feed reads both, so one word for both would make every call site ambiguous.
+-- ONE row is visible to both parties and updates both at once (D28) — never two entries to reconcile.
+-- Up to THREE amounts, and each answers a different question:
+--   * `amount`/`currency` is the BUCKET leg: which per-currency balance this cleared, and by how much.
+--     Balances never net across currencies, so a settlement always names exactly one bucket.
+--   * `from_amount` is what actually left the payer's own account, in THAT account's currency;
+--   * `to_amount` is what actually arrived in the payee's, in theirs.
+-- Each cash figure is NULL when it equals `amount` — i.e. when no conversion happened — so the sums
+-- read coalesce(from_amount, amount), exactly as card_settlements reads its account leg. Two legs
+-- rather than one because a settlement moves money between two DIFFERENT people's accounts: the payer
+-- records where it left from and the payee where it arrived, each on their own side.
+-- There is deliberately no stored rate: a pair of amounts IS the record of the rate used, and no
+-- single direction reads correctly both ways.
+-- Both account legs are optional — mark-as-paid with no account named is the v1 default (real payment
+-- rails are deferred), and a name-only member has no account to name at all.
+CREATE TABLE group_settlements (
+  id              BIGSERIAL PRIMARY KEY,
+  group_id        BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  from_member_id  BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  to_member_id    BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  date            DATE NOT NULL,
+  amount          NUMERIC(18, 2) NOT NULL,
+  currency        VARCHAR(3) NOT NULL,
+  status          group_settlement_status NOT NULL DEFAULT 'pending',
+  from_account_id BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  from_amount     NUMERIC(18, 2),
+  to_account_id   BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  to_amount       NUMERIC(18, 2),
+  confirmed_at    TIMESTAMPTZ,
+  notes           TEXT,
+  created_by      BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT group_settlements_positive_amount CHECK (amount > 0),
+  -- Paying yourself moves the same balance in both directions and clears nothing.
+  CONSTRAINT group_settlements_distinct_members CHECK (from_member_id <> to_member_id),
+  CONSTRAINT group_settlements_positive_legs CHECK (
+    (from_amount IS NULL OR from_amount > 0) AND (to_amount IS NULL OR to_amount > 0)
+  ),
+  -- Same reason transfers forbids it: the balance union sums each leg independently, so one account on
+  -- both sides would be added and subtracted at once and the row would be a silent no-op.
+  CONSTRAINT group_settlements_distinct_accounts CHECK (
+    from_account_id IS NULL OR to_account_id IS NULL OR from_account_id <> to_account_id
+  ),
+  -- A write-off is a debt given up on, not a payment: no cash moved, so naming an account would record
+  -- a movement that never happened and would move a real balance for it.
+  -- Safe against the ON DELETE SET NULL above — clearing an account id only makes this MORE satisfied,
+  -- unlike a "leg amount requires its account" CHECK, which 0016 measured to make any account that
+  -- ever funded a cross-currency settlement permanently undeletable. That rule is enforced in the
+  -- service instead, for exactly that reason.
+  CONSTRAINT group_settlements_write_off_moves_nothing CHECK (
+    status <> 'written_off' OR (from_account_id IS NULL AND to_account_id IS NULL)
+  ),
+  -- confirmed_at is the timestamp of the acknowledgement, so it exists in exactly one status.
+  CONSTRAINT group_settlements_confirmed_at CHECK ((status = 'confirmed') = (confirmed_at IS NOT NULL))
+);
+
+CREATE INDEX idx_group_settlements_group_date ON group_settlements(group_id, date DESC);
+CREATE INDEX idx_group_settlements_from_member ON group_settlements(from_member_id);
+CREATE INDEX idx_group_settlements_to_member ON group_settlements(to_member_id);
+CREATE INDEX idx_group_settlements_from_account_date
+  ON group_settlements(from_account_id, date) WHERE from_account_id IS NOT NULL;
+CREATE INDEX idx_group_settlements_to_account_date
+  ON group_settlements(to_account_id, date) WHERE to_account_id IS NOT NULL;
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -1204,6 +1405,22 @@ CREATE TRIGGER trg_pot_member_permissions_updated_at
 
 CREATE TRIGGER trg_pot_ownership_events_updated_at
   BEFORE UPDATE ON pot_ownership_events
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_group_money_settings_updated_at
+  BEFORE UPDATE ON group_money_settings
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_shared_expenses_updated_at
+  BEFORE UPDATE ON shared_expenses
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_shared_expense_splits_updated_at
+  BEFORE UPDATE ON shared_expense_splits
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_group_settlements_updated_at
+  BEFORE UPDATE ON group_settlements
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------------
@@ -1586,6 +1803,66 @@ CREATE POLICY pot_ownership_events_scope_read ON pot_ownership_events FOR SELECT
 CREATE POLICY pot_ownership_events_scope_write ON pot_ownership_events FOR ALL
   USING (app_can_write_pot(pot_id))
   WITH CHECK (app_can_write_pot(pot_id));
+
+-- The shared-flow tables. All four are group state, so membership is the gate — the same
+-- app_is_group_member() helper the three tables above use, for the same two reasons (no predicate
+-- copy-pasted per table, and `role` appears in none of them).
+--
+-- Two of them additionally need a SECOND read branch, and it is not a widening of the visibility
+-- model — it is what keeps a PRIVATE balance correct, exactly as pot_ownership_events' is. A shared
+-- expense may be funded from one member's own account or card, and a settlement moves money between
+-- two members' own accounts. If that member later leaves the group the membership branch stops
+-- matching, the row disappears from their balance query, and their account silently gains back money
+-- it no longer holds (or their card sheds a charge it still carries). The branch matches only rows
+-- naming an account or card the caller OWNS, so every row it returns is the caller's own movement and
+-- it exposes nothing about any other member's.
+--
+-- Reading is FOR SELECT and every write command is FOR ALL on membership alone. Two policies rather
+-- than one because Postgres has no WITH CHECK for DELETE: a single FOR ALL policy carrying the wide
+-- read branch would let a former member DELETE the group's expense, not merely see their own leg of it.
+ALTER TABLE group_money_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY group_money_settings_member_isolation ON group_money_settings
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+ALTER TABLE shared_expenses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shared_expenses_scope_read ON shared_expenses FOR SELECT
+  USING (
+    app_is_group_member(group_id)
+    OR EXISTS (
+      SELECT 1 FROM accounts a
+      WHERE a.id = shared_expenses.paid_from_account_id
+        AND a.user_id = app_current_user_id()
+    )
+    OR EXISTS (
+      SELECT 1 FROM credit_cards c
+      WHERE c.id = shared_expenses.credit_card_id
+        AND c.user_id = app_current_user_id()
+    )
+  );
+CREATE POLICY shared_expenses_scope_write ON shared_expenses FOR ALL
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- Splits get NO second branch, and that is a decision rather than an omission. A split says what one
+-- member consumed, which is group state and nothing else — it names no account and moves no balance,
+-- so nothing goes silently wrong when it stops being visible. Leaving a group therefore removes its
+-- expenses from your own /expenses list, which is the same thing leaving does to a pot, and it is
+-- visible rather than silent.
+ALTER TABLE shared_expense_splits ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shared_expense_splits_member_isolation ON shared_expense_splits
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+ALTER TABLE group_settlements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY group_settlements_scope_read ON group_settlements FOR SELECT
+  USING (
+    app_is_group_member(group_id)
+    OR EXISTS (
+      SELECT 1 FROM accounts a
+      WHERE a.id IN (group_settlements.from_account_id, group_settlements.to_account_id)
+        AND a.user_id = app_current_user_id()
+    )
+  );
+CREATE POLICY group_settlements_scope_write ON group_settlements FOR ALL
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
 -- pair/ticker (not by user) and are intentionally left without RLS so every request

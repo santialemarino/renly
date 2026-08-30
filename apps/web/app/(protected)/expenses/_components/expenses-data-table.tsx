@@ -57,17 +57,37 @@ function RowActions({
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   /*
-   * Two independent reasons a row action is withheld, each with its own explanation. A reconciliation's
-   * adjustment is derived, so the API refuses BOTH PUT and DELETE on it (409) — offering either would
-   * only dead-end or orphan. A system category is narrower: it means the form cannot round-trip the row
-   * (no matching combobox option, and the schema's z.enum rejects the stored value), so it withholds
-   * Edit while Delete stays legitimate for a row nothing owns — a restored adjustment, whose
-   * reconciliation links restore nulls while its category survives. Either way the row explains itself:
-   * an action that silently vanishes is the thing this gate exists to avoid.
+   * Three independent reasons a row action is withheld, each with its own explanation and its own
+   * predicate — kept apart rather than collapsed into one flag, because they diverge.
+   *
+   * A SHARED row is not this user's expense at all: it is their share of one the group recorded, read
+   * in by the list's union. Its `id` belongs to `shared_expenses`, and ids are unique per TABLE and
+   * not across them — so a PUT or DELETE to /expenses/{id} would land on whatever private expense
+   * happens to hold that number. Measured on real data: a shared expense with id 2 sat beside a
+   * private one with id 2, so Delete on the shared row would have removed an unrelated expense.
+   *
+   * A reconciliation's adjustment is derived, so the API refuses BOTH PUT and DELETE on it (409) —
+   * offering either would only dead-end or orphan. A system category is narrower: it means the form
+   * cannot round-trip the row (no matching combobox option, and the schema's z.enum rejects the stored
+   * value), so it withholds Edit while Delete stays legitimate for a row nothing owns — a restored
+   * adjustment, whose reconciliation links restore nulls while its category survives. Either way the
+   * row explains itself: an action that silently vanishes is the thing this gate exists to avoid.
    */
+  const shared = expense.scope === 'shared';
   const reconciliationOwned = isReconciliationOwned(expense);
   const systemCategory = isSystemExpenseCategory(expense.category);
-  const canEdit = !reconciliationOwned && !systemCategory;
+  const canEdit = !shared && !reconciliationOwned && !systemCategory;
+  const canDelete = !shared && !reconciliationOwned;
+  const lockedReason = shared
+    ? ('lockedRow.sharedExpense' as const)
+    : reconciliationOwned
+      ? ('lockedRow.reconciliationOwned' as const)
+      : ('lockedRow.systemCategory' as const);
+  const lockedLabel = shared
+    ? 'Managed by the group'
+    : reconciliationOwned
+      ? 'Managed by a reconciliation'
+      : 'Category is system-generated';
 
   return (
     <>
@@ -83,17 +103,9 @@ function RowActions({
             }}
           />
         ) : (
-          <RowLockedIndicator
-            icon={Lock}
-            tooltip={tCommon(
-              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
-            )}
-            ariaLabel={
-              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
-            }
-          />
+          <RowLockedIndicator icon={Lock} tooltip={tCommon(lockedReason)} ariaLabel={lockedLabel} />
         )}
-        {!reconciliationOwned && (
+        {canDelete && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('actions.delete')}

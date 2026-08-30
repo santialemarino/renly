@@ -26,11 +26,11 @@ def _order(model, sort_by: str | None, sort_order: str = "asc") -> str:
     return _order_by(
         apply_entry_sort(
             select(model),
-            model,
             sort_by,
             sort_order,
             sort_columns=_SORT_COLUMNS[model],
             default_order=(model.date.desc(), model.id.desc()),
+            tie_break=(model.id.desc(),),
         )
     )
 

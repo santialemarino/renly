@@ -7,7 +7,7 @@
 # makes the comparison mean anything: derive the two stub shapes from the same rows and the only way
 # they can disagree is if the code does.
 #
-# The union has seven terms and three of them can only ever be empty for a pot's accounts (a shared
+# The union has TEN terms and three of them can only ever be empty for a pot's accounts (a shared
 # account cannot carry private entries at all). They are fixtured anyway. Dropping a term because a
 # guard currently makes it empty is how a sum ends up agreeing with reality only for as long as that
 # guard holds — the shape §18 recorded.
@@ -32,6 +32,11 @@ _MOVEMENTS: dict[str, list[tuple[int, date, Decimal]]] = {
     "transfers_out": [(1, date(2026, 6, 1), Decimal("75.00"))],
     "ownership_in": [(1, date(2026, 5, 5), Decimal("1000.00")), (2, date(2026, 7, 4), Decimal("60.00"))],
     "ownership_out": [(2, date(2026, 4, 20), Decimal("10.00"))],
+    # The flow half. A shared expense drawn from account 1, and both legs of a group settlement — one
+    # on each account, so a sign flipped on either is visible rather than cancelling out.
+    "shared_expenses": [(1, date(2026, 6, 10), Decimal("300.00"))],
+    "group_settlements_in": [(1, date(2026, 7, 8), Decimal("180.00"))],
+    "group_settlements_out": [(2, date(2026, 5, 2), Decimal("25.00"))],
 }
 
 _DATES = [date(2026, 3, 31), date(2026, 4, 30), date(2026, 5, 31), date(2026, 6, 30), date(2026, 7, 31)]
@@ -77,6 +82,9 @@ def _stub_dated(monkeypatch) -> None:
         (account_service.transfer_repository, "sum_out_by_account_ids_dated", "transfers_out"),
         (account_service.pot_ownership_repository, "sum_in_by_account_ids_dated", "ownership_in"),
         (account_service.pot_ownership_repository, "sum_out_by_account_ids_dated", "ownership_out"),
+        (account_service.shared_expense_repository, "sum_by_account_ids_dated", "shared_expenses"),
+        (account_service.group_settlement_repository, "sum_in_by_account_ids_dated", "group_settlements_in"),
+        (account_service.group_settlement_repository, "sum_out_by_account_ids_dated", "group_settlements_out"),
     ):
 
         def handler(_session, account_ids, *_args, until: date, _source=source, **_kwargs):
@@ -95,6 +103,9 @@ def _stub_at(monkeypatch) -> None:
         (account_service.transfer_repository, "sum_out_by_account_ids", "transfers_out"),
         (account_service.pot_ownership_repository, "sum_in_by_account_ids", "ownership_in"),
         (account_service.pot_ownership_repository, "sum_out_by_account_ids", "ownership_out"),
+        (account_service.shared_expense_repository, "sum_by_account_ids", "shared_expenses"),
+        (account_service.group_settlement_repository, "sum_in_by_account_ids", "group_settlements_in"),
+        (account_service.group_settlement_repository, "sum_out_by_account_ids", "group_settlements_out"),
     ):
 
         def handler(_session, account_ids, *_args, as_of_date: date, _source=source, **_kwargs):
@@ -126,11 +137,11 @@ class TestAgreementWithThePointInTimeEngine:
         _stub_dated(monkeypatch)
         series = await account_service.compute_account_balance_series(AsyncMock(), accounts, dates=_DATES)
         assert series[1] == [
-            Decimal("670.00"),  # 200 opening + 500 income - 30 settlement, both dated 10 March
+            Decimal("670.00"),  # 200 opening + 500 income - 30 card settlement, both dated 10 March
             Decimal("550.00"),  # - 120 expense on 2 April
             Decimal("1590.00"),  # + 1000 ownership in on 5 May, + 40 income on the 31st itself
-            Decimal("1515.00"),  # - 75 transferred out on 1 June
-            Decimal("1515.00"),  # nothing in July
+            Decimal("1215.00"),  # - 75 transferred out on 1 June, - 300 shared expense on the 10th
+            Decimal("1395.00"),  # + 180 group settlement received on 8 July
         ]
 
 

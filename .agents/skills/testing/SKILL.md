@@ -67,6 +67,18 @@ pnpm test:e2e        # Playwright E2E
     without `type = 'opening'` it takes the pot's contributions and withdrawals too, and without
     `pot_id` it takes every OTHER pot's baseline in the database. Seeded with two pots so a
     too-wide predicate shows up as a deletion somewhere it was not asked for.
+  - `test_rls_shared_flows.py` — the same two `RLS_TEST_*` vars. The membership policies on the
+    shared-flow tables, and specifically the boundary of the second READ branch two of them carry:
+    a FORMER member must still see the rows naming an account or card they own (without it their own
+    balance silently gains back money it no longer holds) and must see nothing else, and must not be
+    able to DELETE the row they can still read — which one `FOR ALL` policy would let them do,
+    because Postgres has no `WITH CHECK` for DELETE.
+  - `test_shared_flow_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The three queries
+    whose whole correctness lives in the SQL: the `/expenses` UNION (does it return the caller's
+    SHARE or the whole expense, and is its page order total across two tables whose ids collide), the
+    balance aggregation, and the settlement leg sums' `coalesce(<leg>_amount, amount)`. Seeded with
+    one cross-currency settlement whose three figures all differ, so a query reading the wrong column
+    shows up as two accounts moving by each other's amount.
 - **Reach for one when the same fact is stated in two queries.** A unit test mocks repositories, so
   it cannot notice that two SQL statements which must describe the same row set have stopped
   agreeing — it will happily pass on both the right answer and the wrong one. Assert the two against

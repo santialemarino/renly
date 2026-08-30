@@ -264,7 +264,38 @@ There is one input that is neither a percentage nor an amount: **the whole of so
 
 A pot's **value over time** is the same figure asked at a series of past dates, at whatever rhythm the pot declared, with your own share drawn inside it. Two things about it are deliberate and worth expecting. Periods where the value cannot be worked out in full show as **gaps rather than zeros** — which, on a pot whose newest holding was added last month, is most of the earlier ones. And the chart never reaches back before the pot itself: a shared investment brings its whole history with it, so without that bound a pot created yesterday would appear to have been worth something for years. If the co-owners agreed their split began earlier than they recorded it, the chart starts there instead.
 
-Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first — and "known" means the whole of it, because the value is a sum and a sum missing a term is not a smaller sum. A pot holding something nobody has valued yet reports no value at all rather than the total of the rest. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it.
+Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first — and "known" means the whole of it, because the value is a sum and a sum missing a term is not a smaller sum. A pot holding something nobody has valued yet reports no value at all rather than the total of the rest. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it. Record it as a shared expense instead and the same purchase is captured honestly, with what the other owners are owed for it written down where they can settle it.
+
+### Shared Expenses, Splits and Settlements
+
+A pot divides what a household **holds**. These divide what it **spends**, and they are deliberately separate tables from your own expenses: an expense with one funding source and an N-way split cannot be one flat row, and your personal entries keep their simple owner-only privacy while everything here is reachable by every member of the group.
+
+**A shared expense records two figures per member,** and the whole feature balances on the pair: what they **consumed** — their share, which is their expense — and what they **fronted**, the money they actually put up. Both add up to the expense's total, so a member's standing is what they fronted minus what they used, and a group's standing always adds to exactly **zero in every currency**. Not by a rule anybody has to remember: by the shape of the row.
+
+That pair is also why there is **no "who paid" column**. Money can come out of a shared account, in which case the people who own that pot fronted it in their own proportions and there is no single payer — something one column could not say. Those proportions are read from the ownership ledger **as it stood on the expense's date and written onto the split rows then and there**, because the ledger is replayed from its events: worked out fresh on every read, somebody back-dating an ownership change would silently rewrite a balance two people had already agreed.
+
+An expense is divided **equally**, by **exact amounts**, by **shares** (two parts to one), or by **percentages**, and the parts always add up to the total exactly. The leftover cent is spread one at a time from the largest share down, so nobody ever carries more than a cent of it — a split is money somebody owes, and it accumulates across every expense a group ever records. Exact amounts must already add up and percentages must reach 100; neither is quietly rescaled, because turning a 90/5 split into 94.7/5.3 on the user's behalf is worse than refusing it.
+
+Every case follows from the one pair of figures, with no special handling anywhere:
+
+- **One person pays for the group.** Their fronted figure is the whole bill, everyone's consumed figure is their share, and the difference is what they are owed.
+- **A shared account pays for the group.** The pot's owners front it between them; if their ownership matches the split, nobody ends up owing anything.
+- **A shared account pays for one person.** That person consumed all of it while the others fronted their share, so what they owe each of the others is exactly the joint money spent on them. This is what happens instead of quietly letting one person spend everyone's money.
+- **Somebody fronts a bill they are not in on.** They consumed nothing and fronted everything, which is a real position and a real receivable.
+
+The **funding account falls by the whole amount**, because the money really left it — who owed whom afterwards is the split's business, not the account's. A card-funded shared expense raises that card's balance exactly as a personal charge does.
+
+A **settlement** is one recorded payment from one member to another, and the only thing that clears a balance. It is a single row both people see, never two entries to reconcile. Balances are kept in **per-currency buckets that never net against each other**: you can be owed pesos while owing dollars, and each is its own line to settle, because merging them would invent an exchange rate nobody agreed to. When Renly suggests how to square up it pays the largest creditor from the largest debtor and repeats, so A pays C directly rather than A paying B who pays C.
+
+A settlement carries up to three amounts, each answering a different question: what balance it cleared and by how much, what actually left the payer's account, and what arrived in the payee's. The last two are only recorded when that side crossed currencies — when they match, what left the account **is** what cleared the balance. There is no stored exchange rate; the pair of figures is the record of it.
+
+**Each side records their own half.** The two accounts belong to two different people, and neither can see the other's at all — so the payer says where the money left from, the payee says where it arrived, and either can leave theirs blank. Marking a payment as made without naming any account is the ordinary case, and a name-only member has no account to name at all.
+
+A recorded payment **counts against the balance straight away** — the money genuinely moved — and confirming it is the other person acknowledging they received it. What confirmation changes is who can undo it: until then either party can remove it, which is what reversing a payment is; afterwards nobody can, until the person who received it takes their confirmation back. A couple can turn confirmation off entirely.
+
+The other way a balance ends is a **write-off**: giving up on a debt. It clears the same bucket a payment would, moves no money, and only the person who is **owed** can record it — the other way round would be one person deciding on somebody else's behalf. Settling or writing off is required before a member with an open balance leaves the group or deletes their account, because the moment their seat goes the person on the other side loses the record of what they were owed.
+
+Finally, **your share of a shared expense appears in your ordinary expenses list**, read straight from the group's tables rather than copied into your own. One source of truth: editing the group's expense has nothing to chase, and nothing can drift. Each row says which it is, carries the group it belongs to and the whole amount your share is part of, and is edited where it was created rather than from your own list.
 
 ### Settings
 
@@ -376,11 +407,35 @@ Group
  |                                               cleared, not cascaded, if that account is deleted)
  |
  |-- has many --> Group Invites
-                  (one live invite per seat; single-use, expiring, revocable.
-                   Links an EXISTING account to a seat — never creates one)
+ |                (one live invite per seat; single-use, expiring, revocable.
+ |                 Links an EXISTING account to a seat — never creates one)
+ |
+ |-- has one  --> Group Money Settings
+ |                (the split it proposes by default, and whether a payment
+ |                 needs the other side to confirm it)
+ |
+ |-- has many --> Pots
+ |                (what the group HOLDS together)
+ |                  |
+ |                  |-- has many --> Pot Permissions .... who may see it, who may write to it
+ |                  |-- has many --> Ownership Events ... the dated ledger units are replayed from
+ |                  \-- holds many -> Investments / Accounts
+ |                                    (pointing at the pot instead of at a person)
+ |
+ |-- has many --> Shared Expenses
+ |                (what the group SPENDS together)
+ |                  |
+ |                  \-- has many --> Shared Expense Splits
+ |                                   (per member: what they used, and what they fronted.
+ |                                    Both columns add to the expense's total)
+ |
+ \-- has many --> Group Settlements
+                  (payments and write-offs, the only things that clear a balance)
 ```
 
 A group is reachable by every account holding an active seat in it, which is why it hangs off `Group` rather than off `User`. `created_by` records who made it and confers nothing.
+
+Nothing here is owned by one person, and that is the point: a balance is a fact about two people, so it cannot live in either one's data. Group members' seats survive the accounts behind them — deleting an account reverts its seat to a name-only placeholder and leaves everything attached to it intact.
 
 **Supporting data** (shared across all users):
 

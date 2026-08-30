@@ -55,11 +55,11 @@ async def list_by_user_filtered(
     # are low-cardinality, and without a total order Postgres may repeat a row across pages or skip it.
     sorted_stmt = apply_entry_sort(
         stmt,
-        Investment,
         sort_by,
         sort_order,
         sort_columns=_SORT_COLUMNS,
         default_order=(Investment.id,),
+        tie_break=(Investment.id.desc(),),
     )
     items_stmt = sorted_stmt.offset((page - 1) * page_size).limit(page_size)
     items_result = await session.execute(items_stmt)

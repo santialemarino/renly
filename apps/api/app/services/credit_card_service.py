@@ -23,6 +23,7 @@ from app.repositories import (
     expense_repository,
     installment_repository,
     payment_obligation_repository,
+    shared_expense_repository,
     subscription_repository,
 )
 from app.schemas.card_settlement import CardSettlementResponse
@@ -98,6 +99,17 @@ async def get_card_balances(
     if not card_ids:
         return {}
     expense_grouped = await expense_repository.sum_by_credit_card_ids_grouped(session, card_ids, user_id)
+    # A group's shared expense charged to this card raises the same liability a private one does: the
+    # whole amount hit the card, whoever ends up owing whom for it. No user filter — the rows belong to
+    # the group and RLS scopes them, and a card only ever carries its own owner's charges anyway.
+    shared_grouped = await shared_expense_repository.sum_by_credit_card_ids_grouped(session, card_ids)
+    # Merged BUCKET by bucket, not card by card: both sides are {card_id: {currency: total}}, so
+    # replacing a card's inner dict would drop whichever side had fewer currencies, and adding the
+    # outer dicts would not add anything at all.
+    for card_id, by_currency in shared_grouped.items():
+        card_buckets = expense_grouped.setdefault(card_id, {})
+        for currency, total in by_currency.items():
+            card_buckets[currency] = Decimal(str(card_buckets.get(currency, 0))) + Decimal(str(total))
     settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
 
@@ -168,6 +180,7 @@ async def delete_card(session: AsyncSession, card_id: int, user: User) -> None:
     card = await get_card(session, card_id, user)
     references = (
         ("expenses", await expense_repository.count_by_credit_card(session, card_id, user.id)),
+        ("shared expenses", await shared_expense_repository.count_by_credit_card(session, card_id)),
         ("subscriptions", await subscription_repository.count_by_credit_card(session, card_id, user.id)),
         ("installment plans", await installment_repository.count_by_credit_card(session, card_id, user.id)),
         ("payment obligations", await payment_obligation_repository.count_by_credit_card(session, card_id, user.id)),

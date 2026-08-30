@@ -12,12 +12,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from app.domain import GroupAdminRequiredError, GroupLastAdminError, NotFoundError
+from app.domain import GroupAdminRequiredError, GroupBalanceOutstandingError, GroupLastAdminError, NotFoundError
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_invite import GroupInvite
 from app.models.user import User
 from app.models.utils import utcnow
-from app.services import group_service
+from app.services import group_money_service, group_service, group_settlement_service
 
 ADMIN = User(id=1, name="Santi", email="admin@test", password_hash="x", session_epoch=0)
 MEMBER = User(id=2, name="Ana", email="ana@test", password_hash="x", session_epoch=0)
@@ -86,6 +86,23 @@ def _patch_repo(monkeypatch, **methods):
 def _patch_invite_repo(monkeypatch, **methods):
     for name in ("delete_by_member", "list_by_group", "list_by_groups"):
         monkeypatch.setattr(group_service.group_invite_repository, name, methods.get(name, AsyncMock(return_value=[])))
+
+
+# Stubs the outstanding-balance guard removal now runs. Patched on the settlement service's own module
+# rather than through group_service, because group_service imports it INSIDE the function to break the
+# cycle between the two — an attribute patched on group_service would never be looked at.
+# Returns the mock so a test can assert the guard was actually consulted rather than assumed.
+def _patch_balance_guard(monkeypatch, **methods) -> AsyncMock:
+    guard = methods.get("ensure_no_outstanding_balance", AsyncMock())
+    monkeypatch.setattr(group_settlement_service, "ensure_no_outstanding_balance", guard)
+    return guard
+
+
+# Stubs the money-settings row every group creation seeds.
+def _patch_money_settings(monkeypatch) -> AsyncMock:
+    seed = AsyncMock()
+    monkeypatch.setattr(group_money_service, "seed_settings", seed)
+    return seed
 
 
 # Stands in for the repository's create_member, which flushes so the DB assigns the seat's id — the
@@ -304,6 +321,26 @@ class TestCreateGroup:
         session.commit.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_every_group_gets_its_money_settings_row(self, monkeypatch):
+        # Written in the same transaction and on the same PRIVILEGED session, because the table shares
+        # the membership policy whose row does not exist yet either. Every reader then joins one row
+        # rather than carrying an "or the default" branch — and a group without it answers 404 on its
+        # settings, which is a broken invariant rather than a defaulting case.
+        #
+        # Asserted on the GROUP ID the service passed: dropping the call entirely left every other
+        # create-group test green, which a mutation sweep is what surfaced.
+        _patch_repo(monkeypatch, create=AsyncMock(side_effect=_flushed_group), create_member=AsyncMock(side_effect=_flushed))
+        _patch_invite_repo(monkeypatch)
+        seed = _patch_money_settings(monkeypatch)
+        session = AsyncMock()
+
+        await group_service.create_group(session, ADMIN, name="Casa", kind=GroupKind.household)
+
+        assert seed.await_count == 1
+        assert seed.await_args.args[0] is session
+        assert seed.await_args.args[1] == _GROUP_ID
+
+    @pytest.mark.asyncio
     async def test_the_group_records_its_name_kind_and_author(self, monkeypatch):
         # created_by is authorship and the only trace of who made the group; nothing else records it.
         create = AsyncMock(side_effect=_flushed_group)
@@ -451,6 +488,7 @@ class TestLastAdminGuard:
             count_active_admins=count,
         )
         _patch_invite_repo(monkeypatch)
+        _patch_balance_guard(monkeypatch)
         await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
         count.assert_not_awaited()
 
@@ -490,6 +528,7 @@ class TestRemoveMember:
             save_member=save_member,
         )
         _patch_invite_repo(monkeypatch)
+        _patch_balance_guard(monkeypatch)
         await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
         assert target.is_active is False
         save_member.assert_awaited_once()
@@ -507,9 +546,37 @@ class TestRemoveMember:
             get_member=AsyncMock(return_value=target),
         )
         _patch_invite_repo(monkeypatch, delete_by_member=delete_invite)
+        _patch_balance_guard(monkeypatch)
         await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
         assert delete_invite.await_count == 1
         assert delete_invite.await_args.args[1] == 3
+
+    @pytest.mark.asyncio
+    async def test_removal_is_refused_while_the_seat_still_owes_or_is_owed(self, monkeypatch):
+        # D24: a balance is money between two real people, and deactivating the seat is what takes the
+        # group's rows away from them. Asserted on the SEAT the guard was handed, not merely that it
+        # ran — passing the wrong one would guard somebody else's balance and pass just as quietly.
+        admin_seat = _member(1, user_id=ADMIN.id, role=GroupMemberRole.admin)
+        target = _member(3, display_name="Nico")
+        save_member = AsyncMock()
+        _patch_repo(
+            monkeypatch,
+            get_by_id=AsyncMock(return_value=_group()),
+            get_member_by_user=AsyncMock(return_value=admin_seat),
+            get_member=AsyncMock(return_value=target),
+            save_member=save_member,
+        )
+        _patch_invite_repo(monkeypatch)
+        guard = _patch_balance_guard(monkeypatch, ensure_no_outstanding_balance=AsyncMock(side_effect=GroupBalanceOutstandingError(["Casa"])))
+
+        with pytest.raises(GroupBalanceOutstandingError):
+            await group_service.remove_member(AsyncMock(), _GROUP_ID, 3, ADMIN)
+
+        assert guard.await_args.args[1] == [target]
+        # And nothing was written: the refusal has to land before the seat is deactivated, or the
+        # rollback is the only thing standing between a raised error and a removed member.
+        assert target.is_active is True
+        save_member.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_reactivating_through_the_update_path_does_not_touch_any_invite(self, monkeypatch):
@@ -542,6 +609,7 @@ class TestRemoveMember:
             get_member=AsyncMock(return_value=seat),
         )
         _patch_invite_repo(monkeypatch)
+        _patch_balance_guard(monkeypatch)
         await group_service.remove_member(AsyncMock(), _GROUP_ID, 2, MEMBER)
         assert seat.is_active is False
 
