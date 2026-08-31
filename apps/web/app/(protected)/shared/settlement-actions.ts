@@ -1,6 +1,11 @@
 'use server';
 
-import { toResult, type SharedMutationResult } from '@/app/(protected)/shared/mutation-result';
+import {
+  toDataResult,
+  toResult,
+  type SharedDataResult,
+  type SharedMutationResult,
+} from '@/app/(protected)/shared/mutation-result';
 import type {
   MoneySettingsFormValues,
   SettlementFormValues,
@@ -8,6 +13,7 @@ import type {
   WriteOffFormValues,
 } from '@/app/(protected)/shared/settlement-form-schema';
 import { legCrossesCurrency } from '@/app/(protected)/shared/settlement-rules';
+import { mapSettlementPlan, type GroupSettlementPlan } from '@/lib/api/group-settlements';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 /*
@@ -83,6 +89,79 @@ export async function recordSettlement(
       to_amount: side === 'incoming' ? leg.amount : null,
       notes: values.notes?.trim() || null,
     },
+  });
+  return toResult(res, 'Failed to record settlement');
+}
+
+/*
+ * The body both the dry run and the write take. One shape, because the plan the payer confirms has to
+ * be the plan that gets recorded — and the write RECOMPUTES it from these fields, so nothing here can
+ * name an amount for a spillover bucket. Only which buckets were kept.
+ */
+export interface SettlementPlanRequest {
+  fromMemberId: number;
+  toMemberId: number;
+  date: string;
+  amount: string;
+  currency: string;
+  spilloverCurrencies?: string[];
+  accountId?: string;
+  legCurrency?: string;
+  legAmount?: string;
+  notes?: string;
+}
+
+// The two account fields on the wire, for whichever side the caller holds. Shared by both calls below
+// so the dry run is priced against exactly the payment the write would record.
+function toPlanBody(values: SettlementPlanRequest, side: 'outgoing' | 'incoming' | null) {
+  const leg = toLegBody(values, values.currency);
+  return {
+    from_member_id: values.fromMemberId,
+    to_member_id: values.toMemberId,
+    date: values.date,
+    amount: values.amount,
+    currency: values.currency,
+    spillover_currencies: values.spilloverCurrencies ?? null,
+    from_account_id: side === 'outgoing' ? leg.accountId : null,
+    from_amount: side === 'outgoing' ? leg.amount : null,
+    to_account_id: side === 'incoming' ? leg.accountId : null,
+    to_amount: side === 'incoming' ? leg.amount : null,
+    notes: values.notes?.trim() || null,
+  };
+}
+
+/*
+ * Where an overpayment would land, at the payment date's rates. Writes nothing.
+ *
+ * A READ behind a POST, which is why it is here rather than in `lib/api/*`: the question is asked
+ * about a body, and the two `preview` endpoints the importers and restore already expose take the
+ * same shape for the same reason.
+ */
+export async function previewSettlement(
+  groupId: number,
+  values: SettlementPlanRequest,
+  side: 'outgoing' | 'incoming' | null,
+): Promise<SharedDataResult<GroupSettlementPlan>> {
+  const res = await authenticatedFetch(`/groups/${groupId}/settlements/preview`, {
+    method: 'POST',
+    body: toPlanBody(values, side),
+  });
+  return toDataResult(res, mapSettlementPlan, 'Failed to plan settlement');
+}
+
+/*
+ * Records one payment across every bucket it reaches — several settlements, written together or not
+ * at all. Used only when the preview found an excess with somewhere to go; the plain create above
+ * stays the path for the ordinary payment, which is nearly all of them.
+ */
+export async function recordSettlementWaterfall(
+  groupId: number,
+  values: SettlementPlanRequest,
+  side: 'outgoing' | 'incoming' | null,
+): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/groups/${groupId}/settlements/waterfall`, {
+    method: 'POST',
+    body: toPlanBody(values, side),
   });
   return toResult(res, 'Failed to record settlement');
 }

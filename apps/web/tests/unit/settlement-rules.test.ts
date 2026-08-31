@@ -4,6 +4,8 @@ import {
   balanceMagnitude,
   balancesEmptyState,
   balanceStanding,
+  bucketOutOfReach,
+  bucketPartlyCleared,
   canAttachOwnLeg,
   canUnconfirmSettlement,
   canWriteOffSuggestion,
@@ -13,6 +15,9 @@ import {
   ownLegAccounts,
   ownLegAmount,
   ownSettlementSide,
+  plannedRows,
+  planNeedsConfirming,
+  selectedSpilloverCurrencies,
   suggestionSide,
   suggestionVoice,
 } from '@/app/(protected)/shared/settlement-rules';
@@ -20,6 +25,8 @@ import type { Account } from '@/lib/api/accounts';
 import type {
   GroupCurrencyBalance,
   GroupSettlement,
+  GroupSettlementPlan,
+  GroupSettlementPlanBucket,
   GroupSettleSuggestion,
 } from '@/lib/api/group-settlements';
 
@@ -282,5 +289,139 @@ describe('balancesEmptyState / hasOpenBalances', () => {
   it('reports whether any bucket is open at all', () => {
     expect(hasOpenBalances([])).toBe(false);
     expect(hasOpenBalances([{ currency: 'ARS' } as GroupCurrencyBalance])).toBe(true);
+  });
+});
+
+/*
+ * The overpay waterfall's surface rules.
+ *
+ * Every figure a plan carries is the SERVER's, and these decide only what to render — which is the
+ * line that matters: the moment one of these recomputed an amount it would be a second implementation
+ * of the allocation, and the payer would confirm one number while another was recorded.
+ */
+
+function planBucket(overrides: Partial<GroupSettlementPlanBucket> = {}): GroupSettlementPlanBucket {
+  return {
+    currency: 'USD',
+    outstanding: '10.00',
+    cost: '10375.00',
+    amount: '10.00',
+    appliedCost: '10375.00',
+    selected: true,
+    ...overrides,
+  };
+}
+
+function plan(overrides: Partial<GroupSettlementPlan> = {}): GroupSettlementPlan {
+  return {
+    currency: 'ARS',
+    amount: '45000.00',
+    primaryOutstanding: '30000.00',
+    excess: '15000.00',
+    primaryAmount: '34625.00',
+    buckets: [planBucket()],
+    leftover: '4625.00',
+    skippedCurrencies: [],
+    ...overrides,
+  };
+}
+
+describe('planNeedsConfirming', () => {
+  it('is true when an excess has somewhere to go', () => {
+    expect(planNeedsConfirming(plan())).toBe(true);
+  });
+
+  it('is false when the payment does not exceed its bucket', () => {
+    // The preview returns no buckets at all in that case, which is the same signal as below.
+    expect(planNeedsConfirming(plan({ excess: '0', buckets: [] }))).toBe(false);
+  });
+
+  /*
+   * The case that decides whether the confirm step exists at all.
+   *
+   * An excess with nowhere to go is not a plan — the payment simply overshoots its own bucket and
+   * flips it, which is D30 and needs no confirming because the payer typed the number. Treating this
+   * as needing confirmation would put an empty step in front of every ordinary overpayment.
+   */
+  it('is false when there is an excess but no other balance to reach', () => {
+    expect(planNeedsConfirming(plan({ excess: '15000.00', buckets: [] }))).toBe(false);
+  });
+});
+
+describe('plannedRows', () => {
+  it('names the paid bucket first, then each one the excess reached', () => {
+    expect(plannedRows(plan())).toEqual([
+      { currency: 'ARS', amount: '34625.00' },
+      { currency: 'USD', amount: '10.00' },
+    ]);
+  });
+
+  /*
+   * `primaryAmount` is READ, never derived from `primaryOutstanding + leftover` here.
+   *
+   * The two agree in every ordinary case, which is exactly why deriving it would look correct: it is
+   * the partial payment — where the paid bucket takes what the payment covers rather than its whole
+   * balance — that separates them. The fixture below states a primaryAmount the arithmetic would not
+   * produce, and the rule must report the server's answer.
+   */
+  it('reports the server’s figure for the paid bucket rather than recomputing it', () => {
+    const rows = plannedRows(plan({ primaryAmount: '12000.00', leftover: '0' }));
+    expect(rows[0]).toEqual({ currency: 'ARS', amount: '12000.00' });
+  });
+
+  it('writes no row for the paid bucket when the payment covered none of it', () => {
+    // Paying pesos purely to clear a dollar debt: there is no peso balance to write against.
+    expect(plannedRows(plan({ primaryAmount: '0', primaryOutstanding: '0' }))).toEqual([
+      { currency: 'USD', amount: '10.00' },
+    ]);
+  });
+
+  it('leaves out a bucket the excess never reached', () => {
+    const rows = plannedRows(
+      plan({
+        buckets: [planBucket({ amount: '0', appliedCost: '0' }), planBucket({ currency: 'BRL' })],
+      }),
+    );
+    expect(rows.map((row) => row.currency)).toEqual(['ARS', 'BRL']);
+  });
+});
+
+describe('selectedSpilloverCurrencies', () => {
+  it('names only the buckets still ticked', () => {
+    const result = selectedSpilloverCurrencies(
+      plan({ buckets: [planBucket(), planBucket({ currency: 'BRL', selected: false })] }),
+    );
+    expect(result).toEqual(['USD']);
+  });
+
+  /*
+   * An empty list is a real answer and NOT the same as omitting the field.
+   *
+   * Absent means "every bucket the excess can reach", so an unticked-everything plan that sent nothing
+   * would spill into all of them — the exact opposite of what the payer asked for.
+   */
+  it('is empty when every bucket was unticked', () => {
+    expect(
+      selectedSpilloverCurrencies(plan({ buckets: [planBucket({ selected: false })] })),
+    ).toEqual([]);
+  });
+});
+
+describe('bucketOutOfReach and bucketPartlyCleared', () => {
+  it('tells a bucket the money never got to from one it cleared', () => {
+    expect(bucketOutOfReach(planBucket({ amount: '0', appliedCost: '0' }))).toBe(true);
+    expect(bucketOutOfReach(planBucket())).toBe(false);
+  });
+
+  // An unticked bucket is not "out of reach" — it was deliberately left alone, and the row says so
+  // for a different reason. Conflating them would tell somebody the money ran out when they stopped it.
+  it('does not call an unticked bucket out of reach', () => {
+    expect(bucketOutOfReach(planBucket({ amount: '0', selected: false }))).toBe(false);
+  });
+
+  it('spots the one bucket a partial excess landed inside', () => {
+    expect(bucketPartlyCleared(planBucket({ amount: '4.82', appliedCost: '5000.00' }))).toBe(true);
+    expect(bucketPartlyCleared(planBucket())).toBe(false);
+    expect(bucketPartlyCleared(planBucket({ amount: '0' }))).toBe(false);
   });
 });

@@ -49,6 +49,7 @@ from app.domain.errors import (
     GroupSettlementNotPayeeError,
     GroupSettlementSameMemberError,
     GroupSettlementWriteOffHasNoLegError,
+    GroupWriteOffExceedsBalanceError,
     HasLinkedExpensesError,
     InstallmentLockedFieldError,
     InvalidCredentialsError,
@@ -124,10 +125,14 @@ from app.domain.reconciliation import ensure_not_reconciliation_owned
 from app.domain.shared_expense import (
     SettleTransfer,
     SplitEntry,
+    WaterfallCandidate,
+    WaterfallPlan,
+    WaterfallStep,
     apply_settlements,
     compute_shares,
     expense_positions,
     minimise_transfers,
+    plan_waterfall,
 )
 
 __all__ = [
@@ -166,6 +171,7 @@ __all__ = [
     "GroupSettlementNotPayeeError",
     "GroupSettlementSameMemberError",
     "GroupSettlementWriteOffHasNoLegError",
+    "GroupWriteOffExceedsBalanceError",
     "HasLinkedExpensesError",
     "InstallmentLockedFieldError",
     "InvalidCredentialsError",
@@ -223,6 +229,9 @@ __all__ = [
     "TransferBeforeAccountOpenedError",
     "TransferCrossScopeError",
     "TransferSameAccountError",
+    "WaterfallCandidate",
+    "WaterfallPlan",
+    "WaterfallStep",
     "amount_for_units",
     "apply_settlements",
     "claimed_installment_cuotas",
@@ -244,6 +253,7 @@ __all__ = [
     "opening_units",
     "ownership_percentages",
     "period_ends",
+    "plan_waterfall",
     "quantize",
     "replay_units",
     "series_interval",

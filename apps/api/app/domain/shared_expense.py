@@ -179,3 +179,84 @@ def minimise_transfers(positions: dict[int, Decimal]) -> list[SettleTransfer]:
             creditor_index += 1
             due = creditors[creditor_index][1] if creditor_index < len(creditors) else ZERO
     return transfers
+
+
+# One bucket the excess from an overpayment COULD be applied to: what is still owed in it, and what
+# clearing that would cost in the currency being paid.
+#
+# The caller resolves `cost` because only it has the rates. Carrying both figures rather than a rate
+# is what keeps the allocation below pure — and the ratio between them IS the rate, so a partial
+# allocation needs no rate of its own and cannot round differently from the full one.
+@dataclass(frozen=True)
+class WaterfallCandidate:
+    currency: str
+    outstanding: Decimal
+    cost: Decimal
+
+
+# One bucket the excess actually reaches, and by how much.
+#
+# `cost` is what this step consumes of the payment, in the payment's currency; `amount` is what comes
+# off the bucket, in the bucket's own. They are two different currencies' worth of the same act, which
+# is exactly the pair a settlement row already stores.
+@dataclass(frozen=True)
+class WaterfallStep:
+    currency: str
+    outstanding: Decimal
+    amount: Decimal
+    cost: Decimal
+
+
+# Where an overpayment lands: the buckets it reaches, and what is left over after them.
+#
+# `leftover` is in the PAYMENT's currency and is a credit — money handed over that no open bucket
+# absorbed. It is not an error and not rounding noise: it is what the payer is now owed, and the
+# primary settlement carries it so the payment's own bucket flips by exactly that much.
+@dataclass(frozen=True)
+class WaterfallPlan:
+    steps: list[WaterfallStep]
+    leftover: Decimal
+
+
+# Allocates the excess from an overpayment across the payer's other open buckets, largest first.
+#
+# Bounded and terminating by construction: each candidate is visited once, in a fixed order, and every
+# step strictly reduces the excess. There is no recursion and no rate to re-derive per pass, which is
+# what makes the plan safe to show and safe to re-run — the same inputs always produce the same plan,
+# so what the payer confirmed is what gets written.
+#
+# ONE invariant holds over every input and is what the caller relies on: **the steps' costs plus the
+# leftover equal the excess exactly.** The money handed over is fully accounted for, in the currency it
+# was handed over in, however the per-bucket rounding falls. That is why a partial step's cost is the
+# whole of what remains rather than a figure re-derived from its rounded amount — re-deriving would
+# lose or invent minor units, and cash that does not reconcile is the one thing a settle-up screen
+# cannot ship.
+#
+# Largest-cost first, ties broken by currency code so the plan is stable between reads. Ordering only
+# decides which bucket a partial excess fills; the payer changes that by unchecking a bucket, which
+# re-runs this without it.
+def plan_waterfall(excess: Decimal, candidates: list[WaterfallCandidate]) -> WaterfallPlan:
+    remaining = excess
+    steps: list[WaterfallStep] = []
+    for candidate in sorted(candidates, key=lambda entry: (-entry.cost, entry.currency)):
+        if remaining <= ZERO:
+            break
+        if candidate.outstanding <= ZERO or candidate.cost <= ZERO:
+            continue
+        if candidate.cost <= remaining:
+            steps.append(
+                WaterfallStep(currency=candidate.currency, outstanding=candidate.outstanding, amount=candidate.outstanding, cost=candidate.cost)
+            )
+            remaining -= candidate.cost
+            continue
+        # What remains buys only part of this bucket. The share is a pure ratio of the two figures the
+        # candidate already carries, so it cannot disagree with the rate that produced `cost`.
+        amount = min(quantize(candidate.outstanding * remaining / candidate.cost, MONEY_PLACES), candidate.outstanding)
+        # Too small to move this bucket by one minor unit. Skipped rather than ended: a cheaper bucket
+        # further down the list may still be moved by the same money, because each bucket converts at
+        # its own rate.
+        if amount <= ZERO:
+            continue
+        steps.append(WaterfallStep(currency=candidate.currency, outstanding=candidate.outstanding, amount=amount, cost=remaining))
+        remaining = ZERO
+    return WaterfallPlan(steps=steps, leftover=remaining)

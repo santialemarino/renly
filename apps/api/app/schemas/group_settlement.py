@@ -40,6 +40,42 @@ class GroupSettlementCreate(RequestBase):
     _validate_currency = field_validator("currency")(validate_supported_currency)
 
 
+# Body for POST /groups/{group_id}/settlements/preview and .../waterfall — one payment that may clear
+# more than the bucket it names.
+#
+# The same body serves the dry run and the write, because they must agree: the plan the payer confirms
+# has to be the plan that gets recorded, and one request shape is what makes that checkable rather than
+# hoped for. The server recomputes the allocation on the write from these fields alone — the client
+# never sends amounts for the spillover buckets, only which of them it was told about and kept.
+#
+# `spillover_currencies` is that choice: every bucket the payer left ticked. Absent means "every bucket
+# the excess can reach", which is what the first preview of a fresh overpayment asks for. An empty list
+# is a real answer and NOT the same thing — it means the payer unticked all of them, and the excess
+# should stay as a credit in the currency they paid.
+class GroupSettlementPlanCreate(RequestBase):
+    from_member_id: int = Field(description="Seat paying.")
+    to_member_id: int = Field(description="Seat being paid.")
+    date: date_type = Field(description="Date the payment happened; the rate the spillover converts at.")
+    amount: Decimal = Field(description="Total being paid, in the named currency.", gt=0, max_digits=18, decimal_places=2)
+    currency: str = Field(description="Currency being paid in, and the bucket the payment names (ISO 4217).", max_length=3)
+    spillover_currencies: list[str] | None = Field(default=None, description="Buckets the payer kept ticked. Absent means all of them.")
+    from_account_id: int | None = Field(default=None, description="Account the payer drew from; must be their own.")
+    from_amount: Decimal | None = Field(
+        default=None,
+        description="TOTAL that left that account, in its currency. Required only across currencies.",
+        gt=0,
+        max_digits=18,
+        decimal_places=2,
+    )
+    to_account_id: int | None = Field(default=None, description="Account the payee received into; must be their own.")
+    to_amount: Decimal | None = Field(
+        default=None, description="TOTAL that arrived there, in its currency. Required only across currencies.", gt=0, max_digits=18, decimal_places=2
+    )
+    notes: str | None = Field(default=None, description="Optional notes, copied onto every settlement the plan writes.")
+
+    _validate_currency = field_validator("currency")(validate_supported_currency)
+
+
 # Body for POST /groups/{group_id}/settlements/write-off — a debt the creditor gives up on.
 # It clears the same bucket a payment would and moves no money, so it names no account and carries no
 # cash leg; only the person who is owed may record one.
@@ -137,6 +173,49 @@ class GroupBalancesResponse(BaseModel):
     buckets: list[GroupCurrencyBalanceResponse] = Field(description="One per currency the group has money in, alphabetical.")
     display_currency: str | None = Field(default=None, description="Target currency for the converted totals (None = original).")
     skipped_currencies: list[str] = Field(default_factory=list, description="Currencies with no usable rate to the display currency.")
+
+
+# One bucket an overpayment could reach, and what this plan does with it.
+#
+# EVERY reachable bucket is returned, including the ones the payer unticked and the ones the excess
+# never got to — so the client renders one list of checkboxes from one field, rather than reconciling
+# "what is available" against "what is planned" and hoping the two agree about what exists.
+#
+# Two currencies, and confusing them is the mistake this shape exists to prevent: `outstanding` and
+# `amount` are in the BUCKET's currency, `cost` and `applied_cost` in the currency being PAID. A
+# partial step is the one case where `amount` is less than `outstanding`.
+class GroupSettlementPlanBucketResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    currency: str = Field(description="The bucket's currency (ISO 4217).")
+    outstanding: Decimal = Field(description="Still owed in this bucket, in its own currency.")
+    cost: Decimal = Field(description="What clearing it entirely would cost, in the currency being paid.")
+    amount: Decimal = Field(description="What this plan clears off it, in its own currency. Zero when unticked or unreached.")
+    applied_cost: Decimal = Field(description="What that consumes of the payment, in the currency being paid. Zero likewise.")
+    selected: bool = Field(description="Whether the payer kept this bucket ticked.")
+
+
+# Response for POST /groups/{group_id}/settlements/preview — where an overpayment would land.
+#
+# A dry run: it writes nothing. `excess` is zero whenever the payment does not exceed the bucket it
+# names, which is the ordinary case and the signal that there is no plan to show at all.
+#
+# `leftover` is a credit, not an error — money handed over that no ticked bucket absorbed. It flips
+# the paid bucket by exactly that much, which is what makes the sums reconcile: the settlement written
+# for the paid bucket is `primary_outstanding + leftover`.
+class GroupSettlementPlanResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
+    currency: str = Field(description="Currency being paid in.")
+    amount: Decimal = Field(description="Total being paid, in that currency.")
+    primary_outstanding: Decimal = Field(description="Owed in that same currency before this payment.")
+    excess: Decimal = Field(description="How much the payment exceeds it by; zero when it does not.")
+    primary_amount: Decimal = Field(
+        description="What the settlement against the paid bucket will be: what the payment covers of it, plus the leftover. Zero writes no such row."
+    )
+    buckets: list[GroupSettlementPlanBucketResponse] = Field(description="Every other bucket the payer owes this payee in, costliest first.")
+    leftover: Decimal = Field(description="Excess no ticked bucket absorbed, in the currency being paid.")
+    skipped_currencies: list[str] = Field(default_factory=list, description="Buckets left out because no rate reaches them.")
 
 
 # Body for PUT /groups/{group_id}/money-settings. Partial update; only provided fields are changed.

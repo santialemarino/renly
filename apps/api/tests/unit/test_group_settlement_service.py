@@ -16,6 +16,7 @@ from app.domain import (
     GroupSettlementNotPayeeError,
     GroupSettlementSameMemberError,
     GroupSettlementWriteOffHasNoLegError,
+    GroupWriteOffExceedsBalanceError,
     NotFoundError,
 )
 from app.models.account import Account, AccountType
@@ -107,9 +108,15 @@ def _wire(monkeypatch, *, viewer=_MEMBERS[0], account=None, auto_finalise=False,
     monkeypatch.setattr(group_settlement_service, "exchange_rate_service", AsyncMock())
     written: dict = {}
 
+    # `row` is the last one written and `rows` every one, in order. The waterfall writes several from
+    # one request, and a helper that only ever remembered the last would report a plan's final step as
+    # though it were the whole payment.
+    written["rows"] = []
+
     async def _create(_session, row: GroupSettlement) -> GroupSettlement:
-        row.id = 8
+        row.id = 8 + len(written["rows"])
         written["row"] = row
+        written["rows"].append(row)
         return row
 
     monkeypatch.setattr(group_settlement_service.group_settlement_repository, "create", _create)
@@ -361,9 +368,12 @@ class TestReversing:
 
 
 class TestWriteOff:
+    # Seat 12 owes seat 11 thirty pesos — a write-off is capped at the balance, so these need one.
+    _OWES_30 = [("ARS", 11, Decimal("0"), Decimal("30")), ("ARS", 12, Decimal("30"), Decimal("0"))]
+
     @pytest.mark.asyncio
     async def test_the_creditor_writes_it_off(self, monkeypatch):
-        written = _wire(monkeypatch, viewer=_MEMBERS[0])
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], positions=self._OWES_30)
         await group_settlement_service.record_write_off(
             AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30.00"), currency="ARS"
         )
@@ -376,7 +386,7 @@ class TestWriteOff:
     async def test_the_debtor_cannot_write_off_their_own_debt(self, monkeypatch):
         # Giving up a claim is the creditor's to give up; the other way round is one person deciding
         # on somebody else's behalf.
-        _wire(monkeypatch, viewer=_MEMBERS[1])
+        _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._OWES_30)
         with pytest.raises(GroupSettlementNotCreditorError):
             await group_settlement_service.record_write_off(
                 AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30.00"), currency="ARS"
@@ -491,3 +501,555 @@ class TestTheRemovalGuard:
         # member's balance would make one person's debt everybody's problem.
         _wire(monkeypatch, positions=[("ARS", 12, Decimal("0"), Decimal("30")), ("ARS", 13, Decimal("30"), Decimal("0"))])
         await group_settlement_service.ensure_no_outstanding_balance(AsyncMock(), [_MEMBERS[0]])
+
+
+class TestTheWriteOffCap:
+    # Seat 12 owes seat 11 thirty pesos and ten dollars.
+    _POSITIONS = [
+        ("ARS", 11, Decimal("0"), Decimal("30")),
+        ("ARS", 12, Decimal("30"), Decimal("0")),
+        ("USD", 11, Decimal("0"), Decimal("10")),
+        ("USD", 12, Decimal("10"), Decimal("0")),
+    ]
+
+    async def _write_off(self, amount: str, currency: str = "ARS"):
+        return await group_settlement_service.record_write_off(
+            AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal(amount), currency=currency
+        )
+
+    @pytest.mark.asyncio
+    async def test_writing_off_the_whole_balance_is_allowed(self, monkeypatch):
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        await self._write_off("30.00")
+        assert written["row"].amount == Decimal("30.00")
+
+    @pytest.mark.asyncio
+    async def test_writing_off_part_of_it_is_allowed(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        await self._write_off("10.00")
+
+    @pytest.mark.asyncio
+    async def test_writing_off_more_than_the_balance_is_refused(self, monkeypatch):
+        """The asymmetry with a payment, which is the whole point of the rule.
+
+        An overpaying payment is legal and flips the bucket — real money moved. Forgiving more than you
+        are owed would leave the person you forgave owed money BY you, out of nothing, which no act
+        produces. One cent over is refused, because the boundary is the balance and not "roughly it".
+        """
+        _wire(monkeypatch, positions=self._POSITIONS)
+        with pytest.raises(GroupWriteOffExceedsBalanceError) as caught:
+            await self._write_off("30.01")
+        assert caught.value.extra == {"outstanding": "30", "currency": "ARS"}
+
+    @pytest.mark.asyncio
+    async def test_the_cap_is_the_bucket_being_written_off_not_another(self, monkeypatch):
+        # Balances never net across currencies, so the ten dollars owed is no licence to write off
+        # more pesos. Reading the wrong bucket here would pass every same-currency test.
+        _wire(monkeypatch, positions=self._POSITIONS)
+        with pytest.raises(GroupWriteOffExceedsBalanceError):
+            await self._write_off("40.00")
+        await self._write_off("10.00", currency="USD")
+
+    @pytest.mark.asyncio
+    async def test_a_bucket_with_nothing_owed_refuses_any_write_off(self, monkeypatch):
+        # Nobody owes anybody in euros, so there is no claim to give up.
+        _wire(monkeypatch, positions=self._POSITIONS)
+        with pytest.raises(GroupWriteOffExceedsBalanceError):
+            await self._write_off("1.00", currency="EUR")
+
+    @pytest.mark.asyncio
+    async def test_the_cap_follows_the_DIRECTION_of_the_debt(self, monkeypatch):
+        """Seat 11 owes seat 12 nothing, so 11 cannot forgive 12 anything.
+
+        `_owed_between` is directional, and taking the bucket's magnitude instead would let the debtor
+        write off their own debt by naming themselves as the creditor — which the permission check
+        already refuses, so this is the guard behind it rather than a duplicate of it.
+        """
+        _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS)
+        with pytest.raises(GroupWriteOffExceedsBalanceError):
+            await group_settlement_service.record_write_off(
+                AsyncMock(), GROUP_ID, USER, from_member_id=11, to_member_id=12, date=TODAY, amount=Decimal("5.00"), currency="ARS"
+            )
+
+
+class TestTheOverpayWaterfall:
+    """One payment that clears more than the bucket it names.
+
+    Seat 12 owes seat 11 thirty THOUSAND pesos and ten dollars. The rate is 1,037.50 rather than a
+    round 1,000 on purpose: a round rate cannot tell a correct allocation from an incorrect one,
+    because every rounding path agrees when the arithmetic comes out whole.
+    """
+
+    _POSITIONS = [
+        ("ARS", 11, Decimal("0"), Decimal("30000")),
+        ("ARS", 12, Decimal("30000"), Decimal("0")),
+        ("USD", 11, Decimal("0"), Decimal("10")),
+        ("USD", 12, Decimal("10"), Decimal("0")),
+    ]
+    # Clearing the dollar bucket costs 10 × 1037.50 = 10,375.00 pesos.
+    _USD_COST = Decimal("10375.00")
+
+    def _rates(self, monkeypatch, *, available: bool = True):
+        rates = (
+            {ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1037.50"))]}
+            if available
+            else {}
+        )
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+
+    async def _preview(self, **overrides):
+        body = dict(from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30000.00"), currency="ARS")
+        body.update(overrides)
+        return await group_settlement_service.preview_waterfall(AsyncMock(), GROUP_ID, USER, **body)
+
+    async def _record(self, **overrides):
+        body = dict(from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30000.00"), currency="ARS")
+        body.update(overrides)
+        return await group_settlement_service.record_waterfall(AsyncMock(), GROUP_ID, USER, **body)
+
+
+class TestThePreview(TestTheOverpayWaterfall):
+    @pytest.mark.asyncio
+    async def test_a_payment_that_does_not_exceed_the_bucket_has_no_plan(self, monkeypatch):
+        # The ordinary case, and the signal the client uses to take the plain create path instead.
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("20000.00"))
+        assert (plan.excess, plan.buckets, plan.leftover) == (Decimal("0"), [], Decimal("0"))
+
+    @pytest.mark.asyncio
+    async def test_paying_exactly_the_balance_has_no_plan_either(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("30000.00"))
+        assert plan.excess == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_an_overpayment_is_priced_against_the_other_bucket(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("45000.00"))
+        assert plan.primary_outstanding == Decimal("30000")
+        assert plan.excess == Decimal("15000.00")
+        bucket = plan.buckets[0]
+        # Two currencies in one row, and confusing them is what this asserts against: `outstanding`
+        # and `amount` are dollars, `cost` and `applied_cost` pesos.
+        assert (bucket.currency, bucket.outstanding, bucket.cost) == ("USD", Decimal("10"), self._USD_COST)
+        assert (bucket.amount, bucket.applied_cost) == (Decimal("10"), self._USD_COST)
+        # 15,000 covered the 10,375 the dollars cost; the rest is a credit in the currency paid.
+        assert plan.leftover == Decimal("4625.00")
+
+    @pytest.mark.asyncio
+    async def test_an_excess_smaller_than_the_bucket_buys_part_of_it(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("35000.00"))
+        bucket = plan.buckets[0]
+        # 5,000 pesos buys 5000/1037.50 = 4.8192... dollars of the ten owed.
+        assert bucket.amount == Decimal("4.82")
+        assert bucket.applied_cost == Decimal("5000.00")
+        assert plan.leftover == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_unticking_a_bucket_leaves_it_listed_but_unapplied(self, monkeypatch):
+        """The reason every reachable bucket comes back rather than only the applied ones.
+
+        The client renders one list of checkboxes from one field. If unticking removed the bucket from
+        the response the checkbox would vanish along with it, and there would be no way to tick it back.
+        """
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("45000.00"), spillover_currencies=[])
+        assert len(plan.buckets) == 1
+        bucket = plan.buckets[0]
+        assert (bucket.currency, bucket.selected) == ("USD", False)
+        # Still priced, so the row can say what ticking it would cost.
+        assert bucket.cost == self._USD_COST
+        assert (bucket.amount, bucket.applied_cost) == (Decimal("0"), Decimal("0"))
+        # Nothing absorbed it, so the whole excess is a credit.
+        assert plan.leftover == Decimal("15000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_bucket_with_no_rate_is_named_rather_than_guessed(self, monkeypatch):
+        # Same posture as every other conversion in Renly: a missing rate is reported, never invented.
+        # Moving real money at a made-up number is the one outcome this whole flow must not produce.
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch, available=False)
+        plan = await self._preview(amount=Decimal("45000.00"))
+        assert plan.skipped_currencies == ["USD"]
+        assert plan.buckets == []
+        assert plan.leftover == Decimal("15000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_bucket_the_payer_is_OWED_in_is_not_a_candidate(self, monkeypatch):
+        """Direction, which sums alone cannot see.
+
+        Here seat 12 owes pesos but is OWED dollars. Applying a peso overpayment to the dollar bucket
+        would increase what the payee owes them — money flowing the wrong way — so that bucket must not
+        appear at all. `_owed_between` reads the settle-up plan, which is directional.
+        """
+        _wire(
+            monkeypatch,
+            positions=[
+                ("ARS", 11, Decimal("0"), Decimal("30000")),
+                ("ARS", 12, Decimal("30000"), Decimal("0")),
+                ("USD", 12, Decimal("0"), Decimal("10")),
+                ("USD", 11, Decimal("10"), Decimal("0")),
+            ],
+        )
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("45000.00"))
+        assert plan.buckets == []
+        assert plan.leftover == Decimal("15000.00")
+
+    @pytest.mark.asyncio
+    async def test_the_preview_writes_nothing(self, monkeypatch):
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._preview(amount=Decimal("45000.00"))
+        assert written["rows"] == []
+
+
+class TestRecordingTheWaterfall(TestTheOverpayWaterfall):
+    @pytest.mark.asyncio
+    async def test_one_settlement_per_bucket_in_the_bucket_s_own_currency(self, monkeypatch):
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"))
+        assert [(row.currency, row.amount) for row in written["rows"]] == [
+            # The paid bucket carries its own balance PLUS the leftover, so it flips by 4,625.
+            ("ARS", Decimal("34625.00")),
+            ("USD", Decimal("10")),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_the_rows_account_for_exactly_what_was_paid(self, monkeypatch):
+        """The invariant the whole feature rests on, asserted end to end rather than on the allocator.
+
+        Each row's cost in the payment's currency must sum to the payment. The dollar row's cost is not
+        its `amount` — that is dollars — so this reads the peso figure back off the cash leg, which is
+        the only place the two meet.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="ARS"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), from_account_id=5)
+        rows = written["rows"]
+        # A same-currency leg stores None, meaning "the account moved exactly what cleared the bucket".
+        paid = [row.from_amount if row.from_amount is not None else row.amount for row in rows]
+        assert sum(paid) == Decimal("45000.00")
+
+    @pytest.mark.asyncio
+    async def test_unticking_everything_is_a_single_overpaying_settlement(self, monkeypatch):
+        # Which is exactly the behaviour before this PR existed: the bucket flips and nothing spills.
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), spillover_currencies=[])
+        assert [(row.currency, row.amount) for row in written["rows"]] == [("ARS", Decimal("45000.00"))]
+
+    @pytest.mark.asyncio
+    async def test_a_partial_payment_records_what_was_paid_not_the_balance(self, monkeypatch):
+        # The `min` in `primary_amount`. Without it this path credits the payer with the whole 30,000
+        # for a 12,000 payment — every overpay test stays green while partial payments silently
+        # over-clear, which is the worst possible direction for this bug.
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("12000.00"))
+        assert [(row.currency, row.amount) for row in written["rows"]] == [("ARS", Decimal("12000.00"))]
+
+    @pytest.mark.asyncio
+    async def test_paying_only_to_clear_another_currency_writes_no_empty_row(self, monkeypatch):
+        """Nothing owed in the currency being paid, and all of it spills.
+
+        A zero-amount settlement is refused by the schema and means nothing anyway. The row is skipped
+        rather than written at zero.
+        """
+        written = _wire(
+            monkeypatch,
+            positions=[("USD", 11, Decimal("0"), Decimal("10")), ("USD", 12, Decimal("10"), Decimal("0"))],
+        )
+        self._rates(monkeypatch)
+        await self._record(amount=self._USD_COST)
+        assert [(row.currency, row.amount) for row in written["rows"]] == [("USD", Decimal("10"))]
+
+    @pytest.mark.asyncio
+    async def test_auto_finalise_confirms_every_row_not_just_the_first(self, monkeypatch):
+        written = _wire(monkeypatch, positions=self._POSITIONS, auto_finalise=True)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"))
+        assert all(row.status == GroupSettlementStatus.confirmed and row.confirmed_at is not None for row in written["rows"])
+
+    @pytest.mark.asyncio
+    async def test_notes_reach_every_row(self, monkeypatch):
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), notes="Alquiler")
+        assert {row.notes for row in written["rows"]} == {"Alquiler"}
+
+    @pytest.mark.asyncio
+    async def test_naming_the_other_party_s_account_is_refused(self, monkeypatch):
+        # The same rule the plain create enforces: the two legs belong to two different people, and
+        # neither can even see the other's accounts.
+        _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="ARS"))
+        self._rates(monkeypatch)
+        with pytest.raises(GroupSettlementForeignLegError):
+            await self._record(amount=Decimal("45000.00"), to_account_id=5)
+
+
+class TestSplittingTheCashLeg(TestTheOverpayWaterfall):
+    """One real payment out of ONE account, recorded across several rows.
+
+    The payer states what left their account once. It is decomposed across the rows in proportion to
+    what each consumed of the payment — never re-converted at a market rate, because a payment made at
+    the rate their bank actually gave them must stay recorded at that rate.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_foreign_account_s_total_is_split_across_the_rows_exactly(self, monkeypatch):
+        # Paying the peso balance from a DOLLAR account: 45,000 pesos left it as $43.37, all told.
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="USD"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), from_account_id=5, from_amount=Decimal("43.37"))
+        rows = written["rows"]
+        # The dollar row's bucket currency MATCHES the account's, so its leg normalises to None — the
+        # account moved exactly what cleared that bucket. Its share is therefore read off the row.
+        assert rows[0].currency == "ARS" and rows[0].from_amount == Decimal("33.37")
+        assert rows[1].currency == "USD" and rows[1].from_amount is None and rows[1].amount == Decimal("10")
+        # 33.37 + 10.00 = 43.37. Not a cent more or less than the payer said left their account.
+        assert rows[0].from_amount + rows[1].amount == Decimal("43.37")
+
+    @pytest.mark.asyncio
+    async def test_the_payee_s_own_leg_is_split_the_same_way(self, monkeypatch):
+        # Symmetric: either side may record the payment, and each states only their own account.
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], positions=self._POSITIONS, account=_account(6, currency="USD"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), to_account_id=6, to_amount=Decimal("43.37"))
+        rows = written["rows"]
+        assert rows[0].to_amount == Decimal("33.37")
+        assert rows[1].to_amount is None
+
+    @pytest.mark.asyncio
+    async def test_a_same_currency_account_stores_no_leg_amount_on_any_row(self, monkeypatch):
+        """Every reader treats "a leg amount is set" as "this row crossed currencies".
+
+        A second copy of the same figure would be a second thing to keep in step, and would make the
+        peso row look like a conversion it never was.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="ARS"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), from_account_id=5)
+        rows = written["rows"]
+        assert rows[0].from_amount is None
+        # The dollar row DID cross, so it carries what those pesos were.
+        assert rows[1].from_amount == Decimal("10375.00")
+        assert all(row.from_account_id == 5 for row in rows)
+
+
+class TestTwoBucketsAtOnce:
+    """Three rows from one payment, which is what several assertions above cannot reach.
+
+    Seat 12 owes seat 11 30,000 pesos, ten dollars AND forty reais. Two spillover buckets rather than
+    one is the only way to see the ORDER the excess fills them in, and three rows is what makes the
+    cash leg's proportional split leave a remainder to spread — with two rows the arithmetic happened
+    to come out exact, so a sweep survived on removing the spread entirely.
+    """
+
+    _POSITIONS = [
+        ("ARS", 11, Decimal("0"), Decimal("30000")),
+        ("ARS", 12, Decimal("30000"), Decimal("0")),
+        ("USD", 11, Decimal("0"), Decimal("10")),
+        ("USD", 12, Decimal("10"), Decimal("0")),
+        ("BRL", 11, Decimal("0"), Decimal("40")),
+        ("BRL", 12, Decimal("40"), Decimal("0")),
+    ]
+    # 10 USD = 10,375.00 ARS at 1,037.50; 40 BRL = 7,642.73 ARS via USD at 5.43.
+    _USD_COST = Decimal("10375.00")
+    _BRL_COST = Decimal("7642.73")
+    # Clears all three and leaves 500 pesos over.
+    _AMOUNT = Decimal("48517.73")
+
+    def _rates(self, monkeypatch):
+        rates = {
+            ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1037.50"))],
+            ExchangeRatePair.USD_BRL: [ExchangeRate(pair=ExchangeRatePair.USD_BRL, date=date(2026, 1, 1), rate=Decimal("5.43"))],
+        }
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+
+    @pytest.mark.asyncio
+    async def test_the_costliest_bucket_is_listed_and_filled_first(self, monkeypatch):
+        # Ordering, which one bucket cannot show. Dollars cost more than reais, so they come first in
+        # the response AND take the excess first — the list reads top to bottom as the money flows.
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await group_settlement_service.preview_waterfall(
+            AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=self._AMOUNT, currency="ARS"
+        )
+        assert [(b.currency, b.cost) for b in plan.buckets] == [("USD", self._USD_COST), ("BRL", self._BRL_COST)]
+        assert plan.leftover == Decimal("500.00")
+
+    @pytest.mark.asyncio
+    async def test_a_partial_excess_fills_the_costliest_and_leaves_the_rest_untouched(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await group_settlement_service.preview_waterfall(
+            AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("40375.00"), currency="ARS"
+        )
+        by_currency = {b.currency: (b.amount, b.applied_cost) for b in plan.buckets}
+        assert by_currency["USD"] == (Decimal("10"), self._USD_COST)
+        assert by_currency["BRL"] == (Decimal("0"), Decimal("0"))
+
+    @pytest.mark.asyncio
+    async def test_a_row_already_in_the_account_s_currency_moves_exactly_what_it_clears(self, monkeypatch):
+        """Paying a dollar debt out of a dollar account crosses nothing, so no rate may be implied.
+
+        Giving that row a proportional share of the payer's stated total instead would claim the
+        account paid 8.58 dollars to clear a 10-dollar bucket — a contradiction the leg rule refuses
+        outright, and rightly: within one currency a settlement moves exactly what it clears. So the
+        dollar row takes its own amount, and the rows that DID cross split what is left.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="USD"))
+        self._rates(monkeypatch)
+        await group_settlement_service.record_waterfall(
+            AsyncMock(),
+            GROUP_ID,
+            USER,
+            from_member_id=12,
+            to_member_id=11,
+            date=TODAY,
+            amount=self._AMOUNT,
+            currency="ARS",
+            from_account_id=5,
+            from_amount=Decimal("40.14"),
+        )
+        rows = written["rows"]
+        assert [row.currency for row in rows] == ["ARS", "USD", "BRL"]
+        # None on the dollar row IS the statement that it crossed nothing; the other two carry what
+        # those pesos and reais actually cost in dollars, and they split 40.14 − 10.00 between them.
+        assert rows[1].from_amount is None
+        assert rows[0].from_amount + rows[2].from_amount == Decimal("30.14")
+
+    @pytest.mark.asyncio
+    async def test_the_cash_leg_s_rounding_remainder_is_spread_so_the_parts_sum_exactly(self, monkeypatch):
+        """The gap a mutation sweep found: with two parts the split came out exact on its own.
+
+        Two complementary ratios round to the total almost always, so removing `spread_remainder`
+        stayed green. THREE crossing rows is what shows it — here 30.04 euros splits into parts that
+        naively sum to 30.03, and the missing cent has to land on the largest of them. Without the
+        spread the payer's account would show a cent less leaving it than they said did: small, and
+        wrong in the one place a person checks by hand.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="EUR"))
+        self._rates(monkeypatch)
+        await group_settlement_service.record_waterfall(
+            AsyncMock(),
+            GROUP_ID,
+            USER,
+            from_member_id=12,
+            to_member_id=11,
+            date=TODAY,
+            amount=self._AMOUNT,
+            currency="ARS",
+            from_account_id=5,
+            from_amount=Decimal("30.04"),
+        )
+        legs = [row.from_amount for row in written["rows"]]
+        # 18.88 + 6.42 + 4.73 = 30.03. The cent goes to the largest part, making it 18.89.
+        assert legs == [Decimal("18.89"), Decimal("6.42"), Decimal("4.73")]
+        assert sum(legs) == Decimal("30.04")
+
+
+class TestTheRateFollowsThePaymentDate:
+    _POSITIONS = [
+        ("ARS", 11, Decimal("0"), Decimal("30000")),
+        ("ARS", 12, Decimal("30000"), Decimal("0")),
+        ("USD", 11, Decimal("0"), Decimal("10")),
+        ("USD", 12, Decimal("10"), Decimal("0")),
+    ]
+
+    def _rates(self, monkeypatch):
+        # The peso moved a long way between January and May, which is the point: which rate applies is
+        # a real difference in what the payer gets for their money, not a rounding detail.
+        rates = {
+            ExchangeRatePair.USD_ARS_MEP: [
+                ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("900.00")),
+                ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 5, 1), rate=Decimal("1500.00")),
+            ]
+        }
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+
+    async def _preview(self, when: date):
+        return await group_settlement_service.preview_waterfall(
+            AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=when, amount=Decimal("50000.00"), currency="ARS"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_back_dated_payment_converts_at_the_rate_in_force_then(self, monkeypatch):
+        """Not today's rate, which is what `get_balances` deliberately uses.
+
+        The two are different questions and the difference is principled: a displayed BALANCE is a live
+        position with no single date behind it, whereas a payment happened on a day, and the rate that
+        matters is the one in force when the money actually moved — which is how every other
+        cross-currency figure in Renly is recorded.
+        """
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(date(2026, 2, 15))
+        assert plan.buckets[0].cost == Decimal("9000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_payment_made_later_converts_at_the_later_rate(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(date(2026, 6, 1))
+        assert plan.buckets[0].cost == Decimal("15000.00")
+
+
+class TestThePreviewMatchesTheWrite(TestTheOverpayWaterfall):
+    """The number the payer confirms is the number that gets recorded.
+
+    `primary_amount` exists so the confirm step can name the settlement against the paid bucket without
+    re-deriving it — one function answers it for both paths, because two derivations of a figure
+    somebody agrees to and then has recorded are two things that can disagree about what was agreed.
+    """
+
+    @pytest.mark.parametrize(
+        ("amount", "spillover"),
+        [
+            ("45000.00", None),  # overpays, everything ticked
+            ("45000.00", []),  # overpays, nothing ticked
+            ("40375.00", None),  # overpays by exactly the dollar bucket
+            ("30000.00", None),  # pays it off exactly
+            ("12000.00", None),  # a partial payment
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_the_planned_primary_amount_is_what_gets_written(self, monkeypatch, amount, spillover):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal(amount), spillover_currencies=spillover)
+
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal(amount), spillover_currencies=spillover)
+
+        rows_in_paid_currency = [row.amount for row in written["rows"] if row.currency == "ARS"]
+        assert rows_in_paid_currency == ([plan.primary_amount] if plan.primary_amount > Decimal("0") else [])
+
+    @pytest.mark.asyncio
+    async def test_a_payment_purely_for_another_currency_plans_no_row_in_the_one_paid(self, monkeypatch):
+        _wire(monkeypatch, positions=[("USD", 11, Decimal("0"), Decimal("10")), ("USD", 12, Decimal("10"), Decimal("0"))])
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("10375.00"))
+        assert plan.primary_amount == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_every_planned_bucket_amount_is_what_gets_written(self, monkeypatch):
+        _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        plan = await self._preview(amount=Decimal("35000.00"))
+
+        written = _wire(monkeypatch, positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("35000.00"))
+
+        planned = {bucket.currency: bucket.amount for bucket in plan.buckets if bucket.amount > Decimal("0")}
+        assert {row.currency: row.amount for row in written["rows"] if row.currency != "ARS"} == planned

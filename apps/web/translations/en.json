@@ -2652,13 +2652,30 @@
         "error": "Failed to record the payment.",
         "sameMember": "A payment moves money between two different people."
       },
+      "plan": {
+        "title": "Where the extra goes",
+        "description": "This payment is bigger than the balance it clears. Choose which of the other balances the extra should go to.",
+        "intro": "{excess} {currency} more than this balance. At the payment date's rates it can go to:",
+        "owed": "{amount} {currency} owed",
+        "skipped": "Left alone.",
+        "clears": "Cleared in full, using {cost} {currency}.",
+        "partly": "{amount} {bucketCurrency} of it, using the remaining {cost} {currency}.",
+        "outOfReach": "The extra ran out before this one — clearing it would need {cost} {currency}.",
+        "willRecord": "{count, plural, one {This records # payment} other {This records # payments}}",
+        "rowLabel": "In {currency}",
+        "leftover": "{amount} {currency} is left over, so that balance flips and you end up being owed it.",
+        "skippedCurrencies": "No rate for {currencies}, so nothing is applied there.",
+        "back": "Back",
+        "cta": "Confirm and record"
+      },
       "writeOff": {
         "title": "Write this balance off",
         "description": "{from} owes you {amount} {currency}. Writing it off clears the balance with no money changing hands.",
         "warning": "Your net worth drops by what you stop expecting. No expense is recorded — a write-off spans many expenses and belongs to no single one.",
         "amount": {
           "label": "Amount ({currency})",
-          "placeholder": "Enter the amount"
+          "placeholder": "Enter the amount",
+          "hint": "Less forgives part of it and the rest stays outstanding. You cannot write off more than the balance."
         },
         "date": {
           "label": "Date",
@@ -2669,7 +2686,8 @@
         },
         "cta": "Write off",
         "success": "Balance written off.",
-        "error": "Failed to write the balance off."
+        "error": "Failed to write the balance off.",
+        "exceeds": "You can write off at most {amount} {currency} — that is the whole balance."
       },
       "leg": {
         "title": "Which of your accounts?",
@@ -3629,6 +3647,7 @@
     "group_settlement_not_payee": "Only the person who received the money can confirm a settlement.",
     "group_settlement_same_member": "A settlement moves money between two different people.",
     "group_settlement_write_off_has_no_leg": "A written-off balance moved no money, so no account can be attached to it.",
+    "group_write_off_exceeds_balance": "You can write off at most {outstanding} {currency} — that is the whole balance.",
     "has_linked_expenses": "This credit card has linked expenses. Archive it instead of deleting it.",
     "installment_locked_field": "Locked installment fields ({fields}) can't be changed after the first installment has been charged.",
     "integrity_conflict": "That change conflicts with existing data.",

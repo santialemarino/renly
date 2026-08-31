@@ -9,6 +9,8 @@ from app.schemas.group_settlement import (
     GroupMoneySettingsUpdate,
     GroupSettlementCreate,
     GroupSettlementLegUpdate,
+    GroupSettlementPlanCreate,
+    GroupSettlementPlanResponse,
     GroupSettlementResponse,
     GroupWriteOffCreate,
 )
@@ -69,8 +71,60 @@ async def create_group_settlement(
     )
 
 
+# Dry run for a payment that may be bigger than the bucket it names: where the excess would land, at
+# the payment date's rates. No writes. `excess` comes back zero whenever the payment does not exceed
+# the bucket, which is the signal that there is nothing to confirm and the ordinary create applies.
+@router.post("/settlements/preview", response_model=GroupSettlementPlanResponse)
+async def preview_group_settlement(
+    group_id: int,
+    body: GroupSettlementPlanCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> GroupSettlementPlanResponse:
+    return await group_settlement_service.preview_waterfall(
+        session,
+        group_id,
+        current_user,
+        from_member_id=body.from_member_id,
+        to_member_id=body.to_member_id,
+        date=body.date,
+        amount=body.amount,
+        currency=body.currency,
+        spillover_currencies=body.spillover_currencies,
+    )
+
+
+# Records one payment across every bucket it reaches — one settlement per bucket, written together or
+# not at all. The allocation is recomputed here from the same body the preview took; the request names
+# which buckets the payer kept, never how much to put in them.
+@router.post("/settlements/waterfall", response_model=list[GroupSettlementResponse], status_code=status.HTTP_201_CREATED)
+async def create_group_settlement_waterfall(
+    group_id: int,
+    body: GroupSettlementPlanCreate,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> list[GroupSettlementResponse]:
+    return await group_settlement_service.record_waterfall(
+        session,
+        group_id,
+        current_user,
+        from_member_id=body.from_member_id,
+        to_member_id=body.to_member_id,
+        date=body.date,
+        amount=body.amount,
+        currency=body.currency,
+        spillover_currencies=body.spillover_currencies,
+        from_account_id=body.from_account_id,
+        from_amount=body.from_amount,
+        to_account_id=body.to_account_id,
+        to_amount=body.to_amount,
+        notes=body.notes,
+    )
+
+
 # Records a debt the creditor gives up on. Clears the same bucket a payment would and moves no money.
-# Returns 403 when the caller is not the seat being owed.
+# Returns 403 when the caller is not the seat being owed, and 400 for more than the balance holds —
+# unlike a payment, which may exceed it.
 @router.post("/settlements/write-off", response_model=GroupSettlementResponse, status_code=status.HTTP_201_CREATED)
 async def create_group_write_off(
     group_id: int,

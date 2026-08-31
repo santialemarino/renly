@@ -2,6 +2,8 @@ import type { Account } from '@/lib/api/accounts';
 import type {
   GroupCurrencyBalance,
   GroupSettlement,
+  GroupSettlementPlan,
+  GroupSettlementPlanBucket,
   GroupSettleSuggestion,
 } from '@/lib/api/group-settlements';
 
@@ -229,4 +231,76 @@ export function balancesEmptyState(hasSharedSpending: boolean): BalancesEmptySta
  */
 export function hasOpenBalances(buckets: GroupCurrencyBalance[]): boolean {
   return buckets.length > 0;
+}
+
+// --- The overpay waterfall ---
+
+/*
+ * Whether a plan has anything to confirm.
+ *
+ * An excess with nowhere to go is not a plan: the payment simply overshoots its own bucket and flips
+ * it, which is D30 and needs no confirmation step — the payer typed the number. What needs confirming
+ * is money crossing into a currency they did not name, which is what a reachable bucket means.
+ *
+ * A non-empty bucket list already MEANS there is an excess — the preview returns no buckets at all
+ * when the payment does not exceed its own, and none for a currency it has no rate to reach. So
+ * re-checking `excess` here would be a second copy of a fact this field already carries, and one that
+ * no input could ever disagree with.
+ */
+export function planNeedsConfirming(plan: GroupSettlementPlan): boolean {
+  return plan.buckets.length > 0;
+}
+
+/*
+ * The rows the plan will write, in the order they will be written.
+ *
+ * Every figure comes from the API — `primaryAmount` is read, never re-derived from the leftover —
+ * because the payer confirms these numbers and then they are recorded. This assembles what the server
+ * already decided; it does not decide anything itself.
+ *
+ * A bucket the excess never reached contributes no row, and neither does a paid bucket the payment
+ * covered nothing of (paying purely to clear another currency).
+ */
+export interface PlannedSettlementRow {
+  currency: string;
+  amount: string;
+}
+
+export function plannedRows(plan: GroupSettlementPlan): PlannedSettlementRow[] {
+  const primary =
+    Number(plan.primaryAmount) > 0 ? [{ currency: plan.currency, amount: plan.primaryAmount }] : [];
+  return [
+    ...primary,
+    ...plan.buckets
+      .filter((bucket) => Number(bucket.amount) > 0)
+      .map((bucket) => ({ currency: bucket.currency, amount: bucket.amount })),
+  ];
+}
+
+/*
+ * The currencies a confirm step should send back as kept.
+ *
+ * Sent explicitly even when every bucket is ticked, rather than relying on the "absent means all"
+ * default: between the preview and the confirmation somebody else may have recorded a payment, and an
+ * absent field would silently include a bucket that appeared in the meantime. The list is what the
+ * payer actually saw.
+ */
+export function selectedSpilloverCurrencies(plan: GroupSettlementPlan): string[] {
+  return plan.buckets.filter((bucket) => bucket.selected).map((bucket) => bucket.currency);
+}
+
+/*
+ * Whether a bucket was offered but the excess never got to it — ticked, priced, and still untouched.
+ *
+ * Worth saying on the row rather than leaving it blank: "nothing was applied here" reads as a bug
+ * otherwise, when in fact the money simply ran out one bucket earlier.
+ */
+export function bucketOutOfReach(bucket: GroupSettlementPlanBucket): boolean {
+  return bucket.selected && Number(bucket.amount) === 0;
+}
+
+// Whether a bucket got only part of what it is owed, which is the one case a row's two figures differ
+// for a reason the payer should see rather than wonder about.
+export function bucketPartlyCleared(bucket: GroupSettlementPlanBucket): boolean {
+  return Number(bucket.amount) > 0 && Number(bucket.amount) < Number(bucket.outstanding);
 }

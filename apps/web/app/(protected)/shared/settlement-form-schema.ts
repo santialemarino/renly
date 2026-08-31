@@ -130,6 +130,10 @@ export type SettlementLegFormValues = z.infer<ReturnType<typeof buildSettlementL
 interface BuildWriteOffFormSchemaArgs {
   requiredMsg: string;
   positiveMsg: string;
+  // What is actually outstanding in this bucket, as the balance states it.
+  outstanding: string;
+  // Names the figure, because it is the whole of what the user has to do about it.
+  exceedsMsg: string;
 }
 
 /*
@@ -137,14 +141,31 @@ interface BuildWriteOffFormSchemaArgs {
  * names no account and carries no leg — which is also why the API refuses one (409
  * group_settlement_write_off_has_no_leg).
  *
- * The amount stays editable: forgiving part of what someone owes is a real thing to do, and the API
- * takes any figure. The two seats are not editable and so are not fields — a write-off is always
- * recorded against one suggested payment, by the person it would have been paid to.
+ * The amount stays editable but is CAPPED at the balance, mirroring the API (400
+ * group_write_off_exceeds_balance). Forgiving part of what someone owes is a real thing to do;
+ * forgiving more than you are owed would leave the person you forgave owed money by you, out of
+ * nothing, which no act produces. Unlike an overpaying PAYMENT, which is legal and flips the balance
+ * because real money moved.
+ *
+ * Mirrored here rather than left to the API because the figure is on screen: the dialog opens on the
+ * balance and pre-fills it, so a refusal that only arrives after submitting would be a rule the form
+ * could have stated all along.
+ *
+ * The two seats are not editable and so are not fields — a write-off is always recorded against one
+ * suggested payment, by the person it would have been paid to.
  */
-export function buildWriteOffFormSchema({ requiredMsg, positiveMsg }: BuildWriteOffFormSchemaArgs) {
+export function buildWriteOffFormSchema({
+  requiredMsg,
+  positiveMsg,
+  outstanding,
+  exceedsMsg,
+}: BuildWriteOffFormSchemaArgs) {
   return z.object({
     date: z.string().min(1, { message: requiredMsg }),
-    amount: positiveAmount(requiredMsg, positiveMsg),
+    amount: positiveAmount(requiredMsg, positiveMsg).refine(
+      (value) => Number(value) <= Number(outstanding),
+      { message: exceedsMsg },
+    ),
     notes: z.string().max(EXPENSE_NOTES_MAX).optional(),
   });
 }
