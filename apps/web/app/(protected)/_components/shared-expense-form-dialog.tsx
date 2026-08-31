@@ -227,7 +227,7 @@ export function SharedExpenseFormDialog({
         };
       }),
       fundingSource: joint ? 'joint' : 'member',
-      payerMemberId: entity.payerMemberId === null ? '' : String(entity.payerMemberId),
+      payerMemberId: joint ? '' : String(entity.payerMemberId),
       sharedAccountId: joint && entity.paidFromAccountId ? String(entity.paidFromAccountId) : '',
       paymentMethod: (entity.paymentMethod ??
         undefined) as SharedExpenseFormValues['paymentMethod'],

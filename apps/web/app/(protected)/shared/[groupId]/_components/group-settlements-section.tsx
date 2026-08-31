@@ -25,7 +25,7 @@ import {
   canAttachOwnLeg,
   canUnconfirmSettlement,
   ownLegAccountId,
-  ownSettlementSide,
+  ownLegAmount,
 } from '@/app/(protected)/shared/settlement-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -219,10 +219,16 @@ function SettlementRow({
   const fmt = useFormatters();
   const t = useTranslations('shared');
 
-  const side = ownSettlementSide(settlement, mySeatId);
+  /*
+   * The caller's OWN leg, through the rules rather than re-derived here. The inline version this
+   * replaces read `toAmount` whenever the caller was on neither side — the payee's figure, shown to
+   * somebody with no leg in the settlement at all. It was invisible only because the account lookup
+   * below happened to come up empty for the same viewer, which is a second guard doing the first
+   * one's job.
+   */
   const legAccountId = ownLegAccountId(settlement, mySeatId);
   const legAccount = accounts.find((account) => account.id === legAccountId);
-  const legAmount = side === 'outgoing' ? settlement.fromAmount : settlement.toAmount;
+  const legAmount = ownLegAmount(settlement, mySeatId);
 
   return (
     <TableRow>

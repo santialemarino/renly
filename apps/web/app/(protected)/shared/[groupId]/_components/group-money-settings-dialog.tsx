@@ -23,7 +23,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { FormCombobox } from '@/components/form-combobox';
 import type { GroupMoneySettings } from '@/lib/api/group-settlements';
-import { SPLIT_METHODS } from '@/lib/constants/shared-expenses';
+import { DEFAULT_SPLIT_METHOD, SPLIT_METHODS } from '@/lib/constants/shared-expenses';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 
 interface GroupMoneySettingsDialogProps {
@@ -61,8 +61,14 @@ export function GroupMoneySettingsDialog({
     [tCommon],
   );
 
+  /*
+   * The fallbacks are unreachable — `settings` is a required prop and the section renders this dialog
+   * only once it has them — but the hook types its entity as possibly-undefined, so they have to say
+   * something. They say what the API's own column default is, through the shared constant rather than
+   * a literal, so this can never drift from the value a new group actually starts on.
+   */
   const toValues = (entity: GroupMoneySettings | undefined): MoneySettingsFormValues => ({
-    defaultSplitMethod: entity?.defaultSplitMethod ?? 'equal',
+    defaultSplitMethod: entity?.defaultSplitMethod ?? DEFAULT_SPLIT_METHOD,
     autoFinaliseSettlements: entity?.autoFinaliseSettlements ?? false,
   });
 
