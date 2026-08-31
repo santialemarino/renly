@@ -31,16 +31,21 @@ from app.domain import (
     GroupSettlementForeignLegError,
     GroupSettlementLegAmountRequiredError,
     GroupSettlementLegAmountsMustMatchError,
+    GroupSettlementLegTotalTooSmallError,
     GroupSettlementLegWithoutAccountError,
     GroupSettlementNotCreditorError,
     GroupSettlementNotPayeeError,
     GroupSettlementSameMemberError,
     GroupSettlementWriteOffHasNoLegError,
+    GroupWriteOffExceedsBalanceError,
     NotFoundError,
+    WaterfallCandidate,
     apply_settlements,
     expense_positions,
     minimise_transfers,
+    plan_waterfall,
 )
+from app.domain.money import MONEY_PLACES, quantize, spread_remainder
 from app.models.account import Account
 from app.models.group import GroupMember
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
@@ -57,6 +62,8 @@ from app.schemas.group_settlement import (
     GroupBalancesResponse,
     GroupCurrencyBalanceResponse,
     GroupMemberBalanceResponse,
+    GroupSettlementPlanBucketResponse,
+    GroupSettlementPlanResponse,
     GroupSettlementResponse,
     GroupSettleSuggestionResponse,
 )
@@ -185,6 +192,169 @@ async def record_settlement(
     return _build_response(settlement, members_by_id, viewer.id)
 
 
+# Where a payment would land when it is bigger than the bucket it names. A dry run: writes nothing.
+#
+# Split from the write below rather than folded into it because the payer has to SEE this before any
+# of it happens — §5's rule is that a cross-currency cascade is never silent — and because unticking a
+# bucket re-asks the same question with a smaller set. Both paths call the same allocator on the same
+# inputs, so what is shown is what gets written.
+async def preview_waterfall(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    *,
+    from_member_id: int,
+    to_member_id: int,
+    date: date_type,
+    amount: Decimal,
+    currency: str,
+    spillover_currencies: list[str] | None = None,
+) -> GroupSettlementPlanResponse:
+    await group_service.require_member(session, group_id, user)
+    await _require_two_seats(session, group_id, from_member_id, to_member_id)
+    owed = await _owed_between(session, group_id, from_member_id, to_member_id)
+    primary_outstanding = owed.pop(currency, ZERO)
+    excess = amount - primary_outstanding
+    if excess <= ZERO or not owed:
+        # Not an overpayment, or nowhere for one to go. Either way there is no plan: the caller records
+        # the payment the ordinary way, and an excess simply flips the bucket it was paid into.
+        leftover = max(excess, ZERO)
+        return GroupSettlementPlanResponse(
+            currency=currency,
+            amount=amount,
+            primary_outstanding=primary_outstanding,
+            excess=leftover,
+            primary_amount=_primary_amount(amount, primary_outstanding, leftover),
+            buckets=[],
+            leftover=leftover,
+        )
+    candidates, costs, skipped = await _waterfall_candidates(session, user, owed, currency, date, spillover_currencies)
+    plan = plan_waterfall(excess, candidates)
+    applied = {step.currency: step for step in plan.steps}
+    return GroupSettlementPlanResponse(
+        currency=currency,
+        amount=amount,
+        primary_outstanding=primary_outstanding,
+        excess=excess,
+        primary_amount=_primary_amount(amount, primary_outstanding, plan.leftover),
+        # Costliest first, matching the order the allocator fills them in, so the list reads top to
+        # bottom as the money actually flows. Unreachable buckets keep their place rather than sinking.
+        buckets=[
+            GroupSettlementPlanBucketResponse(
+                currency=bucket_currency,
+                outstanding=owed[bucket_currency],
+                cost=cost,
+                amount=applied[bucket_currency].amount if bucket_currency in applied else ZERO,
+                applied_cost=applied[bucket_currency].cost if bucket_currency in applied else ZERO,
+                selected=spillover_currencies is None or bucket_currency in spillover_currencies,
+            )
+            for bucket_currency, cost in sorted(costs.items(), key=lambda pair: (-pair[1], pair[0]))
+        ],
+        leftover=plan.leftover,
+        skipped_currencies=sorted(skipped),
+    )
+
+
+# Records one payment across every bucket it reaches: one settlement per bucket, written together.
+#
+# The allocation is recomputed here from the same inputs the preview used, and the request carries no
+# amounts for the spillover buckets at all — only which of them the payer kept. A client that could
+# name those amounts could clear a bucket at a rate nobody agreed to, and the payee would have no way
+# to tell from the row.
+#
+# One transaction. A payment that half-lands is worse than one that does not land: the payer would
+# have handed money over and the balances would show part of it, with nothing saying which part.
+async def record_waterfall(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    *,
+    from_member_id: int,
+    to_member_id: int,
+    date: date_type,
+    amount: Decimal,
+    currency: str,
+    spillover_currencies: list[str] | None = None,
+    from_account_id: int | None = None,
+    from_amount: Decimal | None = None,
+    to_account_id: int | None = None,
+    to_amount: Decimal | None = None,
+    notes: str | None = None,
+) -> list[GroupSettlementResponse]:
+    _, viewer = await group_service.require_member(session, group_id, user)
+    members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
+    _ensure_own_leg(viewer, from_member_id, from_account_id, from_amount)
+    _ensure_own_leg(viewer, to_member_id, to_account_id, to_amount)
+    owed = await _owed_between(session, group_id, from_member_id, to_member_id)
+    primary_outstanding = owed.pop(currency, ZERO)
+    excess = amount - primary_outstanding
+    plan = None
+    if excess > ZERO and owed:
+        candidates, _, _ = await _waterfall_candidates(session, user, owed, currency, date, spillover_currencies)
+        plan = plan_waterfall(excess, candidates)
+    steps = plan.steps if plan is not None else []
+    leftover = plan.leftover if plan is not None else max(excess, ZERO)
+    primary_amount = _primary_amount(amount, primary_outstanding, leftover)
+    writes: list[tuple[str, Decimal, Decimal]] = []
+    if primary_amount > ZERO:
+        writes.append((currency, primary_amount, primary_amount))
+    writes.extend((step.currency, step.amount, step.cost) for step in steps)
+    # Each side's stated total is split across the rows in proportion to what each consumed of the
+    # payment, and `spread_remainder` makes the parts sum to the stated total EXACTLY. Neither person's
+    # account may end up moving a cent more or less than they said it did.
+    #
+    # Only for a side that NAMED an account. Mark-as-paid names none — the v1 default, and the only
+    # thing a name-only member's side can ever be — and a figure without an account behind it is
+    # refused outright, as a movement through nothing.
+    #
+    # Each side's account is loaded ONCE, before the loop, rather than per row: the rows differ only in
+    # which bucket they clear, and re-reading the same account for each would be a query inside a loop.
+    from_account = await _load_own_account(session, members_by_id[from_member_id], from_account_id) if from_account_id is not None else None
+    to_account = await _load_own_account(session, members_by_id[to_member_id], to_account_id) if to_account_id is not None else None
+    from_legs = _split_leg(from_amount if from_amount is not None else amount, writes, from_account.currency) if from_account is not None else {}
+    to_legs = _split_leg(to_amount if to_amount is not None else amount, writes, to_account.currency) if to_account is not None else {}
+    settings = await group_money_settings_repository.get_by_group_id(session, group_id)
+    auto_finalise = settings is not None and settings.auto_finalise_settlements
+    # Built in memory and written in ONE batch: a payment across several buckets is a single
+    # indivisible act, and flushing per row is a round trip per bucket for no gain.
+    rows: list[GroupSettlement] = []
+    for index, (bucket_currency, bucket_amount, _) in enumerate(writes):
+        from_leg = (
+            _leg_figure(from_account, from_legs.get(index), amount=bucket_amount, currency=bucket_currency, date=date)
+            if from_account is not None
+            else None
+        )
+        to_leg = (
+            _leg_figure(to_account, to_legs.get(index), amount=bucket_amount, currency=bucket_currency, date=date) if to_account is not None else None
+        )
+        rows.append(
+            GroupSettlement(
+                group_id=group_id,
+                from_member_id=from_member_id,
+                to_member_id=to_member_id,
+                date=date,
+                amount=bucket_amount,
+                currency=bucket_currency,
+                status=GroupSettlementStatus.confirmed if auto_finalise else GroupSettlementStatus.pending,
+                confirmed_at=utcnow() if auto_finalise else None,
+                from_account_id=from_account_id,
+                from_amount=from_leg,
+                to_account_id=to_account_id,
+                to_amount=to_leg,
+                notes=notes,
+                created_by=user.id,
+            ),
+        )
+    created = await group_settlement_repository.create_many(session, rows)
+    await session.commit()
+    # One refresh per row, which after a commit is what reading any field would cost anyway — every
+    # object is expired, so the alternative is the same fetches happening implicitly inside the response
+    # builder. Bounded by the number of currencies the payer owes in, so at most the supported set.
+    for settlement in created:
+        await session.refresh(settlement)
+    return [_build_response(settlement, members_by_id, viewer.id) for settlement in created]
+
+
 # Records a debt the creditor has given up on. It clears the same bucket a payment would and moves no
 # money, so it names no account and carries no cash leg.
 #
@@ -207,6 +377,12 @@ async def record_write_off(
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     if viewer.id != to_member_id:
         raise GroupSettlementNotCreditorError()
+    # Capped at the balance, unlike a payment. An overpaying PAYMENT is legal and flips the bucket —
+    # real money moved and the payee owes some back — but forgiving more than you are owed would leave
+    # the person you forgave owing you a negative amount, which no act produces. See the error.
+    outstanding = (await _owed_between(session, group_id, from_member_id, to_member_id)).get(currency, ZERO)
+    if amount > outstanding:
+        raise GroupWriteOffExceedsBalanceError(outstanding, currency)
     settlement = await group_settlement_repository.create(
         session,
         GroupSettlement(
@@ -344,6 +520,135 @@ async def ensure_no_outstanding_balance(session: AsyncSession, members: list[Gro
 # --- Internal ---
 
 
+# What one member owes another, per currency, according to the settle-up plan.
+#
+# Read from `minimise_transfers` rather than from the raw positions, and the difference is not
+# cosmetic: a member being a net debtor in a bucket does not mean they owe THIS payee — with three
+# people the minimiser is what decides who pays whom. Deriving it any other way here would be a second
+# answer to that question, and the two would disagree about who the payment is even for.
+#
+# Only buckets where this pair actually owes in this direction are returned, so the waterfall can never
+# apply money to a bucket where the payer is the one being owed.
+async def _owed_between(session: AsyncSession, group_id: int, from_member_id: int, to_member_id: int) -> dict[str, Decimal]:
+    positions = await _positions_by_currency(session, group_id)
+    owed: dict[str, Decimal] = {}
+    for currency, net in positions.items():
+        for transfer in minimise_transfers(net):
+            if transfer.from_member_id == from_member_id and transfer.to_member_id == to_member_id:
+                owed[currency] = transfer.amount
+    return owed
+
+
+# Prices each open bucket in the currency being paid, so the pure allocator never needs a rate.
+#
+# Converted at the PAYMENT's date, not today: the rate that matters is the one in force when the money
+# moved, which is how every other cross-currency figure in Renly is recorded. (`get_balances` converts
+# at today's for the opposite and equally deliberate reason — a displayed balance is a live position
+# with no single date behind it.)
+#
+# A bucket with no rate is dropped and named, never guessed at: converting at 1:1 or at a neighbouring
+# day's rate would move real money at a number nobody agreed to.
+async def _waterfall_candidates(
+    session: AsyncSession,
+    user: User,
+    owed: dict[str, Decimal],
+    currency: str,
+    date: date_type,
+    spillover_currencies: list[str] | None,
+) -> tuple[list[WaterfallCandidate], dict[str, Decimal], set[str]]:
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    candidates: list[WaterfallCandidate] = []
+    costs: dict[str, Decimal] = {}
+    skipped: set[str] = set()
+    for bucket_currency, outstanding in owed.items():
+        cost = convert_optional(outstanding, bucket_currency, currency, lookup, date)
+        if cost is None or cost <= ZERO:
+            skipped.add(bucket_currency)
+            continue
+        costs[bucket_currency] = cost
+        if spillover_currencies is None or bucket_currency in spillover_currencies:
+            candidates.append(WaterfallCandidate(currency=bucket_currency, outstanding=outstanding, cost=cost))
+    return (candidates, costs, skipped)
+
+
+# What the settlement against the bucket being PAID comes to.
+#
+# It takes whatever the payment covers of that bucket, PLUS the leftover — which is what makes the cash
+# reconcile: this figure plus every step's cost is exactly what was handed over.
+#
+# The `min` is what keeps a partial payment honest: paying 1,000 against a 3,000 balance must record
+# 1,000, not the balance. And with nothing ticked the leftover is the whole excess, so this becomes the
+# single overpaying settlement — the behaviour with no waterfall at all.
+#
+# Zero only when the payer owed nothing in the currency they paid and every cent of it spilled, in
+# which case there is no row to write against that bucket. It cannot leave a payment with no rows at
+# all: with no steps the leftover is the entire amount, which is positive.
+#
+# ONE function, called by the preview and by the write, because the payer confirms this number and
+# then it is recorded — two derivations of it would be two things that can disagree about what they
+# just agreed to.
+def _primary_amount(amount: Decimal, primary_outstanding: Decimal, leftover: Decimal) -> Decimal:
+    return min(amount, primary_outstanding) + leftover
+
+
+# Gives every part at least one minor unit, taking the shortfall off the largest, so the parts still
+# sum to exactly what they did before.
+#
+# A part rounds to nothing when its share of the payment is smaller than the account's smallest unit —
+# which is NOT only an absurd figure: a fifteen-peso row paid from a dollar account really is worth
+# less than a cent, and refusing that would block a legitimate small payment. One minor unit is the
+# honest floor for money that did move, and it is taken from the largest part rather than added, so
+# the total the payer stated is preserved to the cent.
+#
+# The caller guarantees there is room: it refuses any total below one unit per part. Only a part of
+# exactly zero is reachable today — the remainder is positive and `spread_remainder` takes at most one
+# unit off each part — but the test is `<= 0` because a part that somehow went negative needs lifting
+# more urgently, not less, and a guard that says so costs nothing.
+def _lift_zero_parts(parts: dict[int, Decimal]) -> dict[int, Decimal]:
+    empty = [index for index, part in parts.items() if part <= ZERO]
+    if not empty:
+        return parts
+    lifted = dict(parts)
+    for index in empty:
+        lifted[index] = MONEY_PLACES
+        largest = max((key for key in lifted if key not in empty), key=lambda key: lifted[key])
+        lifted[largest] -= MONEY_PLACES
+    return lifted
+
+
+# Divides one side's stated cash total across the rows a payment writes, in proportion to what each
+# consumed of it, summing to the stated total exactly.
+#
+# The proportion is over the payment's own currency, which is the only scale the rows share. It is a
+# decomposition of a figure the payer actually stated rather than a conversion at a market rate — so a
+# payment made at a rate their bank gave them stays recorded at that rate, across every row.
+#
+# With a same-currency account and no stated total this returns each row its own amount, which is what
+# `_resolve_leg` then normalises back to None. One rule covers both cases rather than a branch.
+def _split_leg(total: Decimal, writes: list[tuple[str, Decimal, Decimal]], account_currency: str) -> dict[int, Decimal]:
+    # A row whose bucket is already in the account's own currency crosses nothing, so it moves exactly
+    # what it clears — no rate is involved and none may be implied. Taking a proportional share here
+    # instead would claim the account paid, say, 8.58 dollars to clear a 10-dollar bucket, which is a
+    # contradiction the leg rule rightly refuses.
+    fixed = {index: bucket_amount for index, (bucket_currency, bucket_amount, _) in enumerate(writes) if bucket_currency == account_currency}
+    crossing = [(index, cost) for index, (bucket_currency, _, cost) in enumerate(writes) if bucket_currency != account_currency]
+    crossing_cost = sum(cost for _, cost in crossing)
+    if not crossing or crossing_cost <= ZERO:
+        return fixed
+    # Every row has to move at least one minor unit, so the total has to cover the rows that crossed
+    # nothing PLUS one unit each for the rest. Below that there is no split at all: some row would
+    # record having moved nothing, which a DB CHECK refuses — as a 500, on a form filled in wrong.
+    minimum = sum(fixed.values()) + MONEY_PLACES * len(crossing)
+    if total < minimum:
+        raise GroupSettlementLegTotalTooSmallError(minimum, account_currency)
+    # What is left of the stated total after the rows that crossed nothing, split between the rest in
+    # proportion to what each consumed of the payment. `spread_remainder` makes the parts sum to it
+    # EXACTLY: the payer's account may not end up moving a cent more or less than they said it did.
+    remainder = total - sum(fixed.values())
+    parts = spread_remainder({index: quantize(remainder * cost / crossing_cost, MONEY_PLACES) for index, cost in crossing}, remainder, MONEY_PLACES)
+    return {**fixed, **_lift_zero_parts(parts)}
+
+
 # One group's positions, keyed by currency then seat.
 #
 # Delegates to the batched form with a single id rather than running its own pair of queries: the
@@ -423,6 +728,12 @@ async def _resolve_leg(
             raise GroupSettlementLegWithoutAccountError()
         return None
     account = await _load_own_account(session, member, account_id)
+    return _leg_figure(account, leg_amount, amount=amount, currency=currency, date=date)
+
+
+# The leg rule itself, over an account already in hand. Split from the load above so the waterfall can
+# fetch each side's account ONCE and then apply this per row, rather than issuing a query inside a loop.
+def _leg_figure(account: Account, leg_amount: Decimal | None, *, amount: Decimal, currency: str, date: date_type) -> Decimal | None:
     _ensure_account_open(account, date)
     if account.currency == currency:
         # No conversion happened, so the account moved exactly what came off the bucket. A different

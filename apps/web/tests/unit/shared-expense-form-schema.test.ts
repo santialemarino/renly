@@ -362,7 +362,12 @@ describe('buildSettlementLegFormSchema', () => {
 });
 
 describe('buildWriteOffFormSchema', () => {
-  const schema = buildWriteOffFormSchema({ requiredMsg: 'required', positiveMsg: 'positive' });
+  const schema = buildWriteOffFormSchema({
+    requiredMsg: 'required',
+    positiveMsg: 'positive',
+    outstanding: '30000.00',
+    exceedsMsg: 'exceeds',
+  });
 
   it('takes a date and a positive amount', () => {
     expect(schema.safeParse({ date: '2026-08-30', amount: '30000.00', notes: '' }).success).toBe(
@@ -370,6 +375,27 @@ describe('buildWriteOffFormSchema', () => {
     );
     expect(schema.safeParse({ date: '2026-08-30', amount: '0', notes: '' }).success).toBe(false);
     expect(schema.safeParse({ date: '', amount: '30000.00', notes: '' }).success).toBe(false);
+  });
+
+  it('forgives part of the debt', () => {
+    // The whole point of leaving the field editable: what is left simply stays outstanding.
+    expect(schema.safeParse({ date: '2026-08-30', amount: '10000.00', notes: '' }).success).toBe(
+      true,
+    );
+  });
+
+  /*
+   * The asymmetry with a payment, mirrored from the API.
+   *
+   * An overpaying PAYMENT is legal and flips the balance — real money moved and the payee owes some
+   * back. Forgiving more than you are owed would leave the person you forgave owed money by you, out
+   * of nothing, which no act produces. One cent over, because the boundary is the balance and not
+   * "roughly it".
+   */
+  it('refuses more than the balance holds, by a cent', () => {
+    const result = schema.safeParse({ date: '2026-08-30', amount: '30000.01', notes: '' });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe('exceeds');
   });
 });
 

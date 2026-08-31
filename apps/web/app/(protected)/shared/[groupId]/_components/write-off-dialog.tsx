@@ -78,13 +78,22 @@ export function WriteOffDialog({
 
   const today = todayInTimezone(timeZone);
 
+  // The balance this is capped at. Zero only while the dialog is closing with nothing retained, which
+  // the body never renders — every real open carries a suggestion, and a suggestion is a debt.
+  const outstanding = shown?.amount ?? '0';
+
   const schema = useMemo(
     () =>
       buildWriteOffFormSchema({
         requiredMsg: tCommon('form.errors.required'),
         positiveMsg: t('pots.form.mustBePositive'),
+        outstanding,
+        exceedsMsg: t('settlements.writeOff.exceeds', {
+          amount: fmt.amount(outstanding, shownCurrency),
+          currency: shownCurrency,
+        }),
       }),
-    [t, tCommon],
+    [fmt, outstanding, shownCurrency, t, tCommon],
   );
 
   const toValues = (entity: GroupSettleSuggestion | undefined): WriteOffFormValues => ({
@@ -159,6 +168,14 @@ export function WriteOffDialog({
                         placeholder={t('settlements.writeOff.amount.placeholder')}
                       />
                     </FormControl>
+                    {/*
+                     * Says the rule before the field can break it, the way the settle dialog's own
+                     * amount hint does — and the rule is the OPPOSITE there, so leaving this blank
+                     * would let somebody carry the wrong expectation across two adjacent dialogs.
+                     */}
+                    <p className="text-paragraph-xs text-muted-foreground">
+                      {t('settlements.writeOff.amount.hint')}
+                    </p>
                     <FormMessage />
                   </FormItem>
                 )}

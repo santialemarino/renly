@@ -80,6 +80,26 @@ interface GroupSettlementRaw {
   updated_at: string;
 }
 
+interface GroupSettlementPlanBucketRaw {
+  currency: string;
+  outstanding: string;
+  cost: string;
+  amount: string;
+  applied_cost: string;
+  selected: boolean;
+}
+
+interface GroupSettlementPlanRaw {
+  currency: string;
+  amount: string;
+  primary_outstanding: string;
+  excess: string;
+  primary_amount: string;
+  buckets: GroupSettlementPlanBucketRaw[];
+  leftover: string;
+  skipped_currencies: string[];
+}
+
 interface GroupMoneySettingsRaw {
   group_id: number;
   default_split_method: SplitMethod;
@@ -124,6 +144,44 @@ export interface GroupBalances {
   // has been shared yet, which the caller tells apart by whether any expense exists.
   buckets: GroupCurrencyBalance[];
   displayCurrency: string | null;
+  skippedCurrencies: string[];
+}
+
+/*
+ * One bucket an overpayment could reach, and what the plan does with it.
+ *
+ * TWO CURRENCIES in one object, and reading either as the other is the mistake to avoid: `outstanding`
+ * and `amount` are in this bucket's own currency, `cost` and `appliedCost` in the one being paid. A
+ * row where `amount` is less than `outstanding` is a partial — the excess ran out part way through it.
+ */
+export interface GroupSettlementPlanBucket {
+  currency: string;
+  outstanding: string;
+  cost: string;
+  amount: string;
+  appliedCost: string;
+  selected: boolean;
+}
+
+/*
+ * Where a payment bigger than its bucket would land. A dry run — nothing is written.
+ *
+ * `excess` is zero whenever the payment does not exceed the bucket it names, which is the ordinary
+ * case and the signal to record it the plain way instead. `leftover` is a credit rather than an error:
+ * money handed over that no ticked bucket absorbed, which flips the paid bucket by exactly that much.
+ */
+export interface GroupSettlementPlan {
+  currency: string;
+  amount: string;
+  primaryOutstanding: string;
+  excess: string;
+  // What the settlement against the paid bucket will be — read rather than re-derived, because the
+  // confirm step names this figure and then it is recorded. Zero writes no such row at all.
+  primaryAmount: string;
+  // EVERY reachable bucket, costliest first — including the unticked ones, so the confirm step
+  // renders one list of checkboxes from one field rather than reconciling two.
+  buckets: GroupSettlementPlanBucket[];
+  leftover: string;
   skippedCurrencies: string[];
 }
 
@@ -224,6 +282,33 @@ function mapSettlement(raw: GroupSettlementRaw): GroupSettlement {
     canDelete: raw.can_delete,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
+  };
+}
+
+function mapPlanBucket(raw: GroupSettlementPlanBucketRaw): GroupSettlementPlanBucket {
+  return {
+    currency: raw.currency,
+    outstanding: raw.outstanding,
+    cost: raw.cost,
+    amount: raw.amount,
+    appliedCost: raw.applied_cost,
+    selected: raw.selected,
+  };
+}
+
+// Exported because the preview is a POST and therefore reaches the client through a Server Action
+// rather than through this module — the mapper still lives here so a snake_case wire shape never
+// escapes the API boundary into a component.
+export function mapSettlementPlan(raw: GroupSettlementPlanRaw): GroupSettlementPlan {
+  return {
+    currency: raw.currency,
+    amount: raw.amount,
+    primaryOutstanding: raw.primary_outstanding,
+    excess: raw.excess,
+    primaryAmount: raw.primary_amount,
+    buckets: raw.buckets.map(mapPlanBucket),
+    leftover: raw.leftover,
+    skippedCurrencies: raw.skipped_currencies,
   };
 }
 

@@ -505,6 +505,56 @@ class GroupSettlementWriteOffHasNoLegError(DomainError):
         super().__init__(self.message)
 
 
+# The payer says less left their account than this payment could possibly have moved through it.
+#
+# Reachable only through the waterfall, where one payment writes several rows and each has to move
+# something. Two ways to fall under it, and the minimum covers both: a row whose bucket is already in
+# the account's currency leaves it one for one, so it alone accounts for part of the total; and every
+# other row needs at least one minor unit, since a row recording that it moved nothing is refused by
+# `group_settlements_positive_legs` — as a 500, on a form somebody filled in wrong.
+#
+# The figure named is therefore exact rather than indicative: what the same-currency rows move, plus
+# one unit for each row that crosses. Mapped to 400.
+class GroupSettlementLegTotalTooSmallError(DomainError):
+    code = "group_settlement_leg_total_too_small"
+    status_code = 400
+
+    def __init__(self, minimum: Decimal, currency: str) -> None:
+        self.minimum = minimum
+        self.currency = currency
+        self.message = f"At least {minimum} {currency} must have left that account for this payment — each balance it clears has to move something."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"minimum": str(self.minimum), "currency": self.currency}
+
+
+# A write-off is for more than the bucket actually holds.
+#
+# Refused, unlike an overpaying PAYMENT, which is legal and flips the balance — the two look alike and
+# are not. A payment is a real-world act that can genuinely exceed the debt: money changed hands, and
+# the payee simply owes some back. A write-off is a creditor giving up a claim, so writing off more
+# than the claim would create a debt in the other direction out of nothing — the debtor would end up
+# owed money by the person who forgave them. There is no act that does that, so it is a typo every
+# time. Mapped to 400.
+class GroupWriteOffExceedsBalanceError(DomainError):
+    code = "group_write_off_exceeds_balance"
+    status_code = 400
+
+    def __init__(self, outstanding: Decimal, currency: str) -> None:
+        self.outstanding = outstanding
+        self.currency = currency
+        # The figure is named because it is the whole of what the user has to do about it, and it is
+        # not on screen in every place this can be reached from.
+        self.message = f"You can write off at most {outstanding} {currency} — that is the whole balance."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"outstanding": str(self.outstanding), "currency": self.currency}
+
+
 # A settlement or write-off names a member who is not a real, active seat in the group — or names the
 # same seat on both sides, which would move one balance in two directions and clear nothing. Mapped to
 # 400 by the API.

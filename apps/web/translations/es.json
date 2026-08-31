@@ -2626,7 +2626,7 @@
         "amount": {
           "label": "Monto ({currency})",
           "placeholder": "Ingresá el monto",
-          "hint": "Viene con el saldo completo. Menos es un pago parcial; más da vuelta el saldo."
+          "hint": "Prellenado con el saldo completo. Menos es un pago parcial; de más va a tus otros saldos con esta persona, o da vuelta este si no hay ninguno."
         },
         "date": {
           "label": "Fecha",
@@ -2652,13 +2652,30 @@
         "error": "No se pudo registrar el pago.",
         "sameMember": "Un pago mueve dinero entre dos personas distintas."
       },
+      "plan": {
+        "title": "A dónde va lo que sobra",
+        "description": "Este pago es más grande que el saldo que cancela. Elegí a cuáles de los otros saldos va lo que sobra.",
+        "intro": "{excess} {currency} más que este saldo. A la cotización de la fecha del pago, puede ir a:",
+        "owed": "{amount} {currency} de deuda",
+        "skipped": "Queda sin tocar.",
+        "clears": "Se cancela por completo, usando {cost} {currency}.",
+        "partly": "{amount} {bucketCurrency} de ese saldo, usando los {cost} {currency} que quedaban.",
+        "outOfReach": "Lo que sobraba se terminó antes de llegar acá: cancelarlo necesitaría {cost} {currency}.",
+        "willRecord": "{count, plural, one {Se registra # pago} other {Se registran # pagos}}",
+        "rowLabel": "En {currency}",
+        "leftover": "Sobran {amount} {currency}, así que ese saldo se da vuelta y pasan a debértelos a vos.",
+        "skippedCurrencies": "No hay cotización para {currencies}, así que ahí no se aplica nada.",
+        "back": "Volver",
+        "cta": "Confirmar y registrar"
+      },
       "writeOff": {
         "title": "Dar este saldo por perdido",
         "description": "{from} te debe {amount} {currency}. Darlo por perdido salda el saldo sin que se mueva dinero.",
         "warning": "Tu patrimonio baja por lo que dejás de cobrar. No se registra ningún gasto: dar un saldo por perdido abarca muchos gastos y no pertenece a ninguno en particular.",
         "amount": {
           "label": "Monto ({currency})",
-          "placeholder": "Ingresá el monto"
+          "placeholder": "Ingresá el monto",
+          "hint": "Menos perdona una parte y el resto sigue pendiente. No podés dar por perdido más que el saldo."
         },
         "date": {
           "label": "Fecha",
@@ -2669,7 +2686,8 @@
         },
         "cta": "Dar por perdido",
         "success": "Saldo dado por perdido.",
-        "error": "No se pudo dar el saldo por perdido."
+        "error": "No se pudo dar el saldo por perdido.",
+        "exceeds": "Podés dar por perdido como máximo {amount} {currency}: ese es el saldo completo."
       },
       "leg": {
         "title": "¿Cuál de tus cuentas?",
@@ -3624,11 +3642,13 @@
     "group_settlement_foreign_leg": "Solo podés registrar por cuál de tus propias cuentas se movió el dinero. La otra persona registra la suya.",
     "group_settlement_leg_amount_required": "Este pago cancela un saldo en {bucket_currency} desde una cuenta en {account_currency}, así que tiene que indicar cuánto se movió en {account_currency}.",
     "group_settlement_leg_amounts_must_match": "Dentro de una misma moneda, un pago mueve exactamente lo que cancela. Registrá una comisión como un gasto aparte.",
+    "group_settlement_leg_total_too_small": "Tienen que haber salido al menos {minimum} {currency} de esa cuenta para este pago: cada saldo que cancela tiene que mover algo.",
     "group_settlement_leg_without_account": "El monto en efectivo de un pago necesita la cuenta por la que se movió.",
     "group_settlement_not_creditor": "Solo la persona a la que le deben puede dar un saldo por perdido.",
     "group_settlement_not_payee": "Solo la persona que recibió el dinero puede confirmar un pago.",
     "group_settlement_same_member": "Un pago mueve dinero entre dos personas distintas.",
     "group_settlement_write_off_has_no_leg": "Un saldo dado por perdido no movió dinero, así que no se le puede asociar ninguna cuenta.",
+    "group_write_off_exceeds_balance": "Podés dar por perdido como máximo {outstanding} {currency}: ese es el saldo completo.",
     "has_linked_expenses": "Esta tarjeta de crédito tiene gastos asociados. Archivala en lugar de eliminarla.",
     "installment_locked_field": "Los campos bloqueados de la cuota ({fields}) no se pueden cambiar después de que se cobró la primera cuota.",
     "integrity_conflict": "El cambio genera un conflicto con datos existentes.",
