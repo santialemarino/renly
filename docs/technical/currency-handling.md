@@ -279,6 +279,8 @@ Three legs rather than two because a settlement moves money between **two differ
 
 **A shared expense is single-currency by construction.** Its amount, its splits and its balance bucket are all the same currency, and its funding account must match it (`400 account_currency_mismatch`) — the account sum carries one amount, so a mismatched link would subtract a foreign figure straight from the balance. Only the **settlement** crosses currencies, which is where the conversion belongs: it is the moment somebody actually agreed a rate.
 
+**Every figure the balances surface renders names its own currency, and that is not decoration.** A bucket's amounts carry no code of their own (the bucket's badge says which), so the converted glance beside them has to state its currency or the two read as one scale — "≈ 32.48" next to "50,000" is two numbers in two currencies with nothing on screen telling them apart. The same rule makes the group's expense and settlement tables append the code to each money cell: both hold every currency the group has ever used, side by side and never converted, so a bare `120` beside a bare `90,000` would leave the reader to guess which is dollars. And where a row's own amount IS converted — a shared row in `/expenses` — the sub-line restates the share _and_ the whole in the row's original currency, so it stays a complete fact rather than inviting a ratio against the converted figure above it. `skipped_currencies` is stated out loud for the same reason: a bucket that carries no glance while its neighbour does deserves the reason rather than a guess.
+
 ## Data model
 
 ```sql

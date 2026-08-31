@@ -217,6 +217,12 @@
     "pagination": {
       "previous": "Anterior",
       "next": "Siguiente"
+    },
+    "expenseScope": {
+      "label": "¿Para quién es?",
+      "private": "Solo para mí",
+      "groupsHeading": "Compartido con",
+      "hint": "Un gasto compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio gasto."
     }
   },
   "login": {
@@ -602,7 +608,8 @@
       "empty": "No se encontraron gastos.",
       "emptyTitle": "Seguí tus gastos",
       "emptyDescription": "Registrá cada gasto para ver en qué se va tu dinero y cómo evoluciona en el tiempo.",
-      "total": "{total, plural, one {# gasto} other {# gastos}}"
+      "total": "{total, plural, one {# gasto} other {# gastos}}",
+      "shareOf": "Tu parte: {share} de {amount} {currency}"
     },
     "actions": {
       "edit": "Editar",
@@ -2419,6 +2426,276 @@
           "myShare": "Tu parte"
         }
       }
+    },
+    "balances": {
+      "title": "Saldos",
+      "description": "Quién le debe a quién, en cada moneda. Los montos en monedas distintas nunca se combinan.",
+      "empty": {
+        "nothingShared": {
+          "title": "Todavía no hay nada compartido",
+          "description": "Registrá un gasto compartido y acá va a aparecer el saldo de cada integrante."
+        },
+        "allSquare": {
+          "title": "Están todos a mano",
+          "description": "Todos los saldos de este grupo están saldados o dados por perdidos."
+        }
+      },
+      "standing": {
+        "owed": "Te deben {amount}",
+        "owing": "Debés {amount}",
+        "square": "Estás a mano"
+      },
+      "glance": "≈ {amount} {currency} al tipo de cambio de hoy",
+      "position": {
+        "owed": "tiene a favor {amount}",
+        "owing": "debe {amount}",
+        "square": "está a mano"
+      },
+      "plan": {
+        "title": "Pagos sugeridos",
+        "youPay": "Le pagás {amount} a {to}",
+        "paysYou": "{from} te paga {amount}",
+        "pays": "{from} le paga {amount} a {to}",
+        "settle": "Saldar",
+        "writeOff": "Dar por perdido"
+      },
+      "skipped": "Todavía no hay tipo de cambio a {currency}, así que no se muestra el equivalente de {currencies}. Los saldos en sí no cambian."
+    },
+    "expenses": {
+      "title": "Gastos compartidos",
+      "description": "Lo que este grupo gastó en conjunto. Cualquier integrante puede agregar y editar.",
+      "add": "Agregar gasto",
+      "emptyTitle": "Todavía no hay gastos compartidos",
+      "emptyDescription": "Agregá el primero y Renly lo divide entre las personas que elijas.",
+      "table": {
+        "date": "Fecha",
+        "amount": "Monto",
+        "category": "Categoría",
+        "paidBy": "Pagado por",
+        "notes": "Notas",
+        "actions": "Acciones",
+        "total": "{total, plural, one {# gasto compartido} other {# gastos compartidos}}",
+        "yourShare": "Tu parte: {amount}",
+        "joint": "Dinero conjunto",
+        "jointNamed": "Dinero conjunto · {account}"
+      },
+      "actions": {
+        "edit": "Editar",
+        "delete": "Eliminar"
+      },
+      "delete": {
+        "title": "¿Eliminar este gasto compartido?",
+        "description": "La parte de cada persona desaparece y los saldos se recalculan.",
+        "confirm": "Eliminar",
+        "success": "Gasto compartido eliminado.",
+        "error": "No se pudo eliminar el gasto compartido."
+      },
+      "form": {
+        "titleCreate": "Nuevo gasto compartido",
+        "titleEdit": "Editar gasto compartido",
+        "description": "Todos los integrantes de {group} ven este gasto y su propia parte.",
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "currency": {
+          "label": "Moneda",
+          "placeholder": "Seleccioná una moneda",
+          "searchPlaceholder": "Buscar monedas...",
+          "noResults": "No se encontraron monedas"
+        },
+        "amount": {
+          "label": "Monto total",
+          "placeholder": "Ingresá el monto total"
+        },
+        "category": {
+          "label": "Categoría",
+          "placeholder": "Seleccioná una categoría"
+        },
+        "funding": {
+          "label": "De dónde salió el dinero",
+          "member": "El dinero de un integrante",
+          "joint": "Dinero conjunto"
+        },
+        "sharedAccount": {
+          "label": "Cuenta compartida",
+          "placeholder": "Seleccioná una cuenta compartida",
+          "empty": "No hay ninguna cuenta compartida en {currency}",
+          "hint": "El dinero conjunto lo pone cada dueño en su propia proporción, así que no hay una única persona que pague."
+        },
+        "payer": {
+          "label": "Quién pagó",
+          "placeholder": "Seleccioná quién pagó",
+          "hintSelf": "Ponés el monto completo; la parte de cada persona es lo que te debe.",
+          "hintOther": "Renly registra que esa persona pagó. Con qué cuenta o tarjeta lo hizo solo lo ve ella."
+        },
+        "account": {
+          "label": "Pagado desde",
+          "hint": "De esta cuenta sale el monto completo. Quién le debe a quién después lo resuelve la división."
+        },
+        "splitMethod": {
+          "label": "Cómo dividirlo",
+          "reopenedAsExact": "Se reabrió como montos exactos. Solo se guardan los montos que produjo la división, nunca los porcentajes que la generaron."
+        },
+        "notes": {
+          "label": "Notas",
+          "placeholder": "Notas opcionales..."
+        },
+        "cta": "Guardar",
+        "createSuccess": "Gasto compartido registrado.",
+        "updateSuccess": "Gasto compartido actualizado.",
+        "saveError": "No se pudo guardar el gasto compartido.",
+        "formerSeats": "{count, plural, one {Hay alguien en esta división que ya no está en el grupo: {names}. Quitalo para poder guardar.} other {Hay integrantes en esta división que ya no están en el grupo: {names}. Quitalos para poder guardar.}}"
+      },
+      "split": {
+        "participants": {
+          "label": "Quiénes participaron"
+        },
+        "hint": {
+          "equal": "Se divide en partes iguales entre las personas tildadas.",
+          "exact": "Indicá el monto exacto de cada persona. Tienen que sumar el monto total.",
+          "shares": "Asigná un peso a cada persona: 2 a 1 significa el doble.",
+          "percentage": "Asigná un porcentaje a cada persona. Tienen que sumar 100."
+        },
+        "total": "Total",
+        "errors": {
+          "participants": "Elegí al menos una persona.",
+          "exact": "Los montos tienen que sumar el monto total.",
+          "shares": "Al menos una persona necesita un peso mayor que cero.",
+          "percentage": "Los porcentajes tienen que sumar 100."
+        },
+        "figurePlaceholder": {
+          "exact": "Monto",
+          "shares": "Partes",
+          "percentage": "Porcentaje"
+        },
+        "methods": {
+          "equal": "En partes iguales",
+          "exact": "Montos exactos",
+          "shares": "Partes",
+          "percentage": "Porcentajes"
+        },
+        "formerMember": "(ya no participa)"
+      }
+    },
+    "settlements": {
+      "title": "Pagos del grupo",
+      "description": "Pagos entre integrantes y saldos que alguien dio por perdidos.",
+      "emptyTitle": "Todavía no se saldó nada",
+      "emptyDescription": "Acá se van a listar los pagos y los saldos dados por perdidos.",
+      "table": {
+        "date": "Fecha",
+        "between": "Entre",
+        "amount": "Monto",
+        "status": "Estado",
+        "notes": "Notas",
+        "actions": "Acciones",
+        "pair": "{from} → {to}",
+        "leg": "{amount} {currency} a través de {account}"
+      },
+      "status": {
+        "pending": "Pendiente",
+        "confirmed": "Confirmado",
+        "written_off": "Dado por perdido"
+      },
+      "actions": {
+        "confirm": "Confirmar que lo recibiste",
+        "unconfirm": "Deshacer la confirmación",
+        "attachAccount": "Tu cuenta",
+        "remove": "Eliminar"
+      },
+      "confirmSuccess": "Marcado como recibido.",
+      "unconfirmSuccess": "Confirmación deshecha.",
+      "actionError": "No se pudo actualizar el pago.",
+      "remove": {
+        "title": "¿Eliminar este registro?",
+        "description": {
+          "payment": "El saldo vuelve a lo que era antes de este pago.",
+          "writeOff": "El saldo que diste por perdido vuelve a estar pendiente."
+        },
+        "confirm": "Eliminar",
+        "success": "Eliminado."
+      },
+      "form": {
+        "title": "Saldar",
+        "description": {
+          "youPay": "Estás registrando un pago que le hiciste a {to}.",
+          "paysYou": "Estás registrando un pago que {from} te hizo.",
+          "pays": "Estás registrando un pago que {from} le hizo a {to}."
+        },
+        "amount": {
+          "label": "Monto ({currency})",
+          "placeholder": "Ingresá el monto",
+          "hint": "Viene con el saldo completo. Menos es un pago parcial; más da vuelta el saldo."
+        },
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "account": {
+          "labelOut": "Pagado desde",
+          "labelIn": "Recibido en",
+          "none": "Sin cuenta",
+          "hint": "Solo tus propias cuentas. La otra persona registra la suya."
+        },
+        "legAmount": {
+          "label": "Monto en {currency}",
+          "placeholder": "Ingresá el monto",
+          "hint": "Esta cuenta está en otra moneda, así que indicá cuánto se movió realmente por ella."
+        },
+        "notes": {
+          "label": "Notas",
+          "placeholder": "Notas opcionales..."
+        },
+        "cta": "Registrar pago",
+        "success": "Pago registrado.",
+        "error": "No se pudo registrar el pago.",
+        "sameMember": "Un pago mueve dinero entre dos personas distintas."
+      },
+      "writeOff": {
+        "title": "Dar este saldo por perdido",
+        "description": "{from} te debe {amount} {currency}. Darlo por perdido salda el saldo sin que se mueva dinero.",
+        "warning": "Tu patrimonio baja por lo que dejás de cobrar. No se registra ningún gasto: dar un saldo por perdido abarca muchos gastos y no pertenece a ninguno en particular.",
+        "amount": {
+          "label": "Monto ({currency})",
+          "placeholder": "Ingresá el monto"
+        },
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Seleccioná una fecha"
+        },
+        "notes": {
+          "placeholder": "Notas opcionales..."
+        },
+        "cta": "Dar por perdido",
+        "success": "Saldo dado por perdido.",
+        "error": "No se pudo dar el saldo por perdido."
+      },
+      "leg": {
+        "title": "¿Cuál de tus cuentas?",
+        "description": "Un pago de {amount} {currency} de {from} a {to}. Indicá por cuál de tus cuentas pasó, para que se refleje en tu saldo.",
+        "clear": "Sin cuenta",
+        "hint": "Solo tu lado. La otra persona registra el suyo.",
+        "cta": "Guardar",
+        "success": "Cuenta guardada.",
+        "error": "No se pudo guardar la cuenta."
+      }
+    },
+    "moneySettings": {
+      "title": "Ajustes del dinero compartido",
+      "description": "Los criterios que este grupo usa cuando gasta en conjunto.",
+      "open": "Ajustes de dinero",
+      "cta": "Guardar",
+      "defaultSplit": {
+        "label": "División por defecto",
+        "hint": "Con qué arranca un gasto compartido nuevo. Se puede cambiar en cada gasto."
+      },
+      "autoFinalise": {
+        "label": "Confirmar los pagos automáticamente",
+        "hint": "Un pago registrado cuenta al instante, sin esperar la confirmación de quien lo recibió. Pensado para grupos que se tienen confianza."
+      },
+      "success": "Ajustes guardados.",
+      "error": "No se pudieron guardar los ajustes."
     }
   },
   "preferences": {
