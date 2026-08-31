@@ -9,6 +9,7 @@ import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint'
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getExpenses } from '@/lib/api/expenses';
+import { getGroups } from '@/lib/api/groups';
 import { getInstallments } from '@/lib/api/installments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getPaymentObligations } from '@/lib/api/payment-obligations';
@@ -41,7 +42,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const params = await searchParams;
   const cookieStore = await cookies();
 
-  const [{ settings, creditCards }, supportedCurrencies, accounts] = await Promise.all([
+  const [{ settings, creditCards }, supportedCurrencies, accounts, groups] = await Promise.all([
     getPageSettings(),
     // Entry forms restrict their currency picker to the convertible set; on a fetch error the
     // picker degrades to the full list and the API's 422 still guards.
@@ -52,6 +53,12 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
      * blank picker; the picker only ever OFFERS active accounts.
      */
     getAccounts({ showArchived: true }).catch(() => []),
+    /*
+     * The groups the user belongs to, which is what turns the entry form's scope control on. Empty
+     * for every solo user — which is every public user at launch — and then the control renders
+     * nothing at all, so a solo user sees no added friction (X3).
+     */
+    getGroups().catch(() => []),
   ]);
   const primary = settings?.primaryCurrency ?? FALLBACK_PRIMARY_CURRENCY;
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
@@ -125,6 +132,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}
         accounts={accounts}
+        groups={groups}
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}

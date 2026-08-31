@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Lock, Pencil, Receipt, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import {
+  Badge,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@repo/ui/components';
 import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
@@ -244,12 +252,38 @@ export function ExpensesDataTable({
               />
             ) : (
               items.map((expense) => (
-                <TableRow key={expense.id}>
+                /*
+                 * Keyed on scope AND id, because ids are unique per TABLE and not across them: the
+                 * union really can put a private expense and a shared one with the same number on
+                 * one page, which as a bare `id` is a duplicate React key.
+                 */
+                <TableRow key={`${expense.scope}-${expense.id}`}>
                   <TableCell>{fmt.date(expense.date)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
                     {fmt.amount(
                       expense.convertedAmount ?? expense.amount,
                       expense.convertedAmount ? activeCurrency : expense.currency,
+                    )}
+                    {/*
+                     * A shared row's amount is the viewer's SHARE of a larger bill, and without
+                     * saying so it reads exactly like a solo expense of that size.
+                     *
+                     * The sub-line restates the share AND the whole in the row's OWN currency, and
+                     * names it. Both halves are load-bearing: the cell above may have been converted
+                     * to the display currency, so a bare "of 120 USD" beneath a converted "61,618"
+                     * puts two figures in two currencies side by side with an arithmetic relation a
+                     * reader would try to check and could not. Restating the share makes this line a
+                     * complete, self-consistent fact whatever the cell above happens to be showing.
+                     */}
+                    {expense.scope === 'shared' && expense.fullAmount !== null && (
+                      <span className="flex flex-wrap items-center justify-start gap-x-2 text-paragraph-xs text-muted-foreground">
+                        {expense.groupName && <Badge variant="outline">{expense.groupName}</Badge>}
+                        {t('table.shareOf', {
+                          share: fmt.amount(expense.amount, expense.currency),
+                          amount: fmt.amount(expense.fullAmount, expense.currency),
+                          currency: expense.currency,
+                        })}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>

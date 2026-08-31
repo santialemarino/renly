@@ -17,6 +17,12 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
+import {
+  ExpenseScopeField,
+  PRIVATE_SCOPE,
+  toHandover,
+  type ExpenseHandover,
+} from '@/app/(protected)/_components/expense-scope-field';
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import {
   LinkedObligationSelect,
@@ -52,6 +58,7 @@ import { StyledHint } from '@/components/styled-hint';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Expense } from '@/lib/api/expenses';
+import type { Group } from '@/lib/api/groups';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
@@ -83,6 +90,19 @@ interface ExpenseFormDialogProps {
   onOpenChange: (open: boolean) => void;
   expense?: Expense;
   prefillFromObligation?: PrefillFromObligation;
+  /*
+   * The groups the user belongs to, which turns on the scope control. Supplied only by the expenses
+   * toolbar, because it is the only caller with a shared-expense form to swap to — the calendar and
+   * the obligations table both open this dialog for one specific private entry.
+   */
+  scopeGroups?: Group[];
+  // Fires when the user picks a group, handing back what they have typed so far so the swap loses
+  // nothing. The CALLER swaps the form: a private expense and a shared one are different records in
+  // different tables, so no single form could submit either.
+  onScopeChange?: (scope: string, values: ExpenseHandover) => void;
+  // Values carried in from a scope swap the other way, so switching back from the shared form loses
+  // nothing either. Ignored in edit mode and on the Mark-Paid path, which both seed themselves.
+  prefill?: ExpenseHandover;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
@@ -167,6 +187,9 @@ export function ExpenseFormDialog({
   onOpenChange,
   expense,
   prefillFromObligation,
+  scopeGroups,
+  onScopeChange,
+  prefill,
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
@@ -325,12 +348,18 @@ export function ExpenseFormDialog({
           cyclesToAdvance: prefillFromObligation.recurrence != null ? '1' : undefined,
         });
       } else {
+        /*
+         * A blank create, or one seeded by a scope swap. `prefill` carries only what the two forms
+         * genuinely share — a shared expense has no obligation, subscription or installment link,
+         * and its funding is a different question with different rules — so everything else starts
+         * empty rather than being guessed from a form that never asked.
+         */
         form.reset({
-          date: '',
-          amount: '',
-          currency: '',
-          category: undefined,
-          notes: '',
+          date: prefill?.date ?? '',
+          amount: prefill?.amount ?? '',
+          currency: prefill?.currency ?? '',
+          category: prefill?.category,
+          notes: prefill?.notes ?? '',
           paymentMethod: undefined,
           creditCardId: undefined,
           accountId: undefined,
@@ -341,7 +370,7 @@ export function ExpenseFormDialog({
         });
       }
     }
-  }, [open, expense, prefillFromObligation, form]);
+  }, [open, expense, prefillFromObligation, prefill, form]);
 
   // Soft confirmation when a credit-card expense uses a currency the card
   // hasn't seen before. Catches typos that would otherwise create a phantom
@@ -551,6 +580,21 @@ export function ExpenseFormDialog({
               onSubmit={form.handleSubmit(onSubmit)}
               noValidate
             >
+              {/*
+               * Who the expense is for. Create-only: turning an existing private entry into a shared
+               * one would delete a record of the user's own and write a different one a whole group
+               * can see, which is its own act rather than a side effect of editing an amount. Absent
+               * for a Mark-Paid prefill too — that entry pays a private obligation.
+               */}
+              {scopeGroups && !isEdit && !prefillFromObligation && onScopeChange && (
+                <ExpenseScopeField
+                  groups={scopeGroups}
+                  value={PRIVATE_SCOPE}
+                  onValueChange={(scope) => onScopeChange(scope, toHandover(form.getValues()))}
+                  disabled={form.formState.isSubmitting}
+                />
+              )}
+
               <FormField
                 control={form.control}
                 name="date"

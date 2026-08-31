@@ -217,6 +217,12 @@
     "pagination": {
       "previous": "Previous",
       "next": "Next"
+    },
+    "expenseScope": {
+      "label": "Who is this for?",
+      "private": "Just me",
+      "groupsHeading": "Shared with",
+      "hint": "A shared expense is recorded by the group and split between its members. Your share becomes your own expense."
     }
   },
   "login": {
@@ -602,7 +608,8 @@
       "empty": "No expenses found.",
       "emptyTitle": "Track your spending",
       "emptyDescription": "Log each expense to see where your money goes and how it trends over time.",
-      "total": "{total, plural, one {# expense} other {# expenses}}"
+      "total": "{total, plural, one {# expense} other {# expenses}}",
+      "shareOf": "Your share: {share} of {amount} {currency}"
     },
     "actions": {
       "edit": "Edit",
@@ -2419,6 +2426,276 @@
           "myShare": "Your share"
         }
       }
+    },
+    "balances": {
+      "title": "Balances",
+      "description": "Who owes whom, in each currency. Amounts in different currencies are never merged.",
+      "empty": {
+        "nothingShared": {
+          "title": "Nothing shared yet",
+          "description": "Record a shared expense and this is where everyone's balance will appear."
+        },
+        "allSquare": {
+          "title": "Everyone is square",
+          "description": "Every balance in this group has been settled or written off."
+        }
+      },
+      "standing": {
+        "owed": "You are owed {amount}",
+        "owing": "You owe {amount}",
+        "square": "You are square"
+      },
+      "glance": "≈ {amount} {currency} at today’s rate",
+      "position": {
+        "owed": "is owed {amount}",
+        "owing": "owes {amount}",
+        "square": "is square"
+      },
+      "plan": {
+        "title": "Suggested payments",
+        "youPay": "You pay {to} {amount}",
+        "paysYou": "{from} pays you {amount}",
+        "pays": "{from} pays {to} {amount}",
+        "settle": "Settle up",
+        "writeOff": "Write off"
+      },
+      "skipped": "No rate to {currency} yet, so no figure is shown beside {currencies}. The balances themselves are unaffected."
+    },
+    "expenses": {
+      "title": "Shared expenses",
+      "description": "What this group has spent together. Every member can add and edit.",
+      "add": "Add expense",
+      "emptyTitle": "No shared expenses yet",
+      "emptyDescription": "Add the first one and Renly splits it between the people you pick.",
+      "table": {
+        "date": "Date",
+        "amount": "Amount",
+        "category": "Category",
+        "paidBy": "Paid by",
+        "notes": "Notes",
+        "actions": "Actions",
+        "total": "{total, plural, one {# shared expense} other {# shared expenses}}",
+        "yourShare": "Your share: {amount}",
+        "joint": "Joint money",
+        "jointNamed": "Joint money · {account}"
+      },
+      "actions": {
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete this shared expense?",
+        "description": "Everyone's share of it disappears and the balances recalculate.",
+        "confirm": "Delete",
+        "success": "Shared expense deleted.",
+        "error": "Failed to delete the shared expense."
+      },
+      "form": {
+        "titleCreate": "New shared expense",
+        "titleEdit": "Edit shared expense",
+        "description": "Everyone in {group} sees this expense and their own share of it.",
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "currency": {
+          "label": "Currency",
+          "placeholder": "Select a currency",
+          "searchPlaceholder": "Search currencies...",
+          "noResults": "No currencies found"
+        },
+        "amount": {
+          "label": "Full amount",
+          "placeholder": "Enter the full amount"
+        },
+        "category": {
+          "label": "Category",
+          "placeholder": "Select a category"
+        },
+        "funding": {
+          "label": "Where the money came from",
+          "member": "One member's money",
+          "joint": "Joint money"
+        },
+        "sharedAccount": {
+          "label": "Shared account",
+          "placeholder": "Select a shared account",
+          "empty": "No shared account in {currency}",
+          "hint": "Joint money is fronted by everyone who owns it, in their own proportions — so no single person is the payer."
+        },
+        "payer": {
+          "label": "Who paid",
+          "placeholder": "Select who paid",
+          "hintSelf": "You front the whole amount; each person's share is what they owe you back.",
+          "hintOther": "Renly records that they paid. Which account or card they used is theirs to see, not yours."
+        },
+        "account": {
+          "label": "Paid from",
+          "hint": "The whole amount leaves this account. Who owes whom afterwards is the split's business."
+        },
+        "splitMethod": {
+          "label": "How to split it",
+          "reopenedAsExact": "Reopened as exact amounts. Only the amounts a split produced are stored, never the percentages behind them."
+        },
+        "notes": {
+          "label": "Notes",
+          "placeholder": "Optional notes..."
+        },
+        "cta": "Save",
+        "createSuccess": "Shared expense recorded.",
+        "updateSuccess": "Shared expense updated.",
+        "saveError": "Failed to save the shared expense.",
+        "formerSeats": "{count, plural, one {Somebody in this split has left the group: {names}. Remove them to save it.} other {Some people in this split have left the group: {names}. Remove them to save it.}}"
+      },
+      "split": {
+        "participants": {
+          "label": "Who was in on it"
+        },
+        "hint": {
+          "equal": "Divided equally between everyone ticked.",
+          "exact": "Give each person the exact amount they owe. They must add up to the full amount.",
+          "shares": "Give each person a weight — 2 to 1 means twice as much.",
+          "percentage": "Give each person a percentage. They must add up to 100."
+        },
+        "total": "Total",
+        "errors": {
+          "participants": "Pick at least one person.",
+          "exact": "The amounts must add up to the full amount.",
+          "shares": "At least one person needs a weight above zero.",
+          "percentage": "The percentages must add up to 100."
+        },
+        "figurePlaceholder": {
+          "exact": "Amount",
+          "shares": "Parts",
+          "percentage": "Percentage"
+        },
+        "methods": {
+          "equal": "Equally",
+          "exact": "Exact amounts",
+          "shares": "Shares",
+          "percentage": "Percentages"
+        },
+        "formerMember": "(former)"
+      }
+    },
+    "settlements": {
+      "title": "Settlements",
+      "description": "Payments between members, and balances somebody gave up on.",
+      "emptyTitle": "Nothing settled yet",
+      "emptyDescription": "Payments and write-offs that clear a balance will be listed here.",
+      "table": {
+        "date": "Date",
+        "between": "Between",
+        "amount": "Amount",
+        "status": "Status",
+        "notes": "Notes",
+        "actions": "Actions",
+        "pair": "{from} → {to}",
+        "leg": "{amount} {currency} through {account}"
+      },
+      "status": {
+        "pending": "Pending",
+        "confirmed": "Confirmed",
+        "written_off": "Written off"
+      },
+      "actions": {
+        "confirm": "Confirm receipt",
+        "unconfirm": "Undo confirmation",
+        "attachAccount": "Your account",
+        "remove": "Remove"
+      },
+      "confirmSuccess": "Marked as received.",
+      "unconfirmSuccess": "Confirmation undone.",
+      "actionError": "Could not update the settlement.",
+      "remove": {
+        "title": "Remove this record?",
+        "description": {
+          "payment": "The balance goes back to what it was before this payment.",
+          "writeOff": "The balance you gave up on becomes outstanding again."
+        },
+        "confirm": "Remove",
+        "success": "Removed."
+      },
+      "form": {
+        "title": "Settle up",
+        "description": {
+          "youPay": "Recording a payment you made to {to}.",
+          "paysYou": "Recording a payment {from} made to you.",
+          "pays": "Recording a payment {from} made to {to}."
+        },
+        "amount": {
+          "label": "Amount ({currency})",
+          "placeholder": "Enter the amount",
+          "hint": "Pre-filled with the whole balance. Less is a partial payment; more flips the balance the other way."
+        },
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "account": {
+          "labelOut": "Paid from",
+          "labelIn": "Received into",
+          "none": "No account",
+          "hint": "Only your own accounts. The other person records theirs."
+        },
+        "legAmount": {
+          "label": "Amount in {currency}",
+          "placeholder": "Enter the amount",
+          "hint": "This account is in a different currency, so say how much actually moved through it."
+        },
+        "notes": {
+          "label": "Notes",
+          "placeholder": "Optional notes..."
+        },
+        "cta": "Record payment",
+        "success": "Payment recorded.",
+        "error": "Failed to record the payment.",
+        "sameMember": "A payment moves money between two different people."
+      },
+      "writeOff": {
+        "title": "Write this balance off",
+        "description": "{from} owes you {amount} {currency}. Writing it off clears the balance with no money changing hands.",
+        "warning": "Your net worth drops by what you stop expecting. No expense is recorded — a write-off spans many expenses and belongs to no single one.",
+        "amount": {
+          "label": "Amount ({currency})",
+          "placeholder": "Enter the amount"
+        },
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "notes": {
+          "placeholder": "Optional notes..."
+        },
+        "cta": "Write off",
+        "success": "Balance written off.",
+        "error": "Failed to write the balance off."
+      },
+      "leg": {
+        "title": "Which of your accounts?",
+        "description": "A payment of {amount} {currency} from {from} to {to}. Say which of your own accounts it moved through, so your balance reflects it.",
+        "clear": "No account",
+        "hint": "Only your own side. The other person records theirs.",
+        "cta": "Save",
+        "success": "Account saved.",
+        "error": "Failed to save the account."
+      }
+    },
+    "moneySettings": {
+      "title": "Shared money settings",
+      "description": "The standards this group holds itself to when it spends together.",
+      "open": "Money settings",
+      "cta": "Save",
+      "defaultSplit": {
+        "label": "Default split",
+        "hint": "What a new shared expense starts on. It can be changed on any expense."
+      },
+      "autoFinalise": {
+        "label": "Confirm payments automatically",
+        "hint": "A recorded payment counts straight away instead of waiting for the person who received it to confirm. Meant for groups that trust each other."
+      },
+      "success": "Settings saved.",
+      "error": "Failed to save the settings."
     }
   },
   "preferences": {
