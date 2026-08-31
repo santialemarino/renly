@@ -95,20 +95,22 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 
 **Which date a value converts at, by use case:**
 
-| Use case                                               | Conversion date                               | Why                                                                                                                                                |
-| ------------------------------------------------------ | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Expense / income list display                          | row's `date`                                  | Past records — historical accuracy.                                                                                                                |
-| Snapshot grid cell / transaction                       | row's own `date`                              | Historical accuracy.                                                                                                                               |
-| Asset price lookup                                     | `price.date`                                  | Historical accuracy.                                                                                                                               |
-| Payments Calendar `card_due` event                     | item's event `date` (could be past or future) | Past months use historical rates; future dates fall back to latest stored.                                                                         |
-| Portfolio TWR / IRR                                    | each snapshot / cashflow at its OWN date      | Chain math reflects real historical FX exposure.                                                                                                   |
-| Per-month evolution chart                              | each month-end                                | Each historical month uses its own period-end rate.                                                                                                |
-| Pot value series point                                 | that point's own date                         | Same rule as the evolution chart, on the pot's cadence grid rather than a month grid.                                                              |
-| Subscription / installment / payment obligation amount | today                                         | Forward-looking planning entities — what does this cost me NOW.                                                                                    |
-| Liquidity-alert fixed commitments (amortised totals)   | today                                         | Same rationale as subscriptions / installments / obligations — the alert evaluates current commitment load against current income.                 |
-| Liquidity-alert monthly income window total            | today (window-end anchor)                     | Single conversion anchor for the multi-currency window sum; matches `_sum_converted` semantics used elsewhere for period totals.                   |
-| Card balance display (running total)                   | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
-| Finance-metrics period totals (category breakdowns)    | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
+| Use case                                                | Conversion date                               | Why                                                                                                                                                |
+| ------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Expense / income list display                           | row's `date`                                  | Past records — historical accuracy.                                                                                                                |
+| Snapshot grid cell / transaction                        | row's own `date`                              | Historical accuracy.                                                                                                                               |
+| Asset price lookup                                      | `price.date`                                  | Historical accuracy.                                                                                                                               |
+| Payments Calendar `card_due` event                      | item's event `date` (could be past or future) | Past months use historical rates; future dates fall back to latest stored.                                                                         |
+| Portfolio TWR / IRR                                     | each snapshot / cashflow at its OWN date      | Chain math reflects real historical FX exposure.                                                                                                   |
+| Per-month evolution chart                               | each month-end                                | Each historical month uses its own period-end rate.                                                                                                |
+| Pot value series point                                  | that point's own date                         | Same rule as the evolution chart, on the pot's cadence grid rather than a month grid.                                                              |
+| Subscription / installment / payment obligation amount  | today                                         | Forward-looking planning entities — what does this cost me NOW.                                                                                    |
+| Liquidity-alert fixed commitments (amortised totals)    | today                                         | Same rationale as subscriptions / installments / obligations — the alert evaluates current commitment load against current income.                 |
+| Liquidity-alert monthly income window total             | today (window-end anchor)                     | Single conversion anchor for the multi-currency window sum; matches `_sum_converted` semantics used elsewhere for period totals.                   |
+| Card balance display (running total)                    | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
+| Shared balance glance figure (per currency bucket)      | today                                         | A balance is a live position: the expenses behind it are already reduced to one figure per bucket, with no single date to convert at.              |
+| Overpay waterfall — pricing a bucket the excess reaches | the PAYMENT's `date`                          | A payment happened on a day, and that is the rate at which the money actually moved. Deliberately unlike the row above, which is a live position.  |
+| Finance-metrics period totals (category breakdowns)     | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
 
 - **Helpers**: `utils/metrics.py` (pure, no DB) — `convert_value()`, `convert_optional()`, `can_convert()`, `RateLookup`. Rate loading (`build_rate_lookup()` / `get_user_rate_lookup()`) lives in `exchange_rate_service`; the old `get_rate_map()` shim was removed.
 - **Shared utility**: `get_dollar_pref(session, user_id)` and `get_liquidity_threshold(session, user_id)` live in `settings_service` (the former `utils/settings.py` was removed). They are read by services — via `exchange_rate_service.get_user_rate_lookup` — not by routers.
@@ -280,6 +282,31 @@ Three legs rather than two because a settlement moves money between **two differ
 **A shared expense is single-currency by construction.** Its amount, its splits and its balance bucket are all the same currency, and its funding account must match it (`400 account_currency_mismatch`) — the account sum carries one amount, so a mismatched link would subtract a foreign figure straight from the balance. Only the **settlement** crosses currencies, which is where the conversion belongs: it is the moment somebody actually agreed a rate.
 
 **Every figure the balances surface renders names its own currency, and that is not decoration.** A bucket's amounts carry no code of their own (the bucket's badge says which), so the converted glance beside them has to state its currency or the two read as one scale — "≈ 32.48" next to "50,000" is two numbers in two currencies with nothing on screen telling them apart. The same rule makes the group's expense and settlement tables append the code to each money cell: both hold every currency the group has ever used, side by side and never converted, so a bare `120` beside a bare `90,000` would leave the reader to guess which is dollars. And where a row's own amount IS converted — a shared row in `/expenses` — the sub-line restates the share _and_ the whole in the row's original currency, so it stays a complete fact rather than inviting a ratio against the converted figure above it. `skipped_currencies` is stated out loud for the same reason: a bucket that carries no glance while its neighbour does deserves the reason rather than a guess.
+
+### 14. Overpay waterfall — one payment, several buckets, no stored rate
+
+A payment larger than the balance it names has an excess, and if the payer owes the payee in other
+currencies that excess can clear those too. `POST /groups/{id}/settlements/preview` prices each
+reachable bucket in the currency being paid; `POST …/waterfall` records one settlement per bucket.
+
+**Which rate.** The bucket's outstanding amount is converted into the payment's currency at the rate in
+force on the **payment's date** — not today's, which is what the glance figure beside a balance uses.
+The two are different questions: a displayed balance is a live position with no single date behind it,
+whereas a payment happened on a day. A bucket with no usable rate is named in `skipped_currencies` and
+left alone rather than converted at a guess.
+
+**No stored rate, and no rate needed twice.** Each candidate carries two figures — what is owed, and
+what clearing it costs in the currency being paid — and the allocator works from their ratio, so a
+partial allocation cannot round differently from a full one. The invariant it guarantees: **the steps'
+costs plus the leftover equal the excess exactly**, in the currency the payment was made in.
+
+**The cash leg.** One real payment has one account movement, stated once and divided across the rows in
+proportion to what each consumed of the payment — never re-converted at a market rate, so a payment made
+at the rate the payer's bank gave them stays recorded at that rate. A row whose bucket is already in the
+account's own currency crosses nothing, so it moves exactly what it clears and only the rows that DID
+cross split what is left; each of those still needs at least one minor unit, so a stated total too small
+to give every row something is refused (`400 group_settlement_leg_total_too_small`) and a share that
+merely rounds below one unit is lifted to one, taken off the largest part.
 
 ## Data model
 
