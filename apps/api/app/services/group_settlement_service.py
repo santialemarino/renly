@@ -31,6 +31,7 @@ from app.domain import (
     GroupSettlementForeignLegError,
     GroupSettlementLegAmountRequiredError,
     GroupSettlementLegAmountsMustMatchError,
+    GroupSettlementLegTotalTooSmallError,
     GroupSettlementLegWithoutAccountError,
     GroupSettlementNotCreditorError,
     GroupSettlementNotPayeeError,
@@ -609,6 +610,11 @@ def _split_leg(total: Decimal, writes: list[tuple[str, Decimal, Decimal]], accou
     # proportion to what each consumed of the payment. `spread_remainder` makes the parts sum to it
     # EXACTLY: the payer's account may not end up moving a cent more or less than they said it did.
     remainder = total - sum(fixed.values())
+    # The rows that crossed nothing already account for part of the payment, one for one. A stated
+    # total at or below them describes a payment that cannot have happened, and dividing what is left
+    # would hand the crossing rows a zero or negative leg — refused by a DB CHECK, as a 500.
+    if remainder <= ZERO:
+        raise GroupSettlementLegTotalTooSmallError(sum(fixed.values()), account_currency)
     parts = {index: quantize(remainder * cost / crossing_cost, MONEY_PLACES) for index, cost in crossing}
     return {**fixed, **spread_remainder(parts, remainder, MONEY_PLACES)}
 

@@ -2626,7 +2626,7 @@
         "amount": {
           "label": "Amount ({currency})",
           "placeholder": "Enter the amount",
-          "hint": "Pre-filled with the whole balance. Less is a partial payment; more flips the balance the other way."
+          "hint": "Pre-filled with the whole balance. Less is a partial payment; more goes to your other balances with this person, or flips this one if there are none."
         },
         "date": {
           "label": "Date",
@@ -3642,6 +3642,7 @@
     "group_settlement_foreign_leg": "You can only record which of your own accounts the money moved through. The other person records theirs.",
     "group_settlement_leg_amount_required": "This settlement clears {bucket_currency} through an account in {account_currency}, so it must say how much {account_currency} moved.",
     "group_settlement_leg_amounts_must_match": "Within one currency a settlement moves exactly what it clears. Record a fee as its own expense.",
+    "group_settlement_leg_total_too_small": "This payment moves {minimum} {currency} out of that account on its own, so more than that must have left it.",
     "group_settlement_leg_without_account": "A settlement's cash amount needs the account it moved through.",
     "group_settlement_not_creditor": "Only the person who is owed can write a balance off.",
     "group_settlement_not_payee": "Only the person who received the money can confirm a settlement.",

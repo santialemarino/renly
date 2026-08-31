@@ -29,7 +29,7 @@ interface SettlementPlanStepProps {
  * again.
  *
  * Every figure here comes from the server. Unticking sends the smaller set back and renders whatever
- * comes returns; nothing is recomputed locally, because the excess re-flows when a bucket leaves the
+ * comes back; nothing is recomputed locally, because the excess re-flows when a bucket leaves the
  * set and a client that predicted the new plan would be a second implementation of the allocation.
  *
  * Two currencies live in each row and they are never mixed: the balance being cleared is in ITS OWN
@@ -53,16 +53,31 @@ export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanSt
       <ul className="flex flex-col gap-y-1">
         {plan.buckets.map((bucket) => (
           <li key={bucket.currency}>
-            <label
+            {/*
+             * A DIV, never a <label>: a Radix checkbox renders a <button>, which a label forwards a
+             * click to as well as the button receiving it — so the row toggled twice and landed back
+             * where it started, looking inert while costing two round trips. The same reason
+             * `expense-split-rows` names its checkboxes with `aria-label` rather than a label.
+             *
+             * The row still toggles on click, which the whole surface of it invites: the click is
+             * handled here and the checkbox is made pointer-transparent, so a mouse fires this once
+             * and a keyboard fires Radix's own handler once. Never both.
+             */}
+            <div
+              onClick={() => !pending && onToggle(bucket.currency, !bucket.selected)}
               className={`flex items-start p-3 gap-x-3 border border-border rounded-1.5xl transition-colors ${
-                pending ? 'opacity-60' : 'hover:bg-muted/40'
+                pending ? 'opacity-60' : 'cursor-pointer hover:bg-muted/40'
               }`}
             >
               <Checkbox
                 checked={bucket.selected}
                 onCheckedChange={(checked) => onToggle(bucket.currency, checked === true)}
                 disabled={pending}
-                className="mt-0.5"
+                aria-label={t('settlements.plan.owed', {
+                  amount: fmt.amount(bucket.outstanding, bucket.currency),
+                  currency: bucket.currency,
+                })}
+                className="mt-0.5 pointer-events-none"
               />
               <span className="flex flex-col min-w-0 gap-y-0.5">
                 <span className="text-paragraph-sm-medium text-foreground">
@@ -97,7 +112,7 @@ export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanSt
                           })}
                 </span>
               </span>
-            </label>
+            </div>
           </li>
         ))}
       </ul>
@@ -107,18 +122,23 @@ export function SettlementPlanStep({ plan, onToggle, pending }: SettlementPlanSt
        * settlements is surprising enough that saying so beforehand is the honest thing — and these
        * figures are read from the plan, never re-derived, so what is confirmed is what is recorded.
        */}
-      <dl className="flex flex-col p-4 gap-y-3 bg-muted/30 border border-border rounded-1.5xl">
+      <div className="flex flex-col p-4 gap-y-3 bg-muted/30 border border-border rounded-1.5xl">
+        {/* Outside the list rather than inside it: a `dl` may only hold `dt`, `dd` and `div`. */}
         <p className="text-paragraph-xs-medium uppercase tracking-wide text-muted-foreground">
           {t('settlements.plan.willRecord', { count: rows.length })}
         </p>
-        {rows.map((row) => (
-          <WizardConfirmRow
-            key={row.currency}
-            label={t('settlements.plan.rowLabel', { currency: row.currency })}
-            value={`${fmt.amount(row.amount, row.currency)} ${row.currency}`}
-          />
-        ))}
-      </dl>
+        <dl className="flex flex-col gap-y-3">
+          {rows.map((row) => (
+            // Currency is a safe key here, and only here: the paid bucket is removed from the
+            // spillover list before the plan is built, so no two rows can name the same one.
+            <WizardConfirmRow
+              key={row.currency}
+              label={t('settlements.plan.rowLabel', { currency: row.currency })}
+              value={`${fmt.amount(row.amount, row.currency)} ${row.currency}`}
+            />
+          ))}
+        </dl>
+      </div>
 
       {/*
        * A leftover is a credit, not an error: money handed over that no ticked balance absorbed. It

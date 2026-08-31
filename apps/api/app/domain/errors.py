@@ -505,6 +505,31 @@ class GroupSettlementWriteOffHasNoLegError(DomainError):
         super().__init__(self.message)
 
 
+# The payer says less left their account than the payment moves out of it in that very currency.
+#
+# Reachable only through the waterfall, and only from a real combination: paying one balance from an
+# account whose currency is ANOTHER balance the excess spills into. That spillover row leaves the
+# account one for one — no conversion is involved — so it alone accounts for part of the payment, and
+# a stated total at or below it describes a payment that cannot have happened.
+#
+# Refused here rather than left to the arithmetic, which would hand the remaining rows a zero or
+# negative leg and land on `group_settlements_positive_legs` — a 500 on a form somebody filled in
+# wrong. Mapped to 400.
+class GroupSettlementLegTotalTooSmallError(DomainError):
+    code = "group_settlement_leg_total_too_small"
+    status_code = 400
+
+    def __init__(self, minimum: Decimal, currency: str) -> None:
+        self.minimum = minimum
+        self.currency = currency
+        self.message = f"This payment moves {minimum} {currency} out of that account on its own, so more than that must have left it."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"minimum": str(self.minimum), "currency": self.currency}
+
+
 # A write-off is for more than the bucket actually holds.
 #
 # Refused, unlike an overpaying PAYMENT, which is legal and flips the balance — the two look alike and

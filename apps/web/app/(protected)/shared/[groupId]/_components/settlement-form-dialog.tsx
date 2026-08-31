@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslations } from 'next-intl';
 import { useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
 
 import {
   Button,
@@ -212,8 +213,19 @@ export function SettlementFormDialog({
    * When there is nothing to confirm — the common case by far — it records straight through.
    */
   async function onSubmit(values: SettlementFormValues) {
-    const preview = await previewSettlement(group.id, toRequest(values), side);
-    if (preview.ok && planNeedsConfirming(preview.data)) {
+    /*
+     * A preview that FAILS falls through to the write rather than stopping here, and that is
+     * deliberate: the refusals it can return are the write's refusals — a seat that has left, an
+     * account belonging to the other party — so letting the real request produce them surfaces each
+     * one through the same lifecycle as every other, instead of inventing a second way to report it.
+     *
+     * Wrapped so a thrown failure surfaces at all. `toDataResult` THROWS for anything that is not a
+     * recognised refusal, and an unhandled throw here is a submit that silently does nothing: no
+     * request visible, no toast, the button simply un-sticking — which is exactly the shape of the
+     * defect 5b shipped and had to instrument react-hook-form to find.
+     */
+    const preview = await previewSettlement(group.id, toRequest(values), side).catch(() => null);
+    if (preview?.ok && planNeedsConfirming(preview.data)) {
       setPlan(preview.data);
       return;
     }
@@ -230,17 +242,32 @@ export function SettlementFormDialog({
     );
   }
 
-  // Re-asks the server for a plan over the smaller set. Not recomputed here: unticking a bucket makes
-  // the excess flow on to the next one, at rates only the server has.
+  /*
+   * Re-asks the server for a plan over the smaller set. Not recomputed here: unticking a bucket makes
+   * the excess flow on to the next one, at rates only the server has.
+   *
+   * The pending flag is cleared in a `finally`, so a failed re-preview leaves the step usable rather
+   * than disabled for good — and the plan is left as it was, which shows the tick back where it was.
+   * A toast says so, because a checkbox that springs back with no explanation reads as a bug.
+   */
   async function onTogglePlanBucket(currency: string, selected: boolean) {
     if (!plan) return;
     const next = plan.buckets
       .filter((bucket) => (bucket.currency === currency ? selected : bucket.selected))
       .map((bucket) => bucket.currency);
     setPlanPending(true);
-    const preview = await previewSettlement(group.id, toRequest(form.getValues(), next), side);
-    setPlanPending(false);
-    if (preview.ok) setPlan(preview.data);
+    try {
+      const preview = await previewSettlement(group.id, toRequest(form.getValues(), next), side);
+      if (preview.ok) {
+        setPlan(preview.data);
+        return;
+      }
+      toast.error(preview.conflictDetail);
+    } catch {
+      toast.error(t('settlements.form.error'));
+    } finally {
+      setPlanPending(false);
+    }
   }
 
   // Records the confirmed plan: several settlements, written together or not at all. The request

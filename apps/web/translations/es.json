@@ -2626,7 +2626,7 @@
         "amount": {
           "label": "Monto ({currency})",
           "placeholder": "Ingresá el monto",
-          "hint": "Viene con el saldo completo. Menos es un pago parcial; más da vuelta el saldo."
+          "hint": "Prellenado con el saldo completo. Menos es un pago parcial; de más va a tus otros saldos con esta persona, o da vuelta este si no hay ninguno."
         },
         "date": {
           "label": "Fecha",
@@ -3642,6 +3642,7 @@
     "group_settlement_foreign_leg": "Solo podés registrar por cuál de tus propias cuentas se movió el dinero. La otra persona registra la suya.",
     "group_settlement_leg_amount_required": "Este pago cancela un saldo en {bucket_currency} desde una cuenta en {account_currency}, así que tiene que indicar cuánto se movió en {account_currency}.",
     "group_settlement_leg_amounts_must_match": "Dentro de una misma moneda, un pago mueve exactamente lo que cancela. Registrá una comisión como un gasto aparte.",
+    "group_settlement_leg_total_too_small": "Este pago mueve {minimum} {currency} de esa cuenta por sí solo, así que tiene que haber salido más que eso.",
     "group_settlement_leg_without_account": "El monto en efectivo de un pago necesita la cuenta por la que se movió.",
     "group_settlement_not_creditor": "Solo la persona a la que le deben puede dar un saldo por perdido.",
     "group_settlement_not_payee": "Solo la persona que recibió el dinero puede confirmar un pago.",

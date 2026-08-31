@@ -11,6 +11,7 @@ from app.domain import (
     GroupSettlementForeignLegError,
     GroupSettlementLegAmountRequiredError,
     GroupSettlementLegAmountsMustMatchError,
+    GroupSettlementLegTotalTooSmallError,
     GroupSettlementLegWithoutAccountError,
     GroupSettlementNotCreditorError,
     GroupSettlementNotPayeeError,
@@ -1053,3 +1054,42 @@ class TestThePreviewMatchesTheWrite(TestTheOverpayWaterfall):
 
         planned = {bucket.currency: bucket.amount for bucket in plan.buckets if bucket.amount > Decimal("0")}
         assert {row.currency: row.amount for row in written["rows"] if row.currency != "ARS"} == planned
+
+
+class TestALegTotalSmallerThanThePaymentItself(TestTheOverpayWaterfall):
+    """A stated cash total that the payment's own same-currency rows already exceed.
+
+    Paying from a USD account while the excess spills into the USD bucket means part of the payment
+    leaves that account in dollars, one for one — 9.74 of them here. Saying only 5.00 left in total is
+    not a smaller payment, it is an impossible statement, and the arithmetic that follows hands the
+    remaining rows a NEGATIVE leg.
+
+    Reachable, and it lands on a DB CHECK (`group_settlements_positive_legs`) rather than a message —
+    a 500 on a form somebody filled in wrong.
+    """
+
+    @pytest.mark.parametrize("stated", ["5.00", "9.74"])
+    @pytest.mark.asyncio
+    async def test_it_is_refused_rather_than_left_to_the_database(self, monkeypatch, stated):
+        _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="USD"))
+        self._rates(monkeypatch)
+        with pytest.raises(GroupSettlementLegTotalTooSmallError):
+            await self._record(amount=Decimal("45000.00"), from_account_id=5, from_amount=Decimal(stated))
+
+    @pytest.mark.asyncio
+    async def test_a_total_that_covers_them_is_allowed(self, monkeypatch):
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="USD"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"), from_account_id=5, from_amount=Decimal("29.50"))
+        # 19.50 on the peso row + the 10.00 the dollar row moves on its own = 29.50, to the cent.
+        assert written["rows"][0].from_amount == Decimal("19.50")
+        assert written["rows"][1].from_amount is None
+        assert written["rows"][1].amount == Decimal("10")
+
+    @pytest.mark.asyncio
+    async def test_a_payment_wholly_in_the_account_s_own_currency_needs_no_remainder(self, monkeypatch):
+        # Every row is same-currency, so there is nothing left to divide and nothing to refuse.
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="ARS"))
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("30000.00"), from_account_id=5)
+        assert [row.from_amount for row in written["rows"]] == [None]
