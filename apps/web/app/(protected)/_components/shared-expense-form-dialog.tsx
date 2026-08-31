@@ -127,6 +127,20 @@ export function SharedExpenseFormDialog({
    */
   const [context, setContext] = useState<GroupExpenseContext | null>(null);
 
+  /*
+   * The loaded context belongs to ONE group, so it is dropped the moment the group changes.
+   *
+   * Without this the dialog keeps the previous group's shared accounts and default split for as long
+   * as the new read takes — and on `/expenses`, where the scope control can point this same instance
+   * at a different group, that means offering an account the API would refuse
+   * (400 shared_expense_funding_scope). "Offered then refused" is precisely the experience these
+   * rules exist to avoid. Re-opening on the SAME group deliberately keeps the last answer rather than
+   * blanking the picker; the read below refreshes it either way.
+   */
+  useEffect(() => {
+    setContext(null);
+  }, [group.id]);
+
   const today = todayInTimezone(timeZone);
   const mySeatId = useMemo(
     () => group.members.find((member) => member.isSelf)?.id ?? null,
