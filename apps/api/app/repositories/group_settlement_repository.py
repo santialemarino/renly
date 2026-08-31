@@ -92,6 +92,17 @@ async def create(session: AsyncSession, settlement: GroupSettlement) -> GroupSet
     return settlement
 
 
+# Persists several settlements and flushes ONCE to get their ids. The batch sibling of create, for a
+# payment that spills across buckets: it writes one row per bucket, and flushing per row is a round
+# trip per bucket for what is a single indivisible act. Same shape as the pot ledger's opening.
+async def create_many(session: AsyncSession, settlements: list[GroupSettlement]) -> list[GroupSettlement]:
+    if not settlements:
+        return []
+    session.add_all(settlements)
+    await session.flush()
+    return settlements
+
+
 # Stages a settlement for update (caller commits).
 async def save(session: AsyncSession, settlement: GroupSettlement) -> None:
     session.add(settlement)
@@ -203,6 +214,7 @@ async def clear_account_amounts(session: AsyncSession, account_id: int) -> None:
 class GroupSettlementRepository:
     clear_account_amounts = staticmethod(clear_account_amounts)
     create = staticmethod(create)
+    create_many = staticmethod(create_many)
     delete = staticmethod(delete)
     get_by_id = staticmethod(get_by_id)
     group_ids_with_settlements = staticmethod(group_ids_with_settlements)

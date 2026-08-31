@@ -120,7 +120,13 @@ def _wire(monkeypatch, *, viewer=_MEMBERS[0], account=None, auto_finalise=False,
         written["rows"].append(row)
         return row
 
+    async def _create_many(_session, batch: list[GroupSettlement]) -> list[GroupSettlement]:
+        for row in batch:
+            await _create(_session, row)
+        return batch
+
     monkeypatch.setattr(group_settlement_service.group_settlement_repository, "create", _create)
+    monkeypatch.setattr(group_settlement_service.group_settlement_repository, "create_many", _create_many)
     return written
 
 
@@ -957,6 +963,33 @@ class TestTwoBucketsAtOnce:
         assert legs == [Decimal("18.89"), Decimal("6.42"), Decimal("4.73")]
         assert sum(legs) == Decimal("30.04")
 
+    @pytest.mark.asyncio
+    async def test_the_lifted_unit_comes_off_the_LARGEST_part(self, monkeypatch):
+        """Which part pays for the lift, not merely that one does.
+
+        With two rows the question cannot arise — lifting the only zero leaves exactly one other row to
+        take it from, so a sweep survived on `max` → `min`. THREE rows separate them: 0.03 euros splits
+        naively into 0.02 / 0.01 / 0.00, and taking the unit off the SMALLEST non-zero part would push
+        that one to zero instead, recreating the very 500 the lift exists to prevent.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="EUR"))
+        self._rates(monkeypatch)
+        await group_settlement_service.record_waterfall(
+            AsyncMock(),
+            GROUP_ID,
+            USER,
+            from_member_id=12,
+            to_member_id=11,
+            date=TODAY,
+            amount=self._AMOUNT,
+            currency="ARS",
+            from_account_id=5,
+            from_amount=Decimal("0.03"),
+        )
+        legs = [row.from_amount for row in written["rows"]]
+        assert legs == [Decimal("0.01"), Decimal("0.01"), Decimal("0.01")]
+        assert sum(legs) == Decimal("0.03")
+
 
 class TestTheRateFollowsThePaymentDate:
     _POSITIONS = [
@@ -1068,7 +1101,7 @@ class TestALegTotalSmallerThanThePaymentItself(TestTheOverpayWaterfall):
     a 500 on a form somebody filled in wrong.
     """
 
-    @pytest.mark.parametrize("stated", ["5.00", "9.74"])
+    @pytest.mark.parametrize("stated", ["5.00", "9.74", "9.75"])
     @pytest.mark.asyncio
     async def test_it_is_refused_rather_than_left_to_the_database(self, monkeypatch, stated):
         _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="USD"))
@@ -1093,3 +1126,67 @@ class TestALegTotalSmallerThanThePaymentItself(TestTheOverpayWaterfall):
         self._rates(monkeypatch)
         await self._record(amount=Decimal("30000.00"), from_account_id=5)
         assert [row.from_amount for row in written["rows"]] == [None]
+
+
+class TestEveryRowMovesSomething:
+    """A part of the payment too small to reach the account's smallest unit.
+
+    NOT only an absurd figure: a fifteen-peso row paid from a dollar account really is worth less than
+    a cent, so refusing outright would block a legitimate small payment. One minor unit is the honest
+    floor for money that did move — taken off the largest part, never added, so the total the payer
+    stated survives to the cent.
+
+    The alternative is a row recording that it moved nothing, which `group_settlements_positive_legs`
+    refuses as a 500.
+    """
+
+    _POSITIONS = [
+        ("ARS", 11, Decimal("0"), Decimal("30000")),
+        ("ARS", 12, Decimal("30000"), Decimal("0")),
+        ("USD", 11, Decimal("0"), Decimal("10")),
+        ("USD", 12, Decimal("10"), Decimal("0")),
+    ]
+
+    def _rates(self, monkeypatch):
+        rates = {ExchangeRatePair.USD_ARS_MEP: [ExchangeRate(pair=ExchangeRatePair.USD_ARS_MEP, date=date(2026, 1, 1), rate=Decimal("1037.50"))]}
+        monkeypatch.setattr(group_settlement_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=RateLookup("mep", rates)))
+
+    async def _record(self, **overrides):
+        body = dict(from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("45000.00"), currency="ARS")
+        body.update(overrides)
+        return await group_settlement_service.record_waterfall(AsyncMock(), GROUP_ID, USER, **body)
+
+    @pytest.mark.asyncio
+    async def test_a_share_below_one_minor_unit_is_lifted_rather_than_recorded_as_nothing(self, monkeypatch):
+        # A EUR account, so BOTH rows cross. Two cents over two rows whose costs are 30,000 and 10,375
+        # would naively be 0.02 and 0.00 — the smaller row rounds away entirely.
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="EUR"))
+        self._rates(monkeypatch)
+        await self._record(from_account_id=5, from_amount=Decimal("0.02"))
+        legs = [row.from_amount for row in written["rows"]]
+        assert legs == [Decimal("0.01"), Decimal("0.01")]
+        # The stated total survives exactly: the lifted unit came OFF the largest part, not out of thin air.
+        assert sum(legs) == Decimal("0.02")
+
+    @pytest.mark.asyncio
+    async def test_a_total_that_cannot_give_every_row_a_unit_is_refused(self, monkeypatch):
+        # One cent over two rows: there is no split, so this is refused rather than lifted. The minimum
+        # the error names is exactly right — two rows, one unit each.
+        _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="EUR"))
+        self._rates(monkeypatch)
+        with pytest.raises(GroupSettlementLegTotalTooSmallError) as caught:
+            await self._record(from_account_id=5, from_amount=Decimal("0.01"))
+        assert caught.value.extra == {"minimum": "0.02", "currency": "EUR"}
+
+    @pytest.mark.asyncio
+    async def test_an_extreme_cost_ratio_is_lifted_too_not_only_a_tiny_total(self, monkeypatch):
+        """The case the threshold alone does not catch, which is why the floor exists as well.
+
+        At exactly the minimum, a lopsided pair of costs still rounds the smaller row to nothing: the
+        naive split of two cents across 30,000 and 10,375 gives 0.02 and 0.00. Passing the threshold is
+        not the same as every row getting something.
+        """
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS, account=_account(5, user_id=2, currency="EUR"))
+        self._rates(monkeypatch)
+        await self._record(from_account_id=5, from_amount=Decimal("0.02"))
+        assert all(row.from_amount > Decimal("0") for row in written["rows"])

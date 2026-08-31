@@ -505,16 +505,16 @@ class GroupSettlementWriteOffHasNoLegError(DomainError):
         super().__init__(self.message)
 
 
-# The payer says less left their account than the payment moves out of it in that very currency.
+# The payer says less left their account than this payment could possibly have moved through it.
 #
-# Reachable only through the waterfall, and only from a real combination: paying one balance from an
-# account whose currency is ANOTHER balance the excess spills into. That spillover row leaves the
-# account one for one — no conversion is involved — so it alone accounts for part of the payment, and
-# a stated total at or below it describes a payment that cannot have happened.
+# Reachable only through the waterfall, where one payment writes several rows and each has to move
+# something. Two ways to fall under it, and the minimum covers both: a row whose bucket is already in
+# the account's currency leaves it one for one, so it alone accounts for part of the total; and every
+# other row needs at least one minor unit, since a row recording that it moved nothing is refused by
+# `group_settlements_positive_legs` — as a 500, on a form somebody filled in wrong.
 #
-# Refused here rather than left to the arithmetic, which would hand the remaining rows a zero or
-# negative leg and land on `group_settlements_positive_legs` — a 500 on a form somebody filled in
-# wrong. Mapped to 400.
+# The figure named is therefore exact rather than indicative: what the same-currency rows move, plus
+# one unit for each row that crosses. Mapped to 400.
 class GroupSettlementLegTotalTooSmallError(DomainError):
     code = "group_settlement_leg_total_too_small"
     status_code = 400
@@ -522,7 +522,7 @@ class GroupSettlementLegTotalTooSmallError(DomainError):
     def __init__(self, minimum: Decimal, currency: str) -> None:
         self.minimum = minimum
         self.currency = currency
-        self.message = f"This payment moves {minimum} {currency} out of that account on its own, so more than that must have left it."
+        self.message = f"At least {minimum} {currency} must have left that account for this payment — each balance it clears has to move something."
         super().__init__(self.message)
 
     @property

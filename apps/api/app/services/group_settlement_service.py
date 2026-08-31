@@ -315,7 +315,9 @@ async def record_waterfall(
     to_legs = _split_leg(to_amount if to_amount is not None else amount, writes, to_account.currency) if to_account is not None else {}
     settings = await group_money_settings_repository.get_by_group_id(session, group_id)
     auto_finalise = settings is not None and settings.auto_finalise_settlements
-    created: list[GroupSettlement] = []
+    # Built in memory and written in ONE batch: a payment across several buckets is a single
+    # indivisible act, and flushing per row is a round trip per bucket for no gain.
+    rows: list[GroupSettlement] = []
     for index, (bucket_currency, bucket_amount, _) in enumerate(writes):
         from_leg = (
             _leg_figure(from_account, from_legs.get(index), amount=bucket_amount, currency=bucket_currency, date=date)
@@ -325,8 +327,7 @@ async def record_waterfall(
         to_leg = (
             _leg_figure(to_account, to_legs.get(index), amount=bucket_amount, currency=bucket_currency, date=date) if to_account is not None else None
         )
-        settlement = await group_settlement_repository.create(
-            session,
+        rows.append(
             GroupSettlement(
                 group_id=group_id,
                 from_member_id=from_member_id,
@@ -341,11 +342,14 @@ async def record_waterfall(
                 to_account_id=to_account_id,
                 to_amount=to_leg,
                 notes=notes,
+                created_by=user.id,
             ),
         )
-        settlement.created_by = user.id
-        created.append(settlement)
+    created = await group_settlement_repository.create_many(session, rows)
     await session.commit()
+    # One refresh per row, which after a commit is what reading any field would cost anyway — every
+    # object is expired, so the alternative is the same fetches happening implicitly inside the response
+    # builder. Bounded by the number of currencies the payer owes in, so at most the supported set.
     for settlement in created:
         await session.refresh(settlement)
     return [_build_response(settlement, members_by_id, viewer.id) for settlement in created]
@@ -587,6 +591,31 @@ def _primary_amount(amount: Decimal, primary_outstanding: Decimal, leftover: Dec
     return min(amount, primary_outstanding) + leftover
 
 
+# Gives every part at least one minor unit, taking the shortfall off the largest, so the parts still
+# sum to exactly what they did before.
+#
+# A part rounds to nothing when its share of the payment is smaller than the account's smallest unit —
+# which is NOT only an absurd figure: a fifteen-peso row paid from a dollar account really is worth
+# less than a cent, and refusing that would block a legitimate small payment. One minor unit is the
+# honest floor for money that did move, and it is taken from the largest part rather than added, so
+# the total the payer stated is preserved to the cent.
+#
+# The caller guarantees there is room: it refuses any total below one unit per part. Only a part of
+# exactly zero is reachable today — the remainder is positive and `spread_remainder` takes at most one
+# unit off each part — but the test is `<= 0` because a part that somehow went negative needs lifting
+# more urgently, not less, and a guard that says so costs nothing.
+def _lift_zero_parts(parts: dict[int, Decimal]) -> dict[int, Decimal]:
+    empty = [index for index, part in parts.items() if part <= ZERO]
+    if not empty:
+        return parts
+    lifted = dict(parts)
+    for index in empty:
+        lifted[index] = MONEY_PLACES
+        largest = max((key for key in lifted if key not in empty), key=lambda key: lifted[key])
+        lifted[largest] -= MONEY_PLACES
+    return lifted
+
+
 # Divides one side's stated cash total across the rows a payment writes, in proportion to what each
 # consumed of it, summing to the stated total exactly.
 #
@@ -606,17 +635,18 @@ def _split_leg(total: Decimal, writes: list[tuple[str, Decimal, Decimal]], accou
     crossing_cost = sum(cost for _, cost in crossing)
     if not crossing or crossing_cost <= ZERO:
         return fixed
+    # Every row has to move at least one minor unit, so the total has to cover the rows that crossed
+    # nothing PLUS one unit each for the rest. Below that there is no split at all: some row would
+    # record having moved nothing, which a DB CHECK refuses — as a 500, on a form filled in wrong.
+    minimum = sum(fixed.values()) + MONEY_PLACES * len(crossing)
+    if total < minimum:
+        raise GroupSettlementLegTotalTooSmallError(minimum, account_currency)
     # What is left of the stated total after the rows that crossed nothing, split between the rest in
     # proportion to what each consumed of the payment. `spread_remainder` makes the parts sum to it
     # EXACTLY: the payer's account may not end up moving a cent more or less than they said it did.
     remainder = total - sum(fixed.values())
-    # The rows that crossed nothing already account for part of the payment, one for one. A stated
-    # total at or below them describes a payment that cannot have happened, and dividing what is left
-    # would hand the crossing rows a zero or negative leg — refused by a DB CHECK, as a 500.
-    if remainder <= ZERO:
-        raise GroupSettlementLegTotalTooSmallError(sum(fixed.values()), account_currency)
-    parts = {index: quantize(remainder * cost / crossing_cost, MONEY_PLACES) for index, cost in crossing}
-    return {**fixed, **spread_remainder(parts, remainder, MONEY_PLACES)}
+    parts = spread_remainder({index: quantize(remainder * cost / crossing_cost, MONEY_PLACES) for index, cost in crossing}, remainder, MONEY_PLACES)
+    return {**fixed, **_lift_zero_parts(parts)}
 
 
 # One group's positions, keyed by currency then seat.
