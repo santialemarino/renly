@@ -12,17 +12,6 @@ from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.repositories.utils import apply_entry_sort
 
-# Sortable columns for the expenses list. `category` is sorted as TEXT, not as the enum: ORDER BY on
-# a Postgres enum follows its DECLARATION order, which differs between a database built from
-# 01_create_tables.sql and one built by migrations — the same rows would come back in a different
-# order per environment. The values are alphabetical anyway, so the cast costs nothing.
-_SORT_COLUMNS = {
-    "date": ExpenseEntry.date,
-    "amount": ExpenseEntry.amount,
-    "category": cast(ExpenseEntry.category, String),
-    "payment_method": ExpenseEntry.payment_method,
-}
-
 # The two things a row in the unioned expenses list can be. A private expense_entries row of the
 # caller's own, or the caller's SHARE of a shared expense their group recorded.
 SCOPE_PRIVATE = "private"
@@ -31,6 +20,25 @@ SCOPE_SHARED = "shared"
 # What a shared row reports as its origin. `source` means "how did this get into Renly", and for a row
 # that is one member's share of a group's expense there is no truer answer.
 SOURCE_SHARED = "shared"
+
+
+# The columns the list can be sorted by, read off the UNION's own projection.
+#
+# A function over the merged rows rather than a table-keyed constant, because the two branches read
+# different tables and the sort applies to neither of them directly — a constant naming one table's
+# columns would compile against a projection the query never sorts.
+#
+# `category` is sorted as TEXT, not as the enum: ORDER BY on a Postgres enum follows its DECLARATION
+# order, which differs between a database built from 01_create_tables.sql and one built by migrations —
+# the same rows would come back in a different order per environment. The values are alphabetical
+# anyway, so the cast costs nothing.
+def sort_columns(rows) -> dict:
+    return {
+        "date": rows.c.date,
+        "amount": rows.c.amount,
+        "category": cast(rows.c.category, String),
+        "payment_method": rows.c.payment_method,
+    }
 
 
 # One row of the unioned expenses list, in the projection both branches produce.
@@ -115,7 +123,12 @@ def _apply_list_filters(
 #
 # The tie-break is (id, scope) rather than id alone, because ids are unique per TABLE and this list
 # spans two — without the scope a private row and a shared row sharing a date and an id would have no
-# total order, and Postgres may then repeat one across pages or skip it entirely.
+# total order, and Postgres may then repeat one across pages or skip it entirely.#
+# ▸ The tie-break is NOT observable by testing, and a mutation sweep proved it on both unions. Dropping
+# the scope stays green even against a fixture built to force a genuine (date, id) collision between a
+# private and a shared row, because an unstable sort is *permitted* to be stable and Postgres's top-N
+# sort on a small result happens to be. The total order is the defence; nothing can distinguish it from
+# its absence, so this comment stands in for the test that cannot exist.
 async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
@@ -204,17 +217,11 @@ async def list_by_user_filtered(
     count_result = await session.execute(select(func.count()).select_from(rows))
     total = count_result.scalar_one()
 
-    sort_columns = {
-        "date": rows.c.date,
-        "amount": rows.c.amount,
-        "category": cast(rows.c.category, String),
-        "payment_method": rows.c.payment_method,
-    }
     query = apply_entry_sort(
         select(rows),
         sort_by,
         sort_order,
-        sort_columns=sort_columns,
+        sort_columns=sort_columns(rows),
         default_order=(rows.c.date.desc(), rows.c.id.desc(), rows.c.scope),
         tie_break=(rows.c.id.desc(), rows.c.scope),
     )

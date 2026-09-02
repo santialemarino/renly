@@ -1,10 +1,13 @@
 # Business logic for a group's balances and the settlements that clear them.
 #
 # The balance model in one paragraph. Every shared expense records what each member consumed and what
-# they fronted; a member's position in one currency is the difference, summed over every expense, with
+# they fronted, and every piece of shared income records what each is entitled to and what reached
+# them; a member's position in one currency is the difference on both, summed over every row, with
 # recorded settlements applied on top. Positions are DERIVED — nothing is stored as a running total,
 # matching how every other balance in Renly works — and they sum to zero in each currency by
-# construction rather than by a rule anyone has to remember.
+# construction rather than by a rule anyone has to remember. One settle-up clears whatever the two
+# flows add up to: somebody who fronted a dinner and somebody who collected the rent are owed and owing
+# in the same bucket, so the plan nets them rather than asking for two payments.
 #
 # Balances NEVER net across currencies. Each currency is its own bucket, its own settle line and its
 # own zero-sum: owing dollars while being owed pesos is a real, common state, and merging the two
@@ -41,7 +44,9 @@ from app.domain import (
     NotFoundError,
     WaterfallCandidate,
     apply_settlements,
+    combine_positions,
     expense_positions,
+    income_positions,
     minimise_transfers,
     plan_waterfall,
 )
@@ -57,6 +62,7 @@ from app.repositories import (
     group_repository,
     group_settlement_repository,
     shared_expense_repository,
+    shared_income_repository,
 )
 from app.schemas.group_settlement import (
     GroupBalancesResponse,
@@ -75,9 +81,9 @@ ZERO = Decimal(0)
 
 # Every member's position per currency, plus the fewest payments that clear each bucket.
 #
-# Two queries produce the whole thing regardless of how many expenses a group has: the splits are
-# aggregated to (currency, member, consumed, fronted) in SQL, and the settlements are read as
-# (currency, from, to, amount). A group with a thousand expenses costs one row per member per bucket.
+# Three queries produce the whole thing regardless of how much a group has recorded: each flow's splits
+# are aggregated to (currency, member, two figures) in SQL and the settlements are read as
+# (currency, from, to, amount). A group with a thousand rows costs one row per member per bucket.
 async def get_balances(session: AsyncSession, group_id: int, user: User, *, currency: str | None = None) -> GroupBalancesResponse:
     _, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
@@ -660,22 +666,33 @@ async def _positions_by_currency(session: AsyncSession, group_id: int) -> dict[s
 
 # Every member's position across SEVERAL groups at once, keyed by group, then currency, then seat.
 #
-# Two queries for the whole set regardless of how many groups or expenses are involved — which is why
-# the guard that runs before an account is deleted takes the seats in one call rather than asking per
-# group inside a loop.
+# THREE queries for the whole set regardless of how many groups, expenses or income rows are involved —
+# which is why the guard that runs before an account is deleted takes the seats in one call rather than
+# asking per group inside a loop.
+#
+# A bucket is the sum of BOTH flows plus the settlements against it, and the two flows are two
+# different sign conventions on the same idea: for an expense you are owed what you fronted and you owe
+# what you consumed, while for income you are owed your entitlement and you owe what has already
+# reached you. Each has its own domain function that names its own columns, so neither can be handed
+# the other's — a crossed pair type-checks, still sums to zero, and simply reverses who owes whom.
 async def _positions_by_group(session: AsyncSession, group_ids: list[int]) -> dict[int, dict[str, dict[int, Decimal]]]:
-    rows = await shared_expense_repository.list_positions_by_groups(session, group_ids)
+    expense_rows = await shared_expense_repository.list_positions_by_groups(session, group_ids)
+    income_rows = await shared_income_repository.list_positions_by_groups(session, group_ids)
     movements = await group_settlement_repository.list_movements_by_groups(session, group_ids)
     consumed: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]] = {}
-    for group_id, currency, member_id, amount, paid_amount in rows:
+    for group_id, currency, member_id, amount, paid_amount in expense_rows:
         consumed.setdefault((group_id, currency), []).append((member_id, amount, paid_amount))
+    earned: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]] = {}
+    for group_id, currency, member_id, amount, received_amount in income_rows:
+        earned.setdefault((group_id, currency), []).append((member_id, amount, received_amount))
     settled: dict[tuple[int, str], list[tuple[int, int, Decimal]]] = {}
     for group_id, currency, from_member_id, to_member_id, amount in movements:
         settled.setdefault((group_id, currency), []).append((from_member_id, to_member_id, amount))
     positions: dict[int, dict[str, dict[int, Decimal]]] = {}
-    for key in set(consumed) | set(settled):
+    for key in set(consumed) | set(earned) | set(settled):
         group_id, currency = key
-        net = apply_settlements(expense_positions(consumed.get(key, [])), settled.get(key, []))
+        flows = combine_positions(expense_positions(consumed.get(key, [])), income_positions(earned.get(key, [])))
+        net = apply_settlements(flows, settled.get(key, []))
         if net:
             positions.setdefault(group_id, {})[currency] = net
     return positions

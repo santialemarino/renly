@@ -7,7 +7,7 @@
 # makes the comparison mean anything: derive the two stub shapes from the same rows and the only way
 # they can disagree is if the code does.
 #
-# The union has TEN terms and three of them can only ever be empty for a pot's accounts (a shared
+# The union has ELEVEN terms and three of them can only ever be empty for a pot's accounts (a shared
 # account cannot carry private entries at all). They are fixtured anyway. Dropping a term because a
 # guard currently makes it empty is how a sum ends up agreeing with reality only for as long as that
 # guard holds — the shape §18 recorded.
@@ -32,9 +32,11 @@ _MOVEMENTS: dict[str, list[tuple[int, date, Decimal]]] = {
     "transfers_out": [(1, date(2026, 6, 1), Decimal("75.00"))],
     "ownership_in": [(1, date(2026, 5, 5), Decimal("1000.00")), (2, date(2026, 7, 4), Decimal("60.00"))],
     "ownership_out": [(2, date(2026, 4, 20), Decimal("10.00"))],
-    # The flow half. A shared expense drawn from account 1, and both legs of a group settlement — one
-    # on each account, so a sign flipped on either is visible rather than cancelling out.
+    # The flow half. A shared expense drawn from account 1 and shared income paid INTO it (opposite
+    # signs on the same account, so a sign flipped on either is visible rather than cancelling out
+    # against a different account), and both legs of a group settlement, one on each.
     "shared_expenses": [(1, date(2026, 6, 10), Decimal("300.00"))],
+    "shared_income": [(1, date(2026, 4, 15), Decimal("410.00")), (2, date(2026, 7, 20), Decimal("15.00"))],
     "group_settlements_in": [(1, date(2026, 7, 8), Decimal("180.00"))],
     "group_settlements_out": [(2, date(2026, 5, 2), Decimal("25.00"))],
 }
@@ -71,7 +73,7 @@ def _at(source: str, account_ids: list[int], as_of_date: date) -> dict[int, Deci
     return totals
 
 
-# Stubs the seven dated sums the series reads. The `until` each one is handed is honoured by the
+# Stubs the eleven dated sums the series reads. The `until` each one is handed is honoured by the
 # fixture rather than ignored, so a series that failed to bound its window would come back wrong.
 def _stub_dated(monkeypatch) -> None:
     for repo, method, source in (
@@ -83,6 +85,7 @@ def _stub_dated(monkeypatch) -> None:
         (account_service.pot_ownership_repository, "sum_in_by_account_ids_dated", "ownership_in"),
         (account_service.pot_ownership_repository, "sum_out_by_account_ids_dated", "ownership_out"),
         (account_service.shared_expense_repository, "sum_by_account_ids_dated", "shared_expenses"),
+        (account_service.shared_income_repository, "sum_by_account_ids_dated", "shared_income"),
         (account_service.group_settlement_repository, "sum_in_by_account_ids_dated", "group_settlements_in"),
         (account_service.group_settlement_repository, "sum_out_by_account_ids_dated", "group_settlements_out"),
     ):
@@ -93,7 +96,7 @@ def _stub_dated(monkeypatch) -> None:
         monkeypatch.setattr(repo, method, AsyncMock(side_effect=handler))
 
 
-# Stubs the seven point-in-time sums the existing engine reads, from the same fixture.
+# Stubs the eleven point-in-time sums the existing engine reads, from the same fixture.
 def _stub_at(monkeypatch) -> None:
     for repo, method, source in (
         (account_service.income_repository, "sum_by_account_ids", "income"),
@@ -104,6 +107,7 @@ def _stub_at(monkeypatch) -> None:
         (account_service.pot_ownership_repository, "sum_in_by_account_ids", "ownership_in"),
         (account_service.pot_ownership_repository, "sum_out_by_account_ids", "ownership_out"),
         (account_service.shared_expense_repository, "sum_by_account_ids", "shared_expenses"),
+        (account_service.shared_income_repository, "sum_by_account_ids", "shared_income"),
         (account_service.group_settlement_repository, "sum_in_by_account_ids", "group_settlements_in"),
         (account_service.group_settlement_repository, "sum_out_by_account_ids", "group_settlements_out"),
     ):
@@ -138,10 +142,10 @@ class TestAgreementWithThePointInTimeEngine:
         series = await account_service.compute_account_balance_series(AsyncMock(), accounts, dates=_DATES)
         assert series[1] == [
             Decimal("670.00"),  # 200 opening + 500 income - 30 card settlement, both dated 10 March
-            Decimal("550.00"),  # - 120 expense on 2 April
-            Decimal("1590.00"),  # + 1000 ownership in on 5 May, + 40 income on the 31st itself
-            Decimal("1215.00"),  # - 75 transferred out on 1 June, - 300 shared expense on the 10th
-            Decimal("1395.00"),  # + 180 group settlement received on 8 July
+            Decimal("960.00"),  # - 120 expense on 2 April, + 410 shared income on the 15th
+            Decimal("2000.00"),  # + 1000 ownership in on 5 May, + 40 income on the 31st itself
+            Decimal("1625.00"),  # - 75 transferred out on 1 June, - 300 shared expense on the 10th
+            Decimal("1805.00"),  # + 180 group settlement received on 8 July
         ]
 
 

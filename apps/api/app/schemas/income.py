@@ -42,7 +42,18 @@ class IncomeUpdate(RequestBase):
     _validate_category = field_validator("category")(validate_user_pickable_income_category)
 
 
-# Response for a single income entry.
+# Response for a single income entry, and for one row of the unioned income list.
+#
+# The last four fields are the union's, and are what tell a private entry apart from the caller's share
+# of a group's income:
+#   * `scope` says which table the row came from, and a client MUST gate its row actions on it: ids are
+#     unique per table and not across them, so a PUT or DELETE to /income/{id} for a shared row would
+#     land on whatever private entry happens to hold that number;
+#   * `full_amount` is the whole of a shared row, so a reader can say "your 40 of 100" without a second
+#     request. Null on a private row, where the two would be the same number twice;
+#   * `group_id` / `group_name` name the group, without which a share renders identically to a solo
+#     entry of that size.
+# All four are absent from GET /income/{id}, which reads private entries only.
 class IncomeResponse(BaseModel):
     id: int = Field(description="Income entry id.")
     date: date_type = Field(description="Income date.")
@@ -69,6 +80,12 @@ class IncomeResponse(BaseModel):
     )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
+    scope: str = Field(default="private", description="Which list this row came from: 'private' or 'shared'.")
+    group_id: int | None = Field(default=None, description="Group that recorded it, on a shared row.")
+    group_name: str | None = Field(default=None, description="That group's name, so the row reads without a second request.")
+    full_amount: Decimal | None = Field(
+        default=None, description="The whole shared income, of which `amount` is the caller's share. Null on a private row."
+    )
 
     model_config = {"from_attributes": True}
 

@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from app.domain.money import MONEY_PLACES, quantize
-from app.domain.shared_expense import WaterfallCandidate, plan_waterfall
+from app.domain.shared_flow import WaterfallCandidate, plan_waterfall
 
 # Where an overpayment lands when the payer owes the payee in more than one currency.
 #

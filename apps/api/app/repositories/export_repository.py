@@ -23,6 +23,7 @@ from app.models.investment_collection import InvestmentCollection, InvestmentCol
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import Pot, PotMemberPermission, PotOwnershipEvent
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
+from app.models.shared_income import SharedIncome, SharedIncomeSplit
 from app.models.snapshot import InvestmentSnapshot
 from app.models.subscription import Subscription
 from app.models.transaction import Transaction
@@ -74,6 +75,8 @@ _MEMBERSHIP_SCOPED_TABLES = frozenset(
         "pot_ownership_events",
         "shared_expenses",
         "shared_expense_splits",
+        "shared_income",
+        "shared_income_splits",
         "group_settlements",
     }
 )
@@ -133,8 +136,8 @@ async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]
     data["group_members"] = list(group_members.scalars().all())
     group_invites = await session.execute(select(GroupInvite).where(GroupInvite.group_id.in_(group_ids_stmt)))
     data["group_invites"] = list(group_invites.scalars().all())
-    # The flow half of those groups: what they spent together, how each expense divided, and every
-    # settlement recorded against the resulting balances. Exported for the same reason the rest of the
+    # The flow half of those groups: what they spent and earned together, how each row divided, and
+    # every settlement recorded against the resulting balances. Exported for the same reason the rest of the
     # group is — a shared expense you took part in is part of what Renly holds about you — and NOT
     # restorable for the same reason either: rebuilding a group's ledger from one member's file would
     # stand every other member up as a placeholder bearing a real person's name and owing real money.
@@ -144,6 +147,10 @@ async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]
     data["shared_expenses"] = list(shared_expenses.scalars().all())
     shared_splits = await session.execute(select(SharedExpenseSplit).where(SharedExpenseSplit.group_id.in_(group_ids_stmt)))
     data["shared_expense_splits"] = list(shared_splits.scalars().all())
+    shared_income = await session.execute(select(SharedIncome).where(SharedIncome.group_id.in_(group_ids_stmt)))
+    data["shared_income"] = list(shared_income.scalars().all())
+    income_splits = await session.execute(select(SharedIncomeSplit).where(SharedIncomeSplit.group_id.in_(group_ids_stmt)))
+    data["shared_income_splits"] = list(income_splits.scalars().all())
     settlements = await session.execute(select(GroupSettlement).where(GroupSettlement.group_id.in_(group_ids_stmt)))
     data["group_settlements"] = list(settlements.scalars().all())
 

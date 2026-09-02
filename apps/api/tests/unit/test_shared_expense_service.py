@@ -71,7 +71,9 @@ def _wire(monkeypatch, *, account=None, pot=None, events=(), card=None, members=
     monkeypatch.setattr(shared_expense_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=account))
     monkeypatch.setattr(shared_expense_service.credit_card_repository, "get_by_id", AsyncMock(return_value=card))
     monkeypatch.setattr(shared_expense_service.pot_repository, "get_by_id", AsyncMock(return_value=pot))
-    monkeypatch.setattr(shared_expense_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=list(events)))
+    # Patched on pot_ownership_service, which is where the shared owner-shares helper reads the ledger
+    # from — the expense service no longer touches that repository directly.
+    monkeypatch.setattr(shared_expense_service.pot_ownership_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=list(events)))
     monkeypatch.setattr(shared_expense_service.card_reconciliation_service, "mark_stale_for_date", AsyncMock())
     written: dict = {}
 
@@ -213,7 +215,8 @@ class TestASharedAccountFrontsIt:
         # would otherwise silently rewrite a balance two people had already agreed on.
         written = _wire(monkeypatch, account=_account(5, user_id=None, pot_id=9), pot=self._POT, events=[_event(11, "50"), _event(12, "50")])
         await _create(written, payer_member_id=None, paid_from_account_id=5, date=date(2026, 3, 15))
-        assert shared_expense_service.pot_ownership_repository.list_by_pot.await_args.kwargs == {"as_of_date": date(2026, 3, 15)}
+        ledger = shared_expense_service.pot_ownership_service.pot_ownership_repository
+        assert ledger.list_by_pot.await_args.kwargs == {"as_of_date": date(2026, 3, 15)}
 
     @pytest.mark.asyncio
     async def test_a_pot_with_ONE_owner_still_names_no_payer(self, monkeypatch):

@@ -58,10 +58,10 @@ class TestValidateAccountLink:
         await account_service.validate_account_link(AsyncMock(), USER, 7, "ARS")
 
 
-# Every source the balance union reads, as (module attribute, method, keyword). Ten of them now, so
+# Every source the balance union reads, as (module attribute, method, keyword). Eleven of them now, so
 # the tests below name only the ones they care about and the rest stub to nothing — a test that had to
-# restate all ten would drift the moment an eleventh arrived, which is exactly what happened when the
-# flow half added three.
+# restate all eleven would drift the moment a twelfth arrived, which is exactly what happened when the
+# flow half added three and then a fourth.
 _BALANCE_SOURCES = (
     ("income_repository", "sum_by_account_ids", "income"),
     ("expense_repository", "sum_by_account_ids", "expenses"),
@@ -71,6 +71,7 @@ _BALANCE_SOURCES = (
     ("pot_ownership_repository", "sum_in_by_account_ids", "ownership_in"),
     ("pot_ownership_repository", "sum_out_by_account_ids", "ownership_out"),
     ("shared_expense_repository", "sum_by_account_ids", "shared_expenses"),
+    ("shared_income_repository", "sum_by_account_ids", "shared_income"),
     ("group_settlement_repository", "sum_in_by_account_ids", "group_settlements_in"),
     ("group_settlement_repository", "sum_out_by_account_ids", "group_settlements_out"),
 )
@@ -83,6 +84,7 @@ _LINKED_SOURCES = (
     ("card_settlement_repository", "card_settlements"),
     ("transfer_repository", "transfers"),
     ("shared_expense_repository", "shared_expenses"),
+    ("shared_income_repository", "shared_income"),
     ("group_settlement_repository", "group_settlements"),
 )
 
