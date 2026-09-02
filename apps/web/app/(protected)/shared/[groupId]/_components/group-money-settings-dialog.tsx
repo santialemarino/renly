@@ -122,7 +122,7 @@ export function GroupMoneySettingsDialog({
                       className="w-full"
                       options={SPLIT_METHODS.map((method) => ({
                         value: method,
-                        label: t(`expenses.split.methods.${method}`),
+                        label: t(`split.methods.${method}`),
                       }))}
                     />
                   </FormControl>

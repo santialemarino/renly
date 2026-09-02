@@ -32,7 +32,6 @@ from app.domain import (
     SplitEntry,
     compute_shares,
 )
-from app.domain.pot import OwnershipEntry, replay_units, share_values
 from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
@@ -41,12 +40,11 @@ from app.repositories import (
     account_repository,
     credit_card_repository,
     group_repository,
-    pot_ownership_repository,
     pot_repository,
     shared_expense_repository,
 )
 from app.schemas.shared_expense import SharedExpenseResponse, SharedExpenseSplitInput, SharedExpenseSplitResponse
-from app.services import card_reconciliation_service, exchange_rate_service, group_service
+from app.services import card_reconciliation_service, exchange_rate_service, group_service, pot_ownership_service
 from app.utils.metrics import RateLookup, convert_optional
 
 ZERO = Decimal(0)
@@ -203,7 +201,7 @@ async def create_expense(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> SharedExpenseResponse:
-    group, viewer = await group_service.require_member(session, group_id, user)
+    _, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_active_seats(session, group_id, [split.member_id for split in splits], payer_member_id)
     shares = compute_shares(amount, split_method, [SplitEntry(member_id=split.member_id, figure=split.figure) for split in splits])
     funding = await _resolve_funding(
@@ -443,11 +441,13 @@ def _ensure_account_open(account: Account, date: date_type) -> None:
 
 
 # Splits what a shared account fronted across the pot's owners, in their proportions ON THE EXPENSE'S
-# DATE. share_values is the same function the pot page divides a NAV with, so the parts sum to the
-# total exactly and the rounding rule cannot differ between the two surfaces.
+# DATE.
 #
-# Two refusals rather than one, because they are different problems: a pot in another group has owners
-# this group could never settle with, and an undivided pot has no owners on record at all.
+# The arithmetic is pot_ownership_service.owner_shares, shared with the income mirror so there is one
+# proportional division of a shared account's money rather than two that can drift. What stays here is
+# the pair of refusals, because each names something an expense reader has to fix and the income
+# wording is different: a pot in another group has owners this group could never settle with, and an
+# undivided pot has no owners on record at all.
 #
 # ▸ This path deliberately does NOT apply _require_active_seats, and the asymmetry is the point. A seat
 # NAMED in the request is a choice the user is making now, so a departed one is refused. A pot owner is
@@ -462,9 +462,7 @@ async def _pot_owner_shares(session: AsyncSession, pot_id: int, group_id: int, *
     pot = await pot_repository.get_by_id(session, pot_id)
     if pot is None or pot.group_id != group_id:
         raise SharedExpenseFundingScopeError()
-    events = await pot_ownership_repository.list_by_pot(session, pot_id, as_of_date=date)
-    balances = replay_units([OwnershipEntry(member_id=e.member_id, units=e.units, counterparty_member_id=e.counterparty_member_id) for e in events])
-    shares = share_values(balances, total)
+    shares = await pot_ownership_service.owner_shares(session, pot, total=total, date=date)
     if not shares:
         raise SharedExpenseFundingPotNotDividedError()
     return shares

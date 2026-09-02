@@ -34,7 +34,8 @@ interface GroupBalancesSectionProps {
   balances: GroupBalances;
   // Whether the group has recorded any shared expense at all, which is what tells "nobody has shared
   // anything" apart from "everyone is square" — two opposite sentences for the same empty list.
-  hasSharedSpending: boolean;
+  // Whether the group has recorded ANY shared flow — spending or income. See `balancesEmptyState`.
+  hasAnyFlow: boolean;
   // Null when the settings could not be read. The control that edits them is then not offered rather
   // than opened on invented defaults — a dialog that saves what it guessed would overwrite the real
   // values with them.
@@ -61,7 +62,7 @@ interface GroupBalancesSectionProps {
 export function GroupBalancesSection({
   group,
   balances,
-  hasSharedSpending,
+  hasAnyFlow,
   moneySettings,
   accounts,
   timeZone,
@@ -119,8 +120,8 @@ export function GroupBalancesSection({
       {!hasOpenBalances(balances.buckets) ? (
         <EmptyState
           icon={Scale}
-          title={t(`balances.empty.${balancesEmptyState(hasSharedSpending)}.title`)}
-          description={t(`balances.empty.${balancesEmptyState(hasSharedSpending)}.description`)}
+          title={t(`balances.empty.${balancesEmptyState(hasAnyFlow)}.title`)}
+          description={t(`balances.empty.${balancesEmptyState(hasAnyFlow)}.description`)}
         />
       ) : (
         <div className="flex flex-col gap-y-4">

@@ -42,6 +42,28 @@ def _permission(**kwargs) -> PotMemberPermission:
     return PotMemberPermission(**{**defaults, **kwargs})
 
 
+# Every table the scope-boundary guard consults, stubbed clean, so a test can override the ONE it is
+# about. Listed once rather than per test: a table added to the guard and not to this tuple makes all
+# five of those tests fail in one place, which is the point — the guard grew a blind spot twice, and
+# both times it was a table nobody remembered it should ask.
+_GUARDED_REPOSITORIES = (
+    "income_repository",
+    "expense_repository",
+    "card_settlement_repository",
+    "transfer_repository",
+    "shared_expense_repository",
+    "shared_income_repository",
+    "group_settlement_repository",
+)
+
+
+def _no_movements(monkeypatch) -> None:
+    for repository in _GUARDED_REPOSITORIES:
+        monkeypatch.setattr(getattr(pot_service, repository), "linked_account_ids", AsyncMock(return_value=set()))
+    monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
+    monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+
+
 class TestVisibilityResolution:
     # The four rows of the §7 test matrix, at the service layer. Each one is also asserted against a
     # real Postgres policy in the integration suite.
@@ -226,11 +248,8 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
-        for repo in ("income_repository", "expense_repository", "card_settlement_repository"):
-            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        _no_movements(monkeypatch)
         monkeypatch.setattr(pot_service.transfer_repository, "linked_account_ids", AsyncMock(return_value={7}))
-        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
-        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         with pytest.raises(AccountHasLinkedEntriesError) as excinfo:
@@ -247,14 +266,36 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
-        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
-            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        _no_movements(monkeypatch)
         monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=True))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         with pytest.raises(AccountHasLinkedEntriesError):
             await pot_service.move_holdings(AsyncMock(), 5, USER, account_ids=[7])
+        move.assert_not_awaited()
+
+    @pytest.mark.parametrize(
+        "repository",
+        ["shared_expense_repository", "shared_income_repository", "group_settlement_repository"],
+    )
+    @pytest.mark.asyncio
+    async def test_an_account_carrying_a_GROUP_row_cannot_be_shared(self, monkeypatch, repository):
+        # The blind spot the four private checks cannot see: they all filter by user_id, and a group's
+        # row belongs to no user. So an account whose only history is shared — a distributed income's
+        # destination, a shared expense's funding account, a settlement's cash leg — passed every one
+        # of them and moved into the pot, where the whole of that money then raised every owner's share
+        # pro-rata while the splits still said the collector owed each of them their share. The same
+        # money counted twice, and the row left unsaveable because its account no longer had an owner.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
+        _no_movements(monkeypatch)
+        monkeypatch.setattr(getattr(pot_service, repository), "linked_account_ids", AsyncMock(return_value={7}))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
+        with pytest.raises(AccountHasLinkedEntriesError) as excinfo:
+            await pot_service.move_holdings(AsyncMock(), 5, USER, account_ids=[7])
+        assert excinfo.value.extra == {"account_ids": [7]}
         move.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -264,10 +305,7 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
-        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
-            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
-        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        _no_movements(monkeypatch)
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", AsyncMock(return_value=0))
@@ -351,10 +389,8 @@ class TestMovingHoldings:
             "get_by_ids_any_scope",
             AsyncMock(return_value=[self._account(7, user_id=None, pot_id=5)]),
         )
-        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
-            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
+        _no_movements(monkeypatch)
         monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=True))
-        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         with pytest.raises(AccountHasLinkedEntriesError):
@@ -371,10 +407,7 @@ class TestMovingHoldings:
             "get_by_ids_any_scope",
             AsyncMock(return_value=[self._account(7, user_id=None, pot_id=5)]),
         )
-        for repo in ("income_repository", "expense_repository", "card_settlement_repository", "transfer_repository"):
-            monkeypatch.setattr(getattr(pot_service, repo), "linked_account_ids", AsyncMock(return_value=set()))
-        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
-        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+        _no_movements(monkeypatch)
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", AsyncMock(return_value=0))

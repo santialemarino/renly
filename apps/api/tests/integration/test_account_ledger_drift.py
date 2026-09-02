@@ -80,10 +80,10 @@ async def fixtures(session: AsyncSession):
         u=users[0],
     )
 
-    # A group both users hold a seat in, with a pot holding one joint account. Present so the three
-    # movement kinds the flow half and the ownership ledger add have somewhere to happen: a shared
-    # expense drawn from a private account, a settlement between the two seats, and a contribution
-    # crossing the scope boundary.
+    # A group both users hold a seat in, with a pot holding one joint account. Present so the movement
+    # kinds the flow half and the ownership ledger add have somewhere to happen: a shared expense drawn
+    # from a private account, shared income arriving in one, a settlement between the two seats, and a
+    # contribution crossing the scope boundary.
     group = await scalar("INSERT INTO groups (name, kind, created_by) VALUES ('Ledger group', 'household', :u) RETURNING id", u=users[0])
     seats = [
         await scalar(
@@ -106,8 +106,13 @@ async def fixtures(session: AsyncSession):
 
 
 # Asserts the ledger's own sum and the accounts page's balance agree for the given account.
+#
+# The row is loaded in EITHER scope, because a pot's account has no owner at all and is still an
+# account whose ledger has to add up. `user_id` stays the ASKER's: it scopes the private-entry branches,
+# which are always empty for a shared account, and passing it is what lets the same assertion run for
+# two different callers on one shared row.
 async def _assert_no_drift(session: AsyncSession, account_id: int, user_id: int):
-    account = await account_repository.get_by_id(session, account_id, user_id)
+    account = await account_repository.get_by_id_any_scope(session, account_id)
     from_balance_path = await account_service.get_account_balance(session, account, user_id)
     from_union = await account_movement_repository.sum_movements(session, account_id, user_id, opening_date=account.opening_date)
     assert account.opening_balance + from_union == from_balance_path, (
@@ -352,6 +357,79 @@ class TestTheScopeCrossingMovements:
         assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE - Decimal("9000.00")
 
     @pytest.mark.asyncio
+    async def test_shared_income_puts_the_whole_amount_into_the_account_that_received_it(self, session, fixtures):
+        # The mirror of the shared expense above, and the sign is the point: the WHOLE amount arrives,
+        # not the recipient's share. A branch that subtracted instead of adding would move the balance
+        # by twice the figure in the wrong direction, and the ledger's own sum would agree with it —
+        # which is exactly why this asserts the resulting BALANCE and not just the absence of drift.
+        u, ars, group, seats = fixtures["users"][0], fixtures["ars"], fixtures["group"], fixtures["seats"]
+        income = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, category, split_method, destination, paid_to_account_id)"
+                    " VALUES (:g, '2026-07-14', 6000, 'ARS', 'rental_income', 'equal', 'distributed', :a) RETURNING id"
+                ),
+                {"g": group, "a": ars},
+            )
+        ).scalar_one()
+        for seat, entitled, received in ((seats[0], 3000, 6000), (seats[1], 3000, 0)):
+            await session.execute(
+                text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, :a, :r)"),
+                {"i": income, "g": group, "m": seat, "a": entitled, "r": received},
+            )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE + Decimal("6000.00")
+
+    @pytest.mark.asyncio
+    async def test_shared_income_into_a_POT_account_reads_the_same_for_every_member(self, session, fixtures):
+        # The JOINT destination, and the property that matters about it: the account belongs to no user
+        # at all, so its balance must not depend on who is asking. Neither the sum nor the ledger branch
+        # carries a user filter, and driving BOTH members through the same assertion is the only thing
+        # that proves it — a filter on either side would give one of them a different figure while
+        # staying perfectly self-consistent for the other.
+        users, joint, group, seats = fixtures["users"], fixtures["joint"], fixtures["group"], fixtures["seats"]
+        income = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+                    " VALUES (:g, '2026-07-15', 8000, 'ARS', 'equal', 'joint', :a) RETURNING id"
+                ),
+                {"g": group, "a": joint},
+            )
+        ).scalar_one()
+        for seat, received in ((seats[0], 5000), (seats[1], 3000)):
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 4000, :r)"
+                ),
+                {"i": income, "g": group, "m": seat, "r": received},
+            )
+        await session.flush()
+
+        # The joint account opens at zero (see the fixture), so the whole 8,000 is what arrived — the
+        # WHOLE amount and not either member's share of it.
+        assert await _assert_no_drift(session, joint, users[0]) == Decimal("8000.00")
+        assert await _assert_no_drift(session, joint, users[1]) == Decimal("8000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_pre_opening_shared_income_row_is_excluded_by_both(self, session, fixtures):
+        # opening_balance IS the balance at opening_date, so an earlier row is already inside it. The
+        # bound has to hold on BOTH sides or the ledger lists a row the balance does not count — and it
+        # lives in a join on this side, which no mocked session can exercise.
+        u, ars, group = fixtures["users"][0], fixtures["ars"], fixtures["group"]
+        await session.execute(
+            text(
+                "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+                " VALUES (:g, '2026-06-01', 4000, 'ARS', 'equal', 'distributed', :a)"
+            ),
+            {"g": group, "a": ars},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, ars, u) == _OPENING_BALANCE
+
+    @pytest.mark.asyncio
     async def test_both_legs_of_a_settlement_move_real_cash(self, session, fixtures):
         # D15: settling MOVES money. The payer's account falls and the payee's rises, and a settlement
         # that only cleared a balance would leave both accounts stating figures nobody holds.
@@ -466,6 +544,19 @@ class TestTheScopeCrossingMovements:
             ),
             {"p": pot, "m": seats[0], "f": ars, "t": joint},
         )
+        income = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+                    " VALUES (:g, '2026-07-22', 700, 'ARS', 'equal', 'distributed', :a) RETURNING id"
+                ),
+                {"g": group, "a": ars},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 700, 700)"),
+            {"i": income, "g": group, "m": seats[0]},
+        )
         await session.flush()
 
         account = await account_repository.get_by_id(session, ars, u)
@@ -474,8 +565,21 @@ class TestTheScopeCrossingMovements:
         for kind in MovementKind:
             rows, _ = await account_movement_repository.list_movements(session, ars, u, opening_date=account.opening_date, kind=kind, page_size=100)
             by_kind[kind.value] = len(rows)
-        assert {source.value for source in (m.movement.source for m in unfiltered)} == {"shared_expense", "group_settlement", "ownership"}
+        assert {source.value for source in (m.movement.source for m in unfiltered)} == {
+            "shared_expense",
+            "shared_income",
+            "group_settlement",
+            "ownership",
+        }
         assert by_kind["expense"] == 1 and by_kind["group_settlement"] == 1 and by_kind["ownership"] == 1
+        assert by_kind["income"] == 1 and by_kind["adjustment"] == 0
+        # And the KIND COLUMN each row carries, not merely which filter returned it. The two are
+        # separate — the filter dispatch decides which branches run, the column decides what the row
+        # says it is — so counting rows per filter left a row that reported itself as a
+        # reconciliation adjustment perfectly satisfying the counts above. A sweep found that.
+        kinds = {m.movement.source.value: m.movement.kind.value for m in unfiltered}
+        assert kinds["shared_income"] == "income", kinds
+        assert kinds["shared_expense"] == "expense" and kinds["ownership"] == "ownership"
         # And the CARD settlement kind stays what its shipped label says it is: no group row landed in it.
         assert by_kind["settlement"] == 0
         assert sum(by_kind.values()) == len(unfiltered)

@@ -77,7 +77,21 @@ def _settlement(**overrides) -> GroupSettlement:
 
 # Stubs everything the settlement service reaches for. `viewer` is which seat the caller holds, which
 # is what every permission rule below turns on.
-def _wire(monkeypatch, *, viewer=_MEMBERS[0], account=None, auto_finalise=False, settlement=None, positions=None):
+#
+# `positions` are the EXPENSE splits' aggregate and `income_positions` the income one, as
+# (currency, member_id, two figures) — the two are separate parameters rather than one pre-netted map
+# because the service reads them from two repositories and nets them itself, and a test that handed it
+# one combined figure could not tell a dropped flow from a summed one.
+def _wire(
+    monkeypatch,
+    *,
+    viewer=_MEMBERS[0],
+    account=None,
+    auto_finalise=False,
+    settlement=None,
+    positions=None,
+    income_positions=None,
+):
     monkeypatch.setattr(
         group_settlement_service.group_service,
         "require_member",
@@ -104,6 +118,11 @@ def _wire(monkeypatch, *, viewer=_MEMBERS[0], account=None, auto_finalise=False,
         group_settlement_service.shared_expense_repository,
         "list_positions_by_groups",
         AsyncMock(return_value=[(GROUP_ID, *row) for row in (positions or [])]),
+    )
+    monkeypatch.setattr(
+        group_settlement_service.shared_income_repository,
+        "list_positions_by_groups",
+        AsyncMock(return_value=[(GROUP_ID, *row) for row in (income_positions or [])]),
     )
     monkeypatch.setattr(group_settlement_service.group_settlement_repository, "list_movements_by_groups", AsyncMock(return_value=[]))
     monkeypatch.setattr(group_settlement_service, "exchange_rate_service", AsyncMock())
@@ -431,6 +450,56 @@ class TestBalances:
         result = await group_settlement_service.get_balances(AsyncMock(), GROUP_ID, USER)
         for bucket in result.buckets:
             assert sum(row.amount for row in bucket.balances) == Decimal(0), bucket.currency
+
+    @pytest.mark.asyncio
+    async def test_income_alone_produces_a_balance(self, monkeypatch):
+        """The service reading the INCOME aggregate at all, which a sweep found nothing exercised.
+
+        A member who collected 90 of shared income while entitled to 30 owes the other two their
+        shares — the mirror of fronting a bill. Dropping the income read from the derivation left every
+        expense test green and this figure at zero, which is money nobody could see they were owed.
+        """
+        _wire(
+            monkeypatch,
+            income_positions=[
+                ("ARS", 11, Decimal("30"), Decimal("90")),
+                ("ARS", 12, Decimal("30"), Decimal("0")),
+                ("ARS", 13, Decimal("30"), Decimal("0")),
+            ],
+        )
+        result = await group_settlement_service.get_balances(AsyncMock(), GROUP_ID, USER)
+        ars = next(bucket for bucket in result.buckets if bucket.currency == "ARS")
+        # Entitled 30 minus received 90 — the OPPOSITE direction from an expense, where fronting 90
+        # against a 30 share leaves you owed 60. Reading the income columns the expense way would put
+        # +60 here.
+        assert ars.my_balance == Decimal("-60")
+        assert {row.member_id: row.amount for row in ars.balances} == {11: Decimal("-60"), 12: Decimal("30"), 13: Decimal("30")}
+        assert sum(row.amount for row in ars.balances) == Decimal(0)
+
+    @pytest.mark.asyncio
+    async def test_the_two_flows_net_in_one_bucket(self, monkeypatch):
+        # One settle-up clears whatever the two add up to. Member 11 fronted a 90 expense (owed 60) and
+        # collected 90 of income they were entitled to 30 of (owes 60), so they are square — and the
+        # bucket disappears entirely, which is the state a group that has done both ends in.
+        _wire(
+            monkeypatch,
+            positions=[("ARS", 11, Decimal("30"), Decimal("90")), ("ARS", 12, Decimal("60"), Decimal("0"))],
+            income_positions=[("ARS", 11, Decimal("30"), Decimal("90")), ("ARS", 12, Decimal("60"), Decimal("0"))],
+        )
+        result = await group_settlement_service.get_balances(AsyncMock(), GROUP_ID, USER)
+        assert result.buckets == []
+
+    @pytest.mark.asyncio
+    async def test_a_bucket_only_income_opened_still_appears(self, monkeypatch):
+        # The key set the derivation iterates has to be the UNION of both flows' keys: a currency only
+        # income has been recorded in would otherwise vanish, taking its balance with it.
+        _wire(
+            monkeypatch,
+            positions=[("ARS", 11, Decimal("30"), Decimal("30"))],
+            income_positions=[("USD", 11, Decimal("0"), Decimal("40")), ("USD", 12, Decimal("40"), Decimal("0"))],
+        )
+        result = await group_settlement_service.get_balances(AsyncMock(), GROUP_ID, USER)
+        assert [bucket.currency for bucket in result.buckets] == ["USD"]
 
     @pytest.mark.asyncio
     async def test_the_suggestions_clear_the_bucket(self, monkeypatch):

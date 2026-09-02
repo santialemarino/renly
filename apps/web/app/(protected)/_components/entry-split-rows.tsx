@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useWatch, type UseFormReturn } from 'react-hook-form';
+import { useWatch, type Control, type FieldValues } from 'react-hook-form';
 
 import { Checkbox, Label } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -9,30 +9,49 @@ import {
   includedSplitCount,
   splitFiguresBalance,
   splitFiguresTotal,
-  type SharedExpenseFormValues,
-} from '@/app/(protected)/shared/shared-expense-form-schema';
+  type SplitFormRow,
+} from '@/app/(protected)/shared/split-form-schema';
 import {
   splitFigureKind,
   splitMethodHasTotal,
   type SplitFigureKind,
-} from '@/app/(protected)/shared/shared-expense-rules';
+} from '@/app/(protected)/shared/split-rules';
 import { FormControl, FormField, FormItem } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { GroupMember } from '@/lib/api/groups';
-import { SPLIT_FIGURE_DECIMALS, SPLIT_PERCENTAGE_TOTAL } from '@/lib/constants/shared-expenses';
+import {
+  SPLIT_FIGURE_DECIMALS,
+  SPLIT_PERCENTAGE_TOTAL,
+  type SplitMethod,
+} from '@/lib/constants/shared-expenses';
 import { useFormatters } from '@/lib/i18n/formatters';
 
-interface ExpenseSplitRowsProps {
+// Minimal form shape this control operates on — the three fields a split editor reads, and nothing
+// about which flow the form belongs to. Every embedding schema declares all three.
+export type SplitFormValues = {
+  splits: SplitFormRow[];
+  splitMethod: SplitMethod;
+  amount: string;
+};
+
+interface EntrySplitRowsProps<T extends SplitFormValues & FieldValues> {
   // Must be rendered inside this form's <Form> provider: FormItem and FormMessage read the context.
-  form: UseFormReturn<SharedExpenseFormValues>;
+  control: Control<T>;
   /*
    * One row per seat, in the order the form seeded them — which is the roster's order, so the rows
-   * stay put as the method changes. Former seats appear only when the expense being edited already
-   * named them; a new expense never offers one.
+   * stay put as the method changes. Former seats appear only when the row being edited already named
+   * them; a new one never offers one.
    */
   seats: GroupMember[];
-  // The expense's currency, for the amount fields' precision and the exact method's total.
+  // The row's currency, for the amount fields' precision and the exact method's total.
   currency: string;
+  /*
+   * What this list of people IS, in the one place the two flows differ. An expense asks who was in on
+   * it; income asks who gets a share of it. Every other string here — the per-method hints, the
+   * running total, the figure placeholders, the errors — reads correctly for both and stays in the
+   * shared namespace.
+   */
+  participantsLabel: string;
   /*
    * Whether to show the total's error. The dialog submits the form, so `formState.isSubmitted` is its
    * signal — the same split `PotShareRows` makes, and for the same reason: an error shown before the
@@ -42,7 +61,11 @@ interface ExpenseSplitRowsProps {
 }
 
 /*
- * Who took part in a shared expense, and each participant's figure for the chosen split method.
+ * Who a shared amount is divided between, and each participant's figure for the chosen split method.
+ *
+ * One control for both flows, because the division is one thing: a shared expense and a piece of
+ * shared income take the same four methods, the same figures and the same running total. Only the
+ * heading differs, and it arrives as a prop.
  *
  * The running total is the whole affordance, and it has to be. Both of the schema's split issues land
  * at `path: ['splits']`, which is react-hook-form's ARRAY entry, and an array's `message` is
@@ -56,13 +79,27 @@ interface ExpenseSplitRowsProps {
  * second algorithm to disagree about the one figure a person checks. The exact shares are on the row
  * the moment it is saved.
  */
-export function ExpenseSplitRows({ form, seats, currency, showTotalError }: ExpenseSplitRowsProps) {
+export function EntrySplitRows<T extends SplitFormValues & FieldValues>({
+  control: controlProp,
+  seats,
+  currency,
+  participantsLabel,
+  showTotalError,
+}: EntrySplitRowsProps<T>) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
 
-  const watchedSplits = useWatch({ control: form.control, name: 'splits' });
-  const watchedMethod = useWatch({ control: form.control, name: 'splitMethod' });
-  const watchedAmount = useWatch({ control: form.control, name: 'amount' });
+  /*
+   * Narrow the caller's form typing to the minimal shape, exactly as `AccountField` does and for the
+   * same reason: react-hook-form's Control generic is invariant, so a direct assignment will not
+   * compile even though T extends SplitFormValues. Safe because this control only ever reads and
+   * writes the three fields that shape declares.
+   */
+  const control = controlProp as unknown as Control<SplitFormValues>;
+
+  const watchedSplits = useWatch({ control, name: 'splits' });
+  const watchedMethod = useWatch({ control, name: 'splitMethod' });
+  const watchedAmount = useWatch({ control, name: 'amount' });
 
   const splits = watchedSplits ?? [];
   const hasTotal = splitMethodHasTotal(watchedMethod);
@@ -88,17 +125,15 @@ export function ExpenseSplitRows({ form, seats, currency, showTotalError }: Expe
        * The base Label, not FormLabel: this heads the whole participants block rather than one field,
        * and FormLabel outside a FormField has no field context to read.
        */}
-      <Label required>{t('expenses.split.participants.label')}</Label>
-      <p className="text-paragraph-xs text-muted-foreground">
-        {t(`expenses.split.hint.${watchedMethod}`)}
-      </p>
+      <Label required>{participantsLabel}</Label>
+      <p className="text-paragraph-xs text-muted-foreground">{t(`split.hint.${watchedMethod}`)}</p>
 
       {seats.map((seat, index) => (
         <SplitRow
           key={seat.id}
           seat={seat}
           index={index}
-          form={form}
+          control={control}
           currency={currency}
           figureKind={figureKind}
         />
@@ -106,9 +141,7 @@ export function ExpenseSplitRows({ form, seats, currency, showTotalError }: Expe
 
       {hasTotal && (
         <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-lg">
-          <span className="text-paragraph-sm text-muted-foreground">
-            {t('expenses.split.total')}
-          </span>
+          <span className="text-paragraph-sm text-muted-foreground">{t('split.total')}</span>
           <span
             className={cn(
               'text-paragraph-sm-medium tabular-nums',
@@ -125,14 +158,10 @@ export function ExpenseSplitRows({ form, seats, currency, showTotalError }: Expe
        * is the one that makes the other meaningless — an empty split has no total to be out by.
        */}
       {showTotalError && noParticipants && (
-        <p className="text-paragraph-xs text-destructive">
-          {t('expenses.split.errors.participants')}
-        </p>
+        <p className="text-paragraph-xs text-destructive">{t('split.errors.participants')}</p>
       )}
       {showTotalError && !noParticipants && !balanced && figureKind !== null && (
-        <p className="text-paragraph-xs text-destructive">
-          {t(`expenses.split.errors.${figureKind}`)}
-        </p>
+        <p className="text-paragraph-xs text-destructive">{t(`split.errors.${figureKind}`)}</p>
       )}
     </div>
   );
@@ -148,25 +177,25 @@ export function ExpenseSplitRows({ form, seats, currency, showTotalError }: Expe
 function SplitRow({
   seat,
   index,
-  form,
+  control,
   currency,
   figureKind,
 }: {
   seat: GroupMember;
   index: number;
-  form: UseFormReturn<SharedExpenseFormValues>;
+  control: Control<SplitFormValues>;
   currency: string;
   // Null when the method takes no figures, which is the one case that renders no input at all.
   figureKind: SplitFigureKind | null;
 }) {
   const t = useTranslations('shared');
 
-  const included = useWatch({ control: form.control, name: `splits.${index}.included` });
+  const included = useWatch({ control, name: `splits.${index}.included` });
 
   return (
     <div className="flex min-w-0 items-center gap-x-3">
       <FormField
-        control={form.control}
+        control={control}
         name={`splits.${index}.included`}
         render={({ field }) => (
           <Checkbox
@@ -195,19 +224,19 @@ function SplitRow({
         {seat.isSelf && (
           <span className="text-paragraph-xs text-muted-foreground"> {t('members.you')}</span>
         )}
-        {/* A former seat appears only on an expense that already named them, and saying so is the
-            point: the API refuses to re-record one, and the form says which person that is about. */}
+        {/* A former seat appears only on a row that already named them, and saying so is the point:
+            the API refuses to re-record one, and the form says which person that is about. */}
         {!seat.isActive && (
           <span className="text-paragraph-xs text-muted-foreground">
             {' '}
-            {t('expenses.split.formerMember')}
+            {t('split.formerMember')}
           </span>
         )}
       </span>
 
       {figureKind !== null && (
         <FormField
-          control={form.control}
+          control={control}
           name={`splits.${index}.figure`}
           render={({ field }) => (
             <FormItem className="shrink-0">
@@ -223,7 +252,7 @@ function SplitRow({
                    */
                   currency={figureKind === 'exact' ? currency : undefined}
                   maxDecimals={figureKind === 'exact' ? undefined : SPLIT_FIGURE_DECIMALS}
-                  placeholder={t(`expenses.split.figurePlaceholder.${figureKind}`)}
+                  placeholder={t(`split.figurePlaceholder.${figureKind}`)}
                 />
               </FormControl>
             </FormItem>

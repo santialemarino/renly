@@ -2,11 +2,16 @@ import 'server-only';
 
 import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
+import type { EntryScope } from '@/lib/constants/entries';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
 interface IncomeEntryRaw {
   id: number;
+  scope: string;
+  group_id: number | null;
+  group_name: string | null;
+  full_amount: string | null;
   date: string;
   amount: string;
   currency: string;
@@ -33,6 +38,18 @@ interface IncomeListRaw {
 
 export interface IncomeEntry {
   id: number;
+  /*
+   * Which table the row came from — 'private' for the user's own income_entries row, 'shared' for
+   * their SHARE of one their group recorded, read in by the list's union.
+   *
+   * It is half the identity, not a label: ids are unique per table and not across them, so a shared
+   * row's `id` is meaningless to /income/{id}. Every row action has to gate on this.
+   */
+  scope: EntryScope;
+  // Set on a shared row only: the group it belongs to, and the whole amount `amount` is a share of.
+  groupId: number | null;
+  groupName: string | null;
+  fullAmount: string | null;
   date: string;
   amount: string;
   currency: string;
@@ -74,6 +91,10 @@ export interface GetIncomeParams {
 function mapIncomeEntry(raw: IncomeEntryRaw): IncomeEntry {
   return {
     id: raw.id,
+    scope: raw.scope as EntryScope,
+    groupId: raw.group_id,
+    groupName: raw.group_name,
+    fullAmount: raw.full_amount,
     date: raw.date,
     amount: raw.amount,
     currency: raw.currency,

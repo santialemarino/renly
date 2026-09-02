@@ -243,6 +243,7 @@ class TestTransfersMoveTheBalance:
         monkeypatch.setattr(account_service.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={2: Decimal("2500")}))
         monkeypatch.setattr(account_service.shared_expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
+        monkeypatch.setattr(account_service.shared_income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.group_settlement_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
         monkeypatch.setattr(account_service.group_settlement_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
         for repo in (
@@ -250,6 +251,7 @@ class TestTransfersMoveTheBalance:
             "expense_repository",
             "card_settlement_repository",
             "shared_expense_repository",
+            "shared_income_repository",
             "group_settlement_repository",
         ):
             monkeypatch.setattr(getattr(account_service, repo), "linked_account_ids", AsyncMock(return_value=set()))

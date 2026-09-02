@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { SortOrder } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { ExpenseScope } from '@/lib/constants/expenses';
+import type { EntryScope } from '@/lib/constants/entries';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
@@ -56,7 +56,7 @@ export interface Expense {
    * It is half the identity, not a label: ids are unique per table and not across them, so a shared
    * row's `id` is meaningless to /expenses/{id}. Every row action has to gate on this.
    */
-  scope: ExpenseScope;
+  scope: EntryScope;
   // Set on a shared row only: the group it belongs to, and the whole expense `amount` is a share of.
   groupId: number | null;
   groupName: string | null;
@@ -109,7 +109,7 @@ export interface GetExpensesParams {
 export function mapExpense(raw: ExpenseRaw): Expense {
   return {
     id: raw.id,
-    scope: raw.scope as ExpenseScope,
+    scope: raw.scope as EntryScope,
     groupId: raw.group_id,
     groupName: raw.group_name,
     fullAmount: raw.full_amount,

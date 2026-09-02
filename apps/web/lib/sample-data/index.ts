@@ -134,9 +134,14 @@ export const sampleExpenses: Expense[] = [
   },
 ];
 
+// Every sample income entry is private too, for the reason the expenses above are.
 export const sampleIncome: IncomeEntry[] = [
   {
     id: -1,
+    scope: 'private',
+    groupId: null,
+    groupName: null,
+    fullAmount: null,
     date: '2026-01-01',
     amount: '900000.00',
     currency: 'ARS',
@@ -152,6 +157,10 @@ export const sampleIncome: IncomeEntry[] = [
   },
   {
     id: -2,
+    scope: 'private',
+    groupId: null,
+    groupName: null,
+    fullAmount: null,
     date: '2026-01-10',
     amount: '500.00',
     currency: 'USD',

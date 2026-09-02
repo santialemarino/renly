@@ -1,19 +1,25 @@
-# The math the flow half rests on: dividing one expense between several people, deriving what each of
-# them is owed, and turning that into the fewest payments that clear it.
+# The math the flow half rests on: dividing one shared amount between several people, deriving what
+# each of them is owed, and turning that into the fewest payments that clear it.
+#
+# Named for the FLOW rather than for expenses because only one function here is about expenses. The
+# division, the settle-up minimiser and the overpay waterfall are the same math whichever direction
+# the money went, and shared income uses every one of them.
 #
 # Everything here is pure — no session, no models — so the rules can be tested exhaustively without a
 # database, the way the unit accounting in `pot.py` is.
 #
 # Three properties hold across all of it and are the reason it looks the way it does:
 #
-#   * A split ALWAYS sums to the expense's total, in every method, after rounding. That is what makes
+#   * A split ALWAYS sums to the flow's total, in every method, after rounding. That is what makes
 #     the balances sum to zero, so it is enforced by construction here rather than checked later.
 #
-#   * A member's position in an expense is TWO figures, not one: what they consumed (`amount`) and
-#     what they fronted (`paid_amount`). Their balance is the difference. One pair of columns covers a
-#     member paying for the group, a shared account paying for the group, and a shared account paying
-#     for one member — with no special case anywhere, because "who fronted it" is not always a single
-#     person and a payer column could not say so.
+#   * A member's position in a flow is TWO figures, not one. For an expense: what they consumed
+#     (`amount`) and what they fronted (`paid_amount`). For income: what they are entitled to
+#     (`amount`) and what they actually received (`received_amount`). Their balance is the difference
+#     either way. One pair of columns covers a member paying for the group, a shared account paying
+#     for the group, a shared account paying for one member, and the mirror of all three on the way
+#     in — with no special case anywhere, because neither "who fronted it" nor "who received it" is
+#     always a single person, and a payer or receiver column could not say so.
 #
 #   * Balances NEVER net across currencies. Each currency is its own bucket, its own settle line, and
 #     its own zero-sum. Owing dollars while being owed pesos is a real, common state.
@@ -22,10 +28,10 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from app.domain.errors import (
-    SharedExpenseNoParticipantsError,
-    SharedExpensePercentagesError,
-    SharedExpenseSharesError,
-    SharedExpenseSplitTotalError,
+    SharedSplitNoParticipantsError,
+    SharedSplitPercentagesError,
+    SharedSplitSharesError,
+    SharedSplitTotalError,
 )
 from app.domain.money import MONEY_PLACES, ONE_HUNDRED, quantize, spread_remainder
 from app.models.group_money_settings import SplitMethod
@@ -62,7 +68,7 @@ class SettleTransfer:
 # or weights that are all zero.
 def compute_shares(total: Decimal, method: SplitMethod, entries: list[SplitEntry]) -> dict[int, Decimal]:
     if not entries:
-        raise SharedExpenseNoParticipantsError()
+        raise SharedSplitNoParticipantsError()
     if method == SplitMethod.equal:
         return _split_by_weight(total, {entry.member_id: Decimal(1) for entry in entries})
     if method == SplitMethod.exact:
@@ -80,7 +86,7 @@ def _split_exact(total: Decimal, entries: list[SplitEntry]) -> dict[int, Decimal
     shares = {entry.member_id: quantize(entry.figure or ZERO, MONEY_PLACES) for entry in entries}
     stated = sum(shares.values(), ZERO)
     if stated != quantize(total, MONEY_PLACES):
-        raise SharedExpenseSplitTotalError(stated, quantize(total, MONEY_PLACES))
+        raise SharedSplitTotalError(stated, quantize(total, MONEY_PLACES))
     return shares
 
 
@@ -90,7 +96,7 @@ def _split_by_percentage(total: Decimal, entries: list[SplitEntry]) -> dict[int,
     percentages = {entry.member_id: quantize(entry.figure or ZERO, MONEY_PLACES) for entry in entries}
     stated = sum(percentages.values(), ZERO)
     if stated != ONE_HUNDRED:
-        raise SharedExpensePercentagesError(stated)
+        raise SharedSplitPercentagesError(stated)
     return _split_by_weight(total, percentages)
 
 
@@ -99,9 +105,9 @@ def _split_by_percentage(total: Decimal, entries: list[SplitEntry]) -> dict[int,
 def _split_by_shares(total: Decimal, entries: list[SplitEntry]) -> dict[int, Decimal]:
     weights = {entry.member_id: entry.figure or ZERO for entry in entries}
     if any(weight < ZERO for weight in weights.values()):
-        raise SharedExpenseSharesError()
+        raise SharedSplitSharesError()
     if sum(weights.values(), ZERO) <= ZERO:
-        raise SharedExpenseSharesError()
+        raise SharedSplitSharesError()
     return _split_by_weight(total, weights)
 
 
@@ -116,17 +122,60 @@ def _split_by_weight(total: Decimal, weights: dict[int, Decimal]) -> dict[int, D
     return spread_remainder(parts, target, MONEY_PLACES)
 
 
-# What each member is owed (positive) or owes (negative) in one currency, from the two sides of every
-# split they hold: Σ paid_amount − Σ amount. Members whose position nets to exactly zero are dropped —
-# they are square, and a row of zeros on every screen says nothing.
+# The one accumulator both position functions below funnel into: Σ credit − Σ debit per member, with
+# anyone netting to exactly zero dropped — they are square, and a row of zeros on every screen says
+# nothing.
+#
+# Private so that neither caller can be handed the columns in the wrong order: each public function
+# names its own two figures in its own terms, which is the whole reason there are two of them rather
+# than one generic entry point taking a debit and a credit. A crossed pair here type-checks, produces
+# balances that still sum to zero, and simply reverses who owes whom.
+def _accumulate(rows: list[tuple[int, Decimal, Decimal]]) -> dict[int, Decimal]:
+    positions: dict[int, Decimal] = {}
+    for member_id, debit, credit in rows:
+        positions[member_id] = positions.get(member_id, ZERO) + credit - debit
+    return {member_id: value for member_id, value in positions.items() if value != ZERO}
+
+
+# What each member is owed (positive) or owes (negative) for the group's EXPENSES in one currency,
+# from the two sides of every split they hold: Σ paid_amount − Σ amount. Fronting money is a claim on
+# the group; consuming what it bought is the group having already given you your part.
 #
 # Takes plain tuples rather than model rows so the rule stays testable without a database and so the
-# repository can hand it an aggregate instead of every split.
+# repository can hand it an aggregate instead of every split. Rows are (member_id, amount,
+# paid_amount) — the column order shared_expense_repository.list_positions_by_groups produces.
 def expense_positions(rows: list[tuple[int, Decimal, Decimal]]) -> dict[int, Decimal]:
-    positions: dict[int, Decimal] = {}
-    for member_id, amount, paid_amount in rows:
-        positions[member_id] = positions.get(member_id, ZERO) + paid_amount - amount
-    return {member_id: value for member_id, value in positions.items() if value != ZERO}
+    return _accumulate(rows)
+
+
+# The same figure for the group's INCOME: Σ amount − Σ received_amount, where `amount` is what the
+# member is entitled to and `received_amount` is what actually reached them.
+#
+# The mirror of the expense rule rather than an unrelated one. An entitlement is a claim on the group;
+# cash that has already arrived is the group having settled part of it. So somebody who collects the
+# whole of a shared rent owes the others their shares, and somebody who was entitled to a share and
+# got nothing is owed it — the same two directions an expense produces, in the same buckets, cleared
+# by the same settlements.
+#
+# Rows are (member_id, amount, received_amount) — the order
+# shared_income_repository.list_positions_by_groups produces, which is `amount` first in BOTH
+# repositories so the two aggregates read alike even though the sign of `amount` differs between them.
+def income_positions(rows: list[tuple[int, Decimal, Decimal]]) -> dict[int, Decimal]:
+    return _accumulate([(member_id, received_amount, amount) for member_id, amount, received_amount in rows])
+
+
+# One member-to-value map per flow, added together. A member square on expenses and owed on income is
+# owed; one owed on expenses and owing the same on income is square, and is dropped here rather than
+# rendered as a 0.00 nobody needs to see.
+#
+# Separate from the two functions above because each of them drops its own zeros: adding their outputs
+# can reintroduce a zero that neither could have seen on its own.
+def combine_positions(*parts: dict[int, Decimal]) -> dict[int, Decimal]:
+    combined: dict[int, Decimal] = {}
+    for part in parts:
+        for member_id, value in part.items():
+            combined[member_id] = combined.get(member_id, ZERO) + value
+    return {member_id: value for member_id, value in combined.items() if value != ZERO}
 
 
 # Applies recorded settlements to the positions above, in one currency.

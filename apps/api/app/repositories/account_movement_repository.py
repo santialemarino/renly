@@ -16,6 +16,7 @@ from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.income_entry import IncomeEntry
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.shared_expense import SharedExpense
+from app.models.shared_income import SharedIncome
 from app.models.transfer import Transfer
 from app.repositories.card_settlement_repository import settlement_cash_leg
 
@@ -186,6 +187,43 @@ def _shared_expense_branch(account_id: int, *, opening_date: date_type):
     )
 
 
+# A group's shared income paid into this account: money in, and the WHOLE amount rather than the
+# caller's share. The money really arrived in this account; who owes whom afterwards is the splits'
+# business and never the account's — the mirror of the shared-expense branch above, which reads the
+# parent's amount for the same reason.
+#
+# `kind` is 'income' because from the ACCOUNT's point of view that is exactly what it is: money in,
+# earned. It is deliberately NOT reported as an adjustment — a reconciliation's true-up is the only
+# thing that is, and this is real money.
+#
+# The group is joined for its name so the row can say what it was. INNER rather than outer because a
+# shared-income row's group_id is NOT NULL and cascades, so the row cannot outlive its group.
+#
+# No user filter: the row belongs to the group, the membership policy scopes it, and the account leg's
+# own read branch keeps it visible to whoever owns the account. A shared account's ledger must not
+# depend on who is asking, for the same reason its balance must not.
+def _shared_income_branch(account_id: int, *, opening_date: date_type):
+    return (
+        select(
+            SharedIncome.id.label("source_id"),
+            literal(MovementSource.shared_income.value).label("source"),
+            literal(MovementKind.income.value).label("kind"),
+            SharedIncome.date.label("date"),
+            SharedIncome.amount.label("amount"),
+            cast(SharedIncome.category, String).label(_CATEGORY),
+            Group.name.label(_COUNTERPARTY),
+            cast(null(), Numeric).label(_COUNTERPARTY_AMOUNT),
+            cast(null(), String).label(_COUNTERPARTY_CURRENCY),
+            SharedIncome.notes.label("notes"),
+        )
+        .join(Group, Group.id == SharedIncome.group_id)
+        .where(
+            SharedIncome.paid_to_account_id == account_id,
+            SharedIncome.date >= opening_date,
+        )
+    )
+
+
 # One leg of a group settlement. It can never name the same account twice (a DB CHECK enforces it), so
 # an account sees at most one leg and the two branches cannot collide — which is what lets both share
 # the source 'group_settlement', exactly as the two transfer legs share theirs.
@@ -294,7 +332,7 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
     expense = (ExpenseEntry, MovementSource.expense, MovementKind.expense, True)
 
     if kind == MovementKind.income:
-        return [entry(income, adjustments=False)]
+        return [entry(income, adjustments=False), _shared_income_branch(account_id, opening_date=opening_date)]
     if kind == MovementKind.expense:
         return [entry(expense, adjustments=False), _shared_expense_branch(account_id, opening_date=opening_date)]
     if kind == MovementKind.adjustment:
@@ -320,6 +358,7 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
         entry(income, adjustments=None),
         entry(expense, adjustments=None),
         _shared_expense_branch(account_id, opening_date=opening_date),
+        _shared_income_branch(account_id, opening_date=opening_date),
         _settlement_branch(account_id, user_id, opening_date=opening_date),
         _group_settlement_branch(account_id, outgoing=True, opening_date=opening_date),
         _group_settlement_branch(account_id, outgoing=False, opening_date=opening_date),

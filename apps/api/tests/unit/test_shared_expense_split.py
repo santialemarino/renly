@@ -3,13 +3,13 @@ from decimal import Decimal
 import pytest
 
 from app.domain.errors import (
-    SharedExpenseNoParticipantsError,
-    SharedExpensePercentagesError,
-    SharedExpenseSharesError,
-    SharedExpenseSplitTotalError,
+    SharedSplitNoParticipantsError,
+    SharedSplitPercentagesError,
+    SharedSplitSharesError,
+    SharedSplitTotalError,
 )
 from app.domain.money import MONEY_PLACES, quantize, spread_remainder
-from app.domain.shared_expense import SplitEntry, apply_settlements, compute_shares, expense_positions, minimise_transfers
+from app.domain.shared_flow import SplitEntry, apply_settlements, compute_shares, expense_positions, minimise_transfers
 from app.models.group_money_settings import SplitMethod
 
 # The split math, and the one property the whole flow half rests on: every method's parts sum to the
@@ -70,7 +70,7 @@ class TestEqualSplit:
         assert compute_shares(Decimal("48.30"), SplitMethod.equal, _entries((4, None))) == {4: Decimal("48.30")}
 
     def test_nobody_at_all_is_refused(self):
-        with pytest.raises(SharedExpenseNoParticipantsError):
+        with pytest.raises(SharedSplitNoParticipantsError):
             compute_shares(Decimal("10.00"), SplitMethod.equal, [])
 
 
@@ -88,7 +88,7 @@ class TestExactSplit:
     def test_amounts_that_do_not_add_up_are_refused(self, figures):
         # Nothing to round and nothing to distribute — absorbing the difference onto somebody would be
         # the app deciding who pays the extra cent.
-        with pytest.raises(SharedExpenseSplitTotalError) as exc:
+        with pytest.raises(SharedSplitTotalError) as exc:
             compute_shares(Decimal("10.00"), SplitMethod.exact, _entries((1, figures[0]), (2, figures[1])))
         assert exc.value.expected == Decimal("10.00")
 
@@ -105,7 +105,7 @@ class TestPercentageSplit:
     @pytest.mark.parametrize("figures", [(90, 5), (90, 15), (50, 50, 1)])
     def test_percentages_that_miss_100_are_refused(self, figures):
         # Never rescaled: quietly turning a 90/5 split into 94.7/5.3 is worse than refusing it.
-        with pytest.raises(SharedExpensePercentagesError):
+        with pytest.raises(SharedSplitPercentagesError):
             compute_shares(Decimal("100.00"), SplitMethod.percentage, _entries(*[(i + 1, f) for i, f in enumerate(figures)]))
 
 
@@ -123,13 +123,13 @@ class TestSharesSplit:
 
     @pytest.mark.parametrize("figures", [(0, 0), (None, None), (0, None)])
     def test_all_zero_weights_are_refused(self, figures):
-        with pytest.raises(SharedExpenseSharesError):
+        with pytest.raises(SharedSplitSharesError):
             compute_shares(Decimal("10.00"), SplitMethod.shares, _entries((1, figures[0]), (2, figures[1])))
 
     def test_a_negative_weight_is_refused(self):
         # It would hand one member a share of less than nothing while the parts still summed to the
         # total, inverting who owes whom.
-        with pytest.raises(SharedExpenseSharesError):
+        with pytest.raises(SharedSplitSharesError):
             compute_shares(Decimal("10.00"), SplitMethod.shares, _entries((1, 3), (2, -1)))
 
 

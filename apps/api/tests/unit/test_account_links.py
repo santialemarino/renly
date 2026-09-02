@@ -58,10 +58,10 @@ class TestValidateAccountLink:
         await account_service.validate_account_link(AsyncMock(), USER, 7, "ARS")
 
 
-# Every source the balance union reads, as (module attribute, method, keyword). Ten of them now, so
+# Every source the balance union reads, as (module attribute, method, keyword). Eleven of them now, so
 # the tests below name only the ones they care about and the rest stub to nothing — a test that had to
-# restate all ten would drift the moment an eleventh arrived, which is exactly what happened when the
-# flow half added three.
+# restate all eleven would drift the moment a twelfth arrived, which is exactly what happened when the
+# flow half added three and then a fourth.
 _BALANCE_SOURCES = (
     ("income_repository", "sum_by_account_ids", "income"),
     ("expense_repository", "sum_by_account_ids", "expenses"),
@@ -71,6 +71,7 @@ _BALANCE_SOURCES = (
     ("pot_ownership_repository", "sum_in_by_account_ids", "ownership_in"),
     ("pot_ownership_repository", "sum_out_by_account_ids", "ownership_out"),
     ("shared_expense_repository", "sum_by_account_ids", "shared_expenses"),
+    ("shared_income_repository", "sum_by_account_ids", "shared_income"),
     ("group_settlement_repository", "sum_in_by_account_ids", "group_settlements_in"),
     ("group_settlement_repository", "sum_out_by_account_ids", "group_settlements_out"),
 )
@@ -83,6 +84,7 @@ _LINKED_SOURCES = (
     ("card_settlement_repository", "card_settlements"),
     ("transfer_repository", "transfers"),
     ("shared_expense_repository", "shared_expenses"),
+    ("shared_income_repository", "shared_income"),
     ("group_settlement_repository", "group_settlements"),
 )
 
@@ -266,19 +268,22 @@ class TestAccountHasLinks:
     async def test_false_when_none_exist(self, monkeypatch):
         for repo in ("expense_repository", "income_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(account_service, repo), "exists_by_account_id", AsyncMock(return_value=False))
-        # The two group sources answer with the account-id SET they touch rather than a bool, because
+        # The three group sources answer with the account-id SET they touch rather than a bool, because
         # their queries carry no user filter and take a list — the same functions the currency lock reads.
         _stub_linked(monkeypatch)
 
         assert await account_service.account_has_links(AsyncMock(), 7, 1) is False
 
+    @pytest.mark.parametrize("source", ["shared_expenses", "shared_income", "group_settlements"])
     @pytest.mark.asyncio
-    async def test_true_when_only_a_group_has_spent_from_it(self, monkeypatch):
-        # An account whose only money movement is a group's shared expense is still linked. Without
-        # this the owner could re-denominate it while the group's figures still refer to the old one.
+    async def test_true_when_only_a_GROUP_has_used_it(self, monkeypatch, source):
+        # An account whose only money movement belongs to a group is still linked, whichever of the
+        # three ways it got there. Without any one of them the owner could re-denominate the account
+        # while the group's figures still referred to the old currency, or move its opening_date past
+        # rows the balance is bounded below by — and this is the check the UPDATE actually consults.
         for repo in ("expense_repository", "income_repository", "card_settlement_repository", "transfer_repository"):
             monkeypatch.setattr(getattr(account_service, repo), "exists_by_account_id", AsyncMock(return_value=False))
-        _stub_linked(monkeypatch, shared_expenses={7})
+        _stub_linked(monkeypatch, **{source: {7}})
 
         assert await account_service.account_has_links(AsyncMock(), 7, 1) is True
 

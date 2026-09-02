@@ -51,10 +51,13 @@ from app.repositories import (
     card_settlement_repository,
     expense_repository,
     group_repository,
+    group_settlement_repository,
     income_repository,
     investment_repository,
     pot_ownership_repository,
     pot_repository,
+    shared_expense_repository,
+    shared_income_repository,
     snapshot_repository,
     transfer_repository,
 )
@@ -741,9 +744,18 @@ async def move_holdings(
 # between two pot accounts would end up with one leg in each scope, which no transfer may have, and
 # the balance union would silently stop counting it.
 #
-# Three checks, because none of them sees what the others do:
-#   * linked_account_ids across the four movement tables — filtered by user_id, so it sees a PRIVATE
-#     account's history and is the right question on the way in;
+# Four checks, because none of them sees what the others do:
+#   * linked_account_ids across the four PRIVATE movement tables — filtered by user_id, so it sees a
+#     private account's own history and is the right question on the way in;
+#   * linked_account_ids across the three GROUP-scoped ones — shared expenses, shared income and
+#     settlements. Scope-free by construction: a group's row is nobody's private property, so there is
+#     no user_id to filter by, and the caller can always see the ones that matter here because the
+#     account being moved is their own and any group row naming it belongs to a group they are in.
+#     Without these the hole is live and reachable: an account carrying ONLY shared rows passes every
+#     private check, so moving it into a divided pot lands the whole of a distributed row's money in
+#     the pot — raising every owner's share pro-rata while the splits still say the collector owes
+#     each of them their share, so the same money is credited twice — and NULLs the user_id the row's
+#     own edit path checks, which leaves a row the user can see and can no longer save;
 #   * transfer_repository.exists_for_accounts — scope-FREE, because the user_id filter above is
 #     structurally blind to a pot-scoped transfer, which is exactly the row that matters on the way
 #     out;
@@ -756,6 +768,9 @@ async def _ensure_account_carries_no_movements(session: AsyncSession, account_id
         | await expense_repository.linked_account_ids(session, account_ids, user.id)
         | await card_settlement_repository.linked_account_ids(session, account_ids, user.id)
         | await transfer_repository.linked_account_ids(session, account_ids, user.id)
+        | await shared_expense_repository.linked_account_ids(session, account_ids)
+        | await shared_income_repository.linked_account_ids(session, account_ids)
+        | await group_settlement_repository.linked_account_ids(session, account_ids)
     )
     if not linked and await transfer_repository.exists_for_accounts(session, account_ids):
         linked = set(account_ids)

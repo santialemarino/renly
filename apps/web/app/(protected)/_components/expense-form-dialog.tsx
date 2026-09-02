@@ -18,11 +18,11 @@ import {
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
-  ExpenseScopeField,
+  EntryScopeField,
   PRIVATE_SCOPE,
   toHandover,
   type ExpenseHandover,
-} from '@/app/(protected)/_components/expense-scope-field';
+} from '@/app/(protected)/_components/entry-scope-field';
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import {
   LinkedObligationSelect,
@@ -587,9 +587,10 @@ export function ExpenseFormDialog({
                * for a Mark-Paid prefill too — that entry pays a private obligation.
                */}
               {scopeGroups && !isEdit && !prefillFromObligation && onScopeChange && (
-                <ExpenseScopeField
+                <EntryScopeField
                   groups={scopeGroups}
                   value={PRIVATE_SCOPE}
+                  hint={tCommon('entryScope.expenseHint')}
                   onValueChange={(scope) => onScopeChange(scope, toHandover(form.getValues()))}
                   disabled={form.formState.isSubmitting}
                 />

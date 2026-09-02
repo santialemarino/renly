@@ -7,15 +7,15 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-# The §7 matrix for the four SHARED-FLOW tables, proven against a real Postgres.
+# The §7 matrix for the SIX SHARED-FLOW tables, proven against a real Postgres.
 #
 # These policies are the confidentiality boundary of the flow half: a shared expense names what a
-# household spent and a settlement names what one person paid another, and both are readable by every
-# member of the group and nobody else. The service layer has its own membership gate
+# household spent, a piece of shared income names what it earned and from which asset, and a settlement
+# names what one person paid another — all readable by every member of the group and nobody else. The service layer has its own membership gate
 # (group_service.require_member), and the failure that matters is the two disagreeing — which no unit
 # test can see, because a mocked session returns whatever it was told.
 #
-# Two of the four carry a SECOND read branch for rows naming an account or card the caller owns. That
+# Three of the six carry a SECOND read branch for rows naming an account or card the caller owns. That
 # branch is not a widening of the model, it is what keeps a PRIVATE balance correct when a member
 # leaves: without it the row vanishes from their balance query and their own account silently gains
 # back money it no longer holds. Its exact boundary — what a former member can and cannot then see —
@@ -43,9 +43,16 @@ _EMAILS = {
     "outsider": "flow_rls_outsider@test.local",
 }
 
-# The four tables and the column their membership is keyed through. group_money_settings is keyed by
+# The six tables and the column their membership is keyed through. group_money_settings is keyed by
 # its own primary key, which IS the group id.
-_FLOW_TABLES = ("group_money_settings", "shared_expenses", "shared_expense_splits", "group_settlements")
+_FLOW_TABLES = (
+    "group_money_settings",
+    "shared_expenses",
+    "shared_expense_splits",
+    "shared_income",
+    "shared_income_splits",
+    "group_settlements",
+)
 
 
 async def _scalar(session: AsyncSession, sql: str, **params):
@@ -59,8 +66,9 @@ async def _cleanup(session: AsyncSession) -> None:
 
 
 # One group with three seats, a money-settings row, one shared expense funded from the payer's own
-# account and split three ways, and one settlement between two of the seats. Everything the four
-# policies have to protect, in the smallest fixture that has all of it.
+# account and split three ways, one piece of shared income collected into the leaver's account, and one
+# settlement between two of the seats. Everything the six policies have to protect, in the smallest
+# fixture that has all of it.
 @pytest_asyncio.fixture
 async def seeded():
     admin_engine = create_async_engine(ADMIN_URL)
@@ -122,6 +130,31 @@ async def seeded():
                 text("INSERT INTO shared_expense_splits (shared_expense_id, group_id, member_id, amount, paid_amount) VALUES (:e, :g, :m, 3000, :p)"),
                 {"e": expense, "g": group, "m": seat, "p": 9000 if seat == seats["payer"] else 0},
             )
+        # Shared income collected into the LEAVER's own account: the row their read branch must keep,
+        # and the mirror of leaver_expense on the way in.
+        leaver_income = await _scalar(
+            s,
+            "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+            " VALUES (:g, '2026-06-03', 6000, 'ARS', 'equal', 'distributed', :a) RETURNING id",
+            g=group,
+            a=leaver_account,
+        )
+        # A second row landing in somebody else's account, so "the branch is no wider than that" has a
+        # row of the same table to be refused on.
+        income = await _scalar(
+            s,
+            "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+            " VALUES (:g, '2026-06-04', 900, 'ARS', 'equal', 'distributed', :a) RETURNING id",
+            g=group,
+            a=account,
+        )
+        for seat in seats.values():
+            await s.execute(
+                text(
+                    "INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 2000, :r)"
+                ),
+                {"i": leaver_income, "g": group, "m": seat, "r": 6000 if seat == seats["leaver"] else 0},
+            )
         settlement = await _scalar(
             s,
             "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency, from_account_id)"
@@ -141,6 +174,8 @@ async def seeded():
         "leaver_account": leaver_account,
         "expense": expense,
         "leaver_expense": leaver_expense,
+        "income": income,
+        "leaver_income": leaver_income,
         "settlement": settlement,
         "app": app_sessionmaker,
         "admin": admin_sessionmaker,
@@ -169,6 +204,15 @@ class TestAMemberSeesTheirGroupsMoney:
     async def test_every_flow_table_is_readable_by_a_member(self, seeded, table):
         rows = await _as_user(seeded, seeded["users"]["member"], f"SELECT 1 FROM {table} WHERE group_id = :g", g=seeded["group"])
         assert rows, f"{table} is invisible to a member of its own group"
+
+    @pytest.mark.asyncio
+    async def test_a_member_sees_every_seats_income_split_too(self, seeded):
+        # Same shape on the way in: an income row is seen in full or not at all, or "who owes whom"
+        # after somebody collects the rent is unanswerable.
+        rows = await _as_user(
+            seeded, seeded["users"]["member"], "SELECT member_id FROM shared_income_splits WHERE shared_income_id = :i", i=seeded["leaver_income"]
+        )
+        assert len(rows) == 3
 
     @pytest.mark.asyncio
     async def test_a_member_sees_every_seats_split_not_only_their_own(self, seeded):
@@ -205,6 +249,11 @@ class TestAnOutsiderSeesNothing:
                 "INSERT INTO shared_expenses (group_id, date, amount, currency, split_method) VALUES (:g, '2026-06-01', 1, 'ARS', 'equal')"
             ),
             "shared_expense_splits": ("INSERT INTO shared_expense_splits (shared_expense_id, group_id, member_id, amount) VALUES (:e, :g, :m, 1)"),
+            "shared_income": (
+                "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+                " VALUES (:g, '2026-06-01', 1, 'ARS', 'equal', 'distributed', NULL)"
+            ),
+            "shared_income_splits": ("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount) VALUES (:i, :g, :m, 1)"),
             "group_settlements": (
                 "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency)"
                 " VALUES (:g, :f, :t, '2026-06-01', 1, 'ARS')"
@@ -213,6 +262,7 @@ class TestAnOutsiderSeesNothing:
         params = {
             "g": seeded["group"],
             "e": seeded["expense"],
+            "i": seeded["income"],
             "m": seeded["seats"]["payer"],
             "f": seeded["seats"]["payer"],
             "t": seeded["seats"]["member"],
@@ -248,6 +298,33 @@ class TestTheAccountLegBranch:
     async def test_a_former_member_still_sees_the_settlement_their_own_account_paid(self, departed):
         rows = await _as_user(departed, departed["users"]["leaver"], "SELECT id FROM group_settlements WHERE id = :s", s=departed["settlement"])
         assert rows
+
+    @pytest.mark.asyncio
+    async def test_a_former_member_still_sees_the_income_their_own_account_received(self, departed):
+        # The mirror, and the one that matters more: losing it would take real money OFF their balance
+        # for income their account genuinely holds.
+        rows = await _as_user(departed, departed["users"]["leaver"], "SELECT id FROM shared_income WHERE id = :i", i=departed["leaver_income"])
+        assert rows, "a former member's own account received this, and losing it would corrupt their balance"
+
+    @pytest.mark.asyncio
+    async def test_the_income_branch_is_no_wider_than_that(self, departed):
+        rows = await _as_user(departed, departed["users"]["leaver"], "SELECT id FROM shared_income WHERE id = :i", i=departed["income"])
+        assert rows == []
+
+    @pytest.mark.asyncio
+    async def test_a_former_member_loses_the_income_splits_entirely(self, departed):
+        rows = await _as_user(departed, departed["users"]["leaver"], "SELECT id FROM shared_income_splits WHERE group_id = :g", g=departed["group"])
+        assert rows == []
+
+    @pytest.mark.asyncio
+    async def test_a_former_member_cannot_delete_the_income_row_they_can_still_see(self, departed):
+        async with departed["app"]() as s:
+            set_session_user(s, departed["users"]["leaver"])
+            await s.execute(text("DELETE FROM shared_income WHERE id = :i"), {"i": departed["leaver_income"]})
+            await s.commit()
+        async with departed["admin"]() as s:
+            still_there = (await s.execute(text("SELECT id FROM shared_income WHERE id = :i"), {"i": departed["leaver_income"]})).all()
+        assert still_there, "a former member deleted an income row they could only read through the account branch"
 
     @pytest.mark.asyncio
     async def test_the_branch_is_no_wider_than_that(self, departed):

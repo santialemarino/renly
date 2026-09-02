@@ -1028,21 +1028,141 @@ class SharedExpensePayerRequiredError(DomainError):
         super().__init__(self.message)
 
 
-# A split names nobody. An expense divided between no one has no share to attribute and no balance to
-# create; a self-only expense is a private expense, which is a different table. Mapped to 400.
-class SharedExpenseNoParticipantsError(DomainError):
-    code = "shared_expense_no_participants"
+# --- Shared income ---
+#
+# The mirror of the block above, and deliberately its own set of codes rather than a reuse of it. The
+# rules are symmetric — who received money the group shares, out of a shared account or into one
+# person's hands — but the copy is not: "who paid" and "who the money reached" are different
+# instructions, and somebody recording income should never be told to say who paid.
+
+
+# Shared income is dated before the account it landed in existed. Each leg of the balance union is
+# bounded below by its own account's opening_date (opening_balance already IS the balance at that
+# date), so an earlier row would never reach that account's balance while still crediting money the
+# group thinks it received. Mapped to 400 by the API.
+class SharedIncomeBeforeAccountOpenedError(DomainError):
+    code = "shared_income_before_account_opened"
+    status_code = 400
+
+    def __init__(self, opening_date: date_type) -> None:
+        self.opening_date = opening_date
+        self.message = f"Shared income must be dated on or after its account's opening date ({opening_date.isoformat()})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"opening_date": self.opening_date.isoformat()}
+
+
+# Income set to stay joint lands in a pot whose ownership nobody has agreed yet. Money arriving in a
+# pot reaches its owners in their own proportions, so with no proportions on record there is nothing to
+# credit anyone with — and crediting nobody would leave the received figures short of the total,
+# breaking the identity the group's balances rest on. Mapped to 400 by the API.
+class SharedIncomeDestinationPotNotDividedError(DomainError):
+    code = "shared_income_destination_pot_not_divided"
     status_code = 400
 
     def __init__(self) -> None:
-        self.message = "A shared expense needs at least one person taking part in it."
+        self.message = "Nobody has agreed who owns this shared account's money yet, so there is no way to record who received this. Divide it first."
+        super().__init__(self.message)
+
+
+# Shared income names a destination account belonging to a pot in a DIFFERENT group. Its owners are not
+# members here, so the money they received could not be recorded against anyone this group can settle
+# with. Mapped to 400 by the API.
+class SharedIncomeDestinationScopeError(DomainError):
+    code = "shared_income_destination_scope"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That shared account belongs to another group, so this group's income cannot land in it."
+        super().__init__(self.message)
+
+
+# Income set to be DISTRIBUTED names an account a pot holds. Money paid into a shared account raises
+# every owner's share of it, which is precisely what staying joint means — so the destination and the
+# account contradict each other. Refused rather than silently reinterpreted: quietly changing the
+# destination somebody picked is how the app records something other than what it showed.
+# Mapped to 400 by the API.
+class SharedIncomeDistributedSharedAccountError(DomainError):
+    code = "shared_income_distributed_shared_account"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Money paid into a shared account stays joint. Pick a private account, or set this income to stay joint."
+        super().__init__(self.message)
+
+
+# Income set to stay JOINT does not name an account a pot holds. Joint money is money in a pot, and a
+# pot is worth what its holdings are worth — so income that stayed joint with nowhere to land would
+# claim every owner's share rose while no figure moved. When the cash really reached one person, that
+# person received it and owes the others their shares, which is what DISTRIBUTED records.
+# Mapped to 400 by the API.
+class SharedIncomeJointAccountRequiredError(DomainError):
+    code = "shared_income_joint_account_required"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Income that stays joint has to land in one of the group's shared accounts."
+        super().__init__(self.message)
+
+
+# Shared income names both a shared destination account and one recipient. Money arriving in a shared
+# account reaches the pot's owners in their own proportions, so naming one member as the recipient would
+# assert something the ownership ledger contradicts. Refused rather than ignored, for the same reason
+# the expense mirror is. Mapped to 400 by the API.
+class SharedIncomeJointReceiverError(DomainError):
+    code = "shared_income_joint_receiver"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Money arriving in a shared account reaches everyone who owns it, so this income cannot also name one recipient."
+        super().__init__(self.message)
+
+
+# Distributed income names nobody who received it, so nothing says where the money actually went.
+# Without that the group's balances cannot sum to zero: the shares would add up to the total while
+# nobody had been credited with any of it. Mapped to 400 by the API.
+class SharedIncomeReceiverRequiredError(DomainError):
+    code = "shared_income_receiver_required"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "Say who the money reached — the balance is each person's share minus what actually got to them."
+        super().__init__(self.message)
+
+
+# Shared income names a source asset that no pot of this group holds — one of the caller's own private
+# investments, or another group's. Refused rather than stored: the source drives the default split and
+# is shown to the whole group, so a private holding named here would put its name in front of people
+# who cannot see it. Income from an asset of your own is private income, which is a different table.
+# Mapped to 400 by the API.
+class SharedIncomeSourceScopeError(DomainError):
+    code = "shared_income_source_scope"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That asset is not part of this group's shared money, so its income cannot be shared here."
+        super().__init__(self.message)
+
+
+# A split names nobody. A flow divided between no one has no share to attribute and no balance to
+# create; a self-only one is a private entry, which is a different table.
+# Flow-neutral, like the three below: compute_shares divides a shared EXPENSE and a shared INCOME with
+# the same code, so an expense-worded message here would reach a reader recording income. Mapped to 400.
+class SharedSplitNoParticipantsError(DomainError):
+    code = "shared_split_no_participants"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "A split needs at least one person taking part in it."
         super().__init__(self.message)
 
 
 # A percentage split's figures do not total 100. Never rescaled, for the same reason a pot's opening
 # split is not: quietly turning a 90/5 split into 94.7/5.3 is worse than refusing it. Mapped to 400.
-class SharedExpensePercentagesError(DomainError):
-    code = "shared_expense_percentages"
+class SharedSplitPercentagesError(DomainError):
+    code = "shared_split_percentages"
     status_code = 400
 
     def __init__(self, stated: Decimal) -> None:
@@ -1058,8 +1178,8 @@ class SharedExpensePercentagesError(DomainError):
 # A shares split's weights are negative or all zero. Weights are relative parts, so unlike percentages
 # they have no total to hit — only the requirement that there is something to divide by, and that no
 # part is negative (which would hand one member a share of less than nothing). Mapped to 400.
-class SharedExpenseSharesError(DomainError):
-    code = "shared_expense_shares"
+class SharedSplitSharesError(DomainError):
+    code = "shared_split_shares"
     status_code = 400
 
     def __init__(self) -> None:
@@ -1067,11 +1187,11 @@ class SharedExpenseSharesError(DomainError):
         super().__init__(self.message)
 
 
-# An exact split's amounts do not add up to the expense's total. There is nothing to round and nothing
+# An exact split's amounts do not add up to the flow's total. There is nothing to round and nothing
 # to distribute for this method — the figures are taken as given — so a mismatch is refused rather than
 # silently absorbed onto somebody. Mapped to 400 by the API.
-class SharedExpenseSplitTotalError(DomainError):
-    code = "shared_expense_split_total"
+class SharedSplitTotalError(DomainError):
+    code = "shared_split_total"
     status_code = 400
 
     def __init__(self, stated: Decimal, expected: Decimal) -> None:

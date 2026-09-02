@@ -1,29 +1,127 @@
 from datetime import date as date_type
+from datetime import datetime
 from decimal import Decimal
+from typing import NamedTuple
 
-from sqlalchemy import String, cast, func
+from sqlalchemy import String, cast, func, literal, null, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.account import Account
 from app.models.income_entry import IncomeCategory, IncomeEntry
+from app.models.shared_income import SharedIncome, SharedIncomeSplit
 from app.repositories.utils import apply_entry_sort
 
-# Sortable columns for the income list. `category` is sorted as TEXT, not as the enum: ORDER BY on a
-# Postgres enum follows its DECLARATION order, which differs between a database built from
-# 01_create_tables.sql and one built by migrations — the same rows would come back in a different
-# order per environment. The values are alphabetical anyway, so the cast costs nothing.
-_SORT_COLUMNS = {
-    "date": IncomeEntry.date,
-    "amount": IncomeEntry.amount,
-    "category": cast(IncomeEntry.category, String),
-}
+# The two things a row in the unioned income list can be. A private income_entries row of the caller's
+# own, or the caller's SHARE of income their group recorded.
+SCOPE_PRIVATE = "private"
+SCOPE_SHARED = "shared"
+
+# What a shared row reports as its origin. `source` means "how did this get into Renly", and for a row
+# that is one member's share of a group's income there is no truer answer.
+SOURCE_SHARED = "shared"
 
 
-# List income entries for a user with optional filters, sorting, and pagination.
+# The columns the list can be sorted by, read off the UNION's own projection.
+#
+# A function over the merged rows rather than a table-keyed constant, because the two branches read
+# different tables and the sort applies to neither of them directly — a constant naming one table's
+# columns would compile against a projection the query never sorts.
+#
+# `category` is sorted as TEXT, not as the enum: ORDER BY on a Postgres enum follows its DECLARATION
+# order, which differs between a database built from 01_create_tables.sql and one built by migrations —
+# the same rows would come back in a different order per environment. The values are alphabetical
+# anyway, so the cast costs nothing.
+def sort_columns(rows) -> dict:
+    return {
+        "date": rows.c.date,
+        "amount": rows.c.amount,
+        "category": cast(rows.c.category, String),
+    }
+
+
+# One row of the unioned income list, in the projection both branches produce.
+#
+# It is a flat projection rather than an ORM row because the two branches read different tables and
+# neither is a superset of the other — hydrating each side back into its model would cost two more
+# queries and hand the service two shapes to reconcile.
+#
+# Three fields carry the whole difference between the branches:
+#   * `scope` says which table the row came from. It is also half the identity: `id` is unique within
+#     each table but NOT across the union, so (scope, id) is the key and (scope, id) is the tie-break.
+#   * `amount` is the caller's own figure either way — the whole entry when it is private, their
+#     SHARE when it is shared, which is the one rule the flow half rests on (your share is your income).
+#   * `full_amount` is the shared income's total, so a reader can say "your 40 of 100" without a second
+#     request. Null on a private row, where the two would be the same number twice.
+#
+# `account_id` is deliberately null on a shared row. It identifies where the money LANDED, which is
+# frequently another member's account or one a pot holds, and a row describing your share should not
+# carry somebody else's account id.
+class IncomeListRow(NamedTuple):
+    scope: str
+    id: int
+    date: date_type
+    amount: Decimal
+    currency: str
+    category: IncomeCategory | None
+    notes: str | None
+    account_id: int | None
+    source: str
+    reconciliation_id: int | None
+    account_reconciliation_id: int | None
+    created_at: datetime
+    updated_at: datetime
+    group_id: int | None
+    full_amount: Decimal | None
+
+
+# The filters both branches of the list share, applied to whichever model carries them. Written once
+# so a filter added to the private list cannot silently miss the shared one — the failure that a
+# second copy of this block would eventually produce.
+def _apply_list_filters(
+    stmt,
+    model,
+    *,
+    search: str | None,
+    category: IncomeCategory | None,
+    date_from: date_type | None,
+    date_to: date_type | None,
+):
+    if search:
+        stmt = stmt.where(model.notes.ilike(f"%{search}%"))
+    if category is not None:
+        stmt = stmt.where(model.category == category)
+    if date_from is not None:
+        stmt = stmt.where(model.date >= date_from)
+    if date_to is not None:
+        stmt = stmt.where(model.date <= date_to)
+    return stmt
+
+
+# Lists the caller's income: their own private rows, plus their SHARE of every piece of income their
+# group seats take a share of, as one paginated, sorted, filtered list.
+#
+# `member_ids` are the caller's own active group seats. When it is empty the shared branch is not built
+# at all and the statement is exactly the private query this function has always run — a solo user (who
+# is every user at launch) pays nothing for a union with no rows in it. The filters are applied by one
+# helper to each branch, so the branches cannot drift even though only one of them is always present.
+#
+# The seats are resolved by the caller rather than joined here for the reason the /expenses union
+# measured: joining group_members to filter the splits makes Postgres scan every split in the database,
+# while an `IN (seat ids)` predicate uses the splits' member index.
+#
+# The tie-break is (id, scope) rather than id alone, because ids are unique per TABLE and this list
+# spans two — without the scope a private row and a shared row sharing a date and an id would have no
+# total order, and Postgres may then repeat one across pages or skip it entirely.#
+# ▸ The tie-break is NOT observable by testing, and a mutation sweep proved it on both unions. Dropping
+# the scope stays green even against a fixture built to force a genuine (date, id) collision between a
+# private and a shared row, because an unstable sort is *permitted* to be stable and Postgres's top-N
+# sort on a small result happens to be. The total order is the defence; nothing can distinguish it from
+# its absence, so this comment stands in for the test that cannot exist.
 async def list_by_user_filtered(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     search: str | None = None,
     category: IncomeCategory | None = None,
@@ -33,32 +131,79 @@ async def list_by_user_filtered(
     sort_order: str = "asc",
     page: int = 1,
     page_size: int = 25,
-) -> tuple[list[IncomeEntry], int]:
-    base = select(IncomeEntry).where(IncomeEntry.user_id == user_id)
+) -> tuple[list[IncomeListRow], int]:
+    private = _apply_list_filters(
+        select(
+            literal(SCOPE_PRIVATE).label("scope"),
+            IncomeEntry.id.label("id"),
+            IncomeEntry.date.label("date"),
+            IncomeEntry.amount.label("amount"),
+            IncomeEntry.currency.label("currency"),
+            IncomeEntry.category.label("category"),
+            IncomeEntry.notes.label("notes"),
+            IncomeEntry.account_id.label("account_id"),
+            IncomeEntry.source.label("source"),
+            IncomeEntry.reconciliation_id.label("reconciliation_id"),
+            IncomeEntry.account_reconciliation_id.label("account_reconciliation_id"),
+            IncomeEntry.created_at.label("created_at"),
+            IncomeEntry.updated_at.label("updated_at"),
+            null().label("group_id"),
+            null().label("full_amount"),
+        ).where(IncomeEntry.user_id == user_id),
+        IncomeEntry,
+        search=search,
+        category=category,
+        date_from=date_from,
+        date_to=date_to,
+    )
 
-    if search:
-        base = base.where(IncomeEntry.notes.ilike(f"%{search}%"))
-    if category is not None:
-        base = base.where(IncomeEntry.category == category)
-    if date_from is not None:
-        base = base.where(IncomeEntry.date >= date_from)
-    if date_to is not None:
-        base = base.where(IncomeEntry.date <= date_to)
+    if member_ids:
+        shared = _apply_list_filters(
+            select(
+                literal(SCOPE_SHARED).label("scope"),
+                SharedIncome.id.label("id"),
+                SharedIncome.date.label("date"),
+                SharedIncomeSplit.amount.label("amount"),
+                SharedIncome.currency.label("currency"),
+                SharedIncome.category.label("category"),
+                SharedIncome.notes.label("notes"),
+                null().label("account_id"),
+                literal(SOURCE_SHARED).label("source"),
+                null().label("reconciliation_id"),
+                null().label("account_reconciliation_id"),
+                SharedIncome.created_at.label("created_at"),
+                SharedIncome.updated_at.label("updated_at"),
+                SharedIncome.group_id.label("group_id"),
+                SharedIncome.amount.label("full_amount"),
+            )
+            .join(SharedIncome, SharedIncome.id == SharedIncomeSplit.shared_income_id)
+            # A split entitled to zero is somebody who only COLLECTED the money — a custodian taking no
+            # share of it. That is not their income, so it does not belong in an income list.
+            .where(SharedIncomeSplit.member_id.in_(member_ids), SharedIncomeSplit.amount > 0),
+            SharedIncome,
+            search=search,
+            category=category,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        rows = union_all(private, shared).subquery()
+    else:
+        rows = private.subquery()
 
-    count_result = await session.execute(select(func.count()).select_from(base.subquery()))
+    count_result = await session.execute(select(func.count()).select_from(rows))
     total = count_result.scalar_one()
 
     query = apply_entry_sort(
-        base,
+        select(rows),
         sort_by,
         sort_order,
-        sort_columns=_SORT_COLUMNS,
-        default_order=(IncomeEntry.date.desc(), IncomeEntry.id.desc()),
-        tie_break=(IncomeEntry.id.desc(),),
+        sort_columns=sort_columns(rows),
+        default_order=(rows.c.date.desc(), rows.c.id.desc(), rows.c.scope),
+        tie_break=(rows.c.id.desc(), rows.c.scope),
     )
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)
-    return list(result.scalars().all()), total
+    return [IncomeListRow(*row) for row in result.all()], total
 
 
 # Get a single income entry by id and user_id.

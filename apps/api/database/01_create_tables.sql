@@ -183,6 +183,19 @@ CREATE TYPE group_settlement_status AS ENUM (
   'written_off'
 );
 
+-- Where money a group shares actually ends up (F2). 'joint' means it landed in a shared account a pot
+-- holds, so the pot is worth more and EVERY owner's share rises in proportion — no units are issued
+-- and nobody's percentage moves, because pro-rata growth needs no ownership event at all.
+-- 'distributed' means it reached one person's hands and becomes each owner's own money in their
+-- proportions; whoever collected it holds the rest as a balance until they pass it on.
+-- Stored rather than derived from the destination account's scope, even though it usually could be: it
+-- is the choice the user made, it is what the remembered per-source default reads back, and it is what
+-- lets the API refuse a contradiction by name instead of silently reinterpreting one.
+CREATE TYPE income_destination AS ENUM (
+  'joint',
+  'distributed'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -1292,6 +1305,97 @@ CREATE INDEX idx_group_settlements_from_account_date
 CREATE INDEX idx_group_settlements_to_account_date
   ON group_settlements(to_account_id, date) WHERE to_account_id IS NOT NULL;
 
+-- One piece of income a group shares — the mirror of shared_expenses, and a sibling table for the same
+-- reasons: income with one arrival point and an N-way split cannot be one flat income_entries row, and
+-- income_entries keeps its simple owner-only RLS while everything here is reachable by every member.
+-- Each member's own share appears in their normal /income list by a read-time UNION over the splits
+-- below, never a mirrored income_entries row.
+-- There is NO receiver column, for exactly the reason shared_expenses has no payer column: money can
+-- arrive in a SHARED account, in which case the pot's owners received it in their own proportions and
+-- no single member is the recipient. Who received what lives on the splits as `received_amount`.
+-- `source_investment_id` is the co-owned asset the income came from and drives the DEFAULT split (F1):
+-- rent from a property the group co-owns divides by that property's pot proportions unless somebody
+-- says otherwise. It is a label and a seed, never a dependency — hence SET NULL rather than a delete
+-- guard, since the money really arrived whatever later happens to the asset.
+CREATE TABLE shared_income (
+  id                   BIGSERIAL PRIMARY KEY,
+  group_id             BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  date                 DATE NOT NULL,
+  amount               NUMERIC(18, 2) NOT NULL,
+  currency             VARCHAR(3) NOT NULL,
+  category             income_category,
+  split_method         split_method NOT NULL,
+  destination          income_destination NOT NULL,
+  source_investment_id BIGINT REFERENCES investments(id) ON DELETE SET NULL,
+  paid_to_account_id   BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  notes                TEXT,
+  created_by           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Shared income of nothing has nothing to divide, and a negative one is a reversal the split methods
+  -- have no meaning for (a percentage of a negative total inverts who owes whom).
+  CONSTRAINT shared_income_positive_amount CHECK (amount > 0)
+  -- Joint money landing in a pot's account, and distributed money not, is the service's rule and not a
+  -- CHECK here. It depends on accounts.pot_id, which a CHECK cannot reach; and even "joint names SOME
+  -- account" is a write-time rule rather than a table invariant, because paid_to_account_id is
+  -- ON DELETE SET NULL — pairing the two columns would turn deleting that account into an
+  -- impossibility. A joint row whose account is gone is still truthfully joint, and who was credited
+  -- what lives on the split rows.
+);
+
+CREATE INDEX idx_shared_income_group_date ON shared_income(group_id, date DESC);
+-- The balance union filters by account and bounds by date, so the leg gets a composite index rather
+-- than a bare FK index — the same shape shared_expenses, transfers and the ownership ledger use.
+CREATE INDEX idx_shared_income_account_date
+  ON shared_income(paid_to_account_id, date) WHERE paid_to_account_id IS NOT NULL;
+-- Earns its place twice: the remembered per-source default looks a group's rows up by source, and
+-- moving an investment out of a pot has to find the income that named it.
+CREATE INDEX idx_shared_income_source
+  ON shared_income(source_investment_id) WHERE source_investment_id IS NOT NULL;
+
+-- One member's two sides of one piece of shared income, and the row the income half balances on.
+--   * `amount` is what this member is ENTITLED to — their share, which is the figure that lands in
+--     their own /income list and their own income analytics. Sums to the income's total.
+--   * `received_amount` is what actually REACHED them. Sums to the same total.
+-- A member's balance is therefore Σ amount − Σ received_amount across every split they hold, and the
+-- sum over all members is zero in every currency BY CONSTRUCTION. It is the expense identity with the
+-- two sides swapped, and the swap is the honest reading: an entitlement is a claim on the group, while
+-- cash that has already arrived is the group having settled part of that claim. So:
+--   * rent lands in the group's shared account -> the pot's owners received it in their ownership
+--     proportions at that date, pinned here as several received_amounts, and anyone whose agreed share
+--     differs from their ownership share holds the difference as a balance. Pinned rather than derived
+--     because the ownership ledger is replayable, so a back-dated event would otherwise silently
+--     rewrite an old balance;
+--   * one member collects the rent -> their received_amount is the whole total, everyone's amount is
+--     their share, and the difference is what they owe the others;
+--   * the tenant pays each owner their own share directly -> every member's two figures match and
+--     nobody owes anybody. No special case anywhere.
+-- A row with amount = 0 is somebody who received money they were entitled to none of (a collector who
+-- takes no share); one with received_amount = 0 is an ordinary participant still waiting for theirs.
+-- group_id is denormalized from the parent for RLS, the same way shared_expense_splits carries its own.
+CREATE TABLE shared_income_splits (
+  id               BIGSERIAL PRIMARY KEY,
+  shared_income_id BIGINT NOT NULL REFERENCES shared_income(id) ON DELETE CASCADE,
+  group_id         BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  member_id        BIGINT NOT NULL REFERENCES group_members(id) ON DELETE CASCADE,
+  amount           NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  received_amount  NUMERIC(18, 2) NOT NULL DEFAULT 0,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- One row per member per income: the two figures above are that member's whole position in it, so a
+  -- second row would be a second opinion about the same fact.
+  CONSTRAINT shared_income_splits_member_once UNIQUE (shared_income_id, member_id),
+  -- Negative figures would let a split "un-earn" or "un-receive", inverting who owes whom while still
+  -- summing to the total.
+  CONSTRAINT shared_income_splits_nonnegative CHECK (amount >= 0 AND received_amount >= 0)
+);
+
+CREATE INDEX idx_shared_income_splits_income ON shared_income_splits(shared_income_id);
+-- The /income union reads a member's own shares and the balance reads a group's, so both lookups start
+-- here rather than at the parent.
+CREATE INDEX idx_shared_income_splits_member ON shared_income_splits(member_id);
+CREATE INDEX idx_shared_income_splits_group ON shared_income_splits(group_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -1421,6 +1525,14 @@ CREATE TRIGGER trg_shared_expense_splits_updated_at
 
 CREATE TRIGGER trg_group_settlements_updated_at
   BEFORE UPDATE ON group_settlements
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_shared_income_updated_at
+  BEFORE UPDATE ON shared_income
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER trg_shared_income_splits_updated_at
+  BEFORE UPDATE ON shared_income_splits
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------------
@@ -1862,6 +1974,28 @@ CREATE POLICY group_settlements_scope_read ON group_settlements FOR SELECT
     )
   );
 CREATE POLICY group_settlements_scope_write ON group_settlements FOR ALL
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- Shared income mirrors shared_expenses, minus the card branch: income never arrives on a credit card.
+-- The account branch is there for the same reason — somebody's own account received the money, so the
+-- row is a movement in their own ledger, and without the branch leaving the group would silently take
+-- that money back off their balance.
+ALTER TABLE shared_income ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shared_income_scope_read ON shared_income FOR SELECT
+  USING (
+    app_is_group_member(group_id)
+    OR EXISTS (
+      SELECT 1 FROM accounts a
+      WHERE a.id = shared_income.paid_to_account_id
+        AND a.user_id = app_current_user_id()
+    )
+  );
+CREATE POLICY shared_income_scope_write ON shared_income FOR ALL
+  USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- No second branch on the splits, for the reason spelled out above shared_expense_splits.
+ALTER TABLE shared_income_splits ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shared_income_splits_member_isolation ON shared_income_splits
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by

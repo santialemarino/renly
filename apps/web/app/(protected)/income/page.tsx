@@ -8,6 +8,7 @@ import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-i
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
+import { getGroups } from '@/lib/api/groups';
 import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
@@ -49,6 +50,12 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
    * of a blank picker; the picker only ever OFFERS active accounts.
    */
   const accounts = await getAccounts({ showArchived: true }).catch(() => []);
+  /*
+   * The groups the user belongs to, which is what turns the entry form's scope control on. Empty on a
+   * fetch error, and the control then simply does not render — a solo user's experience, which is the
+   * right degradation: the private form still works and the API still refuses joint money.
+   */
+  const groups = await getGroups().catch(() => []);
 
   const currency = resolveActiveCurrency(cookieStore, primary);
 
@@ -84,6 +91,8 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         accounts={accounts}
+        groups={groups}
+        timeZone={settings?.timezone ?? undefined}
       />
       {showSample ? (
         <SampleIncomeTable />

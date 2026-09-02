@@ -25,6 +25,7 @@ from app.repositories import (
     payment_obligation_repository,
     pot_ownership_repository,
     shared_expense_repository,
+    shared_income_repository,
     subscription_repository,
     transfer_repository,
 )
@@ -147,7 +148,8 @@ async def validate_effective_default_link(
 # Returns ({account_id: balance}, {account_ids with any linked money}) for the given accounts,
 # derived at query time (one batch query per source): balance = opening_balance + linked income −
 # linked expenses − card settlements paid from the account + transfers in − transfers out + ownership
-# movements in − out − shared expenses drawn from it + group settlements received − paid. Every term is
+# movements in − out − shared expenses drawn from it + shared income paid into it + group settlements
+# received − paid. Every term is
 # already denominated in the account's currency, so the sums need no per-currency conversion — but for
 # four different reasons: entries (private and shared alike) are validated to MATCH the account's
 # currency, each transfer leg is stored in its own account's, an ownership event stores both sides and
@@ -171,6 +173,7 @@ async def get_account_summaries(session: AsyncSession, accounts: list[Account], 
         | await card_settlement_repository.linked_account_ids(session, account_ids, user_id)
         | await transfer_repository.linked_account_ids(session, account_ids, user_id)
         | await shared_expense_repository.linked_account_ids(session, account_ids)
+        | await shared_income_repository.linked_account_ids(session, account_ids)
         | await group_settlement_repository.linked_account_ids(session, account_ids)
     )
     return balances, linked
@@ -198,6 +201,9 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
     # account's. A settlement clearing one of those balances moves cash on both sides, so both of its
     # legs are here for exactly the reason a transfer's two are.
     shared_expenses = await shared_expense_repository.sum_by_account_ids(session, account_ids)
+    # And the mirror on the way in: a group's shared income paid into this account puts the WHOLE
+    # amount in it, not anybody's share. Who owes whom afterwards is the splits' business.
+    shared_income = await shared_income_repository.sum_by_account_ids(session, account_ids)
     group_settlements_in = await group_settlement_repository.sum_in_by_account_ids(session, account_ids)
     group_settlements_out = await group_settlement_repository.sum_out_by_account_ids(session, account_ids)
     return {
@@ -211,6 +217,7 @@ async def get_account_balances(session: AsyncSession, accounts: list[Account], u
             + ownership_in.get(a.id, ZERO)
             - ownership_out.get(a.id, ZERO)
             - shared_expenses.get(a.id, ZERO)
+            + shared_income.get(a.id, ZERO)
             + group_settlements_in.get(a.id, ZERO)
             - group_settlements_out.get(a.id, ZERO)
         )
@@ -240,6 +247,7 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
     shared_expenses = await shared_expense_repository.sum_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    shared_income = await shared_income_repository.sum_by_account_ids(session, account_ids, as_of_date=as_of_date)
     group_settlements_in = await group_settlement_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
     group_settlements_out = await group_settlement_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
     return {
@@ -253,6 +261,7 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
             + ownership_in.get(a.id, ZERO)
             - ownership_out.get(a.id, ZERO)
             - shared_expenses.get(a.id, ZERO)
+            + shared_income.get(a.id, ZERO)
             + group_settlements_in.get(a.id, ZERO)
             - group_settlements_out.get(a.id, ZERO)
         )
@@ -264,14 +273,14 @@ async def compute_account_balances_at(session: AsyncSession, accounts: list[Acco
 # Returns {account_id: [balance at each date]}, for the given accounts and an ASCENDING list of dates.
 #
 # The batch-over-time sibling of compute_account_balances_at, and the reason it exists is arithmetic:
-# that function costs seven queries per date, so a twelve-point series would cost eighty-four. This
-# costs seven for the whole series, because each sum is grouped by (account_id, date) once over the
-# window and accumulated here. §12's O3 is exactly this fan-out.
+# that function costs one query per SOURCE per date, so a twelve-point series would cost a dozen times
+# what one point does. This costs one per source for the whole series, because each sum is grouped by
+# (account_id, date) once over the window and accumulated here. §12's O3 is exactly this fan-out.
 #
 # Every term of the union appears, in the same order and with the same sign as the point-in-time
-# version, deliberately: three of the seven can only ever be empty for a pot's accounts (a shared
-# account cannot carry private entries at all), and dropping them for that reason would make this a
-# sum that agrees with the balance only for as long as that guard holds. Keeping all seven makes
+# version, deliberately: three of them can only ever be empty for a pot's accounts (a shared account
+# cannot carry private entries at all), and dropping them for that reason would make this a sum that
+# agrees with the balance only for as long as that guard holds. Keeping every term makes
 # `series[i] == compute_account_balances_at(dates[i])` true by construction, which is what
 # tests/unit/test_account_balance_series.py asserts.
 #
@@ -292,6 +301,7 @@ async def compute_account_balance_series(session: AsyncSession, accounts: list[A
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids_dated(session, account_ids, until=until)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids_dated(session, account_ids, until=until)
     shared_expenses = await shared_expense_repository.sum_by_account_ids_dated(session, account_ids, until=until)
+    shared_income = await shared_income_repository.sum_by_account_ids_dated(session, account_ids, until=until)
     group_settlements_in = await group_settlement_repository.sum_in_by_account_ids_dated(session, account_ids, until=until)
     group_settlements_out = await group_settlement_repository.sum_out_by_account_ids_dated(session, account_ids, until=until)
 
@@ -307,6 +317,7 @@ async def compute_account_balance_series(session: AsyncSession, accounts: list[A
         (ownership_in, 1),
         (ownership_out, -1),
         (shared_expenses, -1),
+        (shared_income, 1),
         (group_settlements_in, 1),
         (group_settlements_out, -1),
     ):
@@ -367,18 +378,22 @@ async def create_account(
     return account
 
 
-# Returns whether any money entry (expense / income / settlement) links this account. Used to lock
-# the account's currency once linked, so the derived balance never mixes currencies.
+# Returns whether any money entry (expense / income / settlement) links this account. Used to lock the
+# account's currency AND its opening_date once linked: the first would silently mix currencies in the
+# derived balance, the second would drop rows out of it, since every sum is bounded below by that date.
 async def account_has_links(session: AsyncSession, account_id: int, user_id: int) -> bool:
     return (
         await expense_repository.exists_by_account_id(session, account_id, user_id)
         or await income_repository.exists_by_account_id(session, account_id, user_id)
         or await card_settlement_repository.exists_by_account_id(session, account_id, user_id)
         or await transfer_repository.exists_by_account_id(session, account_id, user_id)
-        # No user filter on the two group sums: the rows belong to the group, and RLS scopes them.
-        # An account a group has spent from or settled through is denominated just as firmly as one
-        # its owner used privately, so it has to lock the currency too.
+        # No user filter on the three group sources: the rows belong to the group, and RLS scopes them.
+        # An account a group has spent from, earned into or settled through is denominated just as
+        # firmly as one its owner used privately, so it has to lock the currency too. All three are
+        # asked here and not only in the batch summary path: this is the one the UPDATE consults, so a
+        # source missing from it is a currency the owner can still change under the group's figures.
         or bool(await shared_expense_repository.linked_account_ids(session, [account_id]))
+        or bool(await shared_income_repository.linked_account_ids(session, [account_id]))
         or bool(await group_settlement_repository.linked_account_ids(session, [account_id]))
     )
 

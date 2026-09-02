@@ -38,6 +38,7 @@ from app.domain import (
     amount_for_units,
     opening_units,
     replay_units,
+    share_values,
     total_units,
     unit_price,
     units_for_amount,
@@ -179,6 +180,27 @@ def _ensure_accounts_open(accounts: list[Account | None], date: date_type) -> No
     latest = max(openings)
     if date < latest:
         raise PotMovementBeforeAccountOpenedError(latest)
+
+
+# Divides `total` across a pot's owners in their proportions ON `date`, or returns {} when the pot has
+# no units outstanding then.
+#
+# `share_values` is the same function the pot page divides a NAV with, so the parts sum to the total
+# exactly and the rounding rule cannot differ between the two surfaces.
+#
+# Shared by the two flow paths that need it — money a shared account FRONTED for an expense and money
+# a shared account RECEIVED as income — because it is one rule and a second copy is a thing that can
+# be wrong on its own. It deliberately performs NO policy check and raises nothing: whether the pot
+# belongs to the caller's group, and what to say when it is undivided, are questions whose ANSWERS are
+# the same for both flows but whose WORDING is not ("who paid" and "who the money reached" are
+# different instructions). So each caller checks the pot's group and names its own refusal, and only
+# the arithmetic lives here.
+#
+# Runs on whatever session it is given and applies no visibility check of its own: both callers have
+# already resolved the account whose pot this is, through a policy that let them see it.
+async def owner_shares(session: AsyncSession, pot: Pot, *, total: Decimal, date: date_type) -> dict[int, Decimal]:
+    events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=date)
+    return share_values(replay_units(_as_entries(events)), total)
 
 
 # Lists a pot's ownership ledger in replay order. Visible to whoever may see the pot at all: a member

@@ -212,17 +212,19 @@
     "lockedRow": {
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
       "sharedExpense": "Esta es tu parte de un gasto compartido. Editalo o eliminalo desde el grupo al que pertenece.",
+      "sharedIncome": "Esta es tu parte de un ingreso compartido. Editalo o eliminalo desde el grupo al que pertenece.",
       "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
     },
     "pagination": {
       "previous": "Anterior",
       "next": "Siguiente"
     },
-    "expenseScope": {
+    "entryScope": {
       "label": "¿Para quién es?",
       "private": "Solo para mí",
       "groupsHeading": "Compartido con",
-      "hint": "Un gasto compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio gasto."
+      "expenseHint": "Un gasto compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio gasto.",
+      "incomeHint": "Un ingreso compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio ingreso."
     }
   },
   "login": {
@@ -533,7 +535,8 @@
       "empty": "No se encontraron ingresos.",
       "emptyTitle": "Registrá tus ingresos",
       "emptyDescription": "Agregá tus fuentes de ingreso para ver tu flujo de dinero y tu tasa de ahorro.",
-      "total": "{total, plural, one {# ingreso} other {# ingresos}}"
+      "total": "{total, plural, one {# ingreso} other {# ingresos}}",
+      "shareOf": "Tu parte: {share} de {amount} {currency}"
     },
     "actions": {
       "edit": "Editar",
@@ -2550,33 +2553,141 @@
       "split": {
         "participants": {
           "label": "Quiénes participaron"
-        },
-        "hint": {
-          "equal": "Se divide en partes iguales entre las personas tildadas.",
-          "exact": "Indicá el monto exacto de cada persona. Tienen que sumar el monto total.",
-          "shares": "Asigná un peso a cada persona: 2 a 1 significa el doble.",
-          "percentage": "Asigná un porcentaje a cada persona. Tienen que sumar 100."
-        },
-        "total": "Total",
-        "errors": {
-          "participants": "Elegí al menos una persona.",
-          "exact": "Los montos tienen que sumar el monto total.",
-          "shares": "Al menos una persona necesita un peso mayor que cero.",
-          "percentage": "Los porcentajes tienen que sumar 100."
-        },
-        "figurePlaceholder": {
-          "exact": "Monto",
-          "shares": "Partes",
-          "percentage": "Porcentaje"
-        },
-        "methods": {
-          "equal": "En partes iguales",
-          "exact": "Montos exactos",
-          "shares": "Partes",
-          "percentage": "Porcentajes"
-        },
-        "formerMember": "(ya no participa)"
+        }
       }
+    },
+    "income": {
+      "title": "Ingresos compartidos",
+      "description": "Lo que este grupo ganó en conjunto. Cualquier integrante puede agregar y editar.",
+      "add": "Agregar ingreso",
+      "emptyTitle": "Todavía no hay ingresos compartidos",
+      "emptyDescription": "Agregá el primero y Renly lo divide entre las personas que elijas.",
+      "table": {
+        "date": "Fecha",
+        "amount": "Monto",
+        "category": "Categoría",
+        "source": "De",
+        "wentTo": "Fue a",
+        "notes": "Notas",
+        "actions": "Acciones",
+        "total": "{total, plural, one {# ingreso compartido} other {# ingresos compartidos}}",
+        "yourShare": "Tu parte: {amount}",
+        "joint": "Quedó en común",
+        "jointNamed": "Quedó en común · {account}",
+        "noSource": "—"
+      },
+      "split": {
+        "participants": {
+          "label": "Quiénes reciben una parte"
+        }
+      },
+      "actions": {
+        "edit": "Editar",
+        "delete": "Eliminar"
+      },
+      "delete": {
+        "title": "¿Eliminar este ingreso compartido?",
+        "description": "La parte de cada persona desaparece y los saldos se recalculan.",
+        "confirm": "Eliminar",
+        "success": "Ingreso compartido eliminado.",
+        "error": "No se pudo eliminar el ingreso compartido."
+      },
+      "form": {
+        "titleCreate": "Nuevo ingreso compartido",
+        "titleEdit": "Editar ingreso compartido",
+        "description": "Todos los integrantes de {group} ven este ingreso y su propia parte.",
+        "date": {
+          "label": "Fecha",
+          "placeholder": "Elegí una fecha"
+        },
+        "currency": {
+          "label": "Moneda",
+          "placeholder": "Elegí una moneda",
+          "searchPlaceholder": "Buscar monedas...",
+          "noResults": "No se encontraron monedas"
+        },
+        "amount": {
+          "label": "Monto total",
+          "placeholder": "Ingresá el monto total"
+        },
+        "category": {
+          "label": "Categoría",
+          "placeholder": "Elegí una categoría"
+        },
+        "source": {
+          "label": "De dónde viene",
+          "placeholder": "Elegí un activo compartido",
+          "none": "De nada en particular",
+          "empty": "El dinero compartido de este grupo todavía no tiene activos",
+          "hint": "Al elegir un activo compartido, el ingreso se divide según cómo está repartido ese activo. Podés cambiar cualquier parte abajo.",
+          "applied": "Dividido según cómo está repartido {asset}.",
+          "ownerNotInGroup": "{count, plural, one {La división quedó como estaba: {names} es dueño de una parte de este activo pero dejó el grupo, así que las partes no sumarían 100%. Dividilo vos.} other {La división quedó como estaba: {names} son dueños de una parte de este activo pero dejaron el grupo, así que las partes no sumarían 100%. Dividilo vos.}}"
+        },
+        "destination": {
+          "label": "A dónde fue",
+          "joint": "Quedó en común",
+          "distributed": "Le llegó a una persona",
+          "hintJoint": "Entra en una cuenta compartida, así que el dinero de todo el grupo crece y la parte de cada uno sube con él.",
+          "hintDistributed": "Una persona lo tiene. Lo que supere su propia parte es lo que les debe a los demás.",
+          "remembered": "Igual que la última vez para este origen."
+        },
+        "sharedAccount": {
+          "label": "Cuenta compartida",
+          "placeholder": "Elegí una cuenta compartida",
+          "empty": "No hay ninguna cuenta compartida en {currency}",
+          "hint": "El dinero que entra acá les llega a todos los que son dueños, en sus propias proporciones, así que no lo tiene una sola persona."
+        },
+        "receiver": {
+          "label": "Quién lo recibió",
+          "placeholder": "Elegí quién lo recibió",
+          "hintSelf": "Tenés el monto completo; la parte de cada persona es lo que les debés.",
+          "hintOther": "Renly registra que le llegó a esa persona. En qué cuenta entró solo lo ve ella."
+        },
+        "account": {
+          "label": "Depositado en",
+          "hint": "El monto completo entra en esta cuenta. Quién le debe a quién después lo resuelve la división."
+        },
+        "splitMethod": {
+          "label": "Cómo dividirlo",
+          "reopenedAsExact": "Se reabrió como montos exactos. Solo se guardan los montos que produjo la división, nunca los porcentajes que la generaron."
+        },
+        "notes": {
+          "label": "Notas",
+          "placeholder": "Notas opcionales..."
+        },
+        "formerSeats": "{count, plural, one {Hay alguien en esta división que ya no está en el grupo: {names}. Quitalo para poder guardar.} other {Hay integrantes en esta división que ya no están en el grupo: {names}. Quitalos para poder guardar.}}",
+        "cta": "Guardar",
+        "createSuccess": "Ingreso compartido registrado.",
+        "updateSuccess": "Ingreso compartido actualizado.",
+        "saveError": "No se pudo guardar el ingreso compartido."
+      }
+    },
+    "split": {
+      "hint": {
+        "equal": "Se divide en partes iguales entre las personas tildadas.",
+        "exact": "Indicá el monto exacto de cada persona. Tienen que sumar el monto total.",
+        "shares": "Asigná un peso a cada persona: 2 a 1 significa el doble.",
+        "percentage": "Asigná un porcentaje a cada persona. Tienen que sumar 100."
+      },
+      "total": "Total",
+      "errors": {
+        "participants": "Elegí al menos una persona.",
+        "exact": "Los montos tienen que sumar el monto total.",
+        "shares": "Al menos una persona necesita un peso mayor que cero.",
+        "percentage": "Los porcentajes tienen que sumar 100."
+      },
+      "figurePlaceholder": {
+        "exact": "Monto",
+        "shares": "Partes",
+        "percentage": "Porcentaje"
+      },
+      "methods": {
+        "equal": "En partes iguales",
+        "exact": "Montos exactos",
+        "shares": "Partes",
+        "percentage": "Porcentajes"
+      },
+      "formerMember": "(ya no participa)"
     },
     "settlements": {
       "title": "Pagos del grupo",
@@ -3689,12 +3800,20 @@
     "shared_expense_before_account_opened": "Un gasto compartido tiene que tener fecha igual o posterior a la de apertura de la cuenta ({opening_date}).",
     "shared_expense_funding_pot_not_divided": "Todavía nadie acordó de quién es el dinero de esta cuenta compartida, así que no hay forma de registrar quién pagó. Repartí primero lo compartido.",
     "shared_expense_funding_scope": "Esa cuenta compartida es de otro grupo, así que este grupo no puede gastar desde ella.",
-    "shared_expense_no_participants": "Un gasto compartido necesita al menos una persona que participe.",
     "shared_expense_payer_required": "Indicá quién pagó esto: el saldo es lo que adelantó menos lo que usó.",
-    "shared_expense_percentages": "Los porcentajes de la división suman {stated}%, no 100%.",
     "shared_expense_shared_account_payer": "El dinero de una cuenta compartida lo adelantan todos los que son dueños, así que este gasto no puede además indicar un único pagador.",
-    "shared_expense_shares": "Las partes no pueden ser negativas, y al menos una persona necesita una parte mayor que cero.",
-    "shared_expense_split_total": "Los montos de la división suman {stated}, no {expected}.",
+    "shared_income_before_account_opened": "Un ingreso compartido tiene que tener fecha igual o posterior a la de apertura de la cuenta ({opening_date}).",
+    "shared_income_destination_pot_not_divided": "Todavía nadie acordó de quién es el dinero de esta cuenta compartida, así que no hay forma de registrar quién lo recibió. Repartí primero lo compartido.",
+    "shared_income_destination_scope": "Esa cuenta compartida es de otro grupo, así que el ingreso de este grupo no puede entrar ahí.",
+    "shared_income_distributed_shared_account": "El dinero que entra en una cuenta compartida queda en común. Elegí una cuenta privada, o marcá que este ingreso queda en común.",
+    "shared_income_joint_account_required": "Un ingreso que queda en común tiene que entrar en una de las cuentas compartidas del grupo.",
+    "shared_income_joint_receiver": "El dinero que entra en una cuenta compartida les llega a todos los que son dueños, así que este ingreso no puede además indicar una única persona que lo recibió.",
+    "shared_income_receiver_required": "Indicá a quién le llegó el dinero: el saldo es la parte de cada uno menos lo que realmente le llegó.",
+    "shared_income_source_scope": "Ese activo no es parte del dinero compartido de este grupo, así que su ingreso no se puede compartir acá.",
+    "shared_split_no_participants": "Una división necesita al menos una persona que participe.",
+    "shared_split_percentages": "Los porcentajes de la división suman {stated}%, no 100%.",
+    "shared_split_shares": "Las partes no pueden ser negativas, y al menos una persona necesita una parte mayor que cero.",
+    "shared_split_total": "Los montos de la división suman {stated}, no {expected}.",
     "transfer_amount_required": "Al mover {from_currency} a {to_currency} hay que registrar el monto recibido, para conservar la cotización que conseguiste.",
     "transfer_amounts_must_match": "Dentro de una misma moneda, una transferencia tiene que acreditar exactamente lo que debita. Registrá una comisión como un gasto aparte.",
     "transfer_before_account_opened": "Una transferencia tiene que tener fecha igual o posterior a las fechas de apertura de las dos cuentas — la más tardía es {opening_date}.",

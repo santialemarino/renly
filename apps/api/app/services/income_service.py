@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.domain import NotFoundError, ensure_not_reconciliation_owned
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
-from app.repositories import income_repository
+from app.repositories import group_repository, income_repository
+from app.repositories.income_repository import IncomeListRow
 from app.schemas.income import IncomeListResponse, IncomeResponse
 from app.services import account_service, exchange_rate_service, settings_service
 from app.utils.metrics import RateLookup, convert_optional
@@ -21,7 +22,47 @@ def _to_response(entry: IncomeEntry, currency: str | None, lookup: RateLookup | 
     return resp
 
 
-# List income entries for a user with optional filters, pagination, and display-currency conversion.
+# Maps one row of the UNIONED list to its response. Built field by field rather than by validating the
+# row, because the two branches are different tables and only this projection knows which of its
+# fields mean what: `amount` is the caller's own figure either way, `full_amount` is the whole of a
+# shared row, and `scope` is what a client must gate its row actions on — ids are unique per table and
+# not across them, so a PUT to /income/{id} on a shared row would land on an unrelated private entry.
+#
+# `group_name` is filled in by the caller, which resolves the names for the whole page in one query.
+def _list_row_to_response(row: IncomeListRow, currency: str | None, lookup: RateLookup | None) -> IncomeResponse:
+    return IncomeResponse(
+        id=row.id,
+        date=row.date,
+        amount=row.amount,
+        currency=row.currency,
+        converted_amount=convert_optional(row.amount, row.currency, currency, lookup, row.date),
+        category=row.category,
+        notes=row.notes,
+        account_id=row.account_id,
+        source=row.source,
+        reconciliation_id=row.reconciliation_id,
+        account_reconciliation_id=row.account_reconciliation_id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        scope=row.scope,
+        group_id=row.group_id,
+        group_name=None,
+        full_amount=row.full_amount,
+    )
+
+
+# The names of the groups behind the shared rows on this page, in ONE query. A row has to say which
+# group it belongs to — a 40,000 share of 100,000 rent renders identically to a solo 40,000 entry
+# without it — and resolving that per row would be an N+1 over a list the user paginates through.
+async def _group_names(session: AsyncSession, rows: list[IncomeListRow]) -> dict[int, str]:
+    group_ids = {row.group_id for row in rows if row.group_id is not None}
+    if not group_ids:
+        return {}
+    return {group.id: group.name for group in await group_repository.get_by_ids(session, sorted(group_ids))}
+
+
+# List income for a user with optional filters, pagination, and display-currency conversion: their own
+# private entries, plus their SHARE of every piece of income their group seats take a share of.
 async def list_income(
     session: AsyncSession,
     user: User,
@@ -36,9 +77,15 @@ async def list_income(
     page: int = 1,
     page_size: int = 25,
 ) -> IncomeListResponse:
-    entries, total = await income_repository.list_by_user_filtered(
+    # The caller's own active seats, resolved before the union rather than joined inside it: an
+    # `IN (seat ids)` predicate uses the splits' member index, while the join makes Postgres scan every
+    # split in the database. An empty list also means the shared branch is not built at all, so a user
+    # in no group pays nothing for it.
+    member_ids = await group_repository.list_active_member_ids(session, user.id)
+    rows, total = await income_repository.list_by_user_filtered(
         session,
         user.id,
+        member_ids,
         search=search,
         category=category,
         date_from=date_from,
@@ -49,13 +96,15 @@ async def list_income(
         page_size=page_size,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
+    group_names = await _group_names(session, rows)
     items: list[IncomeResponse] = []
     skipped: set[str] = set()
-    for e in entries:
-        resp = _to_response(e, currency, lookup)
+    for row in rows:
+        resp = _list_row_to_response(row, currency, lookup)
+        resp.group_name = group_names.get(row.group_id)
         # A requested conversion that yielded null means the rate was missing — flag the row's currency.
-        if currency and e.currency != currency and resp.converted_amount is None:
-            skipped.add(e.currency)
+        if currency and row.currency != currency and resp.converted_amount is None:
+            skipped.add(row.currency)
         items.append(resp)
     return IncomeListResponse(
         items=items,

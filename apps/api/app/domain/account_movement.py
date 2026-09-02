@@ -19,8 +19,9 @@ from typing import NamedTuple
 # net worth does not change (unlike an expense) while the money crosses between scopes (unlike a
 # transfer, which is neutral only within one). Both legs read as this kind, direction by sign.
 #
-# A group's shared expense drawn from this account reads as 'expense', because from the ACCOUNT's
-# point of view that is exactly what it is: money out, for something bought.
+# A group's shared expense drawn from this account reads as 'expense', and a group's shared income paid
+# into it reads as 'income', because from the ACCOUNT's point of view that is exactly what each is:
+# money out for something bought, and money in that was earned.
 #
 # Clearing a group balance gets its OWN kind rather than joining 'settlement', which is a card bill.
 # Both are "paying off something you owe", so one kind would have been defensible — but the shipped
@@ -48,6 +49,7 @@ class MovementSource(StrEnum):
     ownership = "ownership"
     settlement = "settlement"
     shared_expense = "shared_expense"
+    shared_income = "shared_income"
     transfer = "transfer"
 
 
