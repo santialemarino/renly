@@ -171,8 +171,11 @@ _FEEDBACK_CATEGORIES: dict[str, dict[str, str]] = {
 
 # Wraps plain body text in a minimal HTML document so the message renders in both HTML and plain-text
 # clients. Escapes each line — the body is TEXT, never markup — so user-controlled content (e.g. a
-# feedback message) can't inject HTML into the recipient's inbox.
-def _html(body: str) -> str:
+# feedback message, or a group name somebody chose) can't inject HTML into the recipient's inbox.
+# Public because notification_templates renders its own catalog of bodies and has to wrap them
+# identically: two wrappers would be two escaping rules, and the second one is the one that gets it
+# wrong.
+def html_body(body: str) -> str:
     paragraphs = "".join(f"<p>{html.escape(line)}</p>" for line in body.strip().split("\n\n"))
     return f'<div style="font-family: sans-serif; line-height: 1.5;">{paragraphs}</div>'
 
@@ -189,7 +192,7 @@ def _link_email(key: str, to: str, link: str, locale: str) -> EmailMessage:
     strings = _strings(key, locale)
     text = strings["body"].format(product=_PRODUCT_NAME, link=link)
     subject = strings["subject"].format(product=_PRODUCT_NAME)
-    return EmailMessage(to=to, subject=subject, html=_html(text), text=text)
+    return EmailMessage(to=to, subject=subject, html=html_body(text), text=text)
 
 
 # Verification email sent after signup; the link confirms the address and unlocks login (AUTH-1).
@@ -233,7 +236,7 @@ def group_invite_email(to: str, link: str, group_name: str, inviter_name: str, l
     strings = _strings("group_invite", locale)
     text = strings["body"].format(product=_PRODUCT_NAME, link=link, group=group_name, inviter=inviter_name)
     subject = strings["subject"].format(product=_PRODUCT_NAME, group=group_name, inviter=inviter_name)
-    return EmailMessage(to=to, subject=subject, html=_html(text), text=text)
+    return EmailMessage(to=to, subject=subject, html=html_body(text), text=text)
 
 
 # Notifies an admin that a user submitted feedback from the in-app form (SHELL-7). to = the admin;
@@ -244,4 +247,4 @@ def feedback_notification_email(to: str, submitter_email: str, category: str, me
     category_label = labels.get(str(category), str(category))
     text = strings["body"].format(product=_PRODUCT_NAME, category=category_label, submitter=submitter_email, message=message)
     subject = strings["subject"].format(product=_PRODUCT_NAME, category=category_label)
-    return EmailMessage(to=to, subject=subject, html=_html(text), text=text)
+    return EmailMessage(to=to, subject=subject, html=html_body(text), text=text)

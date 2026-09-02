@@ -21,8 +21,10 @@ from app.models.installment import Installment
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.invite import Invite, InviteStatus
+from app.models.notification import Notification, NotificationChannel, NotificationEvent, NotificationPreference
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent, PotVisibility
+from app.models.push_subscription import PushSubscription
 from app.models.refresh_token import RefreshToken
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.shared_income import IncomeDestination, SharedIncome, SharedIncomeSplit
@@ -71,12 +73,17 @@ __all__ = [
     "InvestmentSnapshot",
     "Invite",
     "InviteStatus",
+    "Notification",
+    "NotificationChannel",
+    "NotificationEvent",
+    "NotificationPreference",
     "OwnershipEventType",
     "PaymentObligation",
     "Pot",
     "PotMemberPermission",
     "PotOwnershipEvent",
     "PotVisibility",
+    "PushSubscription",
     "RefreshToken",
     "SharedExpense",
     "SharedExpenseSplit",

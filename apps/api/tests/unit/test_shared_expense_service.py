@@ -16,6 +16,7 @@ from app.domain import (
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_money_settings import SplitMethod
+from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.shared_expense import SharedExpense
 from app.models.user import User
@@ -75,7 +76,11 @@ def _wire(monkeypatch, *, account=None, pot=None, events=(), card=None, members=
     # from — the expense service no longer touches that repository directly.
     monkeypatch.setattr(shared_expense_service.pot_ownership_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=list(events)))
     monkeypatch.setattr(shared_expense_service.card_reconciliation_service, "mark_stale_for_date", AsyncMock())
-    written: dict = {}
+    # The notification fan-out. Stubbed on every write path, and captured rather than silenced so
+    # TestWhatIsAnnounced can assert what the group is actually told.
+    dispatched = AsyncMock()
+    monkeypatch.setattr(shared_expense_service.notification_service, "dispatch", dispatched)
+    written: dict = {"dispatched": dispatched}
 
     async def _create(_session, expense: SharedExpense) -> SharedExpense:
         expense.id = 77
@@ -328,6 +333,44 @@ class TestSeatsAreCheckedAgainstThisGroup:
         _wire(monkeypatch)
         with pytest.raises(NotFoundError):
             await _create({}, payer_member_id=999)
+
+
+class TestWhatIsAnnounced:
+    @pytest.mark.asyncio
+    async def test_the_group_is_told_the_TOTAL_and_never_the_readers_own_share(self, monkeypatch):
+        # One payload is shared by every recipient, which is what makes a notification impossible to
+        # render with somebody else's number in it. Each person's share lives on the row's own page.
+        written = _wire(monkeypatch, account=_account(1, user_id=1))
+        await _create(written, paid_from_account_id=1)
+        event, recipients, payload = written["dispatched"].await_args.args
+        assert event == NotificationEvent.shared_expense_added
+        assert (payload["amount"], payload["currency"]) == ("90.00", "ARS")
+        assert (payload["group"], payload["group_id"]) == ("Casa", GROUP_ID)
+        assert payload["actor"] == _MEMBERS[0].display_name
+        # The actor is excluded and the placeholder seat has no account: seats 11 (the caller) and 13
+        # (name-only) both drop out, leaving one recipient.
+        assert recipients == [_MEMBERS[1].user_id]
+
+    @pytest.mark.asyncio
+    async def test_an_EDIT_announces_nothing(self, monkeypatch):
+        # A correction is not news, and re-announcing an edited expense reads as a second expense.
+        # D25's "visible adjustment" is the audit log's job, not a notification's.
+        written = _wire(monkeypatch, account=_account(1, user_id=1))
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "get_by_id", AsyncMock(return_value=None))
+        with pytest.raises(NotFoundError):
+            await shared_expense_service.update_expense(
+                AsyncMock(),
+                GROUP_ID,
+                77,
+                USER,
+                date=TODAY,
+                amount=Decimal("90.00"),
+                currency="ARS",
+                split_method=SplitMethod.equal,
+                splits=[SharedExpenseSplitInput(member_id=11)],
+                payer_member_id=11,
+            )
+        written["dispatched"].assert_not_awaited()
 
 
 class TestTheCardLeg:

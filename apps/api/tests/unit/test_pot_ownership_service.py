@@ -26,6 +26,7 @@ from app.domain import (
 from app.domain.errors import AccountCurrencyMismatchError
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.user import User
 from app.services import pot_ownership_service as svc
@@ -35,6 +36,11 @@ GROUP = Group(id=10, name="Casa", kind=GroupKind.household, created_by=USER.id)
 POT = Pot(id=5, group_id=10, base_currency="USD", is_default=True)
 SEAT = GroupMember(id=100, group_id=10, user_id=USER.id, display_name="Santi", role=GroupMemberRole.admin)
 OTHER_SEAT = GroupMember(id=101, group_id=10, user_id=2, display_name="Ana", role=GroupMemberRole.member)
+
+
+# One shared dispatch mock, reset per arrangement, so TestWhatIsAnnounced can read it without every
+# other test having to thread a second return value through _arrange.
+_DISPATCHED = AsyncMock()
 
 
 def _event(**kwargs) -> PotOwnershipEvent:
@@ -88,7 +94,84 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
         return events
 
     monkeypatch.setattr(svc.pot_ownership_repository, "create_many", AsyncMock(side_effect=_persist_many))
+
+    # The notification fan-out every write ends with. Stubbed at the two seams a mocked session cannot
+    # serve: the pot's audience (a roster + permissions read) and the group's name. `dispatch` itself is
+    # captured rather than silenced, so the tests below can assert WHAT was announced — see
+    # TestNotifications.
+    monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_SEAT.user_id]))
+    monkeypatch.setattr(svc.group_repository, "get_by_id", AsyncMock(return_value=GROUP))
+    monkeypatch.setattr(svc.notification_service, "dispatch", _DISPATCHED)
+    _DISPATCHED.reset_mock()
     return created
+
+
+class TestWhatIsAnnounced:
+    # Addressed by the POT's visibility rather than the group's, because an 'owners' pot must not
+    # announce itself to a member who cannot see it — a notification that discloses what the policy
+    # hides is the one failure this whole audience rule exists to prevent.
+
+    @pytest.mark.asyncio
+    async def test_an_opening_says_the_pot_has_been_divided(self, monkeypatch):
+        _arrange(monkeypatch, events=[])
+        await svc.record_opening(AsyncMock(), 5, USER, date=date(2026, 1, 1), value=Decimal("100"), shares={100: Decimal("100")})
+        event, recipients, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.ownership_changed
+        assert recipients == [OTHER_SEAT.user_id]
+        assert payload == {"group_id": 10, "group": "Casa", "pot_id": 5, "pot": None, "variant": "opening", "actor": SEAT.display_name}
+
+    @pytest.mark.asyncio
+    async def test_a_contribution_names_whose_units_moved_and_what_the_POT_took_in(self, monkeypatch):
+        # Not the source amount: a cross-currency movement's two figures are different numbers in
+        # different currencies, and what changed for every reader is what the pot was credited.
+        _arrange(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(),
+            5,
+            USER,
+            type=OwnershipEventType.contribution,
+            date=date(2026, 2, 1),
+            member_id=101,
+            amount=Decimal("1100"),
+            amount_currency="ARS",
+            base_amount=Decimal("11"),
+        )
+        event, _recipients, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.pot_movement
+        assert payload["variant"] == "contribution"
+        assert payload["member"] == OTHER_SEAT.display_name
+        assert (payload["amount"], payload["currency"]) == ("11", "USD")
+
+    @pytest.mark.asyncio
+    async def test_a_withdrawal_reads_as_money_leaving(self, monkeypatch):
+        _arrange(monkeypatch)
+        await svc.record_movement(
+            AsyncMock(), 5, USER, type=OwnershipEventType.withdrawal, date=date(2026, 2, 1), member_id=100, amount=Decimal("11")
+        )
+        assert _DISPATCHED.await_args.args[2]["variant"] == "withdrawal"
+
+    @pytest.mark.asyncio
+    async def test_a_re_agreement_names_both_sides_and_carries_no_figure(self, monkeypatch):
+        # What moved is a number of UNITS, which no surface shows a person (U2: percentages in,
+        # percentages out) — and the percentage is not on the event, so any figure here would be a
+        # second answer to a question the pot page already answers.
+        _arrange(monkeypatch)
+        await svc.record_reagreement(AsyncMock(), 5, USER, date=date(2026, 2, 1), from_member_id=100, to_member_id=101, percentage=Decimal("10"))
+        event, _recipients, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.ownership_changed
+        assert payload["variant"] == "reagreement"
+        assert (payload["from_member"], payload["to_member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
+        assert "amount" not in payload
+
+    @pytest.mark.asyncio
+    async def test_DELETING_an_event_announces_nothing(self, monkeypatch):
+        # There is no honest sentence for it until the audit log exists: the state after a deletion is
+        # that the movement was never recorded.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", AsyncMock())
+        await svc.delete_event(AsyncMock(), 5, 1, USER)
+        _DISPATCHED.assert_not_awaited()
 
 
 class TestOpening:

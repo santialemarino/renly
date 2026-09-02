@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     # Registration access mode (default invite): invite requires a valid admin invite to register,
     # open lets anyone register. Only invite is exercised at launch.
     signup_mode: SignupMode = SignupMode.invite
+    # Web push (shared money — the notification layer). The base64url-encoded P-256 private key half
+    # of a VAPID pair; unset (default) means this deployment sends no push at all, and the app says so
+    # rather than offering a switch that does nothing. There is deliberately no public-key setting: the
+    # applicationServerKey the browser subscribes with is DERIVED from this one, so a mismatched pair —
+    # which fails silently, every browser subscribing happily and every send rejected — cannot exist.
+    vapid_private_key: str | None = None
+    # Contact the push service can reach about this deployment (a mailto: or https: URL, per RFC 8292).
+    # Falls back to web_base_url, which is a valid subject and cannot go stale like a hard-coded address.
+    vapid_subject: str | None = None
 
     # Rejects a missing or weak JWT secret at startup; a short/guessable secret makes every token forgeable.
     @field_validator("jwt_secret")

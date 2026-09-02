@@ -943,6 +943,58 @@ Neither list is writable through its shared rows. A shared row's id belongs to a
 
 ---
 
+## Notifications
+
+What Renly tells you about, and where it reaches you. Three channels — the in-app feed, email, and web
+push — with a switch per event per channel.
+
+A notification stores its **event** and a **payload**, never a rendered sentence. The prose is built by
+the client from its own translations, so the feed reads in whatever language you are using now and a
+copy fix reaches notifications written months ago. The payload also carries the ids the client builds
+the row's link from, so no route is stored. Email and web push are the exception and are rendered
+server-side, for the same reason transactional emails are: there is no client to render them at the
+moment they are sent, so they are localized to your stored language.
+
+**Events.** `group_invited`, `member_joined`, `ownership_changed` (a pot's first division, or a change
+of split), `pot_movement` (money in or out of a pot), `snapshot_due` (a pot is behind on its valuation
+cadence), `settle_marked_paid`, `settle_confirmed`, `balance_written_off`, `shared_expense_added`,
+`shared_income_added`.
+
+**Defaults.** The feed is on for every event. Email and push are on for the five about your own money
+or awaiting your own action — `ownership_changed`, `snapshot_due`, `settle_marked_paid`,
+`settle_confirmed`, `balance_written_off` — and off for the rest, so a household recording ten expenses
+a week does not send ten emails to everyone in it. A preference row exists only where you have
+overridden a default, so a new event has an answer for every existing account the day it is added.
+
+**A push carries no figures.** It renders on a lock screen, where anybody holding the phone reads it, so
+it says who did what in which group and the amount waits for the app. The feed and the email carry the
+figure.
+
+| Method   | Path                                | Description                                                                                                                                                                           |
+| -------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/notifications`                    | One page of your notifications, newest first, with `total` and `unread`. Optional `limit` (1–50, default 20) and `offset`.                                                            |
+| `POST`   | `/notifications/{id}/read`          | Mark one read. `404` for an id that is not yours — indistinguishable from one that does not exist.                                                                                    |
+| `POST`   | `/notifications/read-all`           | Mark every notification you can see read. Returns how many changed.                                                                                                                   |
+| `GET`    | `/notifications/preferences`        | The whole grid: every event on every channel, with `is_default` saying which cells you have never touched. Also `push_available` and the `push_public_key` a browser subscribes with. |
+| `PUT`    | `/notifications/preferences`        | Set one switch (`event`, `channel`, `enabled`) and get the whole grid back. One cell per request, so two tabs editing different rows cannot overwrite each other.                     |
+| `POST`   | `/notifications/push/subscriptions` | Register this browser for web push (`endpoint`, `p256dh`, `auth`, optional `user_agent`). `409 push_not_configured` where the deployment has no VAPID key.                            |
+| `DELETE` | `/notifications/push/subscriptions` | Stop pushing to one browser, named by its `endpoint` in the body. Idempotent.                                                                                                         |
+
+**Web push needs no third-party service.** The browser's own push service is the endpoint and VAPID is
+how it knows the message is from Renly; a deployment with no key configured reports `push_available:
+false` and offers no switch rather than storing a subscription nothing would ever reach. Subscriptions
+are per BROWSER, not per account — a laptop and a phone are two decisions — and a subscription the push
+service reports gone is deleted on the spot rather than retried forever. The `p256dh` and `auth` keys
+are write-only: no endpoint reads them back, and they are excluded from the data export, exactly as
+session credentials are.
+
+**The overdue-valuation reminder.** `snapshot_due` is the one event nobody triggers: an hourly job
+reports a pot whose valuation has fallen behind the cadence its group agreed on, to the members who can
+actually re-value it. Each person is reached at 09:00 in their own timezone and at most once per cadence
+period — a pot still overdue when the next period opens raises it again.
+
+---
+
 ## Feedback
 
 The in-app feedback channel. Any authenticated user can submit feedback; the caller's account email is attached server-side (not part of the body), and every admin is notified by email best-effort (a mail outage never fails the submission). Listing all feedback is admin-only.

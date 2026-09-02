@@ -522,8 +522,10 @@ class TestExport:
     def test_every_user_owned_table_is_exported_or_deliberately_excluded(self):
         # Session/credential state, not user data: an export is portable and must never carry
         # anything that authenticates. feedback is a support conversation with the operator rather
-        # than the user's own financial records.
-        deliberately_excluded = {"auth_tokens", "refresh_tokens", "feedback"}
+        # than the user's own financial records. push_subscriptions is credential state too — its
+        # p256dh and auth are the keys a push payload is encrypted with, so anybody holding the
+        # exported file could push to that browser as if they were Renly.
+        deliberately_excluded = {"auth_tokens", "refresh_tokens", "feedback", "push_subscriptions"}
         # EXPORTED_TABLES, not _USER_ID_MODELS: some tables are exported by a query of their own (the
         # collection junction joins through its investment, the group tables are scoped by membership),
         # and deriving the set from the user_id dict alone would call those uncovered.
@@ -533,6 +535,25 @@ class TestExport:
         assert user_owned - exported - deliberately_excluded == set()
         # And the exclusion list itself can't rot: every name in it must still be a real table.
         assert deliberately_excluded <= user_owned
+        # The half that was missing, and it is the half that matters for the secrets: nothing stops a
+        # table being listed as excluded AND exported. A mutation adding push_subscriptions to the
+        # export passed both assertions above — which would have put the keys a push payload is
+        # encrypted with into a portable file people email to themselves.
+        assert deliberately_excluded & exported == set()
+
+    # Everything the export produces has to be either restorable or REPORTED as skipped. The
+    # notification tables are neither restorable nor silently dropped: a preference set is the same
+    # shape as user_settings (overwriting the target's own answers would be wrong), and a notification
+    # is a record of things that HAPPENED, mostly in groups the restoring account is not in — writing
+    # them would fabricate a history that never reached this person. Saying so is the difference
+    # between a decision and an omission.
+    def test_the_notification_tables_are_reported_as_skipped_rather_than_dropped_silently(self):
+        from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
+
+        restorable = {spec.key for spec in RESTORE_SPECS}
+        for name in ("notifications", "notification_preferences"):
+            assert name not in restorable
+            assert name in SKIPPED_ENTITIES
 
     # EXPORTED_TABLES is declared, not derived, so it could claim coverage the queries do not provide
     # (or miss a key they do). Driving the real dump against a stub session pins the two together: add

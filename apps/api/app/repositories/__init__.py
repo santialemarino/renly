@@ -23,9 +23,11 @@ from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.invite_repository import invite_repository
 from app.repositories.metrics_repository import metrics_repository
+from app.repositories.notification_repository import notification_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
 from app.repositories.pot_ownership_repository import pot_ownership_repository
 from app.repositories.pot_repository import pot_repository
+from app.repositories.push_subscription_repository import push_subscription_repository
 from app.repositories.refresh_token_repository import refresh_token_repository
 from app.repositories.restore_repository import restore_repository
 from app.repositories.shared_expense_repository import shared_expense_repository
@@ -61,9 +63,11 @@ __all__ = [
     "investment_repository",
     "invite_repository",
     "metrics_repository",
+    "notification_repository",
     "payment_obligation_repository",
     "pot_ownership_repository",
     "pot_repository",
+    "push_subscription_repository",
     "refresh_token_repository",
     "restore_repository",
     "shared_expense_repository",

@@ -29,7 +29,7 @@ class TestSchedulerConfig:
     # Every job must survive a late tick: hours-scale grace, coalesced to a single run.
     def test_all_jobs_have_misfire_grace_and_coalesce(self, monkeypatch):
         recorder = self._record(monkeypatch)
-        assert len(recorder.calls) == 6
+        assert len(recorder.calls) == 7
         for _func, _trigger, kwargs in recorder.calls:
             assert kwargs["misfire_grace_time"] == scheduler_module.MISFIRE_GRACE_SECONDS
             assert kwargs["coalesce"] is True
@@ -39,3 +39,13 @@ class TestSchedulerConfig:
         recorder = self._record(monkeypatch)
         ids = {kwargs["id"] for _f, _t, kwargs in recorder.calls}
         assert "auto_snapshots_startup_catchup" in ids
+
+    # The overdue-valuation reminder runs HOURLY, and that is the whole reason it can fire at each
+    # person's own local morning: the service filters the tick to the users whose local hour matches,
+    # exactly as the auto-expense job does. A daily cron here would pick one global hour and be wrong
+    # for everybody outside it.
+    def test_the_pot_reminder_runs_hourly_so_it_can_follow_each_persons_clock(self, monkeypatch):
+        recorder = self._record(monkeypatch)
+        job = next(call for call in recorder.calls if call[2]["id"] == "send_pot_reminders")
+        assert job[1] == "cron"
+        assert job[2]["minute"] == 0 and "hour" not in job[2]

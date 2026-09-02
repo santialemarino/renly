@@ -25,6 +25,15 @@ async def list_visible(session: AsyncSession) -> list[Pot]:
     return list(result.scalars().all())
 
 
+# Every pot in the database, for the privileged scheduler (the overdue-valuation reminder has to
+# consider all of them). Deliberately its own function rather than calling list_visible on the
+# privileged session: that name promises scoping, and a name promising scoping used where nothing
+# scopes it is how a future change to the scoping silently stops applying to a background job.
+async def list_all(session: AsyncSession) -> list[Pot]:
+    result = await session.execute(select(Pot).order_by(Pot.id))
+    return list(result.scalars().all())
+
+
 # Lists the visible pots belonging to one group.
 async def list_by_group(session: AsyncSession, group_id: int) -> list[Pot]:
     result = await session.execute(select(Pot).where(Pot.group_id == group_id).order_by(Pot.created_at.desc(), Pot.id.desc()))
@@ -138,6 +147,7 @@ class PotRepository:
     get_by_id = staticmethod(get_by_id)
     get_permission = staticmethod(get_permission)
     list_accounts = staticmethod(list_accounts)
+    list_all = staticmethod(list_all)
     list_by_group = staticmethod(list_by_group)
     list_holdings = staticmethod(list_holdings)
     list_investment_ids = staticmethod(list_investment_ids)

@@ -303,6 +303,47 @@ It can also say **where it came from**: a co-owned asset the group holds. That d
 
 Finally, **your share of a shared expense appears in your ordinary expenses list, and your share of shared income in your income list** — read straight from the group's tables rather than copied into your own. One source of truth: editing the group's row has nothing to chase, and nothing can drift. Each row says which it is, carries the group it belongs to and the whole amount your share is part of, and is edited where it was created rather than from your own list.
 
+### Notifications, Notification Preferences and Push Subscriptions
+
+The layer that tells people what happened. Three tables, and all three belong to a **person** rather
+than to a group: group activity is what produces a notification, but the row it becomes is its
+recipient's — which is also why it carries read state, something a shared row could not.
+
+Nothing here names a group, a pot or an expense. A notification carries an **event** (a label like
+`shared_expense_added`) and a **payload** — the values its sentence interpolates plus the ids its link
+is built from — and nothing else. That is the whole reason the layer is reusable: a second kind of
+household event adds a label and reuses every row, policy and preference unchanged.
+
+**The prose is not stored.** The feed's sentence is assembled by the app from its own translations, so
+it reads in whatever language you are using now and a wording fix reaches notifications written months
+ago. Email and web push are rendered server-side instead, for the same reason transactional emails are:
+nothing is there to render them at the moment they are sent, so they are localized to your stored
+language.
+
+**A preference row exists only where you have overridden a default.** Nothing is seeded, so a new event
+has an answer for every existing account the day it is added — and a default that changes reaches
+everybody who never expressed an opinion about it. The feed is on for every event; email and push are
+on for the ones about your own money or awaiting your own action.
+
+**Fanning one event out writes one row per recipient,** and who those recipients are is decided by the
+entity that produced it, using that entity's own visibility rules: an event about a pot only reaches the
+members who can see that pot, and one about a settlement between two people reaches only the other one.
+A name-only member with no account is never a recipient — there is nothing to reach.
+
+**A repeating notification is deduplicated by a key rather than by tracking what was already sent.** The
+overdue-valuation reminder carries `pot:<id>:<cadence period>`, and the database refuses the second row
+with that key — so the hourly job can attempt it all period and each person is told once. When the next
+period opens the key changes and the reminder is raised again.
+
+**A push subscription belongs to a BROWSER,** not to an account: a laptop and a phone are two rows, and
+turning push off on one leaves the other alone. Its two keys are the secrets a push payload is encrypted
+with, so they are treated as credentials — never returned by any endpoint, and excluded from the data
+export, exactly as session tokens are.
+
+Because a browser holds only one subscription, turning push on **hands that browser over**: on a shared
+computer, the account that enables it last is the one it reaches, and the previous account's push there
+stops. Their other browsers are untouched.
+
 ### Settings
 
 Each user has personal preferences that control how the app behaves:
@@ -395,6 +436,15 @@ User
  |-- has many --> API Keys
  |                (for iOS Shortcut / external tool access)
  |
+ |-- has many --> Notifications
+ |                (one row per thing they were told; carries its event, its payload, and read state)
+ |
+ |-- has many --> Notification Preferences
+ |                (only where a default has been overridden: one event, one channel, on or off)
+ |
+ |-- has many --> Push Subscriptions
+ |                (one per browser that agreed to receive web push)
+ |
  |-- has --> Settings
               (currency preferences, display options)
 ```
@@ -449,6 +499,8 @@ Group
 ```
 
 A group is reachable by every account holding an active seat in it, which is why it hangs off `Group` rather than off `User`. `created_by` records who made it and confers nothing.
+
+Every write in that branch also produces a **notification** for the members it concerns — but those rows hang off `User` above rather than off `Group`, because a notification is addressed to one person and carries their own read state.
 
 Nothing here is owned by one person, and that is the point: a balance is a fact about two people, so it cannot live in either one's data. Group members' seats survive the accounts behind them — deleting an account reverts its seat to a name-only placeholder and leaves everything attached to it intact.
 

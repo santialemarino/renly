@@ -46,12 +46,13 @@ from app.domain import (
 from app.domain.errors import AccountCurrencyMismatchError
 from app.domain.pot import ONE_HUNDRED, OPENING_UNIT_PRICE, UNIT_PLACES, OwnershipEntry, quantize
 from app.models.account import Account
-from app.models.group import GroupMember
+from app.models.group import Group, GroupMember
+from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.user import User
 from app.repositories import account_repository, group_repository, pot_ownership_repository
 from app.schemas.pot import PotOwnershipEventResponse
-from app.services import exchange_rate_service, pot_service
+from app.services import exchange_rate_service, notification_service, pot_service
 
 ZERO = Decimal(0)
 
@@ -203,6 +204,24 @@ async def owner_shares(session: AsyncSession, pot: Pot, *, total: Decimal, date:
     return share_values(replay_units(_as_entries(events)), total)
 
 
+# Who hears about a change to this pot: everyone who may SEE it, minus whoever made the change.
+# `pot_service.list_notifiable_user_ids` is the pot's own visibility rule, so an 'owners' pot never
+# announces itself to a member who cannot see it — the notification would otherwise disclose exactly
+# what the policy hides.
+async def _pot_audience(session: AsyncSession, pot: Pot, user: User) -> list[int]:
+    return await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
+
+
+# The payload every pot notification carries, plus whatever the specific event adds.
+#
+# `pot` is the pot's raw name and may be NULL — a group's default pot has none — and it is left NULL
+# rather than filled in here, because the label a nameless pot reads under is LOCALIZED while this
+# payload is shared by every recipient whatever language each of them uses. Each renderer applies its
+# own fallback: notification_templates for email and push, potLabel() on the web for the feed.
+def _pot_payload(pot: Pot, group: Group | None, extra: dict) -> dict:
+    return {"group_id": pot.group_id, "group": group.name if group else None, "pot_id": pot.id, "pot": pot.name, **extra}
+
+
 # Lists a pot's ownership ledger in replay order. Visible to whoever may see the pot at all: a member
 # holding 0% still sees every movement, because partial visibility of something you co-own is not a
 # feature (V5).
@@ -229,7 +248,7 @@ async def record_opening(
     shares: dict[int, Decimal],
     notes: str | None = None,
 ) -> list[PotOwnershipEventResponse]:
-    pot, _ = await pot_service.require_writable(session, pot_id, user)
+    pot, actor = await pot_service.require_writable(session, pot_id, user)
     existing = await pot_ownership_repository.list_by_pot(session, pot.id)
     if existing:
         raise PotAlreadyOpenedError()
@@ -265,7 +284,21 @@ async def record_opening(
             for member_id, units in units_by_member.items()
         ],
     )
+    # Resolved BEFORE the commit, deliberately. Every producer in this initiative reads its recipients
+    # and its payload while the transaction is still open, so a failure in those reads fails the whole
+    # use case with nothing written — an honest error — rather than 500-ing a request whose money write
+    # has already landed. After the commit only dispatch() runs, and that swallows everything.
+    recipients = await _pot_audience(session, pot, user)
+    group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
+
+    # Everyone who can SEE the pot is told it now has a division: the answer to "what do I own here"
+    # changed from nothing to a percentage.
+    await notification_service.dispatch(
+        NotificationEvent.ownership_changed,
+        recipients,
+        _pot_payload(pot, group, {"variant": "opening", "actor": actor.display_name}),
+    )
     return [_build_response(e, members_by_id) for e in created]
 
 
@@ -356,7 +389,28 @@ async def record_movement(
             created_by=user.id,
         ),
     )
+    recipients = await _pot_audience(session, pot, user)
+    group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
+
+    # The figure notified is `credited` in the POT's base currency, not the source `amount`: what
+    # changed for every reader is what the pot took in or paid out, and a cross-currency movement's two
+    # figures are different numbers in different currencies. The member NAMED is whose units moved,
+    # which is not necessarily the person who recorded it.
+    await notification_service.dispatch(
+        NotificationEvent.pot_movement,
+        recipients,
+        _pot_payload(
+            pot,
+            group,
+            {
+                "variant": type.value,
+                "member": member.display_name,
+                "amount": str(credited),
+                "currency": pot.base_currency,
+            },
+        ),
+    )
     return _build_response(event, {member.id: member})
 
 
@@ -387,7 +441,7 @@ async def record_reagreement(
     percentage: Decimal | None,
     notes: str | None = None,
 ) -> PotOwnershipEventResponse:
-    pot, _ = await pot_service.require_writable(session, pot_id, user)
+    pot, actor = await pot_service.require_writable(session, pot_id, user)
     giver = await _require_seat(session, pot, from_member_id)
     receiver = await _require_seat(session, pot, to_member_id)
     if giver.id == receiver.id:
@@ -422,7 +476,29 @@ async def record_reagreement(
             created_by=user.id,
         ),
     )
+    recipients = await _pot_audience(session, pot, user)
+    group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
+
+    # No figure at all, and that is deliberate rather than an omission. What moved is a number of UNITS
+    # — a quantity no surface shows a person (U2: percentages go in and percentages come out) — and the
+    # percentage it corresponds to is not stored on the event, so any figure here would have to be
+    # re-derived from the ledger and would then be a second answer to a question the pot page already
+    # answers. It says who gave to whom, and the pot page says how much.
+    await notification_service.dispatch(
+        NotificationEvent.ownership_changed,
+        recipients,
+        _pot_payload(
+            pot,
+            group,
+            {
+                "variant": "reagreement",
+                "actor": actor.display_name,
+                "from_member": giver.display_name,
+                "to_member": receiver.display_name,
+            },
+        ),
+    )
     return _build_response(event, {giver.id: giver, receiver.id: receiver})
 
 

@@ -47,6 +47,7 @@ from app.domain import (
 from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.investment import Investment
+from app.models.notification import NotificationEvent
 from app.models.shared_income import IncomeDestination, SharedIncome, SharedIncomeSplit
 from app.models.user import User
 from app.repositories import (
@@ -57,7 +58,7 @@ from app.repositories import (
     shared_income_repository,
 )
 from app.schemas.shared_income import SharedIncomeResponse, SharedIncomeSplitInput, SharedIncomeSplitResponse
-from app.services import exchange_rate_service, group_service, pot_ownership_service
+from app.services import exchange_rate_service, group_service, notification_service, pot_ownership_service
 from app.utils.metrics import RateLookup, convert_optional
 
 ZERO = Decimal(0)
@@ -231,7 +232,7 @@ async def create_income(
     received_by_member_id: int | None = None,
     paid_to_account_id: int | None = None,
 ) -> SharedIncomeResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_active_seats(session, group_id, [split.member_id for split in splits], received_by_member_id)
     shares = compute_shares(amount, split_method, [SplitEntry(member_id=split.member_id, figure=split.figure) for split in splits])
     source = await _resolve_source(session, group_id, source_investment_id)
@@ -263,8 +264,22 @@ async def create_income(
         ),
     )
     written = await _write_splits(session, income, shares, landing.received_by)
+    # Resolved before the commit, so a failure reading the roster fails the whole use case with nothing
+    # written rather than 500-ing a request whose income has already landed.
+    recipients = await group_service.list_notifiable_user_ids(session, group_id, exclude_user_id=user.id)
     await session.commit()
     await session.refresh(income)
+
+    # The TOTAL received, in its own currency — the expense mirror, and for the same reason: one payload
+    # is shared by every recipient, so it can never carry somebody else's share as if it were the
+    # reader's. The DESTINATION is deliberately absent from the copy too; whether the money stayed joint
+    # or was distributed is what the row's own page says, and it is the fact most likely to be edited.
+    # An UPDATE notifies nobody, exactly as an edited expense does not: a correction is not news.
+    await notification_service.dispatch(
+        NotificationEvent.shared_income_added,
+        recipients,
+        {"group_id": group_id, "group": group.name, "actor": viewer.display_name, "amount": str(amount), "currency": currency},
+    )
     return _build_response(
         income,
         written,

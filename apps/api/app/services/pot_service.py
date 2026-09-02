@@ -19,6 +19,7 @@
 # satisfy its own predicate. Widening the policy with an author escape hatch would outlive the
 # author's own membership, so the bootstrap runs as the owner instead.
 
+from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -93,6 +94,49 @@ def _may_write(permission: PotMemberPermission | None) -> bool:
     return permission is not None and permission.can_write
 
 
+# The accounts that should hear about something happening to a pot.
+#
+# The group's own rule (`group_service.list_notifiable_user_ids`) is not enough here, because a pot is
+# not necessarily visible to the whole group: an 'owners' pot, or a member with can_view false, must not
+# be told about a movement in something they cannot see — the notification would disclose exactly what
+# the policy hides. So this asks the pot's own predicate, through the SAME `_may_view` / `_may_write`
+# functions require_visible and require_writable use. Reusing them keeps the count of copies of that
+# rule at two (this Python one and the app_can_view_pot SQL helper, which test_rls_pot_scope pins
+# together) rather than adding a third.
+#
+# `require_write` picks which question is asked, and the reminder is the reason it exists: only a member
+# with write access can snapshot a shared holding, so a nudge to re-value a pot is addressed to the
+# people who can act on it. Every other pot event goes to everyone who can see it.
+#
+# One roster query and one permissions query, both batched — never a permission lookup per member.
+async def list_notifiable_user_ids(session: AsyncSession, pot: Pot, *, require_write: bool = False, exclude_user_id: int | None = None) -> list[int]:
+    members = await group_repository.list_members(session, pot.group_id)
+    permissions = {p.member_id: p for p in await pot_repository.list_permissions(session, pot.id)}
+
+    def allowed(member: GroupMember) -> bool:
+        permission = permissions.get(member.id)
+        return _may_write(permission) if require_write else _may_view(pot, permission)
+
+    return [
+        member.user_id
+        for member in members
+        if member.is_active and member.user_id is not None and member.user_id != exclude_user_id and allowed(member)
+    ]
+
+
+# The batch counterpart of list_notifiable_user_ids, for a caller that has already loaded the roster
+# and the permission rows — the hourly overdue reminder, which considers every pot in the database and
+# must not pay two queries per pot to find out nobody is due.
+#
+# It lives here rather than in that job so the write rule stays behind `_may_write`: the module comment
+# above says there are meant to be exactly two copies of it (this Python side and the app_can_write_pot
+# SQL helper), and a third one reached from a background job is precisely the copy nobody would notice
+# had drifted.
+def writer_user_ids(pot: Pot, members: list[GroupMember], permissions: list[PotMemberPermission]) -> list[int]:
+    by_member = {permission.member_id: permission for permission in permissions}
+    return [member.user_id for member in members if member.is_active and member.user_id is not None and _may_write(by_member.get(member.id))]
+
+
 # Resolves the caller's active seat in the pot's group plus their permission row, or raises
 # NotFoundError. Used as the visibility gate: a non-member, a former member and a member without view
 # permission all get the same 404 as a pot that does not exist.
@@ -153,12 +197,58 @@ def _add_holdings(total: Decimal, figures: list[tuple[Decimal, str] | None], bas
     return total
 
 
+# What a pot HOLDS at a date, and how current that is — the half of a valuation that needs no
+# conversion, no rate lookup and no balance arithmetic.
+#
+# Extracted so freshness has exactly one implementation. Two things ask it: every surface that shows a
+# pot's "as of" date (through get_valuation), and the overdue reminder, which runs over every pot in
+# the database hourly and must not pay for a NAV to learn a date. §20 made the same move for the value
+# series, and for the same reason — two ways to compute one figure is the shape that goes wrong quietly.
+@dataclass(frozen=True)
+class _Holdings:
+    investment_ids: list[int]
+    snapshots: dict[int, InvestmentSnapshot]
+    accounts: list[Account]
+    # The OLDEST of the latest snapshots, because the pot's value is only as current as its stalest
+    # term — one holding nobody has touched since March makes the whole figure a March figure, however
+    # fresh the rest are. None when any investment has no snapshot at all.
+    valued_as_of: date_type | None
+    holds_anything: bool
+
+
+async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type) -> _Holdings:
+    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
+    snapshots: dict[int, InvestmentSnapshot] = {}
+    valued_as_of: date_type | None = None
+    if investment_ids:
+        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
+        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
+        # a back-dated ownership event would be priced against that understated NAV.
+        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
+        found = [snapshots[investment_id].date for investment_id in investment_ids if investment_id in snapshots]
+        valued_as_of = min(found) if len(found) == len(investment_ids) else None
+
+    accounts = await pot_repository.list_accounts(session, pot.id)
+    # An account's balance is DERIVED at the date asked about, so it is current by construction and
+    # never pulls valued_as_of backwards; only a snapshot can. A pot holding accounts alone is
+    # therefore known as of the date itself.
+    if accounts and not investment_ids:
+        valued_as_of = as_of_date
+    return _Holdings(
+        investment_ids=investment_ids,
+        snapshots=snapshots,
+        accounts=accounts,
+        valued_as_of=valued_as_of,
+        holds_anything=bool(investment_ids or accounts),
+    )
+
+
 # The pot's value on a date, in its base currency: every holding it carries, converted at that date.
 # Investments contribute their latest snapshot on or before the date; accounts contribute their
 # derived balance. Both reuse the existing engines unchanged, which is the whole point of co-owning
 # stock in place rather than duplicating a metrics layer for shared money.
 #
-# Returns (nav, valued_as_of, holds_anything). The NAV is None — never a partial total — in every case
+# Returns (nav, holdings). The NAV is None — never a partial total — in every case
 # where the figure cannot be stated in full:
 #
 #   * a holding whose currency cannot be converted. The repo's standing fail-loud rule.
@@ -179,48 +269,44 @@ async def _value_pot(
     *,
     as_of_date: date_type,
     lookup: RateLookup,
-) -> tuple[Decimal | None, date_type | None, bool]:
+) -> tuple[Decimal | None, _Holdings]:
     rate_map = lookup.get_rate_map_at(as_of_date)
+    held = await _holdings_at(session, pot, as_of_date=as_of_date)
+    if not held.holds_anything:
+        return (None, held)
 
-    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
-    valued_as_of: date_type | None = None
     total: Decimal | None = ZERO
-    if investment_ids:
-        # Bounded by the date, not filtered after the fact — see the repository comment. Without the
-        # bound, valuing a pot at a past date silently omits every investment snapshotted since, and
-        # a back-dated ownership event would be priced against that understated NAV.
-        snapshots = await snapshot_repository.get_latest_by_investments(session, investment_ids, as_of_date=as_of_date)
-        # The OLDEST of the latest snapshots, because the pot's value is only as current as its
-        # stalest term — one holding nobody has touched since March makes the whole figure a March
-        # figure, however fresh the rest are. None when any holding has no snapshot at all.
-        found = [snapshots[investment_id].date for investment_id in investment_ids if investment_id in snapshots]
-        valued_as_of = min(found) if len(found) == len(investment_ids) else None
+    if held.investment_ids:
         figures = [
-            None if investment_id not in snapshots else (snapshots[investment_id].value, snapshots[investment_id].currency)
-            for investment_id in investment_ids
+            None if investment_id not in held.snapshots else (held.snapshots[investment_id].value, held.snapshots[investment_id].currency)
+            for investment_id in held.investment_ids
         ]
         total = _add_holdings(total, figures, pot.base_currency, rate_map)
-        # Returned here so the two lookups keep their original order and neither runs when the other
-        # has already answered None — an unconvertible investment must not cost a balance query.
+        # Returned here so an unconvertible investment never costs a BALANCE query — the expensive
+        # read, seven sums per account. (The two cheap holdings lookups now both happen up front, in
+        # _holdings_at, because knowing what the pot holds is what decides holds_anything at all.)
         if total is None:
-            return (None, valued_as_of, True)
+            return (None, held)
 
-    accounts = await pot_repository.list_accounts(session, pot.id)
-    if accounts:
-        # An account's balance is DERIVED at the date asked about, so it is current by construction
-        # and never pulls valued_as_of backwards; only a snapshot can. A pot holding accounts alone is
-        # therefore known as of the date itself.
-        if not investment_ids:
-            valued_as_of = as_of_date
+    if held.accounts:
         # No missing case here either: an account always has a balance — its opening figure at worst.
-        balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=as_of_date)
-        total = _add_holdings(total, [(balances.get(a.id, ZERO), a.currency) for a in accounts], pot.base_currency, rate_map)
+        balances = await account_service.compute_account_balances_at(session, held.accounts, as_of_date=as_of_date)
+        total = _add_holdings(total, [(balances.get(a.id, ZERO), a.currency) for a in held.accounts], pot.base_currency, rate_map)
         if total is None:
-            return (None, valued_as_of, True)
+            return (None, held)
 
-    if not investment_ids and not accounts:
-        return (None, None, False)
-    return (total, valued_as_of, True)
+    return (total, held)
+
+
+# Whether the pot is behind on its own cadence. THE one call site of the rule, so the point-in-time
+# valuation, the value series and the overdue reminder cannot answer it three different ways.
+def _is_overdue(pot: Pot, held: _Holdings, today: date_type) -> bool:
+    return is_valuation_overdue(
+        cadence=pot.snapshot_cadence,
+        valued_as_of=held.valued_as_of,
+        holds_anything=held.holds_anything,
+        today=today,
+    )
 
 
 # The pot's value on a date plus how current that value is: see PotValuation for what each null means.
@@ -235,17 +321,24 @@ async def get_valuation(
     as_of_date: date_type,
     lookup: RateLookup,
 ) -> PotValuation:
-    nav, valued_as_of, holds_anything = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
-    return PotValuation(
-        nav=nav,
-        valued_as_of=valued_as_of,
-        is_stale=is_valuation_overdue(
-            cadence=pot.snapshot_cadence,
-            valued_as_of=valued_as_of,
-            holds_anything=holds_anything,
-            today=as_of_date,
-        ),
-    )
+    nav, held = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
+    return PotValuation(nav=nav, valued_as_of=held.valued_as_of, is_stale=_is_overdue(pot, held, as_of_date))
+
+
+# How current a pot's value is, WITHOUT computing what it is.
+#
+# It exists for the overdue reminder, which runs hourly over every pot in the database and needs no
+# figure at all — and a NAV is the expensive half (seven sums per account, times every account). This
+# is not a second freshness rule: it shares `_holdings_at` and `_is_overdue` with get_valuation, so the
+# reminder and the badge on the pot page are the same answer by construction rather than by agreement.
+# That is §20's own lesson about the value series applied a second time.
+#
+# It also needs no RateLookup, which is what makes it usable from a background job: freshness is a
+# question about DATES, and only the NAV depends on a rate — so the reminder cannot be made wrong by
+# whose currency preference it happened to run under.
+async def get_freshness(session: AsyncSession, pot: Pot, *, as_of_date: date_type) -> tuple[date_type | None, bool]:
+    held = await _holdings_at(session, pot, as_of_date=as_of_date)
+    return (held.valued_as_of, _is_overdue(pot, held, as_of_date))
 
 
 # The pot's value on a date, for a caller that needs only the figure — the ownership ledger prices

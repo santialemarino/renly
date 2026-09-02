@@ -460,6 +460,7 @@ class TestNav:
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="BRL")
         monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {}
         assert await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=date(2026, 6, 1), lookup=lookup) is None
@@ -705,6 +706,9 @@ class TestValuationFreshness:
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)} if rates is None else rates
         return lookup
 
+    def _account(self, *, currency: str = "USD") -> Account:
+        return Account(id=1, user_id=None, pot_id=5, name="Joint", type=AccountType.bank, currency=currency, opening_date=date(2026, 1, 1))
+
     @pytest.mark.asyncio
     async def test_a_pot_is_current_only_to_its_STALEST_holding(self, monkeypatch):
         # The whole rule in one test: a total is only as current as the oldest term in it. One holding
@@ -764,23 +768,31 @@ class TestValuationFreshness:
             "get_latest_by_investments",
             AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 10), currency="BRL")}),
         )
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup(rates={}))
         assert (valuation.nav, valuation.valued_as_of, valuation.is_stale) == (None, date(2026, 6, 10), False)
 
     @pytest.mark.asyncio
     async def test_an_unconvertible_investment_still_costs_no_balance_query(self, monkeypatch):
-        # The ordering the two lookups have always had: abandoning the sum must not go on to pay for
-        # a balance union whose result cannot be used.
+        # The ordering the two sums have always had: abandoning the total must not go on to pay for a
+        # balance union whose result cannot be used.
+        #
+        # Asserted on `compute_account_balances_at` — the union, seven sums per account — rather than
+        # on `list_accounts`, which is the cheap indexed read that decides whether the pot holds
+        # anything at all and now always runs. Naming the expensive query is also what makes the test
+        # discriminate: with `list_accounts` returning [] there is no balance query to make either way,
+        # so the pot here HOLDS an account and the guard is the only reason the union is skipped.
         monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
         monkeypatch.setattr(
             pot_service.snapshot_repository,
             "get_latest_by_investments",
             AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 10), currency="BRL")}),
         )
-        accounts = AsyncMock(return_value=[])
-        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", accounts)
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[self._account()]))
+        balances = AsyncMock(return_value={})
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", balances)
         await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup(rates={}))
-        accounts.assert_not_awaited()
+        balances.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_pot_holding_nothing_is_not_reported_as_behind(self, monkeypatch):

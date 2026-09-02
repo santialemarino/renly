@@ -196,6 +196,32 @@ CREATE TYPE income_destination AS ENUM (
   'distributed'
 );
 
+-- What a notification is about. Ordered as the preferences surface presents them rather than
+-- alphabetically, the same way income_destination and group_settlement_status are declared.
+-- The labels are money events because shared money is what produces them; none of the three
+-- notification TABLES names a money entity, which is what lets a second module (household reminders
+-- and the like) add labels here and reuse every row, policy and preference unchanged.
+CREATE TYPE notification_event AS ENUM (
+  'group_invited',
+  'member_joined',
+  'ownership_changed',
+  'pot_movement',
+  'snapshot_due',
+  'settle_marked_paid',
+  'settle_confirmed',
+  'balance_written_off',
+  'shared_expense_added',
+  'shared_income_added'
+);
+
+-- How a notification reaches someone. 'in_app' is the feed and is never sent anywhere; the other two
+-- leave the app, which is why they are the ones a preference usually turns off.
+CREATE TYPE notification_channel AS ENUM (
+  'in_app',
+  'email',
+  'push'
+);
+
 -- ---------------------------------------------------------------------------
 -- Tables
 -- ---------------------------------------------------------------------------
@@ -1396,6 +1422,90 @@ CREATE INDEX idx_shared_income_splits_income ON shared_income_splits(shared_inco
 CREATE INDEX idx_shared_income_splits_member ON shared_income_splits(member_id);
 CREATE INDEX idx_shared_income_splits_group ON shared_income_splits(group_id);
 
+-- The notification layer: what a person asked to be told about, what they have been told, and which
+-- browsers agreed to receive a push. All three are USER-owned rather than group-scoped — a notification
+-- belongs to its recipient, not to the group whose activity produced it — so they take the plain
+-- owner-match policy shape below and never call app_is_group_member(). Which members of a group get a
+-- row is decided by the fan-out in the service, using the group's own visibility rules; once written,
+-- the row is simply that person's.
+--
+-- Nothing here references a group, a pot or an expense. That is the entity-agnostic requirement, and
+-- it is met by the shape rather than by anyone remembering it: an event is a label and its context
+-- travels in `payload`.
+
+-- Only OVERRIDES. A missing row means the shipped default (app/domain/notification.py), so there is no
+-- seeding step, and a new event has an answer for every existing account on the day it is added.
+CREATE TABLE notification_preferences (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event      notification_event NOT NULL,
+  channel    notification_channel NOT NULL,
+  enabled    BOOLEAN NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- One answer per person per event per channel; a second row would be a second opinion about the same
+  -- switch, and the reader would have to pick one.
+  CONSTRAINT notification_preferences_once UNIQUE (user_id, event, channel)
+);
+-- No index on user_id alone: the only read is "every override this user holds", which the unique
+-- constraint's index already serves on its leading column.
+
+-- One thing that happened, addressed to one person. Fanning an event out to five people writes five
+-- rows, because read state is per-person and a shared row could not carry it.
+CREATE TABLE notifications (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  event      notification_event NOT NULL,
+  -- The values the copy interpolates and the ids its link is built from. JSONB rather than columns
+  -- precisely because this table must not know what a pot is: every event carries its own shape.
+  -- The feed's prose is rendered by the WEB from `notifications.<event>` translation keys, so a row
+  -- re-reads in whatever language the reader is using now and a copy fix reaches old rows.
+  payload    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  -- Identifies a REPEATING notification so the same one is written at most once; NULL for a one-off.
+  dedupe_key VARCHAR(255),
+  read_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- The feed is one user's rows newest first, which is the only way this table is ever read.
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+-- The unread badge counts a user's unread rows, and the partial index is the point: a feed is mostly
+-- read, so this stays small however long the history grows.
+CREATE INDEX idx_notifications_user_unread ON notifications(user_id) WHERE read_at IS NULL;
+-- What makes a repeating notification idempotent. The overdue-valuation reminder is attempted hourly
+-- and carries a key naming the pot and the cadence period, so every attempt after the first is a no-op
+-- — which replaces a "last notified" column that would have had to live on pots (a per-pot answer to a
+-- per-user question) and would have needed its own reset rule when the period rolled over.
+-- PARTIAL for SIZE rather than for semantics: NULLs are distinct in a unique index, so two keyless
+-- rows would not collide either way. Its one consequence is that an ON CONFLICT naming these columns
+-- must repeat the predicate, or the statement raises.
+CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, event, dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
+
+-- One BROWSER that has agreed to receive web push for one account — not one user: the Push API mints a
+-- subscription per browser profile per device, so a laptop and a phone are two rows and revoking one
+-- must not silence the other.
+-- p256dh and auth are the SECRETS the payload is encrypted with: anyone holding them plus the endpoint
+-- can push to that browser as if they were Renly. They are treated as credentials rather than data —
+-- never logged, never returned by an endpoint, and excluded from the data export, exactly as
+-- auth_tokens and refresh_tokens are.
+CREATE TABLE push_subscriptions (
+  id           BIGSERIAL PRIMARY KEY,
+  user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- Globally unique, not unique per user: the same endpoint arriving again is the same browser
+  -- re-subscribing, which is an upsert. TEXT because the endpoint is a third-party URL whose shape is
+  -- not ours to cap.
+  endpoint     TEXT NOT NULL,
+  p256dh       VARCHAR(255) NOT NULL,
+  auth         VARCHAR(255) NOT NULL,
+  user_agent   VARCHAR(500),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Last successful send, set explicitly by the sender: "when did a send last succeed" is a different
+  -- question from "when was this row last touched", so there is no updated_at trigger here.
+  last_used_at TIMESTAMPTZ,
+  CONSTRAINT push_subscriptions_endpoint_once UNIQUE (endpoint)
+);
+CREATE INDEX idx_push_subscriptions_user ON push_subscriptions(user_id);
+
 -- ---------------------------------------------------------------------------
 -- updated_at trigger
 -- PostgreSQL does not support ON UPDATE CURRENT_TIMESTAMP natively,
@@ -1533,6 +1643,13 @@ CREATE TRIGGER trg_shared_income_updated_at
 
 CREATE TRIGGER trg_shared_income_splits_updated_at
   BEFORE UPDATE ON shared_income_splits
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Only notification_preferences of the three notification tables. A notification is an immutable record
+-- of something that happened (the one field that changes is read_at, whose value IS the timestamp), and
+-- a push subscription's mutable field is last_used_at, which the sender sets deliberately.
+CREATE TRIGGER trg_notification_preferences_updated_at
+  BEFORE UPDATE ON notification_preferences
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 -- ---------------------------------------------------------------------------
@@ -1997,6 +2114,34 @@ CREATE POLICY shared_income_scope_write ON shared_income FOR ALL
 ALTER TABLE shared_income_splits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY shared_income_splits_member_isolation ON shared_income_splits
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- The notification layer. Back to the plain owner match: these are the recipient's rows, so
+-- app_is_group_member() appears nowhere here even though group activity is what produces them.
+ALTER TABLE notification_preferences ENABLE ROW LEVEL SECURITY;
+CREATE POLICY notification_preferences_user_isolation ON notification_preferences
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY push_subscriptions_user_isolation ON push_subscriptions
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+
+-- notifications is the one user-owned table here with per-command policies rather than one FOR ALL,
+-- and INSERT deliberately has NO policy at all. Fanning an event out writes rows for OTHER users,
+-- which a `user_id = app_current_user_id()` WITH CHECK could never permit, so the dispatcher runs on
+-- the privileged session — the same posture as group creation and invite acceptance. With RLS enabled
+-- and no INSERT policy, the request role cannot write a notification through any path: nobody can
+-- forge an entry in their own feed, or in anyone else's.
+-- UPDATE carries WITH CHECK as well as USING, so marking one read cannot also re-address it to somebody
+-- else — defence in depth rather than the only guard, since Postgres also requires an updated row to
+-- stay visible under the SELECT policy, and widening either one alone still refuses it. DELETE gets its
+-- own policy because Postgres has no WITH CHECK for DELETE.
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY notifications_user_read ON notifications FOR SELECT
+  USING (user_id = app_current_user_id());
+CREATE POLICY notifications_user_update ON notifications FOR UPDATE
+  USING (user_id = app_current_user_id()) WITH CHECK (user_id = app_current_user_id());
+CREATE POLICY notifications_user_delete ON notifications FOR DELETE
+  USING (user_id = app_current_user_id());
 
 -- exchange_rates, asset_prices and cedear_ratios are global reference data keyed by
 -- pair/ticker (not by user) and are intentionally left without RLS so every request

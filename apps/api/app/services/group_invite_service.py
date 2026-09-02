@@ -30,11 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.domain import GroupMembershipExistsError, GroupSeatTakenError, InvalidTokenError, NotFoundError
 from app.models.group_invite import GroupInvite
+from app.models.notification import NotificationEvent
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import group_invite_repository, group_repository, user_repository
 from app.schemas.group_invite import GroupInviteAcceptedResponse, GroupInviteCreatedResponse, GroupInvitePreviewResponse
-from app.services import email_templates, group_service, settings_service
+from app.services import email_templates, group_service, notification_service, settings_service
 from app.services.email_service import EmailMessage, get_email_service
 
 logger = logging.getLogger(__name__)
@@ -90,7 +91,7 @@ async def create_invite(
     *,
     email: str | None = None,
 ) -> GroupInviteCreatedResponse:
-    group, _ = await group_service.require_admin(session, group_id, user)
+    group, inviter = await group_service.require_admin(session, group_id, user)
     member = await group_repository.get_member(session, group.id, member_id)
     if member is None or not member.is_active:
         raise NotFoundError("Group member not found")
@@ -123,6 +124,10 @@ async def create_invite(
         invite.consumed_at = None
         invite.created_by = user.id
         await group_invite_repository.save(session, invite)
+    # Resolved BEFORE the commit, deliberately: a failure reading the roster then fails the whole use
+    # case with nothing written, rather than 500-ing a request whose invite has already landed. After
+    # the commit only dispatch() runs, and that swallows everything.
+    recipients = await group_service.list_notifiable_user_ids(session, group.id, exclude_user_id=user.id)
     await session.commit()
 
     link = _invite_link(raw_token)
@@ -131,6 +136,20 @@ async def create_invite(
         # stored preference to read.
         locale = await settings_service.get_user_language(session, user.id)
         await _safe_send(email_templates.group_invite_email(normalized_email, link, group.name, user.name, locale=locale))
+
+    # The group's OTHER members are told an invite went out — never the invitee, whose only usable
+    # channel is the email above. A notification row is readable data and could therefore never carry
+    # the raw token, which is precisely what token_hash exists to prevent; a feed entry announcing a
+    # link it cannot hand over would be worse than none. So this is group activity, exactly like
+    # member_joined beside it.
+    await notification_service.dispatch(
+        NotificationEvent.group_invited,
+        recipients,
+        # Both people are named by their SEAT, never by an account name. Inside a group that is the
+        # identity everyone else knows — it is what `display_name` is for, and GroupMemberResponse
+        # deliberately exposes nothing else — so mixing the two would put two vocabularies in one feed.
+        {"group_id": group.id, "group": group.name, "inviter": inviter.display_name, "invitee": member.display_name},
+    )
     return GroupInviteCreatedResponse(member_id=member.id, email=normalized_email, invite_url=link, expires_at=expires_at)
 
 
@@ -188,5 +207,16 @@ async def accept_invite(admin_session: AsyncSession, raw_token: str, user: User)
     await group_repository.save_member(admin_session, member)
     invite.consumed_at = utcnow()
     await group_invite_repository.save(admin_session, invite)
+    # Resolved before the commit for the reason create_invite states. Excluding the joiner by ACCOUNT
+    # rather than by seat is what makes this correct either side of the commit: their own seat is the
+    # one being linked, so filtering on the seat would depend on whether the write had landed yet.
+    recipients = await group_service.list_notifiable_user_ids(admin_session, group.id, exclude_user_id=user.id)
     await admin_session.commit()
+
+    # Everybody else in the group learns the seat is now a real person.
+    await notification_service.dispatch(
+        NotificationEvent.member_joined,
+        recipients,
+        {"group_id": group.id, "group": group.name, "member": member.display_name},
+    )
     return GroupInviteAcceptedResponse(group_id=group.id, group_name=group.name, member_id=member.id)
