@@ -32,7 +32,6 @@ interface IncomeListRaw {
   page: number;
   page_size: number;
   display_currency: string | null;
-  skipped_currencies: string[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -71,10 +70,6 @@ export interface IncomeListResponse {
   page: number;
   pageSize: number;
   displayCurrency: string | null;
-  // Original-currency codes on this page whose conversion is missing a stored rate, so their figures
-  // are shown unconverted. The API has always reported these; the list surfaces them now that a
-  // group's income can put a currency on the page the user never chose themselves.
-  skippedCurrencies: string[];
 }
 
 export type IncomeSortField = 'date' | 'amount' | 'category';
@@ -139,6 +134,5 @@ export async function getIncome(params: GetIncomeParams = {}): Promise<IncomeLis
     page: raw.page,
     pageSize: raw.page_size,
     displayCurrency: raw.display_currency,
-    skippedCurrencies: raw.skipped_currencies,
   };
 }

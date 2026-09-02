@@ -132,16 +132,40 @@ async def seeded(session: AsyncSession):
             )
         return row
 
-    # 6,000 ARS collected by seat B into their own hands and split three ways: B owes the other two.
-    # Dated the same day as a private entry, so a filter that reached one branch only would show it.
-    colliding_id = await earned(date(2026, 5, 20), 6000, "ARS", "distributed", {seats[0]: (2000, 0), seats[1]: (2000, 6000), seats[2]: (2000, 0)})
-    # And now a PRIVATE entry that collides with it on both id and date, which is the only shape that
-    # can tell the page order's scope tie-break apart from its absence: ids are unique per table and
-    # not across them, so this pair is genuinely indistinguishable without the scope. A fixture whose
-    # ids happened not to collide left the tie-break untestable, which a mutation sweep found.
+    # 90 USD, a second bucket that must never net with the first.
+    await earned(date(2026, 6, 12), 90, "USD", "distributed", {seats[0]: (45, 90), seats[1]: (45, 0)}, notes="usd rent")
+    # One where seat A collected money they are entitled to none of: an entitlement of zero that must
+    # not appear as income, and the mirror of the "not mine" expense above.
+    await earned(date(2026, 6, 18), 500, "ARS", "distributed", {seats[0]: (0, 500), seats[1]: (500, 0)}, notes="not my income")
+
+    # A shared row and a PRIVATE one sharing an id AND a date, which is the only shape that can tell
+    # the page order's scope tie-break apart from its absence: ids are unique per table and not across
+    # them, so this pair is genuinely indistinguishable without the scope. A fixture whose ids happened
+    # not to collide left the tie-break untestable, which a mutation sweep found.
     #
-    # The shared row is inserted FIRST and its id copied, because `shared_income`'s sequence is not
-    # transactional — earlier rolled-back runs have already advanced it, so the id cannot be predicted.
+    # BOTH ids are stated explicitly, taken from one past the highest live id in either table. Letting
+    # either sequence choose does not work: neither is transactional, so a rolled-back run leaves them
+    # advanced by different amounts, and copying one table's fresh id into the other eventually names an
+    # id that table's own sequence has already handed out — a suite that passes once and then fails on
+    # a re-run against the same database, which is how this was found. Done LAST in the seeding so
+    # every auto-id row is already in, and the chosen id is therefore free in both tables.
+    colliding_id = await scalar(
+        "SELECT GREATEST(COALESCE((SELECT max(id) FROM shared_income), 0), COALESCE((SELECT max(id) FROM income_entries), 0)) + 1"
+    )
+    # 6,000 ARS collected by seat B into their own hands and split three ways: B owes the other two.
+    # Dated the same day as the private entry below, so a filter that reached one branch only would show it.
+    await session.execute(
+        text(
+            "INSERT INTO shared_income (id, group_id, date, amount, currency, category, split_method, destination, notes)"
+            " VALUES (:i, :g, '2026-05-20', 6000, 'ARS', 'rental_income', 'equal', 'distributed', 'rent')"
+        ),
+        {"i": colliding_id, "g": group},
+    )
+    for seat, (entitled, received) in {seats[0]: (2000, 0), seats[1]: (2000, 6000), seats[2]: (2000, 0)}.items():
+        await session.execute(
+            text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, :a, :r)"),
+            {"i": colliding_id, "g": group, "m": seat, "a": entitled, "r": received},
+        )
     await session.execute(
         text(
             "INSERT INTO income_entries (id, user_id, date, amount, currency, category, notes)"
@@ -149,12 +173,22 @@ async def seeded(session: AsyncSession):
         ),
         {"i": colliding_id, "u": users[0]},
     )
-    # 90 USD, a second bucket that must never net with the first.
-    await earned(date(2026, 6, 12), 90, "USD", "distributed", {seats[0]: (45, 90), seats[1]: (45, 0)}, notes="usd rent")
-    # One where seat A collected money they are entitled to none of: an entitlement of zero that must
-    # not appear as income, and the mirror of the "not mine" expense above.
-    await earned(date(2026, 6, 18), 500, "ARS", "distributed", {seats[0]: (0, 500), seats[1]: (500, 0)}, notes="not my income")
+    # Both sequences pushed past the id just taken by hand, because the TESTS insert further rows of
+    # their own: a sequence left behind an explicit id hands that same id out again on the next auto
+    # insert. setval does not roll back, which is what makes it the right tool here — the explicit row
+    # disappears with the transaction, the reservation does not.
+    for table in ("shared_income", "income_entries"):
+        await session.execute(
+            text(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST(:i, (SELECT last_value FROM {table}_id_seq)))"),
+            {"i": colliding_id},
+        )
     await session.flush()
+    # The collision is a PROPERTY of this fixture, asserted here rather than trusted: without it the
+    # paging test still passes and simply stops testing the tie-break it exists for.
+    assert (
+        await scalar("SELECT count(*) FROM income_entries WHERE id = :i", i=colliding_id) == 1
+        and await scalar("SELECT count(*) FROM shared_income WHERE id = :i", i=colliding_id) == 1
+    )
     return {
         "users": users,
         "group": group,
@@ -557,3 +591,33 @@ class TestTheSharedIncomeAccountSums:
         )
         await session.flush()
         assert await shared_income_repository.linked_account_ids(session, [seeded["account"], seeded["usd_account"]]) == {seeded["account"]}
+
+    @pytest.mark.asyncio
+    async def test_deleting_the_account_a_JOINT_row_names_leaves_the_row_standing(self, session, seeded):
+        # The reason `destination = 'joint'` carries no CHECK requiring an account. The FK is
+        # ON DELETE SET NULL, so a constraint pairing the two columns turns this delete into a refusal
+        # — and the refusal is not even a legible one, since main.py maps every IntegrityError to a
+        # bare 409. What must survive instead is the row and its splits: the money did stay together,
+        # and who was credited what is on the split rows, which the deletion does not touch.
+        income = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, split_method, destination, paid_to_account_id)"
+                    " VALUES (:g, '2026-06-10', 5000, 'ARS', 'equal', 'joint', :a) RETURNING id"
+                ),
+                {"g": seeded["group"], "a": seeded["account"]},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 2500, 2500)"),
+            {"i": income, "g": seeded["group"], "m": seeded["seats"][0]},
+        )
+        await session.execute(text("DELETE FROM accounts WHERE id = :a"), {"a": seeded["account"]})
+        await session.flush()
+
+        row = (await session.execute(text("SELECT destination, paid_to_account_id FROM shared_income WHERE id = :i"), {"i": income})).one()
+        assert row == ("joint", None)
+        splits = (
+            await session.execute(text("SELECT amount, received_amount FROM shared_income_splits WHERE shared_income_id = :i"), {"i": income})
+        ).all()
+        assert splits == [(Decimal("2500.00"), Decimal("2500.00"))]

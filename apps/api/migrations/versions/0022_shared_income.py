@@ -54,9 +54,14 @@ CREATE POLICY shared_income_scope_read ON shared_income FOR SELECT
 # silently rewrite an old balance.
 #
 # `destination` and `paid_to_account_id` must agree (joint money lands in a pot's account, distributed
-# money does not), and that rule is enforced in the service rather than by a CHECK: it depends on
-# accounts.pot_id, and a CHECK cannot span two rows. Same reason transfers' same-scope invariant lives
-# in the service.
+# money does not), and that rule is enforced in the service rather than by a CHECK — for two reasons.
+# It depends on accounts.pot_id, and a CHECK cannot span two rows; same reason transfers' same-scope
+# invariant lives in the service. And even the half a CHECK could see ("joint names SOME account") is a
+# write-time rule rather than a table invariant: the account FK is ON DELETE SET NULL, so a constraint
+# pairing the two columns turns deleting that account into an impossibility instead of merely dropping
+# an attribution — the exact trap account_service.delete_account already documents for the settlement
+# cash leg. A joint row whose account is gone is still truthfully joint: the money did stay together,
+# and WHO was credited what lives on the split rows, which the deletion does not touch.
 def upgrade() -> None:
     destination = postgresql.ENUM("joint", "distributed", name="income_destination")
     destination.create(op.get_bind(), checkfirst=True)
@@ -80,14 +85,6 @@ def upgrade() -> None:
         sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")),
         sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")),
         sa.CheckConstraint("amount > 0", name="shared_income_positive_amount"),
-        # Joint money is money in a pot, and a pot is worth what its holdings are worth — so joint
-        # income with nowhere to land would claim every owner's share rose while no figure moved.
-        # Whether the named account actually belongs to a pot of THIS group is the service's check;
-        # this one only refuses the shape that is wrong whatever the account turns out to be.
-        sa.CheckConstraint(
-            "destination <> 'joint' OR paid_to_account_id IS NOT NULL",
-            name="shared_income_joint_lands_somewhere",
-        ),
     )
     op.create_index("idx_shared_income_group_date", "shared_income", ["group_id", sa.text("date DESC")])
     op.create_index(

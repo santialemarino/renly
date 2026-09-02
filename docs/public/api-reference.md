@@ -888,7 +888,7 @@ Money arriving from outside the household **crosses no scope boundary on the way
 
 The default is applied by the **form**, not the API: what gets stored is always the split the request states, so a later change to who owns the asset never restates income the group already agreed on.
 
-**What it moves.** The destination account rises by the **whole amount** — the money really arrived, and who owes whom afterwards is the splits' business, never the account's. The currency must match that account's (`400 account_currency_mismatch`) and the row cannot be dated before it opened (`400 shared_income_before_account_opened`). Each member's own share appears in their `/income` list (see below); nobody's share is written into `income_entries`.
+**What it moves.** The destination account rises by the **whole amount** — the money really arrived, and who owes whom afterwards is the splits' business, never the account's. The currency must match that account's (`400 account_currency_mismatch`) and the row cannot be dated before it opened (`400 shared_income_before_account_opened`). That FK is `ON DELETE SET NULL` too, and a joint row whose account is later deleted keeps saying it stayed joint: the money did stay together, and who was credited what is on the split rows, which the deletion does not touch. Naming an account is therefore a rule at write time rather than a permanent property of the row. Each member's own share appears in their `/income` list (see below); nobody's share is written into `income_entries`.
 
 ### Balances and settlements
 

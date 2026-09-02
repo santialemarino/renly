@@ -1334,15 +1334,13 @@ CREATE TABLE shared_income (
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Shared income of nothing has nothing to divide, and a negative one is a reversal the split methods
   -- have no meaning for (a percentage of a negative total inverts who owes whom).
-  CONSTRAINT shared_income_positive_amount CHECK (amount > 0),
-  -- Joint money is money in a pot, and a pot is worth what its holdings are worth — so joint income
-  -- with nowhere to land would claim every owner's share rose while no figure moved. Whether the named
-  -- account actually belongs to a pot of THAT group is the service's check, because it depends on
-  -- accounts.pot_id and a CHECK cannot span two rows; this one refuses the shape that is wrong
-  -- whatever the account turns out to be.
-  CONSTRAINT shared_income_joint_lands_somewhere CHECK (
-    destination <> 'joint' OR paid_to_account_id IS NOT NULL
-  )
+  CONSTRAINT shared_income_positive_amount CHECK (amount > 0)
+  -- Joint money landing in a pot's account, and distributed money not, is the service's rule and not a
+  -- CHECK here. It depends on accounts.pot_id, which a CHECK cannot reach; and even "joint names SOME
+  -- account" is a write-time rule rather than a table invariant, because paid_to_account_id is
+  -- ON DELETE SET NULL — pairing the two columns would turn deleting that account into an
+  -- impossibility. A joint row whose account is gone is still truthfully joint, and who was credited
+  -- what lives on the split rows.
 );
 
 CREATE INDEX idx_shared_income_group_date ON shared_income(group_id, date DESC);

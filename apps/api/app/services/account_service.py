@@ -378,18 +378,22 @@ async def create_account(
     return account
 
 
-# Returns whether any money entry (expense / income / settlement) links this account. Used to lock
-# the account's currency once linked, so the derived balance never mixes currencies.
+# Returns whether any money entry (expense / income / settlement) links this account. Used to lock the
+# account's currency AND its opening_date once linked: the first would silently mix currencies in the
+# derived balance, the second would drop rows out of it, since every sum is bounded below by that date.
 async def account_has_links(session: AsyncSession, account_id: int, user_id: int) -> bool:
     return (
         await expense_repository.exists_by_account_id(session, account_id, user_id)
         or await income_repository.exists_by_account_id(session, account_id, user_id)
         or await card_settlement_repository.exists_by_account_id(session, account_id, user_id)
         or await transfer_repository.exists_by_account_id(session, account_id, user_id)
-        # No user filter on the two group sums: the rows belong to the group, and RLS scopes them.
-        # An account a group has spent from or settled through is denominated just as firmly as one
-        # its owner used privately, so it has to lock the currency too.
+        # No user filter on the three group sources: the rows belong to the group, and RLS scopes them.
+        # An account a group has spent from, earned into or settled through is denominated just as
+        # firmly as one its owner used privately, so it has to lock the currency too. All three are
+        # asked here and not only in the batch summary path: this is the one the UPDATE consults, so a
+        # source missing from it is a currency the owner can still change under the group's figures.
         or bool(await shared_expense_repository.linked_account_ids(session, [account_id]))
+        or bool(await shared_income_repository.linked_account_ids(session, [account_id]))
         or bool(await group_settlement_repository.linked_account_ids(session, [account_id]))
     )
 
