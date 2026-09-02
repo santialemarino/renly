@@ -17,11 +17,11 @@ import {
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
 import {
-  ExpenseScopeField,
+  EntryScopeField,
   toHandover,
   type ExpenseHandover,
-} from '@/app/(protected)/_components/expense-scope-field';
-import { ExpenseSplitRows } from '@/app/(protected)/_components/expense-split-rows';
+} from '@/app/(protected)/_components/entry-scope-field';
+import { EntrySplitRows } from '@/app/(protected)/_components/entry-split-rows';
 import {
   createSharedExpense,
   getGroupExpenseContext,
@@ -36,10 +36,9 @@ import {
   canNameOwnInstrument,
   inactiveSeatNames,
   isJointlyFunded,
-  reopenChangedMethod,
-  reopenSplitMethod,
   wasParticipant,
 } from '@/app/(protected)/shared/shared-expense-rules';
+import { reopenChangedMethod, reopenSplitMethod } from '@/app/(protected)/shared/split-rules';
 import { AccountField } from '@/components/account-field';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
@@ -167,8 +166,8 @@ export function SharedExpenseFormDialog({
       buildSharedExpenseFormSchema({
         requiredMsg: tCommon('form.errors.required'),
         positiveMsg: t('pots.form.mustBePositive'),
-        participantsMsg: t('expenses.split.errors.participants'),
-        splitTotalMsg: t('expenses.split.errors.exact'),
+        participantsMsg: t('split.errors.participants'),
+        splitTotalMsg: t('split.errors.exact'),
       }),
     [t, tCommon],
   );
@@ -404,9 +403,10 @@ export function SharedExpenseFormDialog({
             noValidate
           >
             {scopeGroups && !expense && onScopeChange && (
-              <ExpenseScopeField
+              <EntryScopeField
                 groups={scopeGroups}
                 value={String(group.id)}
+                hint={tCommon('entryScope.expenseHint')}
                 onValueChange={(scope) => onScopeChange(scope, toHandover(form.getValues()))}
                 disabled={form.formState.isSubmitting}
               />
@@ -629,7 +629,7 @@ export function SharedExpenseFormDialog({
                       className="w-full"
                       options={SPLIT_METHODS.map((method) => ({
                         value: method,
-                        label: t(`expenses.split.methods.${method}`),
+                        label: t(`split.methods.${method}`),
                       }))}
                     />
                   </FormControl>
@@ -645,10 +645,11 @@ export function SharedExpenseFormDialog({
               )}
             />
 
-            <ExpenseSplitRows
-              form={form}
+            <EntrySplitRows
+              control={form.control}
               seats={seats}
               currency={watchedCurrency}
+              participantsLabel={t('expenses.split.participants.label')}
               showTotalError={form.formState.isSubmitted}
             />
 

@@ -212,17 +212,19 @@
     "lockedRow": {
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
       "sharedExpense": "This is your share of a shared expense. Edit or remove it from the group it belongs to.",
+      "sharedIncome": "This is your share of shared income. Edit or remove it from the group it belongs to.",
       "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
     },
     "pagination": {
       "previous": "Previous",
       "next": "Next"
     },
-    "expenseScope": {
+    "entryScope": {
       "label": "Who is this for?",
       "private": "Just me",
       "groupsHeading": "Shared with",
-      "hint": "A shared expense is recorded by the group and split between its members. Your share becomes your own expense."
+      "expenseHint": "A shared expense is recorded by the group and split between its members. Your share becomes your own expense.",
+      "incomeHint": "Shared income is recorded by the group and split between its members. Your share becomes your own income."
     }
   },
   "login": {
@@ -533,7 +535,8 @@
       "empty": "No income entries found.",
       "emptyTitle": "Record your income",
       "emptyDescription": "Add your income sources to see your cash flow and savings rate.",
-      "total": "{total, plural, one {# entry} other {# entries}}"
+      "total": "{total, plural, one {# entry} other {# entries}}",
+      "shareOf": "Your share: {share} of {amount} {currency}"
     },
     "actions": {
       "edit": "Edit",
@@ -2550,33 +2553,141 @@
       "split": {
         "participants": {
           "label": "Who was in on it"
-        },
-        "hint": {
-          "equal": "Divided equally between everyone ticked.",
-          "exact": "Give each person the exact amount they owe. They must add up to the full amount.",
-          "shares": "Give each person a weight — 2 to 1 means twice as much.",
-          "percentage": "Give each person a percentage. They must add up to 100."
-        },
-        "total": "Total",
-        "errors": {
-          "participants": "Pick at least one person.",
-          "exact": "The amounts must add up to the full amount.",
-          "shares": "At least one person needs a weight above zero.",
-          "percentage": "The percentages must add up to 100."
-        },
-        "figurePlaceholder": {
-          "exact": "Amount",
-          "shares": "Parts",
-          "percentage": "Percentage"
-        },
-        "methods": {
-          "equal": "Equally",
-          "exact": "Exact amounts",
-          "shares": "Shares",
-          "percentage": "Percentages"
-        },
-        "formerMember": "(former)"
+        }
       }
+    },
+    "income": {
+      "title": "Shared income",
+      "description": "What this group has earned together. Every member can add and edit.",
+      "add": "Add income",
+      "emptyTitle": "No shared income yet",
+      "emptyDescription": "Add the first one and Renly divides it between the people you pick.",
+      "table": {
+        "date": "Date",
+        "amount": "Amount",
+        "category": "Category",
+        "source": "From",
+        "wentTo": "Went to",
+        "notes": "Notes",
+        "actions": "Actions",
+        "total": "{total, plural, one {# shared income entry} other {# shared income entries}}",
+        "yourShare": "Your share: {amount}",
+        "joint": "Stayed joint",
+        "jointNamed": "Stayed joint · {account}",
+        "noSource": "—"
+      },
+      "split": {
+        "participants": {
+          "label": "Who gets a share"
+        }
+      },
+      "actions": {
+        "edit": "Edit",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete this shared income?",
+        "description": "Everyone's share of it disappears and the balances recalculate.",
+        "confirm": "Delete",
+        "success": "Shared income deleted.",
+        "error": "Failed to delete the shared income."
+      },
+      "form": {
+        "titleCreate": "New shared income",
+        "titleEdit": "Edit shared income",
+        "description": "Everyone in {group} sees this income and their own share of it.",
+        "date": {
+          "label": "Date",
+          "placeholder": "Select a date"
+        },
+        "currency": {
+          "label": "Currency",
+          "placeholder": "Select a currency",
+          "searchPlaceholder": "Search currencies...",
+          "noResults": "No currencies found"
+        },
+        "amount": {
+          "label": "Full amount",
+          "placeholder": "Enter the full amount"
+        },
+        "category": {
+          "label": "Category",
+          "placeholder": "Select a category"
+        },
+        "source": {
+          "label": "Where it came from",
+          "placeholder": "Select a shared asset",
+          "none": "Nothing in particular",
+          "empty": "This group's shared money holds no assets yet",
+          "hint": "Picking a shared asset divides the income the way that asset is owned. Change any share below.",
+          "applied": "Split by how {asset} is owned.",
+          "ownerNotInGroup": "{count, plural, one {The split was left alone: {names} owns part of this asset but has left the group, so the shares would not add up to 100%. Divide it yourself.} other {The split was left alone: {names} own part of this asset but have left the group, so the shares would not add up to 100%. Divide it yourself.}}"
+        },
+        "destination": {
+          "label": "Where it went",
+          "joint": "Stayed joint",
+          "distributed": "Went to one person",
+          "hintJoint": "It lands in a shared account, so the whole group's money grows and every share rises with it.",
+          "hintDistributed": "One person holds it. Whatever exceeds their own share is what they owe the others.",
+          "remembered": "Same as last time for this source."
+        },
+        "sharedAccount": {
+          "label": "Shared account",
+          "placeholder": "Select a shared account",
+          "empty": "No shared account in {currency}",
+          "hint": "Money arriving here reaches everyone who owns it, in their own proportions — so no single person holds it."
+        },
+        "receiver": {
+          "label": "Who received it",
+          "placeholder": "Select who received it",
+          "hintSelf": "You hold the whole amount; each person's share is what you owe them.",
+          "hintOther": "Renly records that it reached them. Which account it landed in is theirs to see, not yours."
+        },
+        "account": {
+          "label": "Deposited to",
+          "hint": "The whole amount arrives in this account. Who owes whom afterwards is the split's business."
+        },
+        "splitMethod": {
+          "label": "How to divide it",
+          "reopenedAsExact": "Reopened as exact amounts. Only the amounts a split produced are stored, never the percentages behind them."
+        },
+        "notes": {
+          "label": "Notes",
+          "placeholder": "Optional notes..."
+        },
+        "formerSeats": "{count, plural, one {Somebody in this split has left the group: {names}. Remove them to save it.} other {Some people in this split have left the group: {names}. Remove them to save it.}}",
+        "cta": "Save",
+        "createSuccess": "Shared income recorded.",
+        "updateSuccess": "Shared income updated.",
+        "saveError": "Failed to save the shared income."
+      }
+    },
+    "split": {
+      "hint": {
+        "equal": "Divided equally between everyone ticked.",
+        "exact": "Give each person their exact amount. They must add up to the full amount.",
+        "shares": "Give each person a weight — 2 to 1 means twice as much.",
+        "percentage": "Give each person a percentage. They must add up to 100."
+      },
+      "total": "Total",
+      "errors": {
+        "participants": "Pick at least one person.",
+        "exact": "The amounts must add up to the full amount.",
+        "shares": "At least one person needs a weight above zero.",
+        "percentage": "The percentages must add up to 100."
+      },
+      "figurePlaceholder": {
+        "exact": "Amount",
+        "shares": "Parts",
+        "percentage": "Percentage"
+      },
+      "methods": {
+        "equal": "Equally",
+        "exact": "Exact amounts",
+        "shares": "Shares",
+        "percentage": "Percentages"
+      },
+      "formerMember": "(former)"
     },
     "settlements": {
       "title": "Settlements",
@@ -3689,12 +3800,20 @@
     "shared_expense_before_account_opened": "A shared expense must be dated on or after its account's opening date ({opening_date}).",
     "shared_expense_funding_pot_not_divided": "Nobody has agreed who owns this shared account's money yet, so there is no way to record who paid. Divide the pot first.",
     "shared_expense_funding_scope": "That shared account belongs to another group, so this group cannot spend from it.",
-    "shared_expense_no_participants": "A shared expense needs at least one person taking part in it.",
     "shared_expense_payer_required": "Say who paid for this — the balance is what they fronted minus what they used.",
-    "shared_expense_percentages": "The split percentages add up to {stated}%, not 100%.",
     "shared_expense_shared_account_payer": "Money from a shared account is fronted by everyone who owns it, so this expense cannot also name one payer.",
-    "shared_expense_shares": "Shares must not be negative, and at least one person needs a share above zero.",
-    "shared_expense_split_total": "The split amounts add up to {stated}, not {expected}.",
+    "shared_income_before_account_opened": "Shared income must be dated on or after the account's opening date ({opening_date}).",
+    "shared_income_destination_pot_not_divided": "Nobody has agreed who owns this shared account's money yet, so there's no way to record who received this. Divide it first.",
+    "shared_income_destination_scope": "That shared account belongs to another group, so this group's income can't land in it.",
+    "shared_income_distributed_shared_account": "Money paid into a shared account stays joint. Pick a private account, or set this income to stay joint.",
+    "shared_income_joint_account_required": "Income that stays joint has to land in one of the group's shared accounts.",
+    "shared_income_joint_receiver": "Money arriving in a shared account reaches everyone who owns it, so this income can't also name one recipient.",
+    "shared_income_receiver_required": "Say who the money reached — the balance is each person's share minus what actually got to them.",
+    "shared_income_source_scope": "That asset isn't part of this group's shared money, so its income can't be shared here.",
+    "shared_split_no_participants": "A split needs at least one person taking part in it.",
+    "shared_split_percentages": "The split percentages add up to {stated}%, not 100%.",
+    "shared_split_shares": "Shares must not be negative, and at least one person needs a share above zero.",
+    "shared_split_total": "The split amounts add up to {stated}, not {expected}.",
     "transfer_amount_required": "Moving {from_currency} to {to_currency} must record the amount received, so the rate you got is preserved.",
     "transfer_amounts_must_match": "Within one currency a transfer must credit exactly what it debits. Record a fee as its own expense.",
     "transfer_before_account_opened": "A transfer has to be dated on or after both accounts' opening dates — the later one is {opening_date}.",

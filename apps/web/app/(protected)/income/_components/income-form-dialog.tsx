@@ -15,6 +15,12 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
+import {
+  EntryScopeField,
+  PRIVATE_SCOPE,
+  toHandover,
+  type IncomeHandover,
+} from '@/app/(protected)/_components/entry-scope-field';
 import { createIncome, updateIncome } from '@/app/(protected)/income/income-actions';
 import {
   buildIncomeFormSchema,
@@ -26,6 +32,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { FormCombobox } from '@/components/form-combobox';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { Account } from '@/lib/api/accounts';
+import type { Group } from '@/lib/api/groups';
 import type { IncomeEntry } from '@/lib/api/income';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
@@ -37,6 +44,15 @@ interface IncomeFormDialogProps {
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   accounts?: Account[];
+  /*
+   * X3's scope control, rendered only when supplied AND recording a new entry. Editing never offers
+   * it: turning a private entry into a shared one would delete a record of the user's own and write a
+   * different one a whole group can see, which is its own act rather than a side effect of an edit.
+   */
+  scopeGroups?: Group[];
+  onScopeChange?: (scope: string, values: IncomeHandover) => void;
+  // What a swap from the shared form carried across, seeding this one so nothing typed is lost.
+  prefill?: IncomeHandover;
   onSuccess: () => void;
 }
 
@@ -47,6 +63,9 @@ export function IncomeFormDialog({
   preferredCurrencies,
   supportedCurrencies,
   accounts,
+  scopeGroups,
+  onScopeChange,
+  prefill,
   onSuccess,
 }: IncomeFormDialogProps) {
   const locale = useLocale();
@@ -77,12 +96,17 @@ export function IncomeFormDialog({
     onOpenChange,
     form,
     entity: income,
+    /*
+     * A saved entry wins over a handover, and a handover over this form's own empty defaults. The
+     * date uses `||` rather than `??` because the shared form always has one — so an untouched date
+     * arrives as a real value, while a user who cleared it should get this form's blank.
+     */
     toValues: (i) => ({
-      date: i?.date ?? '',
-      amount: i?.amount ? String(Number(i.amount)) : '',
-      currency: i?.currency ?? '',
-      category: (i?.category ?? undefined) as IncomeFormValues['category'],
-      notes: i?.notes ?? '',
+      date: i?.date ?? prefill?.date ?? '',
+      amount: i?.amount ? String(Number(i.amount)) : (prefill?.amount ?? ''),
+      currency: i?.currency ?? prefill?.currency ?? '',
+      category: (i?.category ?? prefill?.category ?? undefined) as IncomeFormValues['category'],
+      notes: i?.notes ?? prefill?.notes ?? '',
       accountId: i?.accountId ?? undefined,
     }),
     onSuccess,
@@ -110,6 +134,16 @@ export function IncomeFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            {scopeGroups && !isEdit && onScopeChange && (
+              <EntryScopeField
+                groups={scopeGroups}
+                value={PRIVATE_SCOPE}
+                hint={tCommon('entryScope.incomeHint')}
+                onValueChange={(scope) => onScopeChange(scope, toHandover(form.getValues()))}
+                disabled={form.formState.isSubmitting}
+              />
+            )}
+
             <FormField
               control={form.control}
               name="date"

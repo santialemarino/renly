@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   PRIVATE_SCOPE,
   type ExpenseHandover,
-} from '@/app/(protected)/_components/expense-scope-field';
+} from '@/app/(protected)/_components/entry-scope-field';
+import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
   type LinkedPlanMismatch,
@@ -24,17 +24,9 @@ import type { Group } from '@/lib/api/groups';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
+import { DIALOG_EXIT_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
-
-/*
- * How long to wait between closing one form and opening the other on a scope swap.
- *
- * Mirrors `duration-200` on the @repo/ui DialogContent. Both dialogs mounted at once would stack two
- * overlays and double the dim; letting the first finish its exit is what makes the swap read as one
- * form changing rather than two dialogs fighting.
- */
-const DIALOG_EXIT_MS = 200;
 
 export function ExpensesToolbar({
   preferredCurrencies,

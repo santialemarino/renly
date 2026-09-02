@@ -3,18 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   canNameOwnInstrument,
   expensePayerDisplay,
-  hasSharedSpending,
   inactiveSeatNames,
   isJointlyFunded,
-  reopenChangedMethod,
-  reopenSplitMethod,
-  splitFigureKind,
-  splitMethodHasTotal,
   wasParticipant,
 } from '@/app/(protected)/shared/shared-expense-rules';
 import type { GroupMember } from '@/lib/api/groups';
 import type { SharedExpense, SharedExpenseSplit } from '@/lib/api/shared-expenses';
-import { SPLIT_METHODS, type SplitMethod } from '@/lib/constants/shared-expenses';
 
 /*
  * The rules that decide what a shared expense's surface shows and offers. Each mirrors a rule the API
@@ -82,31 +76,6 @@ function expense(overrides: Partial<SharedExpense> = {}): SharedExpense {
     ...overrides,
   };
 }
-
-describe('splitMethodHasTotal', () => {
-  it('is true only for the two methods with a target to hit', () => {
-    expect(splitMethodHasTotal('exact')).toBe(true);
-    expect(splitMethodHasTotal('percentage')).toBe(true);
-    // Shares are relative weights with nothing to add up to, and equal takes no figures at all.
-    expect(splitMethodHasTotal('shares')).toBe(false);
-    expect(splitMethodHasTotal('equal')).toBe(false);
-  });
-});
-
-describe('splitFigureKind', () => {
-  it('names the figure every method that takes one asks for', () => {
-    expect(splitFigureKind('exact')).toBe('exact');
-    expect(splitFigureKind('shares')).toBe('shares');
-    expect(splitFigureKind('percentage')).toBe('percentage');
-  });
-
-  // The null is what stops the editor rendering a figure field, and what stops it indexing a
-  // translation namespace with a method that has no message there.
-  it('is null for the method that divides by head count', () => {
-    expect(splitFigureKind('equal')).toBeNull();
-    expect(SPLIT_METHODS.filter((method) => splitFigureKind(method) === null)).toEqual(['equal']);
-  });
-});
 
 describe('isJointlyFunded', () => {
   it('reads the API’s own null payer rather than guessing from the splits', () => {
@@ -219,33 +188,5 @@ describe('wasParticipant', () => {
   // An exact split may deliberately give somebody nothing. They were there.
   it('counts a participant explicitly given zero', () => {
     expect(wasParticipant(split({ amount: '0.00', paidAmount: '0.00' }))).toBe(true);
-  });
-});
-
-describe('reopenSplitMethod', () => {
-  it('keeps the three methods the stored amounts reconstruct exactly', () => {
-    (['equal', 'exact', 'shares'] as SplitMethod[]).forEach((method) => {
-      expect(reopenSplitMethod(expense({ splitMethod: method }))).toBe(method);
-      expect(reopenChangedMethod(expense({ splitMethod: method }))).toBe(false);
-    });
-  });
-
-  /*
-   * Percentages are not stored, only what they produced — and dividing the amounts back out need not
-   * reach 100. Three equal shares of 3.00 come back as 33.33 three times, which is 99.99, so the form
-   * would open already refused. Exact amounts are the lossless statement of the same division.
-   */
-  it('reopens a percentage split as exact amounts, and says so', () => {
-    const percentage = expense({ splitMethod: 'percentage' });
-    expect(reopenSplitMethod(percentage)).toBe('exact');
-    expect(reopenChangedMethod(percentage)).toBe(true);
-  });
-});
-
-describe('hasSharedSpending', () => {
-  // What tells an empty balances list apart: nothing recorded yet, or everything already cleared.
-  it('distinguishes a group with nothing recorded from one that has spent', () => {
-    expect(hasSharedSpending([])).toBe(false);
-    expect(hasSharedSpending([expense()])).toBe(true);
   });
 });

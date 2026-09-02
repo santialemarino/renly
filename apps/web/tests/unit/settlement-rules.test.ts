@@ -9,6 +9,7 @@ import {
   canAttachOwnLeg,
   canUnconfirmSettlement,
   canWriteOffSuggestion,
+  hasAnySharedFlow,
   hasOpenBalances,
   legCrossesCurrency,
   ownLegAccountId,
@@ -273,6 +274,23 @@ describe('ownLegAccounts', () => {
       account({ id: 3, currency: 'ARS', isActive: false }),
     ];
     expect(ownLegAccounts(accounts).map((a) => a.id)).toEqual([1, 2]);
+  });
+});
+
+describe('hasAnySharedFlow', () => {
+  // What feeds the sentence below. INCOME ALONE has to count: a group whose only shared record is a
+  // piece of income everyone has been paid their share of is square, not empty, and telling them to
+  // add their first expense would be wrong about a ledger they can see right above.
+  it('counts either flow, and says nothing shared only when both are empty', () => {
+    expect(hasAnySharedFlow([], [])).toBe(false);
+    expect(hasAnySharedFlow([{}], [])).toBe(true);
+    expect(hasAnySharedFlow([], [{}])).toBe(true);
+    expect(hasAnySharedFlow([{}], [{}])).toBe(true);
+  });
+
+  it('feeds the empty-state sentence, so income alone reads as all square', () => {
+    expect(balancesEmptyState(hasAnySharedFlow([], [{}]))).toBe('allSquare');
+    expect(balancesEmptyState(hasAnySharedFlow([], []))).toBe('nothingShared');
   });
 });
 

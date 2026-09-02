@@ -5,7 +5,15 @@ import { useRouter } from 'next/navigation';
 import { CircleDollarSign, Lock, Pencil, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
+import {
+  Badge,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@repo/ui/components';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
@@ -38,12 +46,35 @@ function RowActions({
   const tCommon = useTranslations('common');
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Mirrors the expenses table: reconciliation ownership withholds both actions (the API refuses
-  // both), a system category withholds Edit only (the form cannot round-trip the row). Each reason
-  // gets its own explanation rather than an action that silently disappears.
+  /*
+   * Three independent reasons a row action is withheld, each with its own explanation and its own
+   * predicate — kept apart rather than collapsed into one flag, because they diverge. The same three
+   * the expenses table gates on, and for the same reasons.
+   *
+   * A SHARED row is not this user's income entry at all: it is their share of one the group recorded,
+   * read in by the list's union. Its `id` belongs to `shared_income`, and ids are unique per TABLE and
+   * not across them — so a PUT or DELETE to /income/{id} would land on whatever private entry happens
+   * to hold that number.
+   *
+   * A reconciliation's adjustment is derived, so the API refuses BOTH PUT and DELETE on it (409). A
+   * system category is narrower: it means the form cannot round-trip the row, so it withholds Edit
+   * while Delete stays legitimate for a row nothing owns.
+   */
+  const shared = income.scope === 'shared';
   const reconciliationOwned = isReconciliationOwned(income);
   const systemCategory = isSystemIncomeCategory(income.category);
-  const canEdit = !reconciliationOwned && !systemCategory;
+  const canEdit = !shared && !reconciliationOwned && !systemCategory;
+  const canDelete = !shared && !reconciliationOwned;
+  const lockedReason = shared
+    ? ('lockedRow.sharedIncome' as const)
+    : reconciliationOwned
+      ? ('lockedRow.reconciliationOwned' as const)
+      : ('lockedRow.systemCategory' as const);
+  const lockedLabel = shared
+    ? 'Managed by the group'
+    : reconciliationOwned
+      ? 'Managed by a reconciliation'
+      : 'Category is system-generated';
 
   return (
     <>
@@ -59,17 +90,9 @@ function RowActions({
             }}
           />
         ) : (
-          <RowLockedIndicator
-            icon={Lock}
-            tooltip={tCommon(
-              reconciliationOwned ? 'lockedRow.reconciliationOwned' : 'lockedRow.systemCategory',
-            )}
-            ariaLabel={
-              reconciliationOwned ? 'Managed by a reconciliation' : 'Category is system-generated'
-            }
-          />
+          <RowLockedIndicator icon={Lock} tooltip={tCommon(lockedReason)} ariaLabel={lockedLabel} />
         )}
-        {!reconciliationOwned && (
+        {canDelete && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('actions.delete')}
@@ -175,12 +198,38 @@ export function IncomeDataTable({
               />
             ) : (
               items.map((entry) => (
-                <TableRow key={entry.id}>
+                /*
+                 * Keyed on scope AND id, because ids are unique per TABLE and not across them: the
+                 * union really can put a private entry and a shared one with the same number on one
+                 * page, which as a bare `id` is a duplicate React key.
+                 */
+                <TableRow key={`${entry.scope}-${entry.id}`}>
                   <TableCell>{fmt.date(entry.date)}</TableCell>
                   <TableCell className="text-paragraph-sm tabular-nums">
                     {fmt.amount(
                       entry.convertedAmount ?? entry.amount,
                       entry.convertedAmount ? activeCurrency : entry.currency,
+                    )}
+                    {/*
+                     * A shared row's amount is the viewer's SHARE of a larger sum, and without saying
+                     * so it reads exactly like a solo entry of that size.
+                     *
+                     * The sub-line restates the share AND the whole in the row's OWN currency, and
+                     * names it. Both halves are load-bearing: the cell above may have been converted
+                     * to the display currency, so a bare "of 120 USD" beneath a converted "61,618"
+                     * puts two figures in two currencies side by side with an arithmetic relation a
+                     * reader would try to check and could not. Restating the share makes this line a
+                     * complete, self-consistent fact whatever the cell above happens to be showing.
+                     */}
+                    {entry.scope === 'shared' && entry.fullAmount !== null && (
+                      <span className="flex flex-wrap items-center justify-start gap-x-2 text-paragraph-xs text-muted-foreground">
+                        {entry.groupName && <Badge variant="outline">{entry.groupName}</Badge>}
+                        {t('table.shareOf', {
+                          share: fmt.amount(entry.amount, entry.currency),
+                          amount: fmt.amount(entry.fullAmount, entry.currency),
+                          currency: entry.currency,
+                        })}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>

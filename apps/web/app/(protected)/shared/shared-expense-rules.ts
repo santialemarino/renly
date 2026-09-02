@@ -1,6 +1,5 @@
 import type { GroupMember } from '@/lib/api/groups';
 import type { SharedExpense, SharedExpenseSplit } from '@/lib/api/shared-expenses';
-import { SPLIT_METHODS_WITH_TOTAL, type SplitMethod } from '@/lib/constants/shared-expenses';
 
 /*
  * What a shared expense's surface shows and offers, as pure functions over the API's own response.
@@ -10,6 +9,9 @@ import { SPLIT_METHODS_WITH_TOTAL, type SplitMethod } from '@/lib/constants/shar
  * here is a control that 400s rather than a hole — but "offered then refused" is the experience these
  * flows exist to avoid, so the predicates have to agree with the backend exactly.
  *
+ * The split's own rules are NOT here: a split is a split whichever direction the money went, so
+ * `split-rules.ts` and `split-form-schema.ts` own them and shared income reads the same two modules.
+ *
  * Two distinctions carry most of the weight, and conflating either is the mistake to avoid:
  *
  *   * A member's position is TWO figures — what they consumed and what they fronted — and their
@@ -18,37 +20,6 @@ import { SPLIT_METHODS_WITH_TOTAL, type SplitMethod } from '@/lib/constants/shar
  *     pot's owners in their own proportions, which is why there is no payer column and why the API
  *     reports no payer for such an expense however its ownership happens to be divided.
  */
-
-// --- The split method's shape ---
-
-/*
- * Whether the editor can check the figures add up before submitting. Only `exact` and `percentage`
- * have a target — the expense's amount and 100 respectively, neither ever rescaled. `shares` are
- * relative weights with nothing to hit, and `equal` takes no figures at all.
- */
-export function splitMethodHasTotal(method: SplitMethod): boolean {
-  return SPLIT_METHODS_WITH_TOTAL.includes(method);
-}
-
-/*
- * Which figure each participant supplies, or null when the method asks for none.
- *
- * ONE function rather than a "does it take figures" boolean beside a "which unit" switch, because
- * the same answer decides four things that must never disagree: whether the figure inputs render at
- * all, what each is labelled, what precision it takes, and which rule the editor states when the
- * figures do not satisfy the method. Two derivations of that would be two things that can drift, and
- * a pair of booleans would additionally admit a state — percentage AND shares — that cannot exist.
- *
- * `equal` is the null: it divides by head count, so there is nothing to type and nothing to get
- * wrong. Returned as a case rather than left to the call site because the alternative is indexing a
- * translation namespace with a method that has no entry there — a key lookup that only fails in a
- * state nobody can reach, which is exactly the kind that ships.
- */
-export type SplitFigureKind = 'exact' | 'shares' | 'percentage';
-
-export function splitFigureKind(method: SplitMethod): SplitFigureKind | null {
-  return method === 'equal' ? null : method;
-}
 
 // --- Who fronted it ---
 
@@ -143,48 +114,4 @@ export function expensePayerDisplay(expense: SharedExpense): ExpensePayerDisplay
  */
 export function wasParticipant(split: SharedExpenseSplit): boolean {
   return !(Number(split.amount) === 0 && Number(split.paidAmount) > 0);
-}
-
-/*
- * Which split method the edit form opens a saved expense on.
- *
- * The stored row keeps the METHOD and the resulting amounts, never the figures that produced them —
- * so reopening has to reconstruct the division from the amounts alone, and only three of the four
- * methods can be reconstructed from them exactly:
- *
- *   * `equal` needs no figures at all and re-divides identically.
- *   * `exact` figures ARE the amounts.
- *   * `shares` taken as the amounts themselves are weights in exactly the stored proportion, so the
- *     division comes out unchanged to the cent.
- *   * `percentage` cannot. Dividing each amount by the total recovers percentages that need not sum
- *     to 100 — three equal shares of 3.00 come back as 33.33 three times, which is 99.99 — so the
- *     form would open already refused, through no fault of whoever opened it. Rounding the residue
- *     onto somebody would be inventing a figure they never chose, on the one screen where people
- *     check each other's numbers.
- *
- * So a percentage split reopens as EXACT AMOUNTS: the one lossless statement of what was actually
- * agreed. The dialog says so rather than letting the method appear to have changed by itself.
- */
-export function reopenSplitMethod(expense: SharedExpense): SplitMethod {
-  return expense.splitMethod === 'percentage' ? 'exact' : expense.splitMethod;
-}
-
-/*
- * Whether reopening changed the method, which is the only case the dialog has anything to explain.
- * Derived from the same function that does the changing, so the notice cannot outlive the rule.
- */
-export function reopenChangedMethod(expense: SharedExpense): boolean {
-  return reopenSplitMethod(expense) !== expense.splitMethod;
-}
-
-/*
- * Whether the group has anything shared at all, which is what tells an empty balances section apart
- * from a settled one.
- *
- * A fully-settled bucket disappears from the balances response entirely, so "no buckets" alone cannot
- * distinguish "nobody has recorded anything" from "everyone is square" — two states that deserve
- * opposite sentences, one an invitation and one a reassurance.
- */
-export function hasSharedSpending(expenses: SharedExpense[]): boolean {
-  return expenses.length > 0;
 }

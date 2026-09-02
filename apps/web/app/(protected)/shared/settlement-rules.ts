@@ -215,13 +215,28 @@ export function ownLegAccounts(accounts: Account[]): Account[] {
  *
  * A fully-settled bucket disappears from the response entirely, so an empty list means one of two
  * opposite things: nothing has been shared yet, or everything that was has been cleared. The first
- * asks for a first expense and the second says there is nothing to do — and showing either sentence
- * in the other's situation is a plain untruth about the group's money.
+ * asks for a first entry and the second says there is nothing to do — and showing either sentence in
+ * the other's situation is a plain untruth about the group's money.
+ *
+ * `hasAnyFlow` is BOTH flows, not just spending: a group whose only shared record is a piece of income
+ * everyone has already been paid their share of is square, not empty, and telling them to add their
+ * first expense would be wrong about a ledger they can see right above.
  */
 export type BalancesEmptyState = 'nothingShared' | 'allSquare';
 
-export function balancesEmptyState(hasSharedSpending: boolean): BalancesEmptyState {
-  return hasSharedSpending ? 'allSquare' : 'nothingShared';
+/*
+ * Whether the group has recorded any shared flow at all — spending or income.
+ *
+ * Named rather than asked inline at the call site, because it is the input to the sentence above and
+ * an inline copy is a second place the question can be asked with one flow missing. Takes both lists
+ * rather than two booleans so a caller cannot pass the same one twice.
+ */
+export function hasAnySharedFlow(expenses: unknown[], income: unknown[]): boolean {
+  return expenses.length > 0 || income.length > 0;
+}
+
+export function balancesEmptyState(hasAnyFlow: boolean): BalancesEmptyState {
+  return hasAnyFlow ? 'allSquare' : 'nothingShared';
 }
 
 /*

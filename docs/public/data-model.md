@@ -266,9 +266,9 @@ A pot's **value over time** is the same figure asked at a series of past dates, 
 
 Two things Renly refuses rather than guesses. A movement on a date the pot has no known value for has no honest price to issue units at, so the flow asks for that value first — and "known" means the whole of it, because the value is a sum and a sum missing a term is not a smaller sum. A pot holding something nobody has valued yet reports no value at all rather than the total of the rest. And a private expense cannot be paid from a shared account: the money really leaves, so every co-owner's share would silently fall — one person spending and everyone paying, with nothing recording it. Record it as a shared expense instead and the same purchase is captured honestly, with what the other owners are owed for it written down where they can settle it.
 
-### Shared Expenses, Splits and Settlements
+### Shared Expenses, Shared Income, Splits and Settlements
 
-A pot divides what a household **holds**. These divide what it **spends**, and they are deliberately separate tables from your own expenses: an expense with one funding source and an N-way split cannot be one flat row, and your personal entries keep their simple owner-only privacy while everything here is reachable by every member of the group.
+A pot divides what a household **holds**. These divide what it **spends and earns**, and they are deliberately separate tables from your own entries: a row with one funding source and an N-way split cannot be one flat row, and your personal entries keep their simple owner-only privacy while everything here is reachable by every member of the group.
 
 **A shared expense records two figures per member,** and the whole feature balances on the pair: what they **consumed** — their share, which is their expense — and what they **fronted**, the money they actually put up. Both add up to the expense's total, so a member's standing is what they fronted minus what they used, and a group's standing always adds to exactly **zero in every currency**. Not by a rule anybody has to remember: by the shape of the row.
 
@@ -295,7 +295,13 @@ A recorded payment **counts against the balance straight away** — the money ge
 
 The other way a balance ends is a **write-off**: giving up on a debt. It clears the same bucket a payment would, moves no money, and only the person who is **owed** can record it — the other way round would be one person deciding on somebody else's behalf. Settling or writing off is required before a member with an open balance leaves the group or deletes their account, because the moment their seat goes the person on the other side loses the record of what they were owed.
 
-Finally, **your share of a shared expense appears in your ordinary expenses list**, read straight from the group's tables rather than copied into your own. One source of truth: editing the group's expense has nothing to chase, and nothing can drift. Each row says which it is, carries the group it belongs to and the whole amount your share is part of, and is edited where it was created rather than from your own list.
+**Shared income is the same shape with the two sides swapped.** A piece of income the group shares records what each member is **entitled to** — their share, which is their income — and what actually **reached them**. Both add up to the total, so the same balances still come to zero: somebody who collects the rent and passes on nothing yet owes the others their shares, and somebody entitled to a share who has received nothing is owed it. There is no "who received it" column, for exactly the reason there is no "who paid" one: money can arrive in a shared account, where the pot's owners receive it in their own proportions.
+
+Each piece of income says **where it went**. It either **stayed joint** — landing in a shared account, so the whole pot is worth more and everyone's share rises with it, which needs no ownership event at all because nobody's percentage changes — or it **went to one person**, who holds the rest until they pass it on. Money arriving from outside the household crosses no ownership boundary on the way in; only money already inside a pot can leave one.
+
+It can also say **where it came from**: a co-owned asset the group holds. That divides the income the way the asset is owned, so rent from a property owned 60/40 is 60/40 income unless somebody changes it — the common case needs no decision at all. What gets stored is always the division actually agreed, so later changes to who owns the asset never restate income already recorded. Both flows share one set of balances, so one payment squares up whatever they add up to.
+
+Finally, **your share of a shared expense appears in your ordinary expenses list, and your share of shared income in your income list** — read straight from the group's tables rather than copied into your own. One source of truth: editing the group's row has nothing to chase, and nothing can drift. Each row says which it is, carries the group it belongs to and the whole amount your share is part of, and is edited where it was created rather than from your own list.
 
 ### Settings
 
@@ -429,8 +435,17 @@ Group
  |                                   (per member: what they used, and what they fronted.
  |                                    Both columns add to the expense's total)
  |
+ |-- has many --> Shared Income
+ |                (what the group EARNS together; says where it went, and
+ |                 optionally which co-owned asset it came from)
+ |                  |
+ |                  \-- has many --> Shared Income Splits
+ |                                   (per member: what they are entitled to, and what
+ |                                    reached them. Both columns add to the row's total)
+ |
  \-- has many --> Group Settlements
-                  (payments and write-offs, the only things that clear a balance)
+                  (payments and write-offs, the only things that clear a balance —
+                   whatever the two flows add up to, in one bucket per currency)
 ```
 
 A group is reachable by every account holding an active seat in it, which is why it hangs off `Group` rather than off `User`. `created_by` records who made it and confers nothing.
