@@ -328,7 +328,10 @@ class TestTheMonthlyPositions:
         )
         await session.flush()
 
-        live = await group_settlement_service.get_positions_by_group(session, [seeded["group"]])
+        # The INTERNAL derivation on purpose: it is the one get_balances runs for the group hub, and
+        # the dashboard now reads the monthly series' last entry instead of issuing it a second time.
+        # This equality is what makes that substitution safe.
+        live = await group_settlement_service._positions_by_group(session, [seeded["group"]])
         series = await group_settlement_service.get_positions_by_month(session, [seeded["group"]])
 
         assert series, "the fixture has flow rows, so the series cannot be empty"

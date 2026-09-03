@@ -89,10 +89,6 @@ class SharedContext:
     positions: list[tuple[tuple[int, int], dict[int, dict[str, dict[int, Decimal]]]]]
 
     @property
-    def group_ids(self) -> list[int]:
-        return sorted({seat.group_id for seat in self.seats})
-
-    @property
     def seat_ids(self) -> set[int]:
         return {seat.id for seat in self.seats}
 
@@ -139,8 +135,9 @@ async def get_shared_worth(
     if not context.has_shared:
         return SharedWorth()
     # A pot's holdings are converted into ITS OWN base currency before anything else, so a valuation
-    # needs a lookup even when the caller asked for no display currency at all.
-    pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
+    # needs a lookup even when the caller asked for no display currency at all — but only a POT needs
+    # one, and a group with balances and no pots is a real and common shape.
+    pot_lookup = (lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)) if context.pots else None
 
     rate_map = lookup.get_rate_map_at(as_of_date) if lookup else None
     skipped: set[str] = set()
@@ -164,7 +161,7 @@ async def get_shared_worth(
         for bucket, value in _attribute(converted, share.weights, share.nav).items():
             buckets[bucket] = buckets.get(bucket, ZERO) + value
 
-    receivable, payable, balance_skipped = await _net_balances(session, context, currency=currency, rate_map=rate_map)
+    receivable, payable, balance_skipped = _net_balances(context, currency=currency, rate_map=rate_map)
     return SharedWorth(
         pot_value=pot_value,
         receivable=receivable,
@@ -204,7 +201,7 @@ async def get_shared_series(
     if not month_ends or not context.has_shared:
         return (values, set())
 
-    pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
+    pot_lookup = (lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)) if context.pots else None
     skipped: set[str] = set()
 
     for seat in context.pots:
@@ -308,16 +305,21 @@ def _my_buckets(by_group: dict[int, dict[str, dict[int, Decimal]]], seat_ids: se
 # Converted per bucket and split by SIGN before summing: a positive bucket is an asset and a negative
 # one is a liability, so netting them first would put both through one figure and lose which was which
 # — exactly what D3 says a net-worth line must not do.
-async def _net_balances(
-    session: AsyncSession,
+#
+# It reads the LAST entry of the context's monthly series rather than issuing the live balance query,
+# and the two are the same figure by construction: positions are a running sum over every row, so the
+# most recent month that moved IS today's position (asserted against the live read in
+# tests/integration/test_shared_flow_queries.py). Asking twice would cost three more queries per
+# dashboard load and, worse, put two derivations behind two figures a reader compares side by side.
+def _net_balances(
     context: SharedContext,
     *,
     currency: str | None,
     rate_map: dict[str, Decimal] | None,
 ) -> tuple[Decimal, Decimal, set[str]]:
-    if not context.seats:
+    if not context.positions:
         return (ZERO, ZERO, set())
-    by_group = await group_settlement_service.get_positions_by_group(session, context.group_ids)
+    by_group = context.positions[-1][1]
     receivable = ZERO
     payable = ZERO
     skipped: set[str] = set()

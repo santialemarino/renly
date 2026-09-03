@@ -56,6 +56,12 @@ def _context(*, seats=(), pots=(), positions=()) -> shared_worth_service.SharedC
     return shared_worth_service.SharedContext(seats=list(seats), pots=list(pots), positions=list(positions))
 
 
+# The context's positions as the dashboard reads them: the cumulative position at the end of every
+# month that moved. The headline takes the LAST entry, which is today's position by construction.
+def _standing(by_group, month=(2026, 7)):
+    return [(month, by_group)]
+
+
 # Stubs the one pot read get_shared_worth makes, with the same answer for every pot it is asked about.
 def _share(monkeypatch, *, nav, value, weights=None, holds_anything=True) -> None:
     monkeypatch.setattr(
@@ -63,10 +69,6 @@ def _share(monkeypatch, *, nav, value, weights=None, holds_anything=True) -> Non
         "get_member_share",
         AsyncMock(return_value=pot_service.PotShare(nav=nav, value=value, weights=weights or {}, holds_anything=holds_anything)),
     )
-
-
-def _positions(monkeypatch, by_group) -> None:
-    monkeypatch.setattr(shared_worth_service.group_settlement_service, "get_positions_by_group", AsyncMock(return_value=by_group))
 
 
 async def _worth(monkeypatch, context, *, currency: str | None = "USD", lookup=None) -> shared_worth_service.SharedWorth:
@@ -87,7 +89,6 @@ class TestVisibilityNeverInflates:
         # portfolio. share_values gives them no row, so their share is zero, and there is nothing
         # half-finished about it: the pot IS divided, just not to them.
         _share(monkeypatch, nav=Decimal("100000"), value=Decimal("0"), weights={"fci": Decimal("100000")})
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
         assert worth.pot_value == Decimal("0")
         assert worth.total == Decimal("0")
@@ -99,7 +100,6 @@ class TestVisibilityNeverInflates:
         # opening drops it out of your net worth, because nobody owns any share of anything yet.
         # Nothing may be attributed — so the pot is named instead, and the breakdown says why.
         _share(monkeypatch, nav=Decimal("100000"), value=None, holds_anything=True)
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
         assert worth.pot_value == Decimal("0")
         assert [(p.pot_id, p.name, p.group_id) for p in worth.undivided_pots] == [(5, None, 10)]
@@ -109,7 +109,6 @@ class TestVisibilityNeverInflates:
         # A container with nothing in it is not a half-finished setup: there is no missing value to
         # explain, so naming it would put a permanent unexplained line on the dashboard.
         _share(monkeypatch, nav=None, value=None, holds_anything=False)
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
         assert worth.undivided_pots == []
 
@@ -117,7 +116,6 @@ class TestVisibilityNeverInflates:
     async def test_an_unconvertible_pot_is_dropped_and_its_currency_reported(self, monkeypatch):
         # Fail-loud, the repo's standing rule: never sum a figure that could not be restated.
         _share(monkeypatch, nav=Decimal("100"), value=Decimal("50"), weights={"fci": Decimal("100")})
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat(_pot(currency="BRL"))], seats=[_seat(100)]))
         assert worth.pot_value == Decimal("0")
         assert worth.skipped_currencies == {"BRL"}
@@ -133,7 +131,6 @@ class TestTheAttribution:
             value=Decimal("500"),
             weights={"cedears": Decimal("600"), "cash": Decimal("400")},
         )
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
         assert worth.buckets == {"cedears": Decimal("300.00"), "cash": Decimal("200.00")}
 
@@ -148,7 +145,6 @@ class TestTheAttribution:
             value=Decimal("100"),
             weights={"a": Decimal("100"), "b": Decimal("100"), "c": Decimal("100")},
         )
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
         assert sum(worth.buckets.values()) == worth.pot_value == Decimal("100")
         assert worth.buckets["a"] == Decimal("33.34")
@@ -158,7 +154,6 @@ class TestTheAttribution:
         # Converting each segment on its own and summing them is what leaves the parts a cent off the
         # whole. 50 USD of a pot valued in USD, displayed in ARS at 1000: 50,000 across two segments.
         _share(monkeypatch, nav=Decimal("100"), value=Decimal("50"), weights={"fci": Decimal("50"), "cash": Decimal("50")})
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]), currency="ARS")
         assert worth.pot_value == Decimal("50000")
         assert sum(worth.buckets.values()) == Decimal("50000")
@@ -170,8 +165,8 @@ class TestTheBalanceSplit:
         # D3: each is its own net-worth line. Owed 100 in one group and owing 100 in another is not
         # somebody with no balances — the totals still net to zero in the headline, and the breakdown
         # says what the zero is made of.
-        _positions(monkeypatch, {10: {"USD": {100: Decimal("100")}}, 11: {"USD": {200: Decimal("-100")}}})
-        worth = await _worth(monkeypatch, _context(seats=[_seat(100, 10), _seat(200, 11)]))
+        positions = _standing({10: {"USD": {100: Decimal("100")}}, 11: {"USD": {200: Decimal("-100")}}})
+        worth = await _worth(monkeypatch, _context(seats=[_seat(100, 10), _seat(200, 11)], positions=positions))
         assert worth.receivable == Decimal("100")
         assert worth.payable == Decimal("100")
         assert worth.total == Decimal("0")
@@ -179,8 +174,8 @@ class TestTheBalanceSplit:
     @pytest.mark.asyncio
     async def test_only_the_callers_OWN_seat_counts(self, monkeypatch):
         # The bucket holds every member's position; the dashboard is one person's net worth.
-        _positions(monkeypatch, {10: {"USD": {100: Decimal("75"), 101: Decimal("-75")}}})
-        worth = await _worth(monkeypatch, _context(seats=[_seat(100)]))
+        positions = _standing({10: {"USD": {100: Decimal("75"), 101: Decimal("-75")}}})
+        worth = await _worth(monkeypatch, _context(seats=[_seat(100)], positions=positions))
         assert worth.receivable == Decimal("75")
         assert worth.payable == Decimal("0")
 
@@ -188,15 +183,15 @@ class TestTheBalanceSplit:
     async def test_currencies_never_net_against_each_other(self, monkeypatch):
         # Owing dollars while being owed pesos is a real state. Each bucket is converted on its own and
         # its SIGN decides which side it lands on, so the two do not cancel before they are reported.
-        _positions(monkeypatch, {10: {"USD": {100: Decimal("-10")}, "ARS": {100: Decimal("10000")}}})
-        worth = await _worth(monkeypatch, _context(seats=[_seat(100)]))
+        positions = _standing({10: {"USD": {100: Decimal("-10")}, "ARS": {100: Decimal("10000")}}})
+        worth = await _worth(monkeypatch, _context(seats=[_seat(100)], positions=positions))
         assert worth.receivable == Decimal("10")
         assert worth.payable == Decimal("10")
 
     @pytest.mark.asyncio
     async def test_an_unconvertible_bucket_is_dropped_and_reported(self, monkeypatch):
-        _positions(monkeypatch, {10: {"BRL": {100: Decimal("500")}}})
-        worth = await _worth(monkeypatch, _context(seats=[_seat(100)]))
+        positions = _standing({10: {"BRL": {100: Decimal("500")}}})
+        worth = await _worth(monkeypatch, _context(seats=[_seat(100)], positions=positions))
         assert worth.receivable == Decimal("0")
         assert worth.skipped_currencies == {"BRL"}
 
@@ -205,28 +200,24 @@ class TestTheBalanceSplit:
         # Somebody who owes more than their share of everything shared is worth less for it, and the
         # headline has to say so rather than clamping at zero.
         _share(monkeypatch, nav=Decimal("100"), value=Decimal("100"), weights={"fci": Decimal("100")})
-        _positions(monkeypatch, {10: {"USD": {100: Decimal("-250")}}})
-        worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)]))
+        positions = _standing({10: {"USD": {100: Decimal("-250")}}})
+        worth = await _worth(monkeypatch, _context(pots=[_pot_seat()], seats=[_seat(100)], positions=positions))
         assert worth.total == Decimal("-150")
 
 
 class TestHasShared:
     @pytest.mark.asyncio
     async def test_a_solo_user_has_no_shared_side_and_pays_for_no_reads(self, monkeypatch):
-        positions = AsyncMock(return_value={})
-        monkeypatch.setattr(shared_worth_service.group_settlement_service, "get_positions_by_group", positions)
         _share(monkeypatch, nav=Decimal("1"), value=Decimal("1"))
         worth = await _worth(monkeypatch, _context())
         assert worth.has_shared is False
         assert worth.total == Decimal("0")
-        positions.assert_not_awaited()
         pot_service.get_member_share.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_seat_with_no_money_at_all_still_has_a_shared_side(self, monkeypatch):
         # Existence, not value: a household whose balances happen to be square this week still gets
         # the breakdown, exactly as has_holdings is an existence test rather than a non-zero one.
-        _positions(monkeypatch, {})
         worth = await _worth(monkeypatch, _context(seats=[_seat(100)]))
         assert worth.has_shared is True
         assert worth.total == Decimal("0")
@@ -341,9 +332,8 @@ class TestTheSeries:
         # are two derivations of one number, and a reader compares them at a glance. Both are driven
         # from the same position fixture here, so a sign flip or a dropped seat reddens.
         by_group = {10: {"USD": {100: Decimal("90")}, "ARS": {100: Decimal("-20000")}}}
-        _positions(monkeypatch, by_group)
         _share(monkeypatch, nav=Decimal("1"), value=None, holds_anything=False)
-        context = _context(seats=[_seat(100)], positions=[((2026, 7), by_group)])
+        context = _context(seats=[_seat(100)], positions=_standing(by_group))
         worth = await _worth(monkeypatch, context)
 
         monkeypatch.setattr(pot_service, "compute_share_series", AsyncMock(return_value=[]))

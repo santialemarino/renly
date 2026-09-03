@@ -316,7 +316,11 @@ async def _value_pot(
         if added is None:
             return (None, {}, held)
         total, cash_buckets = added
-        buckets = {**buckets, **cash_buckets}
+        # Added rather than merged. No investment category is called `cash` today, so the two maps are
+        # disjoint — but a dict merge would silently DROP one side on a collision instead of summing,
+        # and nothing enforces that the enum never gains such a member.
+        for bucket, value in cash_buckets.items():
+            buckets[bucket] = buckets.get(bucket, ZERO) + value
 
     return (total, buckets, held)
 

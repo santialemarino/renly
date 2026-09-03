@@ -600,16 +600,6 @@ async def ensure_no_outstanding_balance(session: AsyncSession, members: list[Gro
         raise GroupBalanceOutstandingError(outstanding)
 
 
-# Every member's position in every named group, per currency — the live figure, made public because
-# the dashboard's net-worth headline needs the same one the group hub shows.
-#
-# A thin re-export of the internal derivation rather than a second read: an owed balance is an asset on
-# your net-worth line (D3), so the dashboard's figure and the hub's have to be the same number, and the
-# only way to guarantee that is for there to be one derivation.
-async def get_positions_by_group(session: AsyncSession, group_ids: list[int]) -> dict[int, dict[str, dict[int, Decimal]]]:
-    return await _positions_by_group(session, group_ids)
-
-
 # The same positions as they stood at the END of every month that has any activity, ascending.
 #
 # Positions are a running sum, so a month's is every row dated on or before it. Emitting only the
