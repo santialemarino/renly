@@ -590,6 +590,21 @@ class TestTheYoursSharedSplit:
         assert [(p.pot_id, p.name, p.group_name) for p in result.undivided_pots] == [(5, None, "Casa")]
 
     @pytest.mark.asyncio
+    async def test_a_pot_whose_group_name_will_not_resolve_is_dropped_rather_than_half_named(self, monkeypatch):
+        # The copy reads "{pot} in {group} counts as 0". A missing group would render a dangling "in ",
+        # which is the notification layer's "None is due a new valuation" from the other side — a
+        # nullable that fails by PRINTING. Only reachable if the membership policy and this read
+        # disagree, and the fail-closed answer is to say nothing rather than say it wrong.
+        shared = shared_worth_service.SharedWorth(
+            undivided_pots=[shared_worth_service.UndividedPot(pot_id=5, name=None, group_id=10)],
+            has_shared=True,
+        )
+        self._patch(monkeypatch, shared=shared)
+        monkeypatch.setattr(dashboard_service.group_repository, "get_by_ids", AsyncMock(return_value=[]))
+        result = await dashboard_service.get_overview(AsyncMock(), 1)
+        assert result.undivided_pots == []
+
+    @pytest.mark.asyncio
     async def test_holding_only_a_shared_side_still_counts_as_holding_something(self, monkeypatch):
         # has_holdings gates the dashboard's teaching hint. A user whose only money is co-owned holds
         # plenty, and treating them as empty would offer them a first-run nudge.
@@ -660,6 +675,38 @@ class TestCompositionFoldsTheSharedShare:
         self._patch(monkeypatch, shared=shared)
         result = await dashboard_service.get_composition(AsyncMock(), 1)
         assert sum(i.percentage for i in result.items) == Decimal("100")
+
+    @pytest.mark.asyncio
+    async def test_a_category_worth_exactly_zero_gets_no_slice(self, monkeypatch):
+        # Deliberate, and a change from emitting every allocation item: a zero draws nothing in the
+        # donut and occupies a legend row reading "0%". The same gate cash and liabilities pass.
+        allocation = AllocationResponse(
+            items=[
+                AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("100")),
+                AllocationItem(category=CAT_B, value=Decimal("0"), percentage=Decimal("0")),
+            ],
+            total_value=Decimal("600"),
+        )
+        self._patch(monkeypatch, shared=shared_worth_service.SharedWorth())
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=allocation))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [i.label for i in result.items] == [CAT_A]
+
+    @pytest.mark.asyncio
+    async def test_a_NEGATIVE_category_is_still_shown(self, monkeypatch):
+        # The counterweight: a negative is a figure somebody needs to see, and the percentage base
+        # already floors it at zero rather than letting it distort the others.
+        allocation = AllocationResponse(
+            items=[
+                AllocationItem(category=CAT_A, value=Decimal("600"), percentage=Decimal("100")),
+                AllocationItem(category=CAT_B, value=Decimal("-50"), percentage=Decimal("0")),
+            ],
+            total_value=Decimal("550"),
+        )
+        self._patch(monkeypatch, shared=shared_worth_service.SharedWorth())
+        monkeypatch.setattr(dashboard_service.metrics_service, "get_allocation", AsyncMock(return_value=allocation))
+        result = await dashboard_service.get_composition(AsyncMock(), 1)
+        assert [(i.label, i.value) for i in result.items] == [(CAT_A, Decimal("600")), (CAT_B, Decimal("-50"))]
 
     @pytest.mark.asyncio
     async def test_a_currency_the_shared_side_could_not_restate_is_reported(self, monkeypatch):

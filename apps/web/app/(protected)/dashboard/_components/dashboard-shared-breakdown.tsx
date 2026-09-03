@@ -74,7 +74,7 @@ export function DashboardSharedBreakdown({ overview }: DashboardSharedBreakdownP
         >
           {t('shared.undividedPot', {
             pot: potLabel(pot, tCommon('potDefaultLabel')),
-            group: pot.groupName ?? '',
+            group: pot.groupName,
           })}
         </InlineLink>
       ))}

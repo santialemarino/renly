@@ -450,10 +450,12 @@ async def sum_by_user_monthly(
     date_to: date_type | None = None,
 ) -> list[tuple[int, int, str, Decimal]]:
     rows = _spending_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
+    year_col = func.extract("year", rows.c.date).label("year")
+    month_col = func.extract("month", rows.c.date).label("month")
     stmt = (
-        select(rows.c.year, rows.c.month, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
-        .group_by(rows.c.year, rows.c.month, rows.c.currency)
-        .order_by(rows.c.year, rows.c.month)
+        select(year_col, month_col, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
+        .group_by(year_col, month_col, rows.c.currency)
+        .order_by(year_col, month_col)
     )
     result = await session.execute(stmt)
     return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
@@ -490,6 +492,10 @@ async def sum_by_user_grouped_by_category(
 # most-used aggregate — and the caller's seats are resolved BEFORE the query rather than joined inside
 # it, for the reason §21 measured: the join makes Postgres scan every split in the database.
 #
+# It projects the raw DATE rather than a year/month pair, so it is column-for-column the mirror of
+# income_repository._earning_rows and the two can be read side by side. Bucketing by month is the
+# monthly aggregate's own business, and the date is what the income side's MIN() needs anyway.
+#
 # ▸ TWO PROPERTIES HERE ARE NOT OBSERVABLE, and a mutation sweep proved both rather than leaving them
 # implied. The early return is a PERFORMANCE decision: `member_id IN ()` matches nothing, so deleting it
 # returns identical rows and only costs the plan. And `amount > 0` cannot be seen through a SUM at all,
@@ -498,8 +504,7 @@ async def sum_by_user_grouped_by_category(
 # MIN(date) the liquidity card reads.
 def _spending_rows(user_id: int, member_ids: list[int], *, date_from: date_type | None, date_to: date_type | None):
     private = select(
-        func.extract("year", ExpenseEntry.date).label("year"),
-        func.extract("month", ExpenseEntry.date).label("month"),
+        ExpenseEntry.date.label("date"),
         ExpenseEntry.currency.label("currency"),
         cast(ExpenseEntry.category, String).label("category"),
         ExpenseEntry.amount.label("amount"),
@@ -513,8 +518,7 @@ def _spending_rows(user_id: int, member_ids: list[int], *, date_from: date_type 
 
     shared = (
         select(
-            func.extract("year", SharedExpense.date).label("year"),
-            func.extract("month", SharedExpense.date).label("month"),
+            SharedExpense.date.label("date"),
             SharedExpense.currency.label("currency"),
             cast(SharedExpense.category, String).label("category"),
             SharedExpenseSplit.amount.label("amount"),

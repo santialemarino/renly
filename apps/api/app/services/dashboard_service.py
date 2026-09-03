@@ -348,9 +348,14 @@ async def get_overview(
         shared_receivable=shared.receivable,
         shared_payable=shared.payable,
         has_shared=shared.has_shared,
+        # A pot whose group name did not resolve is DROPPED rather than named with a hole in the
+        # sentence. It can only happen if the membership policy and this read disagree, which is the
+        # same fail-closed skip list_pots already takes: the pot still contributes zero either way, and
+        # under-reporting the explanation beats rendering "… in  counts as 0".
         undivided_pots=[
-            UndividedPotItem(pot_id=pot.pot_id, name=pot.name, group_id=pot.group_id, group_name=group_names.get(pot.group_id))
+            UndividedPotItem(pot_id=pot.pot_id, name=pot.name, group_id=pot.group_id, group_name=group_names[pot.group_id])
             for pot in shared.undivided_pots
+            if pot.group_id in group_names
         ],
         cash_total=cash_total,
         net_worth_change=net_worth_change,
@@ -623,10 +628,17 @@ async def get_composition(
     def _pct(value: Decimal) -> Decimal:
         return (value / items_total * 100) if items_total != ZERO else ZERO
 
-    # Ordered by the allocation's own categories first so a private-only user's donut is unchanged, then
-    # any category that exists ONLY because something shared sits in it.
-    labels = [item.category for item in allocation.items]
-    labels += sorted(label for label in by_label if label not in set(labels))
+    # Ordered by the allocation's own categories first so a private-only user's donut keeps its colours,
+    # then any category that exists ONLY because something shared sits in it.
+    #
+    # A category worth exactly ZERO is dropped rather than given a slice, which is a deliberate change
+    # from emitting every allocation item: it draws nothing in the donut and occupies a legend row
+    # reading "Stocks 0%", and it is the same gate cash, receivable and liabilities already pass. A
+    # NEGATIVE one is kept, because that is a figure somebody needs to see and the percentage math
+    # already floors it at zero.
+    from_allocation = [item.category for item in allocation.items]
+    seen = set(from_allocation)
+    labels = from_allocation + sorted(label for label in by_label if label not in seen)
     items = [
         CompositionItem(label=label, value=by_label[label], percentage=_pct(by_label[label])) for label in labels if by_label.get(label, ZERO) != ZERO
     ]

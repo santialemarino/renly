@@ -8,13 +8,19 @@ from pydantic import BaseModel, Field
 
 # One pot holding value that nobody's net worth can claim yet, because its owners have not agreed a
 # division. Named on the dashboard's Shared breakdown so a holding that used to be in the headline does
-# not simply vanish from it. `name` is null for a group's default pot (A4 leaves it unnamed); the
-# frontend supplies the fallback label, so no renderer here can print "None".
+# not simply vanish from it.
+#
+# `name` is null for a group's default pot (A4 leaves it unnamed) and the frontend supplies the
+# fallback label, so no renderer here can print "None". `group_name` is NOT nullable, and that is the
+# same lesson from the other side: the copy reads "{pot} in {group} counts as 0", and a null group
+# would render a dangling "in " rather than raising. A pot only reaches this list when its caller is an
+# active member of its group, so the name is always resolvable — and on the one path where it is not,
+# the service omits the pot rather than emitting a sentence with a hole in it.
 class UndividedPotItem(BaseModel):
     pot_id: int = Field(description="Pot id, for the link to its page.")
     name: str | None = Field(default=None, description="Pot name; null for a group's default pot.")
     group_id: int = Field(description="Group the pot belongs to.")
-    group_name: str | None = Field(default=None, description="Group name, for the label beside the pot's.")
+    group_name: str = Field(description="Group name, for the label beside the pot's.")
 
 
 # Net worth and aggregated KPIs for the dashboard overview cards.

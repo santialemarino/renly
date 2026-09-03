@@ -493,7 +493,7 @@
       "shared": "Compartido",
       "owedToYou": "Te deben",
       "youOwe": "Debés",
-      "undividedPot": "{pot} en {group} cuenta 0 — falta acordar la propiedad."
+      "undividedPot": "{pot} en {group} cuenta como 0 — falta acordar la propiedad."
     }
   },
   "financeDashboard": {

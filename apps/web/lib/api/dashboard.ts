@@ -8,7 +8,7 @@ interface UndividedPotRaw {
   pot_id: number;
   name: string | null;
   group_id: number;
-  group_name: string | null;
+  group_name: string;
 }
 
 interface DashboardOverviewRaw {
@@ -94,7 +94,9 @@ export interface UndividedPot {
   potId: number;
   name: string | null;
   groupId: number;
-  groupName: string | null;
+  // Never null: the copy reads "{pot} in {group}", and the API drops a pot whose group it cannot name
+  // rather than emitting a sentence with a hole in it.
+  groupName: string;
 }
 
 export interface DashboardOverview {

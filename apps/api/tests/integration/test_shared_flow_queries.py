@@ -398,6 +398,18 @@ class TestTheDashboardsSpendingAndEarningUnions:
         assert any(row.scope == "shared" for row in rows)
 
     @pytest.mark.asyncio
+    async def test_the_monthly_totals_are_bucketed_by_MONTH(self, session, seeded):
+        # Every other assertion here sums across months and is therefore blind to the bucketing itself
+        # — a mutation swapping the month extraction for a second year extraction left them all green.
+        # The fixture spans May (private only), June (private + both shared buckets) and July (income),
+        # so a wrong bucket collapses three months into one.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        expense = {(year, month, currency) for year, month, currency, _t in await expense_repository.sum_by_user_monthly(session, user, [seat])}
+        assert expense == {(2026, 5, "ARS"), (2026, 6, "ARS"), (2026, 6, "USD")}
+        income = {(year, month, currency) for year, month, currency, _t in await income_repository.sum_by_user_monthly(session, user, [seat])}
+        assert income == {(2026, 5, "ARS"), (2026, 6, "USD"), (2026, 7, "ARS")}
+
+    @pytest.mark.asyncio
     async def test_the_category_breakdown_equals_the_same_list(self, session, seeded):
         user, seat = seeded["users"][0], seeded["seats"][0]
         rows, _ = await expense_repository.list_by_user_filtered(session, user, [seat], page_size=200)
