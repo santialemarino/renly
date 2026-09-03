@@ -37,6 +37,13 @@ def _pot(**kwargs) -> Pot:
     return Pot(**{**defaults, **kwargs})
 
 
+# A pot-held investment as the valuation now reads it: whole rows, because each holding is labelled
+# with the composition bucket it contributes to. Category is incidental here — nothing in this file is
+# about the bucket.
+def _pot_investment(investment_id: int) -> Investment:
+    return Investment(id=investment_id, user_id=None, pot_id=5, name=f"I{investment_id}", category=InvestmentCategory.fci, base_currency="USD")
+
+
 def _permission(**kwargs) -> PotMemberPermission:
     defaults = dict(pot_id=5, member_id=100, can_view=True, can_write=False)
     return PotMemberPermission(**{**defaults, **kwargs})
@@ -452,13 +459,78 @@ class TestAbsorbingPotsOnAccountDeletion:
         list_by_group.assert_not_awaited()
 
 
+class TestOneMembersShare:
+    # What the dashboard reads per pot: the member's own share, and what the pot's value is made of.
+    def _wire(self, monkeypatch, *, investments, snapshots, accounts=(), balances=None):
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=list(investments)))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=dict(snapshots)))
+        monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=list(accounts)))
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value=dict(balances or {})))
+        lookup = AsyncMock()
+        lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+        return lookup
+
+    def _seat(self, events=()):
+        return pot_service.PotSeat(pot=_pot(base_currency="USD"), member_id=SEAT.id, events=list(events))
+
+    def _opening(self, member_id: int, on: date, units: str):
+        from app.models.pot import OwnershipEventType, PotOwnershipEvent
+
+        return PotOwnershipEvent(
+            id=None, pot_id=5, type=OwnershipEventType.opening, date=on, member_id=member_id, units=Decimal(units), unit_price=Decimal(1)
+        )
+
+    @pytest.mark.asyncio
+    async def test_each_holding_is_labelled_with_the_bucket_it_contributes_to(self, monkeypatch):
+        # The composition folds a member's share into the same segments a private holding lands in, so
+        # a co-owned CEDEAR has to arrive labelled `cedears` and a jointly held account labelled `cash`.
+        # A mutation that labelled every investment `cash` was invisible to every other test.
+        cedear = Investment(id=1, user_id=None, pot_id=5, name="AAPL", category=InvestmentCategory.cedears, base_currency="USD")
+        snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 6, 1), value=Decimal("300"), currency="USD")
+        account = Account(id=9, user_id=None, pot_id=5, name="Joint", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        lookup = self._wire(monkeypatch, investments=[cedear], snapshots={1: snapshot}, accounts=[account], balances={9: Decimal("100")})
+
+        share = await pot_service.get_member_share(
+            AsyncMock(), self._seat([self._opening(SEAT.id, date(2026, 2, 1), "100")]), as_of_date=date(2026, 7, 1), lookup=lookup
+        )
+        assert share.nav == Decimal("400")
+        assert share.weights == {"cedears": Decimal("300"), "cash": Decimal("100")}
+        assert share.value == Decimal("400")
+
+    @pytest.mark.asyncio
+    async def test_an_event_AFTER_the_date_asked_about_does_not_count(self, monkeypatch):
+        # The ledger is bounded in Python because the batch read fetched every pot's events at once.
+        # Without the bound a past valuation would be divided by a division agreed afterwards.
+        snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD")
+        investment = Investment(id=1, user_id=None, pot_id=5, name="F", category=InvestmentCategory.fci, base_currency="USD")
+        lookup = self._wire(monkeypatch, investments=[investment], snapshots={1: snapshot})
+        events = [self._opening(SEAT.id, date(2026, 2, 1), "50"), self._opening(PLAIN_SEAT.id, date(2026, 9, 1), "50")]
+
+        # In March only the first opening has happened, so the whole pot is this member's.
+        march = await pot_service.get_member_share(AsyncMock(), self._seat(events), as_of_date=date(2026, 3, 1), lookup=lookup)
+        assert march.value == Decimal("100")
+        # By October the second owner holds half of it.
+        october = await pot_service.get_member_share(AsyncMock(), self._seat(events), as_of_date=date(2026, 10, 1), lookup=lookup)
+        assert october.value == Decimal("50")
+
+    @pytest.mark.asyncio
+    async def test_an_undivided_pot_has_no_share_to_state(self, monkeypatch):
+        snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD")
+        investment = Investment(id=1, user_id=None, pot_id=5, name="F", category=InvestmentCategory.fci, base_currency="USD")
+        lookup = self._wire(monkeypatch, investments=[investment], snapshots={1: snapshot})
+        share = await pot_service.get_member_share(AsyncMock(), self._seat(), as_of_date=date(2026, 3, 1), lookup=lookup)
+        assert share.nav == Decimal("100")
+        assert share.value is None
+        assert share.holds_anything is True
+
+
 class TestNav:
     @pytest.mark.asyncio
     async def test_an_unconvertible_holding_makes_the_nav_unknown_rather_than_understated(self, monkeypatch):
         # Fail-loud, and it matters more here than anywhere else: an understated NAV would silently
         # misprice every unit issued against it.
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="BRL")
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -473,7 +545,7 @@ class TestNav:
         # returns the latest snapshot on or before it instead. Asserted on the argument the service
         # passed, because a stub returns whatever it was told either way.
         latest = AsyncMock(return_value={})
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", latest)
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -485,7 +557,7 @@ class TestNav:
     async def test_a_pot_whose_holdings_have_no_snapshot_by_that_date_has_an_UNKNOWN_value(self, monkeypatch):
         # Not zero. A pot holding something nobody has valued is not worth nothing, and reporting zero
         # tells every co-owner their money is gone.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -502,7 +574,7 @@ class TestNav:
         from app.models.snapshot import InvestmentSnapshot as Snapshot
 
         snapshot = Snapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD")
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1), _pot_investment(2)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -513,7 +585,7 @@ class TestNav:
     async def test_a_pot_holding_nothing_at_all_has_an_unknown_value_rather_than_zero(self, monkeypatch):
         # A NAV is a valuation OF something. Null is also what PotResponse documents for this case, and
         # a pot cannot be valued at <= 0 for ownership purposes anyway.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
@@ -528,7 +600,7 @@ class TestNav:
             1: Snapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("100"), currency="USD"),
             2: Snapshot(id=2, investment_id=2, user_id=None, pot_id=5, date=date(2026, 1, 1), value=Decimal("10.50"), currency="USD"),
         }
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1), _pot_investment(2)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -540,7 +612,7 @@ class TestNav:
         # Accounts have no unvalued case — an account always has a balance, its opening figure at worst
         # — so the completeness rule above must not accidentally require a snapshot for them.
         account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
         monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
         lookup = AsyncMock()
@@ -715,7 +787,7 @@ class TestValuationFreshness:
         # nobody has touched since March makes the pot a March figure however fresh the rest are, and
         # reporting the newest date instead would call a half-stale pot up to date.
         snapshots = {1: self._snapshot(1, date(2026, 3, 2)), 2: self._snapshot(2, date(2026, 6, 1))}
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1), _pot_investment(2)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
@@ -724,7 +796,7 @@ class TestValuationFreshness:
 
     @pytest.mark.asyncio
     async def test_a_holding_nobody_has_ever_valued_leaves_no_date_to_state(self, monkeypatch):
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1, 2]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1), _pot_investment(2)]))
         monkeypatch.setattr(
             pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 1))})
         )
@@ -737,7 +809,7 @@ class TestValuationFreshness:
         # An account's balance is DERIVED at the date asked for, so there is nothing to be behind on
         # and no cadence can make it overdue.
         account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[account]))
         monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: Decimal("42.00")}))
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
@@ -749,7 +821,7 @@ class TestValuationFreshness:
         # current" reading gets wrong: an account alongside a stale investment must not make the pot
         # read fresh, because the NAV still contains the stale term.
         account = Account(id=9, user_id=None, pot_id=5, name="Conjunta", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(
             pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 1, 5))})
         )
@@ -762,7 +834,7 @@ class TestValuationFreshness:
     async def test_an_unconvertible_pot_still_says_when_it_was_last_valued(self, monkeypatch):
         # Two different problems, two different fields. The snapshots are fresh; this currency just
         # cannot state them, so collapsing both into "unknown" would hide a fact the page has.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(
             pot_service.snapshot_repository,
             "get_latest_by_investments",
@@ -782,7 +854,7 @@ class TestValuationFreshness:
         # anything at all and now always runs. Naming the expensive query is also what makes the test
         # discriminate: with `list_accounts` returning [] there is no balance query to make either way,
         # so the pot here HOLDS an account and the guard is the only reason the union is skipped.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(
             pot_service.snapshot_repository,
             "get_latest_by_investments",
@@ -798,7 +870,7 @@ class TestValuationFreshness:
     async def test_a_pot_holding_nothing_is_not_reported_as_behind(self, monkeypatch):
         # "No valuation" has two causes and only one is a problem. Demanding a valuation of a pot
         # holding nothing is a demand nobody can satisfy.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         valuation = await pot_service.get_valuation(AsyncMock(), _pot(), as_of_date=date(2026, 6, 15), lookup=self._lookup())
         assert (valuation.nav, valuation.valued_as_of, valuation.is_stale) == (None, None, False)
@@ -807,7 +879,7 @@ class TestValuationFreshness:
     async def test_the_pots_own_cadence_decides_and_ad_hoc_never_does(self, monkeypatch):
         # The same pot, the same snapshot, three cadences: the setting is what makes the answer differ,
         # which is the reason §9 made it a setting rather than a rule.
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(
             pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: self._snapshot(1, date(2026, 6, 1))})
         )

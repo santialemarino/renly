@@ -85,9 +85,12 @@ async def list_holdings(session: AsyncSession, pot_id: int) -> tuple[list[Invest
     return (list(investments.scalars().all()), list(accounts.scalars().all()))
 
 
-# Ids of the investments a pot holds, for the NAV query.
-async def list_investment_ids(session: AsyncSession, pot_id: int) -> list[int]:
-    result = await session.execute(select(Investment.id).where(Investment.pot_id == pot_id, Investment.is_active.is_(True)))
+# The ACTIVE investments a pot holds, for the NAV query. Returns whole rows rather than ids because a
+# valuation now also has to say which composition bucket each holding contributes to, and `category`
+# comes free in the same query — a second read to fetch it would be a second answer to "what does this
+# pot hold".
+async def list_active_investments(session: AsyncSession, pot_id: int) -> list[Investment]:
+    result = await session.execute(select(Investment).where(Investment.pot_id == pot_id, Investment.is_active.is_(True)).order_by(Investment.id))
     return list(result.scalars().all())
 
 
@@ -147,10 +150,10 @@ class PotRepository:
     get_by_id = staticmethod(get_by_id)
     get_permission = staticmethod(get_permission)
     list_accounts = staticmethod(list_accounts)
+    list_active_investments = staticmethod(list_active_investments)
     list_all = staticmethod(list_all)
     list_by_group = staticmethod(list_by_group)
     list_holdings = staticmethod(list_holdings)
-    list_investment_ids = staticmethod(list_investment_ids)
     list_permissions = staticmethod(list_permissions)
     list_permissions_by_pots = staticmethod(list_permissions_by_pots)
     list_visible = staticmethod(list_visible)

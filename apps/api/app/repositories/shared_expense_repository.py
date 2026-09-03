@@ -78,6 +78,35 @@ async def list_positions_by_groups(session: AsyncSession, group_ids: list[int]) 
     return [(row[0], row[1], row[2], Decimal(str(row[3])), Decimal(str(row[4]))) for row in result.all()]
 
 
+# The same aggregate bucketed by MONTH, as (group_id, year, month, currency, member_id, amount,
+# paid_amount) — the input the dashboard's net-worth series accumulates into a position per point.
+#
+# One query for the whole history rather than one per point, which is the same reason
+# compute_account_balance_series exists: a twelve-month chart must not cost twelve aggregates. The
+# caller accumulates forward and runs each month's totals through the SAME domain functions the live
+# balance uses, so a point on the chart and the figure on the group hub cannot be computed two ways.
+async def list_positions_by_groups_monthly(session: AsyncSession, group_ids: list[int]) -> list[tuple[int, int, int, str, int, Decimal, Decimal]]:
+    if not group_ids:
+        return []
+    year_col = func.extract("year", SharedExpense.date).label("year")
+    month_col = func.extract("month", SharedExpense.date).label("month")
+    result = await session.execute(
+        select(
+            SharedExpense.group_id,
+            year_col,
+            month_col,
+            SharedExpense.currency,
+            SharedExpenseSplit.member_id,
+            func.coalesce(func.sum(SharedExpenseSplit.amount), 0),
+            func.coalesce(func.sum(SharedExpenseSplit.paid_amount), 0),
+        )
+        .join(SharedExpense, SharedExpense.id == SharedExpenseSplit.shared_expense_id)
+        .where(SharedExpense.group_id.in_(group_ids))
+        .group_by(SharedExpense.group_id, year_col, month_col, SharedExpense.currency, SharedExpenseSplit.member_id)
+    )
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4], Decimal(str(row[5])), Decimal(str(row[6]))) for row in result.all()]
+
+
 # Inserts a shared expense and flushes so its id is available for the splits.
 async def create(session: AsyncSession, expense: SharedExpense) -> SharedExpense:
     session.add(expense)
@@ -170,6 +199,34 @@ async def sum_by_credit_card_ids_grouped(session: AsyncSession, card_ids: list[i
     return grouped
 
 
+# The same charges bucketed by MONTH, as (card_id, year, month, currency, total) — the monthly sibling
+# of sum_by_credit_card_ids_grouped, matching what expense_repository returns for private rows.
+#
+# It exists because get_card_balances merges both tables for the CURRENT balance while the evolution
+# chart's monthly card series read only the private one, so the headline card figure and the chart's
+# card line described different sets of charges. A card's whole charge is its owner's liability
+# whoever consumed what it bought, which is why there is no split here and no user filter: the rows
+# belong to the group, RLS scopes them, and a card only ever carries its own owner's charges.
+async def sum_by_credit_card_ids_monthly(session: AsyncSession, card_ids: list[int]) -> list[tuple[int, int, int, str, float]]:
+    if not card_ids:
+        return []
+    year_col = func.extract("year", SharedExpense.date).label("year")
+    month_col = func.extract("month", SharedExpense.date).label("month")
+    result = await session.execute(
+        select(
+            SharedExpense.credit_card_id,
+            year_col,
+            month_col,
+            SharedExpense.currency,
+            func.coalesce(func.sum(SharedExpense.amount), 0),
+        )
+        .where(SharedExpense.credit_card_id.in_(card_ids))
+        .group_by(SharedExpense.credit_card_id, year_col, month_col, SharedExpense.currency)
+        .order_by(year_col, month_col)
+    )
+    return [(row[0], int(row[1]), int(row[2]), row[3], float(row[4])) for row in result.all()]
+
+
 # Counts the shared expenses charged to one card, for the card-delete guard. No user filter: RLS
 # already limits the rows to groups the caller is in, and a card only ever carries its owner's charges.
 async def count_by_credit_card(session: AsyncSession, credit_card_id: int) -> int:
@@ -198,11 +255,13 @@ class SharedExpenseRepository:
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_group = staticmethod(list_by_group)
     list_positions_by_groups = staticmethod(list_positions_by_groups)
+    list_positions_by_groups_monthly = staticmethod(list_positions_by_groups_monthly)
     list_splits_by_expense_ids = staticmethod(list_splits_by_expense_ids)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_account_ids_dated = staticmethod(sum_by_account_ids_dated)
     sum_by_credit_card_ids_grouped = staticmethod(sum_by_credit_card_ids_grouped)
+    sum_by_credit_card_ids_monthly = staticmethod(sum_by_credit_card_ids_monthly)
 
 
 # Singleton used by services to access shared-expense persistence.

@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.models.group import GroupMember, GroupMemberRole
+from app.models.investment import Investment, InvestmentCategory
 from app.models.pot import Pot, PotMemberPermission, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.services import group_service, pot_service
@@ -25,6 +26,13 @@ def _member(member_id: int, *, user_id: int | None, is_active: bool = True) -> G
 
 def _pot(*, visibility: PotVisibility = PotVisibility.members) -> Pot:
     return Pot(id=5, group_id=10, base_currency="USD", visibility=visibility, is_default=True)
+
+
+# A pot-held investment as the valuation now reads it: whole rows, because each holding is labelled
+# with the composition bucket it contributes to. Category is incidental here — nothing in this file is
+# about the bucket.
+def _pot_investment(investment_id: int) -> Investment:
+    return Investment(id=investment_id, user_id=None, pot_id=5, name=f"I{investment_id}", category=InvestmentCategory.fci, base_currency="USD")
 
 
 def _permission(member_id: int, *, can_view: bool, can_write: bool = False) -> PotMemberPermission:
@@ -152,7 +160,7 @@ class TestFreshnessSharesOneRule:
     # reminder that quietly stops firing.
     def _wire(self, monkeypatch, *, snapshot_date):
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=snapshot_date, value=Decimal("100"), currency="USD")
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
@@ -171,7 +179,7 @@ class TestFreshnessSharesOneRule:
 
     @pytest.mark.asyncio
     async def test_they_agree_about_a_pot_holding_nothing(self, monkeypatch):
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         lookup = AsyncMock()
         lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
@@ -186,7 +194,7 @@ class TestFreshnessSharesOneRule:
         # What makes it usable from a background job: freshness is a question about DATES, so the answer
         # cannot depend on whose currency preference the job happened to run under.
         snapshot = InvestmentSnapshot(id=1, investment_id=1, user_id=None, pot_id=5, date=date(2026, 6, 1), value=Decimal("100"), currency="BRL")
-        monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=[1]))
+        monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=[_pot_investment(1)]))
         monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value={1: snapshot}))
         monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=[]))
         # An unconvertible holding: the NAV is unknown, and the freshness is still a real date.

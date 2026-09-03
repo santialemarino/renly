@@ -270,9 +270,9 @@ async def delete(session: AsyncSession, entry: IncomeEntry) -> None:
 
 # Earliest income entry date for a user. Returns None when the user has no income entries.
 # Used by the liquidity alert to size the income window during early app life.
-async def get_first_income_date(session: AsyncSession, user_id: int) -> date_type | None:
-    stmt = select(func.min(IncomeEntry.date)).where(IncomeEntry.user_id == user_id)
-    result = await session.execute(stmt)
+async def get_first_income_date(session: AsyncSession, user_id: int, member_ids: list[int]) -> date_type | None:
+    rows = _earning_rows(user_id, member_ids, date_from=None, date_to=None)
+    result = await session.execute(select(func.min(rows.c.date)))
     return result.scalar_one_or_none()
 
 
@@ -280,23 +280,13 @@ async def get_first_income_date(session: AsyncSession, user_id: int) -> date_typ
 async def sum_by_user(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> dict[str, Decimal]:
-    stmt = (
-        select(
-            IncomeEntry.currency,
-            func.coalesce(func.sum(IncomeEntry.amount), 0),
-        )
-        .where(IncomeEntry.user_id == user_id)
-        .group_by(IncomeEntry.currency)
-    )
-    if date_from is not None:
-        stmt = stmt.where(IncomeEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(IncomeEntry.date <= date_to)
-    result = await session.execute(stmt)
+    rows = _earning_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
+    result = await session.execute(select(rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0)).group_by(rows.c.currency))
     return {row[0]: row[1] for row in result.all()}
 
 
@@ -375,27 +365,19 @@ async def sum_by_account_ids_monthly(session: AsyncSession, account_ids: list[in
 async def sum_by_user_monthly(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> list[tuple[int, int, str, Decimal]]:
-    year_col = func.extract("year", IncomeEntry.date).label("year")
-    month_col = func.extract("month", IncomeEntry.date).label("month")
+    rows = _earning_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
+    year_col = func.extract("year", rows.c.date).label("year")
+    month_col = func.extract("month", rows.c.date).label("month")
     stmt = (
-        select(
-            year_col,
-            month_col,
-            IncomeEntry.currency,
-            func.coalesce(func.sum(IncomeEntry.amount), 0),
-        )
-        .where(IncomeEntry.user_id == user_id)
-        .group_by(year_col, month_col, IncomeEntry.currency)
+        select(year_col, month_col, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
+        .group_by(year_col, month_col, rows.c.currency)
         .order_by(year_col, month_col)
     )
-    if date_from is not None:
-        stmt = stmt.where(IncomeEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(IncomeEntry.date <= date_to)
     result = await session.execute(stmt)
     return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
 
@@ -407,25 +389,57 @@ async def sum_by_user_monthly(
 async def sum_by_user_grouped_by_category(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> list[tuple[str, str, Decimal]]:
-    stmt = (
-        select(
-            IncomeEntry.category,
-            IncomeEntry.currency,
-            func.coalesce(func.sum(IncomeEntry.amount), 0),
-        )
-        .where(IncomeEntry.user_id == user_id)
-        .group_by(IncomeEntry.category, IncomeEntry.currency)
-    )
-    if date_from is not None:
-        stmt = stmt.where(IncomeEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(IncomeEntry.date <= date_to)
+    rows = _earning_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
+    stmt = select(rows.c.category, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0)).group_by(rows.c.category, rows.c.currency)
     result = await session.execute(stmt)
     return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
+
+
+# Every row that counts as this person's income in a window: their own entries, plus what they are
+# ENTITLED to out of every shared income row they are in — the same union /income lists, reduced to the
+# columns the aggregates above group on.
+#
+# The mirror of expense_repository._spending_rows, and it exists for the same reason: the finance
+# dashboard was summing one of the two tables while the list page showed both. `amount` on a split is
+# the entitlement, not what has already reached the member — the entitlement is the income, and whether
+# it has been handed over yet is a BALANCE, which is the shared side of net worth rather than earnings.
+#
+# The shared branch is not built at all for a user in no group, and the caller's seats are resolved
+# before the query rather than joined inside it — see the expense sibling for the measurement.
+def _earning_rows(user_id: int, member_ids: list[int], *, date_from: date_type | None, date_to: date_type | None):
+    private = select(
+        IncomeEntry.date.label("date"),
+        IncomeEntry.currency.label("currency"),
+        cast(IncomeEntry.category, String).label("category"),
+        IncomeEntry.amount.label("amount"),
+    ).where(IncomeEntry.user_id == user_id)
+    if date_from is not None:
+        private = private.where(IncomeEntry.date >= date_from)
+    if date_to is not None:
+        private = private.where(IncomeEntry.date <= date_to)
+    if not member_ids:
+        return private.subquery()
+
+    shared = (
+        select(
+            SharedIncome.date.label("date"),
+            SharedIncome.currency.label("currency"),
+            cast(SharedIncome.category, String).label("category"),
+            SharedIncomeSplit.amount.label("amount"),
+        )
+        .join(SharedIncome, SharedIncome.id == SharedIncomeSplit.shared_income_id)
+        .where(SharedIncomeSplit.member_id.in_(member_ids), SharedIncomeSplit.amount > 0)
+    )
+    if date_from is not None:
+        shared = shared.where(SharedIncome.date >= date_from)
+    if date_to is not None:
+        shared = shared.where(SharedIncome.date <= date_to)
+    return union_all(private, shared).subquery()
 
 
 # Which of the given accounts have any linked income row at all. Drives the currency lock, so unlike

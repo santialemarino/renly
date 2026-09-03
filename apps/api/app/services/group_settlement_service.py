@@ -600,6 +600,65 @@ async def ensure_no_outstanding_balance(session: AsyncSession, members: list[Gro
         raise GroupBalanceOutstandingError(outstanding)
 
 
+# Every member's position in every named group, per currency — the live figure, made public because
+# the dashboard's net-worth headline needs the same one the group hub shows.
+#
+# A thin re-export of the internal derivation rather than a second read: an owed balance is an asset on
+# your net-worth line (D3), so the dashboard's figure and the hub's have to be the same number, and the
+# only way to guarantee that is for there to be one derivation.
+async def get_positions_by_group(session: AsyncSession, group_ids: list[int]) -> dict[int, dict[str, dict[int, Decimal]]]:
+    return await _positions_by_group(session, group_ids)
+
+
+# The same positions as they stood at the END of every month that has any activity, ascending.
+#
+# Positions are a running sum, so a month's is every row dated on or before it. Emitting only the
+# months that MOVED — rather than a caller-supplied grid — means one aggregate per source over the
+# whole history, and it hands the caller two things at once: the values, and the first month the
+# group's money existed at all, which is what lets the dashboard's chart start where the history does
+# instead of where the private half happens to.
+#
+# The caller forward-fills onto whatever grid it draws, exactly as forward_fill_card_balances already
+# does for the card series: a month with no rows stands where the previous one left it.
+#
+# What this deliberately does NOT do is re-implement the position algebra. Each month's accumulated
+# totals go through _net_positions — the same fold get_balances uses — so a point on the chart cannot
+# mean something different from the figure on the group hub.
+async def get_positions_by_month(
+    session: AsyncSession, group_ids: list[int]
+) -> list[tuple[tuple[int, int], dict[int, dict[str, dict[int, Decimal]]]]]:
+    if not group_ids:
+        return []
+    expense_rows = await shared_expense_repository.list_positions_by_groups_monthly(session, group_ids)
+    income_rows = await shared_income_repository.list_positions_by_groups_monthly(session, group_ids)
+    movements = await group_settlement_repository.list_movements_by_groups_monthly(session, group_ids)
+
+    consumed: dict[tuple[int, int], list[tuple[int, str, int, Decimal, Decimal]]] = {}
+    for group_id, year, month, currency, member_id, amount, paid_amount in expense_rows:
+        consumed.setdefault((year, month), []).append((group_id, currency, member_id, amount, paid_amount))
+    earned: dict[tuple[int, int], list[tuple[int, str, int, Decimal, Decimal]]] = {}
+    for group_id, year, month, currency, member_id, amount, received_amount in income_rows:
+        earned.setdefault((year, month), []).append((group_id, currency, member_id, amount, received_amount))
+    settled: dict[tuple[int, int], list[tuple[int, str, int, int, Decimal]]] = {}
+    for group_id, year, month, currency, from_member_id, to_member_id, amount in movements:
+        settled.setdefault((year, month), []).append((group_id, currency, from_member_id, to_member_id, amount))
+
+    running_consumed: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]] = {}
+    running_earned: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]] = {}
+    running_settled: dict[tuple[int, str], list[tuple[int, int, Decimal]]] = {}
+
+    series: list[tuple[tuple[int, int], dict[int, dict[str, dict[int, Decimal]]]]] = []
+    for month_key in sorted(set(consumed) | set(earned) | set(settled)):
+        for group_id, currency, member_id, amount, paid_amount in consumed.get(month_key, []):
+            running_consumed.setdefault((group_id, currency), []).append((member_id, amount, paid_amount))
+        for group_id, currency, member_id, amount, received_amount in earned.get(month_key, []):
+            running_earned.setdefault((group_id, currency), []).append((member_id, amount, received_amount))
+        for group_id, currency, from_member_id, to_member_id, amount in settled.get(month_key, []):
+            running_settled.setdefault((group_id, currency), []).append((from_member_id, to_member_id, amount))
+        series.append((month_key, _net_positions(running_consumed, running_earned, running_settled)))
+    return series
+
+
 # --- Internal ---
 
 
@@ -765,6 +824,20 @@ async def _positions_by_group(session: AsyncSession, group_ids: list[int]) -> di
     settled: dict[tuple[int, str], list[tuple[int, int, Decimal]]] = {}
     for group_id, currency, from_member_id, to_member_id, amount in movements:
         settled.setdefault((group_id, currency), []).append((from_member_id, to_member_id, amount))
+    return _net_positions(consumed, earned, settled)
+
+
+# The position algebra itself, over three (group_id, currency)-keyed collections of rows: expenses,
+# income, and the settlements applied on top. THE one place it lives, so the live balance and the
+# dashboard's monthly series cannot answer it differently.
+#
+# A bucket that nets to nothing is dropped rather than kept as a map of zeros, which is what makes
+# "does this group owe anything" a truth test on the result at every caller.
+def _net_positions(
+    consumed: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]],
+    earned: dict[tuple[int, str], list[tuple[int, Decimal, Decimal]]],
+    settled: dict[tuple[int, str], list[tuple[int, int, Decimal]]],
+) -> dict[int, dict[str, dict[int, Decimal]]]:
     positions: dict[int, dict[str, dict[int, Decimal]]] = {}
     for key in set(consumed) | set(earned) | set(settled):
         group_id, currency = key

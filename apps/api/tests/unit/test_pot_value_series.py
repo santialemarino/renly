@@ -20,6 +20,7 @@ import pytest
 from app.domain.pot_monitoring import PotSeriesInterval, period_ends
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.investment import Investment, InvestmentCategory
 from app.models.pot import OwnershipEventType, Pot, PotCadence, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
@@ -68,6 +69,13 @@ def _snapshot(investment_id: int, on: date, value: str, *, currency: str = "USD"
     return InvestmentSnapshot(id=None, investment_id=investment_id, user_id=None, pot_id=5, date=on, value=Decimal(value), currency=currency)
 
 
+# The pot's holdings are read as whole rows now (the valuation labels each one with its composition
+# bucket), so the fixtures name a category. It is the same category throughout: nothing in this file is
+# about the bucket, only about which figure lands at which point.
+def _investment(investment_id: int) -> Investment:
+    return Investment(id=investment_id, user_id=None, pot_id=5, name=f"I{investment_id}", category=InvestmentCategory.fci, base_currency="USD")
+
+
 def _account(account_id: int, *, currency: str = "USD", opening: date = CREATED) -> Account:
     return Account(id=account_id, user_id=None, pot_id=5, name=f"A{account_id}", type=AccountType.bank, currency=currency, opening_date=opening)
 
@@ -92,7 +100,8 @@ def _wire(monkeypatch, *, pot=None, investments=(), accounts=(), snapshots=(), b
     monkeypatch.setattr(pot_service.group_repository, "get_member_by_user", AsyncMock(return_value=SEAT))
     monkeypatch.setattr(pot_service.pot_repository, "get_permission", AsyncMock(return_value=PotMemberPermission(pot_id=5, member_id=100)))
     monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=list(events)))
-    monkeypatch.setattr(pot_service.pot_repository, "list_investment_ids", AsyncMock(return_value=list(investments)))
+    rows = [_investment(investment_id) for investment_id in investments]
+    monkeypatch.setattr(pot_service.pot_repository, "list_active_investments", AsyncMock(return_value=rows))
     monkeypatch.setattr(pot_service.pot_repository, "list_accounts", AsyncMock(return_value=list(accounts)))
     listed = AsyncMock(return_value=list(snapshots))
     monkeypatch.setattr(pot_service.snapshot_repository, "list_by_investments", listed)
@@ -139,6 +148,36 @@ class TestAgreementWithThePointInTimeValuation:
             lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
             expected = await pot_service.get_nav(AsyncMock(), _pot(), as_of_date=point_date, lookup=lookup)
             assert series.points[index].nav == expected, point_date
+
+    @pytest.mark.asyncio
+    async def test_MY_SHARE_at_every_point_equals_what_get_member_share_says(self, monkeypatch):
+        # The same parity, one level up, and the one the dashboard now rests on: the chart's Shared
+        # line reads compute_share_series while the headline's Shared figure reads get_member_share, so
+        # a reader compares the two at a glance. Both engines are driven from the same snapshots,
+        # balances and ledger here, and the ledger moves inside the window so the share is not constant.
+        grid = _grid(4)
+        rows = [_snapshot(1, grid[0], "100.00"), _snapshot(1, grid[2], "300.00")]
+        balances = {9: [Decimal("0.00"), Decimal("0.00"), Decimal("0.00"), Decimal("0.00")]}
+        events = [_opening(SEAT.id, grid[0], "60"), _opening(OTHER_SEAT.id, grid[0], "40")]
+        _wire(monkeypatch, investments=[1], accounts=[_account(9)], snapshots=rows, balances=balances, events=events)
+
+        series = await pot_service.get_value_series(AsyncMock(), 5, USER, periods=4)
+
+        def latest_at(as_of_date):
+            return {row.investment_id: row for row in sorted((r for r in rows if r.date <= as_of_date), key=lambda r: r.date)}
+
+        seat = pot_service.PotSeat(pot=_pot(), member_id=SEAT.id, events=events)
+        for index, point in enumerate(series.points):
+            monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=latest_at(point.date)))
+            monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value={9: balances[9][index]}))
+            lookup = AsyncMock()
+            lookup.get_rate_map_at = lambda _d: {"USD": Decimal(1)}
+            expected = await pot_service.get_member_share(AsyncMock(), seat, as_of_date=point.date, lookup=lookup)
+            assert point.my_value == expected.value, point.date
+
+        # The positive control: 60% of 100 then of 300, so neither engine can be answering None or a
+        # constant and still agree.
+        assert [point.my_value for point in series.points] == [Decimal("60.00"), Decimal("60.00"), Decimal("180.00"), Decimal("180.00")]
 
     @pytest.mark.asyncio
     async def test_the_series_is_not_flat(self, monkeypatch):

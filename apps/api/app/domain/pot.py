@@ -18,7 +18,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from app.domain.money import MONEY_PLACES, ONE_HUNDRED, PERCENT_PLACES, quantize
+from app.domain.money import MONEY_PLACES, ONE_HUNDRED, PERCENT_PLACES, assign_remainder, quantize
 
 # NUMERIC(18,6) on pot_ownership_events.units and .unit_price — the precedent snapshots and
 # transactions already set for quantity.
@@ -39,20 +39,6 @@ class OwnershipEntry:
     member_id: int
     units: Decimal
     counterparty_member_id: int | None = None
-
-
-# Spreads a rounding remainder over already-rounded parts so they sum to `target` exactly. The whole
-# remainder goes to the largest part, deterministically: ties break on the lowest member id, so the
-# same ledger always produces the same figures rather than depending on dict ordering.
-# Returns the parts unchanged when there is nothing to distribute to.
-def _distribute_remainder(parts: dict[int, Decimal], target: Decimal, places: Decimal) -> dict[int, Decimal]:
-    if not parts:
-        return parts
-    remainder = quantize(target - sum(parts.values()), places)
-    if remainder == 0:
-        return parts
-    largest = min(parts, key=lambda member_id: (-parts[member_id], member_id))
-    return {member_id: (value + remainder if member_id == largest else value) for member_id, value in parts.items()}
 
 
 # Replays a pot's ledger into each member's unit balance. Entries must already be ordered by date
@@ -96,7 +82,7 @@ def amount_for_units(units: Decimal, price: Decimal) -> Decimal:
     return quantize(units * price, MONEY_PLACES)
 
 
-# Each member's ownership percentage, summing to exactly 100 (see _distribute_remainder).
+# Each member's ownership percentage, summing to exactly 100 (see assign_remainder).
 # An empty pot returns no rows rather than a set of zeros: with no units outstanding nobody owns any
 # share of anything, and "0%" would assert something the ledger has not said.
 def ownership_percentages(balances: dict[int, Decimal]) -> dict[int, Decimal]:
@@ -104,7 +90,7 @@ def ownership_percentages(balances: dict[int, Decimal]) -> dict[int, Decimal]:
     if outstanding <= 0:
         return {}
     parts = {member_id: quantize(units / outstanding * ONE_HUNDRED, PERCENT_PLACES) for member_id, units in balances.items()}
-    return _distribute_remainder(parts, ONE_HUNDRED, PERCENT_PLACES)
+    return assign_remainder(parts, ONE_HUNDRED, PERCENT_PLACES)
 
 
 # Each member's share of the pot in its base currency, summing to exactly the NAV.
@@ -116,7 +102,7 @@ def share_values(balances: dict[int, Decimal], nav: Decimal) -> dict[int, Decima
         return {}
     price = nav / outstanding
     parts = {member_id: quantize(units * price, MONEY_PLACES) for member_id, units in balances.items()}
-    return _distribute_remainder(parts, quantize(nav, MONEY_PLACES), MONEY_PLACES)
+    return assign_remainder(parts, quantize(nav, MONEY_PLACES), MONEY_PLACES)
 
 
 # Turns an opening baseline — a total value and each owner's percentage — into the units to issue.

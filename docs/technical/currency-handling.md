@@ -310,6 +310,30 @@ cross split what is left; each of those still needs at least one minor unit, so 
 to give every row something is refused (`400 group_settlement_leg_total_too_small`) and a share that
 merely rounds below one unit is lifted to one, taken off the largest part.
 
+### 15. The dashboard's shared half, and the two frames its figures live in
+
+The net-worth headline converts every term at TODAY's rate: a pot's NAV from the pot's base currency,
+and each balance bucket from its own. A bucket with no rate is dropped and named in
+`skipped_currencies`, which the dashboard now renders rather than discarding — a headline quietly
+missing a whole account is the figure a person acts on.
+
+**A pot's share is converted once, then divided.** The member's share of a pot arrives in the POT's base
+currency; it is converted to the display currency and only then spread across the composition's
+segments, pro rata to what each holding contributed to the NAV. Converting each segment separately and
+summing them leaves the parts a cent or two off the whole, and the whole is the figure the headline
+shows; this way they sum to it exactly, with the odd cent on the largest segment.
+
+**The chart is in a different frame from the headline, on purpose.** Each monthly point converts at
+THAT month's rate, so a foreign-currency account tracks its own currency over time instead of staying
+frozen at the rate of the month its money arrived. Cash and the shared side are derived AT each month
+end and converted there; investments and card debt forward-fill, each carrying the rate of the date its
+figure was recorded. One consequence is worth knowing rather than rediscovering: **a card carrying a
+foreign-currency bucket makes the chart's last point differ from the headline's card figure** — the
+chart accumulates each charge at the rate of the month it landed, the headline restates the whole
+bucket at today's. Measured on real data: 54 USD of old charges on peso cards, a 4,876 ARS gap. Both
+answers are correct for the question each asks, and closing it would mean restating the card series the
+way the cash series now is.
+
 ## Data model
 
 ```sql

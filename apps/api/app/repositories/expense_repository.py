@@ -444,27 +444,17 @@ async def sum_by_credit_card_ids_monthly(
 async def sum_by_user_monthly(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> list[tuple[int, int, str, Decimal]]:
-    year_col = func.extract("year", ExpenseEntry.date).label("year")
-    month_col = func.extract("month", ExpenseEntry.date).label("month")
+    rows = _spending_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
     stmt = (
-        select(
-            year_col,
-            month_col,
-            ExpenseEntry.currency,
-            func.coalesce(func.sum(ExpenseEntry.amount), 0),
-        )
-        .where(ExpenseEntry.user_id == user_id)
-        .group_by(year_col, month_col, ExpenseEntry.currency)
-        .order_by(year_col, month_col)
+        select(rows.c.year, rows.c.month, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0))
+        .group_by(rows.c.year, rows.c.month, rows.c.currency)
+        .order_by(rows.c.year, rows.c.month)
     )
-    if date_from is not None:
-        stmt = stmt.where(ExpenseEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(ExpenseEntry.date <= date_to)
     result = await session.execute(stmt)
     return [(int(row[0]), int(row[1]), row[2], row[3]) for row in result.all()]
 
@@ -476,25 +466,67 @@ async def sum_by_user_monthly(
 async def sum_by_user_grouped_by_category(
     session: AsyncSession,
     user_id: int,
+    member_ids: list[int],
     *,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> list[tuple[str, str, Decimal]]:
-    stmt = (
-        select(
-            ExpenseEntry.category,
-            ExpenseEntry.currency,
-            func.coalesce(func.sum(ExpenseEntry.amount), 0),
-        )
-        .where(ExpenseEntry.user_id == user_id)
-        .group_by(ExpenseEntry.category, ExpenseEntry.currency)
-    )
-    if date_from is not None:
-        stmt = stmt.where(ExpenseEntry.date >= date_from)
-    if date_to is not None:
-        stmt = stmt.where(ExpenseEntry.date <= date_to)
+    rows = _spending_rows(user_id, member_ids, date_from=date_from, date_to=date_to)
+    stmt = select(rows.c.category, rows.c.currency, func.coalesce(func.sum(rows.c.amount), 0)).group_by(rows.c.category, rows.c.currency)
     result = await session.execute(stmt)
     return [("uncategorized" if row[0] is None else str(row[0]), row[1], row[2]) for row in result.all()]
+
+
+# Every row that counts as this person's spending in a window: their own expenses, plus their SHARE of
+# every shared expense they are in — the same union /expenses lists, reduced to the four columns the
+# aggregates above group on.
+#
+# It exists because the dashboard was summing one of those two and the list page was showing both, so
+# the totals on the finance dashboard disagreed with the list they summarise. D2 settles which figure
+# is the person's: their share, never the whole bill. A split of zero is a payer who took no part, which
+# is legal and is not spending, so it is excluded exactly as the list excludes it.
+#
+# The shared branch is not built at all for a user in no group — which is every solo user, on the app's
+# most-used aggregate — and the caller's seats are resolved BEFORE the query rather than joined inside
+# it, for the reason §21 measured: the join makes Postgres scan every split in the database.
+#
+# ▸ TWO PROPERTIES HERE ARE NOT OBSERVABLE, and a mutation sweep proved both rather than leaving them
+# implied. The early return is a PERFORMANCE decision: `member_id IN ()` matches nothing, so deleting it
+# returns identical rows and only costs the plan. And `amount > 0` cannot be seen through a SUM at all,
+# because a zero share contributes zero either way — it earns its place by keeping this predicate
+# identical to the one /expenses lists rows under, and its income-side twin IS observable, through the
+# MIN(date) the liquidity card reads.
+def _spending_rows(user_id: int, member_ids: list[int], *, date_from: date_type | None, date_to: date_type | None):
+    private = select(
+        func.extract("year", ExpenseEntry.date).label("year"),
+        func.extract("month", ExpenseEntry.date).label("month"),
+        ExpenseEntry.currency.label("currency"),
+        cast(ExpenseEntry.category, String).label("category"),
+        ExpenseEntry.amount.label("amount"),
+    ).where(ExpenseEntry.user_id == user_id)
+    if date_from is not None:
+        private = private.where(ExpenseEntry.date >= date_from)
+    if date_to is not None:
+        private = private.where(ExpenseEntry.date <= date_to)
+    if not member_ids:
+        return private.subquery()
+
+    shared = (
+        select(
+            func.extract("year", SharedExpense.date).label("year"),
+            func.extract("month", SharedExpense.date).label("month"),
+            SharedExpense.currency.label("currency"),
+            cast(SharedExpense.category, String).label("category"),
+            SharedExpenseSplit.amount.label("amount"),
+        )
+        .join(SharedExpense, SharedExpense.id == SharedExpenseSplit.shared_expense_id)
+        .where(SharedExpenseSplit.member_id.in_(member_ids), SharedExpenseSplit.amount > 0)
+    )
+    if date_from is not None:
+        shared = shared.where(SharedExpense.date >= date_from)
+    if date_to is not None:
+        shared = shared.where(SharedExpense.date <= date_to)
+    return union_all(private, shared).subquery()
 
 
 # Finds the most recent auto-generated expense (source IN subscription / installment)

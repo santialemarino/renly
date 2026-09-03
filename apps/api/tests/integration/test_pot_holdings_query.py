@@ -139,11 +139,11 @@ class TestArchivedHoldingsAreStillReturned:
         # archived holding is listed on the page and contributes nothing to the pot's value. If this
         # ever goes red the NAV has started counting archived money.
         async with seeded["maker"]() as s:
-            investment_ids = await pot_repository.list_investment_ids(s, seeded["pot"])
+            investments = await pot_repository.list_active_investments(s, seeded["pot"])
             accounts = await pot_repository.list_accounts(s, seeded["pot"])
         # Sorted on both sides: neither NAV query declares an order, so comparing sequences would be
         # asserting an accident of the planner.
-        assert sorted(investment_ids) == sorted([seeded["shared_active_investment"], seeded["shared_last_investment"]])
+        assert sorted(i.id for i in investments) == sorted([seeded["shared_active_investment"], seeded["shared_last_investment"]])
         assert sorted(a.id for a in accounts) == sorted([seeded["shared_active_account"], seeded["shared_last_account"]])
 
 

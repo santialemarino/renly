@@ -6,13 +6,46 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 
+# One pot holding value that nobody's net worth can claim yet, because its owners have not agreed a
+# division. Named on the dashboard's Shared breakdown so a holding that used to be in the headline does
+# not simply vanish from it. `name` is null for a group's default pot (A4 leaves it unnamed); the
+# frontend supplies the fallback label, so no renderer here can print "None".
+class UndividedPotItem(BaseModel):
+    pot_id: int = Field(description="Pot id, for the link to its page.")
+    name: str | None = Field(default=None, description="Pot name; null for a group's default pot.")
+    group_id: int = Field(description="Group the pot belongs to.")
+    group_name: str | None = Field(default=None, description="Group name, for the label beside the pot's.")
+
+
 # Net worth and aggregated KPIs for the dashboard overview cards.
 class DashboardOverviewResponse(BaseModel):
-    net_worth: Decimal = Field(description="Investment total value plus cash minus credit card balance.")
-    cash_total: Decimal = Field(default=Decimal(0), description="Total cash/bank account balance in the display currency.")
+    net_worth: Decimal = Field(description="Everything the user is worth: their private holdings plus their share of everything shared.")
+    private_net_worth: Decimal = Field(
+        default=Decimal(0), description="The 'Yours' half: private investments plus private cash minus the credit-card balance."
+    )
+    shared_net_worth: Decimal = Field(
+        default=Decimal(0), description="The 'Shared' half: the user's share of every visible pot, plus receivables, less payables."
+    )
+    shared_pot_value: Decimal = Field(default=Decimal(0), description="The user's share of every pot they can see, in the display currency.")
+    shared_receivable: Decimal = Field(default=Decimal(0), description="What the user's groups owe them, summed across currency buckets.")
+    shared_payable: Decimal = Field(default=Decimal(0), description="What the user owes their groups, summed across currency buckets.")
+    has_shared: bool = Field(
+        default=False,
+        description=(
+            "Whether the user has a shared side at all — a visible pot or a group seat. Existence, not value, so a household "
+            "whose balances net to zero still gets the breakdown."
+        ),
+    )
+    undivided_pots: list[UndividedPotItem] = Field(
+        default_factory=list,
+        description="Visible pots holding value that no ownership baseline divides yet, so they contribute exactly zero to net worth.",
+    )
+    cash_total: Decimal = Field(
+        default=Decimal(0), description="Cash/bank balances in the display currency: the user's own accounts plus their share of pot-held ones."
+    )
     net_worth_change: Decimal | None = Field(default=None, description="Absolute net worth change vs previous month.")
     net_worth_change_pct: Decimal | None = Field(default=None, description="Percentage net worth change vs previous month.")
-    investment_total: Decimal = Field(description="Sum of latest investment snapshot values.")
+    investment_total: Decimal = Field(description="Latest investment values: the user's own holdings plus their share of pot-held ones.")
     investment_gain: Decimal = Field(description="Investment total value minus total invested capital.")
     investment_gain_pct: Decimal | None = Field(default=None, description="Simple return: (total_value / total_invested) - 1.")
     investment_month_change: Decimal | None = Field(default=None, description="Investment value absolute change vs previous month.")
@@ -39,10 +72,14 @@ class DashboardOverviewResponse(BaseModel):
 # Single data point for the net-worth evolution line chart.
 class NetWorthEvolutionPoint(BaseModel):
     date: date_type = Field(description="First day of the month.")
-    investment_value: Decimal = Field(description="Aggregated investment portfolio value.")
-    cash_balance: Decimal = Field(default=Decimal(0), description="Cumulative cash/bank balance at this month.")
+    investment_value: Decimal = Field(description="Aggregated private investment portfolio value at this month.")
+    cash_balance: Decimal = Field(default=Decimal(0), description="Private cash/bank balance at this month end.")
     card_balance: Decimal = Field(description="Cumulative credit card balance at this month.")
-    net_worth: Decimal = Field(description="investment_value plus cash_balance minus card_balance.")
+    shared_value: Decimal = Field(
+        default=Decimal(0), description="The user's share of every visible pot at this month, plus their net position in every group."
+    )
+    private_net_worth: Decimal = Field(default=Decimal(0), description="investment_value plus cash_balance minus card_balance — the 'Yours' line.")
+    net_worth: Decimal = Field(description="private_net_worth plus shared_value.")
 
 
 # Monthly net worth series for the evolution chart.
@@ -55,18 +92,18 @@ class DashboardEvolutionResponse(BaseModel):
     )
 
 
-# One slice of the composition donut (investment category, 'cash', or 'liabilities').
+# One slice of the composition donut (investment category, 'cash', 'receivable', or 'liabilities').
 class CompositionItem(BaseModel):
-    label: str = Field(description="Segment label (investment category name, 'cash', or 'liabilities').")
+    label: str = Field(description="Segment label (investment category name, 'cash', 'receivable', or 'liabilities').")
     value: Decimal = Field(description="Absolute value for this segment.")
     percentage: Decimal = Field(description="Percentage of the summed item values (asset categories plus the liabilities item when present).")
 
 
 # Investment allocation by category plus a cash segment and a liabilities segment.
 class DashboardCompositionResponse(BaseModel):
-    items: list[CompositionItem] = Field(description="Composition segments (investment categories + cash + liabilities).")
-    total_assets: Decimal = Field(description="Total investment portfolio value plus cash.")
-    total_liabilities: Decimal = Field(description="Total credit card balance, including archived cards.")
+    items: list[CompositionItem] = Field(description="Composition segments (investment categories + cash + receivable + liabilities).")
+    total_assets: Decimal = Field(description="Investment value plus cash plus what the user's groups owe them, each including their shared share.")
+    total_liabilities: Decimal = Field(description="Credit-card balance (archived cards included) plus what the user owes their groups.")
     currency: str | None = Field(default=None, description="Display currency (null if no conversion requested).")
     skipped_currencies: list[str] = Field(
         default_factory=list,
