@@ -6,6 +6,7 @@ import { ExpensesDataTable } from '@/app/(protected)/expenses/_components/expens
 import { ExpensesToolbar } from '@/app/(protected)/expenses/_components/expenses-toolbar';
 import { SampleExpensesTable } from '@/app/(protected)/expenses/_components/sample-expenses-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { WarningHint } from '@/components/styled-hint';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getExpenses } from '@/lib/api/expenses';
@@ -16,6 +17,8 @@ import { getPaymentObligations } from '@/lib/api/payment-obligations';
 import { getPageSettings } from '@/lib/api/settings';
 import { getSubscriptions } from '@/lib/api/subscriptions';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { getFormatters } from '@/lib/i18n/formatters-server';
+import { resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -34,10 +37,12 @@ interface ExpensesPageProps {
     page?: string;
     sort_by?: string;
     sort_order?: string;
+    scope?: string;
   }>;
 }
 
 export default async function ExpensesPage({ searchParams }: ExpensesPageProps) {
+  const fmt = await getFormatters();
   const t = await getTranslations('expenses');
   const params = await searchParams;
   const cookieStore = await cookies();
@@ -64,6 +69,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
   const currency = resolveActiveCurrency(cookieStore, primary);
+  const scope = resolveListScope(params.scope);
 
   // Round 2: the table data plus everything that doesn't depend on it — the full plan lists
   // (filtered in-memory below to the same active ∪ linked-archived subset includeIds used to
@@ -71,6 +77,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
   const [data, allObligations, allSubscriptions, allInstallments, onboardingStatus] =
     await Promise.all([
       getExpenses({
+        scope,
         search: params.search,
         category: params.category,
         paymentMethod: params.payment_method,
@@ -97,7 +104,8 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     !!params.category ||
     !!params.payment_method ||
     !!params.date_from ||
-    !!params.date_to;
+    !!params.date_to ||
+    scope !== 'all';
   const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
 
   // Collect linked-plan ids from the loaded page so the edit dropdowns can still render the plan
@@ -127,7 +135,16 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <DismissableCurrencyHint show={!!currency} />
+      {/*
+       * A row the API could not convert renders its ORIGINAL figure, which reads exactly like a
+       * converted one — so without this the page silently mixes two scales. The API has computed
+       * these codes since Phase 3 and nothing had ever read them.
+       */}
+      <WarningHint show={data.skippedCurrencies.length > 0} parentGap={16}>
+        {t('skippedCurrencies', { currencies: fmt.list(data.skippedCurrencies) })}
+      </WarningHint>
       <ExpensesToolbar
+        showScope={groups.length > 0}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         creditCards={creditCards}

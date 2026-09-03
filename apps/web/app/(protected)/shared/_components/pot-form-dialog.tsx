@@ -80,9 +80,11 @@ export function PotFormDialog({
     onSuccess,
   });
 
+  // The cadence labels live in `common` because the snapshots grid names them too, and a page must
+  // never reach into another page's namespace.
   const cadenceOptions = POT_CADENCES.map((cadence) => ({
     value: cadence,
-    label: t(`pots.cadence.${cadence}`),
+    label: tCommon(`cadence.${cadence}`),
   }));
 
   const visibilityOptions = POT_VISIBILITIES.map((visibility) => ({

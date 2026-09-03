@@ -6,6 +6,7 @@ import { IncomeDataTable } from '@/app/(protected)/income/_components/income-dat
 import { IncomeToolbar } from '@/app/(protected)/income/_components/income-toolbar';
 import { SampleIncomeTable } from '@/app/(protected)/income/_components/sample-income-table';
 import { DismissableCurrencyHint } from '@/components/dismissable-currency-hint';
+import { WarningHint } from '@/components/styled-hint';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
 import { getGroups } from '@/lib/api/groups';
@@ -13,6 +14,8 @@ import { getIncome } from '@/lib/api/income';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { getFormatters } from '@/lib/i18n/formatters-server';
+import { resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -30,10 +33,12 @@ interface IncomePageProps {
     page?: string;
     sort_by?: string;
     sort_order?: string;
+    scope?: string;
   }>;
 }
 
 export default async function IncomePage({ searchParams }: IncomePageProps) {
+  const fmt = await getFormatters();
   const t = await getTranslations('income');
   const params = await searchParams;
   const cookieStore = await cookies();
@@ -58,8 +63,10 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   const groups = await getGroups().catch(() => []);
 
   const currency = resolveActiveCurrency(cookieStore, primary);
+  const scope = resolveListScope(params.scope);
 
   const data = await getIncome({
+    scope,
     search: params.search,
     category: params.category,
     dateFrom: params.date_from,
@@ -80,14 +87,27 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
   // Once the sample is retired, a still-onboarding user gets the teaching empty state (the fallback
   // that keeps this page consistent with the other list pages); a filtered-empty view stays plain.
   const hasActiveFilters =
-    !!params.search || !!params.category || !!params.date_from || !!params.date_to;
+    !!params.search ||
+    !!params.category ||
+    !!params.date_from ||
+    !!params.date_to ||
+    scope !== 'all';
   const firstRun = isFirstRunEmptyState(data.items.length === 0, hasActiveFilters, settings);
 
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
       <DismissableCurrencyHint show={!!currency} />
+      {/*
+       * A row the API could not convert renders its ORIGINAL figure, which reads exactly like a
+       * converted one — so without this the page silently mixes two scales. The API has computed
+       * these codes since Phase 3 and nothing had ever read them.
+       */}
+      <WarningHint show={data.skippedCurrencies.length > 0} parentGap={16}>
+        {t('skippedCurrencies', { currencies: fmt.list(data.skippedCurrencies) })}
+      </WarningHint>
       <IncomeToolbar
+        showScope={groups.length > 0}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         accounts={accounts}

@@ -214,7 +214,10 @@
       "reconciliationOwned": "Created by a reconciliation. Re-run or delete that reconciliation from its account or credit card.",
       "sharedExpense": "This is your share of a shared expense. Edit or remove it from the group it belongs to.",
       "sharedIncome": "This is your share of shared income. Edit or remove it from the group it belongs to.",
-      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form."
+      "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form.",
+      "sharedHolding": "This holding belongs to a shared pot. Only a member with write access can change it — ask a group admin for it.",
+      "sharedAccount": "Reconciling this account and removing it happen on its pot, beside the ownership they move.",
+      "sharedAccountReadOnly": "This account belongs to a shared pot. Only a member with write access can change it — ask a group admin for it."
     },
     "pagination": {
       "previous": "Previous",
@@ -226,6 +229,18 @@
       "groupsHeading": "Shared with",
       "expenseHint": "A shared expense is recorded by the group and split between its members. Your share becomes your own expense.",
       "incomeHint": "Shared income is recorded by the group and split between its members. Your share becomes your own income."
+    },
+    "scope": {
+      "label": "Scope",
+      "all": "All",
+      "private": "Yours",
+      "shared": "Shared",
+      "potInGroup": "{pot} · {group}"
+    },
+    "cadence": {
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "ad_hoc": "No set rhythm"
     }
   },
   "login": {
@@ -553,7 +568,8 @@
       "emptyTitle": "Record your income",
       "emptyDescription": "Add your income sources to see your cash flow and savings rate.",
       "total": "{total, plural, one {# entry} other {# entries}}",
-      "shareOf": "Your share: {share} of {amount} {currency}"
+      "shareOf": "Your share: {share} of {amount} {currency}",
+      "sectionCount": "{count, plural, one {# entry} other {# entries}}"
     },
     "actions": {
       "edit": "Edit",
@@ -603,7 +619,8 @@
       "deleting": "Deleting...",
       "success": "Income entry deleted.",
       "error": "Failed to delete income entry."
-    }
+    },
+    "skippedCurrencies": "No stored rate for {currencies}, so amounts in them are shown as they were recorded."
   },
   "expenses": {
     "metadata": {
@@ -629,7 +646,8 @@
       "emptyTitle": "Track your spending",
       "emptyDescription": "Log each expense to see where your money goes and how it trends over time.",
       "total": "{total, plural, one {# expense} other {# expenses}}",
-      "shareOf": "Your share: {share} of {amount} {currency}"
+      "shareOf": "Your share: {share} of {amount} {currency}",
+      "sectionCount": "{count, plural, one {# expense} other {# expenses}}"
     },
     "actions": {
       "edit": "Edit",
@@ -740,7 +758,8 @@
       "deleting": "Deleting...",
       "success": "Expense deleted.",
       "error": "Failed to delete expense."
-    }
+    },
+    "skippedCurrencies": "No stored rate for {currencies}, so amounts in them are shown as they were recorded."
   },
   "creditCards": {
     "metadata": {
@@ -956,7 +975,8 @@
       "actions": "Actions",
       "empty": "No accounts found.",
       "emptyTitle": "Add your first account",
-      "emptyDescription": "Track your cash, bank, and wallet balances so your net worth reflects the money you actually hold."
+      "emptyDescription": "Track your cash, bank, and wallet balances so your net worth reflects the money you actually hold.",
+      "sectionCount": "{count, plural, one {# account} other {# accounts}}"
     },
     "types": {
       "cash": "Cash",
@@ -1634,7 +1654,8 @@
       "empty": "No investments found.",
       "emptyTitle": "Start building your portfolio",
       "emptyDescription": "Add an investment — stocks, crypto, funds, real estate — to track its value, returns, and allocation over time.",
-      "total": "{total, plural, one {# investment} other {# investments}}"
+      "total": "{total, plural, one {# investment} other {# investments}}",
+      "sectionCount": "{count, plural, one {# holding} other {# holdings}}"
     },
     "actions": {
       "edit": "Edit",
@@ -1790,7 +1811,12 @@
       "refresh": "Refresh prices",
       "refreshing": "Refreshing...",
       "refreshSuccess": "{prices} prices updated.",
-      "refreshError": "Failed to refresh prices."
+      "refreshError": "Failed to refresh prices.",
+      "interval": {
+        "label": "Columns",
+        "monthly": "Monthly",
+        "weekly": "Weekly"
+      }
     },
     "grid": {
       "investment": "Investment",
@@ -1798,7 +1824,13 @@
       "emptyTitle": "Track your portfolio's value over time",
       "emptyDescription": "Snapshots are point-in-time values of your investments. Add an investment first, then record snapshots to chart how it evolves.",
       "addSnapshot": "Add snapshot",
-      "actions": "Actions"
+      "actions": "Actions",
+      "sectionCount": "{count, plural, one {# investment} other {# investments}}",
+      "overdue": "Needs an update",
+      "overdueHint": "This is valued up to {date}, and the pot expects a fresh figure {cadence}.",
+      "neverValued": "Never valued, and the pot expects a figure {cadence}.",
+      "lockedAdd": "Only a member with write access can value this pot. Ask a group admin for it.",
+      "skippedInvestments": "Left out because their currency can't be converted: {names}."
     },
     "form": {
       "titleCreate": "Add snapshot",
@@ -2423,11 +2455,6 @@
         }
       },
       "updatedThrough": "updated through {date}",
-      "cadence": {
-        "weekly": "Weekly",
-        "monthly": "Monthly",
-        "ad_hoc": "No set rhythm"
-      },
       "freshness": {
         "neverValued": "Something here has never been valued, so the pot has no value to divide.",
         "overdue": "These figures only go up to {date}. A fresh valuation is overdue.",

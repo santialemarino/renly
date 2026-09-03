@@ -17,6 +17,7 @@ import { SharedExpenseFormDialog } from '@/app/(protected)/_components/shared-ex
 import { ExpenseCategorySelect } from '@/app/(protected)/expenses/_components/expense-category-select';
 import { PaymentMethodSelect } from '@/app/(protected)/expenses/_components/payment-method-select';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
+import { ScopePill } from '@/components/scope-pill';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -24,11 +25,14 @@ import type { Group } from '@/lib/api/groups';
 import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
+import type { ListScope } from '@/lib/api/types';
 import { DIALOG_EXIT_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
+import { resolveListScope } from '@/lib/list-scope';
 
 export function ExpensesToolbar({
+  showScope,
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
@@ -38,6 +42,9 @@ export function ExpensesToolbar({
   activeSubscriptions,
   activeInstallments,
 }: {
+  // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
+  // so a solo user (every public user at launch) sees no added control.
+  showScope?: boolean;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
@@ -54,6 +61,10 @@ export function ExpensesToolbar({
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.expenses, { resetPage: true });
   const [createOpen, setCreateOpen] = useState(false);
+
+  // The FILTER's scope, distinct from the form `scope` below, which says which RECORD is being
+  // written. Same word, two different questions, so they are named apart.
+  const scopeFilter = resolveListScope(searchParams.get('scope') ?? undefined);
   /*
    * Which form the Add button is currently showing: the private one, or a group's shared-expense
    * one. Held here rather than inside either dialog because the swap replaces the whole form —
@@ -109,6 +120,19 @@ export function ExpensesToolbar({
     }, DIALOG_EXIT_MS);
   }
 
+  /*
+   * The FILTER's scope, which is a different thing from `handleScopeChange` above — that one hands an
+   * in-progress entry between the private and the shared FORM. Named apart on purpose: one decides
+   * which rows are read, the other which record is being written, and collapsing them would be the
+   * mode X2 exists to prevent.
+   *
+   * 'all' clears the param rather than writing it, so the default view has a clean URL and a shared
+   * link cannot pin somebody into a narrower list than they meant to send.
+   */
+  function handleScopeFilterChange(next: ListScope) {
+    navigate({ scope: next === 'all' ? null : next });
+  }
+
   return (
     <EntityListToolbar
       route={ROUTES.expenses}
@@ -119,6 +143,7 @@ export function ExpensesToolbar({
       onAdd={handleAdd}
       filters={
         <>
+          {showScope && <ScopePill value={scopeFilter} onChange={handleScopeFilterChange} />}
           <ExpenseCategorySelect
             value={selectedCategory}
             onValueChange={handleCategoryChange}

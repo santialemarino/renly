@@ -7,6 +7,7 @@ import {
   ArchiveRestore,
   ChevronRight,
   Landmark,
+  Lock,
   Pencil,
   Scale,
   ScrollText,
@@ -25,17 +26,23 @@ import { AccountTransfersSection } from '@/app/(protected)/accounts/_components/
 import { TransferFormDialog } from '@/app/(protected)/accounts/_components/transfer-form-dialog';
 import { archiveAccount, unarchiveAccount } from '@/app/(protected)/accounts/account-actions';
 import { RowActionButton } from '@/components/row-action-button';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TableSectionRow } from '@/components/table-section-row';
 import { accountLedgerPath, ROUTES } from '@/config/routes';
 import type { Account, AccountSortField } from '@/lib/api/accounts';
+import type { ListSection } from '@/lib/api/types';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
 const COLUMN_COUNT = 8;
 
 interface AccountsTableProps {
   accounts: Account[];
+  // The list's scope sections, in row order. Empty when nothing is shared, which draws a flat table.
+  sections: ListSection[];
   // Unfiltered, for the transfer dialog's pickers — the page's `accounts` is search/archive filtered.
   allAccounts: Account[];
   preferredCurrencies?: string[];
@@ -46,6 +53,7 @@ interface AccountsTableProps {
 
 export function AccountsTable({
   accounts,
+  sections,
   allAccounts,
   preferredCurrencies,
   firstRun,
@@ -53,6 +61,7 @@ export function AccountsTable({
 }: AccountsTableProps) {
   const fmt = useFormatters();
   const t = useTranslations('accounts');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, isPending } = useTableSort<AccountSortField>(
     ROUTES.accounts,
@@ -91,6 +100,15 @@ export function AccountsTable({
       setArchivingId(null);
     }
   }
+
+  const rendered = sectionedRows(accounts, sections, {
+    rowKey: (account) => String(account.id),
+    scopeKey: (account) => account.potId,
+    sectionKey: bySectionPot,
+  });
+  // Write access is a property of the section, so a row reads it from there rather than carrying a
+  // copy. A row with no section is the caller's own, which they may always change.
+  const writableByPot = new Map(sections.map((section) => [section.potId, section.canWrite]));
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -143,21 +161,46 @@ export function AccountsTable({
                 plain={t('table.empty')}
               />
             ) : (
-              accounts.map((a) => {
-                const isExpanded = expandedId === a.id;
+              rendered.map((entry) => {
+                if (entry.kind === 'header') {
+                  return (
+                    <TableSectionRow
+                      key={entry.key}
+                      section={entry.section}
+                      colSpan={COLUMN_COUNT}
+                      countLabel={t('table.sectionCount', { count: entry.section.count })}
+                    />
+                  );
+                }
+                const a = entry.row;
+                /*
+                 * A shared account does not EXPAND. Both sub-sections it would open — its
+                 * reconciliations and its transfers — are private-only reads, so a pot's account
+                 * would open two empty panels and explain neither. Its row navigates to the ledger
+                 * instead, which is the surface that genuinely answers "how did this money move".
+                 */
+                const isShared = a.scope === 'shared';
+                const canWrite = writableByPot.get(a.potId) ?? true;
+                const isExpanded = !isShared && expandedId === a.id;
                 return (
-                  <Fragment key={a.id}>
+                  <Fragment key={entry.key}>
                     <TableRow
                       className={cn('cursor-pointer', !a.isActive && 'opacity-60')}
-                      onClick={() => setExpandedId(isExpanded ? null : a.id)}
+                      onClick={() =>
+                        isShared
+                          ? router.push(accountLedgerPath(a.id))
+                          : setExpandedId(isExpanded ? null : a.id)
+                      }
                     >
                       <TableCell>
-                        <ChevronRight
-                          className={cn(
-                            'size-4 transition-transform duration-200',
-                            isExpanded && 'rotate-90',
-                          )}
-                        />
+                        {!isShared && (
+                          <ChevronRight
+                            className={cn(
+                              'size-4 transition-transform duration-200',
+                              isExpanded && 'rotate-90',
+                            )}
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -183,30 +226,71 @@ export function AccountsTable({
                             ariaLabel="View ledger"
                             href={accountLedgerPath(a.id)}
                           />
-                          {a.isActive ? (
-                            <>
-                              <RowActionButton
-                                icon={Scale}
-                                tooltip={t('actions.reconcile')}
-                                ariaLabel="Reconcile"
-                                onClick={() => setReconcileAccount(a)}
-                              />
-                              <RowActionButton
-                                icon={Pencil}
-                                tooltip={t('actions.edit')}
-                                ariaLabel="Edit"
-                                onClick={() => setEditAccount(a)}
-                              />
-                              <RowActionButton
-                                icon={Archive}
-                                tooltip={t('actions.archive')}
-                                ariaLabel="Archive"
-                                variant="muted"
-                                onClick={() => handleArchive(a)}
-                                disabled={archivingId === a.id}
-                              />
-                            </>
-                          ) : (
+                          {a.isActive &&
+                            (isShared ? (
+                              /*
+                               * A shared account's editable half is gated on POT WRITE access, which
+                               * is granted per (pot, member) and stated on the section. Reconciling
+                               * and deleting are withheld from everyone here on purpose: a
+                               * reconciliation posts an adjustment entry owned by one user, which a
+                               * pot's account has none of, and removing an account a pot holds
+                               * changes the pot's value — so it belongs on the pot's page, beside the
+                               * ownership it moves.
+                               */
+                              <>
+                                {canWrite && (
+                                  <>
+                                    <RowActionButton
+                                      icon={Pencil}
+                                      tooltip={t('actions.edit')}
+                                      ariaLabel="Edit"
+                                      onClick={() => setEditAccount(a)}
+                                    />
+                                    <RowActionButton
+                                      icon={Archive}
+                                      tooltip={t('actions.archive')}
+                                      ariaLabel="Archive"
+                                      variant="muted"
+                                      onClick={() => handleArchive(a)}
+                                      disabled={archivingId === a.id}
+                                    />
+                                  </>
+                                )}
+                                <RowLockedIndicator
+                                  icon={Lock}
+                                  tooltip={tCommon(
+                                    canWrite
+                                      ? 'lockedRow.sharedAccount'
+                                      : 'lockedRow.sharedAccountReadOnly',
+                                  )}
+                                  ariaLabel="Managed by the pot"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <RowActionButton
+                                  icon={Scale}
+                                  tooltip={t('actions.reconcile')}
+                                  ariaLabel="Reconcile"
+                                  onClick={() => setReconcileAccount(a)}
+                                />
+                                <RowActionButton
+                                  icon={Pencil}
+                                  tooltip={t('actions.edit')}
+                                  ariaLabel="Edit"
+                                  onClick={() => setEditAccount(a)}
+                                />
+                                <RowActionButton
+                                  icon={Archive}
+                                  tooltip={t('actions.archive')}
+                                  ariaLabel="Archive"
+                                  variant="muted"
+                                  onClick={() => handleArchive(a)}
+                                  disabled={archivingId === a.id}
+                                />
+                              </>
+                            ))}
+                          {!a.isActive && (
                             <RowActionButton
                               icon={ArchiveRestore}
                               tooltip={t('actions.unarchive')}
@@ -215,13 +299,15 @@ export function AccountsTable({
                               disabled={archivingId === a.id}
                             />
                           )}
-                          <RowActionButton
-                            icon={Trash2}
-                            tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
-                            variant="destructive"
-                            onClick={() => setDeleteState(a)}
-                          />
+                          {!isShared && (
+                            <RowActionButton
+                              icon={Trash2}
+                              tooltip={t('actions.delete')}
+                              ariaLabel="Delete"
+                              variant="destructive"
+                              onClick={() => setDeleteState(a)}
+                            />
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

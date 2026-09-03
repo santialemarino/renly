@@ -1,7 +1,13 @@
 import 'server-only';
 
 import type { InvestmentCollectionInfo } from '@/lib/api/collections';
-import type { SortOrder } from '@/lib/api/types';
+import {
+  mapListSection,
+  type ListScope,
+  type ListSection,
+  type ListSectionRaw,
+  type SortOrder,
+} from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -16,6 +22,8 @@ interface InvestmentRaw {
   notes: string | null;
   is_active: boolean;
   has_snapshots: boolean;
+  scope: string;
+  pot_id: number | null;
   created_at: string;
   updated_at: string;
   collections: InvestmentCollectionInfo[];
@@ -26,6 +34,7 @@ interface InvestmentListRaw {
   total: number;
   page: number;
   page_size: number;
+  sections: ListSectionRaw[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -40,6 +49,10 @@ export interface Investment {
   notes: string | null;
   isActive: boolean;
   hasSnapshots: boolean;
+  // 'shared' when a pot the caller co-owns holds it. `potId` joins the row to its section, which is
+  // where the pot's label and the caller's write access are stated — once, not per row.
+  scope: 'private' | 'shared';
+  potId: number | null;
   createdAt: string;
   updatedAt: string;
   collections: InvestmentCollectionInfo[];
@@ -50,11 +63,15 @@ export interface InvestmentListResponse {
   total: number;
   page: number;
   pageSize: number;
+  sections: ListSection[];
 }
 
 export type InvestmentSortField = 'name' | 'category' | 'base_currency' | 'broker';
 
 export interface GetInvestmentsParams {
+  // Defaults to 'private' on the API, which is what keeps the four pickers that read this list
+  // showing only the caller's own holdings. The list PAGE asks for 'all'.
+  scope?: ListScope;
   search?: string;
   collectionIds?: number[];
   category?: string;
@@ -78,6 +95,8 @@ function mapInvestment(raw: InvestmentRaw): Investment {
     notes: raw.notes,
     isActive: raw.is_active,
     hasSnapshots: raw.has_snapshots,
+    scope: raw.scope === 'shared' ? 'shared' : 'private',
+    potId: raw.pot_id,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
     collections: raw.collections,
@@ -90,6 +109,7 @@ export async function getInvestments(
   params: GetInvestmentsParams = {},
 ): Promise<InvestmentListResponse> {
   const qs = new URLSearchParams();
+  if (params.scope) qs.set('scope', params.scope);
   if (params.search) qs.set('search', params.search);
   if (params.collectionIds?.length) {
     params.collectionIds.forEach((id) => qs.append('collection_ids', String(id)));
@@ -110,5 +130,6 @@ export async function getInvestments(
     total: raw.total,
     page: raw.page,
     pageSize: raw.page_size,
+    sections: raw.sections.map(mapListSection),
   };
 }
