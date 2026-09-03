@@ -8,11 +8,13 @@ import { TimezoneAutoSync } from '@/app/(protected)/_components/timezone-auto-sy
 import { SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
 import { LOGIN_ROUTE } from '@/config/routes';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
+import { getNotifications } from '@/lib/api/notifications';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { getSignupContext } from '@/lib/api/signup-context';
 import { getSession } from '@/lib/auth';
 import { FALLBACK_PRIMARY_CURRENCY, FALLBACK_SECONDARY_CURRENCY } from '@/lib/constants/currency';
+import { NOTIFICATION_POPOVER_SIZE } from '@/lib/constants/notifications';
 import { hasNoCoreData } from '@/lib/onboarding';
 import {
   ACTIVE_CURRENCY_COOKIE,
@@ -31,10 +33,14 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   // supportedCurrencies feeds the currency switcher's "not convertible" warning from the same
   // backend registry the entry pickers use (single source of truth); undefined on fetch error
   // fails open (no spurious warning).
-  const [settings, { mode: signupMode }, supportedCurrencies] = await Promise.all([
+  // The bell's rows come from here rather than from a client fetch, so the unread state is correct on
+  // every navigation with nothing polling. It fails soft to an empty bell: a feed that cannot load must
+  // not take the whole app's shell down with it.
+  const [settings, { mode: signupMode }, supportedCurrencies, notifications] = await Promise.all([
     getSettings().catch(() => null),
     getSignupContext(),
     getSupportedCurrencies().catch(() => undefined),
+    getNotifications(NOTIFICATION_POPOVER_SIZE).catch(() => null),
   ]);
   const cookieStore = await cookies();
 
@@ -76,6 +82,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </>
       )}
       <AppSidebar
+        notifications={notifications?.items ?? []}
+        unreadNotifications={notifications?.unread ?? 0}
         displayCurrencies={displayCurrencies}
         activeCurrency={activeCurrency}
         supportedCurrencies={supportedCurrencies}

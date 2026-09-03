@@ -73,6 +73,12 @@ pnpm test:e2e        # Playwright E2E
     balance silently gains back money it no longer holds) and must see nothing else, and must not be
     able to DELETE the row they can still read — which one `FOR ALL` policy would let them do,
     because Postgres has no `WITH CHECK` for DELETE.
+  - `test_notification_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The two
+    notification statements whose whole correctness lives in the SQL: the fan-out's
+    `ON CONFLICT DO NOTHING` against a PARTIAL unique index (Postgres matches a partial index only
+    when the statement repeats its predicate, and getting it wrong raises on every send — invisibly,
+    because the dispatcher swallows its own exceptions), and the three feed reads that share one
+    WHERE, whose failure is the badge and the list describing different row sets.
   - `test_shared_flow_queries.py` — `LEDGER_TEST_DATABASE_URL` (owner role only). The three queries
     whose whole correctness lives in the SQL: the `/expenses` UNION (does it return the caller's
     SHARE or the whole expense, and is its page order total across two tables whose ids collide), the
@@ -116,9 +122,18 @@ pnpm test:e2e        # Playwright E2E
   helpers can't cover (e.g. `LocaleAmountInput`'s live grouping + caret, resync/precision effects) —
   extract and node-test the pure parts first.
 - Components that read locale/timezone render under a `NextIntlClientProvider` (pass `locale` +
-  `messages={{}}` + `timeZone`); a controlled input needs a small stateful harness that feeds
-  `onChange` back as `value`. Prefer `keyboard` + a manual `setSelectionRange` over `type` when a
-  test needs the caret at a specific position.
+  `messages={{}}` + `timeZone`, or the real `translations/<locale>.json` when the copy itself is the
+  thing under test); a controlled input needs a small stateful harness that feeds `onChange` back as
+  `value`. Prefer `keyboard` + a manual `setSelectionRange` over `type` when a test needs the caret at
+  a specific position.
+- **A component that renders a RADIX primitive cannot currently be tested here.** `apps/web` and
+  `packages/ui` declare different React ranges, so pnpm installs two copies; `vitest.config.ts`'s
+  `dedupe` collapses the direct imports but a transitive dependency reached through `@repo/ui` (Radix)
+  still resolves its own, and the render dies with `Cannot read properties of null (reading
+'useState')` from inside the Radix component while everything around it renders fine. The message
+  points at React, not at the duplication, so it is worth recognising rather than debugging. A
+  `resolve.alias` in the vitest config does NOT fix it (tried). Until the two ranges are aligned, test
+  such a component's logic through what it renders WITHOUT the primitive, or cover it in the browser.
 
 **Don't unit-test on the web:** framework behavior, or full multi-page user flows (those are Playwright
 E2E). Keep a jsdom test to a single component's behavior.
@@ -136,7 +151,19 @@ apps/web/tests/
 └── e2e/            # Playwright (see the e2e-testing skill)
 ```
 
-There is no shared `conftest.py` — API tests build their own fixtures/mocks per file.
+`apps/api/tests/unit/conftest.py` holds ONE autouse guard and nothing else: it fails any unit test
+that opened a real privileged session. Every service takes its session from the caller, which is what
+makes the unit suite DB-free by construction — `notification_service` is the one exception, and two of
+its functions open their own, because both do something no request connection may: `dispatch` writes
+rows for OTHER users into a table with no INSERT policy, and `subscribe_push` detaches a browser from
+whichever account held it before. A unit test reaching either would connect to whatever
+`DATABASE_ADMIN_URL` names, which on a developer's machine is their real data, and `dispatch` would do
+so silently (it swallows every exception). The guard therefore records rather than raises, and asserts
+at TEARDOWN, because a raise inside dispatch is exactly what dispatch ignores. Reaching it usually
+means a producer was driven without stubbing `notification_service.dispatch` — which is also what lets
+a test assert WHAT was announced.
+
+Apart from that guard, API tests build their own fixtures/mocks per file.
 
 ## Fixtures
 

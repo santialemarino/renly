@@ -57,7 +57,18 @@ from app.models.transfer import Transfer
 # api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
 # overwriting the target's settings); the two reconciliation tables are the circular-FK cluster, and
 # replaying an old true-up against a freshly re-derived balance would be wrong regardless (see above).
-SKIPPED_ENTITIES = ("api_keys", "user_settings", "card_reconciliations", "account_reconciliations")
+# notification_preferences is the same shape as user_settings and skipped for the same reason. And
+# notifications is a record of things that HAPPENED — mostly in groups the restoring account is not in
+# — so writing them would fabricate a history of events that never reached this person; both are listed
+# here rather than merely omitted so the restore says so instead of dropping them silently.
+SKIPPED_ENTITIES = (
+    "api_keys",
+    "user_settings",
+    "card_reconciliations",
+    "account_reconciliations",
+    "notification_preferences",
+    "notifications",
+)
 
 
 # A foreign key on the model that points at another restored entity and must be remapped to the new id.

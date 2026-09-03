@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { FEATURE_ICONS } from '@/app/(public)/_components/landing-features';
 import type { ProseSectionData } from '@/app/(public)/_components/prose-section';
+import { SIDEBAR_NAV_KEYS } from '@/config/nav';
 import { HELP_ANCHORS } from '@/config/routes';
 import en from '../../translations/en.json';
 import es from '../../translations/es.json';
@@ -151,6 +152,26 @@ describe('help page anchors', () => {
   it('still defines every anchor the app links to', () => {
     const ids = new Set(enSections.map((section) => section.id));
     expect(Object.values(HELP_ANCHORS).filter((anchor) => !ids.has(anchor))).toEqual([]);
+  });
+});
+
+describe('sidebar nav labels', () => {
+  /*
+   * Every item the sidebar renders has to have a label in both locales. Without this, a nav item added
+   * without its translation renders its own key path — "sidebar.nav.notifications" — in the sidebar, and
+   * nothing else catches it: not tsc, not ESLint, not the build, not any other test. It shipped exactly
+   * once, which is why this exists.
+   */
+  it.each(['en', 'es'])('%s labels every nav item', (locale) => {
+    const nav = (locale === 'en' ? en : es).sidebar.nav as Record<string, string>;
+    const missing = SIDEBAR_NAV_KEYS.filter((key) => !nav[key]);
+    expect(missing).toEqual([]);
+  });
+
+  it('has no nav label for an item the sidebar no longer renders', () => {
+    // The other direction, so a removed item's label does not linger as copy nobody can reach.
+    const known = new Set<string>(SIDEBAR_NAV_KEYS);
+    expect(Object.keys(en.sidebar.nav).filter((key) => !known.has(key))).toEqual([]);
   });
 });
 

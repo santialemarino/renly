@@ -20,6 +20,7 @@ from app.models.income_entry import IncomeEntry
 from app.models.installment import Installment
 from app.models.investment import Investment
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
+from app.models.notification import Notification, NotificationPreference
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import Pot, PotMemberPermission, PotOwnershipEvent
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
@@ -58,6 +59,13 @@ _USER_ID_MODELS = {
     "payment_obligations": PaymentObligation,
     "api_keys": ApiKey,
     "user_settings": UserSettings,
+    # The notification layer, minus push_subscriptions — which is deliberately excluded rather than
+    # forgotten (see test_account_lifecycle's exclusion list). Those rows hold the encryption secrets a
+    # push is sealed with, so anybody holding the exported file could push to the user's browser as if
+    # they were Renly, and an export is a portable file people email to themselves. Same reasoning that
+    # keeps auth_tokens and refresh_tokens out.
+    "notification_preferences": NotificationPreference,
+    "notifications": Notification,
 }
 
 # Tables the export covers with a query of their own rather than the user_id filter above:

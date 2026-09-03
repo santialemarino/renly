@@ -34,6 +34,7 @@ from app.domain import (
 )
 from app.models.account import Account
 from app.models.group import Group, GroupMember
+from app.models.notification import NotificationEvent
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.user import User
 from app.repositories import (
@@ -44,7 +45,7 @@ from app.repositories import (
     shared_expense_repository,
 )
 from app.schemas.shared_expense import SharedExpenseResponse, SharedExpenseSplitInput, SharedExpenseSplitResponse
-from app.services import card_reconciliation_service, exchange_rate_service, group_service, pot_ownership_service
+from app.services import card_reconciliation_service, exchange_rate_service, group_service, notification_service, pot_ownership_service
 from app.utils.metrics import RateLookup, convert_optional
 
 ZERO = Decimal(0)
@@ -201,7 +202,7 @@ async def create_expense(
     payment_method: str | None = None,
     credit_card_id: int | None = None,
 ) -> SharedExpenseResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_active_seats(session, group_id, [split.member_id for split in splits], payer_member_id)
     shares = compute_shares(amount, split_method, [SplitEntry(member_id=split.member_id, figure=split.figure) for split in splits])
     funding = await _resolve_funding(
@@ -235,8 +236,22 @@ async def create_expense(
     written = await _write_splits(session, expense, shares, funding.paid_by)
     if funding.credit_card_id is not None:
         await card_reconciliation_service.mark_stale_for_date(session, funding.credit_card_id, currency, date)
+    # Resolved before the commit, so a failure reading the roster fails the whole use case with nothing
+    # written rather than 500-ing a request whose expense has already landed.
+    recipients = await group_service.list_notifiable_user_ids(session, group_id, exclude_user_id=user.id)
     await session.commit()
     await session.refresh(expense)
+
+    # The figure notified is the expense's TOTAL, in its own currency, and not the reader's share. One
+    # payload is shared by every recipient — which is what makes a notification impossible to render
+    # with somebody else's number in it — and the row's own page carries each person's share.
+    # An UPDATE deliberately notifies nobody: a correction is not news, D25's "visible adjustment" is
+    # PR 10's audit log, and re-announcing an edited expense would read as a second expense.
+    await notification_service.dispatch(
+        NotificationEvent.shared_expense_added,
+        recipients,
+        {"group_id": group_id, "group": group.name, "actor": viewer.display_name, "amount": str(amount), "currency": currency},
+    )
     return _build_response(
         expense,
         written,

@@ -20,6 +20,7 @@ from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_money_settings import SplitMethod
 from app.models.investment import Investment, InvestmentCategory
+from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.shared_income import IncomeDestination, SharedIncome
 from app.models.user import User
@@ -93,7 +94,11 @@ def _wire(monkeypatch, *, account=None, pot=None, events=(), members=_MEMBERS, i
     pots = [pot if source_pot is ... else source_pot, pot]
     monkeypatch.setattr(shared_income_service.pot_repository, "get_by_id", AsyncMock(side_effect=lambda *_a, **_k: pots.pop(0) if pots else pot))
     monkeypatch.setattr(shared_income_service.pot_ownership_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=list(events)))
-    written: dict = {}
+    # The notification fan-out. Stubbed on every write path, and captured rather than silenced so
+    # the announcement itself can be asserted.
+    dispatched = AsyncMock()
+    monkeypatch.setattr(shared_income_service.notification_service, "dispatch", dispatched)
+    written: dict = {"dispatched": dispatched}
 
     async def _create(_session, income: SharedIncome) -> SharedIncome:
         income.id = 77
@@ -408,6 +413,49 @@ class TestItStaysJoint:
         )
         with pytest.raises(SharedIncomeDestinationScopeError):
             await _create(written, destination=IncomeDestination.joint, received_by_member_id=None, paid_to_account_id=5)
+
+
+class TestWhatIsAnnounced:
+    @pytest.mark.asyncio
+    async def test_the_group_is_told_the_TOTAL_received_and_not_the_readers_entitlement(self, monkeypatch):
+        # The expense mirror, and for the same reason: one payload reaches every recipient, so it can
+        # never carry somebody else's share as if it were the reader's.
+        written = _wire(monkeypatch, account=_account(1, user_id=1))
+        await _create(written, paid_to_account_id=1)
+        event, recipients, payload = written["dispatched"].await_args.args
+        assert event == NotificationEvent.shared_income_added
+        assert (payload["amount"], payload["currency"]) == ("90.00", "ARS")
+        assert (payload["group"], payload["group_id"], payload["actor"]) == ("Casa", GROUP_ID, _MEMBERS[0].display_name)
+        # Seat 11 is the caller and seat 13 a name-only placeholder, so one recipient is left.
+        assert recipients == [_MEMBERS[1].user_id]
+
+    @pytest.mark.asyncio
+    async def test_the_destination_is_deliberately_absent_from_the_copy(self, monkeypatch):
+        # Whether the money stayed joint or was distributed is what the row's own page says, and it is
+        # the fact most likely to be edited afterwards — a notification asserting it would go stale.
+        written = _wire(monkeypatch, account=_account(1, user_id=1))
+        await _create(written, paid_to_account_id=1)
+        assert "destination" not in written["dispatched"].await_args.args[2]
+
+    @pytest.mark.asyncio
+    async def test_an_EDIT_announces_nothing(self, monkeypatch):
+        written = _wire(monkeypatch, account=_account(1, user_id=1))
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "get_by_id", AsyncMock(return_value=None))
+        with pytest.raises(NotFoundError):
+            await shared_income_service.update_income(
+                AsyncMock(),
+                GROUP_ID,
+                77,
+                USER,
+                date=TODAY,
+                amount=Decimal("90.00"),
+                currency="ARS",
+                split_method=SplitMethod.equal,
+                splits=[SharedIncomeSplitInput(member_id=11)],
+                destination=IncomeDestination.distributed,
+                received_by_member_id=11,
+            )
+        written["dispatched"].assert_not_awaited()
 
 
 class TestTheSourceAsset:

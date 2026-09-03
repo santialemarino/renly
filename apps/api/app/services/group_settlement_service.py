@@ -52,8 +52,9 @@ from app.domain import (
 )
 from app.domain.money import MONEY_PLACES, quantize, spread_remainder
 from app.models.account import Account
-from app.models.group import GroupMember
+from app.models.group import Group, GroupMember
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
+from app.models.notification import NotificationEvent
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import (
@@ -73,7 +74,7 @@ from app.schemas.group_settlement import (
     GroupSettlementResponse,
     GroupSettleSuggestionResponse,
 )
-from app.services import exchange_rate_service, group_service
+from app.services import exchange_rate_service, group_service, notification_service
 from app.utils.metrics import convert_optional
 
 ZERO = Decimal(0)
@@ -142,6 +143,45 @@ async def list_settlements(session: AsyncSession, group_id: int, user: User) -> 
     return [_build_response(settlement, members_by_id, viewer.id) for settlement in settlements]
 
 
+# Tells the OTHER party a payment between the two of them was recorded.
+#
+# Either side may record one, so the recipient is whichever named seat is not the caller and the copy
+# reads from their side: `payee` is somebody saying "I paid you" (and the reader's move is to confirm
+# it), `payer` is somebody saying "you paid me", which needs no action and is simply news. One event
+# with a variant rather than two events, because it is one act described from two seats.
+#
+# A settlement recorded by a THIRD member of the group notifies neither side today — the surface never
+# offers it (a settle row is opened from your own balance), and inventing a third variant for a state
+# no path produces is a branch nothing can test. Such a caller would notify the payee, which is the
+# side whose confirmation the row is waiting on.
+#
+# Nobody else in the group is told: a balance between two people is between those two, and the group's
+# other members see it on the hub whenever they look.
+def _settlement_audience(settlement: GroupSettlement, members_by_id: dict[int, GroupMember], viewer: GroupMember) -> tuple[list[int], str]:
+    payer = members_by_id.get(settlement.from_member_id)
+    payee = members_by_id.get(settlement.to_member_id)
+    other = payer if viewer.id == settlement.to_member_id else payee
+    variant = "payer" if viewer.id == settlement.to_member_id else "payee"
+    return ([other.user_id] if other is not None and other.is_active and other.user_id is not None else [], variant)
+
+
+# What a settlement notification carries: who the two parties are, the group, and the figure that
+# actually moved in the currency it moved in.
+def _settlement_payload(
+    settlement: GroupSettlement, group_name: str | None, members_by_id: dict[int, GroupMember], *, amount: Decimal | None = None
+) -> dict:
+    payer = members_by_id.get(settlement.from_member_id)
+    payee = members_by_id.get(settlement.to_member_id)
+    return {
+        "group_id": settlement.group_id,
+        "group": group_name,
+        "from_member": payer.display_name if payer else None,
+        "to_member": payee.display_name if payee else None,
+        "amount": str(amount if amount is not None else settlement.amount),
+        "currency": settlement.currency,
+    }
+
+
 # Records a payment one member made to another.
 #
 # Confirmed on the spot when the group has opted into auto-finalise, which is D28's near-zero-friction
@@ -163,7 +203,7 @@ async def record_settlement(
     to_amount: Decimal | None = None,
     notes: str | None = None,
 ) -> GroupSettlementResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     # Only the caller's OWN leg may be named here. The two legs belong to two different people and
     # neither can see the other's accounts — the policies hide them — so a request naming both could
@@ -195,6 +235,13 @@ async def record_settlement(
     settlement.created_by = user.id
     await session.commit()
     await session.refresh(settlement)
+
+    recipients, variant = _settlement_audience(settlement, members_by_id, viewer)
+    await notification_service.dispatch(
+        NotificationEvent.settle_marked_paid,
+        recipients,
+        {**_settlement_payload(settlement, group.name, members_by_id), "variant": variant},
+    )
     return _build_response(settlement, members_by_id, viewer.id)
 
 
@@ -287,7 +334,7 @@ async def record_waterfall(
     to_amount: Decimal | None = None,
     notes: str | None = None,
 ) -> list[GroupSettlementResponse]:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     _ensure_own_leg(viewer, from_member_id, from_account_id, from_amount)
     _ensure_own_leg(viewer, to_member_id, to_account_id, to_amount)
@@ -358,6 +405,17 @@ async def record_waterfall(
     # builder. Bounded by the number of currencies the payer owes in, so at most the supported set.
     for settlement in created:
         await session.refresh(settlement)
+
+    # ONE notification for the whole waterfall, naming what was actually handed over — the `amount` the
+    # payer stated, in the currency they paid in. The rows are an accounting of which buckets that one
+    # payment cleared, so telling the payee once per row would announce three payments where one was
+    # made. The first row carries the parties, which every row shares.
+    recipients, variant = _settlement_audience(created[0], members_by_id, viewer)
+    await notification_service.dispatch(
+        NotificationEvent.settle_marked_paid,
+        recipients,
+        {**_settlement_payload(created[0], group.name, members_by_id, amount=amount), "variant": variant, "currency": currency},
+    )
     return [_build_response(settlement, members_by_id, viewer.id) for settlement in created]
 
 
@@ -379,7 +437,7 @@ async def record_write_off(
     currency: str,
     notes: str | None = None,
 ) -> GroupSettlementResponse:
-    _, viewer = await group_service.require_member(session, group_id, user)
+    group, viewer = await group_service.require_member(session, group_id, user)
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     if viewer.id != to_member_id:
         raise GroupSettlementNotCreditorError()
@@ -405,13 +463,23 @@ async def record_write_off(
     settlement.created_by = user.id
     await session.commit()
     await session.refresh(settlement)
+
+    # The DEBTOR is told, and they are the only one who could not otherwise find out: only the creditor
+    # may record a write-off, so without this the debt simply disappears from the other person's screen
+    # with nothing saying who cleared it or how. `from_member_id` is the seat that owed.
+    debtor = members_by_id.get(from_member_id)
+    await notification_service.dispatch(
+        NotificationEvent.balance_written_off,
+        [debtor.user_id] if debtor is not None and debtor.is_active and debtor.user_id is not None else [],
+        {**_settlement_payload(settlement, group.name, members_by_id), "creditor": viewer.display_name},
+    )
     return _build_response(settlement, members_by_id, viewer.id)
 
 
 # Marks a pending settlement as received. Only the payee may — it is the trust anchor for real money,
 # and it means "I got this".
 async def confirm_settlement(session: AsyncSession, group_id: int, settlement_id: int, user: User) -> GroupSettlementResponse:
-    settlement, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
+    settlement, group, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
     if settlement.status != GroupSettlementStatus.pending:
         raise GroupSettlementConfirmedError()
     _ensure_payee(settlement, viewer)
@@ -420,13 +488,22 @@ async def confirm_settlement(session: AsyncSession, group_id: int, settlement_id
     await group_settlement_repository.save(session, settlement)
     await session.commit()
     await session.refresh(settlement)
+
+    # The PAYER is told their money was acknowledged, which closes the loop they opened by recording it.
+    # Only the payee reaches this (`_ensure_payee` above), so the recipient is always the other side.
+    payer = members_by_id.get(settlement.from_member_id)
+    await notification_service.dispatch(
+        NotificationEvent.settle_confirmed,
+        [payer.user_id] if payer is not None and payer.is_active and payer.user_id is not None else [],
+        _settlement_payload(settlement, group.name, members_by_id),
+    )
     return _build_response(settlement, members_by_id, viewer.id)
 
 
 # Takes back a confirmation, returning the settlement to pending so it can be corrected or deleted.
 # Only the payee may, for the same reason only they may confirm: it is their word being withdrawn.
 async def unconfirm_settlement(session: AsyncSession, group_id: int, settlement_id: int, user: User) -> GroupSettlementResponse:
-    settlement, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
+    settlement, _, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
     if settlement.status != GroupSettlementStatus.confirmed:
         raise NotFoundError("Settlement not found")
     _ensure_payee(settlement, viewer)
@@ -459,7 +536,7 @@ async def set_leg(
     account_id: int | None,
     leg_amount: Decimal | None = None,
 ) -> GroupSettlementResponse:
-    settlement, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
+    settlement, _, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
     if settlement.status == GroupSettlementStatus.written_off:
         raise GroupSettlementWriteOffHasNoLegError()
     if viewer.id not in (settlement.from_member_id, settlement.to_member_id):
@@ -493,7 +570,7 @@ async def set_leg(
 # undoing that silently would overwrite somebody else's word. They un-confirm it first, which is a
 # deliberate second act.
 async def delete_settlement(session: AsyncSession, group_id: int, settlement_id: int, user: User) -> None:
-    settlement, _, viewer = await _require_settlement(session, group_id, settlement_id, user)
+    settlement, _, _, viewer = await _require_settlement(session, group_id, settlement_id, user)
     if settlement.status == GroupSettlementStatus.confirmed:
         raise GroupSettlementConfirmedError()
     if not _may_delete(settlement, viewer.id):
@@ -702,13 +779,13 @@ async def _positions_by_group(session: AsyncSession, group_ids: list[int]) -> di
 # settlement's own group is what membership is checked against, so an id from another group answers 404.
 async def _require_settlement(
     session: AsyncSession, group_id: int, settlement_id: int, user: User
-) -> tuple[GroupSettlement, dict[int, GroupMember], GroupMember]:
-    _, viewer = await group_service.require_member(session, group_id, user)
+) -> tuple[GroupSettlement, Group, dict[int, GroupMember], GroupMember]:
+    group, viewer = await group_service.require_member(session, group_id, user)
     settlement = await group_settlement_repository.get_by_id(session, settlement_id)
     if settlement is None or settlement.group_id != group_id:
         raise NotFoundError("Settlement not found")
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
-    return (settlement, members_by_id, viewer)
+    return (settlement, group, members_by_id, viewer)
 
 
 # Resolves the two seats a settlement names and refuses anything that is not an ACTIVE seat of this

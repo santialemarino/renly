@@ -10,6 +10,7 @@ from app.schemas.card_settlement import CardSettlementCreate
 from app.schemas.expense import ExpenseCreate, ExpenseUpdate
 from app.schemas.income import IncomeCreate, IncomeUpdate
 from app.schemas.investment import InvestmentCreate, InvestmentUpdate
+from app.schemas.notification import PUSH_ENDPOINT_MAX_LENGTH, PushSubscriptionCreate, PushSubscriptionDelete
 from app.schemas.payment_obligation import PaymentObligationCreate, PaymentObligationUpdate
 from app.schemas.snapshot import SnapshotCreate
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
@@ -83,3 +84,17 @@ def test_snapshot_value_zero_accepted_negative_rejected():
     assert body.value == Decimal("0")
     with pytest.raises(ValidationError):
         SnapshotCreate(value=Decimal("-1.00"), **kwargs)
+
+
+# The push endpoint is bounded at the request even though its column is unbounded TEXT, and the reason
+# is not tidiness: the column is UNIQUE, and a btree key cannot exceed 2704 bytes, so an over-long
+# endpoint would fail inside the index — `index row size N exceeds btree version 4 maximum 2704`, a 500
+# rather than a 422. Both bodies carry the bound, since both compare on the endpoint.
+@pytest.mark.parametrize("schema", [PushSubscriptionCreate, PushSubscriptionDelete])
+def test_a_push_endpoint_is_bounded_below_the_index_key_limit(schema):
+    assert PUSH_ENDPOINT_MAX_LENGTH < 2704
+    extras = {"p256dh": "k", "auth": "a"} if schema is PushSubscriptionCreate else {}
+    at_cap = schema(endpoint="https://push.test/" + "x" * (PUSH_ENDPOINT_MAX_LENGTH - 18), **extras)
+    assert len(at_cap.endpoint) == PUSH_ENDPOINT_MAX_LENGTH
+    with pytest.raises(ValidationError):
+        schema(endpoint="x" * (PUSH_ENDPOINT_MAX_LENGTH + 1), **extras)

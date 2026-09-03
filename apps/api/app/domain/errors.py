@@ -923,6 +923,20 @@ class PotWriteRequiredError(DomainError):
         super().__init__(self.message)
 
 
+# A browser tried to subscribe to web push on a deployment that has no VAPID key configured, so
+# nothing could ever be sent to it. Refused rather than stored: a subscription that will never receive
+# anything is worse than no subscription, because the switch then reads as on. The preferences response
+# already reports push_available = false, so the surface never offers it — this is the refusal for a
+# client that asked anyway. Mapped to 409.
+class PushNotConfiguredError(DomainError):
+    code = "push_not_configured"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "Push notifications are not available on this deployment."
+        super().__init__(self.message)
+
+
 # A private expense or income names a funding account that belongs to a pot. The money really leaves
 # the shared account, so the pot's value drops and every co-owner's share falls with it — one person
 # spending, everyone paying, with nothing recording it. Refused for the same reason a cross-scope

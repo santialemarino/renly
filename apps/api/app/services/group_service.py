@@ -107,6 +107,22 @@ async def _ensure_admin_remains(session: AsyncSession, group: Group, member: Gro
         raise GroupLastAdminError()
 
 
+# The accounts that should hear about something happening in a group — every ACTIVE seat held by a real
+# account, minus whoever did it.
+#
+# It lives here rather than in the notification layer because it IS the group's visibility rule, and the
+# notification layer is deliberately entity-agnostic. Three conditions, each load-bearing:
+#   * `is_active`, because a former member no longer sees the group's rows and telling them about one
+#     would be the notification leaking what the policy hides;
+#   * `user_id IS NOT NULL`, because a name-only placeholder is a person with no account to notify;
+#   * not the actor, because nobody needs to be told what they just did — and `exclude_user_id` is the
+#     ACCOUNT rather than the seat, so a caller who holds seats in the group under no other identity
+#     cannot be notified by their own action through a second row.
+async def list_notifiable_user_ids(session: AsyncSession, group_id: int, *, exclude_user_id: int | None = None) -> list[int]:
+    members = await group_repository.list_members(session, group_id)
+    return [m.user_id for m in members if m.is_active and m.user_id is not None and m.user_id != exclude_user_id]
+
+
 # Lists the groups the user belongs to, each with its full roster. Members and invites are batch-loaded
 # for every group at once, so the response costs three queries regardless of how many groups there are.
 async def list_groups(session: AsyncSession, user: User) -> list[GroupResponse]:

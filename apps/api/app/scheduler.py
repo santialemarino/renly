@@ -13,6 +13,7 @@ from app.services import (
     auto_snapshot_service,
     cedear_ratio_service,
     exchange_rate_service,
+    pot_reminder_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,6 +76,19 @@ async def _generate_auto_expenses() -> None:
             logger.info("Scheduled auto-expenses: %d entries created.", count)
     except Exception:
         logger.exception("Scheduled auto-expense generation failed.")
+
+
+# Notifies each pot's writers when its valuation has fallen behind the cadence they agreed on.
+# Loops over every pot but values only the ones with somebody due, and the notification's dedupe key
+# makes the whole job idempotent — so it can run hourly and still tell each person once per period.
+async def _send_pot_reminders() -> None:
+    try:
+        async with AdminSessionLocal() as session:
+            count = await pot_reminder_service.send_due_reminders(session)
+            if count:
+                logger.info("Scheduled pot reminders: %d notifications dispatched.", count)
+    except Exception:
+        logger.exception("Scheduled pot reminder run failed.")
 
 
 # Fetches CEDEAR ratios from Banco Comafi.
@@ -155,6 +169,19 @@ def start_scheduler() -> None:
         coalesce=True,
     )
 
+    # Pot reminders: run hourly. The service filters to users whose local-time-now hour equals
+    # SNAPSHOT_REMINDER_HOUR_LOCAL (= 9), so each person's reminder arrives at their own local morning
+    # rather than on one global UTC tick — the same shape as the auto-expense job above.
+    scheduler.add_job(
+        _send_pot_reminders,
+        "cron",
+        minute=0,
+        id="send_pot_reminders",
+        replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
+    )
+
     # CEDEAR ratios: run monthly (1st of each month at 00:00 UTC) + on startup.
     scheduler.add_job(
         _update_cedear_ratios,
@@ -185,10 +212,12 @@ def start_scheduler() -> None:
         "asset prices: daily %02d:00 UTC, "
         "auto-snapshots: last day %02d:00 UTC, "
         "auto-expenses: hourly (per-user local 01:00), "
+        "pot reminders: hourly (per-user local %02d:00), "
         "CEDEAR ratios: now + monthly %dth %02d:00 UTC).",
         EXCHANGE_RATES_INTERVAL_HOURS,
         ASSET_PRICES_HOUR_UTC,
         AUTO_SNAPSHOTS_HOUR_UTC,
+        pot_reminder_service.SNAPSHOT_REMINDER_HOUR_LOCAL,
         CEDEAR_RATIOS_DAY_OF_MONTH,
         CEDEAR_RATIOS_HOUR_UTC,
     )

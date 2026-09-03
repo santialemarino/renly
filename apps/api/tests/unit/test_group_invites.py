@@ -17,6 +17,7 @@ from app.config import settings
 from app.domain import GroupAdminRequiredError, GroupMembershipExistsError, GroupSeatTakenError, InvalidTokenError, NotFoundError
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_invite import GroupInvite
+from app.models.notification import NotificationEvent
 from app.models.user import User
 from app.models.utils import utcnow
 from app.services import group_invite_service
@@ -25,6 +26,8 @@ ADMIN = User(id=1, name="Santi", email="admin@test", password_hash="x", session_
 JOINER = User(id=2, name="Ana", email="ana@test", password_hash="x", session_epoch=0)
 
 _GROUP_ID = 10
+# Another account holding a seat in the same group — the audience every fan-out here resolves to.
+OTHER_USER_ID = 2
 _MEMBER_ID = 3
 
 
@@ -66,11 +69,23 @@ def _patch_invite_repo(monkeypatch, **methods):
         monkeypatch.setattr(group_invite_service.group_invite_repository, name, methods.get(name, AsyncMock(return_value=None)))
 
 
-# Neutralises the outbound email and the language lookup for tests that are not about them.
-def _patch_delivery(monkeypatch, send: AsyncMock | None = None):
+# Neutralises the notification fan-out. Its two seams need stubbing on every write path, because the
+# audience read behind them is a real roster query a mocked session cannot serve; `dispatch` is
+# captured rather than silenced so TestNotifications can assert what was announced.
+def _patch_notifications(monkeypatch, dispatch: AsyncMock | None = None) -> AsyncMock:
+    sent = dispatch or AsyncMock()
+    monkeypatch.setattr(group_invite_service.group_service, "list_notifiable_user_ids", AsyncMock(return_value=[OTHER_USER_ID]))
+    monkeypatch.setattr(group_invite_service.notification_service, "dispatch", sent)
+    return sent
+
+
+# Neutralises the outbound email and the language lookup for tests that are not about them, plus the
+# fan-out above.
+def _patch_delivery(monkeypatch, send: AsyncMock | None = None, dispatch: AsyncMock | None = None):
     monkeypatch.setattr(group_invite_service, "_safe_send", send or AsyncMock())
     monkeypatch.setattr(group_invite_service.settings_service, "get_user_language", AsyncMock(return_value="en"))
     monkeypatch.setattr(group_invite_service.user_repository, "get_by_id", AsyncMock(return_value=ADMIN))
+    _patch_notifications(monkeypatch, dispatch)
 
 
 class TestAdminGate:
@@ -238,8 +253,84 @@ class TestCreateInvite:
         _patch_invite_repo(monkeypatch, create=AsyncMock(side_effect=lambda _s, invite: invite))
         monkeypatch.setattr(group_invite_service.settings_service, "get_user_language", AsyncMock(return_value="en"))
         monkeypatch.setattr(group_invite_service, "get_email_service", lambda: AsyncMock(send=AsyncMock(side_effect=RuntimeError("smtp down"))))
+        _patch_notifications(monkeypatch)
         response = await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN, email="ana@test.com")
         assert response.invite_url
+
+
+class TestWhatIsAnnounced:
+    # The group's OTHER members hear that an invite went out — never the invitee. A notification row is
+    # readable data and could therefore never carry the raw token, which is exactly what token_hash
+    # exists to prevent, so a feed entry announcing a link it cannot hand over would be worse than
+    # none. The invitee's channel is the email, which is also the only one that reaches somebody with
+    # no account at all.
+
+    @pytest.mark.asyncio
+    async def test_inviting_someone_tells_the_rest_of_the_group(self, monkeypatch):
+        _allow_admin(monkeypatch)
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch, create=AsyncMock(side_effect=lambda _s, invite: invite))
+        _patch_delivery(monkeypatch)
+        sent = _patch_notifications(monkeypatch)
+        await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN, email="ana@test.com")
+        event, recipients, payload = sent.await_args.args
+        assert event == NotificationEvent.group_invited
+        assert recipients == [OTHER_USER_ID]
+        # Named by SEAT rather than by account: inside a group, display_name is the identity
+        # everybody else knows, and the settlement copy already names people that way.
+        assert (payload["inviter"], payload["invitee"], payload["group"]) == ("Santi", "Ana", "Casa")
+
+    @pytest.mark.asyncio
+    async def test_no_notification_carries_the_token(self, monkeypatch):
+        # Asserted on the payload rather than argued in a comment: the whole raw token appears in the
+        # returned link, so a payload containing any of it would be a credential in a readable row.
+        _allow_admin(monkeypatch)
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch, create=AsyncMock(side_effect=lambda _s, invite: invite))
+        _patch_delivery(monkeypatch)
+        sent = _patch_notifications(monkeypatch)
+        response = await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN, email="ana@test.com")
+        token = response.invite_url.split("token=")[1]
+        assert token not in str(sent.await_args.args[2])
+
+    @pytest.mark.asyncio
+    async def test_a_link_only_invite_still_tells_the_group(self, monkeypatch):
+        # No email address means nothing is sent anywhere, so this is the only record the rest of the
+        # group gets that a seat is now claimable.
+        _allow_admin(monkeypatch)
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch, create=AsyncMock(side_effect=lambda _s, invite: invite))
+        _patch_delivery(monkeypatch)
+        sent = _patch_notifications(monkeypatch)
+        await group_invite_service.create_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN)
+        assert sent.await_args.args[0] == NotificationEvent.group_invited
+
+    @pytest.mark.asyncio
+    async def test_joining_tells_everyone_but_the_joiner(self, monkeypatch):
+        _patch_group_repo(
+            monkeypatch,
+            get_by_id=AsyncMock(return_value=_group()),
+            get_member=AsyncMock(return_value=_seat()),
+            get_member_by_user=AsyncMock(return_value=None),
+        )
+        _patch_invite_repo(monkeypatch, get_by_hash=AsyncMock(return_value=_invite()))
+        sent = _patch_notifications(monkeypatch)
+        await group_invite_service.accept_invite(AsyncMock(), "token", JOINER)
+        event, _recipients, payload = sent.await_args.args
+        assert event == NotificationEvent.member_joined
+        assert payload == {"group_id": _GROUP_ID, "group": "Casa", "member": "Ana"}
+        # Excluded by ACCOUNT rather than by seat, which is what makes it right either side of the
+        # commit: their own seat is the one being linked.
+        assert sent.await_args.args[1] == [OTHER_USER_ID]
+
+    @pytest.mark.asyncio
+    async def test_REVOKING_an_invite_announces_nothing(self, monkeypatch):
+        _allow_admin(monkeypatch)
+        _patch_group_repo(monkeypatch, get_member=AsyncMock(return_value=_seat()))
+        _patch_invite_repo(monkeypatch)
+        sent = _patch_notifications(monkeypatch)
+        await group_invite_service.revoke_invite(AsyncMock(), _GROUP_ID, _MEMBER_ID, ADMIN)
+        sent.assert_not_awaited()
 
 
 class TestRevokeInvite:
@@ -338,6 +429,7 @@ class TestAcceptInvite:
             save_member=saved_member,
         )
         _patch_invite_repo(monkeypatch, get_by_hash=AsyncMock(return_value=invite), save=saved_invite)
+        _patch_notifications(monkeypatch)
         session = AsyncMock()
 
         response = await group_invite_service.accept_invite(session, "token", JOINER)
@@ -408,6 +500,7 @@ class TestAcceptInvite:
             get_member_by_user=AsyncMock(return_value=None),
         )
         _patch_invite_repo(monkeypatch, get_by_hash=AsyncMock(return_value=_invite(email="someone.else@test.com")))
+        _patch_notifications(monkeypatch)
         response = await group_invite_service.accept_invite(AsyncMock(), "token", JOINER)
         assert response.member_id == _MEMBER_ID
         assert seat.user_id == JOINER.id

@@ -26,13 +26,16 @@ AUTO_SNAPSHOTS_CATCHUP_DAYS = 3
 
 ### Misfire policy
 
-Every job is registered with `misfire_grace_time=MISFIRE_GRACE_SECONDS` (6h) and `coalesce=True`. The job store is in-memory, so APScheduler's default 1s grace would silently skip any tick the event loop couldn't serve on time; 6h of grace lets a late tick still fire, and `coalesce=True` collapses multiple missed runs into a single one (never a burst). Every job here is idempotent / back-filling, so a late run is safe. Grace cannot help across a **restart**, though — the in-memory store loses all schedule state, so a tick missed while the process was down is unrecoverable by grace alone. The month-end auto-snapshot therefore has a dedicated startup catch-up (job 6).
+Every job is registered with `misfire_grace_time=MISFIRE_GRACE_SECONDS` (6h) and `coalesce=True`. The job store is in-memory, so APScheduler's default 1s grace would silently skip any tick the event loop couldn't serve on time; 6h of grace lets a late tick still fire, and `coalesce=True` collapses multiple missed runs into a single one (never a burst). Every job here is idempotent / back-filling, so a late run is safe. Grace cannot help across a **restart**, though — the in-memory store loses all schedule state, so a tick missed while the process was down is unrecoverable by grace alone. The month-end auto-snapshot therefore has a dedicated startup catch-up (job 7).
 
-The auto-expenses local hour lives with the service that owns the per-user filter, since the scheduler tick itself is hourly (no UTC-hour constant). In `apps/api/app/services/auto_expense_service.py`:
+Two jobs fire at each user's own LOCAL hour rather than at a UTC one, so their hour constant lives with the service that owns the per-user filter — the scheduler tick itself is hourly and has no UTC-hour constant for them. In `apps/api/app/services/auto_expense_service.py` and `apps/api/app/services/pot_reminder_service.py`:
 
 ```python
 AUTO_EXPENSES_HOUR_LOCAL = 1
+SNAPSHOT_REMINDER_HOUR_LOCAL = 9
 ```
+
+The reminder's hour is a waking one and the auto-expense job's is not, deliberately: one is a message asking somebody to do something, the other a silent background write nobody reads.
 
 ## Jobs
 
@@ -97,7 +100,17 @@ reconciliation remains the backstop. A card-paid plan never carries one (its cas
 | **Service call** | `cedear_ratio_service.fetch_and_store_ratios(session)`                                                                                                           |
 | **What it does** | Fetches Banco Comafi Excel and BYMA PDF in parallel, picks the most complete source (newer date → more entries → Comafi preferred), upserts into `cedear_ratios` |
 
-### 6. Auto-snapshot startup catch-up
+### 6. Pot valuation reminders
+
+| Property         | Value                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Trigger**      | `cron` (hourly, minute 0)                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Service call** | `pot_reminder_service.send_due_reminders(session)`                                                                                                                                                                                                                                                                                                                                                                                   |
+| **What it does** | Notifies a shared pot's WRITERS when its valuation has fallen behind the cadence the group agreed on (§9's third job for `snapshot_cadence`). Hourly because the filter is per user: only members whose local time is now `SNAPSHOT_REMINDER_HOUR_LOCAL` (9) are considered, so each person is reached in their own morning. Writers rather than every viewer, because only a member with `can_write` can snapshot a shared holding. |
+| **Idempotence**  | Through the notification's `dedupe_key` (`pot:<id>:<cadence period>`) and the partial unique index behind it — not through state of its own. The job may run any number of times and reach different people on different ticks, and each person is still told at most once per period. A pot still overdue when the next period opens produces a new key, so it nudges again.                                                        |
+| **Cost**         | Prunes before it measures: the roster, permissions and timezones load once (three queries), and only pots with somebody actually due are valued at all. Freshness is read with `pot_service.get_freshness`, which needs no NAV and no rate lookup — so the job never pays for the expensive balance union.                                                                                                                           |
+
+### 7. Auto-snapshot startup catch-up
 
 | Field            | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

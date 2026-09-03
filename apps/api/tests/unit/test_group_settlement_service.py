@@ -25,6 +25,7 @@ from app.models.exchange_rate import ExchangeRate, ExchangeRatePair
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_money_settings import GroupMoneySettings
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
+from app.models.notification import NotificationEvent
 from app.models.user import User
 from app.services import group_settlement_service
 from app.utils.metrics import RateLookup
@@ -126,7 +127,11 @@ def _wire(
     )
     monkeypatch.setattr(group_settlement_service.group_settlement_repository, "list_movements_by_groups", AsyncMock(return_value=[]))
     monkeypatch.setattr(group_settlement_service, "exchange_rate_service", AsyncMock())
-    written: dict = {}
+    # The notification fan-out. Stubbed on every write path, and captured rather than silenced so
+    # TestWhatIsAnnounced can assert who is told and which side of the payment they are on.
+    dispatched = AsyncMock()
+    monkeypatch.setattr(group_settlement_service.notification_service, "dispatch", dispatched)
+    written: dict = {"dispatched": dispatched}
 
     # `row` is the last one written and `rows` every one, in order. The waterfall writes several from
     # one request, and a helper that only ever remembered the last would report a plan's final step as
@@ -424,6 +429,79 @@ class TestWriteOff:
         _wire(monkeypatch, viewer=_MEMBERS[1], settlement=_settlement(status=GroupSettlementStatus.written_off))
         with pytest.raises(GroupSettlementNotCreditorError):
             await group_settlement_service.delete_settlement(AsyncMock(), GROUP_ID, 8, USER)
+
+
+class TestWhatIsAnnounced:
+    # A balance between two people is between those two, so every event here reaches exactly one
+    # recipient — and WHICH one depends on who did the recording, which is the part a mocked test can
+    # get wrong invisibly.
+    _OWES_30 = [("ARS", 11, Decimal("0"), Decimal("30")), ("ARS", 12, Decimal("30"), Decimal("0"))]
+
+    @pytest.mark.asyncio
+    async def test_recording_a_payment_tells_the_PAYEE_when_the_payer_recorded_it(self, monkeypatch):
+        # Seat 11 is the payee and seat 12 the payer; the caller holds 12, so the message goes to 11
+        # and reads from their side ("somebody paid you — confirm it").
+        written = _wire(monkeypatch, viewer=_MEMBERS[1])
+        await _record()
+        event, recipients, payload = written["dispatched"].await_args.args
+        assert event == NotificationEvent.settle_marked_paid
+        assert recipients == [_MEMBERS[0].user_id]
+        assert payload["variant"] == "payee"
+        assert (payload["amount"], payload["currency"]) == ("30.00", "ARS")
+
+    @pytest.mark.asyncio
+    async def test_recording_a_payment_tells_the_PAYER_when_the_payee_recorded_it(self, monkeypatch):
+        # The other direction, which is a real path: either side may write a payment down. "X marked a
+        # payment to you" would be false here, so the variant carries a different sentence.
+        written = _wire(monkeypatch, viewer=_MEMBERS[0])
+        await _record()
+        _event, recipients, payload = written["dispatched"].await_args.args
+        assert recipients == [_MEMBERS[1].user_id]
+        assert payload["variant"] == "payer"
+
+    @pytest.mark.asyncio
+    async def test_a_name_only_counterparty_is_told_nothing_and_nothing_breaks(self, monkeypatch):
+        # Seat 13 is a placeholder with no account. The dispatch happens with an empty audience rather
+        # than being skipped, so the fan-out's own no-op path is what handles it.
+        written = _wire(monkeypatch, viewer=_MEMBERS[0])
+        await _record(from_member_id=11, to_member_id=13)
+        assert written["dispatched"].await_args.args[1] == []
+
+    @pytest.mark.asyncio
+    async def test_confirming_tells_the_PAYER_their_money_was_acknowledged(self, monkeypatch):
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], settlement=_settlement())
+        await group_settlement_service.confirm_settlement(AsyncMock(), GROUP_ID, 8, USER)
+        event, recipients, payload = written["dispatched"].await_args.args
+        assert event == NotificationEvent.settle_confirmed
+        assert recipients == [_MEMBERS[1].user_id]
+        assert payload["to_member"] == _MEMBERS[0].display_name
+
+    @pytest.mark.asyncio
+    async def test_UNCONFIRMING_announces_nothing(self, monkeypatch):
+        # Taking your own word back is not news to the other side, and a notification for it would
+        # read as a second payment event.
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], settlement=_settlement(status=GroupSettlementStatus.confirmed))
+        await group_settlement_service.unconfirm_settlement(AsyncMock(), GROUP_ID, 8, USER)
+        written["dispatched"].assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_write_off_tells_the_DEBTOR_who_could_not_otherwise_find_out(self, monkeypatch):
+        # Only the creditor may record one, so without this the debt simply disappears from the other
+        # person's screen with nothing saying who cleared it.
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], positions=self._OWES_30)
+        await group_settlement_service.record_write_off(
+            AsyncMock(), GROUP_ID, USER, from_member_id=12, to_member_id=11, date=TODAY, amount=Decimal("30.00"), currency="ARS"
+        )
+        event, recipients, payload = written["dispatched"].await_args.args
+        assert event == NotificationEvent.balance_written_off
+        assert recipients == [_MEMBERS[1].user_id]
+        assert payload["creditor"] == _MEMBERS[0].display_name
+
+    @pytest.mark.asyncio
+    async def test_DELETING_a_settlement_announces_nothing(self, monkeypatch):
+        written = _wire(monkeypatch, viewer=_MEMBERS[0], settlement=_settlement())
+        await group_settlement_service.delete_settlement(AsyncMock(), GROUP_ID, 8, USER)
+        written["dispatched"].assert_not_awaited()
 
 
 class TestBalances:
@@ -869,6 +947,32 @@ class TestRecordingTheWaterfall(TestTheOverpayWaterfall):
         self._rates(monkeypatch)
         with pytest.raises(GroupSettlementForeignLegError):
             await self._record(amount=Decimal("45000.00"), to_account_id=5)
+
+
+class TestWhatTheWaterfallAnnounces(TestTheOverpayWaterfall):
+    # One payment, one notification — and the figure has to be the payment, not a bucket's share of it.
+    # The rows are an accounting of which buckets one payment cleared, so telling the payee once per row
+    # would announce three payments where one was made, and naming a row's amount would announce a
+    # figure nobody handed over.
+
+    @pytest.mark.asyncio
+    async def test_a_payment_across_three_buckets_is_announced_once(self, monkeypatch):
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"))
+        assert len(written["rows"]) > 1
+        assert written["dispatched"].await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_it_names_what_was_actually_handed_over(self, monkeypatch):
+        # 45,000 pesos left the payer's hands; the rows are 34,625 ARS and 10 USD. Announcing either of
+        # those would state a figure the payment never had.
+        written = _wire(monkeypatch, viewer=_MEMBERS[1], positions=self._POSITIONS)
+        self._rates(monkeypatch)
+        await self._record(amount=Decimal("45000.00"))
+        payload = written["dispatched"].await_args.args[2]
+        assert (payload["amount"], payload["currency"]) == ("45000.00", "ARS")
+        assert payload["variant"] == "payee"
 
 
 class TestSplittingTheCashLeg(TestTheOverpayWaterfall):

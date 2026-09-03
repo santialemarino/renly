@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db import set_session_user
 from app.models.group import GroupKind
 from app.models.user import User
+from app.repositories import push_subscription_repository
 from app.services import group_service
 
 APP_URL = os.getenv("RLS_TEST_DATABASE_URL")
@@ -52,6 +53,11 @@ _OWNER_MATCH_TABLES = (
     "payment_obligations",
     "api_keys",
     "user_settings",
+    # The notification layer's two wholly-user-owned tables. `notifications` is deliberately NOT here:
+    # it carries per-command policies and no INSERT policy at all, so it cannot answer the
+    # cross-user-insert question the same way — see TestTheNotificationFeed.
+    "notification_preferences",
+    "push_subscriptions",
 )
 
 # The group tables, whose policy is the membership EXISTS-join through app_is_group_member() rather
@@ -125,6 +131,23 @@ async def seeded():
                 text("INSERT INTO investment_collection_members (investment_id, collection_id) VALUES (:i, :c)"),
                 {"i": inv, "c": coll},
             )
+            # The notification layer, one row of each per user. The notification is written by the OWNER
+            # role here because that is the only role that can write one at all — which is itself the
+            # property TestTheNotificationFeed asserts.
+            await s.execute(
+                text("INSERT INTO notification_preferences (user_id, event, channel, enabled) VALUES (:u, 'member_joined', 'email', TRUE)"),
+                {"u": uid},
+            )
+            await s.execute(
+                text("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (:u, :e, 'p', 'a')"),
+                {"u": uid, "e": f"https://push.test/{key}"},
+            )
+            notification = (
+                await s.execute(
+                    text("INSERT INTO notifications (user_id, event, payload) VALUES (:u, 'member_joined', '{}'::jsonb) RETURNING id"),
+                    {"u": uid},
+                )
+            ).scalar_one()
             group = (
                 await s.execute(
                     text("INSERT INTO groups (name, kind, created_by) VALUES (:n, 'household', :u) RETURNING id"),
@@ -154,6 +177,7 @@ async def seeded():
             )
             ids[key] = {
                 "user": uid,
+                "notification": notification,
                 "investment": inv,
                 "card": card,
                 "collection": coll,
@@ -202,7 +226,7 @@ async def seeded():
 @pytest.mark.asyncio
 async def test_no_context_reads_no_rows(seeded):
     async with seeded["sessionmaker"]() as s:
-        for table in _OWNER_MATCH_TABLES + _GROUP_TABLES + ("investment_collection_members",):
+        for table in _OWNER_MATCH_TABLES + _GROUP_TABLES + ("investment_collection_members", "notifications"):
             count = (await s.execute(text(f"SELECT count(*) FROM {table}"))).scalar_one()  # noqa: S608 (fixed table list)
             assert count == 0, f"{table} leaked {count} rows with no user context set"
 
@@ -399,6 +423,248 @@ async def test_creating_a_group_requires_the_privileged_session(seeded):
                 visible = (await s.execute(text("SELECT count(*) FROM groups WHERE id = :g"), {"g": response.id})).scalar_one()
                 assert visible == 1
             await owner.execute(text("DELETE FROM groups WHERE id = :g"), {"g": response.id})
+            await owner.commit()
+    finally:
+        await admin_engine.dispose()
+
+
+# --- The notification layer ----------------------------------------------------------------------
+#
+# All three tables are USER-owned rather than group-scoped, and that is the point worth proving: group
+# activity is what produces a notification, but the row belongs to its recipient, so app_is_group_member
+# appears in none of these policies. `notifications` additionally carries per-command policies with NO
+# INSERT policy at all, which is the one property in this PR that a unit test cannot observe — a mocked
+# session inserts whatever it is asked to.
+
+
+# The feed's read side is a plain owner match: A sees A's rows, B's are invisible even by primary key.
+@pytest.mark.asyncio
+async def test_a_notification_is_visible_only_to_its_recipient(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        owners = (await s.execute(text("SELECT DISTINCT user_id FROM notifications"))).scalars().all()
+        assert owners == [a["user"]]
+        assert (await s.execute(text("SELECT count(*) FROM notifications WHERE id = :i"), {"i": b["notification"]})).scalar_one() == 0
+
+
+# The load-bearing one. Fanning an event out writes a row per RECIPIENT, which a
+# `user_id = app_current_user_id()` WITH CHECK could never permit — so `notifications` has no INSERT
+# policy, the dispatcher runs on the privileged session, and NOBODY can write into a feed through a
+# request connection. Including their own: a user who could insert their own notifications could forge
+# a record of something that never happened.
+@pytest.mark.asyncio
+async def test_nobody_can_insert_a_notification_through_a_request_connection(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        with pytest.raises(DBAPIError):
+            await s.execute(
+                text("INSERT INTO notifications (user_id, event, payload) VALUES (:u, 'member_joined', '{}'::jsonb)"),
+                {"u": a["user"]},
+            )
+            await s.commit()
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        with pytest.raises(DBAPIError):
+            await s.execute(
+                text("INSERT INTO notifications (user_id, event, payload) VALUES (:u, 'member_joined', '{}'::jsonb)"),
+                {"u": b["user"]},
+            )
+            await s.commit()
+    # And the owner role still can, or the fan-out would not work at all — which is what makes the two
+    # refusals above evidence of a policy rather than of a broken table.
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            inserted = (
+                await owner.execute(
+                    text("INSERT INTO notifications (user_id, event, payload) VALUES (:u, 'member_joined', '{}'::jsonb) RETURNING id"),
+                    {"u": a["user"]},
+                )
+            ).scalar_one()
+            await owner.execute(text("DELETE FROM notifications WHERE id = :i"), {"i": inserted})
+            await owner.commit()
+    finally:
+        await admin_engine.dispose()
+
+
+# Marking one read is allowed; re-addressing it to somebody else is not.
+#
+# TWO independent mechanisms hold the second half, which is worth knowing before anyone "simplifies"
+# either: the UPDATE policy's WITH CHECK, and Postgres additionally requiring an updated row to stay
+# visible under the SELECT policy. Widening either one alone still refuses it — verified by mutating
+# each in turn against this database — so this asserts the PROPERTY rather than one policy, and the
+# WITH CHECK is what keeps integrity from depending on the confidentiality policy staying narrow.
+@pytest.mark.asyncio
+async def test_a_recipient_may_mark_their_own_read_but_not_re_address_it(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        await s.execute(text("UPDATE notifications SET read_at = NOW() WHERE id = :i"), {"i": a["notification"]})
+        await s.commit()
+        set_session_user(s, a["user"])
+        assert (await s.execute(text("SELECT read_at IS NOT NULL FROM notifications WHERE id = :i"), {"i": a["notification"]})).scalar_one() is True
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        with pytest.raises(DBAPIError):
+            await s.execute(text("UPDATE notifications SET user_id = :b WHERE id = :i"), {"b": b["user"], "i": a["notification"]})
+            await s.commit()
+
+
+# DELETE has its own policy because Postgres has no WITH CHECK for it: a single FOR ALL policy would
+# have needed one and could not have had it. A recipient may drop their own row and nobody else's.
+#
+# The second half is asserted by a row COUNT rather than by an error, because a DELETE that matches
+# nothing succeeds silently — and it is the SELECT policy that makes it match nothing, since A cannot
+# see B's row to delete it. The DELETE policy's own job is the FIRST half: without it, a recipient
+# could not dismiss their own notification at all (mutated both ways to confirm each).
+@pytest.mark.asyncio
+async def test_a_recipient_may_delete_their_own_notification_and_no_other(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        await s.execute(text("DELETE FROM notifications WHERE id = :i"), {"i": b["notification"]})
+        await s.commit()
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            survived = (await owner.execute(text("SELECT count(*) FROM notifications WHERE id = :i"), {"i": b["notification"]})).scalar_one()
+            assert survived == 1, "A deleted B's notification"
+    finally:
+        await admin_engine.dispose()
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        await s.execute(text("DELETE FROM notifications WHERE id = :i"), {"i": a["notification"]})
+        await s.commit()
+        set_session_user(s, a["user"])
+        assert (await s.execute(text("SELECT count(*) FROM notifications"))).scalar_one() == 0
+
+
+# A push subscription holds the keys a payload is sealed with, so the confidentiality boundary matters
+# more here than on an ordinary preferences row: anybody who could read another user's would be able to
+# push to that person's browser as if they were Renly.
+@pytest.mark.asyncio
+async def test_a_push_subscription_is_never_readable_by_another_account(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, a["user"])
+        endpoints = (await s.execute(text("SELECT endpoint FROM push_subscriptions"))).scalars().all()
+        assert endpoints == ["https://push.test/a"]
+        assert (await s.execute(text("SELECT count(*) FROM push_subscriptions WHERE user_id = :u"), {"u": b["user"]})).scalar_one() == 0
+
+
+# A browser holds ONE push subscription, so when a second account signs in on a shared computer and
+# enables push, the endpoint it presents is the one the FIRST account is registered under.
+#
+# This is the policy fact the service is built around: the upsert's conflict target is checked against
+# the owner-match USING expression, so a row belonging to somebody else does not quietly move — it
+# RAISES. Which means a subscribe would 500 and, worse, the first account's row would survive and keep
+# pushing their group activity to a browser somebody else is now signed in on. `release_endpoint` on the
+# privileged session is what closes it, and this is the proof that it is needed rather than defensive.
+@pytest.mark.asyncio
+async def test_one_account_cannot_take_a_browser_from_another_through_its_own_connection(seeded):
+    a, b = seeded["ids"]["a"], seeded["ids"]["b"]
+    shared = "https://push.test/a"
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            await owner.execute(
+                text("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (:u, 'https://push.test/other', 'p', 'a')"),
+                {"u": a["user"]},
+            )
+            await owner.commit()
+    finally:
+        await admin_engine.dispose()
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, b["user"])
+        with pytest.raises(DBAPIError):
+            await s.execute(
+                text(
+                    "INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (:u, :e, 'p2', 'a2') "
+                    "ON CONFLICT ON CONSTRAINT push_subscriptions_endpoint_once "
+                    "DO UPDATE SET user_id = EXCLUDED.user_id, p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth"
+                ),
+                {"u": b["user"], "e": shared},
+            )
+            await s.commit()
+    # A's row is untouched, which is the half that would be a disclosure rather than an error.
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            still = (await owner.execute(text("SELECT user_id FROM push_subscriptions WHERE endpoint = :e"), {"e": shared})).scalar_one()
+            assert still == a["user"]
+            # And the privileged release is what the service uses to hand the browser over. The real
+            # repository function, not a restatement of it: what it deletes and what it spares is the
+            # thing under test, and an inlined DELETE here would be a second opinion that stays green
+            # while the one the service calls drifts.
+            await push_subscription_repository.release_endpoint(owner, shared, keep_user_id=b["user"])
+            await owner.commit()
+            assert (await owner.execute(text("SELECT count(*) FROM push_subscriptions WHERE endpoint = :e"), {"e": shared})).scalar_one() == 0
+            # And ONLY that browser: A's phone, subscribed under a different endpoint, is not swept up
+            # by B claiming A's laptop. Without the endpoint predicate the release would unsubscribe
+            # every other account's every browser, and the count above would not notice.
+            elsewhere = (
+                await owner.execute(text("SELECT count(*) FROM push_subscriptions WHERE endpoint = :e"), {"e": "https://push.test/other"})
+            ).scalar_one()
+            assert elsewhere == 1, "releasing one endpoint unsubscribed a browser it was never about"
+    finally:
+        await admin_engine.dispose()
+    async with seeded["sessionmaker"]() as s:
+        set_session_user(s, b["user"])
+        claimed = (
+            await s.execute(
+                text("INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth) VALUES (:u, :e, 'p2', 'a2') RETURNING id"),
+                {"u": b["user"], "e": shared},
+            )
+        ).scalar_one()
+        await s.commit()
+        set_session_user(s, b["user"])
+        assert (await s.execute(text("SELECT count(*) FROM push_subscriptions WHERE endpoint = :e"), {"e": shared})).scalar_one() == 1
+    # Re-subscribing on a browser you already hold — a page reload does it — must leave the row alone.
+    # `keep_user_id` is what makes the release a hand-over rather than a delete-and-recreate, which
+    # would mint a new row (losing when it was registered and last used) on every visit.
+    admin_engine = create_async_engine(ADMIN_URL)
+    try:
+        async with sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)() as owner:
+            await push_subscription_repository.release_endpoint(owner, shared, keep_user_id=b["user"])
+            await owner.commit()
+            survivor = (await owner.execute(text("SELECT id FROM push_subscriptions WHERE endpoint = :e"), {"e": shared})).scalar_one()
+            assert survivor == claimed
+    finally:
+        await admin_engine.dispose()
+
+
+# The dedupe index is what makes a repeating notification idempotent: the same (user, event, key) twice
+# is refused, a different period is a different key, and two keyless rows coexist.
+#
+# The last of those is NOT what the index's WHERE clause buys — NULLs are distinct in any unique index,
+# so keyless rows would never collide either way (checked directly rather than assumed). It is asserted
+# anyway because it is the behaviour every one-off notification depends on, and the uniqueness IS
+# load-bearing: without it the hourly reminder writes a row every hour.
+@pytest.mark.asyncio
+async def test_the_dedupe_index_binds_only_the_rows_that_opt_into_it(seeded):
+    a = seeded["ids"]["a"]
+    admin_engine = create_async_engine(ADMIN_URL)
+    insert = text("INSERT INTO notifications (user_id, event, payload, dedupe_key) VALUES (:u, 'snapshot_due', '{}'::jsonb, :k) RETURNING id")
+    try:
+        session_factory = sessionmaker(admin_engine, class_=AsyncSession, expire_on_commit=False)
+        async with session_factory() as owner:
+            first = (await owner.execute(insert, {"u": a["user"], "k": "pot:1:2026-09"})).scalar_one()
+            await owner.commit()
+        # The same key again is refused.
+        async with session_factory() as owner:
+            with pytest.raises(DBAPIError):
+                await owner.execute(insert, {"u": a["user"], "k": "pot:1:2026-09"})
+                await owner.commit()
+        # A different period is a different key, so the next month's reminder still lands.
+        async with session_factory() as owner:
+            second = (await owner.execute(insert, {"u": a["user"], "k": "pot:1:2026-10"})).scalar_one()
+            # And two keyless rows of the same event coexist, which the partial WHERE is what allows.
+            third = (await owner.execute(insert, {"u": a["user"], "k": None})).scalar_one()
+            fourth = (await owner.execute(insert, {"u": a["user"], "k": None})).scalar_one()
+            await owner.commit()
+            await owner.execute(text("DELETE FROM notifications WHERE id = ANY(:ids)"), {"ids": [first, second, third, fourth]})
             await owner.commit()
     finally:
         await admin_engine.dispose()

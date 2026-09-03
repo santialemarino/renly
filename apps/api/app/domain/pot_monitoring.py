@@ -102,3 +102,22 @@ def is_valuation_overdue(*, cadence: PotCadence, valued_as_of: date_type | None,
     if valued_as_of is None:
         return True
     return valued_as_of < _cadence_cutoff(cadence, today)
+
+
+# A stable name for the cadence period `today` falls in: the ISO year-week for a weekly pot, the
+# calendar month otherwise.
+#
+# It exists so a reminder can be attempted repeatedly and land at most once per period. The overdue
+# reminder is emitted by an hourly job, and rather than tracking "when did we last tell this person
+# about this pot" in a column of its own, the notification carries this in its dedupe key and the
+# database refuses the second write. The consequence is the intended one: a pot still overdue when the
+# next period opens produces a new key, so it nudges again — once per period, not once ever.
+#
+# 'ad_hoc' shares the monthly shape, exactly as series_interval has it borrow the monthly grid. Such a
+# pot is never overdue so no key is ever built for it, and inventing a third branch for a caller that
+# cannot reach it would be a branch nothing can test.
+def cadence_period_key(cadence: PotCadence, today: date_type) -> str:
+    if cadence == PotCadence.weekly:
+        iso_year, iso_week, _ = today.isocalendar()
+        return f"{iso_year:04d}-W{iso_week:02d}"
+    return f"{today.year:04d}-{today.month:02d}"
