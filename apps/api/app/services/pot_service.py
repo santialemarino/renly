@@ -317,8 +317,11 @@ async def _value_pot(
             return (None, {}, held)
         total, cash_buckets = added
         # Added rather than merged. No investment category is called `cash` today, so the two maps are
-        # disjoint — but a dict merge would silently DROP one side on a collision instead of summing,
-        # and nothing enforces that the enum never gains such a member.
+        # disjoint and a mutation sweep confirms this is UNREACHABLE — reverting it to `{**a, **b}`
+        # leaves the whole suite green, and no fixture can distinguish the two without inventing an
+        # enum member that does not exist. It stays for the reason `_CASH_STATUSES` stays in
+        # group_settlement_repository: it is correct about MEANING rather than about today's enum, and
+        # a merge would silently DROP one side's money on a collision instead of summing it.
         for bucket, value in cash_buckets.items():
             buckets[bucket] = buckets.get(bucket, ZERO) + value
 

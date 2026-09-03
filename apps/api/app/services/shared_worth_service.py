@@ -134,32 +134,34 @@ async def get_shared_worth(
 ) -> SharedWorth:
     if not context.has_shared:
         return SharedWorth()
-    # A pot's holdings are converted into ITS OWN base currency before anything else, so a valuation
-    # needs a lookup even when the caller asked for no display currency at all — but only a POT needs
-    # one, and a group with balances and no pots is a real and common shape.
-    pot_lookup = (lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)) if context.pots else None
-
     rate_map = lookup.get_rate_map_at(as_of_date) if lookup else None
     skipped: set[str] = set()
     pot_value = ZERO
     buckets: dict[str, Decimal] = {}
     undivided: list[UndividedPot] = []
 
-    for seat in context.pots:
-        share = await pot_service.get_member_share(session, seat, as_of_date=as_of_date, lookup=pot_lookup)
-        if share.value is None:
-            # A pot holding nothing is an empty container, not a half-finished setup: there is no
-            # missing value to explain, so it stays silent instead of being listed.
-            if share.holds_anything:
-                undivided.append(UndividedPot(pot_id=seat.pot.id, name=seat.pot.name, group_id=seat.pot.group_id))
-            continue
-        converted = _to_display(share.value, seat.pot.base_currency, currency, rate_map)
-        if converted is None:
-            skipped.add(seat.pot.base_currency)
-            continue
-        pot_value += converted
-        for bucket, value in _attribute(converted, share.weights, share.nav).items():
-            buckets[bucket] = buckets.get(bucket, ZERO) + value
+    # The whole pot section sits behind the guard rather than the lookup alone, so the RateLookup a
+    # valuation requires is only resolved where one is actually needed — and is never a nullable
+    # standing in for one. A pot's holdings convert into ITS OWN base currency before anything else, so
+    # a valuation needs a lookup even when the caller asked for no display currency at all; a group with
+    # balances and no pots needs none, and is a common shape.
+    if context.pots:
+        pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
+        for seat in context.pots:
+            share = await pot_service.get_member_share(session, seat, as_of_date=as_of_date, lookup=pot_lookup)
+            if share.value is None:
+                # A pot holding nothing is an empty container, not a half-finished setup: there is no
+                # missing value to explain, so it stays silent instead of being listed.
+                if share.holds_anything:
+                    undivided.append(UndividedPot(pot_id=seat.pot.id, name=seat.pot.name, group_id=seat.pot.group_id))
+                continue
+            converted = _to_display(share.value, seat.pot.base_currency, currency, rate_map)
+            if converted is None:
+                skipped.add(seat.pot.base_currency)
+                continue
+            pot_value += converted
+            for bucket, value in _attribute(converted, share.weights, share.nav).items():
+                buckets[bucket] = buckets.get(bucket, ZERO) + value
 
     receivable, payable, balance_skipped = _net_balances(context, currency=currency, rate_map=rate_map)
     return SharedWorth(
@@ -201,27 +203,28 @@ async def get_shared_series(
     if not month_ends or not context.has_shared:
         return (values, set())
 
-    pot_lookup = (lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)) if context.pots else None
     skipped: set[str] = set()
 
-    for seat in context.pots:
-        points = await pot_service.compute_share_series(
-            session,
-            seat.pot,
-            seat.member_id,
-            dates=month_ends,
-            events=seat.events,
-            lookup=pot_lookup,
-        )
-        for index, point in enumerate(points):
-            if point.my_value is None:
-                continue
-            rate_map = lookup.get_rate_map_at(month_ends[index]) if lookup else None
-            converted = _to_display(point.my_value, seat.pot.base_currency, currency, rate_map)
-            if converted is None:
-                skipped.add(seat.pot.base_currency)
-                continue
-            values[index] += converted
+    if context.pots:
+        pot_lookup = lookup or await exchange_rate_service.get_user_rate_lookup(session, user_id)
+        for seat in context.pots:
+            points = await pot_service.compute_share_series(
+                session,
+                seat.pot,
+                seat.member_id,
+                dates=month_ends,
+                events=seat.events,
+                lookup=pot_lookup,
+            )
+            for index, point in enumerate(points):
+                if point.my_value is None:
+                    continue
+                rate_map = lookup.get_rate_map_at(month_ends[index]) if lookup else None
+                converted = _to_display(point.my_value, seat.pot.base_currency, currency, rate_map)
+                if converted is None:
+                    skipped.add(seat.pot.base_currency)
+                    continue
+                values[index] += converted
 
     # Forward-filled over the positions series, which carries only the months that moved: a month with
     # no rows stands where the previous one left it, and months before the first are simply square.

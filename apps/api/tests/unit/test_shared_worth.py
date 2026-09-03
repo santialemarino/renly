@@ -21,6 +21,8 @@ from app.schemas.pot import PotValueSeriesPoint
 from app.services import pot_service, shared_worth_service
 
 TODAY = date(2026, 7, 15)
+# Distinguishes "the caller passed no lookup" from "the caller passed None on purpose".
+_MISSING = object()
 RATE_MAP = {"USD": Decimal("1"), "ARS": Decimal("1000")}
 
 
@@ -58,8 +60,15 @@ def _context(*, seats=(), pots=(), positions=()) -> shared_worth_service.SharedC
 
 # The context's positions as the dashboard reads them: the cumulative position at the end of every
 # month that moved. The headline takes the LAST entry, which is today's position by construction.
+#
+# An EARLIER, different entry is prepended so the fixture can tell `[-1]` from `[0]` — a one-entry list
+# cannot, and a mutation sweep proved it could not. The earlier figures are deliberately nothing like
+# the standing ones, so reading the wrong end shows up as a wrong number rather than a near miss.
 def _standing(by_group, month=(2026, 7)):
-    return [(month, by_group)]
+    earlier = {
+        group_id: {currency: dict.fromkeys(net, Decimal("7")) for currency, net in by_currency.items()} for group_id, by_currency in by_group.items()
+    }
+    return [((month[0], month[1] - 1), earlier), (month, by_group)]
 
 
 # Stubs the one pot read get_shared_worth makes, with the same answer for every pot it is asked about.
@@ -71,13 +80,13 @@ def _share(monkeypatch, *, nav, value, weights=None, holds_anything=True) -> Non
     )
 
 
-async def _worth(monkeypatch, context, *, currency: str | None = "USD", lookup=None) -> shared_worth_service.SharedWorth:
+async def _worth(monkeypatch, context, *, currency: str | None = "USD", lookup=_MISSING) -> shared_worth_service.SharedWorth:
     return await shared_worth_service.get_shared_worth(
         AsyncMock(),
         1,
         context,
         currency=currency,
-        lookup=lookup if lookup is not None else _FixedLookup(),
+        lookup=_FixedLookup() if lookup is _MISSING else lookup,
         as_of_date=TODAY,
     )
 
@@ -208,11 +217,31 @@ class TestTheBalanceSplit:
 class TestHasShared:
     @pytest.mark.asyncio
     async def test_a_solo_user_has_no_shared_side_and_pays_for_no_reads(self, monkeypatch):
+        # Both reads this function can make are asserted absent, not just the pot one: the valuation,
+        # and the rate lookup a valuation needs. A dashboard load is the app's most-used request and
+        # every user is solo at launch.
         _share(monkeypatch, nav=Decimal("1"), value=Decimal("1"))
-        worth = await _worth(monkeypatch, _context())
+        rates = AsyncMock()
+        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
+        worth = await _worth(monkeypatch, _context(), lookup=None)
         assert worth.has_shared is False
         assert worth.total == Decimal("0")
         pot_service.get_member_share.assert_not_awaited()
+        rates.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_group_with_balances_and_no_pots_needs_no_rate_lookup_either(self, monkeypatch):
+        # The guard is around the whole pot section rather than the lookup alone: a household that
+        # splits bills and shares no assets is a common shape, and it should not pay for a valuation
+        # engine it has nothing to value.
+        rates = AsyncMock()
+        monkeypatch.setattr(shared_worth_service.exchange_rate_service, "get_user_rate_lookup", rates)
+        context = _context(seats=[_seat(100)], positions=_standing({10: {"USD": {100: Decimal("40")}}}))
+        # lookup=None on purpose: with one supplied, `lookup or await …` short-circuits and the guard
+        # under test is never reached — which is exactly how this test first passed while proving nothing.
+        worth = await _worth(monkeypatch, context, currency=None, lookup=None)
+        assert worth.receivable == Decimal("40")
+        rates.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_seat_with_no_money_at_all_still_has_a_shared_side(self, monkeypatch):
