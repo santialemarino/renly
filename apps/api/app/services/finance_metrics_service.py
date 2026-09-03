@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.credit_card_repository import credit_card_repository
 from app.repositories.expense_repository import expense_repository
+from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
 from app.schemas.finance_metrics import (
     ExpenseBreakdownResponse,
@@ -64,11 +65,13 @@ async def get_overview(
     *,
     currency: str | None = None,
     lookup: RateLookup | None = None,
+    member_ids: list[int] | None = None,
     today: date_type | None = None,
     date_from: date_type | None = None,
     date_to: date_type | None = None,
 ) -> FinanceOverviewResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency, lookup)
+    member_ids = await _resolve_member_ids(session, user_id, member_ids)
     # The caller (dashboard overview) passes today from its merged settings read; standalone callers
     # (the finance-metrics router) omit it and resolve it here.
     if today is None:
@@ -80,12 +83,14 @@ async def get_overview(
     income_rows = await income_repository.sum_by_user_monthly(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
     expense_rows = await expense_repository.sum_by_user_monthly(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
@@ -106,12 +111,14 @@ async def get_overview(
         prev_income_rows = await income_repository.sum_by_user_monthly(
             session,
             user_id,
+            member_ids,
             date_from=prev_from,
             date_to=prev_to,
         )
         prev_expense_rows = await expense_repository.sum_by_user_monthly(
             session,
             user_id,
+            member_ids,
             date_from=prev_from,
             date_to=prev_to,
         )
@@ -170,16 +177,19 @@ async def get_monthly(
     date_to: date_type | None = None,
 ) -> FinanceMonthlyResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency)
+    member_ids = await _resolve_member_ids(session, user_id, None)
 
     income_rows = await income_repository.sum_by_user_monthly(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
     expense_rows = await expense_repository.sum_by_user_monthly(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
@@ -235,12 +245,14 @@ async def get_expense_breakdown(
     date_to: date_type | None = None,
 ) -> ExpenseBreakdownResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency)
+    member_ids = await _resolve_member_ids(session, user_id, None)
     anchor = date_to or await settings_service.get_user_today(session, user_id)
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await expense_repository.sum_by_user_grouped_by_category(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
@@ -293,12 +305,14 @@ async def get_income_breakdown(
     date_to: date_type | None = None,
 ) -> IncomeBreakdownResponse:
     lookup = await _build_lookup_if_needed(session, user_id, currency)
+    member_ids = await _resolve_member_ids(session, user_id, None)
     anchor = date_to or await settings_service.get_user_today(session, user_id)
     rate_map = lookup.get_rate_map_at(anchor) if (currency and lookup) else None
 
     rows = await income_repository.sum_by_user_grouped_by_category(
         session,
         user_id,
+        member_ids,
         date_from=date_from,
         date_to=date_to,
     )
@@ -329,6 +343,24 @@ async def get_income_breakdown(
         currency=currency,
         skipped_currencies=sorted(skipped),
     )
+
+
+# The caller's own active group seats, which is what turns every aggregate here into "their spending
+# and their earnings" rather than "the rows in their own two tables".
+#
+# Resolved once per request and threaded down, because a member's SHARE of a shared expense is their
+# expense (D2) and their entitlement out of shared income is their income — the same rule /expenses and
+# /income already apply row by row. Without it the finance dashboard states a different total from the
+# list it summarises.
+#
+# The dashboard overview pre-resolves them (it needs the same seats for the shared half of net worth)
+# and passes them in; the standalone finance-metrics endpoints resolve them here. An empty list is a
+# real answer, not a missing one — every solo user has one, and it is what makes the shared branch of
+# each aggregate not be built at all.
+async def _resolve_member_ids(session: AsyncSession, user_id: int, member_ids: list[int] | None) -> list[int]:
+    if member_ids is not None:
+        return member_ids
+    return await group_repository.list_active_member_ids(session, user_id)
 
 
 # Returns a pre-loaded RateLookup when a display currency is requested. None otherwise.

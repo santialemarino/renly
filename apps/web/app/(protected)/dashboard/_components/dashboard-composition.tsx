@@ -10,6 +10,7 @@ import {
   CHART_ANIMATION_EASING,
   CHART_COLOR_NEGATIVE,
   CHART_COLOR_POSITIVE,
+  CHART_COLOR_POSITIVE_SOFT,
   DONUT_COLORS,
   DONUT_HEIGHT,
   DONUT_INNER_RADIUS,
@@ -26,6 +27,9 @@ import { useFormatters } from '@/lib/i18n/formatters';
 
 const LIABILITIES_COLOR = CHART_COLOR_NEGATIVE;
 const CASH_COLOR = CHART_COLOR_POSITIVE;
+// A receivable is an asset that belongs with cash rather than beside it, so it takes the same hue two
+// steps lighter — see CHART_COLOR_POSITIVE_SOFT for why it is not the blue one.
+const RECEIVABLE_COLOR = CHART_COLOR_POSITIVE_SOFT;
 
 interface DashboardCompositionProps {
   composition: CompositionItem[];
@@ -38,10 +42,18 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
 
   const hasData = composition.length > 0;
 
-  // Cash (asset) and liabilities get fixed colors; investment categories cycle DONUT_COLORS.
+  /*
+   * Cash, receivables and liabilities get fixed colors; investment categories cycle DONUT_COLORS.
+   *
+   * A co-owned holding does NOT get a segment of its own: the viewer's share of it is folded into the
+   * slice its kind belongs to, because the donut answers "what is my money in" and scope is not an
+   * asset class. The Yours/Shared split lives on the headline, where it decomposes the figure it is
+   * about.
+   */
   function segmentName(label: string): string {
     if (label === 'liabilities') return t('composition.liabilities');
     if (label === 'cash') return t('composition.cash');
+    if (label === 'receivable') return t('composition.receivable');
     return tCommon(`categories.${label}`);
   }
   const chartData = composition.map((item) => ({
@@ -50,15 +62,17 @@ export function DashboardComposition({ composition }: DashboardCompositionProps)
     percentage: item.percentage,
     isLiability: item.label === 'liabilities',
     isCash: item.label === 'cash',
+    isReceivable: item.label === 'receivable',
   }));
 
-  // Picks a segment's color: fixed for cash/liabilities, cycled DONUT_COLORS for investments.
+  // Picks a segment's color: fixed for cash/receivable/liabilities, cycled DONUT_COLORS for investments.
   function segmentColor(
-    entry: { isLiability: boolean; isCash: boolean },
+    entry: { isLiability: boolean; isCash: boolean; isReceivable: boolean },
     investmentIdx: () => number,
   ) {
     if (entry.isLiability) return LIABILITIES_COLOR;
     if (entry.isCash) return CASH_COLOR;
+    if (entry.isReceivable) return RECEIVABLE_COLOR;
     return DONUT_COLORS[investmentIdx() % DONUT_COLORS.length];
   }
 

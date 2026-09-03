@@ -635,6 +635,96 @@ class TestBalances:
         assert result.buckets == []
 
 
+class TestThePositionsByMonth:
+    # The chart's balance line, and the property that keeps it honest: a month's position is every row
+    # dated on or before it, run through the SAME fold the live balance uses. What is asserted here is
+    # the accumulation; that the fold agrees with the live read is a two-queries-one-fact question and
+    # lives in tests/integration/test_dashboard_scope_queries.py.
+    def _wire_monthly(self, monkeypatch, *, expenses=(), income=(), movements=()):
+        monkeypatch.setattr(
+            group_settlement_service.shared_expense_repository, "list_positions_by_groups_monthly", AsyncMock(return_value=list(expenses))
+        )
+        monkeypatch.setattr(
+            group_settlement_service.shared_income_repository, "list_positions_by_groups_monthly", AsyncMock(return_value=list(income))
+        )
+        monkeypatch.setattr(
+            group_settlement_service.group_settlement_repository, "list_movements_by_groups_monthly", AsyncMock(return_value=list(movements))
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_month_carries_every_row_dated_on_or_before_it(self, monkeypatch):
+        # Two expenses in two months, one member fronting both. Their position at the second month is
+        # the sum, not that month's row alone — a balance is a running total.
+        self._wire_monthly(
+            monkeypatch,
+            expenses=[
+                (10, 2026, 5, "ARS", 100, Decimal("50"), Decimal("100")),
+                (10, 2026, 5, "ARS", 101, Decimal("50"), Decimal("0")),
+                (10, 2026, 7, "ARS", 100, Decimal("30"), Decimal("60")),
+                (10, 2026, 7, "ARS", 101, Decimal("30"), Decimal("0")),
+            ],
+        )
+        series = await group_settlement_service.get_positions_by_month(AsyncMock(), [10])
+        assert [month for month, _ in series] == [(2026, 5), (2026, 7)]
+        assert series[0][1] == {10: {"ARS": {100: Decimal("50"), 101: Decimal("-50")}}}
+        assert series[1][1] == {10: {"ARS": {100: Decimal("80"), 101: Decimal("-80")}}}
+
+    @pytest.mark.asyncio
+    async def test_only_the_months_that_MOVED_are_emitted(self, monkeypatch):
+        # The caller forward-fills. Emitting a row for every month in between would make the series'
+        # length depend on how long ago the group started rather than on how much it recorded.
+        self._wire_monthly(monkeypatch, expenses=[(10, 2026, 1, "ARS", 100, Decimal("10"), Decimal("20"))])
+        series = await group_settlement_service.get_positions_by_month(AsyncMock(), [10])
+        assert [month for month, _ in series] == [(2026, 1)]
+
+    @pytest.mark.asyncio
+    async def test_a_settlement_clears_the_bucket_at_its_own_month(self, monkeypatch):
+        self._wire_monthly(
+            monkeypatch,
+            expenses=[
+                (10, 2026, 5, "ARS", 100, Decimal("0"), Decimal("100")),
+                (10, 2026, 5, "ARS", 101, Decimal("100"), Decimal("0")),
+            ],
+            movements=[(10, 2026, 6, "ARS", 101, 100, Decimal("100"))],
+        )
+        series = await group_settlement_service.get_positions_by_month(AsyncMock(), [10])
+        assert series[0][1] == {10: {"ARS": {100: Decimal("100"), 101: Decimal("-100")}}}
+        # Square afterwards, and the bucket is dropped rather than reported as a pair of zeros.
+        assert series[1] == ((2026, 6), {})
+
+    @pytest.mark.asyncio
+    async def test_income_and_expenses_land_in_ONE_bucket(self, monkeypatch):
+        # Somebody who fronted a dinner and somebody who collected the rent are owed and owing in the
+        # same bucket, so one settle-up clears whatever the two flows add up to.
+        self._wire_monthly(
+            monkeypatch,
+            expenses=[(10, 2026, 5, "ARS", 100, Decimal("0"), Decimal("100"))],
+            income=[(10, 2026, 5, "ARS", 100, Decimal("0"), Decimal("40"))],
+        )
+        series = await group_settlement_service.get_positions_by_month(AsyncMock(), [10])
+        # Fronted 100 (owed it) and received 40 they were not entitled to (owe it back): net 60.
+        assert series[0][1] == {10: {"ARS": {100: Decimal("60")}}}
+
+    @pytest.mark.asyncio
+    async def test_currencies_stay_in_their_own_buckets(self, monkeypatch):
+        self._wire_monthly(
+            monkeypatch,
+            expenses=[
+                (10, 2026, 5, "ARS", 100, Decimal("0"), Decimal("100")),
+                (10, 2026, 5, "USD", 100, Decimal("10"), Decimal("0")),
+            ],
+        )
+        series = await group_settlement_service.get_positions_by_month(AsyncMock(), [10])
+        assert series[0][1] == {10: {"ARS": {100: Decimal("100")}, "USD": {100: Decimal("-10")}}}
+
+    @pytest.mark.asyncio
+    async def test_no_groups_reads_nothing(self, monkeypatch):
+        reads = AsyncMock(return_value=[])
+        monkeypatch.setattr(group_settlement_service.shared_expense_repository, "list_positions_by_groups_monthly", reads)
+        assert await group_settlement_service.get_positions_by_month(AsyncMock(), []) == []
+        reads.assert_not_awaited()
+
+
 class TestTheRemovalGuard:
     @pytest.mark.asyncio
     async def test_an_open_balance_refuses_the_removal(self, monkeypatch):

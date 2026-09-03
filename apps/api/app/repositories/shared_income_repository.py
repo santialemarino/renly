@@ -80,6 +80,31 @@ async def list_positions_by_groups(session: AsyncSession, group_ids: list[int]) 
     return [(row[0], row[1], row[2], Decimal(str(row[3])), Decimal(str(row[4]))) for row in result.all()]
 
 
+# The same aggregate bucketed by MONTH, as (group_id, year, month, currency, member_id, amount,
+# received_amount) — the expense sibling's mirror, and it feeds the same accumulation. See that one for
+# why the chart reads a per-month aggregate rather than re-running the live balance per point.
+async def list_positions_by_groups_monthly(session: AsyncSession, group_ids: list[int]) -> list[tuple[int, int, int, str, int, Decimal, Decimal]]:
+    if not group_ids:
+        return []
+    year_col = func.extract("year", SharedIncome.date).label("year")
+    month_col = func.extract("month", SharedIncome.date).label("month")
+    result = await session.execute(
+        select(
+            SharedIncome.group_id,
+            year_col,
+            month_col,
+            SharedIncome.currency,
+            SharedIncomeSplit.member_id,
+            func.coalesce(func.sum(SharedIncomeSplit.amount), 0),
+            func.coalesce(func.sum(SharedIncomeSplit.received_amount), 0),
+        )
+        .join(SharedIncome, SharedIncome.id == SharedIncomeSplit.shared_income_id)
+        .where(SharedIncome.group_id.in_(group_ids))
+        .group_by(SharedIncome.group_id, year_col, month_col, SharedIncome.currency, SharedIncomeSplit.member_id)
+    )
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4], Decimal(str(row[5])), Decimal(str(row[6]))) for row in result.all()]
+
+
 # Inserts a shared-income row and flushes so its id is available for the splits.
 async def create(session: AsyncSession, income: SharedIncome) -> SharedIncome:
     session.add(income)
@@ -175,6 +200,7 @@ class SharedIncomeRepository:
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_group = staticmethod(list_by_group)
     list_positions_by_groups = staticmethod(list_positions_by_groups)
+    list_positions_by_groups_monthly = staticmethod(list_positions_by_groups_monthly)
     list_splits_by_income_ids = staticmethod(list_splits_by_income_ids)
     save = staticmethod(save)
     sum_by_account_ids = staticmethod(sum_by_account_ids)

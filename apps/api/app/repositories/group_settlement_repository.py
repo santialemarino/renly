@@ -76,6 +76,32 @@ async def list_movements_by_groups(session: AsyncSession, group_ids: list[int]) 
     return [(row[0], row[1], row[2], row[3], Decimal(str(row[4]))) for row in result.all()]
 
 
+# The same movements bucketed by MONTH, as (group_id, year, month, currency, from_member_id,
+# to_member_id, amount) — what the dashboard's series applies on top of each month's accumulated
+# positions. `COUNTING_STATUSES` is the same filter the live read uses, so a settlement that counts on
+# the group hub counts on the chart.
+async def list_movements_by_groups_monthly(session: AsyncSession, group_ids: list[int]) -> list[tuple[int, int, int, str, int, int, Decimal]]:
+    if not group_ids:
+        return []
+    year_col = func.extract("year", GroupSettlement.date).label("year")
+    month_col = func.extract("month", GroupSettlement.date).label("month")
+    result = await session.execute(
+        select(
+            GroupSettlement.group_id,
+            year_col,
+            month_col,
+            GroupSettlement.currency,
+            GroupSettlement.from_member_id,
+            GroupSettlement.to_member_id,
+            GroupSettlement.amount,
+        ).where(
+            GroupSettlement.group_id.in_(group_ids),
+            GroupSettlement.status.in_(COUNTING_STATUSES),
+        )
+    )
+    return [(row[0], int(row[1]), int(row[2]), row[3], row[4], row[5], Decimal(str(row[6]))) for row in result.all()]
+
+
 # Whether any group in the given set still has a settlement-relevant row at all. Used by the removal
 # and account-deletion guards, which need to know a group has money history before computing balances.
 async def group_ids_with_settlements(session: AsyncSession, group_ids: list[int]) -> set[int]:
@@ -221,6 +247,7 @@ class GroupSettlementRepository:
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_group = staticmethod(list_by_group)
     list_movements_by_groups = staticmethod(list_movements_by_groups)
+    list_movements_by_groups_monthly = staticmethod(list_movements_by_groups_monthly)
     save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
     sum_in_by_account_ids_dated = staticmethod(sum_in_by_account_ids_dated)

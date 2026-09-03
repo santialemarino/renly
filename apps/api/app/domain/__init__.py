@@ -108,7 +108,7 @@ from app.domain.errors import (
     TransferCrossScopeError,
     TransferSameAccountError,
 )
-from app.domain.money import quantize, spread_remainder
+from app.domain.money import assign_remainder, quantize, spread_remainder
 from app.domain.notification import is_enabled_by_default
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.domain.payments_calendar import CalendarItem
@@ -258,6 +258,7 @@ __all__ = [
     "WaterfallStep",
     "amount_for_units",
     "apply_settlements",
+    "assign_remainder",
     "claimed_installment_cuotas",
     "claimed_subscription_cycles",
     "cadence_period_key",

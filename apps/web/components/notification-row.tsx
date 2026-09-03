@@ -30,11 +30,12 @@ interface NotificationRowProps {
 export function NotificationRow({ notification, onOpen, className }: NotificationRowProps) {
   const fmt = useFormatters();
   const t = useTranslations('notifications');
+  const tCommon = useTranslations('common');
 
   const row = notificationRow(notification, {
     formatAmount: (amount, currency) => fmt.amount(amount, currency || undefined),
     formatDate: (iso) => fmt.date(iso),
-    potFallback: t('potFallback'),
+    potFallback: tCommon('potDefaultLabel'),
   });
   const unread = notification.readAt === null;
 

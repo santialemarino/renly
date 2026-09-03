@@ -25,7 +25,6 @@ import {
   canTakeShareOut,
   holderShare,
   isPriceable,
-  potLabel,
   potLegAccounts,
   wholeExitOutcome,
 } from '@/app/(protected)/shared/pot-rules';
@@ -38,6 +37,7 @@ import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { potLabel } from '@/lib/pots';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 type Stage = 'who' | 'where' | 'confirm' | 'done';
@@ -108,7 +108,7 @@ export function TakeOutWizard({
   const seats = useMemo(() => group.members.filter((m) => m.isActive), [group.members]);
   const mySeatId = useMemo(() => seats.find((m) => m.isSelf)?.id ?? null, [seats]);
   const today = todayInTimezone(timeZone);
-  const label = potLabel(pot, t('pots.defaultLabel'));
+  const label = potLabel(pot, tCommon('potDefaultLabel'));
 
   const priceable = canTakeShareOut(pot);
   // Whoever holds the largest share, unless the viewer holds one — the common case is your own.

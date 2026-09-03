@@ -25,7 +25,6 @@ import {
   canRecordReagreement,
   holderShare,
   isPriceable,
-  potLabel,
 } from '@/app/(protected)/shared/pot-rules';
 import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
@@ -34,6 +33,7 @@ import { sharedBuyOutPath, sharedPotPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { potLabel } from '@/lib/pots';
 import { todayInTimezone } from '@/lib/utils/dates';
 
 type Stage = 'who' | 'recorded' | 'done';
@@ -89,7 +89,7 @@ export function BuyOutWizard({ pot, group, asOfDate, timeZone }: BuyOutWizardPro
 
   const seats = useMemo(() => group.members.filter((m) => m.isActive), [group.members]);
   const today = todayInTimezone(timeZone);
-  const label = potLabel(pot, t('pots.defaultLabel'));
+  const label = potLabel(pot, tCommon('potDefaultLabel'));
   const applicable = canRecordReagreement(pot, group.activeMemberCount);
 
   const schema = useMemo(

@@ -17,7 +17,6 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dialog';
-import { potLabel } from '@/app/(protected)/shared/pot-rules';
 import { DismissableHint } from '@/components/dismissable-hint';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
@@ -25,6 +24,7 @@ import { sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { potLabel } from '@/lib/pots';
 
 interface GroupPotsSectionProps {
   group: Group;
@@ -114,6 +114,7 @@ export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPots
 function SinglePotCard({ pot }: { pot: Pot }) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
+  const tCommon = useTranslations('common');
 
   const stats = [
     {
@@ -131,7 +132,7 @@ function SinglePotCard({ pot }: { pot: Pot }) {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <span className="flex flex-wrap items-center gap-x-2">
           <span className="text-paragraph-medium text-foreground">
-            {potLabel(pot, t('pots.defaultLabel'))}
+            {potLabel(pot, tCommon('potDefaultLabel'))}
           </span>
           <Badge variant="secondary">{pot.baseCurrency}</Badge>
           {/*
@@ -167,6 +168,7 @@ function SinglePotCard({ pot }: { pot: Pot }) {
 function PotsTable({ pots }: { pots: Pot[] }) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
+  const tCommon = useTranslations('common');
 
   return (
     <Table>
@@ -183,7 +185,7 @@ function PotsTable({ pots }: { pots: Pot[] }) {
           <TableRow key={pot.id}>
             <TableCell className="text-paragraph-sm-medium">
               <span className="flex flex-wrap items-center gap-x-2">
-                {potLabel(pot, t('pots.defaultLabel'))}
+                {potLabel(pot, tCommon('potDefaultLabel'))}
                 <Badge variant="secondary">{pot.baseCurrency}</Badge>
                 {pot.isStale && <Badge variant="outline">{t('pots.freshness.badge')}</Badge>}
                 {!pot.canWrite && <Badge variant="secondary">{t('pots.readOnly')}</Badge>}

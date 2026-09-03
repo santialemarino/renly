@@ -1,6 +1,7 @@
 {
   "common": {
     "appName": "Renly",
+    "potDefaultLabel": "Dinero compartido",
     "sampleData": {
       "banner": "Estos son datos de ejemplo para mostrarte cómo funciona. Agregá los tuyos para reemplazarlos.",
       "clear": "Limpiar",
@@ -439,7 +440,9 @@
       "vsLastMonth": "vs mes anterior",
       "netWorthHint": "Inversiones + efectivo − pasivos",
       "cash": "Efectivo",
-      "cashHint": "Saldos de efectivo y banco"
+      "cashHint": "Saldos de efectivo y banco",
+      "cashHintShared": "Tus cuentas y tu parte de las compartidas",
+      "investmentGainScope": "El rendimiento es sobre lo que tenés a tu nombre"
     },
     "period": {
       "ytd": "YTD",
@@ -450,12 +453,17 @@
     },
     "chart": {
       "title": "Evolución del Patrimonio",
-      "tooltipValue": "Valor"
+      "tooltipValue": "Valor",
+      "legend": {
+        "total": "Patrimonio neto",
+        "yours": "Tuyo"
+      }
     },
     "composition": {
       "title": "Composición",
       "liabilities": "Pasivos",
-      "cash": "Efectivo y banco"
+      "cash": "Efectivo y banco",
+      "receivable": "Te deben"
     },
     "health": {
       "savingsRate": "Tasa de Ahorro",
@@ -478,7 +486,15 @@
     },
     "currencyFallback": "El dashboard requiere una moneda común. <bold>Mostrando valores en {currency}.</bold>",
     "loadError": "No se pudo cargar el dashboard. Intentalo de nuevo más tarde.",
-    "noData": "No hay datos disponibles. Agregá entradas financieras o snapshots de inversión para ver tu resumen."
+    "noData": "No hay datos disponibles. Agregá entradas financieras o snapshots de inversión para ver tu resumen.",
+    "skippedCurrencies": "No hay cotización guardada para {currencies}, así que lo que esté en esas monedas queda fuera de las cifras de abajo.",
+    "shared": {
+      "yours": "Tuyo",
+      "shared": "Compartido",
+      "owedToYou": "Te deben",
+      "youOwe": "Debés",
+      "undividedPot": "{pot} en {group} cuenta como 0 — falta acordar la propiedad."
+    }
   },
   "financeDashboard": {
     "metadata": {
@@ -1995,7 +2011,6 @@
       },
       "title": "Dinero compartido",
       "description": "Lo que este grupo tiene en conjunto. Lo que crece o baja se reparte solo, en proporción — nadie tiene que registrarlo.",
-      "defaultLabel": "Dinero compartido",
       "subtitle": "Dinero compartido en {group}",
       "add": "Nuevo",
       "edit": "Editar",
@@ -2950,7 +2965,6 @@
     },
     "title": "Notificaciones",
     "subtitle": "Qué te avisa Renly y por dónde te llega.",
-    "potFallback": "Dinero compartido",
     "bell": {
       "unread": "{count, plural, one {# notificación sin leer} other {# notificaciones sin leer}}",
       "none": "Sin notificaciones",

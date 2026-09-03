@@ -126,14 +126,18 @@ class TestRendering:
 
     @pytest.mark.parametrize("locale", _LOCALES)
     def test_the_nameless_label_is_the_one_the_web_shows(self, locale):
-        # The same event must not have two names. This asserts the API's label against the WEB's
-        # `notifications.potFallback`, read out of the translation file rather than restated, so the
-        # two cannot drift into "Shared money" in an inbox and something else in the app.
+        # The same pot must not have two names. This asserts the API's label against the WEB's
+        # `common.potDefaultLabel`, read out of the translation file rather than restated, so the two
+        # cannot drift into "Shared money" in an inbox and something else in the app.
+        #
+        # It is a `common` key rather than a per-namespace one because THREE surfaces now render it —
+        # the notification feed, the Shared module and the dashboard's undivided-pot line — and the
+        # first two used to hold byte-identical copies under two namespaces.
         import json
         from pathlib import Path
 
         web = json.loads((Path(__file__).resolve().parents[3] / "web" / "translations" / f"{locale}.json").read_text())
-        assert templates._strings("_pot", locale)["name"] == web["notifications"]["potFallback"]
+        assert templates._strings("_pot", locale)["name"] == web["common"]["potDefaultLabel"]
 
     def test_an_unknown_locale_falls_back_to_english(self):
         message = templates.notification_email(

@@ -76,6 +76,11 @@ from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal(0)
 
+# The composition segment a pot's cash accounts contribute to — the same 'cash' label the dashboard
+# already gives a private account, so a member's share of a jointly-held bank account lands in the
+# slice they would look for it in. Investments contribute under their own category instead.
+CASH_BUCKET = "cash"
+
 
 # Whether a seat may see a pot, resolved exactly as the app_can_view_pot SQL helper does: an explicit
 # permission row if there is one, otherwise the pot's visibility default. Kept in one function for the
@@ -186,15 +191,28 @@ def _to_base_currency(value: Decimal, currency: str, base_currency: str, rate_ma
 # series — because a series whose points were computed by a second copy of this rule is a second
 # algorithm that has to agree with the first at every date, and the shape to watch for (§18) is
 # exactly a sum that drops a term instead of refusing.
-def _add_holdings(total: Decimal, figures: list[tuple[Decimal, str] | None], base_currency: str, rate_map) -> Decimal | None:
-    for figure in figures:
+#
+# Each figure arrives labelled with the BUCKET it contributes to — an investment's category, or `cash`
+# for an account — so the dashboard's composition can attribute a member's share of the pot across the
+# same segments a private holding lands in. Returns (total, per-bucket additions); the value series
+# ignores the second element, and it is returned rather than accumulated through a mutable argument so
+# a refusal leaves the caller with nothing partial to mistake for an answer.
+def _add_holdings(
+    total: Decimal,
+    figures: list[tuple[str, tuple[Decimal, str] | None]],
+    base_currency: str,
+    rate_map,
+) -> tuple[Decimal, dict[str, Decimal]] | None:
+    buckets: dict[str, Decimal] = {}
+    for bucket, figure in figures:
         if figure is None:
             return None
         converted = _to_base_currency(figure[0], figure[1], base_currency, rate_map)
         if converted is None:
             return None
         total += converted
-    return total
+        buckets[bucket] = buckets.get(bucket, ZERO) + converted
+    return (total, buckets)
 
 
 # What a pot HOLDS at a date, and how current that is — the half of a valuation that needs no
@@ -206,7 +224,7 @@ def _add_holdings(total: Decimal, figures: list[tuple[Decimal, str] | None], bas
 # series, and for the same reason — two ways to compute one figure is the shape that goes wrong quietly.
 @dataclass(frozen=True)
 class _Holdings:
-    investment_ids: list[int]
+    investments: list[Investment]
     snapshots: dict[int, InvestmentSnapshot]
     accounts: list[Account]
     # The OLDEST of the latest snapshots, because the pot's value is only as current as its stalest
@@ -217,7 +235,8 @@ class _Holdings:
 
 
 async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type) -> _Holdings:
-    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
+    investments = await pot_repository.list_active_investments(session, pot.id)
+    investment_ids = [investment.id for investment in investments]
     snapshots: dict[int, InvestmentSnapshot] = {}
     valued_as_of: date_type | None = None
     if investment_ids:
@@ -235,11 +254,11 @@ async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type
     if accounts and not investment_ids:
         valued_as_of = as_of_date
     return _Holdings(
-        investment_ids=investment_ids,
+        investments=investments,
         snapshots=snapshots,
         accounts=accounts,
         valued_as_of=valued_as_of,
-        holds_anything=bool(investment_ids or accounts),
+        holds_anything=bool(investments or accounts),
     )
 
 
@@ -248,7 +267,10 @@ async def _holdings_at(session: AsyncSession, pot: Pot, *, as_of_date: date_type
 # derived balance. Both reuse the existing engines unchanged, which is the whole point of co-owning
 # stock in place rather than duplicating a metrics layer for shared money.
 #
-# Returns (nav, holdings). The NAV is None — never a partial total — in every case
+# Returns (nav, buckets, holdings) — `buckets` being what each composition segment contributed, in the
+# pot's base currency, so a member's share of the pot can be attributed across the same segments a
+# private holding lands in. It is empty whenever the NAV is None, because there is nothing to
+# attribute. The NAV is None — never a partial total — in every case
 # where the figure cannot be stated in full:
 #
 #   * a holding whose currency cannot be converted. The repo's standing fail-loud rule.
@@ -269,33 +291,54 @@ async def _value_pot(
     *,
     as_of_date: date_type,
     lookup: RateLookup,
-) -> tuple[Decimal | None, _Holdings]:
+) -> tuple[Decimal | None, dict[str, Decimal], _Holdings]:
     rate_map = lookup.get_rate_map_at(as_of_date)
     held = await _holdings_at(session, pot, as_of_date=as_of_date)
     if not held.holds_anything:
-        return (None, held)
+        return (None, {}, held)
 
-    total: Decimal | None = ZERO
-    if held.investment_ids:
-        figures = [
-            None if investment_id not in held.snapshots else (held.snapshots[investment_id].value, held.snapshots[investment_id].currency)
-            for investment_id in held.investment_ids
-        ]
-        total = _add_holdings(total, figures, pot.base_currency, rate_map)
+    total = ZERO
+    buckets: dict[str, Decimal] = {}
+    if held.investments:
+        added = _add_holdings(total, _investment_figures(held), pot.base_currency, rate_map)
         # Returned here so an unconvertible investment never costs a BALANCE query — the expensive
         # read, seven sums per account. (The two cheap holdings lookups now both happen up front, in
         # _holdings_at, because knowing what the pot holds is what decides holds_anything at all.)
-        if total is None:
-            return (None, held)
+        if added is None:
+            return (None, {}, held)
+        total, buckets = added
 
     if held.accounts:
         # No missing case here either: an account always has a balance — its opening figure at worst.
         balances = await account_service.compute_account_balances_at(session, held.accounts, as_of_date=as_of_date)
-        total = _add_holdings(total, [(balances.get(a.id, ZERO), a.currency) for a in held.accounts], pot.base_currency, rate_map)
-        if total is None:
-            return (None, held)
+        figures = [(CASH_BUCKET, (balances.get(a.id, ZERO), a.currency)) for a in held.accounts]
+        added = _add_holdings(total, figures, pot.base_currency, rate_map)
+        if added is None:
+            return (None, {}, held)
+        total, cash_buckets = added
+        # Added rather than merged. No investment category is called `cash` today, so the two maps are
+        # disjoint and a mutation sweep confirms this is UNREACHABLE — reverting it to `{**a, **b}`
+        # leaves the whole suite green, and no fixture can distinguish the two without inventing an
+        # enum member that does not exist. It stays for the reason `_CASH_STATUSES` stays in
+        # group_settlement_repository: it is correct about MEANING rather than about today's enum, and
+        # a merge would silently DROP one side's money on a collision instead of summing it.
+        for bucket, value in cash_buckets.items():
+            buckets[bucket] = buckets.get(bucket, ZERO) + value
 
-    return (total, held)
+    return (total, buckets, held)
+
+
+# Each held investment's figure, labelled with the composition bucket it contributes to. A `None`
+# figure is an investment nobody has snapshotted on or before the date, which is what makes the whole
+# NAV unknown rather than smaller.
+def _investment_figures(held: _Holdings) -> list[tuple[str, tuple[Decimal, str] | None]]:
+    return [
+        (
+            investment.category.value,
+            None if investment.id not in held.snapshots else (held.snapshots[investment.id].value, held.snapshots[investment.id].currency),
+        )
+        for investment in held.investments
+    ]
 
 
 # Whether the pot is behind on its own cadence. THE one call site of the rule, so the point-in-time
@@ -321,7 +364,7 @@ async def get_valuation(
     as_of_date: date_type,
     lookup: RateLookup,
 ) -> PotValuation:
-    nav, held = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
+    nav, _, held = await _value_pot(session, pot, as_of_date=as_of_date, lookup=lookup)
     return PotValuation(nav=nav, valued_as_of=held.valued_as_of, is_stale=_is_overdue(pot, held, as_of_date))
 
 
@@ -464,6 +507,71 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
     return responses
 
 
+# One visible pot paired with the caller's own seat in it and its ownership ledger.
+#
+# The walk that produces these is shared by the dashboard's two reads — the headline needs each pot
+# valued today, the evolution chart needs each pot's share series over a month grid — so that neither
+# holds its own copy of "which pots can this person see, and as whom".
+@dataclass(frozen=True)
+class PotSeat:
+    pot: Pot
+    member_id: int
+    events: list
+
+
+# One member's stake in one pot, plus what the pot's value is made of.
+#
+# `value` is that member's share in the POT's base currency. It is None while nothing has been divided:
+# before the baseline nobody owns any share of anything (the rule ownership_percentages already
+# applies), so there is no figure to state — and None again whenever the NAV is, because a share of an
+# unknown total is unknown.
+#
+# `weights` is what each composition bucket contributed to the WHOLE pot, in the same currency. The
+# member's own attribution is pro-rata of those and is computed by the caller AFTER converting to a
+# display currency, so the converted parts sum to the converted share exactly instead of to a
+# re-rounded approximation of it.
+@dataclass(frozen=True)
+class PotShare:
+    nav: Decimal | None
+    value: Decimal | None
+    weights: dict[str, Decimal]
+    holds_anything: bool
+
+
+# Every pot the caller may see, as their own seat in it — the dashboard's input, and deliberately not
+# list_pots: that one builds a full response per pot (every member's row, every permission row) for a
+# page that shows them, and the dashboard needs one figure per pot.
+#
+# The viewer-seat resolution is the same, including the fail-closed skip: RLS returns only pots the user
+# may see, so a missing seat means the policy and this service disagree, and under-reporting is the safe
+# direction. A pot the caller may see but owns none of is still returned — X1's rule is that visibility
+# never inflates net worth, not that it hides the pot.
+async def list_visible_seats(session: AsyncSession, user_id: int) -> list[PotSeat]:
+    pots = await pot_repository.list_visible(session)
+    if not pots:
+        return []
+    events_by_pot = await pot_ownership_repository.list_by_pots(session, [p.id for p in pots if p.id is not None])
+    members_by_group = await group_repository.list_members_by_groups(session, sorted({p.group_id for p in pots}))
+    seats = []
+    for pot in pots:
+        viewer = next((m for m in members_by_group.get(pot.group_id, []) if m.user_id == user_id and m.is_active), None)
+        if viewer is None:
+            continue
+        seats.append(PotSeat(pot=pot, member_id=viewer.id, events=events_by_pot.get(pot.id, [])))
+    return seats
+
+
+# What one seat's share of its pot is worth on a date, and what the pot's value is made of.
+#
+# Bounded by the date in Python rather than in SQL: list_visible_seats fetched every pot's ledger in one
+# query, and re-reading per pot to apply a bound would cost a query per pot to answer the same question.
+async def get_member_share(session: AsyncSession, seat: PotSeat, *, as_of_date: date_type, lookup: RateLookup) -> PotShare:
+    nav, weights, held = await _value_pot(session, seat.pot, as_of_date=as_of_date, lookup=lookup)
+    balances = replay_units(_as_entries([e for e in seat.events if e.date <= as_of_date]))
+    value = None if nav is None or total_units(balances) <= 0 else share_values(balances, nav).get(seat.member_id, ZERO)
+    return PotShare(nav=nav, value=value, weights=weights, holds_anything=held.holds_anything)
+
+
 # Fetches one pot with its ownership breakdown. Raises NotFoundError when it does not exist or the
 # caller may not see it — the same answer for both.
 async def get_pot(session: AsyncSession, pot_id: int, user: User, *, as_of_date: date_type | None = None) -> PotResponse:
@@ -600,11 +708,34 @@ async def get_value_series(session: AsyncSession, pot_id: int, user: User, *, pe
     events = await pot_ownership_repository.list_by_pot(session, pot.id)
     anchor = min(events[0].date, pot.created_at.date(), today) if events else min(pot.created_at.date(), today)
     dates = [d for d in period_ends(today, interval, periods) if d >= anchor]
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    points = await compute_share_series(session, pot, viewer.id, dates=dates, events=events, lookup=lookup)
+    return PotValueSeriesResponse(interval=interval, points=points)
 
-    investment_ids = await pot_repository.list_investment_ids(session, pot.id)
+
+# The same series over an ARBITRARY set of dates, which is what makes the dashboard's monthly net-worth
+# grid and the pot page's cadence grid one engine rather than two. Everything above this line is the
+# pot page's framing — which grid, how far back, and the anchor bound; everything below is the
+# valuation itself, and neither caller may hold its own copy of that.
+#
+# `dates` must be ascending, and `events` is passed in because both callers have already read the
+# ledger for their own reasons.
+async def compute_share_series(
+    session: AsyncSession,
+    pot: Pot,
+    viewer_member_id: int,
+    *,
+    dates: list[date_type],
+    events: list,
+    lookup: RateLookup,
+) -> list[PotValueSeriesPoint]:
+    if not dates:
+        return []
+    investments = await pot_repository.list_active_investments(session, pot.id)
+    investment_ids = [investment.id for investment in investments]
+    bucket_by_investment = {investment.id: investment.category.value for investment in investments}
     accounts = [a for a in await pot_repository.list_accounts(session, pot.id) if a.id is not None]
     holds_anything = bool(investment_ids or accounts)
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
     snapshots = await snapshot_repository.list_by_investments(session, investment_ids, until=dates[-1])
     balances = await account_service.compute_account_balance_series(session, accounts, dates=dates)
 
@@ -637,19 +768,23 @@ async def get_value_series(session: AsyncSession, pot_id: int, user: User, *, pe
         rate_map = lookup.get_rate_map_at(point_date)
         nav: Decimal | None = None
         if holds_anything:
-            figures: list[tuple[Decimal, str] | None] = [
-                None if latest[investment_id] is None else (latest[investment_id].value, latest[investment_id].currency)
+            figures: list[tuple[str, tuple[Decimal, str] | None]] = [
+                (
+                    bucket_by_investment[investment_id],
+                    None if latest[investment_id] is None else (latest[investment_id].value, latest[investment_id].currency),
+                )
                 for investment_id in investment_ids
             ]
-            nav = _add_holdings(ZERO, figures, pot.base_currency, rate_map)
-            if nav is not None:
-                nav = _add_holdings(nav, [(balances[a.id][index], a.currency) for a in accounts], pot.base_currency, rate_map)
+            added = _add_holdings(ZERO, figures, pot.base_currency, rate_map)
+            if added is not None:
+                added = _add_holdings(added[0], [(CASH_BUCKET, (balances[a.id][index], a.currency)) for a in accounts], pot.base_currency, rate_map)
+            nav = None if added is None else added[0]
 
         unit_balances = replay_units(replayed)
-        my_value = None if nav is None or total_units(unit_balances) <= 0 else share_values(unit_balances, nav).get(viewer.id, ZERO)
+        my_value = None if nav is None or total_units(unit_balances) <= 0 else share_values(unit_balances, nav).get(viewer_member_id, ZERO)
         points.append(PotValueSeriesPoint(date=point_date, nav=nav, my_value=my_value))
 
-    return PotValueSeriesResponse(interval=interval, points=points)
+    return points
 
 
 # Creates a pot and seats its creator with full access, in one transaction. Runs on the PRIVILEGED

@@ -4,8 +4,22 @@ import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
+interface UndividedPotRaw {
+  pot_id: number;
+  name: string | null;
+  group_id: number;
+  group_name: string;
+}
+
 interface DashboardOverviewRaw {
   net_worth: string;
+  private_net_worth: string;
+  shared_net_worth: string;
+  shared_pot_value: string;
+  shared_receivable: string;
+  shared_payable: string;
+  has_shared: boolean;
+  undivided_pots: UndividedPotRaw[];
   cash_total: string;
   net_worth_change: string | null;
   net_worth_change_pct: string | null;
@@ -21,6 +35,7 @@ interface DashboardOverviewRaw {
   income_expense_ratio: string | null;
   currency: string | null;
   has_holdings: boolean;
+  skipped_currencies: string[];
 }
 
 interface NetWorthEvolutionPointRaw {
@@ -28,12 +43,15 @@ interface NetWorthEvolutionPointRaw {
   investment_value: string;
   cash_balance: string;
   card_balance: string;
+  shared_value: string;
+  private_net_worth: string;
   net_worth: string;
 }
 
 interface DashboardEvolutionRaw {
   points: NetWorthEvolutionPointRaw[];
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 interface CompositionItemRaw {
@@ -47,6 +65,7 @@ interface DashboardCompositionRaw {
   total_assets: string;
   total_liabilities: string;
   currency: string | null;
+  skipped_currencies: string[];
 }
 
 interface SkippedLiquidityEntityRaw {
@@ -69,8 +88,29 @@ interface DashboardLiquidityRaw {
 
 // --- Frontend types (camelCase) ---
 
+// A pot holding value that no ownership baseline divides yet, so it contributes exactly nothing to
+// anybody's net worth. `name` is null for a group's default pot — the renderer supplies the fallback.
+export interface UndividedPot {
+  potId: number;
+  name: string | null;
+  groupId: number;
+  // Never null: the copy reads "{pot} in {group}", and the API drops a pot whose group it cannot name
+  // rather than emitting a sentence with a hole in it.
+  groupName: string;
+}
+
 export interface DashboardOverview {
   netWorth: number;
+  // The 'Yours' half of the headline: private investments plus private cash minus card debt.
+  privateNetWorth: number;
+  // The 'Shared' half: your share of every visible pot, plus receivables, less payables.
+  sharedNetWorth: number;
+  sharedPotValue: number;
+  sharedReceivable: number;
+  sharedPayable: number;
+  // Existence, not value — a household whose balances net to zero still gets the breakdown.
+  hasShared: boolean;
+  undividedPots: UndividedPot[];
   cashTotal: number;
   netWorthChange: number | null;
   netWorthChangePct: number | null;
@@ -87,6 +127,8 @@ export interface DashboardOverview {
   currency: string | null;
   // Whether the user holds any investment, account, or card — true even when the figures net to zero.
   hasHoldings: boolean;
+  // Original-currency codes the totals had to exclude because no exchange rate was stored.
+  skippedCurrencies: string[];
 }
 
 export interface NetWorthEvolutionPoint {
@@ -94,12 +136,15 @@ export interface NetWorthEvolutionPoint {
   investmentValue: number;
   cashBalance: number;
   cardBalance: number;
+  sharedValue: number;
+  privateNetWorth: number;
   netWorth: number;
 }
 
 export interface DashboardEvolution {
   points: NetWorthEvolutionPoint[];
   currency: string | null;
+  skippedCurrencies: string[];
 }
 
 export interface CompositionItem {
@@ -113,6 +158,7 @@ export interface DashboardComposition {
   totalAssets: number;
   totalLiabilities: number;
   currency: string | null;
+  skippedCurrencies: string[];
 }
 
 export type LiquidityState = 'healthy' | 'caution' | 'at_risk' | 'unknown';
@@ -140,6 +186,18 @@ export interface DashboardLiquidity {
 function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
   return {
     netWorth: Number(raw.net_worth),
+    privateNetWorth: Number(raw.private_net_worth),
+    sharedNetWorth: Number(raw.shared_net_worth),
+    sharedPotValue: Number(raw.shared_pot_value),
+    sharedReceivable: Number(raw.shared_receivable),
+    sharedPayable: Number(raw.shared_payable),
+    hasShared: raw.has_shared === true,
+    undividedPots: (raw.undivided_pots ?? []).map((pot) => ({
+      potId: pot.pot_id,
+      name: pot.name,
+      groupId: pot.group_id,
+      groupName: pot.group_name,
+    })),
     cashTotal: Number(raw.cash_total),
     netWorthChange: raw.net_worth_change !== null ? Number(raw.net_worth_change) : null,
     netWorthChangePct: raw.net_worth_change_pct !== null ? Number(raw.net_worth_change_pct) : null,
@@ -157,6 +215,7 @@ function mapOverview(raw: DashboardOverviewRaw): DashboardOverview {
     incomeExpenseRatio: raw.income_expense_ratio !== null ? Number(raw.income_expense_ratio) : null,
     currency: raw.currency,
     hasHoldings: raw.has_holdings === true,
+    skippedCurrencies: raw.skipped_currencies ?? [],
   };
 }
 
@@ -166,6 +225,8 @@ function mapEvolutionPoint(raw: NetWorthEvolutionPointRaw): NetWorthEvolutionPoi
     investmentValue: Number(raw.investment_value),
     cashBalance: Number(raw.cash_balance),
     cardBalance: Number(raw.card_balance),
+    sharedValue: Number(raw.shared_value),
+    privateNetWorth: Number(raw.private_net_worth),
     netWorth: Number(raw.net_worth),
   };
 }
@@ -236,6 +297,7 @@ export async function getDashboardEvolution(
   return {
     points: raw.points.map(mapEvolutionPoint),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies ?? [],
   };
 }
 
@@ -254,6 +316,7 @@ export async function getDashboardComposition(
     totalAssets: Number(raw.total_assets),
     totalLiabilities: Number(raw.total_liabilities),
     currency: raw.currency,
+    skippedCurrencies: raw.skipped_currencies ?? [],
   };
 }
 

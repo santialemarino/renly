@@ -140,6 +140,12 @@ You can view allocation by **category** (stocks, CEDEARs, bonds, etc.) or by **c
 
 **Net worth composition (assets vs. liabilities).** The composition donut on the main dashboard sizes each slice by its value, and the percentages are shares of the values actually shown — your asset categories plus a "liabilities" slice when you carry a card balance. When you have a net card credit (the card owes you), there is no liabilities slice and your asset percentages add up to exactly 100%.
 
+**Your share of money you share.** Your net worth is everything you are worth: what you hold in your own name, plus your share of everything you share with a group. The dashboard shows the total and splits it into **Yours** and **Shared** beneath. Your share of a co-owned holding lands in the same slice a private one would — a jointly held CEDEAR in CEDEARs, a jointly held bank account in cash — and what a group owes you is its own slice, while what you owe them counts as a liability. Settling up therefore leaves your net worth flat: the cash arrives and the claim clears.
+
+Two things deliberately count as **zero**. A shared pot you can see but own none of adds nothing, because seeing money is not owning it. And one whose owners have not agreed who owns what yet also adds nothing — before that agreement there is no share to attribute to anybody — so the dashboard names those pots underneath, with a link, rather than letting the value quietly vanish.
+
+**What the return figure covers.** The Investment Value card counts your share of co-owned holdings, but the return beneath it does not: a share of a pot has no "amount invested" of its own, and how much of the pot is yours changes whenever somebody contributes. The card says so, and a pot's own history lives on its page.
+
 **Uncategorized entries.** The expense and income breakdown donuts on the finance dashboard now include an "Uncategorized" slice for entries you left without a category, so the donut always adds up to the same total as the summary card above it.
 
 **"vs previous period."** The change indicators on the finance dashboard compare your selected period against the period of the same length immediately before it — ending the day before your window starts, with no shared day. A June 1–30 view compares against May 2–31.

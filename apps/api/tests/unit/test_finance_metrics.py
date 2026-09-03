@@ -11,6 +11,13 @@ from app.services import finance_metrics_service
 from app.utils.metrics import RateLookup
 
 
+# Every aggregate here now unions the caller's SHARE of their groups' rows, so each one first resolves
+# the seats they hold. These tests are about the private arithmetic, so the caller holds none — which is
+# also what every solo user holds, and what makes the shared branch of each query not be built at all.
+def _solo(monkeypatch) -> None:
+    monkeypatch.setattr(finance_metrics_service.group_repository, "list_active_member_ids", AsyncMock(return_value=[]))
+
+
 def _card(*, card_id: int, is_active: bool) -> CreditCard:
     return CreditCard(id=card_id, user_id=1, name=f"Card {card_id}", closing_day=20, due_day=5, currency="ARS", is_active=is_active)
 
@@ -27,6 +34,7 @@ class TestOverviewIncludesArchivedCards:
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", list_mock)
         monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         monkeypatch.setattr(
             finance_metrics_service.credit_card_service,
@@ -57,6 +65,7 @@ class TestPrevPeriodWindow:
         monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", income_mock)
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", expense_mock)
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_overview(
             AsyncMock(),
@@ -93,6 +102,7 @@ class TestOverviewMatchesMonthly:
         monkeypatch.setattr(finance_metrics_service.income_repository, "sum_by_user_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_monthly", AsyncMock(return_value=expense_rows))
         monkeypatch.setattr(finance_metrics_service.credit_card_repository, "list_by_user", AsyncMock(return_value=[]))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 30)))
 
         overview = await finance_metrics_service.get_overview(AsyncMock(), 1, currency="USD")
@@ -113,6 +123,7 @@ class TestUncategorizedSlice:
         # widening this raised a validation error ('uncategorized' is not an enum member).
         rows = [("food", "ARS", Decimal("1000")), ("uncategorized", "ARS", Decimal("3000"))]
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
         result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)
         assert result.total_expenses == Decimal("4000")
@@ -136,6 +147,7 @@ class TestNegativeCategoryInBreakdown:
             ("card_credits_and_refunds", "ARS", Decimal("-200")),
         ]
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
 
         result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)
@@ -153,6 +165,7 @@ class TestNegativeCategoryInBreakdown:
     async def test_all_negative_categories_yield_zero_percentages_without_dividing_by_zero(self, monkeypatch):
         rows = [("card_credits_and_refunds", "ARS", Decimal("-200"))]
         monkeypatch.setattr(finance_metrics_service.expense_repository, "sum_by_user_grouped_by_category", AsyncMock(return_value=rows))
+        _solo(monkeypatch)
         monkeypatch.setattr(finance_metrics_service.settings_service, "get_user_today", AsyncMock(return_value=date(2026, 6, 15)))
 
         result = await finance_metrics_service.get_expense_breakdown(AsyncMock(), 1)

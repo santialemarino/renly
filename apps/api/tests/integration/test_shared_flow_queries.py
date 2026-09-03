@@ -16,12 +16,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 #     land in the SAME bucket and have to net there, with each read in its own direction;
 #   * the settlement LEG sums — the `coalesce(<leg>_amount, amount)` that decides whether a
 #     cross-currency settlement moves the bucket's figure or the account's;
-#   * the shared-income account sums, whose opening_date bound lives entirely in a join.
+#   * the shared-income account sums, whose opening_date bound lives entirely in a join;
+#   * the DASHBOARD's own reads over the same tables, added when the aggregates learned to see the
+#     shared side. Three of them are two-queries-one-fact pairs and belong here for that reason alone:
+#     the monthly positions the chart derives a balance-per-month from must equal the live positions
+#     the group hub shows at their last month; the finance dashboard's spending and earning totals must
+#     equal the lists they summarise; and a group's card charge must reach the monthly card series as
+#     well as the current card balance, which it did not before.
 #
 # Skipped unless LEDGER_TEST_DATABASE_URL points at a database with the schema applied, matching the
 # contract the other query suites use.
 from app.domain.shared_flow import apply_settlements, combine_positions, expense_positions, income_positions, minimise_transfers
 from app.repositories import expense_repository, group_settlement_repository, income_repository, shared_expense_repository, shared_income_repository
+from app.services import group_settlement_service
 
 DB_URL = os.getenv("LEDGER_TEST_DATABASE_URL")
 
@@ -290,6 +297,246 @@ class TestTheBalanceAggregation:
         await session.flush()
         movements = [row[1:] for row in await group_settlement_repository.list_movements_by_groups(session, [seeded["group"]])]
         assert [row[0] for row in movements] == ["ARS"]
+
+
+# A monthly aggregate summed back to one figure per currency. Written once because the per-month rows
+# are what the aggregate returns and the totals are what the dashboard shows — collapsing them with a
+# dict comprehension keyed on currency silently keeps only the LAST month, which is how the first draft
+# of two of these tests came to assert the wrong figure.
+def _by_currency(rows) -> dict[str, Decimal]:
+    totals: dict[str, Decimal] = {}
+    for _year, _month, currency, total in rows:
+        totals[currency] = totals.get(currency, Decimal(0)) + total
+    return totals
+
+
+class TestTheMonthlyPositions:
+    # The dashboard's net-worth chart derives a balance per month from its OWN aggregates, while the
+    # group hub derives today's from the live ones. Two queries, one fact — the shape a mocked session
+    # is structurally unable to notice going wrong, because it returns whatever it was told for both.
+    #
+    # The parity below is the load-bearing one: the last month of the monthly series must equal the
+    # live positions exactly, member by member, in every bucket.
+    @pytest.mark.asyncio
+    async def test_the_last_month_equals_the_LIVE_positions(self, session, seeded):
+        await session.execute(
+            text(
+                "INSERT INTO group_settlements (group_id, from_member_id, to_member_id, date, amount, currency)"
+                " VALUES (:g, :f, :t, '2026-07-02', 1000, 'ARS')"
+            ),
+            {"g": seeded["group"], "f": seeded["seats"][1], "t": seeded["seats"][0]},
+        )
+        await session.flush()
+
+        # The INTERNAL derivation on purpose: it is the one get_balances runs for the group hub, and
+        # the dashboard now reads the monthly series' last entry instead of issuing it a second time.
+        # This equality is what makes that substitution safe.
+        live = await group_settlement_service._positions_by_group(session, [seeded["group"]])
+        series = await group_settlement_service.get_positions_by_month(session, [seeded["group"]])
+
+        assert series, "the fixture has flow rows, so the series cannot be empty"
+        assert series[-1][1] == live
+        # A positive control: a fixture whose positions were all zero would satisfy the equality above
+        # while testing nothing.
+        assert any(amount != Decimal(0) for by_currency in live.values() for net in by_currency.values() for amount in net.values())
+
+    @pytest.mark.asyncio
+    async def test_it_is_cumulative_rather_than_per_month(self, session, seeded):
+        # Every month carries every row on or before it. Asserted by comparing the FIRST month against
+        # the live positions restricted to rows up to that month — a per-month aggregate would report
+        # only that month's movement and the two would diverge from the second month on.
+        series = await group_settlement_service.get_positions_by_month(session, [seeded["group"]])
+        months = [month for month, _ in series]
+        assert months == sorted(months)
+        # The fixture spans May to July, so there is more than one month to be cumulative across.
+        assert len(months) > 1
+        totals = [
+            sum(abs(amount) for by_currency in positions.values() for net in by_currency.values() for amount in net.values())
+            for _month, positions in series
+        ]
+        assert totals[-1] > totals[0]
+
+    @pytest.mark.asyncio
+    async def test_each_month_is_bucketed_by_its_own_rows_date(self, session, seeded):
+        rows = await shared_expense_repository.list_positions_by_groups_monthly(session, [seeded["group"]])
+        # Every shared expense in the fixture is dated June.
+        assert {(year, month) for _g, year, month, _c, _m, _a, _p in rows} == {(2026, 6)}
+        income = await shared_income_repository.list_positions_by_groups_monthly(session, [seeded["group"]])
+        assert {(year, month) for _g, year, month, _c, _m, _a, _r in income} == {(2026, 5), (2026, 6)}
+
+    @pytest.mark.asyncio
+    async def test_the_monthly_totals_sum_to_the_live_ones_per_bucket(self, session, seeded):
+        # The columns, not only the shape: summing the monthly aggregate over every month has to give
+        # the live aggregate's two figures back. A crossed pair of columns type-checks and still nets
+        # to zero, so it is the sums that have to be compared rather than the balances.
+        live = {(c, m): (a, p) for _g, c, m, a, p in await shared_expense_repository.list_positions_by_groups(session, [seeded["group"]])}
+        monthly: dict[tuple[str, int], tuple[Decimal, Decimal]] = {}
+        for _g, _y, _mo, currency, member_id, amount, paid in await shared_expense_repository.list_positions_by_groups_monthly(
+            session, [seeded["group"]]
+        ):
+            running = monthly.get((currency, member_id), (Decimal(0), Decimal(0)))
+            monthly[(currency, member_id)] = (running[0] + amount, running[1] + paid)
+        assert monthly == live
+
+
+class TestTheDashboardsSpendingAndEarningUnions:
+    # The finance dashboard sums the caller's spending and earnings; the list pages show them row by
+    # row. Both now read the same two tables, and the property that matters is that the aggregate
+    # equals the list — which is exactly what a mocked session cannot check, because the aggregate and
+    # the list are different SQL over the same rows.
+    @pytest.mark.asyncio
+    async def test_the_monthly_expense_total_equals_the_list_it_summarises(self, session, seeded):
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        rows, _ = await expense_repository.list_by_user_filtered(session, user, [seat], page_size=200)
+        listed: dict[str, Decimal] = {}
+        for row in rows:
+            listed[row.currency] = listed.get(row.currency, Decimal(0)) + row.amount
+
+        assert _by_currency(await expense_repository.sum_by_user_monthly(session, user, [seat])) == listed
+        # The positive control: the shared branch really is in there, so the equality is not two
+        # private-only reads agreeing with each other.
+        assert any(row.scope == "shared" for row in rows)
+
+    @pytest.mark.asyncio
+    async def test_the_monthly_totals_are_bucketed_by_MONTH(self, session, seeded):
+        # Every other assertion here sums across months and is therefore blind to the bucketing itself
+        # — a mutation swapping the month extraction for a second year extraction left them all green.
+        # The fixture spans May (private only), June (private + both shared buckets) and July (income),
+        # so a wrong bucket collapses three months into one.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        expense = {(year, month, currency) for year, month, currency, _t in await expense_repository.sum_by_user_monthly(session, user, [seat])}
+        assert expense == {(2026, 5, "ARS"), (2026, 6, "ARS"), (2026, 6, "USD")}
+        income = {(year, month, currency) for year, month, currency, _t in await income_repository.sum_by_user_monthly(session, user, [seat])}
+        assert income == {(2026, 5, "ARS"), (2026, 6, "USD"), (2026, 7, "ARS")}
+
+    @pytest.mark.asyncio
+    async def test_the_category_breakdown_equals_the_same_list(self, session, seeded):
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        rows, _ = await expense_repository.list_by_user_filtered(session, user, [seat], page_size=200)
+        listed: dict[tuple[str, str], Decimal] = {}
+        for row in rows:
+            key = ("uncategorized" if row.category is None else str(row.category), row.currency)
+            listed[key] = listed.get(key, Decimal(0)) + row.amount
+        summed = {
+            (category, currency): total
+            for category, currency, total in await expense_repository.sum_by_user_grouped_by_category(session, user, [seat])
+        }
+        assert summed == listed
+        # Both the private category and the shared one are represented, so a branch that vanished
+        # would change the keyset rather than only a figure.
+        assert {"food", "dining"} <= {category for category, _currency in summed}
+
+    @pytest.mark.asyncio
+    async def test_a_zero_share_is_excluded_from_the_totals_just_as_it_is_from_the_list(self, session, seeded):
+        # A payer who took no part spent nothing. The fixture's "not mine" expense is 400 ARS fronted
+        # by seat A with a zero share, so it must not reach the ARS total.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        summed = _by_currency(await expense_repository.sum_by_user_monthly(session, user, [seat]))
+        # 1,000 + 2,000 private, plus a 3,000 share of the dinner. The 400 is absent.
+        assert summed["ARS"] == Decimal("6000.00")
+
+    @pytest.mark.asyncio
+    async def test_a_user_in_no_group_gets_exactly_their_private_totals(self, session, seeded):
+        user = seeded["users"][0]
+        summed = _by_currency(await expense_repository.sum_by_user_monthly(session, user, []))
+        assert summed == {"ARS": Decimal("3000.00")}
+
+    @pytest.mark.asyncio
+    async def test_the_income_total_equals_the_income_list(self, session, seeded):
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        rows, _ = await income_repository.list_by_user_filtered(session, user, [seat], page_size=200)
+        listed: dict[str, Decimal] = {}
+        for row in rows:
+            listed[row.currency] = listed.get(row.currency, Decimal(0)) + row.amount
+        assert _by_currency(await income_repository.sum_by_user_monthly(session, user, [seat])) == listed
+        assert any(row.scope == "shared" for row in rows)
+
+    @pytest.mark.asyncio
+    async def test_the_income_total_counts_the_ENTITLEMENT_not_what_arrived(self, session, seeded):
+        # `amount` on a split is what the member is entitled to; `received_amount` is what reached
+        # them, and the gap between the two is a BALANCE rather than earnings. Seat A is entitled to
+        # 45 USD of the rent and received 90 of it, so their income is 45.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        summed = _by_currency(await income_repository.sum_by_user_monthly(session, user, [seat]))
+        assert summed["USD"] == Decimal("45.00")
+
+    @pytest.mark.asyncio
+    async def test_a_zero_ENTITLEMENT_does_not_move_the_first_income_date(self, session, seeded):
+        # Where the `amount > 0` filter is actually observable. In a SUM a zero contributes zero either
+        # way, so no total can tell the predicate from its absence — but a MIN(date) can: a row somebody
+        # collected and is entitled to none of would otherwise back-date their income history and change
+        # what the liquidity card thinks it has to work with.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        row = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, category, split_method, destination)"
+                    " VALUES (:g, '2024-01-05', 900, 'ARS', 'rental_income', 'equal', 'distributed') RETURNING id"
+                ),
+                {"g": seeded["group"]},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 0, 900)"),
+            {"i": row, "g": seeded["group"], "m": seat},
+        )
+        await session.flush()
+        assert await income_repository.get_first_income_date(session, user, [seat]) == date(2026, 5, 20)
+
+    @pytest.mark.asyncio
+    async def test_the_first_income_date_sees_the_shared_side(self, session, seeded):
+        # The liquidity card's history gate. The caller's own earliest private entry is 2026-05-20 and
+        # so is a shared one, so the discriminating check is that adding an EARLIER shared row moves it.
+        user, seat = seeded["users"][0], seeded["seats"][0]
+        before = await income_repository.get_first_income_date(session, user, [seat])
+        row = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income (group_id, date, amount, currency, category, split_method, destination)"
+                    " VALUES (:g, '2026-02-02', 100, 'ARS', 'rental_income', 'equal', 'distributed') RETURNING id"
+                ),
+                {"g": seeded["group"]},
+            )
+        ).scalar_one()
+        await session.execute(
+            text("INSERT INTO shared_income_splits (shared_income_id, group_id, member_id, amount, received_amount) VALUES (:i, :g, :m, 100, 0)"),
+            {"i": row, "g": seeded["group"], "m": seat},
+        )
+        await session.flush()
+        assert before == date(2026, 5, 20)
+        assert await income_repository.get_first_income_date(session, user, [seat]) == date(2026, 2, 2)
+        # And a caller in no group still reads only their own history.
+        assert await income_repository.get_first_income_date(session, user, []) == date(2026, 5, 20)
+
+
+class TestTheMonthlyCardCharges:
+    # get_card_balances merges a group's charges into the CURRENT card balance; the evolution chart's
+    # monthly series has to merge the same rows or the headline and the chart describe different debts.
+    @pytest.mark.asyncio
+    async def test_a_groups_charge_appears_in_the_monthly_series_too(self, session, seeded):
+        card = (
+            await session.execute(
+                text(
+                    "INSERT INTO credit_cards (user_id, name, closing_day, due_day, currency) VALUES (:u, 'Monthly card', 20, 5, 'ARS') RETURNING id"
+                ),
+                {"u": seeded["users"][0]},
+            )
+        ).scalar_one()
+        await session.execute(
+            text(
+                "INSERT INTO shared_expenses (group_id, date, amount, currency, category, split_method, payment_method, credit_card_id)"
+                " VALUES (:g, '2026-06-09', 2500, 'ARS', 'dining', 'equal', 'credit_card', :c)"
+            ),
+            {"g": seeded["group"], "c": card},
+        )
+        await session.flush()
+
+        monthly = await shared_expense_repository.sum_by_credit_card_ids_monthly(session, [card])
+        assert monthly == [(card, 2026, 6, "ARS", 2500.0)]
+        # And it agrees with the grouped read the current balance uses, which is the figure the chart
+        # has to end at.
+        grouped = await shared_expense_repository.sum_by_credit_card_ids_grouped(session, [card])
+        assert Decimal(str(grouped[card]["ARS"])) == Decimal(str(sum(total for _c, _y, _m, _cur, total in monthly)))
 
 
 class TestTheCardBucketGrouping:
