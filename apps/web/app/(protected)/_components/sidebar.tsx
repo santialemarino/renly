@@ -4,37 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  ArrowDownUp,
-  BarChart3,
-  Bell,
-  CalendarClock,
   ChevronDown,
   ChevronRight,
-  CircleDollarSign,
   ClipboardList,
-  CreditCard,
-  FileText,
-  FolderOpen,
-  Globe,
   HelpCircle,
-  Inbox,
-  Landmark,
   LayoutDashboard,
   LifeBuoy,
-  ListChecks,
   LogOut,
   MessageSquare,
-  Puzzle,
-  Receipt,
-  RefreshCw,
-  Rows3,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
-  Table2,
   TrendingUp,
-  UserCog,
-  UserPlus,
   Users,
   Wallet,
   type LucideIcon,
@@ -63,54 +43,23 @@ import {
 import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
 import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
+import { NotificationBell } from '@/app/(protected)/_components/notification-bell';
 import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
 import { COOKIE_MAX_AGE_1_YEAR, SIDEBAR_EXPANDED_COOKIE } from '@/config/constants';
+import {
+  ADMIN_GROUP,
+  COMMITMENTS_GROUP,
+  FINANCES_GROUP,
+  PORTFOLIO_GROUP,
+  SETTINGS_GROUP,
+  SHARED_GROUP,
+} from '@/config/nav';
 import { ALL_ROUTE_PATHS, LOGIN_ROUTE, ROUTES } from '@/config/routes';
+import type { AppNotification } from '@/lib/api/notifications';
 import type { SignupMode } from '@/lib/auth-api';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
-
-const FINANCES_GROUP = [
-  { key: 'financeDashboard', href: ROUTES.financeDashboard, icon: BarChart3 },
-  { key: 'income', href: ROUTES.income, icon: CircleDollarSign },
-  { key: 'expenses', href: ROUTES.expenses, icon: Receipt },
-  { key: 'creditCards', href: ROUTES.creditCards, icon: CreditCard },
-  { key: 'accounts', href: ROUTES.accounts, icon: Landmark },
-] as const;
-
-const COMMITMENTS_GROUP = [
-  { key: 'subscriptions', href: ROUTES.subscriptions, icon: RefreshCw },
-  { key: 'installments', href: ROUTES.installments, icon: ListChecks },
-  { key: 'paymentObligations', href: ROUTES.paymentObligations, icon: FileText },
-  { key: 'paymentsCalendar', href: ROUTES.paymentsCalendar, icon: CalendarClock },
-] as const;
-
-const PORTFOLIO_GROUP = [
-  { key: 'investorDashboard', href: ROUTES.investorDashboard, icon: BarChart3 },
-  { key: 'investments', href: ROUTES.investments, icon: Rows3 },
-  { key: 'collections', href: ROUTES.collections, icon: FolderOpen },
-  { key: 'snapshots', href: ROUTES.snapshots, icon: Table2 },
-] as const;
-
-// The Shared module. One item today; the group hub is reached from it, and settle-up joins it later.
-const SHARED_GROUP = [{ key: 'groups', href: ROUTES.shared, icon: Users }] as const;
-
-const SETTINGS_GROUP = [
-  { key: 'account', href: ROUTES.account, icon: UserCog },
-  { key: 'preferences', href: ROUTES.preferences, icon: SlidersHorizontal },
-  { key: 'alerts', href: ROUTES.alerts, icon: Bell },
-  { key: 'localization', href: ROUTES.localization, icon: Globe },
-  { key: 'data', href: ROUTES.data, icon: ArrowDownUp },
-  { key: 'integrations', href: ROUTES.integrations, icon: Puzzle },
-] as const;
-
-// Admin-only group (rendered only when the user is an admin). Items can be gated further:
-// invitePeople is only relevant in invite mode (in open mode anyone signs up, so there's no one to invite).
-const ADMIN_GROUP = [
-  { key: 'invitePeople', href: ROUTES.admin, icon: UserPlus, inviteOnly: true },
-  { key: 'feedback', href: ROUTES.adminFeedback, icon: Inbox, inviteOnly: false },
-] as const;
 
 /*
  * Progressive disclosure (UX-7): advanced nav items hidden from a first-run newcomer until they
@@ -226,6 +175,10 @@ function NavSubItem({
 }
 
 interface AppSidebarProps {
+  // The bell's data comes from the layout (a server component), so the count is right on every
+  // navigation and nothing polls.
+  notifications: AppNotification[];
+  unreadNotifications: number;
   displayCurrencies: string[];
   activeCurrency: string;
   supportedCurrencies: string[] | undefined;
@@ -237,6 +190,8 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({
+  notifications,
+  unreadNotifications,
   displayCurrencies,
   activeCurrency,
   supportedCurrencies,
@@ -302,8 +257,9 @@ export function AppSidebar({
 
   return (
     <Sidebar className="border-sidebar-border shadow-lg">
-      <SidebarHeader className="pl-4 py-5 border-b border-sidebar-border">
+      <SidebarHeader className="flex-row items-center justify-between pl-4 pr-3 py-5 border-b border-sidebar-border">
         <Brand name={t('brand')} size="lg" />
+        <NotificationBell notifications={notifications} unread={unreadNotifications} />
       </SidebarHeader>
 
       <SidebarContent>

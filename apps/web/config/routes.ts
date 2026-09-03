@@ -36,6 +36,7 @@ export const ROUTES = {
   shared: '/shared',
   preferences: '/preferences',
   alerts: '/alerts',
+  notifications: '/notifications',
   localization: '/localization',
   integrations: '/integrations',
   account: '/account',

@@ -323,6 +323,7 @@
       "groups": "Grupos",
       "preferences": "Preferencias",
       "alerts": "Alertas y límites",
+      "notifications": "Notificaciones",
       "localization": "Localización",
       "integrations": "Integraciones",
       "account": "Cuenta",
@@ -2942,6 +2943,122 @@
       "saveError": "No se pudieron guardar las alertas."
     }
   },
+  "notifications": {
+    "metadata": {
+      "title": "Notificaciones",
+      "description": "Qué te avisa Renly y por dónde te llega."
+    },
+    "title": "Notificaciones",
+    "subtitle": "Qué te avisa Renly y por dónde te llega.",
+    "potFallback": "Dinero compartido",
+    "bell": {
+      "unread": "{count, plural, one {# notificación sin leer} other {# notificaciones sin leer}}",
+      "none": "Sin notificaciones",
+      "heading": "Notificaciones",
+      "markAll": "Marcar todo como leído",
+      "seeAll": "Ver todas",
+      "emptyDescription": "Acá aparece lo que pasa en tus grupos."
+    },
+    "feed": {
+      "title": "Notificaciones recientes",
+      "description": "Todo lo que te avisó Renly, de lo más nuevo a lo más viejo.",
+      "empty": "Todavía no hay nada",
+      "emptyDescription": "Acá aparece lo que pasa en tus grupos: una invitación, un gasto compartido, un pago.",
+      "markAll": "Marcar todo como leído",
+      "markAllDone": "Listo, no queda nada sin leer.",
+      "markAllError": "No se pudieron marcar como leídas. Probá de nuevo.",
+      "unreadDot": "Sin leer",
+      "count": "{count, plural, one {# notificación} other {# notificaciones}}"
+    },
+    "channels": {
+      "title": "De qué te avisamos",
+      "description": "El listado está activado para todo. El correo y las push vienen activados para lo que toca tu propio dinero o espera algo tuyo; podés cambiar cualquiera acá.",
+      "event": "Evento",
+      "in_app": "En la app",
+      "email": "Correo",
+      "push": "Push",
+      "error": "No se pudo guardar. Probá de nuevo.",
+      "pushUnavailableHint": "Las push no están configuradas en este entorno, así que esos interruptores todavía no hacen nada."
+    },
+    "events": {
+      "group_invited": {
+        "label": "Invitan a alguien a un grupo",
+        "title": "{inviter} invitó a {invitee} a {group}"
+      },
+      "member_joined": {
+        "label": "Alguien se une a un grupo",
+        "title": "{member} se unió a {group}"
+      },
+      "ownership_changed": {
+        "label": "Cambia el reparto de un fondo",
+        "opening": {
+          "title": "{actor} dividió {pot} entre sus dueños"
+        },
+        "reagreement": {
+          "title": "{actor} registró un cambio de reparto en {pot}",
+          "detail": "De {from_member} a {to_member}"
+        }
+      },
+      "pot_movement": {
+        "label": "Entra o sale dinero de un fondo",
+        "contribution": {
+          "title": "{member} puso {amount} {currency} en {pot}"
+        },
+        "withdrawal": {
+          "title": "{member} sacó {amount} {currency} de {pot}"
+        }
+      },
+      "snapshot_due": {
+        "label": "Un fondo necesita una nueva valuación",
+        "title": "{pot} necesita una nueva valuación",
+        "detailValued": "Última valuación: {date}",
+        "detailNever": "Nunca se valuó"
+      },
+      "settle_marked_paid": {
+        "label": "Alguien registra un pago a tu nombre",
+        "payee": {
+          "title": "{from_member} registró un pago de {amount} {currency} a tu nombre en {group}",
+          "detail": "Confirmalo cuando lo hayas recibido."
+        },
+        "payer": {
+          "title": "{to_member} registró tu pago de {amount} {currency} en {group}"
+        }
+      },
+      "settle_confirmed": {
+        "label": "Confirman tu pago",
+        "title": "{to_member} confirmó tu pago de {amount} {currency} en {group}"
+      },
+      "balance_written_off": {
+        "label": "Alguien da por perdido lo que le debías",
+        "title": "{creditor} dio por perdidos {amount} {currency} que le debías en {group}"
+      },
+      "shared_expense_added": {
+        "label": "Se agrega un gasto compartido",
+        "title": "{actor} agregó un gasto compartido de {amount} {currency} a {group}"
+      },
+      "shared_income_added": {
+        "label": "Se agrega un ingreso compartido",
+        "title": "{actor} agregó un ingreso compartido de {amount} {currency} a {group}"
+      }
+    },
+    "push": {
+      "title": "Notificaciones push",
+      "description": "Las push llegan a este navegador incluso con Renly cerrado. Se configuran por navegador, así que activarlas acá no las activa en ningún otro.",
+      "enable": "Activar en este navegador",
+      "enabling": "Activando...",
+      "disable": "Desactivar en este navegador",
+      "disabling": "Desactivando...",
+      "on": "Activadas en este navegador.",
+      "off": "Desactivadas en este navegador.",
+      "devicesOther": "{count, plural, one {Hay # navegador más suscripto} other {Hay # navegadores más suscriptos}}.",
+      "unsupported": "Este navegador no admite notificaciones push.",
+      "unavailable": "Las notificaciones push no están configuradas en este entorno.",
+      "denied": "Este navegador está bloqueando las notificaciones de Renly. Permitilas en la configuración del sitio y probá de nuevo.",
+      "error": "No se pudieron activar las push. Probá de nuevo.",
+      "errorOff": "No se pudieron desactivar las push. Probá de nuevo.",
+      "privacy": "Una push dice quién hizo qué y en qué grupo, nunca un monto: aparece en la pantalla bloqueada."
+    }
+  },
   "localization": {
     "metadata": {
       "title": "Localización",
@@ -3790,6 +3907,7 @@
     "pot_valuation_required": "No hay un valor conocido de acá al {as_of_date}, así que no se pueden valuar las partes. Registrá primero cuánto valía en esa fecha.",
     "pot_write_required": "Tenés acceso de solo lectura a esto. Pedile acceso de escritura a un administrador del grupo.",
     "private_entry_from_shared_account": "Un movimiento privado no se puede pagar desde una cuenta compartida — el dinero saldría de la parte de todos. Registrá primero un retiro.",
+    "push_not_configured": "Las notificaciones push no están disponibles en este entorno.",
     "reconciliation_owned_entry": "Esta entrada fue creada por una conciliación, así que no se puede editar ni eliminar directamente. Volvé a ejecutar esa conciliación o eliminala.",
     "reconciliation_period_mismatch": "Este período no coincide con ninguno de los resúmenes de la tarjeta; puede que su día de cierre haya cambiado. Actualizá la página y probá de nuevo.",
     "request_too_large": "La solicitud es demasiado grande. Reducí la cantidad de datos e intentá de nuevo.",
