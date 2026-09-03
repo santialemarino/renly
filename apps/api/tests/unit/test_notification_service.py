@@ -111,8 +111,11 @@ class TestDispatch:
             }
         }
         mocks = _arrange_dispatch(monkeypatch, overrides=overrides)
-        await svc.dispatch(NotificationEvent.member_joined, [OTHER.id], {"group_id": 1, "group": "Casa", "member": "Ana"})
+        told = await svc.dispatch(NotificationEvent.member_joined, [OTHER.id], {"group_id": 1, "group": "Casa", "member": "Ana"})
         mocks["created"].assert_not_awaited()
+        # And nobody was told, which is the figure the hourly reminder logs — see TestDispatch's own
+        # tests for why an over-reported count is worse than a missing one.
+        assert told == 0
 
     @pytest.mark.asyncio
     async def test_a_row_is_still_written_when_only_the_FEED_is_off(self, monkeypatch):
@@ -133,6 +136,33 @@ class TestDispatch:
             dedupe_key="pot:5:2026-09",
         )
         assert mocks["created"].await_args.args[1][0].dedupe_key == "pot:5:2026-09"
+
+    @pytest.mark.asyncio
+    async def test_it_reports_how_many_people_were_actually_told(self, monkeypatch):
+        # The figure the hourly reminder logs. A deduped repeat is NOT a dispatch: both people were
+        # eligible and only one gained a row, so reporting the eligible count would make a job that
+        # told nobody claim it told everybody, every day of the period.
+        _arrange_dispatch(monkeypatch, written=[OTHER.id])
+        told = await svc.dispatch(
+            NotificationEvent.snapshot_due, [USER.id, OTHER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"}, dedupe_key="k"
+        )
+        assert told == 1
+
+    @pytest.mark.asyncio
+    async def test_nobody_told_is_reported_as_zero(self, monkeypatch):
+        _arrange_dispatch(monkeypatch, written=[])
+        assert await svc.dispatch(NotificationEvent.snapshot_due, [OTHER.id], {"group_id": 1, "group": "Casa"}, dedupe_key="k") == 0
+        # And an empty audience never opens a session at all.
+        assert await svc.dispatch(NotificationEvent.snapshot_due, [], {"group_id": 1}) == 0
+
+    @pytest.mark.asyncio
+    async def test_a_failed_dispatch_reports_nobody_rather_than_everybody(self, monkeypatch):
+        # dispatch swallows its own exceptions so a push outage cannot roll back the money write that
+        # produced the event — which means the RETURN is the only thing a caller can read. Reporting the
+        # audience here would turn a silent total failure into a log line saying it worked.
+        _arrange_dispatch(monkeypatch)
+        monkeypatch.setattr(svc.notification_repository, "create_many", AsyncMock(side_effect=RuntimeError("the database is gone")))
+        assert await svc.dispatch(NotificationEvent.member_joined, [USER.id, OTHER.id], {"group_id": 1, "group": "Casa", "member": "Ana"}) == 0
 
     @pytest.mark.asyncio
     async def test_only_the_recipients_who_GAINED_a_row_are_emailed(self, monkeypatch):

@@ -35,7 +35,7 @@ def _permission(member_id: int, *, can_write: bool) -> PotMemberPermission:
 
 # Wires one pot in one group: the custodian may write, the co-owner may only view, and the pot is
 # behind on its cadence unless told otherwise.
-def _arrange(monkeypatch, *, pots=None, timezones=None, permissions=None, freshness=(date(2026, 7, 12), True)):
+def _arrange(monkeypatch, *, pots=None, timezones=None, permissions=None, freshness=(date(2026, 7, 12), True), told=None):
     monkeypatch.setattr(svc.pot_repository, "list_all", AsyncMock(return_value=pots if pots is not None else [_pot()]))
     monkeypatch.setattr(
         svc.pot_repository,
@@ -52,7 +52,9 @@ def _arrange(monkeypatch, *, pots=None, timezones=None, permissions=None, freshn
         AsyncMock(return_value=timezones if timezones is not None else {1: BUENOS_AIRES, 2: BUENOS_AIRES}),
     )
     monkeypatch.setattr(svc.pot_service, "get_freshness", AsyncMock(return_value=freshness))
-    dispatched = AsyncMock()
+    # dispatch answers with how many people it actually WROTE a row for, which is what the job counts.
+    # Defaults to "everybody it was asked about", so a test that does not care reads naturally.
+    dispatched = AsyncMock(side_effect=(lambda _e, ids, _p, **_kw: len(ids)) if told is None else (lambda *_a, **_kw: told))
     monkeypatch.setattr(svc.notification_service, "dispatch", dispatched)
     return dispatched
 
@@ -229,6 +231,26 @@ class TestCost:
         monkeypatch.setattr(svc.user_settings_repository, "get_all_timezones", timezones)
         assert await svc.send_due_reminders(AsyncMock(), NOON_UTC) == 0
         timezones.assert_not_awaited()
+
+
+class TestWhatTheJobReports:
+    # The count the scheduler logs. A pot stays stale for the rest of its period, so the job offers the
+    # same reminder to the same people every day and the dedupe index refuses all but the first — a
+    # count of who was ASKED would therefore claim a daily reminder nobody received, every day for a
+    # month. Counting what dispatch actually wrote is the only figure an operator can act on.
+    @pytest.mark.asyncio
+    async def test_a_deduped_repeat_is_reported_as_nobody_told(self, monkeypatch):
+        dispatched = _arrange(monkeypatch, told=0)
+        assert await svc.send_due_reminders(AsyncMock(), NOON_UTC) == 0
+        # And it still made the offer — the silence is the index's decision, not the job's.
+        dispatched.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_it_reports_the_people_actually_told(self, monkeypatch):
+        # The positive control: without it, the assertion above would also pass on a job that always
+        # reported zero.
+        _arrange(monkeypatch)
+        assert await svc.send_due_reminders(AsyncMock(), NOON_UTC) == 1
 
 
 def test_the_reminder_hour_is_a_waking_one():

@@ -151,8 +151,12 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         # Globally unique, not unique per user: the push service mints one endpoint per browser, so the
-        # same endpoint arriving again is the same browser re-subscribing — an upsert, never a duplicate.
-        # Unbounded length because the endpoint is a third-party URL whose shape is not ours to cap.
+        # same endpoint arriving again is the same browser re-subscribing. Handing it over is a
+        # privileged action, though, not an upsert — see push_subscription_repository.release_endpoint,
+        # because the owner-match policy below refuses a conflict-update it cannot see.
+        # TEXT because a third-party URL's shape is not ours to cap; the length bound lives on the
+        # REQUEST instead (schemas/notification.py), where it keeps an over-long value out of the UNIQUE
+        # btree below, whose key cannot exceed 2704 bytes.
         sa.Column("endpoint", sa.Text(), nullable=False),
         # SECRETS. Anyone holding these two plus the endpoint can push to that browser as if they were
         # Renly, so they are never logged, never returned by an endpoint, and never exported.

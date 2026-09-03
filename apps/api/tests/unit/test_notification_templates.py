@@ -105,6 +105,36 @@ class TestRendering:
             assert "https://renly.test/shared/1" in message.text
             assert "{" not in templates.push_body(event, payload, locale)
 
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_a_NAMELESS_pot_reads_as_its_label_and_never_as_None(self, locale):
+        # `pots.name` is NULL for a group's DEFAULT pot — the pot most groups only ever have — so this
+        # is the common case, not the edge one. And it does not raise: "{pot}".format(pot=None) happily
+        # prints "None", so the failure would have shipped as an email and a lock-screen line reading
+        # "None is due a new valuation" while the feed, which has its own fallback, read correctly.
+        payload = {**_PAYLOAD, "pot": None}
+        for key in _template_keys():
+            if "{pot}" not in "".join(templates._STRINGS[locale][key].values()):
+                continue
+            event = NotificationEvent(key.split(".")[0])
+            variant = key.split(".")[1] if "." in key else None
+            rendered = {**payload, **({"variant": variant} if variant else {})}
+            message = templates.notification_email(
+                "a@test.local", event, rendered, link="https://renly.test/x", settings_link="https://renly.test/n", locale=locale
+            )
+            for text in (message.subject, message.text, templates.push_body(event, rendered, locale)):
+                assert "None" not in text, f"{key} rendered a nameless pot as None in {locale}"
+
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_the_nameless_label_is_the_one_the_web_shows(self, locale):
+        # The same event must not have two names. This asserts the API's label against the WEB's
+        # `notifications.potFallback`, read out of the translation file rather than restated, so the
+        # two cannot drift into "Shared money" in an inbox and something else in the app.
+        import json
+        from pathlib import Path
+
+        web = json.loads((Path(__file__).resolve().parents[3] / "web" / "translations" / f"{locale}.json").read_text())
+        assert templates._strings("_pot", locale)["name"] == web["notifications"]["potFallback"]
+
     def test_an_unknown_locale_falls_back_to_english(self):
         message = templates.notification_email(
             "a@test.local",

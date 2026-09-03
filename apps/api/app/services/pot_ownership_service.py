@@ -217,7 +217,8 @@ async def _pot_audience(session: AsyncSession, pot: Pot, user: User) -> list[int
 # `pot` is the pot's raw name and may be NULL — a group's default pot has none — and it is left NULL
 # rather than filled in here, because the label a nameless pot reads under is LOCALIZED while this
 # payload is shared by every recipient whatever language each of them uses. Each renderer applies its
-# own fallback: notification_templates for email and push, potLabel() on the web for the feed.
+# own fallback in the reader's own language: `notification_templates._readable` for email and push,
+# and `notificationRow`'s `potFallback` on the web for the feed.
 def _pot_payload(pot: Pot, group: Group | None, extra: dict) -> dict:
     return {"group_id": pot.group_id, "group": group.name if group else None, "pot_id": pot.id, "pot": pot.name, **extra}
 

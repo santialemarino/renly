@@ -52,9 +52,10 @@ SNAPSHOT_REMINDER_HOUR_LOCAL = 9
 
 # Tells the people who can re-value a pot that it has fallen behind its cadence.
 #
-# Runs on the PRIVILEGED session (the scheduler has no user context), and returns how many
-# notifications were dispatched so the job can log something meaningful. `now_utc` is injectable for
-# tests, mirroring auto_expense_service.
+# Runs on the PRIVILEGED session (the scheduler has no user context), and returns how many people were
+# actually TOLD — not how many were offered a reminder, which for a pot that stays stale is the same
+# people every day. The dedupe index decides the difference, so the scheduler's log stays honest.
+# `now_utc` is injectable for tests, mirroring auto_expense_service.
 async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = None) -> int:
     now_utc = now_utc or datetime.now(UTC)
     pots = await pot_repository.list_all(session)
@@ -87,7 +88,11 @@ async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = N
             valued_as_of, is_stale = await pot_service.get_freshness(session, pot, as_of_date=local_today)
             if not is_stale:
                 continue
-            await notification_service.dispatch(
+            # The count is what dispatch actually WROTE, not len(user_ids): a pot stays stale for the
+            # rest of its period, so the offer is made every day and the dedupe index refuses all but
+            # the first. Counting the offer would make the scheduler's log claim a daily reminder that
+            # nobody received.
+            dispatched += await notification_service.dispatch(
                 NotificationEvent.snapshot_due,
                 user_ids,
                 {
@@ -101,5 +106,4 @@ async def send_due_reminders(session: AsyncSession, now_utc: datetime | None = N
                 },
                 dedupe_key=f"pot:{pot.id}:{cadence_period_key(pot.snapshot_cadence, local_today)}",
             )
-            dispatched += len(user_ids)
     return dispatched

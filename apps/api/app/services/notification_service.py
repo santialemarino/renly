@@ -153,12 +153,17 @@ async def _send_push(
 # The order is not arbitrary. Preferences are read first, so a recipient with every channel off costs
 # nothing further; the rows go in next, and only the recipients who actually GAINED one are sent to —
 # which is what stops a re-attempted reminder emailing somebody a second time.
+#
+# Returns how many people were actually TOLD, which is not how many were asked: a deduped repeat and a
+# recipient with every channel off both return 0, and so does a failure. Every producer ignores it; the
+# hourly reminder is what needs it, because a job that logs its recipient count would report the same
+# figure every day of a period while the dedupe index quietly wrote nothing.
 async def dispatch(
     event: NotificationEvent, user_ids: list[int], payload: dict, *, dedupe_key: str | None = None, now: datetime | None = None
-) -> None:
+) -> int:
     recipients = sorted(set(user_ids))
     if not recipients:
-        return
+        return 0
     try:
         async with AdminSessionLocal() as admin_session:
             overrides = await notification_repository.preferences_by_user_ids(admin_session, recipients)
@@ -166,7 +171,7 @@ async def dispatch(
                 user_id for user_id in recipients if any(_is_enabled(event, channel, overrides.get(user_id, {})) for channel in NotificationChannel)
             ]
             if not wanted:
-                return
+                return 0
             rows = [Notification(user_id=user_id, event=event, payload=payload, dedupe_key=dedupe_key) for user_id in wanted]
             if now is not None:
                 for row in rows:
@@ -175,8 +180,10 @@ async def dispatch(
             await admin_session.commit()
             if written:
                 await _deliver(admin_session, event, payload, written, overrides)
+            return len(written)
     except Exception:
         logger.exception("Notification dispatch failed for event '%s'.", event.value)
+        return 0
 
 
 # Sends the out-of-app channels to the recipients who gained a row. Split from dispatch because the

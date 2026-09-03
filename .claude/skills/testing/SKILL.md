@@ -122,9 +122,18 @@ pnpm test:e2e        # Playwright E2E
   helpers can't cover (e.g. `LocaleAmountInput`'s live grouping + caret, resync/precision effects) —
   extract and node-test the pure parts first.
 - Components that read locale/timezone render under a `NextIntlClientProvider` (pass `locale` +
-  `messages={{}}` + `timeZone`); a controlled input needs a small stateful harness that feeds
-  `onChange` back as `value`. Prefer `keyboard` + a manual `setSelectionRange` over `type` when a
-  test needs the caret at a specific position.
+  `messages={{}}` + `timeZone`, or the real `translations/<locale>.json` when the copy itself is the
+  thing under test); a controlled input needs a small stateful harness that feeds `onChange` back as
+  `value`. Prefer `keyboard` + a manual `setSelectionRange` over `type` when a test needs the caret at
+  a specific position.
+- **A component that renders a RADIX primitive cannot currently be tested here.** `apps/web` and
+  `packages/ui` declare different React ranges, so pnpm installs two copies; `vitest.config.ts`'s
+  `dedupe` collapses the direct imports but a transitive dependency reached through `@repo/ui` (Radix)
+  still resolves its own, and the render dies with `Cannot read properties of null (reading
+'useState')` from inside the Radix component while everything around it renders fine. The message
+  points at React, not at the duplication, so it is worth recognising rather than debugging. A
+  `resolve.alias` in the vitest config does NOT fix it (tried). Until the two ranges are aligned, test
+  such a component's logic through what it renders WITHOUT the primitive, or cover it in the browser.
 
 **Don't unit-test on the web:** framework behavior, or full multi-page user flows (those are Playwright
 E2E). Keep a jsdom test to a single component's behavior.

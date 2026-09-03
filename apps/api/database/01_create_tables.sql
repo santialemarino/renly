@@ -1492,8 +1492,10 @@ CREATE TABLE push_subscriptions (
   id           BIGSERIAL PRIMARY KEY,
   user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   -- Globally unique, not unique per user: the same endpoint arriving again is the same browser
-  -- re-subscribing, which is an upsert. TEXT because the endpoint is a third-party URL whose shape is
-  -- not ours to cap.
+  -- re-subscribing. Handing that browser to a DIFFERENT account is a privileged action rather than an
+  -- upsert, because the owner-match policy below refuses a conflict-update it cannot see.
+  -- TEXT because a third-party URL's shape is not ours to cap; the length bound lives on the REQUEST
+  -- instead, where it keeps an over-long value out of the UNIQUE btree (max key 2704 bytes).
   endpoint     TEXT NOT NULL,
   p256dh       VARCHAR(255) NOT NULL,
   auth         VARCHAR(255) NOT NULL,

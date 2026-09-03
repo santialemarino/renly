@@ -123,6 +123,11 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
         "_footer": {
             "text": "You can change which notifications {product} sends you under Settings → Notifications:\n{settings_link}",
         },
+        # What a NAMELESS pot is called. A group's default pot has no name (pots.name is NULL for it),
+        # and it is the pot most groups only ever have — so without this the most common reminder of
+        # all reads "None is due a new valuation". Same label the web renders it under
+        # (`notifications.potFallback`), so one event does not have two names.
+        "_pot": {"name": "Shared money"},
     },
     "es": {
         "group_invited": {
@@ -209,6 +214,7 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
         "_footer": {
             "text": "Podés cambiar qué notificaciones te manda {product} en Configuración → Notificaciones:\n{settings_link}",
         },
+        "_pot": {"name": "Dinero compartido"},
     },
 }
 
@@ -250,12 +256,21 @@ def _amount(value: str, locale: str) -> str:
     return f"{sign}{grouped}{decimal}{fraction}" if fraction else f"{sign}{grouped}"
 
 
-# The payload with its money figures rendered for reading, leaving every other value untouched. Applied
-# once per message so no template has to remember to do it.
+# The payload as the templates need to read it: money figures formatted, and a nameless pot given the
+# label it is known by. Applied once per message, by BOTH renderers, so no template has to remember it.
+#
+# The pot half is the one that bites. `pots.name` is NULL for a group's default pot — which is the pot
+# most groups only ever have — and `"{pot} is due a new valuation".format(pot=None)` does not raise, it
+# prints "None". The feed never showed that because the web substitutes its own localized fallback; the
+# email and the push had no such step, so the same event read correctly in the app and wrongly in an
+# inbox and on a lock screen.
 def _readable(payload: dict, locale: str) -> dict:
-    if "amount" not in payload:
-        return payload
-    return {**payload, "amount": _amount(str(payload["amount"]), locale)}
+    readable = dict(payload)
+    if "amount" in readable:
+        readable["amount"] = _amount(str(readable["amount"]), locale)
+    if readable.get("pot") is None and "pot" in readable:
+        readable["pot"] = _strings("_pot", locale)["name"]
+    return readable
 
 
 # The {subject, body, push} block for one template key in one locale, falling back to the default
@@ -277,7 +292,7 @@ def template_key(event: NotificationEvent, payload: dict) -> str:
 # The lock-screen line for one notification: no figures, ever. No amount is even formatted here — the
 # push strings interpolate no `{amount}` at all, so there is nothing to leave out by accident.
 def push_body(event: NotificationEvent, payload: dict, locale: str = _DEFAULT_LOCALE) -> str:
-    return _strings(template_key(event, payload), locale)["push"].format(product=_PRODUCT_NAME, **payload)
+    return _strings(template_key(event, payload), locale)["push"].format(product=_PRODUCT_NAME, **_readable(payload, locale))
 
 
 # One notification as an email, localized to the recipient's stored language.
