@@ -73,8 +73,8 @@ def _row(
 
 
 # Wires the three repository calls and the balance the ledger anchors to.
-def _wire(monkeypatch, *, rows, total=None, balance="100000", empty_first_call=False):
-    monkeypatch.setattr(account_movement_service.account_service, "get_account", AsyncMock(return_value=_account()))
+def _wire(monkeypatch, *, rows, total=None, balance="100000", empty_first_call=False, account=None):
+    monkeypatch.setattr(account_movement_service.account_service, "get_account_in_scope", AsyncMock(return_value=account or _account()))
     balance_mock = AsyncMock(return_value=Decimal(balance))
     monkeypatch.setattr(account_movement_service.account_service, "get_account_balance", balance_mock)
     reported = total if total is not None else len(rows)
@@ -93,10 +93,27 @@ def _wire(monkeypatch, *, rows, total=None, balance="100000", empty_first_call=F
 
 class TestOwnership:
     @pytest.mark.asyncio
-    async def test_another_users_account_raises_not_found(self, monkeypatch):
-        monkeypatch.setattr(account_movement_service.account_service, "get_account", AsyncMock(side_effect=NotFoundError("Account not found.")))
+    async def test_an_unreachable_account_raises_not_found(self, monkeypatch):
+        monkeypatch.setattr(
+            account_movement_service.account_service, "get_account_in_scope", AsyncMock(side_effect=NotFoundError("Account not found."))
+        )
         with pytest.raises(NotFoundError):
             await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+
+    @pytest.mark.asyncio
+    async def test_the_account_is_loaded_in_either_scope_and_its_pot_reaches_the_query(self, monkeypatch):
+        # A group's bank account has a ledger worth reading, and `transfers` is the one movement table
+        # carrying a scope of its own — so the pot has to reach the query or a transfer between two of
+        # the pot's accounts moves the balance and never appears in the ledger explaining it.
+        _wire(monkeypatch, rows=[_row(1, MovementKind.transfer, 10, "3000")], account=_account(user_id=None, pot_id=4))
+        await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert account_movement_service.account_movement_repository.list_movements.await_args.kwargs["pot_id"] == 4
+
+    @pytest.mark.asyncio
+    async def test_a_private_account_passes_no_pot(self, monkeypatch):
+        _wire(monkeypatch, rows=[_row(1, MovementKind.transfer, 10, "3000")])
+        await account_movement_service.list_account_movements(AsyncMock(), 7, USER)
+        assert account_movement_service.account_movement_repository.list_movements.await_args.kwargs["pot_id"] is None
 
 
 class TestRunningBalance:

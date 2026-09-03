@@ -12,20 +12,27 @@ import { SharedIncomeFormDialog } from '@/app/(protected)/_components/shared-inc
 import { IncomeCategorySelect } from '@/app/(protected)/income/_components/income-category-select';
 import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
+import { ScopePill } from '@/components/scope-pill';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
+import type { ListScope } from '@/lib/api/types';
 import { DIALOG_EXIT_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
+import { resolveListScope } from '@/lib/list-scope';
 
 export function IncomeToolbar({
+  showScope,
   preferredCurrencies,
   supportedCurrencies,
   accounts,
   groups,
   timeZone,
 }: {
+  // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
+  // so a solo user (every public user at launch) sees no added control.
+  showScope?: boolean;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   accounts?: Account[];
@@ -39,6 +46,10 @@ export function IncomeToolbar({
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.income, { resetPage: true });
   const [createOpen, setCreateOpen] = useState(false);
+
+  // The FILTER's scope, distinct from the form `scope` below, which says which RECORD is being
+  // written. Same word, two different questions, so they are named apart.
+  const scopeFilter = resolveListScope(searchParams.get('scope') ?? undefined);
   /*
    * Which form the Add button is currently showing: the private one, or a group's shared-income one.
    * Held here rather than inside either dialog because the swap replaces the whole form — a private
@@ -75,6 +86,18 @@ export function IncomeToolbar({
 
   // Closes the form on screen, then opens the other with what was typed. Sequential rather than
   // simultaneous — see DIALOG_EXIT_MS.
+  /*
+   * The FILTER's scope, which is a different thing from `handleScopeChange` below — that one hands an
+   * in-progress entry between the private and the shared FORM. Named apart on purpose: one decides
+   * which rows are read, the other which record is being written.
+   *
+   * 'all' clears the param rather than writing it, so the default view has a clean URL and a shared
+   * link cannot pin somebody into a narrower list than they meant to send.
+   */
+  function handleScopeFilterChange(next: ListScope) {
+    navigate({ scope: next === 'all' ? null : next });
+  }
+
   function handleScopeChange(next: string, values: IncomeHandover) {
     setHandover(values);
     setCreateOpen(false);
@@ -94,12 +117,15 @@ export function IncomeToolbar({
       addLabel={t('toolbar.addIncome')}
       onAdd={handleAdd}
       filters={
-        <IncomeCategorySelect
-          value={selectedCategory}
-          onValueChange={handleCategoryChange}
-          surface
-          className="min-w-fit flex-1"
-        />
+        <>
+          {showScope && <ScopePill value={scopeFilter} onChange={handleScopeFilterChange} />}
+          <IncomeCategorySelect
+            value={selectedCategory}
+            onValueChange={handleCategoryChange}
+            surface
+            className="min-w-fit flex-1"
+          />
+        </>
       }
     >
       <IncomeFormDialog

@@ -538,27 +538,90 @@ class PotShare:
     holds_anything: bool
 
 
-# Every pot the caller may see, as their own seat in it — the dashboard's input, and deliberately not
-# list_pots: that one builds a full response per pot (every member's row, every permission row) for a
-# page that shows them, and the dashboard needs one figure per pot.
+# One visible pot as a LIST PAGE sees it: what to call it, whose group it belongs to, and whether the
+# caller may change what it holds.
 #
-# The viewer-seat resolution is the same, including the fail-closed skip: RLS returns only pots the user
-# may see, so a missing seat means the policy and this service disagree, and under-reporting is the safe
-# direction. A pot the caller may see but owns none of is still returned — X1's rule is that visibility
-# never inflates net worth, not that it hides the pot.
-async def list_visible_seats(session: AsyncSession, user_id: int) -> list[PotSeat]:
+# Deliberately not a PotSeat: a seat carries the ownership ledger because the dashboard values a share
+# from it, and a list page needs a label and a permission instead. Two projections of one walk, which is
+# the same split list_visible_seats and list_pots already keep.
+@dataclass(frozen=True)
+class PotScope:
+    pot_id: int
+    name: str | None
+    group_id: int
+    group_name: str
+    can_write: bool
+    # The pot's re-valuation cadence, which the snapshots grid measures each shared row's freshness
+    # against (§8.2). Carried here rather than re-read per row: it is a property of the pot, and this
+    # catalogue is already the one read that resolves those.
+    cadence: PotCadence
+
+
+# Every visible pot paired with the caller's own seat in it — the walk both projections below need, and
+# which neither should own a copy of.
+#
+# The fail-closed skip is the load-bearing part: RLS returns only pots the user may see, so a missing
+# seat means the policy and this service disagree, and under-reporting is the safe direction. A pot the
+# caller may see but owns none of IS returned — the rule is that visibility never inflates net worth,
+# not that it hides the pot.
+async def _visible_pots_with_seat(session: AsyncSession, user_id: int) -> list[tuple[Pot, int]]:
     pots = await pot_repository.list_visible(session)
     if not pots:
         return []
-    events_by_pot = await pot_ownership_repository.list_by_pots(session, [p.id for p in pots if p.id is not None])
     members_by_group = await group_repository.list_members_by_groups(session, sorted({p.group_id for p in pots}))
-    seats = []
+    pairs: list[tuple[Pot, int]] = []
     for pot in pots:
         viewer = next((m for m in members_by_group.get(pot.group_id, []) if m.user_id == user_id and m.is_active), None)
         if viewer is None:
             continue
-        seats.append(PotSeat(pot=pot, member_id=viewer.id, events=events_by_pot.get(pot.id, [])))
-    return seats
+        pairs.append((pot, viewer.id))
+    return pairs
+
+
+# Every pot the caller may see, as their own seat in it — the dashboard's input, and deliberately not
+# list_pots: that one builds a full response per pot (every member's row, every permission row) for a
+# page that shows them, and the dashboard needs one figure per pot.
+async def list_visible_seats(session: AsyncSession, user_id: int) -> list[PotSeat]:
+    pairs = await _visible_pots_with_seat(session, user_id)
+    if not pairs:
+        return []
+    events_by_pot = await pot_ownership_repository.list_by_pots(session, [pot.id for pot, _ in pairs])
+    return [PotSeat(pot=pot, member_id=member_id, events=events_by_pot.get(pot.id, [])) for pot, member_id in pairs]
+
+
+# Every pot the caller may see, as a list page's section: its label, its group's name, and whether the
+# caller may write it. Sorted by pot id ascending, which is the order the list queries put the rows in
+# (`pot_id` NULLS FIRST) — so the sections and the rows they label cannot disagree about which is first.
+#
+# A pot whose GROUP did not resolve is dropped, and the drop is deliberate rather than defensive: the
+# copy reads "{pot} · {group}", and a null interpolated into it fails by printing rather than by
+# raising. It is also unreachable by construction — app_can_view_pot requires an active seat in the
+# pot's group, which is the same predicate app_is_group_member applies to the group row — so the caller
+# filtering its rows to exactly these pot ids keeps a row from ever appearing under a header that
+# could not be drawn.
+async def list_visible_scopes(session: AsyncSession, user_id: int) -> list[PotScope]:
+    pairs = await _visible_pots_with_seat(session, user_id)
+    if not pairs:
+        return []
+    permissions_by_pot = await pot_repository.list_permissions_by_pots(session, [pot.id for pot, _ in pairs])
+    groups = {g.id: g for g in await group_repository.get_by_ids(session, sorted({pot.group_id for pot, _ in pairs}))}
+    scopes: list[PotScope] = []
+    for pot, member_id in pairs:
+        group = groups.get(pot.group_id)
+        if group is None:
+            continue
+        mine = next((p for p in permissions_by_pot.get(pot.id, []) if p.member_id == member_id), None)
+        scopes.append(
+            PotScope(
+                pot_id=pot.id,
+                name=pot.name,
+                group_id=pot.group_id,
+                group_name=group.name,
+                can_write=_may_write(mine),
+                cadence=pot.snapshot_cadence,
+            )
+        )
+    return sorted(scopes, key=lambda scope: scope.pot_id)
 
 
 # What one seat's share of its pot is worth on a date, and what the pot's value is made of.

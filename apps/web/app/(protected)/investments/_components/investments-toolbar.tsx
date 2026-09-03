@@ -11,19 +11,26 @@ import { InvestmentFormDialog } from '@/app/(protected)/investments/_components/
 import { CategorySelect } from '@/components/category-select';
 import { CollectionMultiSelect } from '@/components/collection-multi-select';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
+import { ScopePill } from '@/components/scope-pill';
 import { ROUTES } from '@/config/routes';
 import type { InvestmentCollection } from '@/lib/api/collections';
+import type { ListScope } from '@/lib/api/types';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
+import { resolveListScope } from '@/lib/list-scope';
 
 export function InvestmentsToolbar({
   collections,
   preferredCurrencies,
   supportedCurrencies,
+  showScope,
 }: {
   collections: InvestmentCollection[];
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
+  // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
+  // so a solo user (every public user at launch) sees no added control.
+  showScope?: boolean;
 }) {
   const t = useTranslations('investments');
   const router = useRouter();
@@ -33,6 +40,7 @@ export function InvestmentsToolbar({
 
   const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
+  const scope = resolveListScope(searchParams.get('scope') ?? undefined);
 
   function handleCollectionToggle(collectionId: number) {
     const next = selectedCollectionIds.includes(collectionId)
@@ -43,6 +51,12 @@ export function InvestmentsToolbar({
 
   function handleCategoryChange(cat: string) {
     navigate({ category: cat === CATEGORY_ALL ? null : cat });
+  }
+
+  // 'all' clears the param rather than writing it, so the default view has a clean URL and a shared
+  // link cannot pin somebody into a narrower list than they meant to send.
+  function handleScopeChange(next: ListScope) {
+    navigate({ scope: next === 'all' ? null : next });
   }
 
   return (
@@ -56,6 +70,7 @@ export function InvestmentsToolbar({
       onAdd={() => setCreateOpen(true)}
       filters={
         <>
+          {showScope && <ScopePill value={scope} onChange={handleScopeChange} />}
           {collections.length > 0 && (
             <CollectionMultiSelect
               collections={collections}

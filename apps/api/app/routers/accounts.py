@@ -1,15 +1,12 @@
 from datetime import date as date_type
-from decimal import Decimal
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.domain.account_movement import MovementKind
-from app.models.account import Account
-from app.models.user import User
-from app.schemas.account import AccountCreate, AccountResponse, AccountUpdate
+from app.domain.list_scope import ListScope
+from app.schemas.account import AccountCreate, AccountListResponse, AccountResponse, AccountUpdate
 from app.schemas.account_movement import AccountMovementListResponse
 from app.schemas.account_reconciliation import (
     AccountComputedBalanceResponse,
@@ -21,64 +18,46 @@ from app.services import account_movement_service, account_reconciliation_servic
 router = APIRouter(prefix="/accounts", tags=["accounts"])
 
 
-# Builds an AccountResponse, injecting the derived balance (defaults to opening_balance), the
-# has-links flag (whether any money — including a transfer on either leg — links the account — the frontend locks its currency when set),
-# and the date of the account's most recent reconciliation.
-def _to_response(
-    account: Account,
-    balance: Decimal | None = None,
-    has_links: bool = False,
-    last_reconciled_date: date_type | None = None,
-) -> AccountResponse:
-    data = account.model_dump()
-    return AccountResponse(
-        **{
-            **data,
-            "balance": balance if balance is not None else account.opening_balance,
-            "has_links": has_links,
-            "last_reconciled_date": last_reconciled_date,
-        }
-    )
-
-
-# Builds responses for a set of accounts, batching every derived field: the balance union, the
-# has-links flag, and the last-reconciled date are grouped queries, so cost is independent of count.
-async def _to_responses(session: AsyncSession, accounts: list[Account], user: User) -> list[AccountResponse]:
-    balances, linked = await account_service.get_account_summaries(session, accounts, user.id)
-    last_reconciled = await account_reconciliation_service.get_latest_reconciled_dates(session, accounts, user.id)
-    return [_to_response(a, balances.get(a.id), a.id in linked, last_reconciled.get(a.id)) for a in accounts]
-
-
-# List accounts for the current user with optional search, sorting, and balances.
-@router.get("", response_model=list[AccountResponse])
+# List accounts for the current user with optional search, sorting, scope filtering and balances. Rows
+# come back grouped by scope, and `sections` says what each group is called and what it totals.
+@router.get("", response_model=AccountListResponse)
 async def list_accounts(
     current_user: CurrentUser,
     session: SessionDep,
+    scope: ListScope = Query(
+        default=ListScope.private,
+        description="Which scopes to return: private (own only, the default), shared (co-owned only) or all (both, grouped).",
+    ),
     search: str | None = Query(default=None, description="Filter accounts by name (case-insensitive)."),
     sort_by: str | None = Query(default=None, description="Column to sort by (name, type, currency, opening_date)."),
     sort_order: str = Query(default="asc", description="Sort direction (asc or desc)."),
     show_archived: bool = Query(default=False, description="Include archived (inactive) accounts."),
-) -> list[AccountResponse]:
-    accounts = await account_service.list_accounts(
+) -> AccountListResponse:
+    return await account_service.list_accounts_grouped(
         session,
         current_user,
+        scope=scope,
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=not show_archived,
     )
-    return await _to_responses(session, accounts, current_user)
 
 
-# Get a single account with its current balance.
+# Get a single account with its current balance, in EITHER scope.
+#
+# Dual-scope because a shared account has to be READABLE for its ledger page to have a header: that
+# page loads the row for its name, currency and balance, and an owner-filtered lookup 404s on a row
+# whose user_id is NULL. Every WRITE path below keeps `get_account`, which is private-only — this
+# widens exactly one read, and reachability is still RLS's answer plus the pot's own predicate.
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
     account_id: int,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> AccountResponse:
-    account = await account_service.get_account(session, account_id, current_user)
-    return (await _to_responses(session, [account], current_user))[0]
+    account = await account_service.get_account_in_scope(session, account_id, current_user)
+    return (await account_service.to_responses(session, [account], current_user))[0]
 
 
 # Create a new account.
@@ -98,7 +77,7 @@ async def create_account(
         opening_date=body.opening_date,
         notes=body.notes,
     )
-    return _to_response(account)
+    return account_service.to_response(account)
 
 
 # Update an account.
@@ -111,7 +90,7 @@ async def update_account(
 ) -> AccountResponse:
     payload = body.model_dump(exclude_unset=True)
     account = await account_service.update_account(session, account_id, current_user, **payload)
-    return (await _to_responses(session, [account], current_user))[0]
+    return (await account_service.to_responses(session, [account], current_user))[0]
 
 
 # Delete an account. Linked entries are un-attributed (ON DELETE SET NULL), preserving their history.
@@ -132,7 +111,7 @@ async def archive_account(
     session: SessionDep,
 ) -> AccountResponse:
     account = await account_service.archive_account(session, account_id, current_user)
-    return (await _to_responses(session, [account], current_user))[0]
+    return (await account_service.to_responses(session, [account], current_user))[0]
 
 
 # Unarchive an account (set is_active = true). Returns the updated account.
@@ -143,7 +122,7 @@ async def unarchive_account(
     session: SessionDep,
 ) -> AccountResponse:
     account = await account_service.unarchive_account(session, account_id, current_user)
-    return (await _to_responses(session, [account], current_user))[0]
+    return (await account_service.to_responses(session, [account], current_user))[0]
 
 
 # The account's ledger: every movement that reaches it, newest first, paginated. `balance_after` is

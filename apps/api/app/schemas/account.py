@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.account import AccountType
 from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.list_scope import ListSectionResponse
 
 
 # Body for POST /accounts.
@@ -49,7 +50,22 @@ class AccountResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     has_links: bool = Field(default=False, description="Whether any expense/income/settlement/transfer links this account (locks its currency).")
     last_reconciled_date: date_type | None = Field(default=None, description="as_of_date of the most recent reconciliation, if any.")
+    scope: str = Field(default="private", description="'private' when the caller owns it, 'shared' when a pot they co-own does.")
+    pot_id: int | None = Field(
+        default=None,
+        description="Pot holding it; null on a private row. Joins the row to its section, which carries the pot's label.",
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /accounts. An envelope rather than a bare array, because a grouped list has to say
+# what its sections are called and what each one totals — facts about the list, not about any row.
+class AccountListResponse(BaseModel):
+    items: list[AccountResponse] = Field(description="Every matching account, unpaginated, in scope-major order.")
+    sections: list[ListSectionResponse] = Field(
+        default_factory=list,
+        description="The list's scope sections in row order, each with its per-currency balance total.",
+    )

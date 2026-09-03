@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_expense_category
+from app.schemas.list_scope import ListSectionResponse
 
 
 # Body for POST /expenses.
@@ -285,4 +286,12 @@ class ExpenseListResponse(BaseModel):
     skipped_currencies: list[str] = Field(
         default_factory=list,
         description="Original-currency codes on this page whose converted_amount is null because no exchange rate was stored.",
+    )
+    sections: list[ListSectionResponse] = Field(
+        default_factory=list,
+        description=(
+            "The list's scope sections in row order, each counted and totalled per currency across "
+            "every page. Empty for a caller who belongs to no group, which is what tells the page to "
+            "draw a flat table."
+        ),
     )

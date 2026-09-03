@@ -19,6 +19,7 @@ from app.models.shared_expense import SharedExpense
 from app.models.shared_income import SharedIncome
 from app.models.transfer import Transfer
 from app.repositories.card_settlement_repository import settlement_cash_leg
+from app.repositories.utils import account_scope_matches_bound
 
 _CATEGORY = "category"
 _COUNTERPARTY = "counterparty"
@@ -49,6 +50,12 @@ def _is_adjustment(model):
 # so the ledger reads as one signed column instead of asking every reader to know which kinds
 # subtract. A reconciliation's adjustment is an ordinary entry carrying a reconciliation FK, so the
 # kind is decided per ROW rather than per branch.
+#
+# The owner match is the WHOLE predicate here, and that is a property of the two tables rather than an
+# omission: expense_entries and income_entries keep `user_id NOT NULL` and have no pot_id at all (§3 —
+# a shared flow lives in its own table), so they never name a pot-owned account and the balance sums
+# beside them filter on exactly the same column. `transfers` is the one movement table that DOES carry
+# a scope, and its branch below matches on it.
 #
 # `opening_date` is a bound value rather than a join to accounts: the caller already loaded that row
 # in this same transaction, and the balance sums only join because they run for MANY accounts at once.
@@ -126,7 +133,7 @@ def _settlement_branch(account_id: int, user_id: int, *, opening_date: date_type
 # what lets both share the source 'transfer'. The leg's own amount is what moves THIS account and is
 # already in THIS account's currency; the other side rides along so a cross-currency transfer can
 # still show the pair that IS its rate record.
-def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool, opening_date: date_type):
+def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool, opening_date: date_type, pot_id: int | None):
     counterpart = aliased(Account)
     leg = Transfer.from_account_id if outgoing else Transfer.to_account_id
     other_leg = Transfer.to_account_id if outgoing else Transfer.from_account_id
@@ -148,7 +155,7 @@ def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool, opening_d
         .join(counterpart, counterpart.id == other_leg)
         .where(
             leg == account_id,
-            Transfer.user_id == user_id,
+            account_scope_matches_bound(Transfer, user_id, pot_id),
             Transfer.date >= opening_date,
         )
     )
@@ -314,7 +321,7 @@ def _ownership_branch(account_id: int, *, outgoing: bool, opening_date: date_typ
 # The branches a kind filter admits. None means the whole ledger. 'income' and 'expense' deliberately
 # EXCLUDE adjustments — a true-up is not money the user earned or spent, and filtering to it is what
 # the 'adjustment' kind is for.
-def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, opening_date: date_type) -> list:
+def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, opening_date: date_type, pot_id: int | None) -> list:
     def entry(spec, adjustments):
         model, source, base_kind, negate = spec
         return _entry_branch(
@@ -351,8 +358,8 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
         ]
     if kind == MovementKind.transfer:
         return [
-            _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date),
-            _transfer_branch(account_id, user_id, outgoing=False, opening_date=opening_date),
+            _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date, pot_id=pot_id),
+            _transfer_branch(account_id, user_id, outgoing=False, opening_date=opening_date, pot_id=pot_id),
         ]
     return [
         entry(income, adjustments=None),
@@ -364,14 +371,14 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
         _group_settlement_branch(account_id, outgoing=False, opening_date=opening_date),
         _ownership_branch(account_id, outgoing=True, opening_date=opening_date),
         _ownership_branch(account_id, outgoing=False, opening_date=opening_date),
-        _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date),
-        _transfer_branch(account_id, user_id, outgoing=False, opening_date=opening_date),
+        _transfer_branch(account_id, user_id, outgoing=True, opening_date=opening_date, pot_id=pot_id),
+        _transfer_branch(account_id, user_id, outgoing=False, opening_date=opening_date, pot_id=pot_id),
     ]
 
 
 # The union of every movement the filter admits, as a subquery to order and paginate over.
-def _union(account_id: int, user_id: int, *, kind: MovementKind | None, opening_date: date_type):
-    return union_all(*_branches(account_id, user_id, kind=kind, opening_date=opening_date)).subquery()
+def _union(account_id: int, user_id: int, *, kind: MovementKind | None, opening_date: date_type, pot_id: int | None):
+    return union_all(*_branches(account_id, user_id, kind=kind, opening_date=opening_date, pot_id=pot_id)).subquery()
 
 
 # Newest first, and a TOTAL order: (date, source, source_id) is unique because `source` names the
@@ -416,11 +423,12 @@ async def list_movements(
     user_id: int,
     *,
     opening_date: date_type,
+    pot_id: int | None = None,
     kind: MovementKind | None = None,
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[MovementRow], int]:
-    sub = _union(account_id, user_id, kind=kind, opening_date=opening_date)
+    sub = _union(account_id, user_id, kind=kind, opening_date=opening_date, pot_id=pot_id)
     windowed = select(
         sub,
         func.count().over().label("total"),
@@ -442,9 +450,10 @@ async def count_movements(
     user_id: int,
     *,
     opening_date: date_type,
+    pot_id: int | None = None,
     kind: MovementKind | None = None,
 ) -> int:
-    sub = _union(account_id, user_id, kind=kind, opening_date=opening_date)
+    sub = _union(account_id, user_id, kind=kind, opening_date=opening_date, pot_id=pot_id)
     result = await session.execute(select(func.count()).select_from(sub))
     return int(result.scalar_one())
 
@@ -453,8 +462,8 @@ async def count_movements(
 # holds. Deliberately NOT used to render anything: the ledger anchors on
 # account_service.get_account_balances precisely so it never becomes a second source of truth. It
 # exists for the drift guard, which proves the two still describe the same row set.
-async def sum_movements(session: AsyncSession, account_id: int, user_id: int, *, opening_date: date_type) -> Decimal:
-    sub = _union(account_id, user_id, kind=None, opening_date=opening_date)
+async def sum_movements(session: AsyncSession, account_id: int, user_id: int, *, opening_date: date_type, pot_id: int | None = None) -> Decimal:
+    sub = _union(account_id, user_id, kind=None, opening_date=opening_date, pot_id=pot_id)
     result = await session.execute(select(func.coalesce(func.sum(sub.c.amount), 0)).select_from(sub))
     return Decimal(str(result.scalar_one()))
 

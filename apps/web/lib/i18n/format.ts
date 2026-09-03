@@ -123,6 +123,20 @@ export function formatMonthYear(dateStr: string, locale?: string): string {
   return dateTimeFormat(getLocaleTag(locale), { month: 'short', year: 'numeric' }).format(date);
 }
 
+/*
+ * Formats a date string (YYYY-MM-DD) as a day + short month (e.g. "5 Jul" / "5 jul"). Date-only —
+ * never timezone-shifted.
+ *
+ * The label a WEEKLY grid column needs. Its neighbours are both wrong there: formatMonth names the
+ * month and no day, so four columns inside one month read identically, while formatWeekdayDay names
+ * the weekday and no month — and every week-ending column is a Sunday, so it prints "Sunday" on all
+ * of them while leaving July's 5th and August's 2nd indistinguishable.
+ */
+export function formatDayMonth(dateStr: string, locale?: string): string {
+  const date = new Date(dateStr + 'T00:00:00');
+  return dateTimeFormat(getLocaleTag(locale), { day: 'numeric', month: 'short' }).format(date);
+}
+
 // Formats a date string (YYYY-MM-DD) as a long weekday + day-of-month (e.g. "Monday 5" / "lunes 5"). Date-only — never timezone-shifted.
 export function formatWeekdayDay(dateStr: string, locale?: string): string {
   const date = new Date(dateStr + 'T00:00:00');

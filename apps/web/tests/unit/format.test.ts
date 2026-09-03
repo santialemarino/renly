@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatAxisValue,
   formatDateForLocale,
+  formatDayMonth,
   formatList,
   formatMonth,
   formatMonthLong,
@@ -148,6 +149,25 @@ describe('date formatters', () => {
     const es = formatMonthYear('2025-01-31', 'es');
     expect(es).toContain('ene');
     expect(es).toContain('2025');
+  });
+
+  it('formatDayMonth renders a day + short month, which is what a weekly column needs', () => {
+    // The two labels beside it are both wrong for that: formatMonth names no day, so four columns
+    // inside one month read identically, and formatWeekdayDay names no month while printing "Sunday"
+    // on every week-ending column. Field ordering follows the locale's CLDR pattern, so assert parts.
+    const en = formatDayMonth('2026-07-05', 'en');
+    expect(en).toContain('Jul');
+    expect(en).toContain('5');
+    expect(en).not.toContain('Sunday');
+    const es = formatDayMonth('2026-07-05', 'es');
+    expect(es).toContain('jul');
+    expect(es).toContain('5');
+  });
+
+  it('formatDayMonth tells two weeks in different months apart', () => {
+    // The defect it exists for: as a bare day number, July's 5th and August's 2nd are both a Sunday
+    // with nothing to separate them.
+    expect(formatDayMonth('2026-07-05', 'en')).not.toBe(formatDayMonth('2026-08-02', 'en'));
   });
 
   it('formatWeekdayDay renders the long weekday + day-of-month', () => {

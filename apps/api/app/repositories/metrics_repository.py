@@ -4,17 +4,34 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain.list_scope import ListScope
 from app.models.investment import Investment
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
+from app.repositories.utils import scope_filter
 
 
-# Returns all active investments for a user (no pagination).
+# Returns all active investments for a user (no pagination), in the requested scope.
+#
+# `private` is the DEFAULT and every metrics caller keeps it: the investor dashboard stays private by
+# decision (PR 8a decision 7 — a co-owned holding's TWR is the POT's, because your exposure moves
+# whenever units are issued, so a per-investment return attributed to you is wrong in a way no label
+# repairs). Only the snapshots grid asks for more, and it asks explicitly.
+#
+# Scope-major order (`pot_id` NULLS FIRST) for the same reason the two list queries take it: the grid
+# draws a section header per scope and can only do that where the rows are contiguous.
 async def list_active_investments(
     session: AsyncSession,
     user_id: int,
+    pot_ids: list[int] | None = None,
+    *,
+    scope: ListScope = ListScope.private,
 ) -> list[Investment]:
-    result = await session.execute(select(Investment).where(Investment.user_id == user_id, Investment.is_active.is_(True)).order_by(Investment.id))
+    result = await session.execute(
+        select(Investment)
+        .where(scope_filter(Investment, user_id, pot_ids or [], scope), Investment.is_active.is_(True))
+        .order_by(Investment.pot_id.nulls_first(), Investment.id)
+    )
     return list(result.scalars().all())
 
 

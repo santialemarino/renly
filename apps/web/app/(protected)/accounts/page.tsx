@@ -5,9 +5,11 @@ import { AccountsTable } from '@/app/(protected)/accounts/_components/accounts-t
 import { AccountsToolbar } from '@/app/(protected)/accounts/_components/accounts-toolbar';
 import { ConceptHint } from '@/components/concept-hint';
 import { HELP_ANCHORS } from '@/config/routes';
-import { getAccounts, type AccountSortField } from '@/lib/api/accounts';
+import { getAccounts, getAccountsGrouped, type AccountSortField } from '@/lib/api/accounts';
+import { getGroups } from '@/lib/api/groups';
 import { getPageSettings } from '@/lib/api/settings';
 import type { SortOrder } from '@/lib/api/types';
+import { resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -21,6 +23,7 @@ interface AccountsPageProps {
     sort_by?: string;
     sort_order?: string;
     show_archived?: string;
+    scope?: string;
   }>;
 }
 
@@ -31,7 +34,9 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
   const { settings } = await getPageSettings();
   const preferredCurrencies = settings?.preferredCurrencies ?? undefined;
 
-  const accounts = await getAccounts({
+  const scope = resolveListScope(params.scope);
+  const { items: accounts, sections } = await getAccountsGrouped({
+    scope,
     search: params.search,
     sortBy: params.sort_by as AccountSortField | undefined,
     sortOrder: params.sort_order as SortOrder | undefined,
@@ -46,9 +51,17 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
    */
   const allAccounts = await getAccounts();
 
+  /*
+   * The groups the user belongs to, which is the ONE signal that turns the scope filter on — the same
+   * one the entry forms' scope control uses (X3). Read separately from `sections` on purpose:
+   * `sections` follows the current filter, so a page narrowed to "Yours" would otherwise lose the
+   * control that narrowed it. Empty for every solo user, and then nothing renders.
+   */
+  const groups = await getGroups().catch(() => []);
+
   // Teach the empty state only during first-run (before onboarding is completed) and only when no
   // filter is hiding existing rows — a returning user or a filtered-empty view gets the plain line.
-  const hasActiveFilters = !!params.search || params.show_archived === 'true';
+  const hasActiveFilters = !!params.search || params.show_archived === 'true' || scope !== 'all';
   const firstRun = isFirstRunEmptyState(accounts.length === 0, hasActiveFilters, settings);
 
   return (
@@ -66,9 +79,10 @@ export default async function AccountsPage({ searchParams }: AccountsPageProps) 
       >
         {t('reconcileHint')}
       </ConceptHint>
-      <AccountsToolbar preferredCurrencies={preferredCurrencies} />
+      <AccountsToolbar preferredCurrencies={preferredCurrencies} showScope={groups.length > 0} />
       <AccountsTable
         accounts={accounts}
+        sections={sections}
         allAccounts={allAccounts}
         preferredCurrencies={preferredCurrencies}
         firstRun={firstRun}

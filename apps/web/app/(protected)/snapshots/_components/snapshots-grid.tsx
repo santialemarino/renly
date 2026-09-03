@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, CircleDollarSign, Minus, Plus, Table2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, CircleDollarSign, Lock, Minus, Plus, Table2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 import {
@@ -20,42 +20,14 @@ import {
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortIcon } from '@/components/sort-icon';
+import { TableSectionRow } from '@/components/table-section-row';
 import { ROUTES } from '@/config/routes';
 import type { SnapshotGridCell, SnapshotGridResponse, SnapshotGridRow } from '@/lib/api/snapshots';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
-
-// Extracts "YYYY-MM" from a date string like "2025-01-31".
-function toYearMonth(dateStr: string): string {
-  return dateStr.slice(0, 7);
-}
-
-// Generates all "YYYY-MM" keys between global min and max snapshot dates.
-function generateAllYearMonths(dates: string[]): string[] {
-  if (dates.length === 0) return [];
-  const yms = dates.map(toYearMonth);
-  const sorted = [...new Set(yms)].sort();
-  const min = sorted[0]!;
-  const max = sorted[sorted.length - 1]!;
-
-  const result: string[] = [];
-  const [minY, minM] = min.split('-').map(Number) as [number, number];
-  const [maxY, maxM] = max.split('-').map(Number) as [number, number];
-  let y = minY;
-  let m = minM;
-
-  while (y < maxY || (y === maxY && m <= maxM)) {
-    result.push(`${y}-${String(m).padStart(2, '0')}`);
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
-    }
-  }
-
-  return result;
-}
+import { bySectionPot, sectionedRows } from '@/lib/list-scope';
 
 interface CellContentProps {
   cell: SnapshotGridCell;
@@ -125,6 +97,7 @@ interface SnapshotsGridProps {
 export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
   const fmt = useFormatters();
   const t = useTranslations('snapshots');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.snapshots);
@@ -148,23 +121,40 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
     }
   }
 
-  // Generate all year-month keys between global min and max (fill gaps).
-  const allYearMonths = useMemo(() => generateAllYearMonths(grid.months), [grid.months]);
-
-  // Build cell lookup per row: year-month → latest-dated cell in that month.
+  /*
+   * Cell lookup per row: COLUMN → the latest-dated cell in it.
+   *
+   * The column key comes from the API rather than being derived here, which is the point of moving
+   * it: the pot page's value series is measured on the same period rule, and a second copy in the
+   * browser would have to agree with it about which week a Wednesday belongs to. Which cell WINS a
+   * column stays here, because it is a rendering choice — the other cells are still in `cells`, so
+   * the form knows every date that is taken.
+   */
   const cellMaps = useMemo(
     () =>
-      grid.rows.map((row) => {
-        const map = new Map<string, SnapshotGridCell>();
-        for (const cell of row.cells) {
-          const key = toYearMonth(cell.date);
-          const existing = map.get(key);
-          if (!existing || cell.date > existing.date) map.set(key, cell);
-        }
-        return map;
-      }),
+      new Map(
+        grid.rows.map((row) => {
+          const map = new Map<string, SnapshotGridCell>();
+          for (const cell of row.cells) {
+            const existing = map.get(cell.column);
+            if (!existing || cell.date > existing.date) map.set(cell.column, cell);
+          }
+          return [row.investmentId, map] as const;
+        }),
+      ),
     [grid.rows],
   );
+
+  const rendered = sectionedRows(grid.rows, grid.sections, {
+    rowKey: (row) => String(row.investmentId),
+    scopeKey: (row) => row.potId,
+    sectionKey: bySectionPot,
+  });
+  // Write access is a property of the section: only a member the pot granted it to may value a shared
+  // holding, and a row with no section is the caller's own.
+  const writableByPot = new Map(grid.sections.map((section) => [section.potId, section.canWrite]));
+  // Every column plus the two sticky ones, for a section header that spans the whole grid.
+  const columnCount = grid.columns.length + 2;
 
   function handleCellClick(row: SnapshotGridRow, cell: SnapshotGridCell, e: React.MouseEvent) {
     e.stopPropagation();
@@ -209,12 +199,17 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                   <SortIcon active={isSortActive} order={sortOrder} />
                 </button>
               </TableHead>
-              {allYearMonths.map((month) => (
+              {grid.columns.map((column) => (
                 <TableHead
-                  key={month}
+                  key={column}
                   className="min-w-[140px] text-center text-paragraph-xs bg-background transition-colors group-hover:bg-muted/50"
                 >
-                  {fmt.month(month + '-01')}
+                  {/*
+                   * A monthly column IS its month. A weekly column is the day its week closed, WITH
+                   * the month: the weekday would be "Sunday" on every column, and a bare day number
+                   * leaves July's 5th and August's 2nd reading identically.
+                   */}
+                  {grid.interval === 'weekly' ? fmt.dayMonth(column) : fmt.month(column)}
                 </TableHead>
               ))}
               <TableHead className="sticky right-0 z-10 min-w-[70px] bg-background text-center">
@@ -223,52 +218,108 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {grid.rows.map((row, rowIdx) => (
-              <TableRow key={row.investmentId} className="group">
-                <TableCell className="sticky left-0 z-10 bg-background">
-                  <div className="flex flex-col">
-                    <span className="text-paragraph-sm-medium truncate max-w-[200px]">
-                      {row.name}
-                    </span>
-                    <span className="text-paragraph-xs text-muted-foreground">
-                      {row.baseCurrency}
-                    </span>
-                  </div>
-                </TableCell>
-                {allYearMonths.map((month) => {
-                  const cell = cellMaps[rowIdx]?.get(month);
-                  return (
-                    <TableCell
-                      key={month}
-                      className={`text-center bg-background transition-colors group-hover:bg-muted/50 ${cell ? 'cursor-pointer' : ''}`}
-                      onClick={cell ? (e) => handleCellClick(row, cell, e) : undefined}
-                    >
-                      {cell ? (
-                        <CellContent cell={cell} />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
+            {rendered.map((entry) => {
+              if (entry.kind === 'header') {
+                return (
+                  <TableSectionRow
+                    key={entry.key}
+                    section={entry.section}
+                    colSpan={columnCount}
+                    countLabel={t('grid.sectionCount', { count: entry.section.count })}
+                  />
+                );
+              }
+              const row = entry.row;
+              const canWrite = writableByPot.get(row.potId) ?? true;
+              // The row's latest snapshot, which is what its freshness is measured against. `at(-1)`
+              // rather than an index, because the section walk no longer hands out positions.
+              const latest = row.cells.at(-1);
+              return (
+                <TableRow key={entry.key} className="group">
+                  <TableCell className="sticky left-0 z-10 bg-background">
+                    <div className="flex flex-col">
+                      <span className="text-paragraph-sm-medium truncate max-w-[200px]">
+                        {row.name}
+                      </span>
+                      <span className="text-paragraph-xs text-muted-foreground">
+                        {row.baseCurrency}
+                      </span>
+                      {/*
+                       * §8.2's cadence-driven freshness indicator, and it is per ROW because
+                       * lateness is a fact about this holding: two holdings in one pot can be one
+                       * current and one months old. Only a shared row has a cadence to be late
+                       * against — a private holding declares no rhythm at all.
+                       */}
+                      {row.isOverdue && row.cadence !== null && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="w-fit text-paragraph-mini-medium text-amber-600 cursor-default">
+                              {t('grid.overdue')}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {latest === undefined
+                              ? t('grid.neverValued', {
+                                  cadence: tCommon(`cadence.${row.cadence}`).toLowerCase(),
+                                })
+                              : t('grid.overdueHint', {
+                                  date: fmt.date(latest.date),
+                                  cadence: tCommon(`cadence.${row.cadence}`).toLowerCase(),
+                                })}
+                          </TooltipContent>
+                        </Tooltip>
                       )}
-                    </TableCell>
-                  );
-                })}
-                <TableCell className="sticky right-0 z-10 bg-background text-center">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={(e) => handleAddClick(row, e)}
-                        aria-label="Add snapshot"
+                    </div>
+                  </TableCell>
+                  {grid.columns.map((column) => {
+                    const cell = cellMaps.get(row.investmentId)?.get(column);
+                    return (
+                      <TableCell
+                        key={column}
+                        className={`text-center bg-background transition-colors group-hover:bg-muted/50 ${cell ? 'cursor-pointer' : ''}`}
+                        onClick={cell ? (e) => handleCellClick(row, cell, e) : undefined}
                       >
-                        <Plus className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('grid.addSnapshot')}</TooltipContent>
-                  </Tooltip>
-                </TableCell>
-              </TableRow>
-            ))}
+                        {cell ? (
+                          <CellContent cell={cell} />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                  <TableCell className="sticky right-0 z-10 bg-background text-center">
+                    {/*
+                     * Valuing a shared holding is what keeps its pot valued at all, so the grid
+                     * offers it — but only to a member the pot granted write access to. The
+                     * indicator rather than a disabled button: a Radix tooltip never fires on a
+                     * disabled trigger, so the explanation would never render.
+                     */}
+                    {!canWrite ? (
+                      <RowLockedIndicator
+                        icon={Lock}
+                        tooltip={t('grid.lockedAdd')}
+                        ariaLabel="Managed by the pot"
+                      />
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            onClick={(e) => handleAddClick(row, e)}
+                            aria-label="Add snapshot"
+                          >
+                            <Plus className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t('grid.addSnapshot')}</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

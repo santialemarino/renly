@@ -6,7 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain import NotFoundError
+from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope
 from app.models.account import Account, AccountType
+from app.models.pot import PotCadence
 from app.models.user import User
 from app.schemas.account import AccountCreate
 from app.services import account_service
@@ -133,3 +135,81 @@ class TestSchema:
     def test_opening_balance_defaults_to_zero(self):
         body = AccountCreate(name="X", type="cash", currency="ARS", opening_date=date(2026, 1, 1))
         assert body.opening_balance == Decimal(0)
+
+
+# X2 on /accounts: the list stops being private-only, the rows come back grouped by the pot that owns
+# them, and each section totals its rows' BALANCES per currency.
+#
+# The totals are folded from the rows rather than from an aggregate query, and that is not a shortcut:
+# this list is unpaginated, so the response already IS the whole filtered set, and each balance is
+# DERIVED from eleven movement sources rather than stored — an aggregate would have to re-derive all of
+# them to restate a figure already in hand.
+class TestListAccountsGrouped:
+    @pytest.mark.asyncio
+    async def test_a_row_says_which_scope_it_is_in_and_which_pot_owns_it(self, monkeypatch):
+        _wire(monkeypatch, [_account(id=7), _account(id=8, user_id=None, pot_id=4)])
+        items = (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).items
+        assert [(i.scope, i.pot_id) for i in items] == [(SCOPE_PRIVATE, None), (SCOPE_SHARED, 4)]
+
+    @pytest.mark.asyncio
+    async def test_each_section_totals_its_own_rows_balances_per_currency(self, monkeypatch):
+        # Two currencies inside ONE section, so a fixture with a single bucket per section could not
+        # tell a per-currency total from a blended one. Currencies never net, exactly as the group hub's
+        # balances do not.
+        _wire(
+            monkeypatch,
+            [
+                _account(id=8, user_id=None, pot_id=4, currency="ARS"),
+                _account(id=9, user_id=None, pot_id=4, currency="USD"),
+                _account(id=7),
+            ],
+            balances={8: Decimal("3000.00"), 9: Decimal("400.00"), 7: Decimal("120.00")},
+            scopes=[
+                account_service.pot_service.PotScope(pot_id=4, name=None, group_id=2, group_name="Casa", can_write=True, cadence=PotCadence.monthly)
+            ],
+        )
+        sections = (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).sections
+        assert [(s.scope, s.pot_id, s.group_name, s.can_write, s.count) for s in sections] == [
+            (SCOPE_PRIVATE, None, None, True, 1),
+            (SCOPE_SHARED, 4, "Casa", True, 2),
+        ]
+        assert [(t.currency, t.amount) for t in sections[0].totals] == [("ARS", Decimal("120.00"))]
+        assert [(t.currency, t.amount) for t in sections[1].totals] == [("ARS", Decimal("3000.00")), ("USD", Decimal("400.00"))]
+
+    @pytest.mark.asyncio
+    async def test_the_total_is_the_derived_balance_and_not_the_opening_figure(self, monkeypatch):
+        # The opening figure and the derived balance are the same number on an account nothing has
+        # moved, so a fixture where they agree could not tell which one the header is summing.
+        _wire(
+            monkeypatch,
+            [_account(id=7, opening_balance=Decimal("1500.50"))],
+            balances={7: Decimal("42.00")},
+            scopes=[
+                account_service.pot_service.PotScope(pot_id=4, name=None, group_id=2, group_name="Casa", can_write=True, cadence=PotCadence.monthly)
+            ],
+        )
+        sections = (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).sections
+        assert sections[0].totals[0].amount == Decimal("42.00")
+
+    @pytest.mark.asyncio
+    async def test_a_caller_who_can_see_no_pot_gets_no_sections_at_all(self, monkeypatch):
+        # Every user at launch. An empty `sections` is what tells the page to draw the flat table it
+        # always drew, so a solo user's accounts page is unchanged by X2.
+        _wire(monkeypatch, [_account(id=7)])
+        assert (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).sections == []
+
+    @pytest.mark.asyncio
+    async def test_a_private_only_read_resolves_no_catalogue(self, monkeypatch):
+        # The default, and the path seven other pages take as a picker of the caller's own accounts.
+        _wire(monkeypatch, [_account(id=7)])
+        await account_service.list_accounts_grouped(AsyncMock(), USER)
+        account_service.pot_service.list_visible_scopes.assert_not_awaited()
+
+
+# Wires the four reads list_accounts_grouped makes.
+def _wire(monkeypatch, accounts: list[Account], *, balances=None, scopes=None) -> None:
+    monkeypatch.setattr(account_service.account_repository, "list_by_user", AsyncMock(return_value=accounts))
+    resolved = balances if balances is not None else {a.id: a.opening_balance for a in accounts}
+    monkeypatch.setattr(account_service, "get_account_summaries", AsyncMock(return_value=(resolved, set())))
+    monkeypatch.setattr(account_service.account_reconciliation_repository, "get_latest_dates_by_account_ids", AsyncMock(return_value={}))
+    monkeypatch.setattr(account_service.pot_service, "list_visible_scopes", AsyncMock(return_value=scopes or []))

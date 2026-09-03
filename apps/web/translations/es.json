@@ -214,7 +214,10 @@
       "reconciliationOwned": "Esta entrada la creó una conciliación. Volvé a ejecutarla o eliminala desde la cuenta o la tarjeta de crédito.",
       "sharedExpense": "Esta es tu parte de un gasto compartido. Editalo o eliminalo desde el grupo al que pertenece.",
       "sharedIncome": "Esta es tu parte de un ingreso compartido. Editalo o eliminalo desde el grupo al que pertenece.",
-      "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario."
+      "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario.",
+      "sharedHolding": "Esta tenencia pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo.",
+      "sharedAccount": "Conciliar esta cuenta y quitarla se hacen en su fondo, junto a la propiedad que mueven.",
+      "sharedAccountReadOnly": "Esta cuenta pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo."
     },
     "pagination": {
       "previous": "Anterior",
@@ -226,6 +229,18 @@
       "groupsHeading": "Compartido con",
       "expenseHint": "Un gasto compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio gasto.",
       "incomeHint": "Un ingreso compartido lo registra el grupo y se divide entre sus integrantes. Tu parte pasa a ser tu propio ingreso."
+    },
+    "scope": {
+      "label": "Alcance",
+      "all": "Todo",
+      "private": "Tuyo",
+      "shared": "Compartido",
+      "potInGroup": "{pot} · {group}"
+    },
+    "cadence": {
+      "weekly": "Semanal",
+      "monthly": "Mensual",
+      "ad_hoc": "Sin ritmo fijo"
     }
   },
   "login": {
@@ -553,7 +568,8 @@
       "emptyTitle": "Registrá tus ingresos",
       "emptyDescription": "Agregá tus fuentes de ingreso para ver tu flujo de dinero y tu tasa de ahorro.",
       "total": "{total, plural, one {# ingreso} other {# ingresos}}",
-      "shareOf": "Tu parte: {share} de {amount} {currency}"
+      "shareOf": "Tu parte: {share} de {amount} {currency}",
+      "sectionCount": "{count, plural, one {# entrada} other {# entradas}}"
     },
     "actions": {
       "edit": "Editar",
@@ -603,7 +619,8 @@
       "deleting": "Eliminando...",
       "success": "Ingreso eliminado.",
       "error": "No se pudo eliminar el ingreso."
-    }
+    },
+    "skippedCurrencies": "No hay cotización guardada para {currencies}, así que esos montos se muestran como se registraron."
   },
   "expenses": {
     "metadata": {
@@ -629,7 +646,8 @@
       "emptyTitle": "Seguí tus gastos",
       "emptyDescription": "Registrá cada gasto para ver en qué se va tu dinero y cómo evoluciona en el tiempo.",
       "total": "{total, plural, one {# gasto} other {# gastos}}",
-      "shareOf": "Tu parte: {share} de {amount} {currency}"
+      "shareOf": "Tu parte: {share} de {amount} {currency}",
+      "sectionCount": "{count, plural, one {# gasto} other {# gastos}}"
     },
     "actions": {
       "edit": "Editar",
@@ -740,7 +758,8 @@
       "deleting": "Eliminando...",
       "success": "Gasto eliminado.",
       "error": "No se pudo eliminar el gasto."
-    }
+    },
+    "skippedCurrencies": "No hay cotización guardada para {currencies}, así que esos montos se muestran como se registraron."
   },
   "creditCards": {
     "metadata": {
@@ -956,7 +975,8 @@
       "actions": "Acciones",
       "empty": "No se encontraron cuentas.",
       "emptyTitle": "Agregá tu primera cuenta",
-      "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés."
+      "emptyDescription": "Seguí tus saldos de efectivo, banco y billeteras para que tu patrimonio refleje el dinero que realmente tenés.",
+      "sectionCount": "{count, plural, one {# cuenta} other {# cuentas}}"
     },
     "types": {
       "cash": "Efectivo",
@@ -1634,7 +1654,8 @@
       "empty": "No se encontraron inversiones.",
       "emptyTitle": "Empezá a armar tu cartera de inversiones",
       "emptyDescription": "Agregá una inversión — acciones, cripto, fondos, inmuebles — para seguir su valor, rendimiento y asignación en el tiempo.",
-      "total": "{total, plural, one {# inversión} other {# inversiones}}"
+      "total": "{total, plural, one {# inversión} other {# inversiones}}",
+      "sectionCount": "{count, plural, one {# tenencia} other {# tenencias}}"
     },
     "actions": {
       "edit": "Editar",
@@ -1790,7 +1811,12 @@
       "refresh": "Actualizar precios",
       "refreshing": "Actualizando...",
       "refreshSuccess": "{prices} precios actualizados.",
-      "refreshError": "No se pudieron actualizar los precios."
+      "refreshError": "No se pudieron actualizar los precios.",
+      "interval": {
+        "label": "Columnas",
+        "monthly": "Mensual",
+        "weekly": "Semanal"
+      }
     },
     "grid": {
       "investment": "Inversión",
@@ -1798,7 +1824,13 @@
       "emptyTitle": "Seguí el valor de tu cartera en el tiempo",
       "emptyDescription": "Los snapshots son valores de tus inversiones en un momento dado. Agregá una inversión primero y después registrá snapshots para ver su evolución.",
       "addSnapshot": "Agregar snapshot",
-      "actions": "Acciones"
+      "actions": "Acciones",
+      "sectionCount": "{count, plural, one {# inversión} other {# inversiones}}",
+      "overdue": "Falta actualizar",
+      "overdueHint": "Esto está valuado hasta el {date}, y el fondo espera una cifra nueva {cadence}.",
+      "neverValued": "Nunca se valuó, y el fondo espera una cifra {cadence}.",
+      "lockedAdd": "Solo un integrante con permiso de escritura puede valuar este fondo. Pediselo a un admin del grupo.",
+      "skippedInvestments": "Quedaron afuera porque no se puede convertir su moneda: {names}."
     },
     "form": {
       "titleCreate": "Agregar snapshot",
@@ -2423,11 +2455,6 @@
         }
       },
       "updatedThrough": "actualizado hasta el {date}",
-      "cadence": {
-        "weekly": "Semanal",
-        "monthly": "Mensual",
-        "ad_hoc": "Sin ritmo fijo"
-      },
       "freshness": {
         "neverValued": "Hay algo acá que nunca se valuó, así que el fondo no tiene valor para repartir.",
         "overdue": "Estas cifras solo llegan hasta el {date}. Falta una valuación nueva.",

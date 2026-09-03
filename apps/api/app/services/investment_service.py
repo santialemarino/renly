@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import CurrencyChangeBlockedError, InvestmentCurrencyMismatchError, NotFoundError
+from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope, build_sections
 from app.models.investment import Currency, Investment, InvestmentCategory
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction, TransactionType
@@ -15,7 +16,8 @@ from app.repositories import (
     transaction_repository,
 )
 from app.schemas.investment import InvestmentCollectionInfo, InvestmentListResponse, InvestmentResponse
-from app.services import settings_service
+from app.services import pot_service, settings_service
+from app.services.utils import pot_sections
 
 
 # Assembles InvestmentResponse, enriching it with collection info and snapshot presence.
@@ -35,6 +37,8 @@ def _build_response(
         notes=inv.notes,
         is_active=inv.is_active,
         has_snapshots=(inv.id or 0) in snapshots_set,
+        scope=SCOPE_PRIVATE if inv.pot_id is None else SCOPE_SHARED,
+        pot_id=inv.pot_id,
         created_at=inv.created_at,
         updated_at=inv.updated_at,
         collections=collections,
@@ -62,10 +66,24 @@ async def build_response(session: AsyncSession, investment: Investment) -> Inves
 
 
 # Lists investments for the user with filters and pagination. Returns InvestmentListResponse.
+#
+# The list is DUAL-SCOPE (X2): the caller's own holdings plus every holding a pot they may see holds.
+# The visible pots are resolved once, before the query, and the same catalogue does three things — it
+# bounds which pot rows the query may return, it labels the sections, and it says which of them the
+# caller may write. One source, so a row can never arrive under a header that was never drawn.
+#
+# `filters` is built once and handed to both reads for the reason the two flow unions apply theirs
+# through one helper: a filter that reached the rows and missed the counts would make every section
+# header disagree with the rows beneath it.
+#
+# `private` is the default because four other pages read this list as a PICKER of the caller's own
+# holdings (see the repository's note), and such a read must cost exactly what it cost before: no pot
+# catalogue is resolved, no aggregate is issued, and the page draws the flat table it always drew.
 async def list_investments(
     session: AsyncSession,
     user: User,
     *,
+    scope: ListScope = ListScope.private,
     search: str | None = None,
     collection_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
@@ -75,18 +93,32 @@ async def list_investments(
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> InvestmentListResponse:
+    scopes = [] if scope == ListScope.private else await pot_service.list_visible_scopes(session, user.id)
+    pot_ids = [s.pot_id for s in scopes]
+    filters = {
+        "scope": scope,
+        "search": search,
+        "collection_ids": collection_ids,
+        "category": category,
+        "active_only": active_only,
+    }
     items, total = await investment_repository.list_by_user_filtered(
         session,
         user.id,
-        search=search,
-        collection_ids=collection_ids,
-        category=category,
-        active_only=active_only,
+        pot_ids,
         page=page,
         page_size=page_size,
         sort_by=sort_by,
         sort_order=sort_order,
+        **filters,
     )
+    # The section aggregate is issued ONLY when a pot is visible, which is also the only time the page
+    # draws section headers. A solo user — every user at launch — therefore pays exactly what this list
+    # cost before X2, and an empty `sections` is what tells the page to draw a flat table.
+    sections = []
+    if scopes:
+        counts = await investment_repository.count_by_scope(session, user.id, pot_ids, **filters)
+        sections = pot_sections(build_sections(counts), scopes)
     inv_ids = [inv.id for inv in items if inv.id is not None]
     collections_map, snapshots_set = await _load_response_context(session, inv_ids)
     return InvestmentListResponse(
@@ -94,6 +126,7 @@ async def list_investments(
         total=total,
         page=page,
         page_size=page_size,
+        sections=sections,
     )
 
 

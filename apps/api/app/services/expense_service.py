@@ -14,6 +14,7 @@ from app.domain import (
     ReverseResult,
     ensure_not_reconciliation_owned,
 )
+from app.domain.list_scope import ListScope, build_sections
 from app.models.expense_entry import ExpenseCategory, ExpenseEntry
 from app.models.user import User
 from app.repositories import (
@@ -35,6 +36,7 @@ from app.services import (
     settings_service,
     subscription_service,
 )
+from app.services.utils import group_names_by_id, group_sections
 from app.utils.dates import OBLIGATION_MONTH_STEP
 from app.utils.metrics import RateLookup, convert_optional
 
@@ -101,17 +103,6 @@ def _list_row_to_response(row: ExpenseListRow, currency: str | None, lookup: Rat
     )
 
 
-# The names of every group represented on this page, in one query. Denormalized onto the response so a
-# shared row can say which group it belongs to without the client joining against a list of its own —
-# the same reason a card settlement carries its account's name.
-async def _group_names(session: AsyncSession, rows: list[ExpenseListRow]) -> dict[int, str]:
-    group_ids = sorted({row.group_id for row in rows if row.group_id is not None})
-    if not group_ids:
-        return {}
-    groups = await group_repository.get_by_ids(session, group_ids)
-    return {group.id: group.name for group in groups}
-
-
 # Lists the user's expenses — their own, plus their SHARE of every shared expense their groups record
 # — as one filtered, sorted, paginated list with display-currency conversion.
 #
@@ -119,10 +110,17 @@ async def _group_names(session: AsyncSession, rows: list[ExpenseListRow]) -> dic
 # share of a group dinner is spending exactly as much as a solo one. The share is read from the shared
 # tables at query time and never mirrored into expense_entries, so an edit to the group's expense has
 # nothing to chase.
+#
+# `scope` defaults to `all`, and the asymmetry with `/investments` and `/accounts` — which default to
+# `private` — is deliberate. Those two have never returned a co-owned row, so widening their default
+# would silently change nine pickers elsewhere in the app; this list has unioned each member's share
+# since 5a, so `all` IS its existing behaviour and `private` would silently take shared spending out of
+# everyone's expense list. In both cases the default is the one that changes nothing.
 async def list_expenses(
     session: AsyncSession,
     user: User,
     *,
+    scope: ListScope = ListScope.all,
     search: str | None = None,
     category: ExpenseCategory | None = None,
     payment_method: str | None = None,
@@ -138,23 +136,39 @@ async def list_expenses(
     # `IN (seat ids)` predicate uses the splits' member index, while the join makes Postgres scan every
     # split in the database — measured at roughly twice the time on a 55,000-row list. An empty list
     # also means the shared branch is not built at all, so a user in no group pays nothing for it.
-    member_ids = await group_repository.list_active_member_ids(session, user.id)
+    #
+    # A private-only read needs no seats at all, so it does not pay for the query either.
+    member_ids = [] if scope == ListScope.private else await group_repository.list_active_member_ids(session, user.id)
+    filters = {
+        "scope": scope,
+        "search": search,
+        "category": category,
+        "payment_method": payment_method,
+        "date_from": date_from,
+        "date_to": date_to,
+    }
     rows, total = await expense_repository.list_by_user_filtered(
         session,
         user.id,
         member_ids,
-        search=search,
-        category=category,
-        payment_method=payment_method,
-        date_from=date_from,
-        date_to=date_to,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
         page_size=page_size,
+        **filters,
     )
+    # The section aggregate is issued ONLY when a shared side exists, which is also the only time the
+    # page renders section headers. A solo user — every user at launch — therefore pays exactly what
+    # this list cost before X2, and an empty `sections` is what tells the page to draw a flat table.
+    sections = build_sections(await expense_repository.sum_by_scope(session, user.id, member_ids, **filters)) if member_ids else []
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
-    group_names = await _group_names(session, rows)
+    # One query for both consumers: a shared ROW names its group, and so does a shared SECTION, and the
+    # section keys are not a subset of the page's rows — a group whose expenses all sit on page 2 still
+    # has a header to draw on page 1.
+    group_names = await group_names_by_id(
+        session,
+        {row.group_id for row in rows if row.group_id is not None} | {s.key for s in sections if s.key is not None},
+    )
     items: list[ExpenseResponse] = []
     skipped: set[str] = set()
     for row in rows:
@@ -171,6 +185,7 @@ async def list_expenses(
         page_size=page_size,
         display_currency=currency,
         skipped_currencies=sorted(skipped),
+        sections=group_sections(sections, group_names),
     )
 
 

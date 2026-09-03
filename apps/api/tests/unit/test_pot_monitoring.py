@@ -12,8 +12,11 @@ import pytest
 
 from app.domain.pot_monitoring import (
     PotSeriesInterval,
+    _previous_period_end,
     is_valuation_overdue,
+    period_end_containing,
     period_ends,
+    period_grid,
     series_interval,
 )
 from app.models.pot import PotCadence
@@ -124,3 +127,90 @@ class TestValuationOverdue:
         end_of_january = date(2026, 1, 31)
         assert is_valuation_overdue(cadence=PotCadence.monthly, valued_as_of=date(2025, 12, 31), holds_anything=True, today=end_of_january) is False
         assert is_valuation_overdue(cadence=PotCadence.monthly, valued_as_of=date(2025, 12, 30), holds_anything=True, today=end_of_january) is True
+
+
+# The period a date falls IN, which is the snapshots grid's column key. Complement of
+# _previous_period_end, and derived from it so the pot page's series and the grid cannot disagree about
+# which week a Wednesday belongs to.
+class TestPeriodEndContaining:
+    @pytest.mark.parametrize(
+        ("day", "expected"),
+        [
+            (date(2026, 8, 17), date(2026, 8, 23)),  # Monday
+            (date(2026, 8, 19), date(2026, 8, 23)),  # Wednesday
+            (date(2026, 8, 22), date(2026, 8, 23)),  # Saturday
+            (date(2026, 8, 23), date(2026, 8, 23)),  # Sunday closes its own week
+            (date(2026, 8, 24), date(2026, 8, 30)),  # the next Monday starts the next
+        ],
+    )
+    def test_a_week_closes_on_its_sunday(self, day, expected):
+        assert period_end_containing(day, PotSeriesInterval.weekly) == expected
+
+    def test_it_is_the_complement_of_the_backward_step(self):
+        # The two together are the whole week convention: from any date, the previous period end is
+        # strictly before it and the containing one is on or after. If they ever disagreed, the grid's
+        # columns and the cells bucketed into them would drift apart by a week.
+        for offset in range(14):
+            day = date(2026, 8, 17) + timedelta(days=offset)
+            assert _previous_period_end(day, PotSeriesInterval.weekly) < day
+            assert period_end_containing(day, PotSeriesInterval.weekly) >= day
+            assert _previous_period_end(period_end_containing(day, PotSeriesInterval.weekly), PotSeriesInterval.weekly) < day
+
+    @pytest.mark.parametrize(
+        ("day", "expected"),
+        [
+            (date(2026, 1, 1), date(2026, 1, 31)),
+            (date(2026, 2, 15), date(2026, 2, 28)),  # a short month, and not a 30-day step
+            (date(2026, 12, 31), date(2026, 12, 31)),  # December rolls the year, not into month 13
+        ],
+    )
+    def test_a_month_closes_on_its_last_day(self, day, expected):
+        assert period_end_containing(day, PotSeriesInterval.monthly) == expected
+
+
+# The snapshots grid's columns: every period from the oldest recorded snapshot through the newest, with
+# no gaps. A different question from period_ends, which walks back a fixed COUNT from today.
+class TestPeriodGrid:
+    def test_monthly_columns_span_the_data_with_no_gaps(self):
+        assert period_grid(date(2026, 5, 10), date(2026, 8, 26), PotSeriesInterval.monthly, limit=100) == [
+            date(2026, 5, 31),
+            date(2026, 6, 30),
+            date(2026, 7, 31),
+            date(2026, 8, 31),
+        ]
+
+    def test_weekly_columns_span_the_data_with_no_gaps(self):
+        assert period_grid(date(2026, 8, 3), date(2026, 8, 26), PotSeriesInterval.weekly, limit=100) == [
+            date(2026, 8, 9),
+            date(2026, 8, 16),
+            date(2026, 8, 23),
+            date(2026, 8, 30),
+        ]
+
+    def test_one_period_of_history_is_one_column(self):
+        # Two dates in the same month, so a walk that stopped strictly before the first would return
+        # nothing and the grid would have rows and no columns to draw them in.
+        assert period_grid(date(2026, 8, 10), date(2026, 8, 12), PotSeriesInterval.monthly, limit=100) == [date(2026, 8, 31)]
+
+    def test_the_cap_keeps_the_most_recent_columns(self):
+        # Which is the whole point of capping rather than truncating: a weekly grid over five years is
+        # unrenderable, and the periods a reader wants are the recent ones.
+        assert period_grid(date(2026, 1, 1), date(2026, 8, 26), PotSeriesInterval.monthly, limit=3) == [
+            date(2026, 6, 30),
+            date(2026, 7, 31),
+            date(2026, 8, 31),
+        ]
+
+    def test_a_cap_of_one_is_the_newest_period_alone(self):
+        assert period_grid(date(2026, 1, 1), date(2026, 8, 26), PotSeriesInterval.monthly, limit=1) == [date(2026, 8, 31)]
+
+    def test_every_cell_of_the_span_lands_in_a_column_the_grid_drew(self):
+        # The property the renderer depends on: a cell keyed by period_end_containing must find its
+        # column, or a snapshot silently disappears from a grid that claims to show its whole history.
+        start, end = date(2026, 6, 3), date(2026, 9, 14)
+        for interval in (PotSeriesInterval.monthly, PotSeriesInterval.weekly):
+            columns = set(period_grid(start, end, interval, limit=1000))
+            day = start
+            while day <= end:
+                assert period_end_containing(day, interval) in columns, (interval, day)
+                day += timedelta(days=1)

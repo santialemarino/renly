@@ -2,9 +2,10 @@ from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
-from app.repositories.utils import apply_listing_filters
+from app.repositories.utils import apply_sort, scope_filter
 
 _SORT_COLUMNS = {
     "name": Account.name,
@@ -14,25 +15,42 @@ _SORT_COLUMNS = {
 }
 
 
-# List accounts for a user with optional search, sorting, and archive filtering.
+# List accounts for a user with optional search, sorting, archive and scope filtering.
+#
+# The order is SCOPE-MAJOR (`pot_id` NULLS FIRST) with the caller's chosen sort applied within each
+# scope, so the sections a grouped list draws stay contiguous — the same shape the investments list
+# takes. No page tie-break is needed on top of it, unlike that list: this one is UNPAGINATED, so no row
+# has to stay on a stable page.
+#
+# It no longer routes through apply_listing_filters, and that is the point: that helper hardcodes the
+# owner match, which is exactly the predicate a dual-scope list has to replace. Its other four callers
+# are entities with no `pot_id` column at all, so widening it would have offered them a scope argument
+# describing a column they do not have.
+#
+# `private` is the default and every existing caller relies on it: seven other pages read this list as
+# a PICKER of the caller's own accounts, and the group hub's own comment says so in as many words
+# ("getAccounts is the caller's OWN accounts, and that is the whole point"). Grouped-by-default is a
+# property of the LIST PAGE, which asks for it.
 async def list_by_user(
     session: AsyncSession,
     user_id: int,
+    pot_ids: list[int] | None = None,
     *,
+    scope: ListScope = ListScope.private,
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
     active_only: bool = True,
 ) -> list[Account]:
-    stmt = apply_listing_filters(
-        select(Account),
-        Account,
-        user_id,
-        search=search,
-        sort_by=sort_by,
-        sort_order=sort_order,
-        active_only=active_only,
-        include_ids=None,
+    stmt = select(Account).where(scope_filter(Account, user_id, pot_ids or [], scope))
+    if active_only:
+        stmt = stmt.where(Account.is_active.is_(True))
+    if search:
+        stmt = stmt.where(Account.name.ilike(f"%{search}%"))
+    stmt = apply_sort(
+        stmt.order_by(Account.pot_id.nulls_first()),
+        sort_by,
+        sort_order,
         sort_columns=_SORT_COLUMNS,
         default_order=Account.name,
     )

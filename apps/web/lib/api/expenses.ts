@@ -1,6 +1,12 @@
 import 'server-only';
 
-import type { SortOrder } from '@/lib/api/types';
+import {
+  mapListSection,
+  type ListScope,
+  type ListSection,
+  type ListSectionRaw,
+  type SortOrder,
+} from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { EntryScope } from '@/lib/constants/entries';
 
@@ -43,6 +49,8 @@ interface ExpenseListRaw {
   page: number;
   page_size: number;
   display_currency: string | null;
+  skipped_currencies: string[];
+  sections: ListSectionRaw[];
 }
 
 // --- Frontend types (camelCase) ---
@@ -86,11 +94,19 @@ export interface ExpenseListResponse {
   page: number;
   pageSize: number;
   displayCurrency: string | null;
+  // Original-currency codes on this page whose converted amount is null because no rate was stored.
+  // The API has computed these since Phase 3 and nothing read them, so a row that could not be
+  // converted rendered its original figure with no sign that it had not been converted at all.
+  skippedCurrencies: string[];
+  sections: ListSection[];
 }
 
 export type ExpenseSortField = 'date' | 'amount' | 'category' | 'payment_method';
 
 export interface GetExpensesParams {
+  // Defaults to 'all' on the API, which is this list's existing behaviour: it has unioned each
+  // member's share since the flow half shipped. The pill narrows it.
+  scope?: ListScope;
   search?: string;
   category?: string;
   paymentMethod?: string;
@@ -137,6 +153,7 @@ export function mapExpense(raw: ExpenseRaw): Expense {
 
 export async function getExpenses(params: GetExpensesParams = {}): Promise<ExpenseListResponse> {
   const qs = new URLSearchParams();
+  if (params.scope) qs.set('scope', params.scope);
   if (params.search) qs.set('search', params.search);
   if (params.category) qs.set('category', params.category);
   if (params.paymentMethod) qs.set('payment_method', params.paymentMethod);
@@ -158,5 +175,7 @@ export async function getExpenses(params: GetExpensesParams = {}): Promise<Expen
     page: raw.page,
     pageSize: raw.page_size,
     displayCurrency: raw.display_currency,
+    skippedCurrencies: raw.skipped_currencies,
+    sections: raw.sections.map(mapListSection),
   };
 }

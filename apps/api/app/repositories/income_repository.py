@@ -7,6 +7,7 @@ from sqlalchemy import String, cast, func, literal, null, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.shared_income import SharedIncome, SharedIncomeSplit
@@ -98,40 +99,27 @@ def _apply_list_filters(
     return stmt
 
 
-# Lists the caller's income: their own private rows, plus their SHARE of every piece of income their
-# group seats take a share of, as one paginated, sorted, filtered list.
+# The unioned row set both reads below run over, built once so the page and its section totals can
+# never describe different rows — which is the failure a second copy of this block would produce.
 #
-# `member_ids` are the caller's own active group seats. When it is empty the shared branch is not built
-# at all and the statement is exactly the private query this function has always run — a solo user (who
-# is every user at launch) pays nothing for a union with no rows in it. The filters are applied by one
-# helper to each branch, so the branches cannot drift even though only one of them is always present.
-#
-# The seats are resolved by the caller rather than joined here for the reason the /expenses union
-# measured: joining group_members to filter the splits makes Postgres scan every split in the database,
-# while an `IN (seat ids)` predicate uses the splits' member index.
-#
-# The tie-break is (id, scope) rather than id alone, because ids are unique per TABLE and this list
-# spans two — without the scope a private row and a shared row sharing a date and an id would have no
-# total order, and Postgres may then repeat one across pages or skip it entirely.#
-# ▸ The tie-break is NOT observable by testing, and a mutation sweep proved it on both unions. Dropping
-# the scope stays green even against a fixture built to force a genuine (date, id) collision between a
-# private and a shared row, because an unstable sort is *permitted* to be stable and Postgres's top-N
-# sort on a small result happens to be. The total order is the defence; nothing can distinguish it from
-# its absence, so this comment stands in for the test that cannot exist.
-async def list_by_user_filtered(
-    session: AsyncSession,
+# `scope` decides which branches are built at all, and the four cases are not symmetric:
+#   * `private` is exactly the query this list ran before the union existed;
+#   * `shared` is the other half on its own — including when the caller holds NO seat, where
+#     `IN ()` matches nothing and the honest answer is no rows. Falling through to the private branch
+#     there would answer "show me only shared" with the caller's own private income;
+#   * `all` with no seat is the private branch alone, which is §21's measured decision: a solo user
+#     (every user at launch) pays nothing for a union that can contribute no rows;
+#   * `all` with a seat is the union.
+def _union(
     user_id: int,
     member_ids: list[int],
+    scope: ListScope,
     *,
-    search: str | None = None,
-    category: IncomeCategory | None = None,
-    date_from: date_type | None = None,
-    date_to: date_type | None = None,
-    sort_by: str | None = None,
-    sort_order: str = "asc",
-    page: int = 1,
-    page_size: int = 25,
-) -> tuple[list[IncomeListRow], int]:
+    search: str | None,
+    category: IncomeCategory | None,
+    date_from: date_type | None,
+    date_to: date_type | None,
+):
     private = _apply_list_filters(
         select(
             literal(SCOPE_PRIVATE).label("scope"),
@@ -157,44 +145,82 @@ async def list_by_user_filtered(
         date_to=date_to,
     )
 
-    if member_ids:
-        shared = _apply_list_filters(
-            select(
-                literal(SCOPE_SHARED).label("scope"),
-                SharedIncome.id.label("id"),
-                SharedIncome.date.label("date"),
-                SharedIncomeSplit.amount.label("amount"),
-                SharedIncome.currency.label("currency"),
-                SharedIncome.category.label("category"),
-                SharedIncome.notes.label("notes"),
-                null().label("account_id"),
-                literal(SOURCE_SHARED).label("source"),
-                null().label("reconciliation_id"),
-                null().label("account_reconciliation_id"),
-                SharedIncome.created_at.label("created_at"),
-                SharedIncome.updated_at.label("updated_at"),
-                SharedIncome.group_id.label("group_id"),
-                SharedIncome.amount.label("full_amount"),
-            )
-            .join(SharedIncome, SharedIncome.id == SharedIncomeSplit.shared_income_id)
-            # A split entitled to zero is somebody who only COLLECTED the money — a custodian taking no
-            # share of it. That is not their income, so it does not belong in an income list.
-            .where(SharedIncomeSplit.member_id.in_(member_ids), SharedIncomeSplit.amount > 0),
-            SharedIncome,
-            search=search,
-            category=category,
-            date_from=date_from,
-            date_to=date_to,
-        )
-        rows = union_all(private, shared).subquery()
-    else:
-        rows = private.subquery()
+    if scope == ListScope.private or (scope == ListScope.all and not member_ids):
+        return private.subquery()
 
+    shared = _apply_list_filters(
+        select(
+            literal(SCOPE_SHARED).label("scope"),
+            SharedIncome.id.label("id"),
+            SharedIncome.date.label("date"),
+            SharedIncomeSplit.amount.label("amount"),
+            SharedIncome.currency.label("currency"),
+            SharedIncome.category.label("category"),
+            SharedIncome.notes.label("notes"),
+            null().label("account_id"),
+            literal(SOURCE_SHARED).label("source"),
+            null().label("reconciliation_id"),
+            null().label("account_reconciliation_id"),
+            SharedIncome.created_at.label("created_at"),
+            SharedIncome.updated_at.label("updated_at"),
+            SharedIncome.group_id.label("group_id"),
+            SharedIncome.amount.label("full_amount"),
+        )
+        .join(SharedIncome, SharedIncome.id == SharedIncomeSplit.shared_income_id)
+        # A split entitled to zero is somebody who only COLLECTED the money — a custodian taking no
+        # share of it. That is not their income, so it does not belong in an income list.
+        .where(SharedIncomeSplit.member_id.in_(member_ids), SharedIncomeSplit.amount > 0),
+        SharedIncome,
+        search=search,
+        category=category,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return shared.subquery() if scope == ListScope.shared else union_all(private, shared).subquery()
+
+
+# Lists the caller's income: their own private rows, plus their SHARE of every piece of income their
+# group seats take a share of, as one paginated, sorted, filtered list.
+#
+# `member_ids` are the caller's own active group seats; which branches the row set is built from is
+# _union's decision above, including the solo-user path that pays nothing for a union with no rows.
+#
+# The seats are resolved by the caller rather than joined here for the reason the /expenses union
+# measured: joining group_members to filter the splits makes Postgres scan every split in the database,
+# while an `IN (seat ids)` predicate uses the splits' member index.
+#
+# The tie-break is (id, scope) rather than id alone, because ids are unique per TABLE and this list
+# spans two — without the scope a private row and a shared row sharing a date and an id would have no
+# total order, and Postgres may then repeat one across pages or skip it entirely.#
+# ▸ The tie-break is NOT observable by testing, and a mutation sweep proved it on both unions. Dropping
+# the scope stays green even against a fixture built to force a genuine (date, id) collision between a
+# private and a shared row, because an unstable sort is *permitted* to be stable and Postgres's top-N
+# sort on a small result happens to be. The total order is the defence; nothing can distinguish it from
+# its absence, so this comment stands in for the test that cannot exist.
+async def list_by_user_filtered(
+    session: AsyncSession,
+    user_id: int,
+    member_ids: list[int],
+    *,
+    scope: ListScope = ListScope.all,
+    search: str | None = None,
+    category: IncomeCategory | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[IncomeListRow], int]:
+    rows = _union(user_id, member_ids, scope, search=search, category=category, date_from=date_from, date_to=date_to)
     count_result = await session.execute(select(func.count()).select_from(rows))
     total = count_result.scalar_one()
 
     query = apply_entry_sort(
-        select(rows),
+        # Scope-major (`group_id` NULLS FIRST) with the caller's sort applied within each scope, which
+        # is what grouping a table means: the sections stay contiguous across page boundaries, so a
+        # header is drawn once per scope per page instead of the two interleaving.
+        select(rows).order_by(rows.c.group_id.nulls_first()),
         sort_by,
         sort_order,
         sort_columns=sort_columns(rows),
@@ -204,6 +230,31 @@ async def list_by_user_filtered(
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(query)
     return [IncomeListRow(*row) for row in result.all()], total
+
+
+# What each scope of the filtered list holds, as (group_id, currency, amount, count) — the shape
+# build_sections folds.
+#
+# Summed per CURRENCY and never converted: a rate would have to be applied at each row's own date, so a
+# bucket spanning dates has no single honest rate, and a per-currency total needs none. Over the WHOLE
+# filtered set rather than the page, which is the point — a header figure that changed as the reader
+# paged would answer a question nobody asked.
+async def sum_by_scope(
+    session: AsyncSession,
+    user_id: int,
+    member_ids: list[int],
+    *,
+    scope: ListScope = ListScope.all,
+    search: str | None = None,
+    category: IncomeCategory | None = None,
+    date_from: date_type | None = None,
+    date_to: date_type | None = None,
+) -> list[tuple[int | None, str, Decimal, int]]:
+    rows = _union(user_id, member_ids, scope, search=search, category=category, date_from=date_from, date_to=date_to)
+    result = await session.execute(
+        select(rows.c.group_id, rows.c.currency, func.sum(rows.c.amount), func.count()).group_by(rows.c.group_id, rows.c.currency)
+    )
+    return [(row[0], row[1], row[2], int(row[3])) for row in result.all()]
 
 
 # Get a single income entry by id and user_id.
@@ -470,6 +521,7 @@ class IncomeRepository:
     sum_by_account_ids = staticmethod(sum_by_account_ids)
     sum_by_account_ids_dated = staticmethod(sum_by_account_ids_dated)
     sum_by_account_ids_monthly = staticmethod(sum_by_account_ids_monthly)
+    sum_by_scope = staticmethod(sum_by_scope)
     sum_by_user = staticmethod(sum_by_user)
     sum_by_user_grouped_by_category = staticmethod(sum_by_user_grouped_by_category)
     sum_by_user_monthly = staticmethod(sum_by_user_monthly)

@@ -25,6 +25,7 @@ import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
 import { TablePagination } from '@/components/table-pagination';
+import { TableSectionRow } from '@/components/table-section-row';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
@@ -34,6 +35,7 @@ import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { bySectionGroup, sectionedRows } from '@/lib/list-scope';
 import { isReconciliationOwned } from '@/lib/reconciliation';
 import { isSystemExpenseCategory } from '@/lib/utils/categories';
 
@@ -184,9 +186,7 @@ export function ExpensesDataTable({
   activeCurrency?: string;
   firstRun?: boolean;
 }) {
-  const fmt = useFormatters();
   const t = useTranslations('expenses');
-  const tCommon = useTranslations('common');
   const router = useRouter();
   const { sortBy, sortOrder, handleSortChange, navigate, isPending } =
     useTableSort<ExpenseSortField>(ROUTES.expenses, { resetPage: true });
@@ -199,8 +199,16 @@ export function ExpensesDataTable({
     navigate({ page: page > 1 ? String(page) : null });
   }
 
-  const { items, total, page, pageSize } = data;
+  const { items, total, page, pageSize, sections } = data;
   const totalPages = Math.ceil(total / pageSize);
+  const rendered = sectionedRows(items, sections, {
+    // Keyed on scope AND id, because ids are unique per TABLE and not across them: the union really
+    // can put a private expense and a shared one with the same number on one page, which as a bare
+    // `id` is a duplicate React key.
+    rowKey: (expense) => `${expense.scope}-${expense.id}`,
+    scopeKey: (expense) => expense.groupId,
+    sectionKey: bySectionGroup,
+  });
 
   return (
     <div className="flex flex-col gap-y-4">
@@ -251,66 +259,31 @@ export function ExpensesDataTable({
                 plain={t('table.empty')}
               />
             ) : (
-              items.map((expense) => (
-                /*
-                 * Keyed on scope AND id, because ids are unique per TABLE and not across them: the
-                 * union really can put a private expense and a shared one with the same number on
-                 * one page, which as a bare `id` is a duplicate React key.
-                 */
-                <TableRow key={`${expense.scope}-${expense.id}`}>
-                  <TableCell>{fmt.date(expense.date)}</TableCell>
-                  <TableCell className="text-paragraph-sm tabular-nums">
-                    {fmt.amount(
-                      expense.convertedAmount ?? expense.amount,
-                      expense.convertedAmount ? activeCurrency : expense.currency,
-                    )}
-                    {/*
-                     * A shared row's amount is the viewer's SHARE of a larger bill, and without
-                     * saying so it reads exactly like a solo expense of that size.
-                     *
-                     * The sub-line restates the share AND the whole in the row's OWN currency, and
-                     * names it. Both halves are load-bearing: the cell above may have been converted
-                     * to the display currency, so a bare "of 120 USD" beneath a converted "61,618"
-                     * puts two figures in two currencies side by side with an arithmetic relation a
-                     * reader would try to check and could not. Restating the share makes this line a
-                     * complete, self-consistent fact whatever the cell above happens to be showing.
-                     */}
-                    {expense.scope === 'shared' && expense.fullAmount !== null && (
-                      <span className="flex flex-wrap items-center justify-start gap-x-2 text-paragraph-xs text-muted-foreground">
-                        {expense.groupName && <Badge variant="outline">{expense.groupName}</Badge>}
-                        {t('table.shareOf', {
-                          share: fmt.amount(expense.amount, expense.currency),
-                          amount: fmt.amount(expense.fullAmount, expense.currency),
-                          currency: expense.currency,
-                        })}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {expense.category ? tCommon(`categories.${expense.category}`) : '—'}
-                  </TableCell>
-                  <TableCell>
-                    {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}
-                  </TableCell>
-                  <TableCell className="max-w-48 truncate text-muted-foreground">
-                    {expense.notes ?? '—'}
-                  </TableCell>
-                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
-                    <RowActions
-                      expense={expense}
-                      preferredCurrencies={preferredCurrencies}
-                      supportedCurrencies={supportedCurrencies}
-                      creditCards={creditCards}
-                      accounts={accounts}
-                      activeObligations={activeObligations}
-                      activeSubscriptions={activeSubscriptions}
-                      activeInstallments={activeInstallments}
-                      onMismatch={setMismatch}
-                      onSuccess={() => router.refresh()}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))
+              rendered.map((entry) =>
+                entry.kind === 'header' ? (
+                  <TableSectionRow
+                    key={entry.key}
+                    section={entry.section}
+                    colSpan={6}
+                    countLabel={t('table.sectionCount', { count: entry.section.count })}
+                  />
+                ) : (
+                  <ExpenseRow
+                    key={entry.key}
+                    expense={entry.row}
+                    activeCurrency={activeCurrency}
+                    preferredCurrencies={preferredCurrencies}
+                    supportedCurrencies={supportedCurrencies}
+                    creditCards={creditCards}
+                    accounts={accounts}
+                    activeObligations={activeObligations}
+                    activeSubscriptions={activeSubscriptions}
+                    activeInstallments={activeInstallments}
+                    onMismatch={setMismatch}
+                    onSuccess={() => router.refresh()}
+                  />
+                ),
+              )
             )}
           </TableBody>
         </Table>
@@ -332,5 +305,91 @@ export function ExpensesDataTable({
         onPageChange={handlePageChange}
       />
     </div>
+  );
+}
+
+// One expense row. Extracted so the section walk composes rows and headers by mapping one list,
+// rather than nesting a conditional around fifty lines of markup.
+function ExpenseRow({
+  expense,
+  activeCurrency,
+  preferredCurrencies,
+  supportedCurrencies,
+  creditCards,
+  accounts,
+  activeObligations,
+  activeSubscriptions,
+  activeInstallments,
+  onMismatch,
+  onSuccess,
+}: {
+  expense: Expense;
+  activeCurrency?: string;
+  preferredCurrencies?: string[];
+  supportedCurrencies?: string[];
+  creditCards?: CreditCard[];
+  accounts?: Account[];
+  activeObligations?: PaymentObligation[];
+  activeSubscriptions?: Subscription[];
+  activeInstallments?: Installment[];
+  onMismatch: (mismatch: LinkedPlanMismatch) => void;
+  onSuccess: () => void;
+}) {
+  const fmt = useFormatters();
+  const t = useTranslations('expenses');
+  const tCommon = useTranslations('common');
+
+  return (
+    <TableRow>
+      <TableCell>{fmt.date(expense.date)}</TableCell>
+      <TableCell className="text-paragraph-sm tabular-nums">
+        {fmt.amount(
+          expense.convertedAmount ?? expense.amount,
+          expense.convertedAmount ? activeCurrency : expense.currency,
+        )}
+        {/*
+         * A shared row's amount is the viewer's SHARE of a larger bill, and without
+         * saying so it reads exactly like a solo expense of that size.
+         *
+         * The sub-line restates the share AND the whole in the row's OWN currency, and
+         * names it. Both halves are load-bearing: the cell above may have been converted
+         * to the display currency, so a bare "of 120 USD" beneath a converted "61,618"
+         * puts two figures in two currencies side by side with an arithmetic relation a
+         * reader would try to check and could not. Restating the share makes this line a
+         * complete, self-consistent fact whatever the cell above happens to be showing.
+         */}
+        {expense.scope === 'shared' && expense.fullAmount !== null && (
+          <span className="flex flex-wrap items-center justify-start gap-x-2 text-paragraph-xs text-muted-foreground">
+            {expense.groupName && <Badge variant="outline">{expense.groupName}</Badge>}
+            {t('table.shareOf', {
+              share: fmt.amount(expense.amount, expense.currency),
+              amount: fmt.amount(expense.fullAmount, expense.currency),
+              currency: expense.currency,
+            })}
+          </span>
+        )}
+      </TableCell>
+      <TableCell>{expense.category ? tCommon(`categories.${expense.category}`) : '—'}</TableCell>
+      <TableCell>
+        {expense.paymentMethod ? t(`paymentMethods.${expense.paymentMethod}`) : '—'}
+      </TableCell>
+      <TableCell className="max-w-48 truncate text-muted-foreground">
+        {expense.notes ?? '—'}
+      </TableCell>
+      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+        <RowActions
+          expense={expense}
+          preferredCurrencies={preferredCurrencies}
+          supportedCurrencies={supportedCurrencies}
+          creditCards={creditCards}
+          accounts={accounts}
+          activeObligations={activeObligations}
+          activeSubscriptions={activeSubscriptions}
+          activeInstallments={activeInstallments}
+          onMismatch={onMismatch}
+          onSuccess={onSuccess}
+        />
+      </TableCell>
+    </TableRow>
   );
 }

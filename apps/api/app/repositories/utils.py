@@ -1,5 +1,6 @@
 from sqlalchemy import asc, desc, or_
 
+from app.domain.list_scope import ListScope
 from app.models.account import Account
 
 
@@ -12,6 +13,49 @@ from app.models.account import Account
 # true in SQL), so a private account reduces to exactly the owner match it had before 0019.
 def account_scope_matches(model, user_id: int):
     return or_(model.user_id == user_id, model.pot_id == Account.pot_id)
+
+
+# The same predicate for a caller that already holds the Account row and so needs no join — the
+# ledger, which reads ONE account and binds its `opening_date` for exactly this reason.
+#
+# `pot_id is None` drops the pot branch rather than comparing against None, and the reason is a real
+# trap: SQL's `NULL = NULL` is not true, but SQLAlchemy's `column == None` compiles to `IS NULL`, so
+# `model.pot_id == None` would match every PRIVATE row in the table instead of none of them — the
+# widest possible predicate, arrived at by writing what looks like the narrowest.
+#
+# ▸ That widening is NOT observable, and a mutation sweep proved it: every caller has already bounded
+# the query to ONE account id, and a movement naming that account can only belong to its owner or to
+# the pot that holds it. The extra `IS NULL` branch therefore adds no row that the account filter does
+# not already exclude. The guard stays because the next caller may not be account-bounded, and this
+# comment stands in for the test that cannot discriminate.
+def account_scope_matches_bound(model, user_id: int, pot_id: int | None):
+    if pot_id is None:
+        return model.user_id == user_id
+    return or_(model.user_id == user_id, model.pot_id == pot_id)
+
+
+# The dual-scope predicate for a LIST over a stock table (`investments`, `accounts`): the caller's own
+# private rows, plus the rows held by any of the pots they may see (X2). THE one copy of it, because two
+# lists that must agree about what "shared" means are two things that can stop agreeing.
+#
+# `pot_ids` are resolved by the caller rather than reached for here, which is §21's measured decision at
+# a different table: an `IN (ids)` predicate uses the pot_id index, while asking app_can_view_pot per row
+# would evaluate the policy helper once per candidate. Empty — a solo user, or a private-only read —
+# reduces the statement to exactly the owner match it ran before 0019.
+#
+# RLS still decides what is reachable at all: this narrows a policy-scoped read to the scope the caller
+# asked for and can never widen one. Dropping the owner filter altogether would also be scoped correctly
+# by the policy and is still the wrong shape, because the section a row is drawn under has to come from
+# the same list of pot ids the sections themselves are built from.
+#
+# Deliberately NOT folded into apply_listing_filters, whose four other callers are entities with no
+# `pot_id` column at all: a scope argument they could pass would describe a column they do not have.
+def scope_filter(model, user_id: int, pot_ids: list[int], scope: ListScope):
+    private = model.user_id == user_id
+    if scope == ListScope.private or not pot_ids:
+        return private
+    shared = model.pot_id.in_(pot_ids)
+    return shared if scope == ListScope.shared else or_(private, shared)
 
 
 # Resolves a mapped sort request into an ORDER BY clause, or None when it names no mapped column —

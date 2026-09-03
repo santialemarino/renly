@@ -2,6 +2,7 @@ import { formatAmount } from '@/lib/i18n/currency';
 import {
   formatAxisValue,
   formatDateForLocale,
+  formatDayMonth,
   formatList,
   formatMonth,
   formatMonthLong,
@@ -40,6 +41,7 @@ export function createFormatters(locale: string, timeZone?: string) {
     month: (dateStr: string) => formatMonth(dateStr, locale),
     monthLong: (year: number, month: number) => formatMonthLong(year, month, locale),
     monthYear: (dateStr: string) => formatMonthYear(dateStr, locale),
+    dayMonth: (dateStr: string) => formatDayMonth(dateStr, locale),
     weekdayDay: (dateStr: string) => formatWeekdayDay(dateStr, locale),
     date: (iso: string, dateFormat?: string) => formatDateForLocale(iso, locale, dateFormat),
     timestampDate: (iso: string) => formatTimestampDate(iso, locale, timeZone),

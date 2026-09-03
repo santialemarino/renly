@@ -12,10 +12,12 @@ from app.domain import (
     NotFoundError,
     PaymentMethod,
 )
+from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope, build_sections
 from app.domain.pot import ensure_private_funding
 from app.models.account import Account, AccountType
 from app.models.user import User
 from app.repositories import (
+    account_reconciliation_repository,
     account_repository,
     card_settlement_repository,
     expense_repository,
@@ -29,15 +31,20 @@ from app.repositories import (
     subscription_repository,
     transfer_repository,
 )
+from app.schemas.account import AccountListResponse, AccountResponse
+from app.services import pot_service
+from app.services.utils import pot_sections
 
 ZERO = Decimal(0)
 
 
-# List accounts for a user with optional search, sorting, and archive filtering.
+# List accounts for a user with optional search, sorting, archive and scope filtering.
 async def list_accounts(
     session: AsyncSession,
     user: User,
+    pot_ids: list[int] | None = None,
     *,
+    scope: ListScope = ListScope.private,
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
@@ -46,11 +53,90 @@ async def list_accounts(
     return await account_repository.list_by_user(
         session,
         user.id,
+        pot_ids,
+        scope=scope,
         search=search,
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=active_only,
     )
+
+
+# One AccountResponse, with the derived balance (defaulting to the opening figure), the has-links flag
+# (whether any money — a transfer on either leg included — links the account, which is what locks its
+# currency on the frontend) and the date of its most recent reconciliation.
+def to_response(
+    account: Account,
+    balance: Decimal | None = None,
+    has_links: bool = False,
+    last_reconciled_date: date_type | None = None,
+) -> AccountResponse:
+    data = account.model_dump()
+    return AccountResponse(
+        **{
+            **data,
+            "balance": balance if balance is not None else account.opening_balance,
+            "has_links": has_links,
+            "last_reconciled_date": last_reconciled_date,
+            "scope": SCOPE_PRIVATE if account.pot_id is None else SCOPE_SHARED,
+        }
+    )
+
+
+# Responses for a set of accounts, batching every derived field: the balance union, the has-links flag
+# and the last-reconciled date are grouped queries, so cost is independent of count.
+async def to_responses(session: AsyncSession, accounts: list[Account], user: User) -> list[AccountResponse]:
+    balances, linked = await get_account_summaries(session, accounts, user.id)
+    # The reconciliation REPOSITORY rather than its service, because account_reconciliation_service
+    # imports this module (every one of its use cases loads the account first) and reaching back the
+    # other way at import time is a cycle. Its service function is a pure passthrough to this same
+    # grouped query, so nothing is bypassed.
+    last_reconciled = await account_reconciliation_repository.get_latest_dates_by_account_ids(
+        session, [a.id for a in accounts if a.id is not None], user.id
+    )
+    return [to_response(a, balances.get(a.id), a.id in linked, last_reconciled.get(a.id)) for a in accounts]
+
+
+# The accounts list as the page reads it: the rows, grouped by scope, plus each section's label, count
+# and per-currency balance total (X2).
+#
+# The totals are folded from the ROWS rather than from an aggregate query, and that is not a shortcut:
+# this list is unpaginated, so the response already IS the whole filtered set, and each row's balance is
+# DERIVED from eleven movement sources rather than stored — an aggregate would have to re-derive every
+# one of them to restate a figure already in hand. Currencies never net, exactly as the group hub's
+# balances do not: owing dollars while holding pesos is a real state and one blended figure would hide it.
+#
+# `private` is the default scope for the reason the repository states: seven other pages read this list
+# as a picker of the caller's own accounts.
+async def list_accounts_grouped(
+    session: AsyncSession,
+    user: User,
+    *,
+    scope: ListScope = ListScope.private,
+    search: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+    active_only: bool = True,
+) -> AccountListResponse:
+    scopes = [] if scope == ListScope.private else await pot_service.list_visible_scopes(session, user.id)
+    accounts = await list_accounts(
+        session,
+        user,
+        [s.pot_id for s in scopes],
+        scope=scope,
+        search=search,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        active_only=active_only,
+    )
+    items = await to_responses(session, accounts, user)
+    # One tuple per account, because this list is unpaginated: the rows in hand ARE the whole filtered
+    # set, so the fold needs no aggregate query behind it.
+    counts = [(a.pot_id, a.currency, item.balance, 1) for a, item in zip(accounts, items, strict=True)]
+    # No visible pot means no section headers, and an empty `sections` is what tells the page to draw
+    # the flat table it always drew — a solo user's accounts page is unchanged by X2.
+    sections = pot_sections(build_sections(counts), scopes) if scopes else []
+    return AccountListResponse(items=items, sections=sections)
 
 
 # Get a single account by id. Raises NotFoundError if not found.
