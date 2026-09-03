@@ -356,18 +356,18 @@ Unlike account reconciliation, reconciling card statements **out of order is all
 
 ## Accounts
 
-Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time: `opening_balance + linked income − linked expenses − settlements paid from the account + transfers in − transfers out`. Expenses, income, and settlements each carry an optional `account_id` linking them to an account (a NULL link is unattributed and affects no balance), and both legs of an account-to-account transfer count on their own side. Expenses and income must match the account's currency; a **card settlement may cross it**, and then contributes the `account_amount` it recorded rather than what it cleared off the card. An account's currency is fixed once entries link to it (a change is rejected with 409), so the balance never mixes currencies.
+Cash / bank / wallet accounts — the asset side of net worth (the mirror of credit-card liabilities). Each account has one currency. The balance is derived at query time from every movement that reaches the account: `opening_balance + linked income − linked expenses − settlements paid from the account ± both transfer legs ± both pot-ownership legs − shared expenses drawn from it + shared income paid into it ± both settle-up legs`. Expenses, income, and settlements each carry an optional `account_id` linking them to an account (a NULL link is unattributed and affects no balance), and both legs of an account-to-account transfer count on their own side. Expenses and income must match the account's currency; a **card settlement may cross it**, and then contributes the `account_amount` it recorded rather than what it cleared off the card. An account's currency is fixed once entries link to it (a change is rejected with 409), so the balance never mixes currencies.
 
-| Method   | Path                       | Description                                                     |
-| -------- | -------------------------- | --------------------------------------------------------------- |
-| `GET`    | `/accounts`                | List accounts with search, sorting, and balances.               |
-| `POST`   | `/accounts`                | Create a new account.                                           |
-| `GET`    | `/accounts/{id}`           | Get a single account with its current balance.                  |
-| `PUT`    | `/accounts/{id}`           | Update an account. Only provided fields are changed.            |
-| `DELETE` | `/accounts/{id}`           | Delete an account (linked entries are un-attributed, not lost). |
-| `POST`   | `/accounts/{id}/archive`   | Archive an account (hide from active selection).                |
-| `POST`   | `/accounts/{id}/unarchive` | Restore an archived account.                                    |
-| `GET`    | `/accounts/{id}/movements` | The account's ledger: every movement that reached it.           |
+| Method   | Path                       | Description                                                       |
+| -------- | -------------------------- | ----------------------------------------------------------------- |
+| `GET`    | `/accounts`                | List accounts with search, sorting, scope grouping, and balances. |
+| `POST`   | `/accounts`                | Create a new account.                                             |
+| `GET`    | `/accounts/{id}`           | Get a single account with its current balance.                    |
+| `PUT`    | `/accounts/{id}`           | Update an account. Only provided fields are changed.              |
+| `DELETE` | `/accounts/{id}`           | Delete an account (linked entries are un-attributed, not lost).   |
+| `POST`   | `/accounts/{id}/archive`   | Archive an account (hide from active selection).                  |
+| `POST`   | `/accounts/{id}/unarchive` | Restore an archived account.                                      |
+| `GET`    | `/accounts/{id}/movements` | The account's ledger: every movement that reached it.             |
 
 **List query parameters:** `search` (filter by name), `sort_by` (`name`, `type`, `currency`, `opening_date`), `sort_order` (`asc`/`desc`), `show_archived` (boolean, default `false` — include archived accounts).
 
@@ -383,7 +383,7 @@ Cash / bank / wallet accounts — the asset side of net worth (the mirror of cre
 
 Movements dated before the account's `opening_date` are excluded, because `opening_balance` is by definition the balance at that date and already contains them — the same bound every balance sum applies.
 
-**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series; like `currency`, it is locked once entries link to the account, since every balance sum is bounded by it and `opening_balance` cannot be recomputed — 409 `account_opening_date_change_blocked`), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency: `opening_balance + linked income − linked expenses − settlements paid from it + transfers in − transfers out`, every term bounded below by `opening_date` because `opening_balance` already is the balance at that date), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
+**Account fields:** `name`, `type` (`cash`, `bank`, `wallet`, `other`), `currency` (ISO 4217 — one of the exchange-rate-supported set; rejected with 422 otherwise), `opening_balance` (Decimal; may be negative), `opening_date` (the date the opening balance is measured at — anchors the historical series; like `currency`, it is locked once entries link to the account, since every balance sum is bounded by it and `opening_balance` cannot be recomputed — 409 `account_opening_date_change_blocked`), `is_active` (boolean), `notes` (optional), `balance` (computed, read-only — the account's current balance in its own currency: `opening_balance + linked income − linked expenses − settlements paid from it ± both transfer legs ± both pot-ownership legs − shared expenses drawn from it + shared income paid into it ± both settle-up legs`, every term bounded below by `opening_date` because `opening_balance` already is the balance at that date), `has_links` (computed, read-only — whether any entry links the account; when true, its currency is locked), `last_reconciled_date` (computed, read-only — the date of the most recent reconciliation, or null).
 
 ### Transfers
 
@@ -946,6 +946,50 @@ A split of **zero** never appears: it is a payer who took no part, which is a re
 `GET /income` does exactly the same for the income half, field for field: `scope`, `group_id`, `group_name` and `full_amount` on a shared row, `account_id` null on it (it identifies where the money _landed_, frequently another member's account or a pot's), the same `(id, scope)` tie-break, and the same rule that a shared branch is not built at all for a caller in no group. The zero it drops is the mirror one — a **collector entitled to nothing**, who holds a real position in the row but earned none of it.
 
 Neither list is writable through its shared rows. A shared row's id belongs to another table, so `PUT`/`DELETE` on `/expenses/{id}` or `/income/{id}` with it would act on whatever private entry happens to hold that number; the group's own endpoints are where those rows are edited.
+
+### Scope on the list endpoints
+
+`/investments`, `/accounts`, `/expenses`, `/income` and `/snapshots/grid` all take a **`scope`** of
+`all`, `private` or `shared`, and all return a **`sections`** array describing the groups the rows come
+back in.
+
+The defaults differ per endpoint, and each is the one that changes nothing. `/investments`,
+`/accounts` and `/snapshots/grid` default to **`private`**, because they have never returned a
+co-owned row and a great many callers read them as a picker of the caller's own things — offering a
+group's bank account where somebody is choosing which of their own to pay from would be wrong. The two
+flow lists default to **`all`**, because they have unioned each member's share since shared expenses
+shipped, so `all` is what they already did.
+
+Rows come back **scope-major**: the caller's own first, then each container by id, with the requested
+sort applied _within_ each group. That is what lets a client draw one labelled header per group — a
+header can only label rows that are contiguous. Asking for a single scope collapses the grouping and
+gives back a flat, globally sorted list.
+
+Each entry in `sections` carries `scope`, the container's ids and names (`pot_id` / `pot_name` for the
+lists grouped by pot, `group_id` / `group_name` for the flow lists), a `can_write` flag, a `count`, and
+per-currency `totals`. Three properties are worth relying on:
+
+- **`count` and `totals` span the whole filtered set, not the page returned.** A figure that changed as
+  you paged would answer a different question each time.
+- **`totals` never convert and never net across currencies.** A section holding pesos and dollars
+  reports both, each with its code. `/investments` returns empty `totals`, because its rows carry no
+  amount and a total the rows cannot add up to would be worse than none.
+- **`can_write` belongs to the section, not the row.** Write access to a pot is granted per member, so
+  every row in one section shares the answer; it is always true for the caller's own rows.
+
+`sections` is empty for a caller with nothing shared, which is the signal to render the list flat.
+
+### `/snapshots/grid` columns
+
+The grid takes an **`interval`** of `monthly` (the default) or `weekly` and returns its `columns` as
+one period-end date per bucket — a month's last day, or the week's Sunday — gapless from the oldest
+recorded snapshot's period through the newest's, capped at the most recent (240 monthly, 52 weekly).
+Each cell names the `column` it falls in, so no client re-derives which week a date belongs to.
+
+The interval is a **request parameter and not derived from cadence**, because the grid is not one pot's
+series: it mixes private holdings, which declare no cadence, with the holdings of several pots that may
+each declare a different one. Cadence appears per row instead, as `cadence` and `is_overdue` — whether
+_that_ holding's latest snapshot is behind the pot that owns it.
 
 ---
 

@@ -1,3 +1,6 @@
+// `import type` and it has to stay that way: lib/api/snapshots is `server-only`, while this module is
+// imported by client components. A type import is erased at compile time, so it carries nothing into
+// the client bundle; turning it into a value import would break the build for every one of them.
 import type { SnapshotGridInterval } from '@/lib/api/snapshots';
 import type { ListScope, ListSection } from '@/lib/api/types';
 
