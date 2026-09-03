@@ -94,6 +94,21 @@ class TestColumns:
         assert {c.column for c in grid.rows[0].cells} == {date(2026, 8, 31)}
 
     @pytest.mark.asyncio
+    async def test_weekly_columns_are_capped_where_monthly_ones_are_not(self, monkeypatch):
+        # The cap is what makes weekly usable at all: this span is ~86 weeks, which as ~86 columns of
+        # em-dashes is unreadable and, across twenty rows, thousands of cells. Monthly over the SAME
+        # span is uncapped in practice, so one shared cap would silently truncate it too.
+        span = [_snapshot(7, date(2025, 1, 6)), _snapshot(7, TODAY)]
+        _wire(monkeypatch, [_investment(7)], span)
+        weekly = await snapshot_grid_service.get_snapshot_grid(AsyncMock(), 1, interval=PotSeriesInterval.weekly)
+        _wire(monkeypatch, [_investment(7)], span)
+        monthly = await snapshot_grid_service.get_snapshot_grid(AsyncMock(), 1)
+        assert len(weekly.columns) == 52
+        assert len(monthly.columns) == 20  # Jan 2025 through Aug 2026, uncapped
+        # The cap keeps the MOST RECENT periods, so the newest snapshot still has a column to sit in.
+        assert weekly.columns[-1] >= TODAY
+
+    @pytest.mark.asyncio
     async def test_a_grid_with_no_rows_has_no_columns(self, monkeypatch):
         _wire(monkeypatch, [], [])
         grid = await snapshot_grid_service.get_snapshot_grid(AsyncMock(), 1)
@@ -165,6 +180,20 @@ class TestFreshness:
             _wire(monkeypatch, [_investment(8, pot_id=4)], [_snapshot(8, stale)], scopes=[_scope(4, cadence=cadence)])
             grid = await snapshot_grid_service.get_snapshot_grid(AsyncMock(), 1, scope=ListScope.all)
             assert grid.rows[0].is_overdue is expected, cadence
+
+    @pytest.mark.asyncio
+    async def test_freshness_reads_the_LATEST_snapshot_and_not_the_first(self, monkeypatch):
+        # TWO snapshots, one ancient and one current. With a single-snapshot fixture `[0]` and `[-1]`
+        # are the same row, so reading the wrong end of the history is invisible — a mutation sweep
+        # proved exactly that, and a holding valued yesterday would have read as years overdue.
+        _wire(
+            monkeypatch,
+            [_investment(8, pot_id=4)],
+            [_snapshot(8, date(2024, 1, 1)), _snapshot(8, TODAY)],
+            scopes=[_scope(4, cadence=PotCadence.weekly)],
+        )
+        grid = await snapshot_grid_service.get_snapshot_grid(AsyncMock(), 1, scope=ListScope.all)
+        assert grid.rows[0].is_overdue is False
 
     @pytest.mark.asyncio
     async def test_freshness_reads_the_holdings_own_latest_snapshot(self, monkeypatch):

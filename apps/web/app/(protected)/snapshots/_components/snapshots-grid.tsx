@@ -203,11 +203,11 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                   className="min-w-[140px] text-center text-paragraph-xs bg-background transition-colors group-hover:bg-muted/50"
                 >
                   {/*
-                   * A monthly column IS its month, so it reads as one. A weekly column is a specific
-                   * Sunday, and naming the month there would print the same words up to five times
-                   * in a row — so it reads as the day the week closed.
+                   * A monthly column IS its month. A weekly column is the day its week closed, WITH
+                   * the month: the weekday would be "Sunday" on every column, and a bare day number
+                   * leaves July's 5th and August's 2nd reading identically.
                    */}
-                  {grid.interval === 'weekly' ? fmt.weekdayDay(column) : fmt.month(column)}
+                  {grid.interval === 'weekly' ? fmt.dayMonth(column) : fmt.month(column)}
                 </TableHead>
               ))}
               <TableHead className="sticky right-0 z-10 min-w-[70px] bg-background text-center">

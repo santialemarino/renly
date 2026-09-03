@@ -16,6 +16,7 @@ from app.models.account import Account
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.investment import Investment
 from app.models.pot import Pot, PotCadence, PotMemberPermission
+from app.repositories import account_repository, investment_repository, metrics_repository
 from app.repositories.utils import scope_filter
 from app.services import pot_service
 from app.services.utils import group_sections, pot_sections
@@ -54,6 +55,13 @@ class TestBuildSections:
         # a header figure the visible rows cannot add up to is the thing X2 exists to avoid.
         sections = build_sections([(None, None, None, 4), (6, None, None, 2)])
         assert [(s.key, s.count, s.totals) for s in sections] == [(None, 4, []), (6, 2, [])]
+
+    def test_an_amount_with_no_currency_is_still_no_total(self):
+        # Both halves of the guard, separately. With the amount ALSO null the currency check is
+        # invisible — a mutation sweep proved exactly that — so this row carries a figure and no code
+        # to state it in, which is a total nothing could label.
+        sections = build_sections([(6, None, Decimal("5"), 1)])
+        assert (sections[0].count, sections[0].totals) == (1, [])
 
     def test_no_rows_is_no_sections(self):
         assert build_sections([]) == []
@@ -127,8 +135,8 @@ class TestScopeFilter:
 
 
 # A pot in group 2, named unless the test is about the unnamed default.
-def _pot(pot_id: int, *, name: str | None = "Viaje") -> Pot:
-    return Pot(id=pot_id, group_id=2, name=name, base_currency="ARS")
+def _pot(pot_id: int, *, name: str | None = "Viaje", cadence: PotCadence = PotCadence.monthly) -> Pot:
+    return Pot(id=pot_id, group_id=2, name=name, base_currency="ARS", snapshot_cadence=cadence)
 
 
 def _seat(member_id: int, user_id: int | None = 1) -> GroupMember:
@@ -159,6 +167,21 @@ class TestListVisibleScopes:
         )
         scopes = await pot_service.list_visible_scopes(AsyncMock(), 1)
         assert [(s.pot_id, s.name, s.group_name) for s in scopes] == [(4, None, "Casa"), (9, "Viaje", "Casa")]
+
+    @pytest.mark.asyncio
+    async def test_each_pot_carries_its_own_cadence(self, monkeypatch):
+        # The freshness indicator on the snapshots grid is measured against this. TWO pots with
+        # DIFFERENT cadences, because every consumer of the grid stubs this function — so a constant
+        # here would be invisible to all of them, which a mutation sweep proved.
+        _wire_catalogue(
+            monkeypatch,
+            [_pot(4, cadence=PotCadence.weekly), _pot(9, cadence=PotCadence.ad_hoc)],
+            {2: [_seat(11)]},
+            {},
+            [Group(id=2, name="Casa", kind=GroupKind.household)],
+        )
+        scopes = await pot_service.list_visible_scopes(AsyncMock(), 1)
+        assert [(s.pot_id, s.cadence) for s in scopes] == [(4, PotCadence.weekly), (9, PotCadence.ad_hoc)]
 
     @pytest.mark.asyncio
     async def test_write_access_comes_from_the_callers_own_permission_row(self, monkeypatch):
@@ -202,3 +225,73 @@ class TestListVisibleScopes:
         monkeypatch.setattr(pot_service.pot_repository, "list_permissions_by_pots", permissions)
         assert await pot_service.list_visible_scopes(AsyncMock(), 1) == []
         permissions.assert_not_awaited()
+
+
+# The compiled statements of the three stock-table lists. Their ORDER BY and GROUP BY are what makes a
+# section header drawable at all — a header can only label rows that are CONTIGUOUS — and none of it is
+# reachable through a mocked service, which returns whatever it was told.
+class _CapturingSession:
+    def __init__(self):
+        self.statements: list[str] = []
+
+    async def execute(self, statement):
+        self.statements.append(str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})))
+        return _Result()
+
+
+class _Result:
+    def scalar_one(self):
+        return 0
+
+    def all(self):
+        return []
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return None
+
+
+class TestTheStockListStatements:
+    @pytest.mark.asyncio
+    async def test_the_investments_page_is_ordered_scope_major(self):
+        # The caller's sort applies WITHIN each scope, so the pot has to lead the ORDER BY. Without it
+        # the two scopes interleave and the same header is drawn several times down one page.
+        session = _CapturingSession()
+        await investment_repository.list_by_user_filtered(session, 7, [3], scope=ListScope.all, sort_by="name")
+        order_by = session.statements[-1].split("ORDER BY")[1]
+        assert order_by.strip().startswith("investments.pot_id NULLS FIRST")
+        assert "investments.name ASC" in order_by
+
+    @pytest.mark.asyncio
+    async def test_the_investments_section_counts_are_grouped_by_pot(self):
+        # Grouped by the container, or every section reports the same figure — the whole list's count.
+        session = _CapturingSession()
+        await investment_repository.count_by_scope(session, 7, [3], scope=ListScope.all)
+        assert "GROUP BY investments.pot_id" in session.statements[-1]
+
+    @pytest.mark.asyncio
+    async def test_the_accounts_list_is_ordered_scope_major(self):
+        session = _CapturingSession()
+        await account_repository.list_by_user(session, 7, [3], scope=ListScope.all, sort_by="name")
+        order_by = session.statements[-1].split("ORDER BY")[1]
+        assert order_by.strip().startswith("accounts.pot_id NULLS FIRST")
+        assert "accounts.name ASC" in order_by
+
+    @pytest.mark.asyncio
+    async def test_the_grid_reads_only_private_holdings_unless_asked(self):
+        # THE default that keeps the investor dashboard private: it reads this same function, and a
+        # co-owned holding's TWR is the pot's, not the viewer's (PR 8a, decision 7). Every consumer
+        # stubs this function, so the default is invisible to all of them — a mutation proved it.
+        session = _CapturingSession()
+        await metrics_repository.list_active_investments(session, 7, [3])
+        assert "pot_id" not in session.statements[-1].split("WHERE")[1].split("ORDER BY")[0]
+
+    @pytest.mark.asyncio
+    async def test_the_grid_reads_pot_holdings_when_asked_and_orders_scope_major(self):
+        session = _CapturingSession()
+        await metrics_repository.list_active_investments(session, 7, [3, 5], scope=ListScope.all)
+        sql = session.statements[-1]
+        assert "investments.pot_id IN (3, 5)" in sql
+        assert sql.split("ORDER BY")[1].strip().startswith("investments.pot_id NULLS FIRST")

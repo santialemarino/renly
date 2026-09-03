@@ -22,6 +22,12 @@ def account_scope_matches(model, user_id: int):
 # trap: SQL's `NULL = NULL` is not true, but SQLAlchemy's `column == None` compiles to `IS NULL`, so
 # `model.pot_id == None` would match every PRIVATE row in the table instead of none of them — the
 # widest possible predicate, arrived at by writing what looks like the narrowest.
+#
+# ▸ That widening is NOT observable, and a mutation sweep proved it: every caller has already bounded
+# the query to ONE account id, and a movement naming that account can only belong to its owner or to
+# the pot that holds it. The extra `IS NULL` branch therefore adds no row that the account filter does
+# not already exclude. The guard stays because the next caller may not be account-bounded, and this
+# comment stands in for the test that cannot discriminate.
 def account_scope_matches_bound(model, user_id: int, pot_id: int | None):
     if pot_id is None:
         return model.user_id == user_id

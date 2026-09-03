@@ -44,14 +44,19 @@ async def list_accounts(
     )
 
 
-# Get a single account with its current balance.
+# Get a single account with its current balance, in EITHER scope.
+#
+# Dual-scope because a shared account has to be READABLE for its ledger page to have a header: that
+# page loads the row for its name, currency and balance, and an owner-filtered lookup 404s on a row
+# whose user_id is NULL. Every WRITE path below keeps `get_account`, which is private-only — this
+# widens exactly one read, and reachability is still RLS's answer plus the pot's own predicate.
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
     account_id: int,
     current_user: CurrentUser,
     session: SessionDep,
 ) -> AccountResponse:
-    account = await account_service.get_account(session, account_id, current_user)
+    account = await account_service.get_account_in_scope(session, account_id, current_user)
     return (await account_service.to_responses(session, [account], current_user))[0]
 
 

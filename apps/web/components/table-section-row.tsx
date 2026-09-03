@@ -59,7 +59,16 @@ export function TableSectionRow({
   return (
     <TableRow className="hover:bg-transparent">
       <TableCell colSpan={colSpan} className="bg-muted/40 py-2">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {/*
+         * STICKY to the left, and the whole content left-grouped rather than the figures pushed to
+         * the far edge.
+         *
+         * The snapshots grid is what settles this: its table runs to a few thousand pixels, so an
+         * `ml-auto` count sat past the right edge of a horizontally scrolling container and was
+         * simply never seen. `w-fit` keeps the sticky box from spanning the full colSpan, which
+         * would make `sticky` a no-op.
+         */}
+        <div className="sticky left-0 flex w-fit flex-wrap items-center gap-x-2 gap-y-1">
           {isShared && <Users className="size-3.5 shrink-0 text-muted-foreground" />}
           {!isShared ? (
             <span className="text-paragraph-sm-semibold">{tCommon('scope.private')}</span>
@@ -75,11 +84,16 @@ export function TableSectionRow({
           ) : (
             <span className="text-paragraph-sm-semibold">{label}</span>
           )}
-          <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 text-paragraph-xs text-muted-foreground">
+          <span className="flex flex-wrap items-center gap-x-3 text-paragraph-xs text-muted-foreground">
             <span>{countLabel}</span>
+            {/*
+             * Each total NAMES its currency, and that is the rule rather than a nicety: a section
+             * that holds pesos and dollars prints both side by side and unconverted, so a bare
+             * 1.452.000 beside a bare 200 leaves the reader to guess which one is dollars.
+             */}
             {section.totals.map((total) => (
               <span key={total.currency} className="tabular-nums">
-                {fmt.amount(total.amount, total.currency)}
+                {`${fmt.amount(total.amount, total.currency)} ${total.currency}`}
               </span>
             ))}
           </span>
