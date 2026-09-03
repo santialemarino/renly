@@ -27,6 +27,7 @@ import {
   ENV_SAVINGS_RATE_HEALTHY_PCT,
   ENV_SAVINGS_RATE_MODERATE_PCT,
 } from '@/lib/constants/health-thresholds';
+import { getFormatters } from '@/lib/i18n/formatters-server';
 import { hasNoCoreData } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { todayInTimezone } from '@/lib/utils/dates';
@@ -47,6 +48,7 @@ interface DashboardPageProps {
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const cookieStore = await cookies();
+  const fmt = await getFormatters();
   const t = await getTranslations('dashboard');
   const params = await searchParams;
 
@@ -117,6 +119,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     );
   }
 
+  // Every read reports what its own totals dropped; the page states the union once rather than three
+  // times, because a reader does not care which of the three surfaces could not convert a currency.
+  const skippedCurrencies = [
+    ...new Set([
+      ...overview.skippedCurrencies,
+      ...evolution.skippedCurrencies,
+      ...composition.skippedCurrencies,
+    ]),
+  ].sort();
+
   return (
     <div className="flex flex-col flex-1 p-8 gap-y-4">
       <div className="flex flex-col gap-y-4 sm:flex-row sm:items-start sm:justify-between">
@@ -153,10 +165,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         {t('truthSnapHint')}
       </ConceptHint>
 
+      {/*
+       * Fail-loud, and the one place the dashboard never had it: every total here already reports the
+       * currencies it had to exclude for want of a stored rate, and the page dropped that report on
+       * the floor. A net worth quietly missing a whole account is the figure a person acts on.
+       */}
+      <WarningHint show={skippedCurrencies.length > 0} parentGap={16}>
+        {t('skippedCurrencies', { currencies: fmt.list(skippedCurrencies) })}
+      </WarningHint>
+
       <DashboardMetricCards overview={overview} />
 
       <div className="flex flex-col gap-6 lg:flex-row">
-        <DashboardEvolutionChart evolution={evolution} />
+        <DashboardEvolutionChart evolution={evolution} hasShared={overview.hasShared} />
         <DashboardComposition composition={composition.items} />
       </div>
 

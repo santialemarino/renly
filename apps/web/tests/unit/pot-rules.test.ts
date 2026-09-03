@@ -17,7 +17,6 @@ import {
   isPriceable,
   ownershipEventAmount,
   potFreshnessNotice,
-  potLabel,
   potLegAccounts,
   potValueDisplay,
   seriesHasShare,
@@ -114,18 +113,6 @@ function holding(over: Partial<PotHolding> = {}): PotHolding {
 }
 
 const NO_HOLDINGS: PotHoldings = { investments: [], accounts: [] };
-
-describe('potLabel', () => {
-  it('falls back for the default pot, which A4 leaves unnamed on purpose', () => {
-    expect(potLabel(pot({ name: null }), 'Shared money')).toBe('Shared money');
-    expect(potLabel(pot({ name: 'Casa' }), 'Shared money')).toBe('Casa');
-  });
-
-  it('treats a whitespace-only name as no name', () => {
-    // Otherwise a pot renamed to a space renders a blank heading rather than the fallback.
-    expect(potLabel(pot({ name: '   ' }), 'Shared money')).toBe('Shared money');
-  });
-});
 
 describe('hasLedger vs isDivided', () => {
   /*

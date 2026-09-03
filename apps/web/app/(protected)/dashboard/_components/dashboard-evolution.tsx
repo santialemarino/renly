@@ -5,6 +5,8 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  Legend,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -28,10 +30,13 @@ import {
   CHART_ANIMATION_DURATION,
   CHART_ANIMATION_EASING,
   CHART_COLOR_PRIMARY,
+  CHART_COLOR_SECONDARY,
   CHART_HEIGHT,
   CHART_MARGIN,
   GRID_STROKE_DASHARRAY,
   GRID_VERTICAL,
+  LEGEND_FONT_SIZE,
+  LEGEND_HEIGHT,
   TOOLTIP_ANIMATION_DURATION,
   TOOLTIP_BG,
   TOOLTIP_BORDER,
@@ -45,13 +50,27 @@ import { useFormatters } from '@/lib/i18n/formatters';
 
 interface DashboardEvolutionProps {
   evolution: DashboardEvolution;
+  // Whether the reader has a shared side at all, which is what makes a second series meaningful.
+  hasShared: boolean;
 }
 
-export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) {
+export function DashboardEvolutionChart({ evolution, hasShared }: DashboardEvolutionProps) {
   const fmt = useFormatters();
   const t = useTranslations('dashboard');
 
   const hasData = evolution.points.length > 0;
+  /*
+   * The second series is the part-of-whole pair the pot page already draws: the filled area is
+   * everything the reader is worth and the line inside it is the half held in their own name, so the
+   * gap between them IS the shared side over time. One hue at two steps rather than two colours,
+   * because they are the same measure at two scopes — and dropped entirely for a solo user, where the
+   * two lines would sit exactly on top of each other and the legend would promise a distinction the
+   * chart does not draw.
+   */
+  const seriesNames: Record<string, string> = {
+    netWorth: t('chart.legend.total'),
+    privateNetWorth: t('chart.legend.yours'),
+  };
 
   return (
     <Card className="flex-1">
@@ -85,7 +104,12 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                 <Tooltip
                   animationDuration={TOOLTIP_ANIMATION_DURATION}
                   labelFormatter={(label) => fmt.month(String(label))}
-                  formatter={(value) => [fmt.axisValue(Number(value)), t('chart.tooltipValue')]}
+                  formatter={(value, name) => [
+                    fmt.axisValue(Number(value)),
+                    hasShared
+                      ? (seriesNames[String(name)] ?? String(name))
+                      : t('chart.tooltipValue'),
+                  ]}
                   contentStyle={{
                     backgroundColor: TOOLTIP_BG,
                     color: TOOLTIP_TEXT,
@@ -111,6 +135,18 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                     />
                   </linearGradient>
                 </defs>
+                {/*
+                 * Identity is never colour alone, so two series carry a legend — with its height
+                 * stated rather than measured, or the plot area reflows once the legend is sized.
+                 */}
+                {hasShared && (
+                  <Legend
+                    verticalAlign="bottom"
+                    height={LEGEND_HEIGHT}
+                    formatter={(value) => seriesNames[String(value)] ?? String(value)}
+                    wrapperStyle={{ fontSize: LEGEND_FONT_SIZE }}
+                  />
+                )}
                 <Area
                   type={AREA_CURVE_TYPE}
                   dataKey="netWorth"
@@ -120,6 +156,17 @@ export function DashboardEvolutionChart({ evolution }: DashboardEvolutionProps) 
                   animationDuration={CHART_ANIMATION_DURATION}
                   animationEasing={CHART_ANIMATION_EASING}
                 />
+                {hasShared && (
+                  <Line
+                    type={AREA_CURVE_TYPE}
+                    dataKey="privateNetWorth"
+                    stroke={CHART_COLOR_SECONDARY}
+                    strokeWidth={AREA_STROKE_WIDTH}
+                    dot={false}
+                    animationDuration={CHART_ANIMATION_DURATION}
+                    animationEasing={CHART_ANIMATION_EASING}
+                  />
+                )}
               </AreaChart>
             </ResponsiveContainer>
           </div>

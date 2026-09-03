@@ -25,17 +25,6 @@ import type {
  *   * seeing a pot and writing to it are separate questions, per V5/V6. Nothing here gates a read.
  */
 
-// --- Identity ---
-
-/*
- * A pot's label. A null name is the group's default pot, which A4 deliberately leaves unnamed: the
- * container is not a thing to manage until there is a second one to tell apart. The caller passes the
- * translated fallback, so the rule lives here and the words stay in the locale files.
- */
-export function potLabel(pot: Pot, fallback: string): string {
-  return pot.name?.trim() || fallback;
-}
-
 // --- What the ledger has said so far ---
 
 /*

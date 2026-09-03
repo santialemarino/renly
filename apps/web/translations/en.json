@@ -1,6 +1,7 @@
 {
   "common": {
     "appName": "Renly",
+    "potDefaultLabel": "Shared money",
     "sampleData": {
       "banner": "This is sample data to show you around. Add your own to replace it.",
       "clear": "Clear",
@@ -439,7 +440,9 @@
       "vsLastMonth": "vs last month",
       "netWorthHint": "Investments + cash − liabilities",
       "cash": "Cash",
-      "cashHint": "Cash & bank balances"
+      "cashHint": "Cash & bank balances",
+      "cashHintShared": "Your accounts and your share of shared ones",
+      "investmentGainScope": "Return shown is on your own holdings"
     },
     "period": {
       "ytd": "YTD",
@@ -450,12 +453,17 @@
     },
     "chart": {
       "title": "Net Worth Evolution",
-      "tooltipValue": "Value"
+      "tooltipValue": "Value",
+      "legend": {
+        "total": "Net worth",
+        "yours": "Yours"
+      }
     },
     "composition": {
       "title": "Composition",
       "liabilities": "Liabilities",
-      "cash": "Cash & bank"
+      "cash": "Cash & bank",
+      "receivable": "Owed to you"
     },
     "health": {
       "savingsRate": "Savings Rate",
@@ -478,7 +486,15 @@
     },
     "currencyFallback": "The dashboard requires a common currency. <bold>Showing values in {currency}.</bold>",
     "loadError": "Unable to load dashboard data. Please try again later.",
-    "noData": "No data available yet. Add financial entries or investment snapshots to see your overview."
+    "noData": "No data available yet. Add financial entries or investment snapshots to see your overview.",
+    "skippedCurrencies": "No stored rate for {currencies}, so anything held in them is left out of the figures below.",
+    "shared": {
+      "yours": "Yours",
+      "shared": "Shared",
+      "owedToYou": "Owed to you",
+      "youOwe": "You owe",
+      "undividedPot": "{pot} in {group} counts as 0 — ownership not set yet."
+    }
   },
   "financeDashboard": {
     "metadata": {
@@ -1995,7 +2011,6 @@
       },
       "title": "Shared money",
       "description": "What this group owns together. Growth is shared in proportion automatically — nobody has to record it.",
-      "defaultLabel": "Shared money",
       "subtitle": "Shared money in {group}",
       "add": "New",
       "edit": "Edit",
@@ -2950,7 +2965,6 @@
     },
     "title": "Notifications",
     "subtitle": "What Renly tells you about, and where it reaches you.",
-    "potFallback": "Shared money",
     "bell": {
       "unread": "{count, plural, one {# unread notification} other {# unread notifications}}",
       "none": "No notifications",

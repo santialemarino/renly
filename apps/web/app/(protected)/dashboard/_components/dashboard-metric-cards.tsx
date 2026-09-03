@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 
 import { Card } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
+import { DashboardSharedBreakdown } from '@/app/(protected)/dashboard/_components/dashboard-shared-breakdown';
 import type { DashboardOverview } from '@/lib/api/dashboard';
 import { valueColor } from '@/lib/i18n/format';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -36,6 +37,12 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
           </span>
         )}
         <span className="text-paragraph-mini text-muted-foreground">{t('cards.netWorthHint')}</span>
+        {/*
+         * The headline decomposed where it stands, rather than in cards of its own: X1 keeps the total
+         * as the answer to "what am I worth", and Yours/Shared says how it is held. Renders nothing at
+         * all for a solo user.
+         */}
+        <DashboardSharedBreakdown overview={overview} />
       </Card>
 
       {/* Cash / bank balance */}
@@ -45,7 +52,14 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
           <p className="text-heading-3">{fmt.value(overview.cashTotal)}</p>
           {overview.cashTotal !== 0 && <Landmark className="size-5 text-emerald-600" />}
         </div>
-        <span className="text-paragraph-mini text-muted-foreground">{t('cards.cashHint')}</span>
+        {/*
+         * Counts the user's own accounts PLUS their share of any a pot holds, which is the same money
+         * the composition donut puts in its `cash` slice. Two figures on one screen calling themselves
+         * cash and counting different things is the failure this avoids; the hint says which it is.
+         */}
+        <span className="text-paragraph-mini text-muted-foreground">
+          {overview.hasShared ? t('cards.cashHintShared') : t('cards.cashHint')}
+        </span>
       </Card>
 
       {/* Investment Value + gain subtext */}
@@ -64,6 +78,17 @@ export function DashboardMetricCards({ overview }: DashboardMetricCardsProps) {
             </span>
           )}
         </div>
+        {/*
+         * The total counts co-owned holdings at the viewer's share; the GAIN above cannot. A pot share
+         * has no invested figure of its own that is not the pot's ledger, and your exposure to it moves
+         * every time units are issued — so a return attributed to you would be wrong in a way no
+         * rounding explains. The line says whose return it is instead of quietly meaning less.
+         */}
+        {overview.hasShared && overview.investmentGain !== 0 && (
+          <span className="text-paragraph-mini text-muted-foreground">
+            {t('cards.investmentGainScope')}
+          </span>
+        )}
       </Card>
 
       {/* Net Cash Flow */}

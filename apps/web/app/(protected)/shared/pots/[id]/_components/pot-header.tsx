@@ -13,7 +13,6 @@ import { deletePot } from '@/app/(protected)/shared/pot-actions';
 import {
   canDeletePot,
   potFreshnessNotice,
-  potLabel,
   potValueDisplay,
 } from '@/app/(protected)/shared/pot-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -21,6 +20,7 @@ import { sharedGroupPath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot, PotHoldings } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { potLabel } from '@/lib/pots';
 
 interface PotHeaderProps {
   pot: Pot;
@@ -40,13 +40,14 @@ interface PotHeaderProps {
 export function PotHeader({ pot, group, holdings }: PotHeaderProps) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
 
   const isAdmin = group.myRole === 'admin';
-  const label = potLabel(pot, t('pots.defaultLabel'));
+  const label = potLabel(pot, tCommon('potDefaultLabel'));
 
   /*
    * The value stat carries its own date, the way the account ledger's opening stat does: a figure and
