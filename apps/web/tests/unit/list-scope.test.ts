@@ -5,6 +5,7 @@ import {
   bySectionGroup,
   bySectionPot,
   hasVisibleSections,
+  resolveGridInterval,
   resolveListScope,
   sectionedRows,
 } from '@/lib/list-scope';
@@ -80,6 +81,23 @@ describe('resolveListScope', () => {
     // A hand-edited URL, and the same posture the sort params take.
     expect(resolveListScope('everything')).toBe('all');
     expect(resolveListScope('')).toBe('all');
+  });
+});
+
+describe('resolveGridInterval', () => {
+  it('defaults to monthly, which is the grid every existing user has', () => {
+    expect(resolveGridInterval(undefined)).toBe('monthly');
+    expect(resolveGridInterval('monthly')).toBe('monthly');
+  });
+
+  it('reads the weekly toggle', () => {
+    // A toggle rather than something derived: the grid mixes private holdings that declare no cadence
+    // with the holdings of several pots that may each declare a different one.
+    expect(resolveGridInterval('weekly')).toBe('weekly');
+  });
+
+  it('falls back on a value the toggle never writes', () => {
+    expect(resolveGridInterval('daily')).toBe('monthly');
   });
 });
 

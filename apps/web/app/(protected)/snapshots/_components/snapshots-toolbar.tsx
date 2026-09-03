@@ -20,7 +20,7 @@ import type { ListScope } from '@/lib/api/types';
 import { ANIMATION_DEFAULT, DEBOUNCE_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
-import { resolveListScope } from '@/lib/list-scope';
+import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 
 const INTERVALS: readonly SnapshotGridInterval[] = ['monthly', 'weekly'];
 
@@ -56,8 +56,7 @@ export function SnapshotsToolbar({
   const selectedCollectionIds = searchParams.getAll('collection_ids').map(Number).filter(Boolean);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
   const scope = resolveListScope(searchParams.get('scope') ?? undefined);
-  const interval: SnapshotGridInterval =
-    searchParams.get('interval') === 'weekly' ? 'weekly' : 'monthly';
+  const interval = resolveGridInterval(searchParams.get('interval') ?? undefined);
 
   useEffect(() => {
     const timer = setTimeout(() => navigate({ search }), DEBOUNCE_MS);

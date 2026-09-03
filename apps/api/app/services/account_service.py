@@ -130,10 +130,13 @@ async def list_accounts_grouped(
         active_only=active_only,
     )
     items = await to_responses(session, accounts, user)
+    # One tuple per account, because this list is unpaginated: the rows in hand ARE the whole filtered
+    # set, so the fold needs no aggregate query behind it.
+    counts = [(a.pot_id, a.currency, item.balance, 1) for a, item in zip(accounts, items, strict=True)]
     # No visible pot means no section headers, and an empty `sections` is what tells the page to draw
     # the flat table it always drew — a solo user's accounts page is unchanged by X2.
-    counts = [(a.pot_id, a.currency, item.balance, 1) for a, item in zip(accounts, items, strict=True)]
-    return AccountListResponse(items=items, sections=pot_sections(build_sections(counts), scopes) if scopes else [])
+    sections = pot_sections(build_sections(counts), scopes) if scopes else []
+    return AccountListResponse(items=items, sections=sections)
 
 
 # Get a single account by id. Raises NotFoundError if not found.

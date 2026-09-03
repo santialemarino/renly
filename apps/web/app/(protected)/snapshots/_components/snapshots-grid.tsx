@@ -132,14 +132,16 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
    */
   const cellMaps = useMemo(
     () =>
-      grid.rows.map((row) => {
-        const map = new Map<string, SnapshotGridCell>();
-        for (const cell of row.cells) {
-          const existing = map.get(cell.column);
-          if (!existing || cell.date > existing.date) map.set(cell.column, cell);
-        }
-        return map;
-      }),
+      new Map(
+        grid.rows.map((row) => {
+          const map = new Map<string, SnapshotGridCell>();
+          for (const cell of row.cells) {
+            const existing = map.get(cell.column);
+            if (!existing || cell.date > existing.date) map.set(cell.column, cell);
+          }
+          return [row.investmentId, map] as const;
+        }),
+      ),
     [grid.rows],
   );
 
@@ -228,8 +230,10 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                 );
               }
               const row = entry.row;
-              const rowIdx = grid.rows.indexOf(row);
               const canWrite = writableByPot.get(row.potId) ?? true;
+              // The row's latest snapshot, which is what its freshness is measured against. `at(-1)`
+              // rather than an index, because the section walk no longer hands out positions.
+              const latest = row.cells.at(-1);
               return (
                 <TableRow key={entry.key} className="group">
                   <TableCell className="sticky left-0 z-10 bg-background">
@@ -254,12 +258,12 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                             </span>
                           </TooltipTrigger>
                           <TooltipContent>
-                            {row.cells.length === 0
+                            {latest === undefined
                               ? t('grid.neverValued', {
                                   cadence: tCommon(`cadence.${row.cadence}`).toLowerCase(),
                                 })
                               : t('grid.overdueHint', {
-                                  date: fmt.date(row.cells[row.cells.length - 1]!.date),
+                                  date: fmt.date(latest.date),
                                   cadence: tCommon(`cadence.${row.cadence}`).toLowerCase(),
                                 })}
                           </TooltipContent>
@@ -268,7 +272,7 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                     </div>
                   </TableCell>
                   {grid.columns.map((column) => {
-                    const cell = cellMaps[rowIdx]?.get(column);
+                    const cell = cellMaps.get(row.investmentId)?.get(column);
                     return (
                       <TableCell
                         key={column}

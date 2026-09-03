@@ -1,3 +1,4 @@
+import type { SnapshotGridInterval } from '@/lib/api/snapshots';
 import type { ListScope, ListSection } from '@/lib/api/types';
 
 /*
@@ -18,6 +19,17 @@ import type { ListScope, ListSection } from '@/lib/api/types';
  */
 export function resolveListScope(raw: string | undefined): ListScope {
   return raw === 'private' || raw === 'shared' ? raw : 'all';
+}
+
+/*
+ * The snapshots grid's column interval, read from the URL the same way and defaulting to monthly.
+ *
+ * Here rather than inline because TWO surfaces read it — the page, which sends it to the API, and the
+ * toolbar, which shows which half of the toggle is active — and if the two ever disagreed the toolbar
+ * would highlight a grid the page had not asked for.
+ */
+export function resolveGridInterval(raw: string | undefined): SnapshotGridInterval {
+  return raw === 'weekly' ? 'weekly' : 'monthly';
 }
 
 export type SectionedRow<T> =

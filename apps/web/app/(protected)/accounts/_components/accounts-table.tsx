@@ -226,80 +226,68 @@ export function AccountsTable({
                             ariaLabel="View ledger"
                             href={accountLedgerPath(a.id)}
                           />
-                          {a.isActive &&
-                            (isShared ? (
-                              /*
-                               * A shared account's editable half is gated on POT WRITE access, which
-                               * is granted per (pot, member) and stated on the section. Reconciling
-                               * and deleting are withheld from everyone here on purpose: a
-                               * reconciliation posts an adjustment entry owned by one user, which a
-                               * pot's account has none of, and removing an account a pot holds
-                               * changes the pot's value — so it belongs on the pot's page, beside the
-                               * ownership it moves.
-                               */
-                              <>
-                                {canWrite && (
-                                  <>
-                                    <RowActionButton
-                                      icon={Pencil}
-                                      tooltip={t('actions.edit')}
-                                      ariaLabel="Edit"
-                                      onClick={() => setEditAccount(a)}
-                                    />
-                                    <RowActionButton
-                                      icon={Archive}
-                                      tooltip={t('actions.archive')}
-                                      ariaLabel="Archive"
-                                      variant="muted"
-                                      onClick={() => handleArchive(a)}
-                                      disabled={archivingId === a.id}
-                                    />
-                                  </>
-                                )}
-                                <RowLockedIndicator
-                                  icon={Lock}
-                                  tooltip={tCommon(
-                                    canWrite
-                                      ? 'lockedRow.sharedAccount'
-                                      : 'lockedRow.sharedAccountReadOnly',
-                                  )}
-                                  ariaLabel="Managed by the pot"
-                                />
-                              </>
-                            ) : (
-                              <>
-                                <RowActionButton
-                                  icon={Scale}
-                                  tooltip={t('actions.reconcile')}
-                                  ariaLabel="Reconcile"
-                                  onClick={() => setReconcileAccount(a)}
-                                />
-                                <RowActionButton
-                                  icon={Pencil}
-                                  tooltip={t('actions.edit')}
-                                  ariaLabel="Edit"
-                                  onClick={() => setEditAccount(a)}
-                                />
-                                <RowActionButton
-                                  icon={Archive}
-                                  tooltip={t('actions.archive')}
-                                  ariaLabel="Archive"
-                                  variant="muted"
-                                  onClick={() => handleArchive(a)}
-                                  disabled={archivingId === a.id}
-                                />
-                              </>
-                            ))}
-                          {!a.isActive && (
+                          {/*
+                           * A shared account's editable half is gated on POT WRITE access, which is
+                           * granted per (pot, member) and stated on the section. Reconciling and
+                           * deleting are withheld from everyone on purpose: a reconciliation posts an
+                           * adjustment entry owned by one user, which a pot's account has none of, and
+                           * removing an account a pot holds changes the pot's value — so it belongs on
+                           * the pot's page, beside the ownership it moves.
+                           *
+                           * The gate wraps the ARCHIVE PAIR, active and archived alike. Nesting it
+                           * inside the active branch alone is the shape this started as, and it left an
+                           * archived shared account offering Unarchive to anybody with the lock that
+                           * explains the absence nowhere on the row — a write, ungated.
+                           */}
+                          {!isShared && a.isActive && (
                             <RowActionButton
-                              icon={ArchiveRestore}
-                              tooltip={t('actions.unarchive')}
-                              ariaLabel="Unarchive"
-                              onClick={() => handleUnarchive(a)}
-                              disabled={archivingId === a.id}
+                              icon={Scale}
+                              tooltip={t('actions.reconcile')}
+                              ariaLabel="Reconcile"
+                              onClick={() => setReconcileAccount(a)}
                             />
                           )}
-                          {!isShared && (
+                          {(!isShared || canWrite) && (
+                            <>
+                              {a.isActive ? (
+                                <>
+                                  <RowActionButton
+                                    icon={Pencil}
+                                    tooltip={t('actions.edit')}
+                                    ariaLabel="Edit"
+                                    onClick={() => setEditAccount(a)}
+                                  />
+                                  <RowActionButton
+                                    icon={Archive}
+                                    tooltip={t('actions.archive')}
+                                    ariaLabel="Archive"
+                                    variant="muted"
+                                    onClick={() => handleArchive(a)}
+                                    disabled={archivingId === a.id}
+                                  />
+                                </>
+                              ) : (
+                                <RowActionButton
+                                  icon={ArchiveRestore}
+                                  tooltip={t('actions.unarchive')}
+                                  ariaLabel="Unarchive"
+                                  onClick={() => handleUnarchive(a)}
+                                  disabled={archivingId === a.id}
+                                />
+                              )}
+                            </>
+                          )}
+                          {isShared ? (
+                            <RowLockedIndicator
+                              icon={Lock}
+                              tooltip={tCommon(
+                                canWrite
+                                  ? 'lockedRow.sharedAccount'
+                                  : 'lockedRow.sharedAccountReadOnly',
+                              )}
+                              ariaLabel="Managed by the pot"
+                            />
+                          ) : (
                             <RowActionButton
                               icon={Trash2}
                               tooltip={t('actions.delete')}

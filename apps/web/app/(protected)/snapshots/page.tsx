@@ -11,10 +11,10 @@ import { HELP_ANCHORS } from '@/config/routes';
 import { getCollections } from '@/lib/api/collections';
 import { getGroups } from '@/lib/api/groups';
 import { getSettings } from '@/lib/api/settings';
-import { getSnapshotGrid, type SnapshotGridInterval } from '@/lib/api/snapshots';
+import { getSnapshotGrid } from '@/lib/api/snapshots';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
-import { resolveListScope } from '@/lib/list-scope';
+import { resolveGridInterval, resolveListScope } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { ACTIVE_CURRENCY_COOKIE, ORIGINAL_CURRENCY } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -64,7 +64,7 @@ export default async function SnapshotsPage({ searchParams }: SnapshotsPageProps
   const scope = resolveListScope(params.scope);
   // Weekly is a TOGGLE, not derived: this grid mixes private holdings (no cadence at all) with the
   // holdings of several pots that may each declare a different one, so nothing can derive it honestly.
-  const interval: SnapshotGridInterval = params.interval === 'weekly' ? 'weekly' : 'monthly';
+  const interval = resolveGridInterval(params.interval);
 
   const [grid, collections, groups] = await Promise.all([
     getSnapshotGrid({
