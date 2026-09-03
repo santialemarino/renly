@@ -5,11 +5,12 @@ from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.domain.list_scope import ListScope
 from app.models.investment import Investment, InvestmentCategory
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.models.snapshot import InvestmentSnapshot
 from app.models.transaction import Transaction
-from app.repositories.utils import apply_entry_sort
+from app.repositories.utils import apply_entry_sort, scope_filter
 
 # Sortable columns for the investments list. `category` is sorted as TEXT rather than as the enum:
 # ORDER BY on a Postgres enum follows its DECLARATION order, which differs between a database built
@@ -23,21 +24,23 @@ _SORT_COLUMNS = {
 }
 
 
-# Lists investments for a user with optional filters and pagination. Returns (items, total).
-async def list_by_user_filtered(
-    session: AsyncSession,
+# The shared filtering of the investments list, applied once so the row read and the section aggregate
+# below cannot describe different row sets — the failure a second copy of this block would produce.
+#
+# The dual-scope predicate itself lives in repositories.utils.scope_filter, shared with the accounts
+# list: two lists that must agree about what "shared" means are two things that can stop agreeing.
+def _apply_list_filters(
+    stmt,
     user_id: int,
+    pot_ids: list[int],
+    scope: ListScope,
     *,
-    search: str | None = None,
-    collection_ids: list[int] | None = None,
-    category: InvestmentCategory | None = None,
-    active_only: bool = True,
-    page: int = 1,
-    page_size: int = 20,
-    sort_by: str | None = None,
-    sort_order: str = "asc",
-) -> tuple[list[Investment], int]:
-    stmt = select(Investment).where(Investment.user_id == user_id)
+    search: str | None,
+    category: InvestmentCategory | None,
+    active_only: bool,
+    collection_ids: list[int] | None,
+):
+    stmt = stmt.where(scope_filter(Investment, user_id, pot_ids, scope))
     if active_only:
         stmt = stmt.where(Investment.is_active.is_(True))
     if search:
@@ -48,13 +51,53 @@ async def list_by_user_filtered(
         stmt = stmt.where(
             Investment.id.in_(select(InvestmentCollectionMember.investment_id).where(InvestmentCollectionMember.collection_id.in_(collection_ids)))
         )
+    return stmt
+
+
+# Lists investments for a user with optional filters and pagination. Returns (items, total).
+#
+# The order is SCOPE-MAJOR (`pot_id` NULLS FIRST) and the caller's chosen sort applies WITHIN each
+# scope, which is what grouping a table means: the sections stay contiguous across page boundaries, so
+# a header is drawn once per scope per page instead of the two interleaving. Asking for one scope on the
+# pill collapses the grouping to a single section, which gives back a flat globally sorted list.
+#
+# `private` is the DEFAULT, and it is not timidity. Four other pages read this list as a PICKER whose
+# whole meaning is the caller's own holdings — the pot page offers what may be moved INTO a pot, the
+# share wizard the same, the collections page what may be filed. Widening the default would have those
+# pickers offer moving a pot's holding into the pot it already sits in. Grouped-by-default is a property
+# of the LIST PAGE, which asks for it; the endpoint stays fail-closed.
+async def list_by_user_filtered(
+    session: AsyncSession,
+    user_id: int,
+    pot_ids: list[int],
+    *,
+    scope: ListScope = ListScope.private,
+    search: str | None = None,
+    collection_ids: list[int] | None = None,
+    category: InvestmentCategory | None = None,
+    active_only: bool = True,
+    page: int = 1,
+    page_size: int = 20,
+    sort_by: str | None = None,
+    sort_order: str = "asc",
+) -> tuple[list[Investment], int]:
+    stmt = _apply_list_filters(
+        select(Investment),
+        user_id,
+        pot_ids,
+        scope,
+        search=search,
+        category=category,
+        active_only=active_only,
+        collection_ids=collection_ids,
+    )
     count_stmt = select(func.count()).select_from(stmt.subquery())
     count_result = await session.execute(count_stmt)
     total = count_result.scalar_one()
     # This list is paginated, so the sort needs the id tiebreak too: `category` and `base_currency`
     # are low-cardinality, and without a total order Postgres may repeat a row across pages or skip it.
     sorted_stmt = apply_entry_sort(
-        stmt,
+        stmt.order_by(Investment.pot_id.nulls_first()),
         sort_by,
         sort_order,
         sort_columns=_SORT_COLUMNS,
@@ -65,6 +108,37 @@ async def list_by_user_filtered(
     items_result = await session.execute(items_stmt)
     items = list(items_result.scalars().all())
     return items, total
+
+
+# How many rows each scope of the filtered list holds, as (pot_id, None, None, count) — the shape
+# build_sections folds, with the two money slots empty because this list has no value column and a
+# section total can therefore only honestly be a count.
+#
+# Counted over the WHOLE filtered set rather than the requested page, which is the point: a header
+# figure that changed as the reader paged would answer a question nobody asked.
+async def count_by_scope(
+    session: AsyncSession,
+    user_id: int,
+    pot_ids: list[int],
+    *,
+    scope: ListScope = ListScope.private,
+    search: str | None = None,
+    collection_ids: list[int] | None = None,
+    category: InvestmentCategory | None = None,
+    active_only: bool = True,
+) -> list[tuple[int | None, None, None, int]]:
+    stmt = _apply_list_filters(
+        select(Investment.pot_id, func.count()),
+        user_id,
+        pot_ids,
+        scope,
+        search=search,
+        category=category,
+        active_only=active_only,
+        collection_ids=collection_ids,
+    ).group_by(Investment.pot_id)
+    result = await session.execute(stmt)
+    return [(row[0], None, None, int(row[1])) for row in result.all()]
 
 
 # Fetches a single investment by id and user_id. Returns None if not found or not owned.
@@ -243,6 +317,7 @@ async def get_by_ids_any_scope(session: AsyncSession, ids: list[int]) -> list[In
 class InvestmentRepository:
     bulk_create = staticmethod(bulk_create)
     create = staticmethod(create)
+    count_by_scope = staticmethod(count_by_scope)
     exists_active_by_user = staticmethod(exists_active_by_user)
     exists_by_user = staticmethod(exists_by_user)
     get_by_id = staticmethod(get_by_id)

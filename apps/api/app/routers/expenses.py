@@ -8,6 +8,7 @@ from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
 from app.domain import AdvanceResult, ReverseResult
+from app.domain.list_scope import ListScope
 from app.http_errors import CodedHTTPException
 from app.models.expense_entry import ExpenseCategory
 from app.schemas.expense import (
@@ -41,12 +42,16 @@ def _cursor_change(result: AdvanceResult | ReverseResult | None) -> PlanCursorCh
     )
 
 
-# List expenses with optional filters, pagination, and currency conversion.
+# List expenses with optional filters, scope grouping, pagination, and currency conversion.
 @router.get("", response_model=ExpenseListResponse)
 async def list_expenses(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
+    scope: ListScope = Query(
+        default=ListScope.all,
+        description="Which scopes to return: all (both, grouped — the default), private (own only) or shared (group shares only).",
+    ),
     search: str | None = Query(default=None, description="Search notes."),
     category: ExpenseCategory | None = Query(default=None, description="Filter by category."),
     payment_method: str | None = Query(default=None, description="Filter by payment method."),
@@ -60,6 +65,7 @@ async def list_expenses(
     return await expense_service.list_expenses(
         session,
         current_user,
+        scope=scope,
         search=search,
         category=category,
         payment_method=payment_method,

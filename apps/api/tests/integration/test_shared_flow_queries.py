@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 #
 # Skipped unless LEDGER_TEST_DATABASE_URL points at a database with the schema applied, matching the
 # contract the other query suites use.
+from app.domain.list_scope import ListScope
 from app.domain.shared_flow import apply_settlements, combine_positions, expense_positions, income_positions, minimise_transfers
 from app.repositories import expense_repository, group_settlement_repository, income_repository, shared_expense_repository, shared_income_repository
 from app.services import group_settlement_service
@@ -256,10 +257,42 @@ class TestTheExpensesUnion:
         assert sorted(row.scope for row in rows) == ["private", "shared"]
 
     @pytest.mark.asyncio
-    async def test_sorting_by_amount_orders_across_the_union(self, session, seeded):
+    async def test_sorting_by_amount_orders_within_each_scope(self, session, seeded):
+        # X2 changed what a sort MEANS on this list, deliberately and visibly: the rows are grouped by
+        # scope, so the caller's sort applies inside each section rather than across the whole page.
+        # A globally sorted page could not carry section headers at all — the two scopes would
+        # interleave and the same header would be drawn several times down one page.
+        #
+        # Asserted per group rather than over the whole list, and the seed makes the distinction real:
+        # it holds a private row whose amount falls between two shared ones, so a page that were still
+        # globally sorted would fail the grouping assertion and a page sorted only by group would fail
+        # the within-section one.
         rows, _ = await expense_repository.list_by_user_filtered(
             session, seeded["users"][0], [seeded["seats"][0]], sort_by="amount", sort_order="desc", page_size=50
         )
+        groups = [row.group_id for row in rows]
+        assert groups == sorted(groups, key=lambda g: (g is not None, g or 0))
+        by_group: dict = {}
+        for row in rows:
+            by_group.setdefault(row.group_id, []).append(row.amount)
+        assert len(by_group) > 1
+        for group_id, amounts in by_group.items():
+            assert amounts == sorted(amounts, reverse=True), group_id
+
+    @pytest.mark.asyncio
+    async def test_asking_for_one_scope_gives_back_a_flat_globally_sorted_list(self, session, seeded):
+        # Which is the other half of the same rule: the pill FILTERS, so narrowing to one scope
+        # collapses the grouping to a single section and the sort is global again.
+        rows, _ = await expense_repository.list_by_user_filtered(
+            session,
+            seeded["users"][0],
+            [seeded["seats"][0]],
+            scope=ListScope.shared,
+            sort_by="amount",
+            sort_order="desc",
+            page_size=50,
+        )
+        assert {row.scope for row in rows} == {"shared"}
         assert [row.amount for row in rows] == sorted((row.amount for row in rows), reverse=True)
 
 
@@ -695,10 +728,42 @@ class TestTheIncomeUnion:
         assert sorted(row.scope for row in rows) == ["private", "private", "shared"]
 
     @pytest.mark.asyncio
-    async def test_sorting_by_amount_orders_across_the_union(self, session, seeded):
+    async def test_sorting_by_amount_orders_within_each_scope(self, session, seeded):
+        # X2 changed what a sort MEANS on this list, deliberately and visibly: the rows are grouped by
+        # scope, so the caller's sort applies inside each section rather than across the whole page.
+        # A globally sorted page could not carry section headers at all — the two scopes would
+        # interleave and the same header would be drawn several times down one page.
+        #
+        # Asserted per group rather than over the whole list, and the seed makes the distinction real:
+        # it holds a private row whose amount falls between two shared ones, so a page that were still
+        # globally sorted would fail the grouping assertion and a page sorted only by group would fail
+        # the within-section one.
         rows, _ = await income_repository.list_by_user_filtered(
             session, seeded["users"][0], [seeded["seats"][0]], sort_by="amount", sort_order="desc", page_size=50
         )
+        groups = [row.group_id for row in rows]
+        assert groups == sorted(groups, key=lambda g: (g is not None, g or 0))
+        by_group: dict = {}
+        for row in rows:
+            by_group.setdefault(row.group_id, []).append(row.amount)
+        assert len(by_group) > 1
+        for group_id, amounts in by_group.items():
+            assert amounts == sorted(amounts, reverse=True), group_id
+
+    @pytest.mark.asyncio
+    async def test_asking_for_one_scope_gives_back_a_flat_globally_sorted_list(self, session, seeded):
+        # Which is the other half of the same rule: the pill FILTERS, so narrowing to one scope
+        # collapses the grouping to a single section and the sort is global again.
+        rows, _ = await income_repository.list_by_user_filtered(
+            session,
+            seeded["users"][0],
+            [seeded["seats"][0]],
+            scope=ListScope.shared,
+            sort_by="amount",
+            sort_order="desc",
+            page_size=50,
+        )
+        assert {row.scope for row in rows} == {"shared"}
         assert [row.amount for row in rows] == sorted((row.amount for row in rows), reverse=True)
 
     @pytest.mark.asyncio

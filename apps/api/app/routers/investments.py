@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.domain.list_scope import ListScope
 from app.models.investment import InvestmentCategory
 from app.schemas.investment import (
     InvestmentCreate,
@@ -24,11 +25,16 @@ DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
 
 
-# Lists investments for the user with optional search, collection, category filters and pagination.
+# Lists investments for the user with optional search, collection, category and scope filters and
+# pagination. Rows are grouped by scope and the response carries each section's label and count.
 @router.get("", response_model=InvestmentListResponse)
 async def list_investments(
     current_user: CurrentUser,
     session: SessionDep,
+    scope: ListScope = Query(
+        default=ListScope.private,
+        description="Which scopes to return: private (own only, the default), shared (co-owned only) or all (both, grouped).",
+    ),
     search: str | None = Query(default=None, description="Filter by name (case-insensitive)."),
     collection_ids: list[int] | None = Query(default=None, description="Filter by collection ids (union)."),
     category: InvestmentCategory | None = Query(default=None, description="Filter by category."),
@@ -41,6 +47,7 @@ async def list_investments(
     return await investment_service.list_investments(
         session,
         current_user,
+        scope=scope,
         search=search,
         collection_ids=collection_ids,
         category=category,

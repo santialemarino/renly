@@ -108,6 +108,14 @@ from app.domain.errors import (
     TransferCrossScopeError,
     TransferSameAccountError,
 )
+from app.domain.list_scope import (
+    SCOPE_PRIVATE,
+    SCOPE_SHARED,
+    ListScope,
+    ListSection,
+    SectionTotal,
+    build_sections,
+)
 from app.domain.money import assign_remainder, quantize, spread_remainder
 from app.domain.notification import is_enabled_by_default
 from app.domain.payment_method import PaymentMethod, ensure_account_pairing, ensure_payment_pairing
@@ -130,7 +138,9 @@ from app.domain.pot_monitoring import (
     PotValuation,
     cadence_period_key,
     is_valuation_overdue,
+    period_end_containing,
     period_ends,
+    period_grid,
     series_interval,
 )
 from app.domain.reconciliation import ensure_not_reconciliation_owned
@@ -196,6 +206,8 @@ __all__ = [
     "InvalidTokenError",
     "InvestmentCurrencyMismatchError",
     "InviteEmailTakenError",
+    "ListScope",
+    "ListSection",
     "MovementKind",
     "MovementSource",
     "NotFoundError",
@@ -224,7 +236,10 @@ __all__ = [
     "ReconciliationOwnedEntryError",
     "ReconciliationPeriodMismatchError",
     "ReverseResult",
+    "SCOPE_PRIVATE",
+    "SCOPE_SHARED",
     "SUPPORTED_CURRENCIES",
+    "SectionTotal",
     "SettleTransfer",
     "SettlementAccountAmountRequiredError",
     "SettlementAccountAmountWithoutAccountError",
@@ -259,6 +274,7 @@ __all__ = [
     "amount_for_units",
     "apply_settlements",
     "assign_remainder",
+    "build_sections",
     "claimed_installment_cuotas",
     "claimed_subscription_cycles",
     "cadence_period_key",
@@ -281,7 +297,9 @@ __all__ = [
     "minimise_transfers",
     "opening_units",
     "ownership_percentages",
+    "period_end_containing",
     "period_ends",
+    "period_grid",
     "plan_waterfall",
     "quantize",
     "replay_units",

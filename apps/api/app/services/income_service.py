@@ -4,12 +4,14 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError, ensure_not_reconciliation_owned
+from app.domain.list_scope import ListScope, build_sections
 from app.models.income_entry import IncomeCategory, IncomeEntry
 from app.models.user import User
 from app.repositories import group_repository, income_repository
 from app.repositories.income_repository import IncomeListRow
 from app.schemas.income import IncomeListResponse, IncomeResponse
 from app.services import account_service, exchange_rate_service, settings_service
+from app.services.utils import group_names_by_id, group_sections
 from app.utils.metrics import RateLookup, convert_optional
 
 
@@ -51,22 +53,17 @@ def _list_row_to_response(row: IncomeListRow, currency: str | None, lookup: Rate
     )
 
 
-# The names of the groups behind the shared rows on this page, in ONE query. A row has to say which
-# group it belongs to — a 40,000 share of 100,000 rent renders identically to a solo 40,000 entry
-# without it — and resolving that per row would be an N+1 over a list the user paginates through.
-async def _group_names(session: AsyncSession, rows: list[IncomeListRow]) -> dict[int, str]:
-    group_ids = {row.group_id for row in rows if row.group_id is not None}
-    if not group_ids:
-        return {}
-    return {group.id: group.name for group in await group_repository.get_by_ids(session, sorted(group_ids))}
-
-
 # List income for a user with optional filters, pagination, and display-currency conversion: their own
 # private entries, plus their SHARE of every piece of income their group seats take a share of.
+#
+# `scope` defaults to `all` for the reason /expenses states: this list has unioned each member's share
+# since PR 6, so `all` IS its existing behaviour, while `/investments` and `/accounts` default to
+# `private` because theirs has never returned a co-owned row. In both cases the default changes nothing.
 async def list_income(
     session: AsyncSession,
     user: User,
     *,
+    scope: ListScope = ListScope.all,
     search: str | None = None,
     category: IncomeCategory | None = None,
     date_from: date_type | None = None,
@@ -81,22 +78,39 @@ async def list_income(
     # `IN (seat ids)` predicate uses the splits' member index, while the join makes Postgres scan every
     # split in the database. An empty list also means the shared branch is not built at all, so a user
     # in no group pays nothing for it.
-    member_ids = await group_repository.list_active_member_ids(session, user.id)
+    #
+    # A private-only read needs no seats at all, so it does not pay for the query either.
+    member_ids = [] if scope == ListScope.private else await group_repository.list_active_member_ids(session, user.id)
+    filters = {
+        "scope": scope,
+        "search": search,
+        "category": category,
+        "date_from": date_from,
+        "date_to": date_to,
+    }
     rows, total = await income_repository.list_by_user_filtered(
         session,
         user.id,
         member_ids,
-        search=search,
-        category=category,
-        date_from=date_from,
-        date_to=date_to,
         sort_by=sort_by,
         sort_order=sort_order,
         page=page,
         page_size=page_size,
+        **filters,
     )
+    # The section aggregate is issued ONLY when a shared side exists, which is also the only time the
+    # page renders section headers. A solo user — every user at launch — therefore pays exactly what
+    # this list cost before X2, and an empty `sections` is what tells the page to draw a flat table.
+    sections = build_sections(await income_repository.sum_by_scope(session, user.id, member_ids, **filters)) if member_ids else []
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
-    group_names = await _group_names(session, rows)
+    # One query for both consumers: a shared ROW names its group — a 40,000 share of 100,000 rent
+    # renders identically to a solo 40,000 entry without it — and so does a shared SECTION, whose keys
+    # are not a subset of the page's rows: a group whose income all sits on page 2 still has a header
+    # to draw on page 1.
+    group_names = await group_names_by_id(
+        session,
+        {row.group_id for row in rows if row.group_id is not None} | {s.key for s in sections if s.key is not None},
+    )
     items: list[IncomeResponse] = []
     skipped: set[str] = set()
     for row in rows:
@@ -113,6 +127,7 @@ async def list_income(
         page_size=page_size,
         display_currency=currency,
         skipped_currencies=sorted(skipped),
+        sections=group_sections(sections, group_names),
     )
 
 

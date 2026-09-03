@@ -97,12 +97,33 @@ async def fixtures(session: AsyncSession):
         "INSERT INTO pots (group_id, base_currency, is_default) VALUES (:g, 'ARS', TRUE) RETURNING id",
         g=group,
     )
-    joint = await scalar(
-        "INSERT INTO accounts (pot_id, name, type, currency, opening_balance, opening_date) VALUES (:p, 'Joint', 'bank', 'ARS', 0, :d) RETURNING id",
-        p=pot,
-        d=_OPENING,
-    )
-    return {"users": users, "ars": ars, "usd": usd, "other": other, "card": card, "group": group, "seats": seats, "pot": pot, "joint": joint}
+
+    async def pot_account(name: str, opening: Decimal):
+        return await scalar(
+            "INSERT INTO accounts (pot_id, name, type, currency, opening_balance, opening_date) VALUES (:p, :n, 'bank', 'ARS', :b, :d) RETURNING id",
+            p=pot,
+            n=name,
+            b=opening,
+            d=_OPENING,
+        )
+
+    # TWO of the pot's accounts, not one: a transfer has to stay within a single scope (§4.1), so a
+    # pot-scoped transfer needs a second pot account to reach — and one joint account could not tell a
+    # scope-aware transfer branch from an owner-only one.
+    joint = await pot_account("Joint", Decimal("0.00"))
+    joint_two = await pot_account("Joint savings", Decimal("8000.00"))
+    return {
+        "users": users,
+        "ars": ars,
+        "usd": usd,
+        "other": other,
+        "card": card,
+        "group": group,
+        "seats": seats,
+        "pot": pot,
+        "joint": joint,
+        "joint_two": joint_two,
+    }
 
 
 # Asserts the ledger's own sum and the accounts page's balance agree for the given account.
@@ -111,10 +132,17 @@ async def fixtures(session: AsyncSession):
 # account whose ledger has to add up. `user_id` stays the ASKER's: it scopes the private-entry branches,
 # which are always empty for a shared account, and passing it is what lets the same assertion run for
 # two different callers on one shared row.
+#
+# The account's `pot_id` goes in too, and it is load-bearing rather than tidy: `transfers` is the one
+# movement table that carries a scope of its own, so a transfer between two of a pot's accounts is
+# matched by the balance sums (which compare against the joined account's pot) and would be invisible
+# to a ledger filtering on the asker's user_id alone.
 async def _assert_no_drift(session: AsyncSession, account_id: int, user_id: int):
     account = await account_repository.get_by_id_any_scope(session, account_id)
     from_balance_path = await account_service.get_account_balance(session, account, user_id)
-    from_union = await account_movement_repository.sum_movements(session, account_id, user_id, opening_date=account.opening_date)
+    from_union = await account_movement_repository.sum_movements(
+        session, account_id, user_id, opening_date=account.opening_date, pot_id=account.pot_id
+    )
     assert account.opening_balance + from_union == from_balance_path, (
         f"the ledger union and get_account_balances disagree on account {account_id}: "
         f"opening {account.opening_balance} + union {from_union} != balance {from_balance_path}"
@@ -327,11 +355,34 @@ class TestTheScopeCrossingMovements:
         # through the account service's owner-scoped lookup, and the pot's account has no owner. Without
         # this the incoming branch's CASE is unasserted — a mutation making both legs read the same
         # column survived on exactly that, because the outgoing leg happens to read it either way.
-        rows, _ = await account_movement_repository.list_movements(session, joint, u, opening_date=_OPENING)
+        rows, _ = await account_movement_repository.list_movements(session, joint, u, opening_date=_OPENING, pot_id=pot)
         arriving = next(row.movement for row in rows if row.movement.source == MovementSource.ownership)
         assert arriving.amount == Decimal("60000.00")
         # The pair IS the rate record, so the other side rides along rather than being derived.
         assert (arriving.counterparty_amount, arriving.counterparty_currency) == (Decimal("40.00"), "USD")
+
+    @pytest.mark.asyncio
+    async def test_a_transfer_between_two_of_a_pots_accounts_reaches_the_ledger(self, session, fixtures):
+        # `transfers` is the ONE movement table that carries a scope of its own (§3), so this is the
+        # only movement kind whose ledger branch can disagree with the balance sums beside it about
+        # what a shared account holds. The balance compares against the joined account's pot; a branch
+        # filtering on the asker's user_id alone sees nothing here, because a pot-scoped transfer has
+        # user_id NULL — so the account's balance moved and its ledger did not say why.
+        #
+        # Asserted from BOTH accounts, since the two legs are separate branches and an outgoing-only
+        # fix would leave the arriving side silent.
+        u, pot, joint, joint_two = fixtures["users"][0], fixtures["pot"], fixtures["joint"], fixtures["joint_two"]
+        await session.execute(
+            text(
+                "INSERT INTO transfers (pot_id, date, from_account_id, to_account_id, from_amount, to_amount)"
+                " VALUES (:p, '2026-07-18', :f, :t, 3000, 3000)"
+            ),
+            {"p": pot, "f": joint_two, "t": joint},
+        )
+        await session.flush()
+
+        assert await _assert_no_drift(session, joint_two, u) == Decimal("5000.00")
+        assert await _assert_no_drift(session, joint, u) == Decimal("3000.00")
 
     @pytest.mark.asyncio
     async def test_a_shared_expense_takes_the_whole_amount_from_the_account_that_paid(self, session, fixtures):

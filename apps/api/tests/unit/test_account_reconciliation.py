@@ -17,6 +17,7 @@ from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
 from app.models.user import User
 from app.services import account_reconciliation_service as svc
+from app.services import account_service
 
 # Account reconciliation is the point-in-time Option-F true-up: the derived balance at a date is
 # compared with the real balance the user read, and the gap becomes exactly one dated adjustment
@@ -24,6 +25,57 @@ from app.services import account_reconciliation_service as svc
 
 USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 TODAY = date(2026, 7, 29)
+
+
+# EVERY money source an account balance is made of, with the sign it carries and the repository
+# attribute each is read through. The list itself is the invariant this file exists to pin: a source
+# present in account_service.get_account_balances and absent from compute_account_balance_at does not
+# merely under-report — it makes the reconciliation post an adjustment for money the account really did
+# move. Four were missing before PR 8b, all four of them shared-money sources.
+_BALANCE_SOURCES = (
+    ("income_repository", "sum_by_account_ids", 1),
+    ("expense_repository", "sum_by_account_ids", -1),
+    ("card_settlement_repository", "sum_by_account_ids", -1),
+    ("transfer_repository", "sum_in_by_account_ids", 1),
+    ("transfer_repository", "sum_out_by_account_ids", -1),
+    ("pot_ownership_repository", "sum_in_by_account_ids", 1),
+    ("pot_ownership_repository", "sum_out_by_account_ids", -1),
+    ("shared_expense_repository", "sum_by_account_ids", -1),
+    ("shared_income_repository", "sum_by_account_ids", 1),
+    ("group_settlement_repository", "sum_in_by_account_ids", 1),
+    ("group_settlement_repository", "sum_out_by_account_ids", -1),
+)
+
+
+# Stubs every balance source at once, and returns the mocks keyed by (repository, method).
+#
+# `amounts` gives a source its own figure; anything unnamed answers zero. Stubbing them ALL from one
+# list is what stops a test from silently leaving a new source unstubbed — which under an AsyncMock
+# session is not an error, just a Mock arriving where a Decimal was expected.
+def _stub_sums(monkeypatch, amounts: dict[tuple[str, str], Decimal] | None = None) -> dict:
+    mocks: dict = {}
+    for repo, method, _sign in _BALANCE_SOURCES:
+        value = (amounts or {}).get((repo, method), ZERO)
+        mock = AsyncMock(return_value={7: value} if value else {})
+        monkeypatch.setattr(getattr(svc, repo), method, mock)
+        mocks[(repo, method)] = mock
+    return mocks
+
+
+# One distinct figure per source, so a term the formula drops — or reads with the wrong sign — changes
+# the answer. Equal values would let a dropped `+x` and a dropped `-x` cancel.
+def _distinct_amounts() -> dict[tuple[str, str], Decimal]:
+    return {(repo, method): Decimal(str((index + 1) * 7)) for index, (repo, method, _sign) in enumerate(_BALANCE_SOURCES)}
+
+
+# What the formula must produce for _distinct_amounts, computed from the signs rather than by calling
+# the formula twice.
+def _expected_total(opening: Decimal) -> Decimal:
+    amounts = _distinct_amounts()
+    return opening + sum(sign * amounts[(repo, method)] for repo, method, sign in _BALANCE_SOURCES)
+
+
+ZERO = Decimal(0)
 
 
 def _reconciliation(**overrides) -> AccountReconciliation:
@@ -73,13 +125,16 @@ def _wire(
     captured: dict = {}
     monkeypatch.setattr(svc.account_service, "get_account", AsyncMock(return_value=account))
     monkeypatch.setattr(svc.settings_service, "get_user_today", AsyncMock(return_value=today))
-    monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", AsyncMock(return_value=income or {}))
-    monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", AsyncMock(return_value=expenses or {}))
-    monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value=settlements or {}))
-    monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value=transfers_in or {}))
-    monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value=transfers_out or {}))
-    monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-    monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+    _stub_sums(
+        monkeypatch,
+        {
+            ("income_repository", "sum_by_account_ids"): (income or {}).get(7, ZERO),
+            ("expense_repository", "sum_by_account_ids"): (expenses or {}).get(7, ZERO),
+            ("card_settlement_repository", "sum_by_account_ids"): (settlements or {}).get(7, ZERO),
+            ("transfer_repository", "sum_in_by_account_ids"): (transfers_in or {}).get(7, ZERO),
+            ("transfer_repository", "sum_out_by_account_ids"): (transfers_out or {}).get(7, ZERO),
+        },
+    )
     monkeypatch.setattr(
         svc.account_reconciliation_repository,
         "get_latest_dates_by_account_ids",
@@ -121,63 +176,82 @@ class TestDifference:
 
 class TestComputeBalanceAt:
     @pytest.mark.asyncio
+    async def test_it_reads_the_same_sources_the_live_balance_does(self, monkeypatch):
+        # TWO DERIVATIONS, ONE FACT. account_service.get_account_balances answers "what is in this
+        # account now" and this answers "what was in it at a date"; the second's own comment says it
+        # mirrors the first. A source in one and not the other is the failure that matters, and it is
+        # invisible to every other test here because each of those stubs only the sources it names.
+        #
+        # Every source gets a DISTINCT figure, so a dropped `+x` cannot be cancelled by a dropped `-x`.
+        _stub_sums(monkeypatch, _distinct_amounts())
+        account = _account()
+        dated = await svc.compute_account_balance_at(AsyncMock(), account, TODAY)
+        live = await account_service.get_account_balances(AsyncMock(), [account], USER.id)
+        assert dated == live[7] == _expected_total(account.opening_balance)
+
+    @pytest.mark.asyncio
     async def test_unions_opening_income_expenses_and_settlements(self, monkeypatch):
-        monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("500")}))
-        monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("300")}))
-        monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("150")}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        _stub_sums(
+            monkeypatch,
+            {
+                ("income_repository", "sum_by_account_ids"): Decimal("500"),
+                ("expense_repository", "sum_by_account_ids"): Decimal("300"),
+                ("card_settlement_repository", "sum_by_account_ids"): Decimal("150"),
+            },
+        )
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(), date(2026, 6, 30))
 
         assert balance == Decimal("1050")  # 1000 + 500 - 300 - 150
 
     @pytest.mark.asyncio
+    async def test_a_shared_expense_fronted_from_this_account_leaves_it(self, monkeypatch):
+        # The money really left, whoever ends up owing whom. Missing this term made the reconciliation
+        # compute a balance too HIGH by the whole bill and write the difference in as spending nobody did.
+        _stub_sums(monkeypatch, {("shared_expense_repository", "sum_by_account_ids"): Decimal("400")})
+        assert await svc.compute_account_balance_at(AsyncMock(), _account(), TODAY) == Decimal("600")
+
+    @pytest.mark.asyncio
+    async def test_shared_income_paid_into_this_account_arrives_in_it(self, monkeypatch):
+        _stub_sums(monkeypatch, {("shared_income_repository", "sum_by_account_ids"): Decimal("250")})
+        assert await svc.compute_account_balance_at(AsyncMock(), _account(), TODAY) == Decimal("1250")
+
+    @pytest.mark.asyncio
+    async def test_both_settle_up_legs_move_this_account(self, monkeypatch):
+        # Two legs with DIFFERENT figures, so a formula reading one leg twice shows up as a wrong total
+        # rather than as the right one.
+        _stub_sums(
+            monkeypatch,
+            {
+                ("group_settlement_repository", "sum_in_by_account_ids"): Decimal("300"),
+                ("group_settlement_repository", "sum_out_by_account_ids"): Decimal("120"),
+            },
+        )
+        assert await svc.compute_account_balance_at(AsyncMock(), _account(), TODAY) == Decimal("1180")
+
+    @pytest.mark.asyncio
     async def test_opening_balance_excluded_before_the_account_opened(self, monkeypatch):
-        monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        _stub_sums(monkeypatch)
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(opening_date=date(2026, 5, 1)), date(2026, 4, 30))
 
         assert balance == Decimal(0)
 
     @pytest.mark.asyncio
-    async def test_sums_are_bounded_by_the_as_of_date(self, monkeypatch):
-        # All THREE sums must carry the bound — a missing one would silently include rows dated
-        # after as_of_date, so the recorded computed_balance would not be a point-in-time figure.
-        income = AsyncMock(return_value={})
-        expenses = AsyncMock(return_value={})
-        settlements = AsyncMock(return_value={})
-        monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", income)
-        monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", expenses)
-        monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", settlements)
-        monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+    async def test_every_sum_is_bounded_by_the_as_of_date(self, monkeypatch):
+        # ALL of them must carry the bound — a missing one would silently include rows dated after
+        # as_of_date, so the recorded computed_balance would not be a point-in-time figure at all.
+        mocks = _stub_sums(monkeypatch)
 
         await svc.compute_account_balance_at(AsyncMock(), _account(), date(2026, 6, 30))
 
-        for mock in (income, expenses, settlements):
-            assert mock.await_args.kwargs["as_of_date"] == date(2026, 6, 30)
+        for key, mock in mocks.items():
+            assert mock.await_args.kwargs.get("as_of_date") == date(2026, 6, 30), key
 
     @pytest.mark.asyncio
     async def test_opening_balance_included_on_the_opening_date_itself(self, monkeypatch):
         # The boundary: the guard is `opening_date <= as_of_date`, so the opening date counts.
-        monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        _stub_sums(monkeypatch)
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(opening_date=date(2026, 5, 1)), date(2026, 5, 1))
 
@@ -185,13 +259,7 @@ class TestComputeBalanceAt:
 
     @pytest.mark.asyncio
     async def test_balance_can_be_negative(self, monkeypatch):
-        monkeypatch.setattr(svc.income_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.expense_repository, "sum_by_account_ids", AsyncMock(return_value={7: Decimal("2500")}))
-        monkeypatch.setattr(svc.card_settlement_repository, "sum_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.transfer_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_in_by_account_ids", AsyncMock(return_value={}))
-        monkeypatch.setattr(svc.pot_ownership_repository, "sum_out_by_account_ids", AsyncMock(return_value={}))
+        _stub_sums(monkeypatch, {("expense_repository", "sum_by_account_ids"): Decimal("2500")})
 
         balance = await svc.compute_account_balance_at(AsyncMock(), _account(), TODAY)
 

@@ -55,15 +55,21 @@ async def list_account_movements(
     page: int = 1,
     page_size: int = 25,
 ) -> AccountMovementListResponse:
-    account = await account_service.get_account(session, account_id, user)
+    # In EITHER scope, unlike every other reader of this service: a group's bank account has a ledger
+    # worth reading — it is how the household sees its own money move — and the balance beside it has
+    # been dual-scope since 0019. Reachability is RLS's answer plus the pot's own predicate, which is
+    # what get_account_in_scope defers to; nothing here writes.
+    account = await account_service.get_account_in_scope(session, account_id, user)
     page = min(page, _MAX_PAGE)
-    bounds = {"opening_date": account.opening_date, "kind": kind, "page_size": page_size}
+    bounds = {"opening_date": account.opening_date, "pot_id": account.pot_id, "kind": kind, "page_size": page_size}
     rows, total = await account_movement_repository.list_movements(session, account_id, user.id, page=page, **bounds)
 
     # An empty result is either an empty ledger or a page past the end — only a count separates them,
     # so it is asked for exactly then, keeping the in-range case at one query.
     if not rows:
-        total = await account_movement_repository.count_movements(session, account_id, user.id, opening_date=account.opening_date, kind=kind)
+        total = await account_movement_repository.count_movements(
+            session, account_id, user.id, opening_date=account.opening_date, pot_id=account.pot_id, kind=kind
+        )
         if total:
             page = math.ceil(total / page_size)
             rows, total = await account_movement_repository.list_movements(session, account_id, user.id, page=page, **bounds)

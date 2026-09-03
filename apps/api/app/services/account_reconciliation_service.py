@@ -31,8 +31,11 @@ from app.repositories import (
     account_reconciliation_repository,
     card_settlement_repository,
     expense_repository,
+    group_settlement_repository,
     income_repository,
     pot_ownership_repository,
+    shared_expense_repository,
+    shared_income_repository,
     transfer_repository,
 )
 from app.services import account_service, settings_service
@@ -52,9 +55,20 @@ def compute_reconciliation_difference(statement_balance: Decimal, computed_balan
 # --- Balance ---
 
 
-# Derived balance of an account at as_of_date: opening_balance (only once the account has opened)
-# plus linked income, minus linked expenses and settlements drawn from it, all dated on or before
-# as_of_date, plus both transfer legs. Mirrors account_service.get_account_balances but bounded in time.
+# Derived balance of an account at as_of_date: opening_balance (only once the account has opened) plus
+# every movement that reaches it dated on or before that date.
+#
+# It MIRRORS account_service.get_account_balances bounded in time, and the mirror is the invariant, not
+# a resemblance. The two enumerate the same ELEVEN sources, and a source present in one and absent from
+# the other does not merely under-report — it makes the reconciliation post an adjustment for money the
+# account really did move, permanently, in the app's own drift-closer. Four were missing here: a shared
+# expense a member fronted from this private account (the money really left), shared income paid into
+# it (it really arrived), and both settlement legs of a settle-up. Reconciling an account that had
+# fronted a group's dinner computed a balance too HIGH by the whole bill and then wrote the difference
+# in as an expense nobody made.
+#
+# ▸ So: when a source is added to either list, grep the other one's name and add it there too. The list
+# IS the invariant.
 async def compute_account_balance_at(
     session: AsyncSession,
     account: Account,
@@ -70,6 +84,10 @@ async def compute_account_balance_at(
     transfers_out = await transfer_repository.sum_out_by_account_ids(session, account_ids, account.user_id, as_of_date=as_of_date)
     ownership_in = await pot_ownership_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
     ownership_out = await pot_ownership_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    shared_expenses = await shared_expense_repository.sum_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    shared_income = await shared_income_repository.sum_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    group_settlements_in = await group_settlement_repository.sum_in_by_account_ids(session, account_ids, as_of_date=as_of_date)
+    group_settlements_out = await group_settlement_repository.sum_out_by_account_ids(session, account_ids, as_of_date=as_of_date)
     opening = account.opening_balance if account.opening_date <= as_of_date else ZERO
     return (
         opening
@@ -80,6 +98,10 @@ async def compute_account_balance_at(
         - transfers_out.get(account.id, ZERO)
         + ownership_in.get(account.id, ZERO)
         - ownership_out.get(account.id, ZERO)
+        - shared_expenses.get(account.id, ZERO)
+        + shared_income.get(account.id, ZERO)
+        + group_settlements_in.get(account.id, ZERO)
+        - group_settlements_out.get(account.id, ZERO)
     )
 
 

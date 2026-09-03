@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
+from app.domain.list_scope import ListScope
 from app.models.income_entry import IncomeCategory
 from app.schemas.income import IncomeCreate, IncomeListResponse, IncomeResponse, IncomeUpdate
 from app.services import income_service
@@ -12,12 +13,16 @@ from app.services import income_service
 router = APIRouter(prefix="/income", tags=["income"])
 
 
-# List income entries with optional filters, pagination, and currency conversion.
+# List income entries with optional filters, scope grouping, pagination, and currency conversion.
 @router.get("", response_model=IncomeListResponse)
 async def list_income(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
+    scope: ListScope = Query(
+        default=ListScope.all,
+        description="Which scopes to return: all (both, grouped — the default), private (own only) or shared (group shares only).",
+    ),
     search: str | None = Query(default=None, description="Search notes."),
     category: IncomeCategory | None = Query(default=None, description="Filter by category."),
     date_from: date_type | None = Query(default=None, description="Start date (inclusive)."),
@@ -30,6 +35,7 @@ async def list_income(
     return await income_service.list_income(
         session,
         current_user,
+        scope=scope,
         search=search,
         category=category,
         date_from=date_from,

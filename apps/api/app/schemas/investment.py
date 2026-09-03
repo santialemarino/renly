@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.investment import InvestmentCategory
 from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.list_scope import ListSectionResponse
 
 
 # Minimal collection info embedded in investment responses.
@@ -58,6 +59,11 @@ class InvestmentResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     is_active: bool = Field(description="Whether included in portfolio.")
     has_snapshots: bool = Field(description="Whether the investment has any snapshots. Used to lock currency changes.")
+    scope: str = Field(default="private", description="'private' when the caller owns it, 'shared' when a pot they co-own does.")
+    pot_id: int | None = Field(
+        default=None,
+        description="Pot holding it; null on a private row. Joins the row to its section, which carries the pot's label.",
+    )
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")
     collections: list[InvestmentCollectionInfo] = Field(
@@ -74,3 +80,11 @@ class InvestmentListResponse(BaseModel):
     total: int = Field(description="Total matching investments (across all pages).")
     page: int = Field(description="Current page number (1-based).")
     page_size: int = Field(description="Number of items per page.")
+    sections: list[ListSectionResponse] = Field(
+        default_factory=list,
+        description=(
+            "The list's scope sections in row order, counted across every page. Holds only the private "
+            "section for a user who can see no pot, and the totals are empty because this list shows no "
+            "money column."
+        ),
+    )

@@ -80,6 +80,42 @@ def period_ends(today: date_type, interval: PotSeriesInterval, count: int) -> li
     return ends
 
 
+# The period end a date falls IN: the last day of its own calendar month, or the Sunday that closes
+# its week. The complement of _previous_period_end, and derived from it rather than re-deriving the
+# week convention — one rule, so the pot page's series grid and the snapshots grid cannot disagree
+# about which week a Wednesday belongs to.
+#
+# Weeks close on SUNDAY here, which is what _previous_period_end's `weekday() + 1` step implies: from
+# any date it lands on the Sunday strictly before, so the period CONTAINING that date ends on the
+# following Sunday.
+def period_end_containing(d: date_type, interval: PotSeriesInterval) -> date_type:
+    if interval == PotSeriesInterval.weekly:
+        return d + timedelta(days=_DAYS_IN_WEEK - 1 - d.weekday())
+    return add_months(d.replace(day=1), 1) - timedelta(days=1)
+
+
+# Every period end from `start`'s period through `end`'s, ascending, capped at `limit` by keeping the
+# MOST RECENT ones.
+#
+# The snapshots grid's columns, and the cap is what makes weekly usable there at all: the grid's span
+# is its DATA's — a user snapshotting since 2020 has 68 monthly columns, which scrolls, and would have
+# ~280 weekly ones, which is 5,600 cells for twenty rows and unreadable besides. Monthly stays
+# uncapped in practice because the caller passes a limit only weekly can reach.
+#
+# Distinct from period_ends, which walks back a fixed COUNT from today for a fixed-width chart. A grid
+# is bounded by the history it has, not by a window; the two are different questions and each has its
+# own function rather than one function with a flag.
+def period_grid(start: date_type, end: date_type, interval: PotSeriesInterval, *, limit: int) -> list[date_type]:
+    cursor = period_end_containing(end, interval)
+    ends: list[date_type] = []
+    first = period_end_containing(start, interval)
+    while cursor >= first and len(ends) < limit:
+        ends.append(cursor)
+        cursor = _previous_period_end(cursor, interval)
+    ends.reverse()
+    return ends
+
+
 # The oldest a valuation may be before the cadence considers the pot behind: one whole period back.
 # A valuation exactly one period old is DUE, not late, which is why the comparison below is strict.
 def _cadence_cutoff(cadence: PotCadence, today: date_type) -> date_type:

@@ -1,11 +1,31 @@
-# Business logic for building the snapshots grid (investments × months).
+# Business logic for building the snapshots grid (investments × periods).
+#
+# X2 and X4 both land here. The grid is DUAL-SCOPE — a co-owned holding appears in its pot's own
+# section, because snapshotting one is what keeps the pot valued at all and the grid is the fast way to
+# do it — and its columns are weekly-CAPABLE, on a toolbar toggle rather than derived.
+#
+# ▸ Why a toggle and not a derived interval. §9 says a pot's cadence drives "the value-series columns on
+# the pot page and in the grid", and on the pot page that is exact: one pot, one cadence, one grid. The
+# snapshots grid is not one pot's series. It mixes private holdings (which declare no cadence at all)
+# with the holdings of several pots that may each declare a different one, so there is no single derived
+# answer — and deriving weekly from "any visible pot is weekly" would flip a user's whole grid to ~52
+# columns because one of their pots is watched closely. The cadence still appears, as the per-row
+# freshness indicator §8.2 asks for, which is where it belongs: a fact about one holding's valuation.
 
 from datetime import date as date_type
+from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain import ExchangeRateUnavailableError
-from app.models.investment import InvestmentCategory
+from app.domain import (
+    ExchangeRateUnavailableError,
+    PotSeriesInterval,
+    is_valuation_overdue,
+    period_end_containing,
+    period_grid,
+)
+from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope, build_sections
+from app.models.investment import Investment, InvestmentCategory
 from app.repositories.cedear_ratio_repository import cedear_ratio_repository
 from app.repositories.metrics_repository import metrics_repository
 from app.schemas.metrics import SkippedInvestment
@@ -15,8 +35,24 @@ from app.schemas.snapshot_grid import (
     SnapshotGridRow,
     SnapshotGridTransaction,
 )
-from app.services import exchange_rate_service
+from app.services import exchange_rate_service, pot_service
+from app.services.utils import pot_sections
 from app.utils import metrics as mh
+
+# How many columns the grid will draw, per interval. Two numbers rather than one because the intervals
+# have genuinely different densities, and the monthly figure is deliberately beyond any real history
+# (20 years) so the monthly grid keeps drawing its whole span exactly as it always has.
+#
+# The weekly cap is what makes weekly usable at all: a user snapshotting since 2020 has 68 monthly
+# columns, which scrolls, and would have ~280 weekly ones — 5,600 cells for twenty rows, and unreadable
+# besides. A year is the frame weekly monitoring is asked for in.
+_MAX_MONTHLY_COLUMNS = 240
+_MAX_WEEKLY_COLUMNS = 52
+
+
+# The column cap that goes with an interval.
+def _column_cap(interval: PotSeriesInterval) -> int:
+    return _MAX_WEEKLY_COLUMNS if interval == PotSeriesInterval.weekly else _MAX_MONTHLY_COLUMNS
 
 
 # Builds the snapshots grid for a user's investments.
@@ -26,6 +62,8 @@ async def get_snapshot_grid(
     session: AsyncSession,
     user_id: int,
     *,
+    scope: ListScope = ListScope.private,
+    interval: PotSeriesInterval = PotSeriesInterval.monthly,
     search: str | None = None,
     collection_ids: list[int] | None = None,
     category: InvestmentCategory | None = None,
@@ -33,7 +71,13 @@ async def get_snapshot_grid(
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> SnapshotGridResponse:
-    investments = await metrics_repository.list_active_investments(session, user_id)
+    column_cap = _column_cap(interval)
+    # The visible pots do three things from one read: they bound which pot rows the query may return,
+    # they label the sections, and they carry the cadence each shared row's freshness is measured
+    # against. A private-only request resolves none of it and costs what this grid cost before X2.
+    scopes = [] if scope == ListScope.private else await pot_service.list_visible_scopes(session, user_id)
+    pots_by_id = {s.pot_id: s for s in scopes}
+    investments = await metrics_repository.list_active_investments(session, user_id, [s.pot_id for s in scopes], scope=scope)
 
     # Apply filters in memory (small dataset: 2-3 users, ~20 investments).
     if search:
@@ -48,12 +92,17 @@ async def get_snapshot_grid(
         collection_set = set(collection_ids)
         investments = [i for i in investments if any(cid in collection_set for cid, _ in collections_map.get(i.id, []))]
 
-    # Sort.
+    # Sort WITHIN each scope, which is what grouping a table means: the scope-major order the query
+    # returned has to survive, or the sections stop being contiguous and their headers cannot be drawn.
+    #
+    # Two stable passes rather than one composite key, because `reverse=True` would reverse the SCOPE
+    # order too and put the caller's own holdings last.
     if sort_by == "name":
         investments = sorted(investments, key=lambda i: i.name.lower(), reverse=sort_order == "desc")
+        investments = sorted(investments, key=lambda i: (i.pot_id is not None, i.pot_id or 0))
 
     if not investments:
-        return SnapshotGridResponse(rows=[], months=[], skipped_investments=[])
+        return SnapshotGridResponse(rows=[], columns=[], interval=interval.value, sections=[], skipped_investments=[])
 
     lookup: mh.RateLookup | None = None
     skipped: list[SkippedInvestment] = []
@@ -83,12 +132,16 @@ async def get_snapshot_grid(
     snap_by_inv = mh.group_snapshots_by_investment(all_snapshots)
     tx_by_inv = mh.group_transactions_by_investment(all_transactions)
 
-    # Collect all unique dates.
-    all_dates = sorted({s.date for s in all_snapshots})
+    # The columns span the DATA's own history, one period end per bucket with no gaps — a grid answers
+    # "what has been recorded", not "the last N periods", which is the fixed-width question the pot
+    # page's series asks and domain.period_ends answers.
+    snapshot_dates = [s.date for s in all_snapshots]
+    columns = period_grid(min(snapshot_dates), max(snapshot_dates), interval, limit=column_cap) if snapshot_dates else []
 
     # Batch-load CEDEAR ratios for CEDEAR investments.
     cedear_tickers = [inv.ticker for inv in investments if inv.ticker and inv.category == InvestmentCategory.cedears]
     cedear_ratios = await cedear_ratio_repository.get_latest_by_tickers(session, cedear_tickers)
+    today = date_type.today()
 
     rows: list[SnapshotGridRow] = []
     for inv in investments:
@@ -125,6 +178,7 @@ async def get_snapshot_grid(
             cells.append(
                 SnapshotGridCell(
                     date=snap.date,
+                    column=period_end_containing(snap.date, interval),
                     value=value,
                     original_value=snap.value,
                     quantity=snap.quantity,
@@ -143,19 +197,47 @@ async def get_snapshot_grid(
                 )
             )
 
-        rows.append(
-            SnapshotGridRow(
-                investment_id=inv.id,
-                name=inv.name,
-                category=inv.category,
-                base_currency=inv.base_currency,
-                ticker=inv.ticker,
-                cedear_ratio=cedear_ratios.get(inv.ticker) if inv.ticker else None,
-                cells=cells,
-            )
-        )
+        rows.append(_build_row(inv, cells, cedear_ratios, pots_by_id, today=today))
 
-    return SnapshotGridResponse(rows=rows, months=all_dates, skipped_investments=skipped)
+    counts = [(inv.pot_id, None, None, 1) for inv in investments]
+    return SnapshotGridResponse(
+        rows=rows,
+        columns=columns,
+        interval=interval.value,
+        sections=pot_sections(build_sections(counts), scopes) if scopes else [],
+        skipped_investments=skipped,
+    )
+
+
+# One grid row, with the freshness the owning pot's cadence decides.
+#
+# The overdue question is asked through the SAME domain rule the pot page and the reminder job use, so a
+# holding flagged behind here is behind everywhere. `holds_anything` is True by construction: this row
+# exists because the investment does, and an investment nobody has ever valued IS behind by definition —
+# its value cannot be stated at all, so no contribution can be priced against it.
+def _build_row(
+    inv: Investment,
+    cells: list[SnapshotGridCell],
+    cedear_ratios: dict[str, Decimal],
+    pots_by_id: dict[int, pot_service.PotScope],
+    *,
+    today: date_type,
+) -> SnapshotGridRow:
+    cadence = pots_by_id[inv.pot_id].cadence if inv.pot_id is not None and inv.pot_id in pots_by_id else None
+    valued_as_of = cells[-1].date if cells else None
+    return SnapshotGridRow(
+        investment_id=inv.id,
+        name=inv.name,
+        category=inv.category,
+        base_currency=inv.base_currency,
+        ticker=inv.ticker,
+        cedear_ratio=cedear_ratios.get(inv.ticker) if inv.ticker else None,
+        scope=SCOPE_PRIVATE if inv.pot_id is None else SCOPE_SHARED,
+        pot_id=inv.pot_id,
+        cadence=cadence,
+        is_overdue=(False if cadence is None else is_valuation_overdue(cadence=cadence, valued_as_of=valued_as_of, holds_anything=True, today=today)),
+        cells=cells,
+    )
 
 
 # Returns {snapshot_date: latest_transaction} for periods that had transactions.
