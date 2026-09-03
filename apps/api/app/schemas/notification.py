@@ -8,6 +8,10 @@ from pydantic import BaseModel, Field
 from app.models.notification import NotificationChannel, NotificationEvent
 from app.schemas.base import RequestBase
 
+# The longest push endpoint a request may carry: far above any real one (a few hundred bytes) and
+# safely below 2704, the btree index key limit this bound exists to stay under.
+PUSH_ENDPOINT_MAX_LENGTH = 2000
+
 
 # Body for PUT /notifications/preferences. One switch at a time, which is what the grid emits: a whole
 # matrix per save would make two people editing different rows overwrite each other's answers.
@@ -20,7 +24,13 @@ class NotificationPreferenceUpdate(RequestBase):
 # Body for POST /notifications/push/subscriptions. The three values come verbatim from the browser's
 # PushSubscription — `keys.p256dh` and `keys.auth` are secrets and are never read back out.
 class PushSubscriptionCreate(RequestBase):
-    endpoint: str = Field(description="The push service URL the browser was issued.")
+    # Bounded at the REQUEST even though the column is unbounded TEXT, and the two are different
+    # questions: the column stays TEXT because a third-party URL's shape is not ours to cap, while an
+    # unbounded request body reaches a UNIQUE btree, whose key cannot exceed 2704 bytes. Without this a
+    # long enough endpoint is `index row size N exceeds btree version 4 maximum 2704` — a 500 out of the
+    # index rather than a 422 out of the contract (reproduced against a real Postgres, with
+    # incompressible text: a repetitive 3 KB string fits, because the key is TOAST-compressed first).
+    endpoint: str = Field(description="The push service URL the browser was issued.", max_length=PUSH_ENDPOINT_MAX_LENGTH)
     p256dh: str = Field(description="The browser's public key for payload encryption.", max_length=255)
     auth: str = Field(description="The browser's auth secret for payload encryption.", max_length=255)
     user_agent: str | None = Field(default=None, description="What the browser calls itself, to tell devices apart.", max_length=500)
@@ -29,7 +39,7 @@ class PushSubscriptionCreate(RequestBase):
 # Body for DELETE /notifications/push/subscriptions. Named by endpoint rather than id because the
 # browser knows its own endpoint and has never been told a database id.
 class PushSubscriptionDelete(RequestBase):
-    endpoint: str = Field(description="The push service URL to stop sending to.")
+    endpoint: str = Field(description="The push service URL to stop sending to.", max_length=PUSH_ENDPOINT_MAX_LENGTH)
 
 
 # One notification in the feed.
