@@ -29,6 +29,14 @@ export const config = [
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
+      /*
+       * `react/prop-types` is a legacy-PropTypes rule and this is a TypeScript codebase: every
+       * component's props are typed at the definition. The plugin cannot always see through them —
+       * an inline render prop handed to a library (react-day-picker's `components`) reads as an
+       * untyped component — so it reports false positives that no amount of typing removes, on code
+       * whose types tsc is already checking.
+       */
+      'react/prop-types': 'off',
     },
   },
 ];

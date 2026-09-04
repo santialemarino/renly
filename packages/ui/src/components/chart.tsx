@@ -122,6 +122,9 @@ function ChartTooltipContent({
   labelClassName?: string;
 
   formatter?: (
+    // recharts hands the formatter whatever the datum held, and its own type for this is `any`.
+    // Narrowing it here would only move the cast to every call site.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     value: any,
     name: string,
     item: PayloadItem,
