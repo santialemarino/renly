@@ -173,13 +173,17 @@ export function QuickAdd({
   const prefillAccountId = soleEligibleAccountId(context.accounts, draft.prefill?.currency ?? '');
 
   /*
-   * Reads the caller's pickers, THEN opens the form — deliberately in that order.
+   * Reads the caller's pickers, THEN opens the form — deliberately in that order, and the reason is
+   * data loss rather than a flicker.
    *
-   * Opening first and letting the lists arrive would be worse than a flicker. `AccountField` renders
-   * nothing at all while it has no account to offer, and React Hook Form DELETES a field's value when
-   * its control leaves the DOM — so the pre-selected account would be silently dropped the moment the
-   * list landed and the field mounted. "The list is empty" and "the list has not arrived" are the same
-   * value and opposite facts, and this is the one place that can tell them apart.
+   * `prefillAccountId` is derived from the loaded accounts, and it is a dependency of the entry form's
+   * own reset effect. So a dialog opened BEFORE the read landed would reset itself the moment the
+   * accounts arrived — wiping whatever the user had already typed into it. Everything else about
+   * opening early is merely ugly by comparison: `AccountField` renders nothing at all until it has an
+   * account to offer, and `PaymentMethodFields` shows its zero-cards "Add a card" empty state, which
+   * is a false statement about somebody's data rather than a loading state. "The list is empty" and
+   * "the list has not arrived" are the same value and opposite facts, and this is the one place that
+   * can tell them apart.
    *
    * Re-read on every opening rather than cached: a card, an account or a group can all have appeared on
    * another page since, and a stale list arriving mid-typing could only ever change a picker under

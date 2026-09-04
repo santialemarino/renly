@@ -6,8 +6,9 @@ import type { ExpenseCategory, IncomeCategory } from '@/lib/constants/categories
  *
  * There are two swaps and they carry different things. The SCOPE swap (private ↔ a group's shared
  * form) keeps the category, because both of its sides are the same list. The TYPE swap
- * (expense ↔ income) drops it, because the two lists' categories do not overlap. One function each,
- * both here, so there is a single place that says what survives which swap.
+ * (expense ↔ income) drops it — see `toTypeHandover` for the two overlapping values that make that a
+ * rule rather than a nicety. One function each, both here, so there is a single place that says what
+ * survives which swap.
  *
  * Pure and under lib/ rather than beside the two controls that perform the swaps, for the reason every
  * rule in this app lives here: those controls render Radix primitives, which cannot be mounted in the
@@ -57,10 +58,15 @@ export function toHandover<TCategory extends string>(
  * Narrows either form's values to what crosses a TYPE swap: the date, the amount, the currency and the
  * notes — and deliberately NOT the category.
  *
- * An expense category is not an income category and the two enums do not overlap, so carrying one
- * across would put a value in the receiving form's picker that it cannot render (a blank field) and
- * that the API refuses with a 422. `EntryHandover<never>` is what states that in the type: it is
- * assignable to either list's handover precisely because it can never carry a category at all.
+ * An expense category is not an income category, and the two lists overlap on EXACTLY TWO values —
+ * `gifts` and `other` — which is what makes dropping it a rule rather than a nicety. For the other
+ * eighteen, carrying one across would put a value in the receiving picker that it cannot render (a
+ * blank field) and that the API refuses with a 422: loud, and obviously wrong. For those two it would
+ * be ACCEPTED, silently turning a gift you paid for into a gift you received. The quiet case is the
+ * one worth the rule.
+ *
+ * `EntryHandover<never>` is what states that in the type: it is assignable to either list's handover
+ * precisely because it can never carry a category at all.
  */
 export function toTypeHandover(values: EntryHandover<string>): EntryHandover<never> {
   return {

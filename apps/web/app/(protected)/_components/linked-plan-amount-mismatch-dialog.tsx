@@ -14,6 +14,7 @@ import {
 } from '@repo/ui/components';
 import { updatePaymentObligationAmount } from '@/app/(protected)/payment-obligations/payment-obligation-actions';
 import { updateSubscriptionAmount } from '@/app/(protected)/subscriptions/subscription-actions';
+import { useFormatters } from '@/lib/i18n/formatters';
 
 // Follow-up amount-mismatch prompt fired by ExpenseFormDialog when a manual entry linked
 // to an obligation or subscription is saved with an amount differing from the plan's
@@ -48,6 +49,7 @@ export function LinkedPlanAmountMismatchDialog({
   const lastMismatch = useRef(mismatch);
   if (mismatch) lastMismatch.current = mismatch;
   const display = mismatch ?? lastMismatch.current;
+  const fmt = useFormatters();
   // Picks the obligation or subscription sub-namespace based on the displayed plan
   // type; defaults to obligation when no mismatch has ever been set (initial render
   // before any open — the value never surfaces visibly).
@@ -73,10 +75,17 @@ export function LinkedPlanAmountMismatchDialog({
   }
 
   const title = tType('title');
+  /*
+   * Both figures go through the locale formatter, and they have to: they arrive from different places
+   * — the entered one is the raw string the user typed, the current one the plan's stored decimal — so
+   * unformatted they read as "19500" beside "18000.00" in one sentence, and never grouped for the
+   * locale at all. The currency code stays a separate interpolation because `fmt.amount` returns the
+   * number alone and the copy already names the code.
+   */
   const description = tType('description', {
     planName: display?.planName ?? '',
-    enteredAmount: display?.enteredAmount ?? '',
-    currentAmount: display?.currentAmount ?? '',
+    enteredAmount: fmt.amount(display?.enteredAmount ?? '', display?.currency),
+    currentAmount: fmt.amount(display?.currentAmount ?? '', display?.currency),
     currency: display?.currency ?? '',
   });
   const confirmLabel = updating ? tType('updating') : tType('confirm');

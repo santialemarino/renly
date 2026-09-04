@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from '@/lib/constants/categories';
 import { toHandover, toTypeHandover, type EntryHandover } from '@/lib/entry-handover';
 
 /*
@@ -77,5 +78,25 @@ describe('toTypeHandover (the expense/income swap)', () => {
       currency: undefined,
       notes: undefined,
     });
+  });
+
+  /*
+   * The case that would fail SILENTLY, and the reason dropping the category is a rule rather than a
+   * nicety. The two lists overlap on exactly `gifts` and `other`: eighteen of twenty expense
+   * categories would reach the income picker as a value it cannot render and the API refuses with a
+   * 422 — loud, and obviously wrong — while those two would be ACCEPTED, turning a gift you paid for
+   * into a gift you received. Asserted per value rather than in prose so a category added to both
+   * lists later is covered without anybody remembering this.
+   */
+  const shared = EXPENSE_CATEGORIES.filter((category) =>
+    (INCOME_CATEGORIES as readonly string[]).includes(category),
+  );
+
+  it('overlaps on exactly the two values this rule exists for', () => {
+    expect(shared).toEqual(['gifts', 'other']);
+  });
+
+  it.each(shared)('drops %s, which the receiving list would otherwise accept', (category) => {
+    expect('category' in toTypeHandover({ category })).toBe(false);
   });
 });
