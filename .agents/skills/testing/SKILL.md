@@ -138,6 +138,19 @@ pnpm test:e2e        # Playwright E2E
 **Don't unit-test on the web:** framework behavior, or full multi-page user flows (those are Playwright
 E2E). Keep a jsdom test to a single component's behavior.
 
+## Two assertions that pass on the failure they exist to catch
+
+- **A translation-parity check must assert the KEY PATH IS ABSENT from the output, never that the result
+  is truthy.** next-intl (`createTranslator`, and the app at runtime in production) answers a missing
+  message by returning its own key path — a non-empty string — so `expect(t(key)).toBeTruthy()` passes
+  on exactly the missing key it was written to find. Assert `expect(t(key)).not.toContain(key)` instead,
+  and prove it by deleting a real key.
+- **`SELECT … FOR UPDATE` on an RLS table applies the UPDATE policy's USING clause, not the SELECT
+  one.** That decides who may take a lock, and it is a live-database fact no unit test can substitute
+  for: a path that locks a parent row to serialise itself will work for one role and silently return
+  nothing for another. Where a lock is load-bearing, pin the roles that may take it in
+  `tests/integration/`, in both directions.
+
 ## File structure
 
 ```

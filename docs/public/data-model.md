@@ -344,6 +344,30 @@ Because a browser holds only one subscription, turning push on **hands that brow
 computer, the account that enables it last is the one it reaches, and the previous account's push there
 stops. Their other browsers are untouched.
 
+### The Shared Audit Trail
+
+Every group keeps a record of who did what to which shared thing, and when: a group renamed, a member
+added or removed, an invite created or revoked, a pot's settings or somebody's access to it changed,
+holdings moved in or out, an ownership entry recorded or removed, a shared expense or piece of income
+written or edited, a settlement recorded, confirmed or reversed.
+
+**Nothing here names money.** An entry carries an **entity type** (a label like `pot` or `settlement`),
+the **id** of the thing it concerns, an **action**, and a **payload** — the values its sentence
+interpolates. The prose is not stored: the app assembles it from its own translations, so the trail
+reads in whatever language you are using now and a wording fix reaches entries written months ago,
+exactly as the notification feed works. That is also what makes the whole thing reusable by a
+non-financial kind of household activity.
+
+**An entry outlives what it describes.** Deleting the account that performed an act forgets the name
+and keeps the record; the trail is append-only, so nothing in the app can rewrite or erase an entry
+once it exists. Deleting the whole group does take its trail with it — by then nobody could read it
+anyway.
+
+**It never shows you more than the rest of the app would.** An entry about a pot you cannot see is
+simply absent from your view of the trail, decided by the same rule that hides the pot itself. Reversing
+something is what a deletion IS here — there is no "reversed" state to read back — and the trail is what
+makes that accountable: the act of removing a settlement or an ownership entry is itself recorded.
+
 ### Settings
 
 Each user has personal preferences that control how the app behaves:
