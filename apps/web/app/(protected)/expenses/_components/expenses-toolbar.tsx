@@ -1,13 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import {
-  PRIVATE_SCOPE,
-  type ExpenseHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { PRIVATE_SCOPE } from '@/app/(protected)/_components/entry-scope-field';
 import { ExpenseFormDialog } from '@/app/(protected)/_components/expense-form-dialog';
 import {
   LinkedPlanAmountMismatchDialog,
@@ -26,8 +23,9 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import type { ListScope } from '@/lib/api/types';
-import { DIALOG_EXIT_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import type { ExpenseHandover } from '@/lib/entry-handover';
+import { useDeferredDialogSwap } from '@/lib/hooks/use-deferred-dialog-swap';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
 
@@ -41,6 +39,7 @@ export function ExpensesToolbar({
   activeObligations,
   activeSubscriptions,
   activeInstallments,
+  timeZone,
 }: {
   // Whether the caller belongs to any group at all — the one signal that turns the scope filter on,
   // so a solo user (every public user at launch) sees no added control.
@@ -55,42 +54,44 @@ export function ExpensesToolbar({
   activeObligations?: PaymentObligation[];
   activeSubscriptions?: Subscription[];
   activeInstallments?: Installment[];
+  /*
+   * The user's stored timezone, for the shared form's default date.
+   *
+   * Every other dated form in the app threads it and this one did not, so a shared expense started
+   * from here defaulted to the BROWSER's today while the same form opened from the group hub — or the
+   * income form beside it — used the user's. Two doors into one form disagreeing by a day, for anyone
+   * whose stored zone is not the machine's.
+   */
+  timeZone?: string;
 }) {
   const t = useTranslations('expenses');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.expenses, { resetPage: true });
-  const [createOpen, setCreateOpen] = useState(false);
-
-  // The FILTER's scope, distinct from the form `scope` below, which says which RECORD is being
-  // written. Same word, two different questions, so they are named apart.
-  const scopeFilter = resolveListScope(searchParams.get('scope') ?? undefined);
-  /*
-   * Which form the Add button is currently showing: the private one, or a group's shared-expense
-   * one. Held here rather than inside either dialog because the swap replaces the whole form —
-   * a private expense and a shared one are separate records in separate tables.
-   */
-  const [scope, setScope] = useState<string>(PRIVATE_SCOPE);
-  const [handover, setHandover] = useState<ExpenseHandover | undefined>(undefined);
   // Amount-mismatch follow-up prompt (Phase 3, follow-up Item 6). The expense form
   // fires onLinkedPlanSave only when the saved amount differs from the linked plan's
   // current amount — we stash it here so the dialog survives the form's close animation.
   const [mismatch, setMismatch] = useState<LinkedPlanMismatch | null>(null);
-  // The pending half of a scope swap, so an unmount between the close and the reopen cannot leave a
-  // timer waking up to open a dialog on a page that has gone.
-  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /*
+   * Which form the Add button is currently showing — the private one, or a group's shared-expense one
+   * — and what it opens on. Held here rather than inside either dialog because the swap replaces the
+   * whole form: a private expense and a shared one are separate records in separate tables.
+   */
+  const {
+    open: createOpen,
+    setOpen: setCreateOpen,
+    target: draft,
+    start,
+    swapTo,
+  } = useDeferredDialogSwap<{ scope: string; prefill?: ExpenseHandover }>({ scope: PRIVATE_SCOPE });
 
-  useEffect(
-    () => () => {
-      if (swapTimer.current !== null) clearTimeout(swapTimer.current);
-    },
-    [],
-  );
-
+  // The FILTER's scope, distinct from the form scope above, which says which RECORD is being
+  // written. Same word, two different questions, so they are named apart.
+  const scopeFilter = resolveListScope(searchParams.get('scope') ?? undefined);
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
   const selectedPaymentMethod = searchParams.get('payment_method') ?? CATEGORY_ALL;
   const activeGroups = groups ?? [];
-  const scopedGroup = activeGroups.find((group) => String(group.id) === scope);
+  const scopedGroup = activeGroups.find((group) => String(group.id) === draft.scope);
 
   function handleCategoryChange(cat: string) {
     navigate({ category: cat === CATEGORY_ALL ? null : cat });
@@ -100,28 +101,14 @@ export function ExpensesToolbar({
     navigate({ payment_method: method === CATEGORY_ALL ? null : method });
   }
 
-  // Opens whichever form the scope currently names, always on a clean slate: the Add button starts a
-  // new entry, so a handover left over from a previous swap must not seed it.
+  // The Add button always starts a NEW entry, so it opens the private form carrying nothing: values
+  // left over from a previous swap must not seed it.
   function handleAdd() {
-    setHandover(undefined);
-    setScope(PRIVATE_SCOPE);
-    setCreateOpen(true);
-  }
-
-  // Closes the form on screen, then opens the other with what was typed. Sequential rather than
-  // simultaneous — see DIALOG_EXIT_MS.
-  function handleScopeChange(next: string, values: ExpenseHandover) {
-    setHandover(values);
-    setCreateOpen(false);
-    swapTimer.current = setTimeout(() => {
-      swapTimer.current = null;
-      setScope(next);
-      setCreateOpen(true);
-    }, DIALOG_EXIT_MS);
+    start({ scope: PRIVATE_SCOPE });
   }
 
   /*
-   * The FILTER's scope, which is a different thing from `handleScopeChange` above — that one hands an
+   * The FILTER's scope, which is a different thing from the form swap above — that one hands an
    * in-progress entry between the private and the shared FORM. Named apart on purpose: one decides
    * which rows are read, the other which record is being written, and collapsing them would be the
    * mode X2 exists to prevent.
@@ -161,7 +148,7 @@ export function ExpensesToolbar({
     >
       <ExpenseFormDialog
         accounts={accounts}
-        open={createOpen && scope === PRIVATE_SCOPE}
+        open={createOpen && draft.scope === PRIVATE_SCOPE}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
@@ -170,8 +157,8 @@ export function ExpensesToolbar({
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
         scopeGroups={activeGroups}
-        onScopeChange={handleScopeChange}
-        prefill={handover}
+        onScopeChange={(scope, values) => swapTo({ scope, prefill: values })}
+        prefill={draft.prefill}
         onSuccess={() => router.refresh()}
         onLinkedPlanSave={(values, plan) =>
           setMismatch({
@@ -195,13 +182,14 @@ export function ExpensesToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           group={scopedGroup}
-          prefill={handover}
+          prefill={draft.prefill}
           accounts={accounts}
           creditCards={creditCards}
           preferredCurrencies={preferredCurrencies}
           supportedCurrencies={supportedCurrencies}
+          timeZone={timeZone}
           scopeGroups={activeGroups}
-          onScopeChange={handleScopeChange}
+          onScopeChange={(scope, values) => swapTo({ scope, prefill: values })}
           onSuccess={() => router.refresh()}
         />
       )}

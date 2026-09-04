@@ -223,6 +223,11 @@
       "previous": "Anterior",
       "next": "Siguiente"
     },
+    "entryType": {
+      "label": "¿Qué estás registrando?",
+      "expense": "Gasto",
+      "income": "Ingreso"
+    },
     "entryScope": {
       "label": "¿Para quién es?",
       "private": "Solo para mí",
@@ -322,6 +327,7 @@
     "showMore": "Mostrar más funciones",
     "showLess": "Mostrar menos funciones",
     "nav": {
+      "quickAdd": "Carga rápida",
       "dashboard": "Dashboard",
       "financeDashboard": "Dashboard",
       "income": "Ingresos",

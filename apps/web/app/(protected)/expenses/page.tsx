@@ -153,6 +153,7 @@ export default async function ExpensesPage({ searchParams }: ExpensesPageProps) 
         activeObligations={activeObligations}
         activeSubscriptions={activeSubscriptions}
         activeInstallments={activeInstallments}
+        timeZone={settings?.timezone ?? undefined}
       />
       {showSample ? (
         <SampleExpensesTable />

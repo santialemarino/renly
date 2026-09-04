@@ -17,12 +17,8 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import {
-  EntryScopeField,
-  PRIVATE_SCOPE,
-  toHandover,
-  type ExpenseHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { EntryScopeField, PRIVATE_SCOPE } from '@/app/(protected)/_components/entry-scope-field';
+import { EntryTypeField } from '@/app/(protected)/_components/entry-type-field';
 import { resolveCursorToast } from '@/app/(protected)/expenses/_components/cursor-toast';
 import {
   LinkedObligationSelect,
@@ -63,6 +59,8 @@ import type { Installment } from '@/lib/api/installments';
 import type { PaymentObligation } from '@/lib/api/payment-obligations';
 import type { Subscription } from '@/lib/api/subscriptions';
 import { ANIMATION_DEFAULT } from '@/lib/constants/animations';
+import type { EntryType } from '@/lib/constants/entries';
+import { toHandover, type ExpenseHandover } from '@/lib/entry-handover';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
 
@@ -100,9 +98,25 @@ interface ExpenseFormDialogProps {
   // nothing. The CALLER swaps the form: a private expense and a shared one are different records in
   // different tables, so no single form could submit either.
   onScopeChange?: (scope: string, values: ExpenseHandover) => void;
+  /*
+   * The global quick-add's entry-type control, on the same terms as the scope control above: supplied
+   * only by the caller that has another form to swap TO, and rendered only while recording a new
+   * entry. Every other door into this dialog opens it for one specific kind of entry, so they leave it
+   * unset and the control does not render.
+   */
+  onEntryTypeChange?: (type: EntryType, values: ExpenseHandover) => void;
   // Values carried in from a scope swap the other way, so switching back from the shared form loses
   // nothing either. Ignored in edit mode and on the Mark-Paid path, which both seed themselves.
   prefill?: ExpenseHandover;
+  /*
+   * A funding account to open a BLANK entry on — the quick-add's "the account" pre-fill, which it only
+   * supplies when the entry's currency leaves exactly one to choose from (see soleEligibleAccountId).
+   *
+   * Separate from `prefill` and not part of it on purpose: a handover crosses the scope swap, and a
+   * private entry's account can never fund a shared one (400 private_entry_from_shared_account). Two
+   * producers writing one slot would be two things that can disagree about that.
+   */
+  prefillAccountId?: number | null;
   preferredCurrencies?: string[];
   supportedCurrencies?: string[];
   creditCards?: CreditCard[];
@@ -189,7 +203,9 @@ export function ExpenseFormDialog({
   prefillFromObligation,
   scopeGroups,
   onScopeChange,
+  onEntryTypeChange,
   prefill,
+  prefillAccountId,
   preferredCurrencies,
   supportedCurrencies,
   creditCards,
@@ -362,7 +378,7 @@ export function ExpenseFormDialog({
           notes: prefill?.notes ?? '',
           paymentMethod: undefined,
           creditCardId: undefined,
-          accountId: undefined,
+          accountId: prefillAccountId ?? undefined,
           paymentObligationId: undefined,
           subscriptionId: undefined,
           installmentId: undefined,
@@ -370,7 +386,7 @@ export function ExpenseFormDialog({
         });
       }
     }
-  }, [open, expense, prefillFromObligation, prefill, form]);
+  }, [open, expense, prefillFromObligation, prefill, prefillAccountId, form]);
 
   // Soft confirmation when a credit-card expense uses a currency the card
   // hasn't seen before. Catches typos that would otherwise create a phantom
@@ -580,6 +596,15 @@ export function ExpenseFormDialog({
               onSubmit={form.handleSubmit(onSubmit)}
               noValidate
             >
+              {/* Which KIND of entry — the quick-add's other swap, on the same create-only terms. */}
+              {onEntryTypeChange && !isEdit && !prefillFromObligation && (
+                <EntryTypeField
+                  value="expense"
+                  onValueChange={(type) => onEntryTypeChange(type, toHandover(form.getValues()))}
+                  disabled={form.formState.isSubmitting}
+                />
+              )}
+
               {/*
                * Who the expense is for. Create-only: turning an existing private entry into a shared
                * one would delete a record of the user's own and write a different one a whole group

@@ -13,6 +13,10 @@ interface PillToggleGroupProps {
   value: string;
   onValueChange: (value: string) => void;
   disabled?: boolean;
+  // Accessible name for the group. Radix already gives the root `role="group"`, but the items only
+  // carry their own words — so without this a screen reader announces the choices and never the
+  // question. Optional because a caller with a visible, adjacent heading may already answer it.
+  ariaLabel?: string;
   itemClassName?: string;
   className?: string;
 }
@@ -23,6 +27,7 @@ export function PillToggleGroup({
   value,
   onValueChange,
   disabled,
+  ariaLabel,
   itemClassName,
   className,
 }: PillToggleGroupProps) {
@@ -32,6 +37,7 @@ export function PillToggleGroup({
       value={value}
       onValueChange={(v) => v && onValueChange(v)}
       disabled={disabled}
+      aria-label={ariaLabel}
       variant="outline"
       size="sm"
       className={cn(

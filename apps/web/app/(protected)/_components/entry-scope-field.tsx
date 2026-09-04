@@ -6,52 +6,9 @@ import { useTranslations } from 'next-intl';
 import { Label } from '@repo/ui/components';
 import { FormCombobox } from '@/components/form-combobox';
 import type { Group } from '@/lib/api/groups';
-import type { ExpenseCategory, IncomeCategory } from '@/lib/constants/categories';
 
 // The value the picker carries for "this is mine alone", which is every entry a solo user records.
 export const PRIVATE_SCOPE = 'private';
-
-/*
- * What one entry form hands the other when the scope changes, so nothing typed is lost across the
- * swap.
- *
- * Deliberately only the fields the two records genuinely share. A shared expense has no obligation,
- * subscription or installment link; a private one has no participants or split; a shared income row
- * has a destination and a source asset that no private entry has; and their funding is the same
- * question with opposite answers — a private entry cannot touch joint money at all, which is the whole
- * reason this control exists. Carrying any of those across would mean seeding a field the receiving
- * form never asked about.
- *
- * Generic over the category so each list keeps its own enum: an expense category is not an income
- * category, and a handover that typed them as plain strings would let one reach the other's picker,
- * which renders a blank field and submits a value the API refuses with a 422.
- */
-export interface EntryHandover<TCategory extends string = string> {
-  date?: string;
-  amount?: string;
-  currency?: string;
-  category?: TCategory;
-  notes?: string;
-}
-
-// Narrows either form's values to what crosses the swap. One function so the two directions cannot
-// come to disagree about which fields survive it.
-export function toHandover<TCategory extends string>(
-  values: EntryHandover<TCategory>,
-): EntryHandover<TCategory> {
-  return {
-    date: values.date,
-    amount: values.amount,
-    currency: values.currency,
-    category: values.category,
-    notes: values.notes,
-  };
-}
-
-// The two lists' handovers, bound to their own category enum. Named here rather than beside each form
-// so there is one place that says what crosses the swap and one place that says it per list.
-export type ExpenseHandover = EntryHandover<ExpenseCategory>;
-export type IncomeHandover = EntryHandover<IncomeCategory>;
 
 interface EntryScopeFieldProps {
   // The groups the user belongs to. The control renders nothing when this is empty, which is X3's
@@ -93,6 +50,10 @@ interface EntryScopeFieldProps {
  * Offered on CREATE only. Turning an existing private entry into a shared one would delete a record of
  * the user's own and write a different one that a whole group can see — a visibility change large
  * enough to be its own act, not a side effect of editing an amount.
+ *
+ * WHAT crosses the swap is `toHandover` in `lib/entry-handover`, next to the type swap's own
+ * narrowing. Both live there rather than beside their controls because a rule inside a component that
+ * renders a Radix primitive is a rule the web unit suite cannot reach at all.
  */
 export function EntryScopeField({
   groups,

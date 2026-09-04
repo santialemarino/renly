@@ -16,12 +16,9 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import {
-  EntryScopeField,
-  toHandover,
-  type ExpenseHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { EntryScopeField } from '@/app/(protected)/_components/entry-scope-field';
 import { EntrySplitRows } from '@/app/(protected)/_components/entry-split-rows';
+import { EntryTypeField } from '@/app/(protected)/_components/entry-type-field';
 import {
   createSharedExpense,
   getGroupExpenseContext,
@@ -50,7 +47,9 @@ import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Group, GroupMember } from '@/lib/api/groups';
 import type { SharedExpense } from '@/lib/api/shared-expenses';
+import type { EntryType } from '@/lib/constants/entries';
 import { DEFAULT_SPLIT_METHOD, SPLIT_METHODS } from '@/lib/constants/shared-expenses';
+import { toHandover, type ExpenseHandover } from '@/lib/entry-handover';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { sortExpenseCategoriesByLabel } from '@/lib/utils/categories';
@@ -74,6 +73,12 @@ interface SharedExpenseFormDialogProps {
   // for the private one. The hub does not pass it — there is nothing there to swap to.
   scopeGroups?: Group[];
   onScopeChange?: (scope: string, values: ExpenseHandover) => void;
+  /*
+   * The global quick-add's entry-type control, on the same terms as the scope control above: supplied
+   * only by the caller that has another form to swap TO, and rendered only while recording a new
+   * entry. The group hub does not pass it — there is nothing there to swap to.
+   */
+  onEntryTypeChange?: (type: EntryType, values: ExpenseHandover) => void;
   onSuccess: () => void;
 }
 
@@ -112,6 +117,7 @@ export function SharedExpenseFormDialog({
   timeZone,
   scopeGroups,
   onScopeChange,
+  onEntryTypeChange,
   onSuccess,
 }: SharedExpenseFormDialogProps) {
   const fmt = useFormatters();
@@ -402,6 +408,15 @@ export function SharedExpenseFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            {/* Which KIND of entry — the quick-add's other swap, on the same create-only terms. */}
+            {onEntryTypeChange && !expense && (
+              <EntryTypeField
+                value="expense"
+                onValueChange={(type) => onEntryTypeChange(type, toHandover(form.getValues()))}
+                disabled={form.formState.isSubmitting}
+              />
+            )}
+
             {scopeGroups && !expense && onScopeChange && (
               <EntryScopeField
                 groups={scopeGroups}

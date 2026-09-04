@@ -14,8 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
+import { IncomeFormDialog } from '@/app/(protected)/_components/income-form-dialog';
 import { IncomeDeleteDialog } from '@/app/(protected)/income/_components/income-delete-dialog';
-import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortableTableHead } from '@/components/sortable-table-head';

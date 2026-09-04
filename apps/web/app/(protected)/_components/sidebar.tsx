@@ -44,6 +44,7 @@ import { cn } from '@repo/ui/lib';
 import { CurrencySwitcher } from '@/app/(protected)/_components/currency-switcher';
 import { FeedbackDialog } from '@/app/(protected)/_components/feedback-dialog';
 import { NotificationBell } from '@/app/(protected)/_components/notification-bell';
+import { QuickAdd } from '@/app/(protected)/_components/quick-add';
 import { TruncatingTooltip } from '@/app/(protected)/_components/truncating-tooltip';
 import { userSignOut } from '@/auth';
 import { Brand } from '@/components/brand';
@@ -183,6 +184,11 @@ interface AppSidebarProps {
   activeCurrency: string;
   supportedCurrencies: string[] | undefined;
   currencyCollapsed: boolean;
+  // The quick-add's pre-fill inputs. They cost nothing extra: the layout already reads settings for
+  // the currency switcher, so passing three of its fields down is cheaper than any second read.
+  primaryCurrency: string;
+  preferredCurrencies: string[] | undefined;
+  timeZone: string | undefined;
   isAdmin: boolean;
   signupMode: SignupMode;
   initialExpanded: boolean;
@@ -196,6 +202,9 @@ export function AppSidebar({
   activeCurrency,
   supportedCurrencies,
   currencyCollapsed,
+  primaryCurrency,
+  preferredCurrencies,
+  timeZone,
   isAdmin,
   signupMode,
   initialExpanded,
@@ -263,6 +272,25 @@ export function AppSidebar({
       </SidebarHeader>
 
       <SidebarContent>
+        {/* The global quick-add (X4). Its own group above the nav and separated from it, because it is
+            an ACTION rather than a destination: an always-blue row sitting inside the nav list would
+            read as the item that is currently active, which is what the same blue means one line
+            below. Its label is centred like every other Add button in the app for the same reason —
+            the nav items are left-aligned icon+label rows. Never behind progressive disclosure:
+            recording an expense is the first thing a newcomer does. */}
+        <SidebarGroup className="p-4">
+          <SidebarGroupContent>
+            <QuickAdd
+              primaryCurrency={primaryCurrency}
+              preferredCurrencies={preferredCurrencies}
+              supportedCurrencies={supportedCurrencies}
+              timeZone={timeZone}
+            />
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <Separator />
+
         <SidebarGroup className="p-4">
           <SidebarGroupContent>
             <SidebarMenu className="gap-y-2" data-testid="sidebar-nav">

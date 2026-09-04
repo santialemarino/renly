@@ -1,24 +1,21 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
-import {
-  PRIVATE_SCOPE,
-  type IncomeHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { PRIVATE_SCOPE } from '@/app/(protected)/_components/entry-scope-field';
+import { IncomeFormDialog } from '@/app/(protected)/_components/income-form-dialog';
 import { SharedIncomeFormDialog } from '@/app/(protected)/_components/shared-income-form-dialog';
 import { IncomeCategorySelect } from '@/app/(protected)/income/_components/income-category-select';
-import { IncomeFormDialog } from '@/app/(protected)/income/_components/income-form-dialog';
 import { EntityListToolbar } from '@/components/entity-list-toolbar';
 import { ScopePill } from '@/components/scope-pill';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { ListScope } from '@/lib/api/types';
-import { DIALOG_EXIT_MS } from '@/lib/constants/animations';
 import { CATEGORY_ALL } from '@/lib/constants/api-constants';
+import type { IncomeHandover } from '@/lib/entry-handover';
+import { useDeferredDialogSwap } from '@/lib/hooks/use-deferred-dialog-swap';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { resolveListScope } from '@/lib/list-scope';
 
@@ -45,49 +42,38 @@ export function IncomeToolbar({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { navigate } = useSearchParamsNavigation(ROUTES.income, { resetPage: true });
-  const [createOpen, setCreateOpen] = useState(false);
+  /*
+   * Which form the Add button is currently showing — the private one, or a group's shared-income one
+   * — and what it opens on. Held here rather than inside either dialog because the swap replaces the
+   * whole form: a private income entry and a shared one are separate records in separate tables.
+   */
+  const {
+    open: createOpen,
+    setOpen: setCreateOpen,
+    target: draft,
+    start,
+    swapTo,
+  } = useDeferredDialogSwap<{ scope: string; prefill?: IncomeHandover }>({ scope: PRIVATE_SCOPE });
 
-  // The FILTER's scope, distinct from the form `scope` below, which says which RECORD is being
+  // The FILTER's scope, distinct from the form scope above, which says which RECORD is being
   // written. Same word, two different questions, so they are named apart.
   const scopeFilter = resolveListScope(searchParams.get('scope') ?? undefined);
-  /*
-   * Which form the Add button is currently showing: the private one, or a group's shared-income one.
-   * Held here rather than inside either dialog because the swap replaces the whole form — a private
-   * income entry and a shared one are separate records in separate tables.
-   */
-  const [scope, setScope] = useState<string>(PRIVATE_SCOPE);
-  const [handover, setHandover] = useState<IncomeHandover | undefined>(undefined);
-  // The pending half of a scope swap, so an unmount between the close and the reopen cannot leave a
-  // timer waking up to open a dialog on a page that has gone.
-  const swapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (swapTimer.current !== null) clearTimeout(swapTimer.current);
-    },
-    [],
-  );
-
   const selectedCategory = searchParams.get('category') ?? CATEGORY_ALL;
   const activeGroups = groups ?? [];
-  const scopedGroup = activeGroups.find((group) => String(group.id) === scope);
+  const scopedGroup = activeGroups.find((group) => String(group.id) === draft.scope);
 
   function handleCategoryChange(cat: string) {
     navigate({ category: cat === CATEGORY_ALL ? null : cat });
   }
 
-  // Opens whichever form the scope currently names, always on a clean slate: the Add button starts a
-  // new entry, so a handover left over from a previous swap must not seed it.
+  // The Add button always starts a NEW entry, so it opens the private form carrying nothing: values
+  // left over from a previous swap must not seed it.
   function handleAdd() {
-    setHandover(undefined);
-    setScope(PRIVATE_SCOPE);
-    setCreateOpen(true);
+    start({ scope: PRIVATE_SCOPE });
   }
 
-  // Closes the form on screen, then opens the other with what was typed. Sequential rather than
-  // simultaneous — see DIALOG_EXIT_MS.
   /*
-   * The FILTER's scope, which is a different thing from `handleScopeChange` below — that one hands an
+   * The FILTER's scope, which is a different thing from the form swap above — that one hands an
    * in-progress entry between the private and the shared FORM. Named apart on purpose: one decides
    * which rows are read, the other which record is being written.
    *
@@ -96,16 +82,6 @@ export function IncomeToolbar({
    */
   function handleScopeFilterChange(next: ListScope) {
     navigate({ scope: next === 'all' ? null : next });
-  }
-
-  function handleScopeChange(next: string, values: IncomeHandover) {
-    setHandover(values);
-    setCreateOpen(false);
-    swapTimer.current = setTimeout(() => {
-      swapTimer.current = null;
-      setScope(next);
-      setCreateOpen(true);
-    }, DIALOG_EXIT_MS);
   }
 
   return (
@@ -129,14 +105,14 @@ export function IncomeToolbar({
       }
     >
       <IncomeFormDialog
-        open={createOpen && scope === PRIVATE_SCOPE}
+        open={createOpen && draft.scope === PRIVATE_SCOPE}
         onOpenChange={setCreateOpen}
         preferredCurrencies={preferredCurrencies}
         supportedCurrencies={supportedCurrencies}
         accounts={accounts}
         scopeGroups={activeGroups}
-        onScopeChange={handleScopeChange}
-        prefill={handover}
+        onScopeChange={(scope, values) => swapTo({ scope, prefill: values })}
+        prefill={draft.prefill}
         onSuccess={() => router.refresh()}
       />
 
@@ -150,13 +126,13 @@ export function IncomeToolbar({
           open={createOpen}
           onOpenChange={setCreateOpen}
           group={scopedGroup}
-          prefill={handover}
+          prefill={draft.prefill}
           accounts={accounts}
           preferredCurrencies={preferredCurrencies}
           supportedCurrencies={supportedCurrencies}
           timeZone={timeZone}
           scopeGroups={activeGroups}
-          onScopeChange={handleScopeChange}
+          onScopeChange={(scope, values) => swapTo({ scope, prefill: values })}
           onSuccess={() => router.refresh()}
         />
       )}

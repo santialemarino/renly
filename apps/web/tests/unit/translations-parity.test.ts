@@ -5,6 +5,7 @@ import { FEATURE_ICONS } from '@/app/(public)/_components/landing-features';
 import type { ProseSectionData } from '@/app/(public)/_components/prose-section';
 import { SIDEBAR_NAV_KEYS } from '@/config/nav';
 import { HELP_ANCHORS } from '@/config/routes';
+import { ENTRY_TYPES } from '@/lib/constants/entries';
 import en from '../../translations/en.json';
 import es from '../../translations/es.json';
 
@@ -172,6 +173,24 @@ describe('sidebar nav labels', () => {
     // The other direction, so a removed item's label does not linger as copy nobody can reach.
     const known = new Set<string>(SIDEBAR_NAV_KEYS);
     expect(Object.keys(en.sidebar.nav).filter((key) => !known.has(key))).toEqual([]);
+  });
+});
+
+describe('entry-type labels', () => {
+  /*
+   * The quick-add's type toggle resolves its labels DYNAMICALLY (`entryType.${type}` over
+   * ENTRY_TYPES), which is exactly the shape the sidebar guard above exists for: a missing label
+   * renders its own key path in the control, and nothing else notices — not tsc, not ESLint, not the
+   * build. Both directions, so a removed value's copy does not linger either.
+   */
+  it.each(['en', 'es'])('%s labels every entry type', (locale) => {
+    const labels = (locale === 'en' ? en : es).common.entryType as Record<string, string>;
+    expect(ENTRY_TYPES.filter((type) => !labels[type])).toEqual([]);
+  });
+
+  it('has no entry-type label for a value the toggle no longer offers', () => {
+    const known = new Set<string>([...ENTRY_TYPES, 'label']);
+    expect(Object.keys(en.common.entryType).filter((key) => !known.has(key))).toEqual([]);
   });
 });
 

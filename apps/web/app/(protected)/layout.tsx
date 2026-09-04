@@ -88,6 +88,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         activeCurrency={activeCurrency}
         supportedCurrencies={supportedCurrencies}
         currencyCollapsed={currencyCollapsed}
+        primaryCurrency={primary}
+        preferredCurrencies={settings?.preferredCurrencies ?? undefined}
+        timeZone={settings?.timezone ?? undefined}
         isAdmin={session.user.isAdmin}
         signupMode={signupMode}
         initialExpanded={initialExpanded}

@@ -16,12 +16,9 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import {
-  EntryScopeField,
-  toHandover,
-  type IncomeHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { EntryScopeField } from '@/app/(protected)/_components/entry-scope-field';
 import { EntrySplitRows } from '@/app/(protected)/_components/entry-split-rows';
+import { EntryTypeField } from '@/app/(protected)/_components/entry-type-field';
 import {
   createSharedIncome,
   getGroupIncomeContext,
@@ -52,8 +49,10 @@ import { StyledHint } from '@/components/styled-hint';
 import type { Account } from '@/lib/api/accounts';
 import type { Group, GroupMember } from '@/lib/api/groups';
 import type { SharedIncome } from '@/lib/api/shared-income';
+import type { EntryType } from '@/lib/constants/entries';
 import { DEFAULT_SPLIT_METHOD, SPLIT_METHODS } from '@/lib/constants/shared-expenses';
 import { DEFAULT_INCOME_DESTINATION, INCOME_DESTINATIONS } from '@/lib/constants/shared-income';
+import { toHandover, type IncomeHandover } from '@/lib/entry-handover';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
@@ -76,6 +75,12 @@ interface SharedIncomeFormDialogProps {
   // the private one. The hub does not pass it — there is nothing there to swap to.
   scopeGroups?: Group[];
   onScopeChange?: (scope: string, values: IncomeHandover) => void;
+  /*
+   * The global quick-add's entry-type control, on the same terms as the scope control above: supplied
+   * only by the caller that has another form to swap TO, and rendered only while recording a new
+   * entry. The group hub does not pass it — there is nothing there to swap to.
+   */
+  onEntryTypeChange?: (type: EntryType, values: IncomeHandover) => void;
   onSuccess: () => void;
 }
 
@@ -115,6 +120,7 @@ export function SharedIncomeFormDialog({
   timeZone,
   scopeGroups,
   onScopeChange,
+  onEntryTypeChange,
   onSuccess,
 }: SharedIncomeFormDialogProps) {
   const fmt = useFormatters();
@@ -483,6 +489,15 @@ export function SharedIncomeFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            {/* Which KIND of entry — the quick-add's other swap, on the same create-only terms. */}
+            {onEntryTypeChange && !income && (
+              <EntryTypeField
+                value="income"
+                onValueChange={(type) => onEntryTypeChange(type, toHandover(form.getValues()))}
+                disabled={form.formState.isSubmitting}
+              />
+            )}
+
             {scopeGroups && !income && onScopeChange && (
               <EntryScopeField
                 groups={scopeGroups}
