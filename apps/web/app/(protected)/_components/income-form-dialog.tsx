@@ -15,12 +15,8 @@ import {
   Textarea,
 } from '@repo/ui/components';
 import { CurrencyCombobox } from '@/app/(protected)/_components/currency-combobox';
-import {
-  EntryScopeField,
-  PRIVATE_SCOPE,
-  toHandover,
-  type IncomeHandover,
-} from '@/app/(protected)/_components/entry-scope-field';
+import { EntryScopeField, PRIVATE_SCOPE } from '@/app/(protected)/_components/entry-scope-field';
+import { EntryTypeField } from '@/app/(protected)/_components/entry-type-field';
 import { createIncome, updateIncome } from '@/app/(protected)/income/income-actions';
 import {
   buildIncomeFormSchema,
@@ -34,6 +30,8 @@ import { LocaleAmountInput } from '@/components/locale-amount-input';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { IncomeEntry } from '@/lib/api/income';
+import type { EntryType } from '@/lib/constants/entries';
+import { toHandover, type IncomeHandover } from '@/lib/entry-handover';
 import { useEntityFormDialog } from '@/lib/hooks/use-entity-form-dialog';
 import { sortIncomeCategoriesByLabel } from '@/lib/utils/categories';
 
@@ -51,8 +49,23 @@ interface IncomeFormDialogProps {
    */
   scopeGroups?: Group[];
   onScopeChange?: (scope: string, values: IncomeHandover) => void;
+  /*
+   * The global quick-add's entry-type control, on the same terms as the scope control above: supplied
+   * only by the caller that has another form to swap TO, and rendered only while recording a new
+   * entry. The list page and its table open this dialog for one specific kind of entry, so they leave
+   * it unset and the control does not render.
+   */
+  onEntryTypeChange?: (type: EntryType, values: IncomeHandover) => void;
   // What a swap from the shared form carried across, seeding this one so nothing typed is lost.
   prefill?: IncomeHandover;
+  /*
+   * An account to open a NEW entry on — the quick-add's "the account" pre-fill, supplied only when the
+   * entry's currency leaves exactly one to choose from (see soleEligibleAccountId).
+   *
+   * Separate from `prefill` on purpose: a handover crosses the scope swap, and a private entry's
+   * account can never receive shared money (400 private_entry_from_shared_account).
+   */
+  prefillAccountId?: number | null;
   onSuccess: () => void;
 }
 
@@ -65,7 +78,9 @@ export function IncomeFormDialog({
   accounts,
   scopeGroups,
   onScopeChange,
+  onEntryTypeChange,
   prefill,
+  prefillAccountId,
   onSuccess,
 }: IncomeFormDialogProps) {
   const locale = useLocale();
@@ -107,7 +122,9 @@ export function IncomeFormDialog({
       currency: i?.currency ?? prefill?.currency ?? '',
       category: (i?.category ?? prefill?.category ?? undefined) as IncomeFormValues['category'],
       notes: i?.notes ?? prefill?.notes ?? '',
-      accountId: i?.accountId ?? undefined,
+      // Create-only, and spelled out rather than chained through `??`: a saved entry whose account is
+      // genuinely null must stay null, not inherit the quick-add's default on an edit.
+      accountId: i ? (i.accountId ?? undefined) : (prefillAccountId ?? undefined),
     }),
     onSuccess,
   });
@@ -134,6 +151,15 @@ export function IncomeFormDialog({
             onSubmit={form.handleSubmit(onSubmit)}
             noValidate
           >
+            {/* Which KIND of entry — the quick-add's other swap, on the same create-only terms. */}
+            {onEntryTypeChange && !isEdit && (
+              <EntryTypeField
+                value="income"
+                onValueChange={(type) => onEntryTypeChange(type, toHandover(form.getValues()))}
+                disabled={form.formState.isSubmitting}
+              />
+            )}
+
             {scopeGroups && !isEdit && onScopeChange && (
               <EntryScopeField
                 groups={scopeGroups}

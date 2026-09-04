@@ -223,6 +223,11 @@
       "previous": "Previous",
       "next": "Next"
     },
+    "entryType": {
+      "label": "What are you recording?",
+      "expense": "Expense",
+      "income": "Income"
+    },
     "entryScope": {
       "label": "Who is this for?",
       "private": "Just me",
@@ -322,6 +327,7 @@
     "showMore": "Show more features",
     "showLess": "Show fewer features",
     "nav": {
+      "quickAdd": "Quick add",
       "dashboard": "Dashboard",
       "financeDashboard": "Dashboard",
       "income": "Income",

@@ -4,7 +4,7 @@ import pluginReactHooks from 'eslint-plugin-react-hooks';
 import { globalIgnores } from 'eslint/config';
 import globals from 'globals';
 
-import { config as baseConfig } from './base.js';
+import { config as baseConfig, reactTypeScriptRules } from './base.js';
 
 /**
  * A custom ESLint configuration for libraries that use Next.js.
@@ -39,7 +39,7 @@ export const nextJsConfig = [
     settings: { react: { version: 'detect' } },
     rules: {
       ...pluginReactHooks.configs.recommended.rules,
-      'react/react-in-jsx-scope': 'off',
+      ...reactTypeScriptRules,
     },
   },
 ];

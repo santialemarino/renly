@@ -93,11 +93,13 @@ export const ADMIN_GROUP = [
  * Every nav key the sidebar renders, in one list, for the parity test that asserts each one resolves
  * to a `sidebar.nav.*` label in both locales.
  *
- * The three literals are the items that are not part of a group: the top-level Dashboard, and the two
- * in the footer's Support group (one link and one dialog action). They are listed by hand because
- * they are rendered by hand — and listing them here is what keeps them inside the guard.
+ * The four literals are the items that are not part of a group: the global quick-add above the nav,
+ * the top-level Dashboard, and the two in the footer's Support group (one link and one dialog action).
+ * They are listed by hand because they are rendered by hand — and listing them here is what keeps them
+ * inside the guard.
  */
 export const SIDEBAR_NAV_KEYS: string[] = [
+  'quickAdd',
   'dashboard',
   'help',
   'sendFeedback',
