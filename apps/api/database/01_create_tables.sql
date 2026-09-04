@@ -1422,6 +1422,47 @@ CREATE INDEX idx_shared_income_splits_income ON shared_income_splits(shared_inco
 CREATE INDEX idx_shared_income_splits_member ON shared_income_splits(member_id);
 CREATE INDEX idx_shared_income_splits_group ON shared_income_splits(group_id);
 
+-- The audit trail for shared entities: who did what to which one, and when.
+--
+-- Entity-agnostic by construction, which is the last requirement the membership kernel had to meet for
+-- a non-money module to adopt it: `entity_type` and `action` are VARCHARs rather than enums — the only
+-- string enums in this schema that are — so a second module adds an entity type in its own code and
+-- needs no migration here. Nothing in this table names a pot, an expense or a settlement.
+--
+-- The row stores an entity, an action and a PAYLOAD, never a rendered sentence: the prose is assembled
+-- by the web from `<entity_type>.<action>` translation keys, so the feed reads in whatever language its
+-- reader is using now and a copy fix reaches entries written months ago. Exactly what notifications do.
+--
+-- entity_id and pot_id carry NO foreign key, for two different reasons. entity_id names a row in one of
+-- nine tables, which no single FK could express. pot_id omits one so an entry OUTLIVES the pot it
+-- describes: a CASCADE would delete a pot's whole history at the moment somebody deleted the pot, which
+-- is the one act most worth a record. app_can_view_pot answers false for a pot that is gone, so those
+-- entries go dark rather than becoming group-visible — the fail-closed direction, and the reason the
+-- `pot.deleted` entry alone is written with a NULL pot_id.
+--
+-- APPEND-ONLY, enforced by the grants further down rather than by a trigger: renly_app holds SELECT and
+-- INSERT and neither UPDATE nor DELETE. A raising trigger would have been the other way to say it and
+-- is the wrong one, because an FK cascade performs a real DELETE on the child and deleting a group
+-- would become impossible. Both cascades here run as this table's OWNER and are exempt from the grants
+-- and from the policy, which is what keeps them working.
+CREATE TABLE shared_audit_log (
+  id            BIGSERIAL PRIMARY KEY,
+  group_id      BIGINT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  -- SET NULL exactly as created_by is everywhere else: deleting an account must not erase the record of
+  -- what that account did to money other people share.
+  actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  entity_type   VARCHAR(50) NOT NULL,
+  entity_id     BIGINT,
+  action        VARCHAR(50) NOT NULL,
+  pot_id        BIGINT,
+  payload       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- The only way this table is ever read: one group's entries, newest first. id DESC breaks the tie so
+-- two entries written in the same transaction come back in a stable order rather than an arbitrary one.
+CREATE INDEX idx_shared_audit_log_group_created ON shared_audit_log(group_id, created_at DESC, id DESC);
+-- No updated_at and no trigger: an entry is an immutable record of something that happened.
+
 -- The notification layer: what a person asked to be told about, what they have been told, and which
 -- browsers agreed to receive a push. All three are USER-owned rather than group-scoped — a notification
 -- belongs to its recipient, not to the group whose activity produced it — so they take the plain
@@ -2035,6 +2076,28 @@ CREATE POLICY pot_ownership_events_scope_write ON pot_ownership_events FOR ALL
   USING (app_can_write_pot(pot_id))
   WITH CHECK (app_can_write_pot(pot_id));
 
+-- The one exception to write access on this table, and it exists because the default configuration of
+-- a divided pot leaves a co-owner with no remedy: create_pot grants can_write to the CREATOR only, and
+-- recording the opening grants nobody else write, so the creator can move units away from a co-owner
+-- who can then do nothing about it.
+-- FOR DELETE alone, and narrow in every other direction. It names no INSERT or UPDATE, so a
+-- counterparty gains no ability to record or rewrite anything (permissive policies are OR-ed per
+-- command, so the FOR ALL above still governs those). It requires app_can_view_pot as well as the seat
+-- match, so a member the pot is hidden from cannot reach a row they cannot read. And it is restricted
+-- to `reagreement`: a contribution or a withdrawal moves the mover's own money, and an opening is the
+-- division everyone agreed to, so neither has a counterparty with a claim to undo it.
+CREATE POLICY pot_ownership_events_counterparty_delete ON pot_ownership_events FOR DELETE
+  USING (
+    pot_ownership_events.type = 'reagreement'
+    AND app_can_view_pot(pot_ownership_events.pot_id)
+    AND EXISTS (
+      SELECT 1 FROM group_members gm
+      WHERE gm.id IN (pot_ownership_events.member_id, pot_ownership_events.counterparty_member_id)
+        AND gm.user_id = app_current_user_id()
+        AND gm.is_active
+    )
+  );
+
 -- The shared-flow tables. All four are group state, so membership is the gate — the same
 -- app_is_group_member() helper the three tables above use, for the same two reasons (no predicate
 -- copy-pasted per table, and `role` appears in none of them).
@@ -2116,6 +2179,30 @@ CREATE POLICY shared_income_scope_write ON shared_income FOR ALL
 ALTER TABLE shared_income_splits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY shared_income_splits_member_isolation ON shared_income_splits
   USING (app_is_group_member(group_id)) WITH CHECK (app_is_group_member(group_id));
+
+-- The audit trail. Group membership AND the pot branch, which is the load-bearing half: an entry about
+-- a pot names it in pot_id, and app_can_view_pot is the SAME helper the pot tables use, so the trail
+-- can never state more than the pot page itself would. Entries with no pot are group-wide.
+--
+-- ONE policy rather than the read/write pair the shared-flow tables carry, because this table has no
+-- second read branch to keep narrow: an entry is a record of group activity rather than a movement in
+-- anybody's own account, so nothing about it has to stay visible to a former member. Postgres's missing
+-- WITH CHECK for DELETE costs nothing here — the USING clause already refuses a delete of a row the
+-- caller cannot see, and the grants below refuse a delete outright.
+--
+-- APPEND-ONLY: the ALTER DEFAULT PRIVILEGES above hands renly_app all four verbs, so UPDATE and DELETE
+-- are revoked back off. An audit entry the request role can rewrite or erase is not an audit entry.
+ALTER TABLE shared_audit_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY shared_audit_log_scope ON shared_audit_log
+  USING (
+    app_is_group_member(group_id)
+    AND (pot_id IS NULL OR app_can_view_pot(pot_id))
+  )
+  WITH CHECK (
+    app_is_group_member(group_id)
+    AND (pot_id IS NULL OR app_can_view_pot(pot_id))
+  );
+REVOKE UPDATE, DELETE ON shared_audit_log FROM renly_app;
 
 -- The notification layer. Back to the plain owner match: these are the recipient's rows, so
 -- app_is_group_member() appears nowhere here even though group activity is what produces them.

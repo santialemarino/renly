@@ -63,6 +63,26 @@ async def delete(session: AsyncSession, pot: Pot) -> None:
     await session.delete(pot)
 
 
+# Takes an exclusive row lock on the pot for the rest of the transaction, so two writers cannot derive
+# the same ledger state and both act on it.
+#
+# The POT row rather than the ledger, because the ledger rows a writer must not miss are the ones the
+# other writer is about to INSERT, and nothing can lock a row that does not exist yet. Every path that
+# reads the ledger to decide something — is it already opened, what is a unit worth today, does this
+# member hold enough to withdraw, has anything been divided — takes this first, so they serialise per
+# pot and nowhere wider.
+#
+# It reads `id` alone rather than the row, so the lock is not confused for a fetch: the caller already
+# has the pot, and a second copy of it here would be a stale one after the lock waited.
+#
+# RLS applies, and it is the WRITE policy that governs a locking read, not the read policy — so this is
+# takeable by anyone the pot is visible AND whose group they belong to (`pots_scope_write`'s USING),
+# which deliberately includes a read-only seat: the widened re-agreement delete has no write access and
+# still has to serialise against the writer who recorded it.
+async def lock(session: AsyncSession, pot_id: int) -> None:
+    await session.execute(select(Pot.id).where(Pot.id == pot_id).with_for_update())
+
+
 # How many investments and accounts a pot holds. One query per table rather than a union: the two are
 # counted separately nowhere else, and a union of two different models buys nothing here.
 async def count_holdings(session: AsyncSession, pot_id: int) -> int:
@@ -157,6 +177,7 @@ class PotRepository:
     list_permissions = staticmethod(list_permissions)
     list_permissions_by_pots = staticmethod(list_permissions_by_pots)
     list_visible = staticmethod(list_visible)
+    lock = staticmethod(lock)
     save = staticmethod(save)
     save_permission = staticmethod(save_permission)
 

@@ -23,10 +23,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import GroupAdminRequiredError, GroupLastAdminError, NotFoundError
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import group_invite_repository, group_repository
 from app.schemas.group import GroupMemberResponse, GroupResponse
+from app.services import shared_audit_service
 
 
 # Whether an invite is still usable: minted, never claimed, and not past its window. Expiry is derived
@@ -185,6 +187,15 @@ async def create_group(
     from app.services import group_money_service
 
     await group_money_service.seed_settings(admin_session, group.id)
+    await shared_audit_service.record(
+        admin_session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group,
+        action=AuditAction.created,
+        entity_id=group.id,
+        payload={"group": group.name},
+    )
     await admin_session.commit()
     return _build_response(group, [member], set(), member)
 
@@ -204,12 +215,26 @@ async def update_group(
     if kind is not None:
         group.kind = kind
     await group_repository.save(session, group)
+    await shared_audit_service.record(
+        session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group,
+        action=AuditAction.updated,
+        entity_id=group.id,
+        payload={"group": group.name},
+    )
     await session.commit()
     await session.refresh(group)
     return await get_group(session, group.id, user)
 
 
 # Deletes a group with every seat and invite in it (FK CASCADE). Admin only.
+#
+# The one act on a shared entity that records NO audit entry, and it is not an omission: the trail
+# cascades with the group, so an entry written here would be deleted by the same statement that
+# provoked it. Nothing is lost by that — app_is_group_member is false for a group that no longer
+# exists, so every entry in the trail was already unreadable by everyone the moment the group went.
 async def delete_group(session: AsyncSession, group_id: int, user: User) -> None:
     group, _ = await require_admin(session, group_id, user)
     await group_repository.delete(session, group)
@@ -228,7 +253,16 @@ async def add_member(
     role: GroupMemberRole = GroupMemberRole.member,
 ) -> GroupResponse:
     group, _ = await require_admin(session, group_id, user)
-    await group_repository.create_member(session, GroupMember(group_id=group.id, display_name=display_name, role=role))
+    member = await group_repository.create_member(session, GroupMember(group_id=group.id, display_name=display_name, role=role))
+    await shared_audit_service.record(
+        session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group_member,
+        action=AuditAction.added,
+        entity_id=member.id,
+        payload={"member": member.display_name},
+    )
     await session.commit()
     return await get_group(session, group.id, user)
 
@@ -261,6 +295,15 @@ async def update_member(
     if is_active:
         member.is_active = True
     await group_repository.save_member(session, member)
+    await shared_audit_service.record(
+        session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group_member,
+        action=AuditAction.updated,
+        entity_id=member.id,
+        payload={"member": member.display_name},
+    )
     await session.commit()
     # expire_on_commit is False, so the trigger-set updated_at is stale in memory until refreshed.
     await session.refresh(member)
@@ -279,12 +322,32 @@ async def remove_member(session: AsyncSession, group_id: int, member_id: int, us
     if member.id != viewer.id and viewer.role != GroupMemberRole.admin:
         raise GroupAdminRequiredError()
     await _ensure_admin_remains(session, group, member)
+    # Locked before the balances are read, because the answer is acted on: without it a shared expense
+    # recorded at the same moment lands a balance on a seat that has just been deactivated, and the
+    # membership policy is what makes that row readable — so the person on the other side of it loses
+    # the record of money they are owed.
+    await group_repository.lock(session, group.id)
     # A seat with money still owed either way cannot simply be deactivated: the membership policy is
     # what makes the group's rows readable, so the moment the seat goes inactive the person on the
     # other side of that balance loses the record of it. Settle it or write it off first.
     from app.services import group_settlement_service
 
     await group_settlement_service.ensure_no_outstanding_balance(session, [member])
+    # Recorded BEFORE the seat goes inactive, per the audit service's one ordering rule. A member may
+    # remove THEMSELVES — that is what leaving a group is — and the entry's own policy asks whether the
+    # writer is still a member, so an entry written afterwards would be refused and leaving would fail
+    # outright. `record` flushes, so being first is enough.
+    await shared_audit_service.record(
+        session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group_member,
+        action=AuditAction.removed,
+        entity_id=member.id,
+        # A VARIANT rather than a name comparison at render time: the reader has no way to know which
+        # seat was the actor's, and "Ana left" and "Ana was removed" are different sentences.
+        payload={"member": member.display_name, "variant": "self" if member.id == viewer.id else "by_admin"},
+    )
     member.is_active = False
     await group_repository.save_member(session, member)
     # Dropped in the same transaction: leaving a live link on the seat of someone who was just removed

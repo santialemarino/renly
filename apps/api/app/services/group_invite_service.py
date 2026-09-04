@@ -31,11 +31,12 @@ from app.config import settings
 from app.domain import GroupMembershipExistsError, GroupSeatTakenError, InvalidTokenError, NotFoundError
 from app.models.group_invite import GroupInvite
 from app.models.notification import NotificationEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import group_invite_repository, group_repository, user_repository
 from app.schemas.group_invite import GroupInviteAcceptedResponse, GroupInviteCreatedResponse, GroupInvitePreviewResponse
-from app.services import email_templates, group_service, notification_service, settings_service
+from app.services import email_templates, group_service, notification_service, settings_service, shared_audit_service
 from app.services.email_service import EmailMessage, get_email_service
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,18 @@ async def create_invite(
     # Resolved BEFORE the commit, deliberately: a failure reading the roster then fails the whole use
     # case with nothing written, rather than 500-ing a request whose invite has already landed. After
     # the commit only dispatch() runs, and that swallows everything.
+    await shared_audit_service.record(
+        session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group_invite,
+        action=AuditAction.created,
+        entity_id=invite.id,
+        # The seat's name and nothing else — never the address and never the link. The address belongs
+        # to the invitee, and the raw token is the one value token_hash exists to keep out of readable
+        # data, since an entry here is readable by every member of the group.
+        payload={"member": member.display_name},
+    )
     recipients = await group_service.list_notifiable_user_ids(session, group.id, exclude_user_id=user.id)
     await session.commit()
 
@@ -161,7 +174,20 @@ async def revoke_invite(session: AsyncSession, group_id: int, member_id: int, us
     member = await group_repository.get_member(session, group.id, member_id)
     if member is None:
         raise NotFoundError("Group member not found")
+    invite = await group_invite_repository.get_by_member(session, member.id)
     await group_invite_repository.delete_by_member(session, member.id)
+    # Only when there WAS one. Revoking is idempotent — the caller's intent is satisfied either way —
+    # and an entry saying somebody revoked nothing is a line in the trail that describes no act.
+    if invite is not None:
+        await shared_audit_service.record(
+            session,
+            group_id=group.id,
+            actor=user,
+            entity_type=AuditEntityType.group_invite,
+            action=AuditAction.revoked,
+            entity_id=invite.id,
+            payload={"member": member.display_name},
+        )
     await session.commit()
 
 
@@ -210,6 +236,15 @@ async def accept_invite(admin_session: AsyncSession, raw_token: str, user: User)
     # Resolved before the commit for the reason create_invite states. Excluding the joiner by ACCOUNT
     # rather than by seat is what makes this correct either side of the commit: their own seat is the
     # one being linked, so filtering on the seat would depend on whether the write had landed yet.
+    await shared_audit_service.record(
+        admin_session,
+        group_id=group.id,
+        actor=user,
+        entity_type=AuditEntityType.group_member,
+        action=AuditAction.joined,
+        entity_id=member.id,
+        payload={"member": member.display_name},
+    )
     recipients = await group_service.list_notifiable_user_ids(admin_session, group.id, exclude_user_id=user.id)
     await admin_session.commit()
 

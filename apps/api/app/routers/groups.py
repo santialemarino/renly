@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
@@ -10,7 +10,8 @@ from app.schemas.group import (
     GroupUpdate,
 )
 from app.schemas.group_invite import GroupInviteCreate, GroupInviteCreatedResponse
-from app.services import group_invite_service, group_service
+from app.schemas.shared_audit import SharedAuditEntryResponse
+from app.services import group_invite_service, group_service, shared_audit_service
 
 router = APIRouter(prefix="/groups", tags=["groups"])
 
@@ -135,3 +136,21 @@ async def revoke_group_invite(
     session: SessionDep,
 ) -> None:
     await group_invite_service.revoke_invite(session, group_id, member_id, current_user)
+
+
+# Lists the group's recent activity from the audit trail, newest first. Returns 404 when the caller is
+# not a member. Entries about a pot the caller cannot see are absent — the row-level policy decides
+# that, so this list never states more than the pot pages themselves would.
+@router.get("/{group_id}/activity", response_model=list[SharedAuditEntryResponse])
+async def list_group_activity(
+    group_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    limit: int = Query(
+        default=shared_audit_service.DEFAULT_ACTIVITY_PAGE_SIZE,
+        ge=1,
+        le=shared_audit_service.MAX_ACTIVITY_PAGE_SIZE,
+        description="Entries to return.",
+    ),
+) -> list[SharedAuditEntryResponse]:
+    return await shared_audit_service.list_activity(session, group_id, current_user, limit=limit)

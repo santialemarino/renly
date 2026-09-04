@@ -55,6 +55,7 @@ from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.notification import NotificationEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import (
@@ -74,10 +75,20 @@ from app.schemas.group_settlement import (
     GroupSettlementResponse,
     GroupSettleSuggestionResponse,
 )
-from app.services import exchange_rate_service, group_service, notification_service
+from app.services import exchange_rate_service, group_service, notification_service, shared_audit_service
 from app.utils.metrics import convert_optional
 
 ZERO = Decimal(0)
+
+# How an audit entry says which kind of act cleared a bucket. A payment moved money; a write-off is a
+# creditor giving up a claim and moves none.
+_PAYMENT_VARIANT = "payment"
+_WRITE_OFF_VARIANT = "write_off"
+
+# And how it says which way a cash leg went. Attaching one and clearing one are opposite acts on the
+# same field, so they cannot share a sentence.
+_LEG_ATTACHED_VARIANT = "attached"
+_LEG_CLEARED_VARIANT = "cleared"
 
 
 # Every member's position per currency, plus the fewest payments that clear each bucket.
@@ -233,6 +244,7 @@ async def record_settlement(
         ),
     )
     settlement.created_by = user.id
+    await _audit(session, group_id, user, AuditAction.created, settlement, members_by_id)
     await session.commit()
     await session.refresh(settlement)
 
@@ -338,6 +350,10 @@ async def record_waterfall(
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     _ensure_own_leg(viewer, from_member_id, from_account_id, from_amount)
     _ensure_own_leg(viewer, to_member_id, to_account_id, to_amount)
+    # Locked before the balances are read, because the allocation is computed from them and written as
+    # rows: two waterfalls running at once would each spill into buckets the other is about to clear,
+    # and the payee would end up with more cleared than either payment covered.
+    await group_repository.lock(session, group_id)
     owed = await _owed_between(session, group_id, from_member_id, to_member_id)
     primary_outstanding = owed.pop(currency, ZERO)
     excess = amount - primary_outstanding
@@ -399,6 +415,10 @@ async def record_waterfall(
             ),
         )
     created = await group_settlement_repository.create_many(session, rows)
+    # ONE entry for the whole waterfall, naming what the payer actually handed over — the same choice
+    # the notification makes, and for the same reason: the rows are an accounting of which buckets one
+    # payment cleared, so an entry per row would record three payments where one was made.
+    await _audit(session, group_id, user, AuditAction.created, created[0], members_by_id, amount=amount, currency=currency)
     await session.commit()
     # One refresh per row, which after a commit is what reading any field would cost anyway — every
     # object is expired, so the alternative is the same fetches happening implicitly inside the response
@@ -441,6 +461,10 @@ async def record_write_off(
     members_by_id = await _require_two_seats(session, group_id, from_member_id, to_member_id)
     if viewer.id != to_member_id:
         raise GroupSettlementNotCreditorError()
+    # Locked before the balance is read, because the amount is capped by it: two write-offs recorded at
+    # the same moment each measure the whole debt and between them forgive twice it, leaving the debtor
+    # owing a negative amount — which is exactly the state the cap below exists to prevent.
+    await group_repository.lock(session, group_id)
     # Capped at the balance, unlike a payment. An overpaying PAYMENT is legal and flips the bucket —
     # real money moved and the payee owes some back — but forgiving more than you are owed would leave
     # the person you forgave owing you a negative amount, which no act produces. See the error.
@@ -461,6 +485,7 @@ async def record_write_off(
         ),
     )
     settlement.created_by = user.id
+    await _audit(session, group_id, user, AuditAction.created, settlement, members_by_id)
     await session.commit()
     await session.refresh(settlement)
 
@@ -486,6 +511,7 @@ async def confirm_settlement(session: AsyncSession, group_id: int, settlement_id
     settlement.status = GroupSettlementStatus.confirmed
     settlement.confirmed_at = utcnow()
     await group_settlement_repository.save(session, settlement)
+    await _audit(session, group_id, user, AuditAction.confirmed, settlement, members_by_id)
     await session.commit()
     await session.refresh(settlement)
 
@@ -510,6 +536,7 @@ async def unconfirm_settlement(session: AsyncSession, group_id: int, settlement_
     settlement.status = GroupSettlementStatus.pending
     settlement.confirmed_at = None
     await group_settlement_repository.save(session, settlement)
+    await _audit(session, group_id, user, AuditAction.unconfirmed, settlement, members_by_id)
     await session.commit()
     await session.refresh(settlement)
     return _build_response(settlement, members_by_id, viewer.id)
@@ -558,6 +585,20 @@ async def set_leg(
         settlement.to_account_id = account_id
         settlement.to_amount = resolved
     await group_settlement_repository.save(session, settlement)
+    # Recorded, but with no account named. Which of the caller's OWN accounts the money passed through
+    # is a fact only they can see — the row-level policies hide everyone else's — so an entry every
+    # member reads may say that a leg was attached or cleared and nothing about which account it was.
+    # The variant overrides the payment/write-off one _audit sets, which says nothing here: a write-off
+    # moved no money and is refused a leg outright.
+    await _audit(
+        session,
+        group_id,
+        user,
+        AuditAction.leg_set,
+        settlement,
+        members_by_id,
+        variant=_LEG_ATTACHED_VARIANT if account_id is not None else _LEG_CLEARED_VARIANT,
+    )
     await session.commit()
     await session.refresh(settlement)
     return _build_response(settlement, members_by_id, viewer.id)
@@ -570,11 +611,15 @@ async def set_leg(
 # undoing that silently would overwrite somebody else's word. They un-confirm it first, which is a
 # deliberate second act.
 async def delete_settlement(session: AsyncSession, group_id: int, settlement_id: int, user: User) -> None:
-    settlement, _, _, viewer = await _require_settlement(session, group_id, settlement_id, user)
+    settlement, _, members_by_id, viewer = await _require_settlement(session, group_id, settlement_id, user)
     if settlement.status == GroupSettlementStatus.confirmed:
         raise GroupSettlementConfirmedError()
     if not _may_delete(settlement, viewer.id):
         raise GroupSettlementNotCreditorError() if settlement.status == GroupSettlementStatus.written_off else GroupSettlementNotPayeeError()
+    # Read off the row before it goes. This is the entry that makes deleting a settlement accountable —
+    # a deletion IS the reversal, so without it the honest post-reversal state was that the payment had
+    # never been recorded, with nothing anywhere saying otherwise.
+    await _audit(session, group_id, user, AuditAction.deleted, settlement, members_by_id)
     await group_settlement_repository.delete(session, settlement)
     await session.commit()
 
@@ -844,11 +889,53 @@ async def _require_settlement(
     session: AsyncSession, group_id: int, settlement_id: int, user: User
 ) -> tuple[GroupSettlement, Group, dict[int, GroupMember], GroupMember]:
     group, viewer = await group_service.require_member(session, group_id, user)
-    settlement = await group_settlement_repository.get_by_id(session, settlement_id)
+    settlement = await group_settlement_repository.get_by_id(session, settlement_id, for_update=True)
     if settlement is None or settlement.group_id != group_id:
         raise NotFoundError("Settlement not found")
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
     return (settlement, group, members_by_id, viewer)
+
+
+# One audit entry for a settlement. Both parties are named, because a balance is between two people and
+# "who paid whom" is the whole content of the row; the FIGURE is the one that moved the bucket, in the
+# bucket's currency, which is the only figure both sides agree on — each side's own cash leg is in
+# their own account's currency and is invisible to the other.
+#
+# `amount`/`currency` override that for the waterfall, whose one entry names what the payer actually
+# handed over rather than what any single row cleared.
+async def _audit(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    action: AuditAction,
+    settlement: GroupSettlement,
+    members_by_id: dict[int, GroupMember],
+    *,
+    amount: Decimal | None = None,
+    currency: str | None = None,
+    **payload,
+) -> None:
+    payer = members_by_id.get(settlement.from_member_id)
+    payee = members_by_id.get(settlement.to_member_id)
+    await shared_audit_service.record(
+        session,
+        group_id=group_id,
+        actor=user,
+        entity_type=AuditEntityType.settlement,
+        action=action,
+        entity_id=settlement.id,
+        payload={
+            "from_member": payer.display_name if payer is not None else None,
+            "to_member": payee.display_name if payee is not None else None,
+            "amount": str(amount if amount is not None else settlement.amount),
+            "currency": currency or settlement.currency,
+            # A write-off and a payment clear the same bucket and are not the same act, so the entry
+            # says which. Two values rather than the status's three: pending and confirmed are both
+            # payments, and which of them it is at this instant is what the ACTION already records.
+            "variant": _WRITE_OFF_VARIANT if settlement.status == GroupSettlementStatus.written_off else _PAYMENT_VARIANT,
+            **payload,
+        },
+    )
 
 
 # Resolves the two seats a settlement names and refuses anything that is not an ACTIVE seat of this

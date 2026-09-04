@@ -23,6 +23,7 @@ from app.models.investment_collection import InvestmentCollection, InvestmentCol
 from app.models.notification import Notification, NotificationPreference
 from app.models.payment_obligation import PaymentObligation
 from app.models.pot import Pot, PotMemberPermission, PotOwnershipEvent
+from app.models.shared_audit import SharedAuditEntry
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.shared_income import SharedIncome, SharedIncomeSplit
 from app.models.snapshot import InvestmentSnapshot
@@ -86,6 +87,7 @@ _MEMBERSHIP_SCOPED_TABLES = frozenset(
         "shared_income",
         "shared_income_splits",
         "group_settlements",
+        "shared_audit_log",
     }
 )
 
@@ -161,6 +163,15 @@ async def dump_user_data(session: AsyncSession, user_id: int) -> dict[str, list]
     data["shared_income_splits"] = list(income_splits.scalars().all())
     settlements = await session.execute(select(GroupSettlement).where(GroupSettlement.group_id.in_(group_ids_stmt)))
     data["group_settlements"] = list(settlements.scalars().all())
+    # The audit trail of those groups, on the same membership scope and NOT restorable for the same
+    # reason: a trail rebuilt from one member's file would attribute real acts to placeholders standing
+    # in for people who never performed them.
+    #
+    # It is here rather than left to the export sweep because no test could have caught its absence.
+    # The coverage guard keys on a `user_id` column and this table's actor column is `actor_user_id`,
+    # so the one table whose omission nothing would notice is this one.
+    audit = await session.execute(select(SharedAuditEntry).where(SharedAuditEntry.group_id.in_(group_ids_stmt)))
+    data["shared_audit_log"] = list(audit.scalars().all())
 
     # The pots the user may see, with their permissions and full ownership ledger. Exported for the
     # same reason the group tables are — a portfolio you co-own is part of what Renly holds about you

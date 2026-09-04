@@ -35,6 +35,7 @@ from app.domain import (
 from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.notification import NotificationEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.user import User
 from app.repositories import (
@@ -45,7 +46,14 @@ from app.repositories import (
     shared_expense_repository,
 )
 from app.schemas.shared_expense import SharedExpenseResponse, SharedExpenseSplitInput, SharedExpenseSplitResponse
-from app.services import card_reconciliation_service, exchange_rate_service, group_service, notification_service, pot_ownership_service
+from app.services import (
+    card_reconciliation_service,
+    exchange_rate_service,
+    group_service,
+    notification_service,
+    pot_ownership_service,
+    shared_audit_service,
+)
 from app.utils.metrics import RateLookup, convert_optional
 
 ZERO = Decimal(0)
@@ -238,6 +246,7 @@ async def create_expense(
         await card_reconciliation_service.mark_stale_for_date(session, funding.credit_card_id, currency, date)
     # Resolved before the commit, so a failure reading the roster fails the whole use case with nothing
     # written rather than 500-ing a request whose expense has already landed.
+    await _audit(session, group_id, user, AuditAction.created, expense)
     recipients = await group_service.list_notifiable_user_ids(session, group_id, exclude_user_id=user.id)
     await session.commit()
     await session.refresh(expense)
@@ -327,6 +336,7 @@ async def update_expense(
         await card_reconciliation_service.mark_stale_for_date(session, old_card_id, old_currency, old_date)
     if funding.credit_card_id is not None:
         await card_reconciliation_service.mark_stale_for_date(session, funding.credit_card_id, currency, date)
+    await _audit(session, group_id, user, AuditAction.updated, expense)
     await session.commit()
     await session.refresh(expense)
     return _build_response(
@@ -345,6 +355,8 @@ async def update_expense(
 async def delete_expense(session: AsyncSession, group_id: int, expense_id: int, user: User) -> None:
     expense, _, _ = await _require_expense(session, group_id, expense_id, user)
     card_id, currency, date = expense.credit_card_id, expense.currency, expense.date
+    # Read off the row before it goes, so the entry does not depend on an object whose row is gone.
+    await _audit(session, group_id, user, AuditAction.deleted, expense)
     await shared_expense_repository.delete(session, expense)
     if card_id is not None:
         await card_reconciliation_service.mark_stale_for_date(session, card_id, currency, date)
@@ -352,6 +364,25 @@ async def delete_expense(session: AsyncSession, group_id: int, expense_id: int, 
 
 
 # --- Internal ---
+
+
+# One audit entry for a shared expense. The figure is the expense's TOTAL in its own currency, never a
+# reader's share, for the reason the notification carries the total too: one entry is read by every
+# member, so a per-reader number could not be stored in it.
+#
+# No pot_id even when a POT's account funded it. The entry is about the expense, which is group state
+# every member can already see on the hub — attaching a pot would hide the group's own spending from
+# anybody the pot is hidden from, which is a narrower answer than the expense list itself gives.
+async def _audit(session: AsyncSession, group_id: int, user: User, action: AuditAction, expense: SharedExpense) -> None:
+    await shared_audit_service.record(
+        session,
+        group_id=group_id,
+        actor=user,
+        entity_type=AuditEntityType.shared_expense,
+        action=action,
+        entity_id=expense.id,
+        payload={"amount": str(expense.amount), "currency": expense.currency},
+    )
 
 
 # Resolves every seat a request names — participants and the payer — and refuses any that is not an

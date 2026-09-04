@@ -54,6 +54,23 @@ async def delete(session: AsyncSession, group: Group) -> None:
     await session.delete(group)
 
 
+# Takes an exclusive row lock on the group for the rest of the transaction, so two writers cannot
+# derive the same balances and both act on them.
+#
+# The GROUP row rather than the rows the balance is summed from, because those span four tables and the
+# rows a writer must not miss are the ones the other writer is about to INSERT — nothing can lock a row
+# that does not exist yet. Every path that reads the balances to DECIDE something takes this first: a
+# write-off capped at what is owed, an overpay waterfall allocating across buckets, and removing a
+# member whose position must be zero. Recording an ordinary settlement does not, because it checks
+# nothing against the balances — an overpayment is legal and simply flips the bucket.
+#
+# RLS applies, and it is `groups_member_isolation`'s USING that governs a locking read, so any active
+# member may take it. Nothing in the app locks a group AND a pot in the same transaction, which is what
+# keeps the two lock orders from ever meeting.
+async def lock(session: AsyncSession, group_id: int) -> None:
+    await session.execute(select(Group.id).where(Group.id == group_id).with_for_update())
+
+
 # Ids of the groups that become unreachable once this user's account is gone: groups they hold a seat
 # in where no OTHER active, account-linked seat remains. Such a group can be read by nobody (the
 # membership policy needs an active linked seat), administered by nobody, and re-entered by nobody, so
@@ -175,6 +192,7 @@ class GroupRepository:
     list_members_by_groups = staticmethod(list_members_by_groups)
     list_orphaned_group_ids = staticmethod(list_orphaned_group_ids)
     list_visible = staticmethod(list_visible)
+    lock = staticmethod(lock)
     save = staticmethod(save)
     save_member = staticmethod(save_member)
 

@@ -48,8 +48,22 @@ async def list_by_group(session: AsyncSession, group_id: int) -> list[GroupSettl
 
 
 # Fetches one settlement by id; RLS decides whether the caller may see it.
-async def get_by_id(session: AsyncSession, settlement_id: int) -> GroupSettlement | None:
-    result = await session.execute(select(GroupSettlement).where(GroupSettlement.id == settlement_id))
+#
+# `for_update` takes an exclusive row lock for the rest of the transaction, and every path that CHANGES
+# a settlement passes it. Each of them reads the status and then acts on what it read — confirm refuses
+# anything but pending, un-confirm anything but confirmed, delete refuses a confirmed row — so two of
+# them running at once would both see 'pending' and one would act on a state the other had already
+# left. The concrete loss is a confirmed settlement deleted out from under the payee who vouched for
+# it, which is exactly the act the status is there to prevent.
+#
+# Locking this row rather than the group, unlike the balance-capped writes: what these need is the
+# settlement not changing under them, and a group lock would serialise every settlement in the group
+# against every other for no gain.
+async def get_by_id(session: AsyncSession, settlement_id: int, *, for_update: bool = False) -> GroupSettlement | None:
+    stmt = select(GroupSettlement).where(GroupSettlement.id == settlement_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    result = await session.execute(stmt)
     return result.scalar_one_or_none()
 
 

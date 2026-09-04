@@ -48,6 +48,7 @@ from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.investment import Investment
 from app.models.notification import NotificationEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.shared_income import IncomeDestination, SharedIncome, SharedIncomeSplit
 from app.models.user import User
 from app.repositories import (
@@ -58,7 +59,7 @@ from app.repositories import (
     shared_income_repository,
 )
 from app.schemas.shared_income import SharedIncomeResponse, SharedIncomeSplitInput, SharedIncomeSplitResponse
-from app.services import exchange_rate_service, group_service, notification_service, pot_ownership_service
+from app.services import exchange_rate_service, group_service, notification_service, pot_ownership_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_optional
 
 ZERO = Decimal(0)
@@ -266,6 +267,7 @@ async def create_income(
     written = await _write_splits(session, income, shares, landing.received_by)
     # Resolved before the commit, so a failure reading the roster fails the whole use case with nothing
     # written rather than 500-ing a request whose income has already landed.
+    await _audit(session, group_id, user, AuditAction.created, income)
     recipients = await group_service.list_notifiable_user_ids(session, group_id, exclude_user_id=user.id)
     await session.commit()
     await session.refresh(income)
@@ -348,6 +350,7 @@ async def update_income(
     await shared_income_repository.delete_splits(session, income.id)
     await session.flush()
     written = await _write_splits(session, income, shares, landing.received_by)
+    await _audit(session, group_id, user, AuditAction.updated, income)
     await session.commit()
     await session.refresh(income)
     return _build_response(
@@ -365,11 +368,27 @@ async def update_income(
 # Deletes a piece of shared income; its splits go with it by FK cascade, and the balances recompute.
 async def delete_income(session: AsyncSession, group_id: int, income_id: int, user: User) -> None:
     income, _, _ = await _require_income(session, group_id, income_id, user)
+    # Read off the row before it goes, so the entry does not depend on an object whose row is gone.
+    await _audit(session, group_id, user, AuditAction.deleted, income)
     await shared_income_repository.delete(session, income)
     await session.commit()
 
 
 # --- Internal ---
+
+
+# One audit entry for a piece of shared income. The mirror of the expense side's, and the same two
+# choices: the TOTAL rather than a reader's share, and no pot_id even when a pot's account received it.
+async def _audit(session: AsyncSession, group_id: int, user: User, action: AuditAction, income: SharedIncome) -> None:
+    await shared_audit_service.record(
+        session,
+        group_id=group_id,
+        actor=user,
+        entity_type=AuditEntityType.shared_income,
+        action=action,
+        entity_id=income.id,
+        payload={"amount": str(income.amount), "currency": income.currency},
+    )
 
 
 # Resolves every seat a request names — participants and the recipient — and refuses any that is not
