@@ -59,6 +59,15 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} recorded a change of split in {pot}",
         },
+        "ownership_changed.deleted": {
+            "subject": "{actor} removed an entry from {pot}'s ownership history",
+            "body": (
+                '{actor} removed an entry from the ownership history of "{pot}", in the group "{group}". '
+                "Everyone's share has been recalculated without it.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} removed an ownership entry from {pot}",
+        },
         "pot_movement.contribution": {
             "subject": "{member} added money to {pot}",
             "body": ('{member} added {amount} {currency} to "{pot}", in the group "{group}".\n\nSee the pot and its movements here:\n{link}'),
@@ -153,6 +162,15 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Podés ver el fondo y su reparto acá:\n{link}"
             ),
             "push": "{actor} registró un cambio de reparto en {pot}",
+        },
+        "ownership_changed.deleted": {
+            "subject": "{actor} eliminó una entrada del historial de titularidad de {pot}",
+            "body": (
+                '{actor} eliminó una entrada del historial de titularidad de "{pot}", en el grupo "{group}". '
+                "La parte de cada uno se recalculó sin ella.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} eliminó una entrada de titularidad de {pot}",
         },
         "pot_movement.contribution": {
             "subject": "{member} puso dinero en {pot}",

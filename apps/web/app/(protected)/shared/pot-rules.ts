@@ -75,9 +75,23 @@ export function canRecordReagreement(pot: Pot, activeSeatCount: number): boolean
   return canRecordMovement(pot) && pot.shares.length > 0 && activeSeatCount > 1;
 }
 
-// Moving holdings IN needs only write access — a pot can be filled before it is divided or after.
-export function canMoveHoldingsIn(pot: Pot): boolean {
-  return pot.canWrite;
+/*
+ * Moving a holding IN is free only while nothing has been divided, exactly like moving one out — and
+ * the two are refused for OPPOSITE reasons, which is why they are separate predicates over one
+ * condition rather than one shared flag.
+ *
+ * Adding a holding raises the pot's value while nobody's units change, so every owner's share rises
+ * pro-rata and the value came wholly out of one person's private scope: a gift, made silently, by an
+ * action whose name says nothing about giving. The API refuses it (409 pot_holding_add_divided) and
+ * this is what keeps the button from being offered — it was reachable in two clicks before, because
+ * this predicate asked only about write access.
+ *
+ * A refusal rather than the right answer, deliberately: the right answer is a contribution priced at
+ * the move date, which the follow-up track ships. Until then a divided pot cannot gain a holding at
+ * all, and the section's own copy points at what IS supported instead of implying otherwise.
+ */
+export function canMoveHoldingsIn(pot: Pot, events: PotOwnershipEvent[]): boolean {
+  return pot.canWrite && !hasLedger(events);
 }
 
 /*
@@ -88,6 +102,29 @@ export function canMoveHoldingsIn(pot: Pot): boolean {
  */
 export function canMoveHoldingsOut(pot: Pot, events: PotOwnershipEvent[]): boolean {
   return pot.canWrite && !hasLedger(events);
+}
+
+/*
+ * Who may delete one ledger entry.
+ *
+ * Write access, as everywhere else on this page — EXCEPT that a re-agreement may always be deleted by
+ * either seat it NAMES, with or without it. That exception is not a convenience: write access is not
+ * granted by ownership (a pot's creator is the only member who gets it, and recording the opening
+ * grants nobody else), so the out-of-the-box state of a divided pot is that its creator can move units
+ * away from a co-owner, the co-owner is notified by name, and can do nothing about it.
+ *
+ * Narrow in three ways, all mirroring the API and its row-level policy: only a re-agreement, because
+ * every other event type moves the mover's own money or is the division everybody agreed to; only the
+ * two seats it names; and only DELETE — no counterparty gains the ability to record anything.
+ */
+export function canDeleteOwnershipEvent(
+  pot: Pot,
+  event: PotOwnershipEvent,
+  myMemberId: number | null,
+): boolean {
+  if (pot.canWrite) return true;
+  if (event.type !== 'reagreement' || myMemberId === null) return false;
+  return myMemberId === event.memberId || myMemberId === event.counterpartyMemberId;
 }
 
 // Deleting a pot is group administration, not money movement, and the API refuses it while anything is

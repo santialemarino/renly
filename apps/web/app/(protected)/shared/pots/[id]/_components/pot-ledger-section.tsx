@@ -16,7 +16,11 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { deletePotOwnershipEvent } from '@/app/(protected)/shared/pot-actions';
-import { isOutgoingEvent, ownershipEventAmount } from '@/app/(protected)/shared/pot-rules';
+import {
+  canDeleteOwnershipEvent,
+  isOutgoingEvent,
+  ownershipEventAmount,
+} from '@/app/(protected)/shared/pot-rules';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
@@ -28,6 +32,8 @@ import { useFormatters } from '@/lib/i18n/formatters';
 interface PotLedgerSectionProps {
   pot: Pot;
   events: PotOwnershipEvent[];
+  /** The reader's own seat in the pot's group, or null when they hold none. */
+  myMemberId: number | null;
 }
 
 /*
@@ -41,8 +47,13 @@ interface PotLedgerSectionProps {
  * Deleting an entry is offered because balances are DERIVED: the series simply recomputes without it,
  * with no stored total to correct. That is the same property that makes back-dating safe here while
  * account reconciliation stays forward-only.
+ *
+ * WHO may delete is `canDeleteOwnershipEvent`, and it is the one thing on this page not governed by
+ * write access alone: a re-agreement's two named seats may always remove it. Write access is granted
+ * to a pot's creator and nobody else, so without that a co-owner could be moved out of their own share,
+ * be told so by name, and have no way to undo it.
  */
-export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
+export function PotLedgerSection({ pot, events, myMemberId }: PotLedgerSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
   const [pendingDelete, setPendingDelete] = useState<PotOwnershipEvent | null>(null);
@@ -101,6 +112,7 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
                 key={event.id}
                 pot={pot}
                 event={event}
+                myMemberId={myMemberId}
                 onDelete={() => {
                   setPendingDelete(event);
                   setDeleteOpen(true);
@@ -148,10 +160,12 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
 function LedgerRow({
   pot,
   event,
+  myMemberId,
   onDelete,
 }: {
   pot: Pot;
   event: PotOwnershipEvent;
+  myMemberId: number | null;
   onDelete: () => void;
 }) {
   const fmt = useFormatters();
@@ -199,7 +213,7 @@ function LedgerRow({
         )}
       </TableCell>
       <TableCell className="text-center">
-        {pot.canWrite && (
+        {canDeleteOwnershipEvent(pot, event, myMemberId) && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('pots.ledger.deleteTitle')}

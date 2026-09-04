@@ -35,6 +35,7 @@ from app.domain import (
     PotReagreementSameMemberError,
     PotUnsupportedMovementError,
     PotValuationRequiredError,
+    PotWriteRequiredError,
     amount_for_units,
     opening_units,
     replay_units,
@@ -48,11 +49,12 @@ from app.domain.pot import ONE_HUNDRED, OPENING_UNIT_PRICE, UNIT_PLACES, Ownersh
 from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.notification import NotificationEvent
-from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
+from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
-from app.repositories import account_repository, group_repository, pot_ownership_repository
+from app.repositories import account_repository, group_repository, pot_ownership_repository, pot_repository
 from app.schemas.pot import PotOwnershipEventResponse
-from app.services import exchange_rate_service, notification_service, pot_service
+from app.services import exchange_rate_service, notification_service, pot_service, shared_audit_service
 
 ZERO = Decimal(0)
 
@@ -223,6 +225,34 @@ def _pot_payload(pot: Pot, group: Group | None, extra: dict) -> dict:
     return {"group_id": pot.group_id, "group": group.name if group else None, "pot_id": pot.id, "pot": pot.name, **extra}
 
 
+# One ledger audit entry. `variant` is the event's own type, so the four movements share one action and
+# one sentence with four readings rather than four actions — the split the notification layer already
+# made between an event and its variant.
+#
+# Every entry carries `pot_id`, which is what makes it as hidden as the pot itself: a member who cannot
+# see an 'owners' pot must not read its movements off the group's activity feed either.
+async def _audit(
+    session: AsyncSession,
+    pot: Pot,
+    user: User,
+    action: AuditAction,
+    *,
+    event_id: int | None,
+    variant: OwnershipEventType,
+    **payload,
+) -> None:
+    await shared_audit_service.record(
+        session,
+        group_id=pot.group_id,
+        actor=user,
+        entity_type=AuditEntityType.ownership_event,
+        action=action,
+        entity_id=event_id,
+        pot_id=pot.id,
+        payload={"pot": pot.name, "variant": variant.value, **payload},
+    )
+
+
 # Lists a pot's ownership ledger in replay order. Visible to whoever may see the pot at all: a member
 # holding 0% still sees every movement, because partial visibility of something you co-own is not a
 # feature (V5).
@@ -250,6 +280,11 @@ async def record_opening(
     notes: str | None = None,
 ) -> list[PotOwnershipEventResponse]:
     pot, actor = await pot_service.require_writable(session, pot_id, user)
+    # Locked before the ledger is read, and this is the case that shows why: "is it already opened" is
+    # answered by a SELECT and acted on by an INSERT, so two openings recorded at the same moment both
+    # find an empty ledger and the pot ends up divided twice — a split summing to 200%, which no later
+    # act can repair, because record_opening then refuses while any opening row survives.
+    await pot_repository.lock(session, pot.id)
     existing = await pot_ownership_repository.list_by_pot(session, pot.id)
     if existing:
         raise PotAlreadyOpenedError()
@@ -289,6 +324,7 @@ async def record_opening(
     # and its payload while the transaction is still open, so a failure in those reads fails the whole
     # use case with nothing written — an honest error — rather than 500-ing a request whose money write
     # has already landed. After the commit only dispatch() runs, and that swallows everything.
+    await _audit(session, pot, user, AuditAction.created, event_id=None, variant=OwnershipEventType.opening)
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
@@ -326,6 +362,11 @@ async def record_movement(
     if type not in (OwnershipEventType.contribution, OwnershipEventType.withdrawal):
         raise PotUnsupportedMovementError(type)
     pot, _ = await pot_service.require_writable(session, pot_id, user)
+    # Locked before the price and the balances are derived. Both are read-then-act: the unit price is
+    # what the new units are issued at, and a withdrawal is refused for more than the member holds — so
+    # two withdrawals racing each other both measure a balance neither will still have, and between
+    # them redeem more units than exist.
+    await pot_repository.lock(session, pot.id)
     member = await _require_seat(session, pot, member_id)
     price, balances = await _require_price(session, pot, user, date)
 
@@ -390,6 +431,20 @@ async def record_movement(
             created_by=user.id,
         ),
     )
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.created,
+        event_id=event.id,
+        variant=type,
+        member=member.display_name,
+        # The credited figure in the pot's base currency, matching what the notification says and for
+        # the same reason: what changed for every reader is what the pot took in or paid out, and a
+        # cross-currency movement's two figures are different numbers in different currencies.
+        amount=str(credited),
+        currency=pot.base_currency,
+    )
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
@@ -443,6 +498,10 @@ async def record_reagreement(
     notes: str | None = None,
 ) -> PotOwnershipEventResponse:
     pot, actor = await pot_service.require_writable(session, pot_id, user)
+    # Locked for the same reason a movement is: the giver's balance is read and then acted on, so two
+    # re-agreements moving the same stake would each find it intact and between them hand out more than
+    # the giver owns.
+    await pot_repository.lock(session, pot.id)
     giver = await _require_seat(session, pot, from_member_id)
     receiver = await _require_seat(session, pot, to_member_id)
     if giver.id == receiver.id:
@@ -477,6 +536,16 @@ async def record_reagreement(
             created_by=user.id,
         ),
     )
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.created,
+        event_id=event.id,
+        variant=OwnershipEventType.reagreement,
+        member=giver.display_name,
+        counterparty=receiver.display_name,
+    )
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
@@ -503,6 +572,31 @@ async def record_reagreement(
     return _build_response(event, {giver.id: giver, receiver.id: receiver})
 
 
+# Who may delete one ledger entry.
+#
+# Write access, as everywhere else in this file — EXCEPT that a re-agreement may always be deleted by
+# either seat it names, with or without it.
+#
+# That exception is not a convenience. Write access is not granted by ownership: create_pot inserts
+# can_write for the CREATOR only, and recording the opening grants nobody else write. So the
+# out-of-the-box state of a divided pot is that its creator can move units away from a co-owner, the
+# co-owner is notified by name, and can do nothing about it — no reject, no undo, no appeal. That is
+# the default configuration rather than an edge case, which is what makes the remedy load-bearing.
+#
+# It is deliberately narrow in three ways. Only a RE-AGREEMENT, because that is the only event type
+# that moves value between two people without money changing hands — a contribution or a withdrawal
+# moves the mover's own money, and an opening is the division everyone agreed to. Only the two seats it
+# NAMES, never any other member. And only DELETE: the counterparty gains no ability to record anything,
+# which the row-level policy enforces separately by keeping its WITH CHECK on write access.
+#
+# The confirm-and-lock half of the same decision is a later unit; this is the remedy, which is the half
+# that has to exist first.
+def _may_delete_event(event: PotOwnershipEvent, member: GroupMember, permission: PotMemberPermission | None) -> bool:
+    if pot_service.may_write(permission):
+        return True
+    return event.type == OwnershipEventType.reagreement and member.id in (event.member_id, event.counterparty_member_id)
+
+
 # Deletes an ownership event. Balances are derived, so removing one recomputes the series with no
 # stored total to correct — the same property that makes back-dating safe.
 #
@@ -512,16 +606,64 @@ async def record_reagreement(
 # record_opening refuses while any opening row survives, so the only way back would be a re-agreement,
 # which records a gift that never happened. One act in, one act out.
 #
+# Gated on require_VISIBLE rather than require_writable, with the write check moved into
+# _may_delete_event: the counterparty remedy above is the one act here that write access does not
+# govern, and asking the wider question first is what lets a single function answer both.
+#
 # Returns how many events went, so a caller can say so.
 async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> int:
-    pot, _ = await pot_service.require_writable(session, pot_id, user)
+    pot, viewer, permission = await pot_service.require_visible(session, pot_id, user)
+    # Locked like every other ledger write. A deletion changes what the next unit price is derived from,
+    # so a movement pricing itself against this pot at the same moment must see the ledger either wholly
+    # before or wholly after — never a state in between.
+    await pot_repository.lock(session, pot.id)
     event = await pot_ownership_repository.get_by_id(session, pot.id, event_id)
     if event is None:
         raise NotFoundError("Ownership event not found")
-    if event.type == OwnershipEventType.opening:
+    if not _may_delete_event(event, viewer, permission):
+        raise PotWriteRequiredError()
+    # Everything the announcement and the audit entry need is read off the event BEFORE it goes, so
+    # neither depends on an object whose row no longer exists.
+    entry_id, entry_type = event.id, event.type
+    members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
+    subject = members_by_id.get(event.member_id)
+    counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    if entry_type == OwnershipEventType.opening:
         deleted = await pot_ownership_repository.delete_openings(session, pot.id)
     else:
         await pot_ownership_repository.delete(session, event)
         deleted = 1
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.deleted,
+        event_id=entry_id,
+        variant=entry_type,
+        member=subject.display_name if subject is not None else None,
+        counterparty=counterparty.display_name if counterparty is not None else None,
+    )
+    recipients = await _pot_audience(session, pot, user)
+    group = await group_repository.get_by_id(session, pot.group_id)
     await session.commit()
+
+    # EVERY deletion is announced, not only the counterparty's, and widening it here rather than in the
+    # remedy alone is the point: until now a pot's writer could delete an opening or a contribution and
+    # every percentage on the page would change with nobody told. Undoing an act is as much a change to
+    # what people own as making it was, and whoever recorded the original has to learn it was undone or
+    # they go on believing a split that no longer holds.
+    #
+    # It reuses ownership_changed with a `deleted` variant rather than earning an event of its own, so
+    # somebody who has switched pot-ownership news off stays switched off for the undo too.
+    #
+    # It deliberately does NOT name which KIND of entry went, and the copy is the reason: the four event
+    # types have names on the web and nowhere else, so an email or a push saying "removed a withdrawal"
+    # would need a second vocabulary of them in both locales — four names across three channels, for a
+    # sentence whose job is to say something changed and take the reader to the ledger, which states
+    # exactly what. The audit entry beside it DOES record the type, for the surface that can read it.
+    await notification_service.dispatch(
+        NotificationEvent.ownership_changed,
+        recipients,
+        _pot_payload(pot, group, {"variant": "deleted", "actor": viewer.display_name}),
+    )
     return deleted

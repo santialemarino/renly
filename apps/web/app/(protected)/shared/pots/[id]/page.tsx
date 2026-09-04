@@ -89,7 +89,11 @@ export default async function PotPage({ params }: PotPageProps) {
         privateAccounts={accounts}
         privateInvestments={investments.items}
       />
-      <PotLedgerSection pot={pot} events={events} />
+      <PotLedgerSection
+        pot={pot}
+        events={events}
+        myMemberId={group.members.find((member) => member.isSelf)?.id ?? null}
+      />
       {group.myRole === 'admin' && <PotPermissionsSection pot={pot} group={group} />}
     </div>
   );

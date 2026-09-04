@@ -30,6 +30,7 @@ from app.domain import (
     NotFoundError,
     PotAlreadyDividedError,
     PotHasHoldingsError,
+    PotHoldingAddDividedError,
     PotValuation,
     PotWriteRequiredError,
     is_valuation_overdue,
@@ -45,6 +46,7 @@ from app.models.account import Account
 from app.models.group import GroupMember
 from app.models.investment import Investment
 from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
 from app.repositories import (
@@ -71,7 +73,7 @@ from app.schemas.pot import (
     PotValueSeriesPoint,
     PotValueSeriesResponse,
 )
-from app.services import account_service, exchange_rate_service
+from app.services import account_service, exchange_rate_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_value
 
 ZERO = Decimal(0)
@@ -95,7 +97,12 @@ def _may_view(pot: Pot, permission: PotMemberPermission | None) -> bool:
 # Whether a seat may write to a pot. Unlike viewing, there is no visibility-style default: write is
 # granted per member and nowhere else, so a pot with no permission rows is readable by its group and
 # writable by nobody.
-def _may_write(permission: PotMemberPermission | None) -> bool:
+#
+# Public, unlike its viewing sibling, because the ownership ledger has exactly ONE act that is not
+# gated on write access — a named counterparty deleting the re-agreement that moved their own units —
+# and it still has to ask this same question about every OTHER act. A second copy of the rule there is
+# the copy that eventually disagrees with this one.
+def may_write(permission: PotMemberPermission | None) -> bool:
     return permission is not None and permission.can_write
 
 
@@ -104,7 +111,7 @@ def _may_write(permission: PotMemberPermission | None) -> bool:
 # The group's own rule (`group_service.list_notifiable_user_ids`) is not enough here, because a pot is
 # not necessarily visible to the whole group: an 'owners' pot, or a member with can_view false, must not
 # be told about a movement in something they cannot see — the notification would disclose exactly what
-# the policy hides. So this asks the pot's own predicate, through the SAME `_may_view` / `_may_write`
+# the policy hides. So this asks the pot's own predicate, through the SAME `_may_view` / `may_write`
 # functions require_visible and require_writable use. Reusing them keeps the count of copies of that
 # rule at two (this Python one and the app_can_view_pot SQL helper, which test_rls_pot_scope pins
 # together) rather than adding a third.
@@ -120,7 +127,7 @@ async def list_notifiable_user_ids(session: AsyncSession, pot: Pot, *, require_w
 
     def allowed(member: GroupMember) -> bool:
         permission = permissions.get(member.id)
-        return _may_write(permission) if require_write else _may_view(pot, permission)
+        return may_write(permission) if require_write else _may_view(pot, permission)
 
     return [
         member.user_id
@@ -133,13 +140,13 @@ async def list_notifiable_user_ids(session: AsyncSession, pot: Pot, *, require_w
 # and the permission rows — the hourly overdue reminder, which considers every pot in the database and
 # must not pay two queries per pot to find out nobody is due.
 #
-# It lives here rather than in that job so the write rule stays behind `_may_write`: the module comment
+# It lives here rather than in that job so the write rule stays behind `may_write`: the module comment
 # above says there are meant to be exactly two copies of it (this Python side and the app_can_write_pot
 # SQL helper), and a third one reached from a background job is precisely the copy nobody would notice
 # had drifted.
 def writer_user_ids(pot: Pot, members: list[GroupMember], permissions: list[PotMemberPermission]) -> list[int]:
     by_member = {permission.member_id: permission for permission in permissions}
-    return [member.user_id for member in members if member.is_active and member.user_id is not None and _may_write(by_member.get(member.id))]
+    return [member.user_id for member in members if member.is_active and member.user_id is not None and may_write(by_member.get(member.id))]
 
 
 # Resolves the caller's active seat in the pot's group plus their permission row, or raises
@@ -165,7 +172,7 @@ async def require_visible(session: AsyncSession, pot_id: int, user: User) -> tup
 # permission check are two things that can disagree.
 async def require_writable(session: AsyncSession, pot_id: int, user: User) -> tuple[Pot, GroupMember]:
     pot, member, permission = await require_visible(session, pot_id, user)
-    if not _may_write(permission):
+    if not may_write(permission):
         raise PotWriteRequiredError()
     return (pot, member)
 
@@ -501,7 +508,7 @@ async def list_pots(session: AsyncSession, user: User, *, group_id: int | None =
                 members_by_id={m.id: m for m in members},
                 viewer_member_id=viewer.id,
                 permissions=permissions,
-                can_write=_may_write(mine),
+                can_write=may_write(mine),
             )
         )
     return responses
@@ -617,7 +624,7 @@ async def list_visible_scopes(session: AsyncSession, user_id: int) -> list[PotSc
                 name=pot.name,
                 group_id=pot.group_id,
                 group_name=group.name,
-                can_write=_may_write(mine),
+                can_write=may_write(mine),
                 cadence=pot.snapshot_cadence,
             )
         )
@@ -651,7 +658,7 @@ async def get_pot(session: AsyncSession, pot_id: int, user: User, *, as_of_date:
         members_by_id={m.id: m for m in members},
         viewer_member_id=viewer.id,
         permissions=permissions,
-        can_write=_may_write(permission),
+        can_write=may_write(permission),
     )
 
 
@@ -850,6 +857,41 @@ async def compute_share_series(
     return points
 
 
+# How an audit entry names the access one seat was given. Named constants rather than inline strings
+# because they are translation keys on the other side, and a typo here is a line that renders its own
+# key path to the reader.
+_ACCESS_WRITE = "write"
+_ACCESS_VIEW = "view"
+_ACCESS_NONE = "none"
+
+
+# Which of the three the pair (can_view, can_write) is. can_write implies can_view — a CHECK on the
+# table enforces it too — so there are three levels rather than four states.
+def _access_variant(can_view: bool, can_write: bool) -> str:
+    if can_write:
+        return _ACCESS_WRITE
+    return _ACCESS_VIEW if can_view else _ACCESS_NONE
+
+
+# One pot-scoped audit entry, with the two fields every pot action shares already filled in.
+#
+# `pot_id` is set on every entry this writes, which is what makes the entry as hidden as the pot: an
+# entry naming a pot nobody outside its owners may see must not surface on the group's activity feed
+# for everyone else. The one action that deliberately does NOT go through here is deletion — see
+# delete_pot for why that entry names no pot at all.
+async def _audit(session: AsyncSession, pot: Pot, user: User, action: AuditAction, **payload) -> None:
+    await shared_audit_service.record(
+        session,
+        group_id=pot.group_id,
+        actor=user,
+        entity_type=AuditEntityType.pot,
+        action=action,
+        entity_id=pot.id,
+        pot_id=pot.id,
+        payload={"pot": pot.name, **payload},
+    )
+
+
 # Creates a pot and seats its creator with full access, in one transaction. Runs on the PRIVILEGED
 # session — see the module comment: the permission row this needs is the one the RLS policy reads.
 # The creator always gets an explicit row rather than relying on the visibility default, because a
@@ -880,6 +922,7 @@ async def create_pot(
     )
     pot = await pot_repository.create(admin_session, pot)
     await pot_repository.save_permission(admin_session, PotMemberPermission(pot_id=pot.id, member_id=member.id, can_view=True, can_write=True))
+    await _audit(admin_session, pot, user, AuditAction.created)
     await admin_session.commit()
     return await get_pot(admin_session, pot.id, user)
 
@@ -909,6 +952,7 @@ async def update_pot(
     if visibility is not None:
         pot.visibility = visibility
     await pot_repository.save(session, pot)
+    await _audit(session, pot, user, AuditAction.updated)
     await session.commit()
     await session.refresh(pot)
     return await get_pot(session, pot.id, user)
@@ -925,6 +969,19 @@ async def delete_pot(session: AsyncSession, pot_id: int, user: User) -> None:
     holdings = await pot_repository.count_holdings(session, pot.id)
     if holdings:
         raise PotHasHoldingsError(holdings)
+    # The ONE pot entry written with no pot_id, so it stays readable after the pot is gone. Everything
+    # else about the pot goes dark with it — app_can_view_pot cannot answer for a pot that no longer
+    # exists — and that is the fail-closed direction. What this one entry discloses is a name and an
+    # actor, which is group administration, and by here the pot provably held nothing.
+    await shared_audit_service.record(
+        session,
+        group_id=pot.group_id,
+        actor=user,
+        entity_type=AuditEntityType.pot,
+        action=AuditAction.deleted,
+        entity_id=pot.id,
+        payload={"pot": pot.name},
+    )
     await pot_repository.delete(session, pot)
     await session.commit()
 
@@ -948,6 +1005,23 @@ async def set_permission(
     member = await group_repository.get_member(session, pot.group_id, member_id)
     if member is None:
         raise NotFoundError("Group member not found")
+    # Recorded BEFORE the permission row is saved, per the audit service's one ordering rule: an admin
+    # may be revoking their OWN view of an 'owners' pot, and the entry's own policy would then refuse
+    # the record of them doing it. `record` flushes, so calling it first is enough.
+    await shared_audit_service.record(
+        session,
+        group_id=pot.group_id,
+        actor=user,
+        entity_type=AuditEntityType.pot,
+        action=AuditAction.permission_set,
+        entity_id=pot.id,
+        pot_id=pot.id,
+        # The access LEVEL as a variant rather than two booleans, because that is what the entry is
+        # for: "changed somebody's access" says nothing, and an access change is the act an audit trail
+        # most exists to record. Three levels rather than four states — can_write implies can_view, so
+        # write-without-view is not a state this product has.
+        payload={"pot": pot.name, "member": member.display_name, "variant": _access_variant(can_view, can_write)},
+    )
     await pot_repository.save_permission(
         session,
         # can_write implies can_view, enforced by a CHECK on the table as well: writing something you
@@ -968,6 +1042,19 @@ async def clear_permission(session: AsyncSession, pot_id: int, member_id: int, u
     permission = await pot_repository.get_permission(session, pot.id, member_id)
     if permission is None:
         raise NotFoundError("Pot permission not found")
+    member = await group_repository.get_member(session, pot.group_id, member_id)
+    # Before the delete, for the same reason set_permission records before its save: dropping your own
+    # row on an 'owners' pot revokes your own view, and an entry written afterwards would be refused.
+    await shared_audit_service.record(
+        session,
+        group_id=pot.group_id,
+        actor=user,
+        entity_type=AuditEntityType.pot,
+        action=AuditAction.permission_cleared,
+        entity_id=pot.id,
+        pot_id=pot.id,
+        payload={"pot": pot.name, "member": member.display_name if member is not None else None},
+    )
     await pot_repository.delete_permission(session, permission)
     await session.commit()
     return await get_pot(session, pot.id, user)
@@ -1001,15 +1088,30 @@ async def move_holdings(
     pot, member = await require_writable(session, pot_id, user)
     investment_ids = investment_ids or []
     account_ids = account_ids or []
+    # Locked before the ledger is read, because what follows is a decision taken on it: without this a
+    # move-out and an opening recorded at the same moment each see a world the other is about to leave,
+    # and the move lands on a pot that is divided by the time it commits.
+    await pot_repository.lock(session, pot.id)
 
-    # Taking a holding OUT of a pot whose ownership is already agreed drops the pot's value by the
-    # whole of that holding while nobody's units change — so every co-owner's share falls pro-rata
-    # and the holding lands wholly in one person's private scope. That is one member taking joint
-    # assets, with no cap on the amount, and it is the same violation §4.1 refuses for a cross-scope
-    # transfer. Before the baseline exists nothing has been divided, so the move is free and undoing
-    # a mistaken move-in still works. Afterwards it is a withdrawal or a buy-out, which redeem units.
-    if not into and await pot_ownership_repository.list_by_pot(session, pot.id):
-        raise PotAlreadyDividedError()
+    # Neither direction is free once ownership is agreed, and the two are refused for opposite reasons.
+    #
+    # Taking a holding OUT drops the pot's value by the whole of it while nobody's units change — so
+    # every co-owner's share falls pro-rata and the holding lands wholly in one person's private scope.
+    # That is one member taking joint assets, with no cap on the amount, and it is the same violation
+    # §4.1 refuses for a cross-scope transfer. Afterwards it is a withdrawal or a buy-out, which redeem
+    # units.
+    #
+    # Putting one IN is the mirror image: the pot's value RISES with nobody's units changing, so value
+    # that came wholly out of one person's private scope is handed to every owner pro-rata — a gift,
+    # made silently, by an action whose name says nothing about giving. That refusal is deliberately a
+    # stop rather than the right answer: the right answer is a contribution priced at the move date,
+    # which the follow-up track ships as the fourth guided flow. Until then a divided pot cannot gain a
+    # holding at all, and the error says what IS supported instead of implying otherwise.
+    #
+    # Before the baseline exists nothing has been divided, so both directions are free — which is also
+    # what keeps "undo a mistaken move-in" possible.
+    if await pot_ownership_repository.list_by_pot(session, pot.id):
+        raise PotHoldingAddDividedError() if into else PotAlreadyDividedError()
 
     if investment_ids:
         found = await investment_repository.get_by_ids_any_scope(session, investment_ids)
@@ -1021,6 +1123,16 @@ async def move_holdings(
 
     await investment_repository.move_to_scope(session, investment_ids, pot_id=pot.id if into else None, user_id=None if into else user.id)
     await account_repository.move_to_scope(session, account_ids, pot_id=pot.id if into else None, user_id=None if into else user.id)
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.holdings_added if into else AuditAction.holdings_removed,
+        # No names and no counts. A holding's name is the caller's own private label until the move
+        # lands, and private again after a move OUT, so an entry every member reads must not carry it —
+        # and a count is a value no sentence interpolates, which is the other half of the rule this
+        # payload follows: it holds exactly what the copy renders.
+    )
     await session.commit()
     return await get_pot(session, pot.id, user)
 
