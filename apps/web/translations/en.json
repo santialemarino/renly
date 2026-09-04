@@ -2391,6 +2391,7 @@
       "holdings": {
         "title": "What is in here",
         "description": "The investments and accounts this holds. Their combined value is the total that gets divided.",
+        "dividedNote": "The shares here are already agreed, so things cannot be moved in or out directly — either one would change everyone's share without anybody's stake moving. Add money as a contribution, or take it out as a withdrawal.",
         "investments": "Investments",
         "accounts": "Accounts",
         "archived": "Archived",
@@ -2413,6 +2414,7 @@
         "emptyTitle": "Nothing in here yet",
         "emptyDescription": "Move in the investments and accounts this group owns together. Until then there is nothing to value.",
         "emptyDescriptionReadOnly": "Nothing has been moved in here yet.",
+        "emptyDescriptionDivided": "The shares here are already agreed, so nothing can be moved in.",
         "table": {
           "name": "Name",
           "value": "Value",
@@ -2874,6 +2876,95 @@
       },
       "success": "Settings saved.",
       "error": "Failed to save the settings."
+    },
+    "activity": {
+      "title": "Activity",
+      "description": "Everything that has happened in this group, newest first.",
+      "emptyTitle": "Nothing has happened yet",
+      "emptyDescription": "Once somebody records an expense, changes a split or settles up, it shows here.",
+      "unknownActor": "Someone",
+      "entries": {
+        "group": {
+          "created": "{actor} created {group}",
+          "updated": "{actor} changed the group's name or kind"
+        },
+        "group_invite": {
+          "created": "{actor} invited {member}",
+          "revoked": "{actor} revoked {member}'s invite"
+        },
+        "group_member": {
+          "added": "{actor} added {member} to the group",
+          "joined": "{member} joined the group",
+          "updated": "{actor} updated {member}",
+          "removed": {
+            "base": "{member} is no longer in the group",
+            "self": "{member} left the group",
+            "by_admin": "{actor} removed {member} from the group"
+          }
+        },
+        "group_money_settings": {
+          "updated": "{actor} changed how this group splits and settles"
+        },
+        "ownership_event": {
+          "created": {
+            "base": "{actor} recorded an ownership entry in {pot}",
+            "opening": "{actor} divided {pot} between its owners",
+            "contribution": "{actor} recorded {amount} added to {pot} by {member}",
+            "withdrawal": "{actor} recorded {amount} taken out of {pot} by {member}",
+            "reagreement": "{actor} recorded a change of split in {pot}, from {member} to {counterparty}"
+          },
+          "deleted": {
+            "base": "{actor} removed an ownership entry from {pot}",
+            "opening": "{actor} removed the baseline from {pot}",
+            "contribution": "{actor} removed a contribution by {member} from {pot}",
+            "withdrawal": "{actor} removed a withdrawal by {member} from {pot}",
+            "reagreement": "{actor} removed a change of split in {pot}, from {member} to {counterparty}"
+          }
+        },
+        "pot": {
+          "created": "{actor} created {pot}",
+          "updated": "{actor} changed {pot}'s settings",
+          "deleted": "{actor} deleted {pot}",
+          "holdings_added": "{actor} moved things into {pot}",
+          "holdings_removed": "{actor} took things out of {pot}",
+          "permission_set": {
+            "base": "{actor} changed {member}'s access to {pot}",
+            "write": "{actor} gave {member} full access to {pot}",
+            "view": "{actor} let {member} see {pot} without changing it",
+            "none": "{actor} took away {member}'s access to {pot}"
+          },
+          "permission_cleared": "{actor} reset {member}'s access to {pot}"
+        },
+        "settlement": {
+          "created": {
+            "base": "{actor} recorded {amount} between {from_member} and {to_member}",
+            "payment": "{actor} recorded {amount} paid from {from_member} to {to_member}",
+            "write_off": "{to_member} wrote off {amount} owed by {from_member}"
+          },
+          "confirmed": "{to_member} confirmed receiving {amount} from {from_member}",
+          "unconfirmed": "{to_member} took back their confirmation of {amount} from {from_member}",
+          "leg_set": {
+            "base": "{actor} changed which account their side of a {amount} payment went through",
+            "attached": "{actor} said which account their side of a {amount} payment went through",
+            "cleared": "{actor} removed the account from their side of a {amount} payment"
+          },
+          "deleted": {
+            "base": "{actor} removed {amount} recorded between {from_member} and {to_member}",
+            "payment": "{actor} removed a {amount} payment between {from_member} and {to_member}",
+            "write_off": "{actor} undid a {amount} write-off between {from_member} and {to_member}"
+          }
+        },
+        "shared_expense": {
+          "created": "{actor} added a shared expense of {amount}",
+          "updated": "{actor} edited a shared expense, now {amount}",
+          "deleted": "{actor} deleted a shared expense of {amount}"
+        },
+        "shared_income": {
+          "created": "{actor} added shared income of {amount}",
+          "updated": "{actor} edited shared income, now {amount}",
+          "deleted": "{actor} deleted shared income of {amount}"
+        }
+      }
     }
   },
   "preferences": {
@@ -3038,16 +3129,21 @@
       },
       "ownership_changed": {
         "label": "A pot's split changes",
+        "title": "{actor} changed who owns what in {pot}",
         "opening": {
           "title": "{actor} divided {pot} between its owners"
         },
         "reagreement": {
           "title": "{actor} recorded a change of split in {pot}",
           "detail": "From {from_member} to {to_member}"
+        },
+        "deleted": {
+          "title": "{actor} removed an entry from {pot}'s ownership history"
         }
       },
       "pot_movement": {
         "label": "Money moves in or out of a pot",
+        "title": "{member} moved money in {pot}",
         "contribution": {
           "title": "{member} added {amount} {currency} to {pot}"
         },
@@ -3063,6 +3159,7 @@
       },
       "settle_marked_paid": {
         "label": "Someone records a payment to you",
+        "title": "A payment between {from_member} and {to_member} was recorded",
         "payee": {
           "title": "{from_member} marked a payment of {amount} {currency} to you in {group}",
           "detail": "Confirm it once you have received it."
@@ -3941,6 +4038,7 @@
     "payment_pairing": "A credit card can only be set when the payment method is credit card.",
     "plan_required": "This feature requires a Pro plan.",
     "pot_already_divided": "The shares here are already agreed, so something cannot simply be taken out. Record a withdrawal instead, which reduces the withdrawer's share.",
+    "pot_holding_add_divided": "The shares here are already agreed, so something cannot simply be added in. Its value would raise everyone's share pro-rata without changing anyone's units, so what you added would be a gift to the group. You can still contribute money to it, which gives you a share for what you put in.",
     "pot_already_opened": "This already has ownership history, so a baseline cannot be added under it — a baseline is only ever the first entry. To change who owns what, change the split instead.",
     "pot_base_amount_required": "A movement in {amount_currency} has to say how much was credited in {base_currency}. Rates are never assumed.",
     "pot_has_holdings": "There {holding_count, plural, one {is still # thing} other {are still # things}} in here. Move that out before deleting it.",

@@ -2391,6 +2391,7 @@
       "holdings": {
         "title": "Qué hay acá",
         "description": "Las inversiones y cuentas que esto tiene. La suma de su valor es el total que se reparte.",
+        "dividedNote": "Las partes de acá ya están acordadas, así que no se pueden mover cosas hacia adentro ni hacia afuera directamente: cualquiera de las dos cambiaría la parte de todos sin que se mueva la de nadie. Poné dinero como aporte, o sacalo como retiro.",
         "investments": "Inversiones",
         "accounts": "Cuentas",
         "archived": "Archivada",
@@ -2413,6 +2414,7 @@
         "emptyTitle": "Todavía no hay nada acá",
         "emptyDescription": "Mové acá las inversiones y cuentas que este grupo tiene en conjunto. Hasta entonces no hay nada que valuar.",
         "emptyDescriptionReadOnly": "Todavía no se movió nada acá.",
+        "emptyDescriptionDivided": "Las partes de acá ya están acordadas, así que no se puede mover nada hacia adentro.",
         "table": {
           "name": "Nombre",
           "value": "Valor",
@@ -2874,6 +2876,95 @@
       },
       "success": "Ajustes guardados.",
       "error": "No se pudieron guardar los ajustes."
+    },
+    "activity": {
+      "title": "Actividad",
+      "description": "Todo lo que pasó en este grupo, de lo más nuevo a lo más viejo.",
+      "emptyTitle": "Todavía no pasó nada",
+      "emptyDescription": "Cuando alguien registre un gasto, cambie un reparto o salde una deuda, va a aparecer acá.",
+      "unknownActor": "Alguien",
+      "entries": {
+        "group": {
+          "created": "{actor} creó {group}",
+          "updated": "{actor} cambió el nombre o el tipo del grupo"
+        },
+        "group_invite": {
+          "created": "{actor} invitó a {member}",
+          "revoked": "{actor} anuló la invitación de {member}"
+        },
+        "group_member": {
+          "added": "{actor} agregó a {member} al grupo",
+          "joined": "{member} se unió al grupo",
+          "updated": "{actor} actualizó a {member}",
+          "removed": {
+            "base": "{member} ya no está en el grupo",
+            "self": "{member} dejó el grupo",
+            "by_admin": "{actor} sacó a {member} del grupo"
+          }
+        },
+        "group_money_settings": {
+          "updated": "{actor} cambió cómo este grupo divide y salda"
+        },
+        "ownership_event": {
+          "created": {
+            "base": "{actor} registró una entrada de titularidad en {pot}",
+            "opening": "{actor} dividió {pot} entre sus dueños",
+            "contribution": "{actor} registró {amount} que {member} puso en {pot}",
+            "withdrawal": "{actor} registró {amount} que {member} sacó de {pot}",
+            "reagreement": "{actor} registró un cambio de reparto en {pot}, de {member} a {counterparty}"
+          },
+          "deleted": {
+            "base": "{actor} eliminó una entrada de titularidad de {pot}",
+            "opening": "{actor} eliminó el punto de partida de {pot}",
+            "contribution": "{actor} eliminó un aporte de {member} en {pot}",
+            "withdrawal": "{actor} eliminó un retiro de {member} en {pot}",
+            "reagreement": "{actor} eliminó un cambio de reparto en {pot}, de {member} a {counterparty}"
+          }
+        },
+        "pot": {
+          "created": "{actor} creó {pot}",
+          "updated": "{actor} cambió la configuración de {pot}",
+          "deleted": "{actor} eliminó {pot}",
+          "holdings_added": "{actor} movió cosas a {pot}",
+          "holdings_removed": "{actor} sacó cosas de {pot}",
+          "permission_set": {
+            "base": "{actor} cambió el acceso de {member} a {pot}",
+            "write": "{actor} le dio a {member} acceso completo a {pot}",
+            "view": "{actor} dejó que {member} vea {pot} sin poder cambiarlo",
+            "none": "{actor} le quitó a {member} el acceso a {pot}"
+          },
+          "permission_cleared": "{actor} restableció el acceso de {member} a {pot}"
+        },
+        "settlement": {
+          "created": {
+            "base": "{actor} registró {amount} entre {from_member} y {to_member}",
+            "payment": "{actor} registró {amount} que {from_member} le pagó a {to_member}",
+            "write_off": "{to_member} condonó {amount} que le debía {from_member}"
+          },
+          "confirmed": "{to_member} confirmó que recibió {amount} de {from_member}",
+          "unconfirmed": "{to_member} retiró su confirmación de {amount} de {from_member}",
+          "leg_set": {
+            "base": "{actor} cambió por qué cuenta pasó su parte de un pago de {amount}",
+            "attached": "{actor} indicó por qué cuenta pasó su parte de un pago de {amount}",
+            "cleared": "{actor} quitó la cuenta de su parte de un pago de {amount}"
+          },
+          "deleted": {
+            "base": "{actor} eliminó {amount} registrado entre {from_member} y {to_member}",
+            "payment": "{actor} eliminó un pago de {amount} entre {from_member} y {to_member}",
+            "write_off": "{actor} deshizo una condonación de {amount} entre {from_member} y {to_member}"
+          }
+        },
+        "shared_expense": {
+          "created": "{actor} agregó un gasto compartido de {amount}",
+          "updated": "{actor} editó un gasto compartido, ahora {amount}",
+          "deleted": "{actor} eliminó un gasto compartido de {amount}"
+        },
+        "shared_income": {
+          "created": "{actor} agregó un ingreso compartido de {amount}",
+          "updated": "{actor} editó un ingreso compartido, ahora {amount}",
+          "deleted": "{actor} eliminó un ingreso compartido de {amount}"
+        }
+      }
     }
   },
   "preferences": {
@@ -3038,16 +3129,21 @@
       },
       "ownership_changed": {
         "label": "Cambia el reparto de un fondo",
+        "title": "{actor} cambió quién es dueño de qué en {pot}",
         "opening": {
           "title": "{actor} dividió {pot} entre sus dueños"
         },
         "reagreement": {
           "title": "{actor} registró un cambio de reparto en {pot}",
           "detail": "De {from_member} a {to_member}"
+        },
+        "deleted": {
+          "title": "{actor} eliminó una entrada del historial de titularidad de {pot}"
         }
       },
       "pot_movement": {
         "label": "Entra o sale dinero de un fondo",
+        "title": "{member} movió dinero en {pot}",
         "contribution": {
           "title": "{member} puso {amount} {currency} en {pot}"
         },
@@ -3063,6 +3159,7 @@
       },
       "settle_marked_paid": {
         "label": "Alguien registra un pago a tu nombre",
+        "title": "Se registró un pago entre {from_member} y {to_member}",
         "payee": {
           "title": "{from_member} registró un pago de {amount} {currency} a tu nombre en {group}",
           "detail": "Confirmalo cuando lo hayas recibido."
@@ -3941,6 +4038,7 @@
     "payment_pairing": "Solo se puede asignar una tarjeta de crédito cuando el método de pago es tarjeta de crédito.",
     "plan_required": "Esta función requiere un plan Pro.",
     "pot_already_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente sacar algo. Registrá un retiro, que reduce la parte de quien retira.",
+    "pot_holding_add_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente agregar algo. Su valor subiría la parte de todos a prorrata sin que cambien las unidades de nadie, así que lo que agregues sería un regalo al grupo. Sí podés aportar dinero, que te da una parte por lo que pongas.",
     "pot_already_opened": "Esto ya tiene historial de titularidad, así que no se puede agregar un punto de partida por debajo — el punto de partida es siempre la primera entrada. Para cambiar qué parte es de quién, cambiá el reparto.",
     "pot_base_amount_required": "Un movimiento en {amount_currency} tiene que indicar cuánto se acreditó en {base_currency}. Nunca se asume una cotización.",
     "pot_has_holdings": "Todavía {holding_count, plural, one {hay # cosa} other {hay # cosas}} acá. Sacá eso antes de eliminarlo.",
