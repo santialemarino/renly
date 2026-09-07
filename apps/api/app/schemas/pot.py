@@ -262,6 +262,12 @@ class PotReagreementCreate(RequestBase):
 
 
 # Response for the ownership ledger list and for each movement endpoint.
+#
+# The three permission fields are resolved server-side and read as given, exactly as
+# GroupSettlementResponse's pair is. `can_confirm` could not be derived by a client at all — the rule
+# reads `created_by`, which this response deliberately does not expose — and `can_delete` joins it
+# because confirmation is now one of its clauses, so splitting them would put half the rule in each of
+# two places. `confirmed_at` travels too, because it is what the row's badge states.
 class PotOwnershipEventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
@@ -280,5 +286,9 @@ class PotOwnershipEventResponse(BaseModel):
     unit_price: Decimal = Field(description="The price used, as at the event's date.")
     from_account_id: int | None = Field(default=None, description="Account debited.")
     to_account_id: int | None = Field(default=None, description="Account credited.")
+    confirmed_at: datetime | None = Field(default=None, description="Reagreement only: when its affected seat agreed to it. Null means unconfirmed.")
+    can_confirm: bool = Field(description="Whether the requesting user is the affected seat of a re-agreement still awaiting agreement.")
+    can_unconfirm: bool = Field(description="Whether they are that seat and it is confirmed — the only way back out of the lock.")
+    can_delete: bool = Field(description="Whether they may remove it: write access, or either named seat of an unconfirmed re-agreement.")
     notes: str | None = Field(default=None, description="Optional notes.")
     created_at: datetime = Field(description="When it was recorded.")

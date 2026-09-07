@@ -1078,6 +1078,11 @@ CREATE INDEX idx_pot_member_permissions_member_id ON pot_member_permissions(memb
 -- moved in the pot's own base currency.
 -- unit_price is kept for audit: it is derivable from NAV at the date, but NAV moves as later
 -- snapshots arrive, so the price actually used has to be recorded when it is used.
+-- confirmed_at is a reagreement's TRUST ANCHOR and the only column on this table anything ever
+-- UPDATEs — the grants further down narrow UPDATE to it. The row counts whatever the column says: an
+-- unapplied reagreement would leave the pot showing percentages everybody agrees are wrong, so this is
+-- a LOCK rather than a gate. Unconfirmed, either named seat may delete the entry; confirmed, nobody
+-- may until that seat takes their word back. Exactly group_settlements.confirmed_at's shape.
 -- from_account_id / to_account_id are what make the event a real MOVEMENT rather than a note about
 -- one: a contribution debits the mover's private account and credits an account the pot holds, a
 -- withdrawal reverses it, and the per-account balance union reads both legs. Without them the money
@@ -1100,6 +1105,7 @@ CREATE TABLE pot_ownership_events (
   unit_price             NUMERIC(18, 6) NOT NULL,
   from_account_id        BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   to_account_id          BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
+  confirmed_at           TIMESTAMPTZ,
   notes                  TEXT,
   created_by             BIGINT REFERENCES users(id) ON DELETE SET NULL,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -1124,6 +1130,13 @@ CREATE TABLE pot_ownership_events (
   -- on both sides would be added and subtracted at once and the row would be a silent no-op.
   CONSTRAINT pot_ownership_events_distinct_accounts CHECK (
     from_account_id IS NULL OR to_account_id IS NULL OR from_account_id <> to_account_id
+  ),
+  -- Only a reagreement is confirmed, for the same reason only a reagreement may be deleted by a named
+  -- seat: it is the only event type that moves value between two people with no money changing hands,
+  -- so it is the only one with an affected seat whose agreement means anything. A contribution or a
+  -- withdrawal moves the mover's own money and an opening is the division everybody agreed to.
+  CONSTRAINT pot_ownership_events_confirmable CHECK (
+    confirmed_at IS NULL OR type = 'reagreement'
   )
 );
 
@@ -2072,23 +2085,90 @@ CREATE POLICY pot_ownership_events_scope_read ON pot_ownership_events FOR SELECT
         AND a.user_id = app_current_user_id()
     )
   );
-CREATE POLICY pot_ownership_events_scope_write ON pot_ownership_events FOR ALL
-  USING (app_can_write_pot(pot_id))
+
+-- Split per COMMAND rather than one FOR ALL, and the missing verb is the point: nothing in the app
+-- UPDATEs a ledger entry except a confirmation, so write access grants INSERT and DELETE and no more.
+-- A row whose units a writer could rewrite after the fact would make every derived balance a claim
+-- about the present rather than a replay of what happened. (Permissive policies are OR-ed per command,
+-- so SELECT still resolves to the read policy above.)
+--
+-- The delete carries the LOCK, and it is what makes confirming more than a label: a confirmed entry is
+-- undeletable by everybody, a pot's own writer included, and the only way back out is the affected seat
+-- un-confirming. A no-op for the other three event types, which the CHECK above keeps unconfirmable.
+-- FK cascades from pots and group_members run as this table's owner and are exempt, so deleting a pot
+-- still takes its confirmed entries with it.
+CREATE POLICY pot_ownership_events_scope_insert ON pot_ownership_events FOR INSERT
   WITH CHECK (app_can_write_pot(pot_id));
+CREATE POLICY pot_ownership_events_scope_delete ON pot_ownership_events FOR DELETE
+  USING (app_can_write_pot(pot_id) AND confirmed_at IS NULL);
+
+-- The confirmation, and the ONE rule about who may give it, stated here as well as in Python because
+-- the whole decision (§29.1) is that write access is NOT the trust boundary: create_pot grants
+-- can_write to the creator only, so a rule keyed on it would let whoever recorded the change also
+-- vouch for it. This is the only UPDATE the database permits on this table at all, and the grants
+-- below cap it to the two columns a confirmation touches.
+--
+-- The affected seat is the giver, unless the giver RECORDED the change, in which case it is the
+-- receiver. Written as one expression rather than a set of two seats because that is what makes the
+-- answer always be somebody who did not record the row — including a third party with write access
+-- recording a change between two other members, where the seat with something taken is the one whose
+-- agreement is worth having. `giver.user_id = created_by` is a plain equality on purpose: a NULL on
+-- either side (a name-only giver, or a recorder whose account has since been deleted) yields NULL,
+-- which falls to the ELSE and leaves the answer on the giver — the safe direction.
+--
+-- No WITH CHECK, and that is not an omission: Postgres reuses the USING expression as the check when
+-- one is absent, so the row has to qualify both before and after either way. Spelling it out twice
+-- would be twenty lines that can never disagree with the twenty above them — and unreachable besides,
+-- since the column grant below leaves nothing the predicate reads writable.
+CREATE POLICY pot_ownership_events_confirm_update ON pot_ownership_events FOR UPDATE
+  USING (
+    pot_ownership_events.type = 'reagreement'
+    AND app_can_view_pot(pot_ownership_events.pot_id)
+    AND EXISTS (
+      SELECT 1 FROM group_members giver
+      JOIN group_members caller
+        ON caller.id = CASE WHEN giver.user_id = pot_ownership_events.created_by
+                            THEN pot_ownership_events.counterparty_member_id
+                            ELSE pot_ownership_events.member_id
+                       END
+      WHERE giver.id = pot_ownership_events.member_id
+        AND caller.user_id = app_current_user_id()
+        AND caller.is_active
+    )
+  );
+-- UPDATE narrowed to the confirmation's own column, the same way shared_audit_log's append-only rule
+-- is a grant rather than a trigger: the ALTER DEFAULT PRIVILEGES above hands renly_app all four verbs
+-- on every table, so the table-level UPDATE is revoked and handed back per column. A policy cannot
+-- express this — RLS filters rows, never columns — so without it the confirming seat could rewrite
+-- `units` on their own re-agreement, and a permission error rather than a silent no-op is what makes
+-- the refusal visible.
+--
+-- confirmed_at ALONE, not updated_at with it. Column privileges are checked against a statement's SET
+-- list, and nothing in this codebase ever sets updated_at itself — the BEFORE UPDATE trigger writes
+-- NEW.updated_at, which needs no privilege of the invoking role. So the narrower grant is the true one,
+-- and it fails loudly if that ever stops being so. Referential actions likewise run as the table's
+-- owner and are exempt, which is what keeps the ON DELETE SET NULL on both account legs and on
+-- created_by working.
+REVOKE UPDATE ON pot_ownership_events FROM renly_app;
+GRANT UPDATE (confirmed_at) ON pot_ownership_events TO renly_app;
 
 -- The one exception to write access on this table, and it exists because the default configuration of
 -- a divided pot leaves a co-owner with no remedy: create_pot grants can_write to the CREATOR only, and
 -- recording the opening grants nobody else write, so the creator can move units away from a co-owner
 -- who can then do nothing about it.
 -- FOR DELETE alone, and narrow in every other direction. It names no INSERT or UPDATE, so a
--- counterparty gains no ability to record or rewrite anything (permissive policies are OR-ed per
--- command, so the FOR ALL above still governs those). It requires app_can_view_pot as well as the seat
+-- counterparty gains no ability to record anything, and no ability to confirm one they are not the
+-- affected seat of (permissive policies are OR-ed per command, so the insert and confirm policies above
+-- still govern those on their own terms). It requires app_can_view_pot as well as the seat
 -- match, so a member the pot is hidden from cannot reach a row they cannot read. And it is restricted
 -- to `reagreement`: a contribution or a withdrawal moves the mover's own money, and an opening is the
--- division everyone agreed to, so neither has a counterparty with a claim to undo it.
+-- division everyone agreed to, so neither has a counterparty with a claim to undo it. And it stops at
+-- the confirmation, exactly as the writer's delete does — the remedy is what a seat has BEFORE they
+-- agree, and agreeing is what gives it up.
 CREATE POLICY pot_ownership_events_counterparty_delete ON pot_ownership_events FOR DELETE
   USING (
     pot_ownership_events.type = 'reagreement'
+    AND pot_ownership_events.confirmed_at IS NULL
     AND app_can_view_pot(pot_ownership_events.pot_id)
     AND EXISTS (
       SELECT 1 FROM group_members gm

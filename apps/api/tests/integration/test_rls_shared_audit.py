@@ -23,7 +23,9 @@ from sqlalchemy.orm import sessionmaker
 #
 #   * `pot_ownership_events_counterparty_delete` is the database half of the counterparty remedy. The
 #     service refuses first, so a unit test proves only the service — the policy underneath it would
-#     refuse the same delete, and nothing but this file would say so.
+#     refuse the same delete, and nothing but this file would say so. Its `confirmed_at IS NULL` clause
+#     — the LOCK a confirmation puts on the entry — is covered in test_rls_reagreement_confirm.py
+#     instead, beside the confirm policy that sets the column.
 #
 # Uses the same env vars as test_rls_isolation.py so the whole RLS set runs together.
 from app.db import set_session_user
@@ -434,12 +436,18 @@ async def test_a_member_the_reagreement_does_not_name_may_not_delete_it(seeded):
 
 
 @pytest.mark.asyncio
-async def test_the_widening_grants_no_insert_and_no_update(seeded):
+async def test_the_widening_grants_no_insert_and_no_rewrite(seeded):
     """DELETE alone, which is what keeps the remedy from becoming write access.
 
-    The new policy names FOR DELETE, so the existing FOR ALL policy still governs the other commands —
-    and its WITH CHECK stays app_can_write_pot. Both halves asserted, because a FOR ALL widening would
-    have passed the delete tests above identically.
+    The policy names FOR DELETE, so the insert and confirm policies beside it still govern those
+    commands on their own terms. Both halves asserted, because a FOR ALL widening would have passed the
+    delete tests above identically.
+
+    The two refusals arrive differently, and the difference is the point. The INSERT is refused by a
+    POLICY, so it raises a row-security violation. The rewrite is refused by a GRANT — this seat may
+    reach the row's confirm policy, so RLS would let the UPDATE through; what stops it touching `units`
+    is that renly_app holds UPDATE on `confirmed_at` and on no other column, which is a permission
+    error rather than a filtered no-op. See test_rls_reagreement_confirm.py for that rule in full.
     """
     async with _as(seeded, "counterparty") as s:
         with pytest.raises(DBAPIError):
@@ -452,8 +460,8 @@ async def test_the_widening_grants_no_insert_and_no_update(seeded):
             )
         await s.rollback()
     async with _as(seeded, "counterparty") as s:
-        changed = await s.execute(text("UPDATE pot_ownership_events SET units = 0 WHERE id = :i"), {"i": seeded["reagreement"]})
-        assert changed.rowcount == 0
+        with pytest.raises(DBAPIError):
+            await s.execute(text("UPDATE pot_ownership_events SET units = 0 WHERE id = :i"), {"i": seeded["reagreement"]})
         await s.rollback()
 
 

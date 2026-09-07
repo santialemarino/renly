@@ -837,6 +837,63 @@ class PotBaseAmountRequiredError(DomainError):
         return {"amount_currency": self.amount_currency, "base_currency": self.base_currency}
 
 
+# A confirmation was asked of an event that carries none. Only a RE-AGREEMENT is confirmed, and the
+# reason is the same one that keeps the counterparty's delete narrow: it is the only event type that
+# moves value between two people without money changing hands, so it is the only one with an affected
+# seat whose agreement means anything. A contribution and a withdrawal move the mover's own money, and
+# an opening is the division everybody agreed to.
+#
+# A real rule rather than a malformed body, which is why it is a coded refusal and not a 422: the
+# database says the same thing through a CHECK on confirmed_at, and the only way to reach it is to name
+# another event's id on the confirm route. Mapped to 409 — the request is well-formed and conflicts
+# with what the row is.
+class PotEventNotConfirmableError(DomainError):
+    code = "pot_event_not_confirmable"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "Only a change of split is confirmed. A baseline, a contribution and a withdrawal carry no confirmation."
+        super().__init__(self.message)
+
+
+# A confirmed re-agreement was asked to be confirmed again, or to be deleted. ONE error for both, the
+# way GroupSettlementConfirmedError covers the same pair, because the sentence a user needs is the same
+# in both cases: the row is locked and there is exactly one way out of it.
+#
+# The lock is what confirmation IS. The re-agreement counted from the moment it was recorded — an
+# unapplied one would leave the pot showing percentages everyone agrees are wrong — so confirming
+# changes not the arithmetic but who may undo it: while unconfirmed either named seat may delete it,
+# and once confirmed nobody may until the seat that agreed takes their word back. Mapped to 409.
+class PotReagreementConfirmedError(DomainError):
+    code = "pot_reagreement_confirmed"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = "This change of split is confirmed. The member who agreed to it has to un-confirm it first."
+        super().__init__(self.message)
+
+
+# Somebody who is not the affected seat tried to confirm or un-confirm a re-agreement. Write access is
+# deliberately NOT the answer here, and that is the whole point of the confirm: write access is not
+# granted by ownership — create_pot inserts can_write for the creator only — so a rule keyed on it
+# would let the person who recorded the change also vouch for it.
+#
+# The affected seat is the one LOSING units, unless they recorded the change themselves, in which case
+# it is the one receiving them. One rule, and it always names a seat that did not record the row —
+# including when a third party with write access recorded a change between two other members, where the
+# seat with something taken is the one whose agreement is worth having.
+#
+# A name-only seat cannot confirm, exactly as D34 has it for a settlement: such a re-agreement is
+# simply never confirmable, and stays deletable by the real seat instead. Mapped to 403.
+class PotReagreementNotYoursError(DomainError):
+    code = "pot_reagreement_not_yours"
+    status_code = 403
+
+    def __init__(self) -> None:
+        self.message = "This change of split is not yours to confirm — only the member whose share it moved can."
+        super().__init__(self.message)
+
+
 # A pot still holds investments or accounts, so it cannot be deleted. The database refuses it too
 # (every pot_id foreign key is ON DELETE RESTRICT); this exists so the refusal arrives as a real
 # message instead of an integrity error. Mapped to 409.
