@@ -764,10 +764,55 @@ class PotHoldingAddDividedError(DomainError):
 
     def __init__(self) -> None:
         self.message = (
-            "This pot's ownership is already agreed, so a holding cannot be added to it. "
-            "Contribute money to the pot instead, which issues you units for what you put in."
+            "This pot's ownership is already agreed, so a holding cannot simply be added to it. "
+            "Contribute it instead, which values it and issues you units for exactly that."
         )
         super().__init__(self.message)
+
+
+# A holding offered as a contribution is ARCHIVED. Both NAV queries filter on is_active, so an
+# archived holding contributes nothing to the pot's value — units issued against it would dilute every
+# other owner for value the pot never gains, which is the same coupling
+# pot_movement_account_inactive exists to refuse one leg further along. Mapped to 400.
+class PotHoldingInactiveError(DomainError):
+    code = "pot_holding_inactive"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That is archived, so it is not counted in the pot's value. Restore it before contributing it."
+        super().__init__(self.message)
+
+
+# A holding offered as a contribution has no value on record at the date it would be priced at — an
+# investment nobody has snapshotted on or before it. The units issued ARE its value, so there is
+# nothing to issue; refused rather than treated as zero, the same posture the NAV takes when a holding
+# it contains is unvalued. Mapped to 400.
+class PotHoldingUnvaluedError(DomainError):
+    code = "pot_holding_unvalued"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That has no value on record, so there is nothing to issue units against. Record what it is worth first."
+        super().__init__(self.message)
+
+
+# A holding offered as a contribution is worth zero or less — an emptied or overdrawn account, or a
+# figure that rounds to nothing once converted into the pot's base currency. Units are issued FROM the
+# value, so zero issues nothing and a negative would redeem units the contributor may not even hold:
+# a withdrawal wearing a contribution's name. Mapped to 400.
+class PotHoldingNotPositiveError(DomainError):
+    code = "pot_holding_not_positive"
+    status_code = 400
+
+    def __init__(self, value: Decimal, currency: str) -> None:
+        self.value = value
+        self.currency = currency
+        self.message = f"A contribution has to be worth more than zero (that one is worth {value} {currency})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"value": str(self.value), "currency": self.currency}
 
 
 # A cross-currency ownership movement did not record the amount credited to the pot. `amount` is in

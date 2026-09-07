@@ -174,18 +174,24 @@ async def sum_in_by_account_ids_dated(session: AsyncSession, account_ids: list[i
     return await _sum_leg_dated(session, PotOwnershipEvent.to_account_id, _TO_AMOUNT, account_ids, until=until)
 
 
-# Whether any ownership event names one of these accounts on either leg. Used before an account is
-# moved into (or out of) a pot: a movement already recorded against it would otherwise end up in a
-# different scope than the account it belongs to.
-async def exists_for_accounts(session: AsyncSession, account_ids: list[int]) -> bool:
+# WHICH of these accounts an ownership event names on either leg. Asked before an account is moved
+# into (or out of) a pot: a movement already recorded against it would otherwise end up in a different
+# scope than the account it belongs to.
+#
+# Scope-free by nature, so it has no user-filtered sibling — an ownership event's two legs sit on
+# OPPOSITE sides of the scope boundary by construction, so filtering by user_id would hide exactly the
+# leg the question is about. Returns ids rather than a boolean for the same reason its transfer
+# counterpart does: one caller names the offending accounts, the other keeps the rest.
+async def linked_account_ids(session: AsyncSession, account_ids: list[int]) -> set[int]:
     if not account_ids:
-        return False
+        return set()
     result = await session.execute(
-        select(PotOwnershipEvent.id)
-        .where(or_(PotOwnershipEvent.from_account_id.in_(account_ids), PotOwnershipEvent.to_account_id.in_(account_ids)))
-        .limit(1)
+        select(PotOwnershipEvent.from_account_id, PotOwnershipEvent.to_account_id).where(
+            or_(PotOwnershipEvent.from_account_id.in_(account_ids), PotOwnershipEvent.to_account_id.in_(account_ids))
+        )
     )
-    return result.scalars().first() is not None
+    wanted = set(account_ids)
+    return {account_id for row in result.all() for account_id in row if account_id in wanted}
 
 
 # Namespace to call repository functions (e.g. pot_ownership_repository.list_by_pot).
@@ -194,8 +200,8 @@ class PotOwnershipRepository:
     create_many = staticmethod(create_many)
     delete = staticmethod(delete)
     delete_openings = staticmethod(delete_openings)
-    exists_for_accounts = staticmethod(exists_for_accounts)
     get_by_id = staticmethod(get_by_id)
+    linked_account_ids = staticmethod(linked_account_ids)
     list_by_pot = staticmethod(list_by_pot)
     list_by_pots = staticmethod(list_by_pots)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)

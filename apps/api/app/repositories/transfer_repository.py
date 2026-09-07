@@ -207,16 +207,23 @@ async def linked_account_ids(session: AsyncSession, account_ids: list[int], user
     return {account_id for row in result.all() for account_id in row if account_id in wanted}
 
 
-# Whether ANY transfer names one of these accounts on either leg, in any scope. Distinct from
+# WHICH of these accounts any transfer names on either leg, in any scope. Distinct from
 # linked_account_ids, which filters by user_id and therefore cannot see a pot-scoped transfer at all
 # — the exact blind spot that matters when asking whether a SHARED account may leave its pot.
-async def exists_for_accounts(session: AsyncSession, account_ids: list[int]) -> bool:
+#
+# Returns the ids rather than a boolean because two callers ask about a SET: the move guard names the
+# offending accounts in its refusal, and the contribution picker has to drop the linked ones and keep
+# the rest. A boolean forced both to treat every account in the batch as linked the moment one was.
+async def linked_account_ids_any_scope(session: AsyncSession, account_ids: list[int]) -> set[int]:
     if not account_ids:
-        return False
+        return set()
     result = await session.execute(
-        select(Transfer.id).where(Transfer.from_account_id.in_(account_ids) | Transfer.to_account_id.in_(account_ids)).limit(1)
+        select(Transfer.from_account_id, Transfer.to_account_id).where(
+            Transfer.from_account_id.in_(account_ids) | Transfer.to_account_id.in_(account_ids)
+        )
     )
-    return result.scalars().first() is not None
+    wanted = set(account_ids)
+    return {account_id for row in result.all() for account_id in row if account_id in wanted}
 
 
 # Namespace to call repository functions (e.g. transfer_repository.list_by_user).
@@ -224,9 +231,9 @@ class TransferRepository:
     create = staticmethod(create)
     delete = staticmethod(delete)
     exists_by_account_id = staticmethod(exists_by_account_id)
-    exists_for_accounts = staticmethod(exists_for_accounts)
     get_by_id = staticmethod(get_by_id)
     linked_account_ids = staticmethod(linked_account_ids)
+    linked_account_ids_any_scope = staticmethod(linked_account_ids_any_scope)
     list_by_user = staticmethod(list_by_user)
     save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)

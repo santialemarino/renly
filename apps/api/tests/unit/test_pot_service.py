@@ -13,18 +13,25 @@ import pytest
 
 from app.domain import (
     AccountHasLinkedEntriesError,
+    ExchangeRateUnavailableError,
     NotFoundError,
     PotHasHoldingsError,
     PotHoldingAddDividedError,
+    PotHoldingInactiveError,
+    PotHoldingNotPositiveError,
+    PotHoldingUnvaluedError,
+    PotValuation,
     PotWriteRequiredError,
 )
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.investment import Investment, InvestmentCategory
-from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
+from app.models.pot import OwnershipEventType, Pot, PotCadence, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.snapshot import InvestmentSnapshot
 from app.models.user import User
+from app.schemas.pot import PotHoldingResponse
 from app.services import pot_service
+from app.utils.metrics import RateLookup
 
 USER = User(id=1, name="Santi", email="u@test", password_hash="x", session_epoch=0)
 OTHER = User(id=2, name="Ana", email="a@test", password_hash="x", session_epoch=0)
@@ -45,31 +52,46 @@ def _pot_investment(investment_id: int) -> Investment:
     return Investment(id=investment_id, user_id=None, pot_id=5, name=f"I{investment_id}", category=InvestmentCategory.fci, base_currency="USD")
 
 
+# A rate lookup with nothing in it: every fixture in the picker tests is single-currency, so no
+# conversion is ever reached and an empty one proves the figures came from the holdings themselves
+# rather than from a rate.
+_LOOKUP = RateLookup(dollar_preference=None, rates_by_pair={})
+
+
+# The one ledger row the picker replays to learn how many units are outstanding: 100 at 1.00, which
+# against a NAV of 110 is the same clean 1.10 price the ownership tests use.
+def _opening_event() -> PotOwnershipEvent:
+    return PotOwnershipEvent(
+        id=1, pot_id=5, type=OwnershipEventType.opening, date=date(2026, 1, 1), member_id=100, units=Decimal("100"), unit_price=Decimal("1")
+    )
+
+
 def _permission(**kwargs) -> PotMemberPermission:
     defaults = dict(pot_id=5, member_id=100, can_view=True, can_write=False)
     return PotMemberPermission(**{**defaults, **kwargs})
 
 
-# Every table the scope-boundary guard consults, stubbed clean, so a test can override the ONE it is
-# about. Listed once rather than per test: a table added to the guard and not to this tuple makes all
-# five of those tests fail in one place, which is the point — the guard grew a blind spot twice, and
-# both times it was a table nobody remembered it should ask.
-_GUARDED_REPOSITORIES = (
-    "income_repository",
-    "expense_repository",
-    "card_settlement_repository",
-    "transfer_repository",
-    "shared_expense_repository",
-    "shared_income_repository",
-    "group_settlement_repository",
+# Every read the scope-boundary guard consults, as (repository, method) so the two scope-FREE ones sit
+# in the same enumeration as the seven others rather than beside it. Stubbed clean here so a test can
+# override the ONE it is about. Listed once rather than per test: a table added to the guard and not to
+# this tuple makes all eight of those tests fail in one place, which is the point — the guard grew a
+# blind spot twice, and both times it was a table nobody remembered it should ask.
+_GUARDED_READS = (
+    ("income_repository", "linked_account_ids"),
+    ("expense_repository", "linked_account_ids"),
+    ("card_settlement_repository", "linked_account_ids"),
+    ("transfer_repository", "linked_account_ids"),
+    ("shared_expense_repository", "linked_account_ids"),
+    ("shared_income_repository", "linked_account_ids"),
+    ("group_settlement_repository", "linked_account_ids"),
+    ("transfer_repository", "linked_account_ids_any_scope"),
+    ("pot_ownership_repository", "linked_account_ids"),
 )
 
 
 def _no_movements(monkeypatch) -> None:
-    for repository in _GUARDED_REPOSITORIES:
-        monkeypatch.setattr(getattr(pot_service, repository), "linked_account_ids", AsyncMock(return_value=set()))
-    monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=False))
-    monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=False))
+    for repository, method in _GUARDED_READS:
+        monkeypatch.setattr(getattr(pot_service, repository), method, AsyncMock(return_value=set()))
 
 
 class TestVisibilityResolution:
@@ -275,7 +297,7 @@ class TestMovingHoldings:
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.account_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._account(7)]))
         _no_movements(monkeypatch)
-        monkeypatch.setattr(pot_service.pot_ownership_repository, "exists_for_accounts", AsyncMock(return_value=True))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "linked_account_ids", AsyncMock(return_value={7}))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         with pytest.raises(AccountHasLinkedEntriesError):
@@ -413,7 +435,7 @@ class TestMovingHoldings:
             AsyncMock(return_value=[self._account(7, user_id=None, pot_id=5)]),
         )
         _no_movements(monkeypatch)
-        monkeypatch.setattr(pot_service.transfer_repository, "exists_for_accounts", AsyncMock(return_value=True))
+        monkeypatch.setattr(pot_service.transfer_repository, "linked_account_ids_any_scope", AsyncMock(return_value={7}))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.account_repository, "move_to_scope", move)
         with pytest.raises(AccountHasLinkedEntriesError):
@@ -450,6 +472,255 @@ class TestMovingHoldings:
         with pytest.raises(NotFoundError):
             await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=False)
         move.assert_not_awaited()
+
+
+class TestContributionRefusal:
+    # THE rule the picker filters on and the write raises. Every case below is a row that must not be
+    # offered, because a row that is offered and then 400s is exactly what U6 forbids.
+
+    PRICE = Decimal("1.10")
+
+    @staticmethod
+    def _row(value, base_value, currency="USD"):
+        return PotHoldingResponse(id=1, name="X", currency=currency, value=value, base_value=base_value, is_active=True, valued_on=None)
+
+    def test_a_valued_positive_convertible_holding_is_contributable(self):
+        # The positive control. Without it every assertion below passes on a rule that refuses
+        # everything.
+        assert pot_service.contribution_refusal(self._row(Decimal("55"), Decimal("55")), "USD", self.PRICE) is None
+
+    def test_a_holding_nobody_has_valued_is_refused_for_being_unvalued(self):
+        # An investment with no snapshot on or before today. The units issued ARE its value, so there
+        # is nothing to issue — and treating it as zero would take an asset and give nothing back.
+        refusal = pot_service.contribution_refusal(self._row(None, None), "USD", self.PRICE)
+        assert isinstance(refusal, PotHoldingUnvaluedError)
+
+    def test_an_emptied_or_overdrawn_account_is_refused_for_being_worth_nothing(self):
+        # Zero issues no units; a negative would REDEEM units the contributor may not even hold — a
+        # withdrawal wearing a contribution's name.
+        #
+        # ACROSS CURRENCIES on purpose. A non-positive figure converts to a non-positive one, so the
+        # units test further down refuses the same rows — and against a same-currency fixture the two
+        # name the identical figure, which is how a mutation deleting this check stayed green. What the
+        # check actually buys is the figure the PERSON recognises: -10 ARS, not -0.01 USD.
+        for value, base in ((Decimal("0"), Decimal("0.00")), (Decimal("-10"), Decimal("-0.01"))):
+            refusal = pot_service.contribution_refusal(self._row(value, base, currency="ARS"), "USD", self.PRICE)
+            assert isinstance(refusal, PotHoldingNotPositiveError)
+            assert refusal.extra == {"value": str(value), "currency": "ARS"}
+
+    def test_a_holding_whose_currency_has_no_rate_is_refused_naming_the_pots_currency(self):
+        # A real value, no way to state it in the pot's currency. Distinct from unvalued because the
+        # remedy is distinct: a rate, not a snapshot.
+        refusal = pot_service.contribution_refusal(self._row(Decimal("66000"), None, currency="ARS"), "USD", self.PRICE)
+        assert isinstance(refusal, ExchangeRateUnavailableError)
+        assert refusal.extra == {"currency": "USD"}
+
+    def test_a_holding_worth_nothing_ONCE_CONVERTED_is_refused_in_the_pots_currency(self):
+        # The quiet one: genuinely positive in its own currency, and 0.00 in the pot's. The refusal
+        # names the base figure and the base currency, because that is the figure that is the problem.
+        refusal = pot_service.contribution_refusal(self._row(Decimal("1"), Decimal("0.00"), currency="ARS"), "USD", self.PRICE)
+        assert isinstance(refusal, PotHoldingNotPositiveError)
+        assert refusal.extra == {"value": "0.00", "currency": "USD"}
+
+    def test_a_holding_too_small_to_buy_a_millionth_of_a_unit_is_refused(self):
+        # Positive both ways and still worth nothing HERE, because units are NUMERIC(18,6): at a unit
+        # price of 100,000 a base figure of 0.01 divides to 0.0000001, which rounds to zero units. The
+        # asset would move and nothing would be issued for it. Reachable only on a pot that has grown
+        # enormously, which is why the guard is stated rather than left to arithmetic nobody checked.
+        refusal = pot_service.contribution_refusal(self._row(Decimal("0.01"), Decimal("0.01")), "USD", Decimal("100000"))
+        assert isinstance(refusal, PotHoldingNotPositiveError)
+
+
+class TestResolvingAContributableHolding:
+    # Which of the caller's own things may be handed to a pot, and what each refusal protects.
+
+    @staticmethod
+    def _investment(**kwargs) -> Investment:
+        defaults = dict(id=12, user_id=USER.id, pot_id=None, name="Fondo", category=InvestmentCategory.fci, base_currency="USD", is_active=True)
+        return Investment(**{**defaults, **kwargs})
+
+    @pytest.mark.asyncio
+    async def test_the_callers_own_private_active_investment_resolves(self, monkeypatch):
+        investment = self._investment()
+        monkeypatch.setattr(pot_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=investment))
+        assert await pot_service.require_contributable_holding(AsyncMock(), USER, investment_id=12, account_id=None) is investment
+
+    @pytest.mark.asyncio
+    async def test_somebody_elses_holding_is_a_404_rather_than_a_refusal(self, monkeypatch):
+        # Belt and braces over RLS, and deliberately indistinguishable from "no such id": a specific
+        # refusal here would confirm that somebody else's investment exists.
+        monkeypatch.setattr(pot_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=self._investment(user_id=OTHER.id)))
+        with pytest.raises(NotFoundError):
+            await pot_service.require_contributable_holding(AsyncMock(), USER, investment_id=12, account_id=None)
+
+    @pytest.mark.asyncio
+    async def test_a_holding_already_inside_a_pot_is_a_404_too(self, monkeypatch):
+        # Contributing a pot's own holding back to it would issue units for value that pot already
+        # counts, and contributing ANOTHER pot's would move it sideways out of its owners' hands.
+        monkeypatch.setattr(
+            pot_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=self._investment(user_id=None, pot_id=7))
+        )
+        with pytest.raises(NotFoundError):
+            await pot_service.require_contributable_holding(AsyncMock(), USER, investment_id=12, account_id=None)
+
+    @pytest.mark.asyncio
+    async def test_a_row_naming_BOTH_an_owner_and_a_pot_is_refused_too(self, monkeypatch):
+        # The state investments_single_owner makes impossible in the database, constructed here because
+        # that is the only place it can exist. Without this the pot_id clause is unreachable — a shared
+        # holding has user_id NULL, so the owner check alone already refuses every real row, and a
+        # mutation deleting the clause stayed green. Refusing it keeps the service fail-closed if the
+        # constraint is ever dropped or a row drifts.
+        monkeypatch.setattr(pot_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=self._investment(pot_id=7)))
+        with pytest.raises(NotFoundError):
+            await pot_service.require_contributable_holding(AsyncMock(), USER, investment_id=12, account_id=None)
+
+    @pytest.mark.asyncio
+    async def test_an_archived_holding_is_refused_by_name(self, monkeypatch):
+        # Both NAV queries filter on is_active, so an archived holding raises nobody's value — units
+        # issued against it would dilute every other owner for nothing. A real refusal rather than a
+        # 404, because the caller can act on it: restore it.
+        monkeypatch.setattr(pot_service.investment_repository, "get_by_id_any_scope", AsyncMock(return_value=self._investment(is_active=False)))
+        with pytest.raises(PotHoldingInactiveError):
+            await pot_service.require_contributable_holding(AsyncMock(), USER, investment_id=12, account_id=None)
+
+    @pytest.mark.asyncio
+    async def test_an_account_carrying_movements_cannot_be_contributed_either(self, monkeypatch):
+        # The same rule and the same enumeration the plain move applies: a shared account whose balance
+        # derives from one person's rows reports a different figure to every member.
+        account = Account(id=7, user_id=USER.id, name="A", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        monkeypatch.setattr(pot_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=account))
+        _no_movements(monkeypatch)
+        monkeypatch.setattr(pot_service.expense_repository, "linked_account_ids", AsyncMock(return_value={7}))
+        with pytest.raises(AccountHasLinkedEntriesError):
+            await pot_service.require_contributable_holding(AsyncMock(), USER, account_id=7, investment_id=None)
+
+    @pytest.mark.asyncio
+    async def test_a_clean_account_resolves(self, monkeypatch):
+        account = Account(id=7, user_id=USER.id, name="A", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        monkeypatch.setattr(pot_service.account_repository, "get_by_id_any_scope", AsyncMock(return_value=account))
+        _no_movements(monkeypatch)
+        assert await pot_service.require_contributable_holding(AsyncMock(), USER, account_id=7, investment_id=None) is account
+
+
+class TestAttachingTheHolding:
+    # Which table the move actually writes to. An investment and an account are re-pointed by different
+    # repositories, and both calls look identical at the call site — so a branch that always took the
+    # investment path moved nothing when an ACCOUNT was contributed, leaving a ledger entry issuing
+    # units against a holding that never arrived. A mutation proved nothing caught that.
+
+    @staticmethod
+    def _wire(monkeypatch):
+        investment = AsyncMock(return_value=1)
+        account = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", investment)
+        monkeypatch.setattr(pot_service.account_repository, "move_to_scope", account)
+        return (investment, account)
+
+    @pytest.mark.asyncio
+    async def test_an_investment_is_re_pointed_by_the_investment_repository(self, monkeypatch):
+        investment, account = self._wire(monkeypatch)
+        row = Investment(id=12, user_id=USER.id, name="Fondo", category=InvestmentCategory.fci, base_currency="USD")
+        await pot_service.attach_holding(AsyncMock(), _pot(), row)
+        assert investment.await_args.args[1] == [12]
+        assert investment.await_args.kwargs == {"pot_id": 5, "user_id": None}
+        account.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_account_is_re_pointed_by_the_account_repository(self, monkeypatch):
+        investment, account = self._wire(monkeypatch)
+        row = Account(id=7, user_id=USER.id, name="A", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        await pot_service.attach_holding(AsyncMock(), _pot(), row)
+        assert account.await_args.args[1] == [7]
+        assert account.await_args.kwargs == {"pot_id": 5, "user_id": None}
+        investment.assert_not_awaited()
+
+
+class TestTheContributionPicker:
+    # The picker offers exactly what the write accepts. Asserted as an AGREEMENT between the two rather
+    # than as a list of expected rows: a per-row expectation agrees with itself forever, while running
+    # both sides over one set of candidates fails the moment either drifts.
+
+    @staticmethod
+    def _wire(monkeypatch, *, investments, snapshots, accounts=(), balances=None, linked=frozenset(), nav=Decimal("110")):
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=_LOOKUP))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[_opening_event()]))
+        monkeypatch.setattr(pot_service, "get_valuation", AsyncMock(return_value=PotValuation(nav=nav, valued_as_of=None, is_stale=False)))
+        monkeypatch.setattr(pot_service.metrics_repository, "list_active_investments", AsyncMock(return_value=list(investments)))
+        monkeypatch.setattr(pot_service.account_repository, "list_by_user", AsyncMock(return_value=list(accounts)))
+        monkeypatch.setattr(pot_service.snapshot_repository, "get_latest_by_investments", AsyncMock(return_value=snapshots))
+        monkeypatch.setattr(pot_service.account_service, "compute_account_balances_at", AsyncMock(return_value=balances or {}))
+        monkeypatch.setattr(pot_service, "_accounts_with_movements", AsyncMock(return_value=set(linked)))
+
+    @pytest.mark.asyncio
+    async def test_it_offers_the_valued_ones_and_drops_the_rest(self, monkeypatch):
+        # Three investments, one of each state, so the drop is visible against a control that stays.
+        valued = Investment(id=1, user_id=USER.id, name="Fondo", category=InvestmentCategory.fci, base_currency="USD")
+        unvalued = Investment(id=2, user_id=USER.id, name="Nuevo", category=InvestmentCategory.fci, base_currency="USD")
+        empty = Investment(id=3, user_id=USER.id, name="Vacio", category=InvestmentCategory.fci, base_currency="USD")
+        snapshots = {
+            1: InvestmentSnapshot(investment_id=1, date=date(2026, 2, 1), value=Decimal("55"), currency="USD"),
+            3: InvestmentSnapshot(investment_id=3, date=date(2026, 2, 1), value=Decimal("0"), currency="USD"),
+        }
+        self._wire(monkeypatch, investments=[valued, unvalued, empty], snapshots=snapshots)
+        offered = await pot_service.list_contributable_holdings(AsyncMock(), 5, USER)
+        assert [row.id for row in offered.investments] == [1]
+        assert offered.investments[0].value == Decimal("55")
+
+    @pytest.mark.asyncio
+    async def test_an_account_carrying_movements_is_not_offered(self, monkeypatch):
+        clean = Account(id=7, user_id=USER.id, name="Clean", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        dirty = Account(id=8, user_id=USER.id, name="Dirty", type=AccountType.bank, currency="USD", opening_date=date(2026, 1, 1))
+        self._wire(
+            monkeypatch,
+            investments=[],
+            snapshots={},
+            accounts=[clean, dirty],
+            balances={7: Decimal("500"), 8: Decimal("500")},
+            linked={8},
+        )
+        offered = await pot_service.list_contributable_holdings(AsyncMock(), 5, USER)
+        assert [row.id for row in offered.accounts] == [7]
+
+    @pytest.mark.asyncio
+    async def test_every_offered_row_is_one_the_write_would_accept(self, monkeypatch):
+        # The agreement itself, over a candidate set holding one of every state. The picker's answer
+        # and the write's answer are read from the SAME rule, so this fails the moment either side
+        # grows a condition the other does not have.
+        rows = [
+            Investment(id=1, user_id=USER.id, name="Fondo", category=InvestmentCategory.fci, base_currency="USD"),
+            Investment(id=2, user_id=USER.id, name="Nuevo", category=InvestmentCategory.fci, base_currency="USD"),
+            Investment(id=3, user_id=USER.id, name="Vacio", category=InvestmentCategory.fci, base_currency="USD"),
+        ]
+        snapshots = {
+            1: InvestmentSnapshot(investment_id=1, date=date(2026, 2, 1), value=Decimal("55"), currency="USD"),
+            3: InvestmentSnapshot(investment_id=3, date=date(2026, 2, 1), value=Decimal("-5"), currency="USD"),
+        }
+        self._wire(monkeypatch, investments=rows, snapshots=snapshots)
+        offered = await pot_service.list_contributable_holdings(AsyncMock(), 5, USER)
+        offered_ids = {row.id for row in offered.investments}
+
+        pot = _pot()
+        price = Decimal("1.10")
+        for investment in rows:
+            valued = pot_service._investment_holding(investment, snapshots.get(investment.id), pot=pot, rate_map={})
+            accepted = pot_service.contribution_refusal(valued, pot.base_currency, price) is None
+            assert (investment.id in offered_ids) is accepted, f"picker and write disagree about {investment.name}"
+
+    @pytest.mark.asyncio
+    async def test_a_pot_with_no_price_offers_nothing_at_all(self, monkeypatch):
+        # With no usable valuation the write refuses every row for that reason first, so listing
+        # candidates would be a page of rows that all 400. The flow's own gate keeps this unreachable;
+        # the endpoint stays honest on its own.
+        valued = Investment(id=1, user_id=USER.id, name="Fondo", category=InvestmentCategory.fci, base_currency="USD")
+        self._wire(
+            monkeypatch,
+            investments=[valued],
+            snapshots={1: InvestmentSnapshot(investment_id=1, date=date(2026, 2, 1), value=Decimal("55"), currency="USD")},
+            nav=None,
+        )
+        offered = await pot_service.list_contributable_holdings(AsyncMock(), 5, USER)
+        assert (offered.investments, offered.accounts) == ([], [])
 
 
 class TestAbsorbingPotsOnAccountDeletion:

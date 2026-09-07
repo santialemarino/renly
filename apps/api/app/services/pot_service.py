@@ -27,10 +27,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import (
     AccountHasLinkedEntriesError,
+    ExchangeRateUnavailableError,
     NotFoundError,
     PotAlreadyDividedError,
     PotHasHoldingsError,
     PotHoldingAddDividedError,
+    PotHoldingInactiveError,
+    PotHoldingNotPositiveError,
+    PotHoldingUnvaluedError,
     PotValuation,
     PotWriteRequiredError,
     is_valuation_overdue,
@@ -41,6 +45,7 @@ from app.domain import (
     share_values,
     total_units,
     unit_price,
+    units_for_amount,
 )
 from app.models.account import Account
 from app.models.group import GroupMember
@@ -57,6 +62,7 @@ from app.repositories import (
     group_settlement_repository,
     income_repository,
     investment_repository,
+    metrics_repository,
     pot_ownership_repository,
     pot_repository,
     shared_expense_repository,
@@ -742,6 +748,104 @@ async def list_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHo
     )
 
 
+# The caller's own private holdings that could be contributed to this pot right now, each with its own
+# figure and that figure in the pot's base currency.
+#
+# Every row here is one the contribution endpoint will accept, and that is the point rather than a
+# convenience: U6's rule is that a guided flow must not offer what it will then refuse, and none of the
+# reasons a holding cannot be contributed is visible on a picker built from the generic lists. The
+# write refuses SEVEN conditions and all seven are applied here as filters, in three groups:
+#
+#   * not the caller's own private row, and archived — both already excluded by the two lists
+#     themselves, which are owner-scoped and active-only by construction;
+#   * an account carrying movements — the same enumeration the move guard raises on, asked about the
+#     whole candidate set at once;
+#   * the four in contribution_refusal — unvalued, worth nothing, unconvertible, or worth nothing once
+#     converted.
+#
+# Deliberately NOT the generic private lists the move-in dialog reads. Those carry no value at all, so
+# a picker built on them could neither state what a contribution is worth nor know which rows qualify.
+#
+# Write access, not merely visibility: the whole surface behind this is a write.
+async def list_contributable_holdings(session: AsyncSession, pot_id: int, user: User) -> PotHoldingsResponse:
+    pot, _ = await require_writable(session, pot_id, user)
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    today = date_type.today()
+    rate_map = lookup.get_rate_map_at(today)
+
+    # The pot's own unit price, because the last of the shared rule's conditions is about it: a figure
+    # small enough that dividing it by the price rounds to zero units buys nothing at all. With no
+    # price there is nothing to contribute against and the write would refuse every row here for that
+    # reason first (pot_not_opened or pot_valuation_required), so an empty picker is the honest answer
+    # rather than a list where every row 400s.
+    events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=today)
+    valuation = await get_valuation(session, pot, as_of_date=today, lookup=lookup)
+    price = None if valuation.nav is None else unit_price(valuation.nav, total_units(replay_units(_as_entries(events))))
+    if price is None:
+        return PotHoldingsResponse(investments=[], accounts=[])
+
+    # A shared holding cannot appear in either list, so nothing here can offer somebody else's money,
+    # or a pot's own holding back to the pot that already holds it.
+    investments = await metrics_repository.list_active_investments(session, user.id)
+    accounts = await account_repository.list_by_user(session, user.id)
+
+    # Batched, all three: one snapshot query for every candidate investment, one balance query set for
+    # every candidate account, and one pass of the movement enumeration over every candidate account.
+    snapshots = await snapshot_repository.get_latest_by_investments(session, [i.id for i in investments if i.id is not None], as_of_date=today)
+    balances = await account_service.compute_account_balances_at(session, accounts, as_of_date=today)
+    linked = await _accounts_with_movements(session, [a.id for a in accounts if a.id is not None], user)
+
+    # Built by the SAME two functions list_holdings uses, so a holding's figure on the picker and its
+    # contribution to the NAV after it lands cannot disagree — and then filtered by the same rule the
+    # write raises, so an offered row is an accepted one.
+    investment_rows = [_investment_holding(i, snapshots.get(i.id), pot=pot, rate_map=rate_map) for i in investments]
+    account_rows = [_account_holding(a, balances.get(a.id, ZERO), pot=pot, rate_map=rate_map) for a in accounts if a.id not in linked]
+    return PotHoldingsResponse(
+        investments=_contributable(investment_rows, pot.base_currency, price),
+        accounts=_contributable(account_rows, pot.base_currency, price),
+    )
+
+
+# The rows a contribution could be priced from, by name.
+def _contributable(rows: list[PotHoldingResponse], base_currency: str, price: Decimal) -> list[PotHoldingResponse]:
+    return sorted((row for row in rows if contribution_refusal(row, base_currency, price) is None), key=lambda row: (row.name, row.id))
+
+
+# Why a holding cannot be contributed, or None when it can — returned rather than raised, which is what
+# makes it usable in both directions.
+#
+# THE rule and the one place it exists. The picker FILTERS on it and the write RAISES it, so a row that
+# is offered is a row that will be accepted — U6's "never offer what you will refuse" enforced by
+# construction rather than by two lists agreeing. Two copies of four conditions is four chances to
+# disagree, and every disagreement is a picker row that 400s.
+#
+# The four are ordered so each names the real cause: no value at all is a different problem from a
+# value of zero, and a currency with no rate on file is a different problem from one whose figure buys
+# nothing once converted. The last is the quiet one — a holding genuinely worth something whose base
+# figure buys less than a millionth of a unit at this pot's price would hand over an asset and issue
+# nothing for it.
+#
+# Two things about the pair of non-positive checks. The FIRST is not redundant even though a negative
+# figure converts to a negative one: it is what names the figure in the currency the person recognises,
+# and a mutation dropping it is only lethal against a cross-currency fixture, which is what the test
+# uses. A separate `base_value <= 0` check WAS redundant and is gone — a non-positive figure divided by
+# a positive price is non-positive by construction, so the units test below already covers it, and a
+# mutation proved the extra clause could be deleted with the whole suite green.
+#
+# `price` is always positive: both callers take it from `unit_price`, which answers None rather than
+# zero for an unvalued or unopened pot, and each refuses before reaching here.
+def contribution_refusal(holding: PotHoldingResponse, base_currency: str, price: Decimal) -> Exception | None:
+    if holding.value is None:
+        return PotHoldingUnvaluedError()
+    if holding.value <= ZERO:
+        return PotHoldingNotPositiveError(holding.value, holding.currency)
+    if holding.base_value is None:
+        return ExchangeRateUnavailableError(base_currency)
+    if units_for_amount(holding.base_value, price) <= ZERO:
+        return PotHoldingNotPositiveError(holding.base_value, base_currency)
+    return None
+
+
 # The pot's value at each point of its cadence's grid, plus what the caller's own share was worth at
 # each — the monitoring surface's whole subject (V5/X4).
 #
@@ -1137,10 +1241,83 @@ async def move_holdings(
     return await get_pot(session, pot.id, user)
 
 
-# Refuses to move an account across the scope boundary while anything references it.
+# Resolves ONE private holding the caller may contribute, or raises the refusal it earns.
 #
-# Applied in BOTH directions, which is the correction: guarding only the way in leaves the way out
-# open, and the way out is where the damage is worse. An account's balance derives from expenses,
+# Three checks, and each refuses something different:
+#
+#   * it must be the CALLER's own, and private. Naming someone else's id would co-opt their money into
+#     a pot they never agreed to share, and naming a pot's own holding would move it sideways while
+#     issuing units for value that pot already counts. Both answer NotFoundError rather than a specific
+#     refusal, so an id cannot be probed for which of the two it is.
+#   * it must not be ARCHIVED. Both NAV queries filter on is_active, so an archived holding raises
+#     nobody's value — units issued against it would dilute every other owner for nothing.
+#   * an ACCOUNT must carry no movements, the same rule and the same enumeration a plain move applies.
+#     Its balance derives from rows owned by one user, so a shared one would report a different figure
+#     to every member depending on whose rows they can see.
+#
+# Takes the pot nowhere: this is entirely a question about the caller's own holding.
+async def require_contributable_holding(session: AsyncSession, user: User, *, investment_id: int | None, account_id: int | None):
+    if investment_id is not None:
+        holding = await investment_repository.get_by_id_any_scope(session, investment_id)
+    else:
+        holding = await account_repository.get_by_id_any_scope(session, account_id)
+    # Both halves of the ownership test, not one. `investments_single_owner` (and its accounts twin)
+    # makes a row with both set impossible in the database, so in practice the user_id half already
+    # refuses everything the pot_id half would — which is exactly why it is stated rather than
+    # inherited, the same pair and the same reason _ensure_all_present carries. A test constructs the
+    # impossible row so the clause is a rule rather than dead code.
+    if holding is None or holding.pot_id is not None or holding.user_id != user.id:
+        raise NotFoundError("Holding not found")
+    if not holding.is_active:
+        raise PotHoldingInactiveError()
+    if account_id is not None:
+        await _ensure_account_carries_no_movements(session, [account_id], user)
+    return holding
+
+
+# What a holding about to be contributed is worth, in its own currency and in the pot's — or the
+# refusal that stops it.
+#
+# Built by the SAME two functions the pot's own holdings list and its NAV are built by, which is what
+# makes the arithmetic work: the units issued are `base_value / unit_price`, and the pot's value rises
+# by the very figure this returns because the NAV will read that holding exactly this way a moment
+# later. A second valuation rule here would be a second answer to "what is this worth", and the one it
+# got wrong is the one that moves value between owners.
+async def value_contributed_holding(
+    session: AsyncSession, pot: Pot, holding, *, as_of_date: date_type, lookup: RateLookup, price: Decimal
+) -> PotHoldingResponse:
+    rate_map = lookup.get_rate_map_at(as_of_date)
+    if isinstance(holding, Investment):
+        snapshots = await snapshot_repository.get_latest_by_investments(session, [holding.id], as_of_date=as_of_date)
+        row = _investment_holding(holding, snapshots.get(holding.id), pot=pot, rate_map=rate_map)
+    else:
+        balances = await account_service.compute_account_balances_at(session, [holding], as_of_date=as_of_date)
+        row = _account_holding(holding, balances.get(holding.id, ZERO), pot=pot, rate_map=rate_map)
+    refusal = contribution_refusal(row, pot.base_currency, price)
+    if refusal is not None:
+        raise refusal
+    return row
+
+
+# Re-points one already-resolved holding into a pot.
+#
+# The DIVIDED guard deliberately does NOT live here, and that is the whole reason this is separate from
+# move_holdings: on a divided pot the move is legal exactly when it is paired with the contribution that
+# prices it, and the ledger entry is what pays for the value it adds. Nothing else may call this — a
+# caller reaching for it to skip move_holdings' guard would be re-creating the silent gift that guard
+# exists to refuse.
+async def attach_holding(session: AsyncSession, pot: Pot, holding) -> None:
+    if isinstance(holding, Investment):
+        await investment_repository.move_to_scope(session, [holding.id], pot_id=pot.id, user_id=None)
+    else:
+        await account_repository.move_to_scope(session, [holding.id], pot_id=pot.id, user_id=None)
+
+
+# WHICH of these accounts anything already references — the enumerated list of every table that can
+# move an account's balance, and the one place it exists.
+#
+# The question is asked in BOTH directions, which is the correction: guarding only the way in leaves
+# the way out open, and the way out is where the damage is worse. An account's balance derives from expenses,
 # income, settlements and transfers, so a shared one carrying rows owned by one person would report a
 # different figure to every member depending on whose rows they can see — a figure that changes with
 # the reader is worse than one that is merely wrong. Leaving a pot is the mirror image: a transfer
@@ -1159,14 +1336,18 @@ async def move_holdings(
 #     the pot — raising every owner's share pro-rata while the splits still say the collector owes
 #     each of them their share, so the same money is credited twice — and NULLs the user_id the row's
 #     own edit path checks, which leaves a row the user can see and can no longer save;
-#   * transfer_repository.exists_for_accounts — scope-FREE, because the user_id filter above is
-#     structurally blind to a pot-scoped transfer, which is exactly the row that matters on the way
+#   * transfer_repository.linked_account_ids_any_scope — scope-FREE, because the user_id filter above
+#     is structurally blind to a pot-scoped transfer, which is exactly the row that matters on the way
 #     out;
-#   * pot_ownership_repository.exists_for_accounts — an ownership event names a private account on
+#   * pot_ownership_repository.linked_account_ids — an ownership event names a private account on
 #     one leg and a pot account on the other, so moving either would put both ends in one scope:
 #     money that left the pot and arrived back in it.
-async def _ensure_account_carries_no_movements(session: AsyncSession, account_ids: list[int], user: User) -> None:
-    linked = (
+#
+# Returning the ids rather than raising is what lets the contribution picker ask the same question
+# about a SET and keep the accounts that answer no. A second copy of this list, written to answer
+# that, is the copy that would miss the eighth table.
+async def _accounts_with_movements(session: AsyncSession, account_ids: list[int], user: User) -> set[int]:
+    return (
         await income_repository.linked_account_ids(session, account_ids, user.id)
         | await expense_repository.linked_account_ids(session, account_ids, user.id)
         | await card_settlement_repository.linked_account_ids(session, account_ids, user.id)
@@ -1174,11 +1355,14 @@ async def _ensure_account_carries_no_movements(session: AsyncSession, account_id
         | await shared_expense_repository.linked_account_ids(session, account_ids)
         | await shared_income_repository.linked_account_ids(session, account_ids)
         | await group_settlement_repository.linked_account_ids(session, account_ids)
+        | await transfer_repository.linked_account_ids_any_scope(session, account_ids)
+        | await pot_ownership_repository.linked_account_ids(session, account_ids)
     )
-    if not linked and await transfer_repository.exists_for_accounts(session, account_ids):
-        linked = set(account_ids)
-    if not linked and await pot_ownership_repository.exists_for_accounts(session, account_ids):
-        linked = set(account_ids)
+
+
+# Refuses the move outright while any named account is referenced, naming the ones that are.
+async def _ensure_account_carries_no_movements(session: AsyncSession, account_ids: list[int], user: User) -> None:
+    linked = await _accounts_with_movements(session, account_ids, user)
     if linked:
         raise AccountHasLinkedEntriesError(sorted(linked))
 

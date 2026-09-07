@@ -55,6 +55,7 @@ from app.models.user import User
 from app.repositories import account_repository, group_repository, pot_ownership_repository, pot_repository
 from app.schemas.pot import PotOwnershipEventResponse
 from app.services import exchange_rate_service, notification_service, pot_service, shared_audit_service
+from app.utils.metrics import RateLookup
 
 ZERO = Decimal(0)
 
@@ -103,13 +104,19 @@ async def _require_seat(session: AsyncSession, pot: Pot, member_id: int) -> Grou
 
 # The pot's unit price on a date, or a refusal. Bundles the two ways it can be undefined into the two
 # errors that describe them: no units outstanding (the pot has no baseline) and no usable valuation.
-async def _require_price(session: AsyncSession, pot: Pot, user: User, as_of_date: date_type) -> tuple[Decimal, dict[int, Decimal]]:
+# `lookup` is optional so a caller that needs the rates for something else too builds exactly one per
+# request, which is the layering rule for rate lookups. Left unset it builds its own, which is what the
+# two paths that need nothing else do.
+async def _require_price(
+    session: AsyncSession, pot: Pot, user: User, as_of_date: date_type, *, lookup: RateLookup | None = None
+) -> tuple[Decimal, dict[int, Decimal]]:
     events = await pot_ownership_repository.list_by_pot(session, pot.id, as_of_date=as_of_date)
     balances = replay_units(_as_entries(events))
     outstanding = total_units(balances)
     if outstanding <= 0:
         raise PotNotOpenedError()
-    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    if lookup is None:
+        lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
     nav = await pot_service.get_nav(session, pot, as_of_date=as_of_date, lookup=lookup)
     if nav is None:
         raise PotValuationRequiredError(as_of_date)
@@ -464,6 +471,125 @@ async def record_movement(
             group,
             {
                 "variant": type.value,
+                "member": member.display_name,
+                "amount": str(credited),
+                "currency": pot.base_currency,
+            },
+        ),
+    )
+    return _build_response(event, {member.id: member})
+
+
+# Records a HOLDING contributed to a divided pot: an investment or a cash account moving out of the
+# caller's private scope and into the pot, valued where it stands and paid for in units.
+#
+# This is the fourth guided flow, and it replaces a refusal. Moving a holding into a divided pot on its
+# own raises the pot's value while nobody's units change, so what came wholly out of one person's scope
+# is gifted pro-rata to every owner — silently. What makes it honest is the pairing: the units issued
+# are the holding's value divided by the price the pot's EXISTING holdings set, so the contributor's new
+# share is worth exactly what they put in and nobody else's value moves at all. Only percentages do,
+# which is what units are for.
+#
+# Three properties are load-bearing and each is a defect if it goes:
+#
+#   * THE PRICE IS READ BEFORE THE HOLDING MOVES. A moment later the NAV includes it, so pricing after
+#     the move would divide the pot's new value by its old unit count and issue the contributor units
+#     at an inflated price — they would pay for their own contribution twice over, and the difference
+#     would go to everybody else. The lock, the price and the move are ordered here and nowhere else.
+#   * THE DATE IS TODAY, and it is not a field. A holding has no pot-membership history — the NAV reads
+#     whatever the pot holds NOW at every date it is asked about — so pricing at an earlier date issues
+#     units for what the holding was worth THEN against an asset the pot gains at what it is worth NOW.
+#     The difference is handed out, or taken, pro-rata: the very transfer this flow exists to close.
+#     A money contribution has no such gap, because account balances are derived and the money really
+#     was in the pot's account from the date it moved.
+#   * THE SEAT IS THE CALLER'S OWN, and it is not a field either. The holding is theirs — nothing else
+#     passes require_contributable_holding — so recording it for another member would record that they
+#     contributed an asset they do not own.
+#
+# It reuses the `contribution` event type rather than earning one of its own. Nothing behaves
+# differently on the type (the replay, the ledger's amount rule, the outgoing-sign rule, the
+# notification and audit variants, the delete-permission rule and the movements endpoint's guard all
+# read it the same way), and U4's distinction is contribution-versus-GIFT, which this preserves exactly:
+# units are issued for the whole of the value, so nothing is given away. The row carries the holding's
+# own figure and currency in `amount`, the pot's in `base_amount`, and names no account legs — money
+# moved between no accounts, because the asset itself moved.
+async def contribute_holding(
+    session: AsyncSession,
+    pot_id: int,
+    user: User,
+    *,
+    investment_id: int | None = None,
+    account_id: int | None = None,
+    notes: str | None = None,
+) -> PotOwnershipEventResponse:
+    pot, member = await pot_service.require_writable(session, pot_id, user)
+    # Locked before anything is read, because two things here are read-then-act: the unit price the
+    # units are issued at, and the pot's holdings the NAV behind it is summed from. Two contributions a
+    # moment apart would otherwise each price themselves against a pot that does not yet hold the
+    # other's asset, and between them issue units at a price neither of them ends up at.
+    await pot_repository.lock(session, pot.id)
+    holding = await pot_service.require_contributable_holding(session, user, investment_id=investment_id, account_id=account_id)
+
+    # One lookup for the whole request, shared by the pot's price and the holding's conversion — the
+    # two figures are divided by each other, so a second lookup would be a second set of rates on
+    # opposite sides of the same division.
+    lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id)
+    today = date_type.today()
+    price, _ = await _require_price(session, pot, user, today, lookup=lookup)
+    valued = await pot_service.value_contributed_holding(session, pot, holding, as_of_date=today, lookup=lookup, price=price)
+
+    credited = valued.base_value
+    event = await pot_ownership_repository.create(
+        session,
+        PotOwnershipEvent(
+            pot_id=pot.id,
+            type=OwnershipEventType.contribution,
+            date=today,
+            member_id=member.id,
+            amount=valued.value,
+            # Null whenever the holding is already in the pot's currency, exactly as a money movement
+            # stores it: a row with a currency set always means a real conversion happened.
+            amount_currency=valued.currency if valued.currency != pot.base_currency else None,
+            base_amount=credited,
+            units=units_for_amount(credited, price),
+            unit_price=price,
+            notes=notes,
+            created_by=user.id,
+        ),
+    )
+    # Only now. Everything above had to see the pot WITHOUT this holding in it.
+    await pot_service.attach_holding(session, pot, holding)
+
+    # ONE audit entry, not two. The act changed two tables, but a `holdings_added` entry beside this one
+    # would put two lines in the group's feed for a single act — and the entry that says value arrived
+    # and whose units moved is the one that describes it. The holding's own name stays out of the trail
+    # for PR 10's reason: an entry is permanent and a holding's label may be private again later.
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.created,
+        event_id=event.id,
+        variant=OwnershipEventType.contribution,
+        member=member.display_name,
+        amount=str(credited),
+        currency=pot.base_currency,
+    )
+    recipients = await _pot_audience(session, pot, user)
+    group = await group_repository.get_by_id(session, pot.group_id)
+    await session.commit()
+
+    # The same sentence a money contribution sends, and deliberately: what changed for every reader is
+    # that the pot took in this much and one person's share grew by it. Which KIND of thing arrived is
+    # on the pot page, where the holdings list now names it.
+    await notification_service.dispatch(
+        NotificationEvent.pot_movement,
+        recipients,
+        _pot_payload(
+            pot,
+            group,
+            {
+                "variant": OwnershipEventType.contribution.value,
                 "member": member.display_name,
                 "amount": str(credited),
                 "currency": pot.base_currency,

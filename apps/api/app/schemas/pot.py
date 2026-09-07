@@ -159,6 +159,34 @@ class PotHoldingsMove(RequestBase):
     account_ids: list[int] = Field(default_factory=list, description="Accounts to move.")
 
 
+# Body for POST /pots/{pot_id}/holdings/contribute — one private holding moved into a DIVIDED pot and
+# priced as a contribution.
+#
+# Exactly one holding, named on exactly one of the two fields. Singular rather than the two lists
+# PotHoldingsMove takes, because this call issues units and every ledger entry states one holding's own
+# value in its own currency — a batch would either sum figures across currencies or write rows the
+# ledger cannot tell apart.
+#
+# There is no `member_id` and no `date`. The seat is always the caller's own, because the holding is:
+# the service refuses anything that is not the caller's own private row, so recording it for somebody
+# else would be recording that they contributed an asset they do not own. The date is always today,
+# because a holding has no pot-membership history — it counts in the pot's value from the moment it
+# moves — so pricing it at an earlier date would issue units for what it was worth THEN against an
+# asset the pot gains at what it is worth NOW, and hand the difference to everybody pro-rata.
+class PotHoldingContribute(RequestBase):
+    investment_id: int | None = Field(default=None, description="Investment to contribute; exactly one of the two ids.")
+    account_id: int | None = Field(default=None, description="Cash account to contribute; exactly one of the two ids.")
+    notes: str | None = Field(default=None, description="Optional notes.")
+
+    # Exactly one. Neither names nothing to contribute; both names two things while the response can
+    # only describe one, and silently preferring one would move a holding the caller never saw listed.
+    @model_validator(mode="after")
+    def validate_one_holding(self) -> "PotHoldingContribute":
+        if (self.investment_id is None) == (self.account_id is None):
+            raise ValueError("Name exactly one holding: investment_id or account_id.")
+        return self
+
+
 # Body for POST /pots/{pot_id}/ownership/opening.
 # The percentages ARE the agreement, so they are taken as entered and refused when they do not total
 # 100 rather than quietly rescaled.

@@ -49,6 +49,7 @@ _POT_JSON = {
 _STUB_RETURNS = {
     "list_pots": [],
     "list_holdings": {"investments": [], "accounts": []},
+    "list_contributable_holdings": {"investments": [], "accounts": []},
     "get_value_series": {"interval": "monthly", "points": []},
 }
 
@@ -94,6 +95,7 @@ class TestSessionWiring:
             ("put", "/pots/5/permissions/100", {"can_view": True, "can_write": False}),
             ("delete", "/pots/5/permissions/100", None),
             ("get", "/pots/5/holdings", None),
+            ("get", "/pots/5/holdings/contributable", None),
             ("post", "/pots/5/holdings", {"investment_ids": [1]}),
             ("post", "/pots/5/holdings/remove", {"investment_ids": [1]}),
         ],
@@ -107,6 +109,7 @@ class TestSessionWiring:
             "get_pot",
             "get_value_series",
             "list_holdings",
+            "list_contributable_holdings",
             "update_pot",
             "delete_pot",
             "set_permission",
@@ -124,6 +127,7 @@ class TestSessionWiring:
             ("/pots/5/ownership/opening", {"date": "2026-01-01", "value": "100.00", "shares": {"100": "100"}}),
             ("/pots/5/ownership/movements", {"type": "contribution", "date": "2026-06-01", "member_id": 100, "amount": "5.00"}),
             ("/pots/5/ownership/reagreements", {"date": "2026-06-01", "from_member_id": 100, "to_member_id": 101, "percentage": "10"}),
+            ("/pots/5/holdings/contribute", {"investment_id": 12}),
         ],
     )
     @pytest.mark.asyncio
@@ -145,6 +149,7 @@ class TestSessionWiring:
         monkeypatch.setattr(pot_ownership_service, "record_opening", AsyncMock(return_value=[event]))
         monkeypatch.setattr(pot_ownership_service, "record_movement", AsyncMock(return_value=event))
         monkeypatch.setattr(pot_ownership_service, "record_reagreement", AsyncMock(return_value=event))
+        monkeypatch.setattr(pot_ownership_service, "contribute_holding", AsyncMock(return_value=event))
         response = _client(sessions).post(path, json=body)
         assert response.status_code == 201
         assert sessions["kind"] == "request"
@@ -171,6 +176,52 @@ class TestRequestContract:
         monkeypatch.setattr(pot_service, "update_pot", update)
         response = _client({}).put("/pots/5", json={"name": "Casa", "base_currency": "ARS"})
         assert response.status_code == 200
+
+
+# A contribution names exactly ONE holding, and the boundary is what enforces it.
+#
+# Here rather than only in the service, because the service is written to a resolved holding: it asks
+# require_contributable_holding for one and never sees the pair. Neither id would resolve nothing and
+# both would resolve whichever the resolver happened to check first — moving a holding the caller never
+# saw named, with a ledger entry describing the other.
+class TestOneHoldingPerContribution:
+    _EVENT = {
+        "id": 1,
+        "pot_id": 5,
+        "type": "contribution",
+        "date": "2026-06-01",
+        "member_id": 100,
+        "member_name": "Santi",
+        "units": "50",
+        "unit_price": "1.100000",
+        "created_at": "2026-09-07T00:00:00",
+    }
+
+    @pytest.mark.parametrize(
+        ("body", "why"),
+        [
+            ({}, "neither id names anything to contribute"),
+            ({"investment_id": 12, "account_id": 7}, "both ids name two things for one entry"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_a_body_that_does_not_name_exactly_one_holding_is_refused(self, monkeypatch, body, why):
+        contribute = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "contribute_holding", contribute)
+        response = _client({}).post("/pots/5/holdings/contribute", json=body)
+        assert response.status_code == 422, why
+        contribute.assert_not_awaited()
+
+    @pytest.mark.parametrize(("field", "value"), [("investment_id", 12), ("account_id", 7)])
+    @pytest.mark.asyncio
+    async def test_either_id_alone_reaches_the_service_with_the_other_left_null(self, monkeypatch, field, value):
+        contribute = AsyncMock(return_value=self._EVENT)
+        monkeypatch.setattr(pot_ownership_service, "contribute_holding", contribute)
+        response = _client({}).post("/pots/5/holdings/contribute", json={field: value})
+        assert response.status_code == 201
+        assert contribute.await_args.kwargs[field] == value
+        other = "account_id" if field == "investment_id" else "investment_id"
+        assert contribute.await_args.kwargs[other] is None
 
 
 # How the request body's "the whole share" is stated, and what the router hands the service.
