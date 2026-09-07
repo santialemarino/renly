@@ -345,6 +345,27 @@ export async function getPotHoldings(potId: number): Promise<PotHoldings | null>
 }
 
 /*
+ * The caller's own private holdings that could be contributed to this pot right now, each with its
+ * value and that value in the pot's base currency.
+ *
+ * Every row is one the contribution endpoint will accept — the API applies the same seven refusals as
+ * filters — so the picker never offers something the write then refuses. That is why this is its own
+ * read rather than the private investment and account lists the move-in dialog uses: those carry no
+ * value at all, so a picker built on them could neither state what a contribution is worth nor know
+ * which rows qualify.
+ *
+ * Null for the same two reasons getPot is, plus a third: it needs pot WRITE access, and the API
+ * answers 404 rather than 403 for a pot you cannot see at all.
+ */
+export async function getContributableHoldings(potId: number): Promise<PotHoldings | null> {
+  const res = await authenticatedFetch(`/pots/${potId}/holdings/contributable`, { method: 'GET' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to fetch contributable holdings');
+  const raw: PotHoldingsRaw = await res.json();
+  return { investments: raw.investments.map(mapHolding), accounts: raw.accounts.map(mapHolding) };
+}
+
+/*
  * The pot's value at each point of its cadence's grid, plus the caller's own share value at each.
  * Oldest first, the last point being today, and never starting before the pot's ownership anchor.
  *

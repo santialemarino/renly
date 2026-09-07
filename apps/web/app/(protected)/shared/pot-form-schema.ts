@@ -238,6 +238,27 @@ export function buildPotTakeOutFormSchema({
 
 export type PotTakeOutFormValues = z.infer<ReturnType<typeof buildPotTakeOutFormSchema>>;
 
+/*
+ * Contributing something you own to a pot whose shares are already agreed.
+ *
+ * TWO fields, and the emptiness is the design. There is no amount, because the value is a fact about
+ * the holding rather than a figure to negotiate — and unlike a take-out, where typing less than the
+ * share is worth only costs the person typing it, a contribution valued higher than the thing would
+ * issue units against value that never arrived and dilute every other owner. There is no date either,
+ * for the reason the API refuses one: a holding counts in the pot's value from the moment it moves.
+ *
+ * `holding` is a "<kind>:<id>" key rather than two fields, because the picker is one control over two
+ * lists and exactly one row can be chosen. parseHoldingKey is what turns it back into a body.
+ */
+export function buildPotContributeFormSchema(requiredMsg: string) {
+  return z.object({
+    holding: z.string().min(1, { message: requiredMsg }),
+    notes: z.string().optional(),
+  });
+}
+
+export type PotContributeFormValues = z.infer<ReturnType<typeof buildPotContributeFormSchema>>;
+
 interface BuildPotBuyOutFormSchemaArgs {
   requiredMsg: string;
   sameMemberMsg: string;

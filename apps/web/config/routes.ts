@@ -65,7 +65,7 @@ export const sharedGroupPath = (groupId: number) => `${ROUTES.shared}/${groupId}
 export const sharedPotPath = (potId: number) => `${ROUTES.shared}/pots/${potId}`;
 
 /*
- * The three guided flows (U6). Routes rather than dialogs, which is what makes them resumable: each
+ * The four guided flows (U6). Routes rather than dialogs, which is what makes them resumable: each
  * derives the step it opens on from what the server already has, so re-entering the URL after a
  * failure — or after closing the tab — continues rather than restarting.
  *
@@ -79,6 +79,14 @@ export const sharedSharePath = (groupId: number, potId?: number) =>
 export const sharedTakeOutPath = (potId: number) => `${sharedPotPath(potId)}/take-out`;
 
 export const sharedBuyOutPath = (potId: number) => `${sharedPotPath(potId)}/buy-out`;
+
+/*
+ * The fourth: contributing something you own to a pot whose shares are already agreed. It hangs off
+ * the pot for the same reason take-out and buy-out do — it changes that pot's ownership — and it is
+ * the only way a divided pot can gain a holding at all, since moving one in without pricing it would
+ * gift its whole value to every owner pro-rata.
+ */
+export const sharedContributePath = (potId: number) => `${sharedPotPath(potId)}/contribute`;
 
 /*
  * Anchors on the public help page that the app deep-links to. A help section's id is part of a public
