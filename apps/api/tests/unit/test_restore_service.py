@@ -561,6 +561,11 @@ class TestAccountClusterRoundTrip:
         # re-derived balance would post an adjustment for drift that no longer exists.
         assert "account_reconciliations" in SKIPPED_ENTITIES and "card_reconciliations" in result.skipped_entities
 
+
+# What the preview says about the sections it will NOT write. These are not part of the account cluster
+# above — they are about the group family, whose thirteen tables are exported and deliberately not
+# restorable, and about the rule that decides when a skipped section is worth naming at all.
+class TestSkippedSectionReporting:
     @pytest.mark.asyncio
     async def test_the_group_family_is_reported_rather_than_dropped_silently(self, monkeypatch):
         # The thirteen group-scoped tables are exported and not restorable, so the preview has to name

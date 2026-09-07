@@ -77,8 +77,12 @@ from app.models.transfer import Transfer
 #   * `groups` cannot be restored alone, because visibility IS membership: with `group_members` absent
 #     the restored row fails `app_is_group_member` and the restoring user cannot see the group they just
 #     recreated. Restoring the roster instead is the placeholder problem above, by name.
-#   * `group_invites` holds a single-use credential's hash with an expiry and a `consumed_at`. Writing one
-#     back re-opens a seat claim that was already spent or already expired.
+#   * `group_invites` could not resolve even if it were listed: its `member_id` is NOT NULL and points at
+#     `group_members`, which is not restorable, so every row would land unresolved. And its `token_hash`
+#     is a credential hash — exported on the same footing as an api_key's, i.e. unusable without the raw
+#     token nobody stores. (It would NOT re-open a spent claim: `consumed_at` is copied verbatim like
+#     any other column, so a consumed invite arrives still consumed. That is worth stating because it is
+#     the plausible-sounding reason, and it is wrong.)
 #
 # So the whole family is exported (an export answers "what does Renly hold about me", and a group you
 # belong to is part of that answer) and none of it is restored. Saying so is the difference between a

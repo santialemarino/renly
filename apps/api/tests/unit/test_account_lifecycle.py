@@ -561,7 +561,8 @@ class TestExport:
         # the user's own data rather than a harmless duplicate.
         assert set(SKIPPED_ENTITIES) & restorable == set()
         # And the skip list cannot rot: a name in it that the export no longer produces is copy nobody
-        # can reach, and `preview_restore` filters on presence in the FILE, so it would never surface.
+        # can reach, because `preview_restore` only reports a section the FILE actually holds rows for —
+        # so a stale name would sit here forever without ever reaching a user to be noticed.
         assert set(SKIPPED_ENTITIES) <= EXPORTED_TABLES
 
     # EXPORTED_TABLES is declared, not derived, so it could claim coverage the queries do not provide
