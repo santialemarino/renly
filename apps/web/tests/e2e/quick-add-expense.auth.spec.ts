@@ -13,6 +13,21 @@ const DASHBOARD = '/dashboard';
 const EXPENSES = '/expenses';
 const SNAPSHOTS = '/snapshots';
 
+/*
+ * How long the table may take to stop showing a deleted row.
+ *
+ * Longer than the 5s `expect` default on purpose, and the number is measured rather than padded: the
+ * delete finishes in the database immediately, but what removes the row from the rendered table is a
+ * `router.refresh()`, and a dev server compiling `/expenses` for the first time inside this test does
+ * not land it inside five seconds. Same test, same tree: 6.7s run alone against a warm server, 12.0s
+ * inside the full suite, and past the default on the first run after a server start — which made this
+ * spec fail roughly every other cold run and pass on every retry, the worst kind of red.
+ *
+ * It buys patience, not tolerance: the assertion still has to become true, and the reload below
+ * re-reads from the server so a row that only LOOKED gone would still fail.
+ */
+const ROW_GONE_MS = 20_000;
+
 // Any valid amount; the row is found by its marker rather than this figure, because the rendered
 // value is locale-formatted and the run's locale is whatever the stored session carries.
 const EXPENSE_AMOUNT = '1234.56';
@@ -61,7 +76,7 @@ test.describe('quick-add expense round trip (signed in)', () => {
 
       await row.first().getByTestId('expense-delete').click();
       await page.getByTestId('confirm-dialog-confirm').click();
-      await expect(expenseRow(page, marker)).toHaveCount(0);
+      await expect(expenseRow(page, marker)).toHaveCount(0, { timeout: ROW_GONE_MS });
 
       // Gone from the server, not only from the rendered table — a reload re-reads the list.
       await page.reload();
