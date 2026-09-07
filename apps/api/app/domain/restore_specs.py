@@ -54,13 +54,35 @@ from app.models.transaction import Transaction
 from app.models.transfer import Transfer
 
 # Exported sections the restore flow deliberately does not write, reported to the user for transparency.
-# api_keys carry no secret (unusable); user_settings is a single preferences row (skipped to avoid
-# overwriting the target's settings); the two reconciliation tables are the circular-FK cluster, and
-# replaying an old true-up against a freshly re-derived balance would be wrong regardless (see above).
-# notification_preferences is the same shape as user_settings and skipped for the same reason. And
-# notifications is a record of things that HAPPENED — mostly in groups the restoring account is not in
-# — so writing them would fabricate a history of events that never reached this person; both are listed
-# here rather than merely omitted so the restore says so instead of dropping them silently.
+# Everything the export produces is either restorable or named here — a guard in
+# tests/unit/test_account_lifecycle.py holds that, so a new exported table has to be classified on
+# purpose rather than dropped in silence. Three families, each skipped for its own reason:
+#
+#   * PREFERENCES AND SECRETS. api_keys carry no secret (the export omits it, so a restored row would be
+#     unusable); user_settings and notification_preferences are single preference rows, and writing them
+#     would overwrite the answers the target account already gave.
+#   * THE RECONCILIATION PAIR. card_reconciliations and account_reconciliations are the circular-FK
+#     cluster, and replaying an old true-up against a balance the restore has just re-derived from
+#     scratch would be wrong regardless of the FKs (see above).
+#   * THINGS THAT HAPPENED BETWEEN PEOPLE. notifications, and the thirteen group-scoped tables. Both are
+#     records of events involving other accounts, and a restore only ever holds ONE member's file.
+#
+# The thirteen group tables are the family, and the reason is one reason rather than thirteen: every row
+# in them describes a relationship between several real people, and a restore can only speak for the one
+# whose file it is. Rebuilding a group from it would stand every other member up as a placeholder bearing
+# a real person's name — in a group none of them is in, owning units they never agreed to, owing money
+# they never owed. Two of the thirteen say it on their own even before that argument:
+#
+#   * `groups` cannot be restored alone, because visibility IS membership: with `group_members` absent
+#     the restored row fails `app_is_group_member` and the restoring user cannot see the group they just
+#     recreated. Restoring the roster instead is the placeholder problem above, by name.
+#   * `group_invites` holds a single-use credential's hash with an expiry and a `consumed_at`. Writing one
+#     back re-opens a seat claim that was already spent or already expired.
+#
+# So the whole family is exported (an export answers "what does Renly hold about me", and a group you
+# belong to is part of that answer) and none of it is restored. Saying so is the difference between a
+# decision and an omission — which is the whole reason this tuple exists rather than the keys merely
+# being absent from RESTORE_SPECS.
 SKIPPED_ENTITIES = (
     "api_keys",
     "user_settings",
@@ -68,6 +90,20 @@ SKIPPED_ENTITIES = (
     "account_reconciliations",
     "notification_preferences",
     "notifications",
+    # The group-scoped family, in export order.
+    "groups",
+    "group_members",
+    "group_invites",
+    "group_money_settings",
+    "shared_expenses",
+    "shared_expense_splits",
+    "shared_income",
+    "shared_income_splits",
+    "group_settlements",
+    "shared_audit_log",
+    "pots",
+    "pot_member_permissions",
+    "pot_ownership_events",
 )
 
 

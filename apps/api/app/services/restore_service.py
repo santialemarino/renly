@@ -191,7 +191,12 @@ async def preview_restore(session: AsyncSession, user: User, filename: str, cont
         recognized=True,
         exported_at=exported_at if isinstance(exported_at, str) else None,
         entities=stats,
-        skipped_entities=[name for name in SKIPPED_ENTITIES if name in data],
+        # Reported only where the file actually HELD rows for that section. Presence of the key proves
+        # nothing: an export writes every key, so a solo user's file carries `"groups": []` and a
+        # key-presence test would tell them thirteen group tables "were not restored" from a backup
+        # that never contained a group. The line exists to name what the restore could not carry, and a
+        # section with no rows had nothing to carry.
+        skipped_entities=[name for name in SKIPPED_ENTITIES if data.get(name)],
     )
 
 

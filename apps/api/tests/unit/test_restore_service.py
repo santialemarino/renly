@@ -561,6 +561,28 @@ class TestAccountClusterRoundTrip:
         # re-derived balance would post an adjustment for drift that no longer exists.
         assert "account_reconciliations" in SKIPPED_ENTITIES and "card_reconciliations" in result.skipped_entities
 
+    @pytest.mark.asyncio
+    async def test_the_group_family_is_reported_rather_than_dropped_silently(self, monkeypatch):
+        # The thirteen group-scoped tables are exported and not restorable, so the preview has to name
+        # the ones the file actually held. Two of them here, with rows.
+        _mock_repo(monkeypatch)
+        content = _export(groups=[{"id": 3}], pot_ownership_events=[{"id": 8}])
+        result = await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", content)
+        assert "groups" in result.skipped_entities
+        assert "pot_ownership_events" in result.skipped_entities
+        # And nothing about them reaches the per-entity table, which only walks RESTORE_SPECS.
+        assert {stat.entity for stat in result.entities}.isdisjoint({"groups", "pot_ownership_events"})
+
+    @pytest.mark.asyncio
+    async def test_an_empty_section_is_not_reported_as_skipped(self, monkeypatch):
+        # The direction that matters for a solo user, who is every public user at launch: an export
+        # writes EVERY key, so their file carries `"groups": []`. Reporting on key presence would tell
+        # them a backup that never contained a group had failed to restore thirteen group tables.
+        _mock_repo(monkeypatch)
+        content = _export(groups=[], pots=[], shared_expenses=[], api_keys=[], card_reconciliations=[{"id": 1}])
+        result = await restore_service.preview_restore(AsyncMock(), USER, "renly-export.json", content)
+        assert result.skipped_entities == ["card_reconciliations"]
+
 
 # Router wiring over a TestClient.
 def _restore_client() -> TestClient:
@@ -655,12 +677,29 @@ class TestRestoreSpecsCoverEveryForeignKey:
                         missing.append(f"{spec.key}.{column.name} -> {target}")
         assert missing == []
 
-    def test_every_fk_to_a_skipped_entity_is_nulled(self):
+    # A FK to a skipped entity must never be copied verbatim, and there are exactly TWO ways to
+    # guarantee that. Nulling the column is one. `private_only` is the other, and for the pot column it
+    # is the only correct one: it drops the whole ROW rather than the pointer, because nulling a pot_id
+    # would hand the restoring user sole ownership of something several people own — inventing a
+    # transfer of value nobody agreed to (see restore_specs' header). Accepting both is what lets the
+    # group family join SKIPPED_ENTITIES without this guard demanding the wrong remedy for it.
+    def test_every_fk_to_a_skipped_entity_is_nulled_or_its_row_dropped(self):
         for spec in RESTORE_SPECS:
             for column in spec.model.__table__.columns:
                 for fk in column.foreign_keys:
-                    if fk.column.table.name in SKIPPED_ENTITIES:
-                        assert column.name in spec.null_fields, f"{spec.key}.{column.name} points at a skipped entity"
+                    if fk.column.table.name not in SKIPPED_ENTITIES:
+                        continue
+                    handled = column.name in spec.null_fields or (spec.private_only and column.name == "pot_id")
+                    assert handled, f"{spec.key}.{column.name} points at a skipped entity"
+
+    # The other direction, and the one that makes `private_only` load-bearing rather than incidental:
+    # every spec carrying a pot_id has to declare it, or the engine copies the column verbatim and a
+    # co-owned row lands in the restoring account as their own. Without this, deleting `private_only`
+    # from a spec leaves the guard above satisfied (the column is simply not in null_fields either) and
+    # nothing reddens.
+    def test_every_spec_with_a_pot_column_is_private_only(self):
+        missing = [spec.key for spec in RESTORE_SPECS if "pot_id" in spec.model.__table__.columns and not spec.private_only]
+        assert missing == []
 
     def test_every_parent_is_restored_before_its_children(self):
         # Would have caught `accounts` sitting after `credit_cards` once a card started naming one.
