@@ -111,7 +111,15 @@ Rebuild your data from a **Renly export** (the JSON file from `GET /me/export`) 
 
 **Foreign keys are remapped.** Exported ids won't match the target account, so parents are inserted first and each child's reference is repointed to the newly inserted id. A row whose required parent can't be resolved (or whose data is invalid) is counted under `skipped_unresolved` and skipped; everything else is inserted in one transaction.
 
-**What is restored:** investments, collections (and memberships), snapshots, transactions, credit cards, cash/bank accounts, subscriptions, installments, payment obligations, expenses, income, card settlements, and transfers. **Not restored** (reported in `skipped_entities`): API keys (the export omits their secret), settings, and both reconciliation types. Restored expenses/income keep their amount, date, category, notes **and the cash/bank account they were linked to** — their scheduler and reconciliation links are dropped, so they arrive as plain entries. An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+**What is restored:** investments, collections (and memberships), snapshots, transactions, credit cards, cash/bank accounts, subscriptions, installments, payment obligations, expenses, income, card settlements, and transfers. Restored expenses/income keep their amount, date, category, notes **and the cash/bank account they were linked to** — their scheduler and reconciliation links are dropped, so they arrive as plain entries. An unreadable file, one that isn't a Renly export, or one whose contents violate a constraint returns `400`.
+
+**Everything else is reported, never dropped in silence.** `skipped_entities` names every section the file carried rows for that the restore deliberately does not write, so nothing goes missing without being mentioned. A section your file had no rows in is simply absent from the list. Three families:
+
+- **Preferences and secrets** — API keys (the export omits the secret, so a restored key would be unusable), your settings, and your notification preferences. Writing a preference row would overwrite the answers the target account already gave.
+- **Reconciliations**, both card and account. See below.
+- **Things that happened between people** — your notifications, and everything belonging to a group: the group itself, its members and invitations, its money settings, its shared expenses and income and their splits, its settlements, its activity trail, and its shared pots with their access and ownership history. All of it is in your export, because a group you belong to is part of what Renly holds about you. None of it is restored, because a restore only ever holds ONE member's file: rebuilding a group from it would stand every other member up as a placeholder bearing a real person's name — in a group none of them is in, owning shares they never agreed to and owing money they never owed. Restoring the group without its members is no better: in Renly, seeing a group IS being a member of it, so the restored group would be invisible to the very person who restored it.
+
+To bring a shared group back, its members re-create it and re-invite each other; the ownership and balance history is a record of what several people did together, and only they can re-establish it.
 
 **Balances come back on their own.** Every balance in Renly is derived, never stored: an account's is its `opening_balance` plus the rows linked to it, and a card's is its charges minus the settlements paid against it. Restoring those rows and keeping their links intact therefore reproduces both figures with no extra step.
 
@@ -662,7 +670,7 @@ User preferences stored as key-value pairs. All fields are optional on update --
 
 ## Onboarding
 
-First-run onboarding state for the authenticated user, all derived from the account's real data (no per-step flags to keep in sync): the dashboard welcome's reactive checklist, the per-section first-run sample data, and the welcome tour's seen-state. Each `sample_*` flag is true only while that section is empty **and** the user hasn't yet created that entity or cleared its sample — so each section teaches once, independently. `tour_completed` is a dedicated flag (separate from `onboarding_completed`) so the guided tour and the checklist don't suppress each other. The `onboarding_completed` field under [Settings](#settings) remains the welcome's "hide forever" flag.
+First-run onboarding state for the authenticated user, all derived from the account's real data (no per-step flags to keep in sync): the dashboard welcome's reactive checklist, the per-section first-run sample data, and the welcome tour's seen-state. Three of the checklist's five steps are **optional and non-gating** — an account, display currencies, and sharing money with a group — so the welcome offers its positive finish once income/expenses and an investment exist, whatever those three say. Each `sample_*` flag is true only while that section is empty **and** the user hasn't yet created that entity or cleared its sample — so each section teaches once, independently. `tour_completed` is a dedicated flag (separate from `onboarding_completed`) so the guided tour and the checklist don't suppress each other. The `onboarding_completed` field under [Settings](#settings) remains the welcome's "hide forever" flag.
 
 | Method | Path                                   | Description                                                                                                       |
 | ------ | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -677,6 +685,7 @@ First-run onboarding state for the authenticated user, all derived from the acco
 | `has_investments`      | bool | The user has created at least one investment.                     |
 | `has_finances`         | bool | The user has recorded at least one income or expense entry.       |
 | `has_accounts`         | bool | The user has created at least one cash or bank account.           |
+| `has_groups`           | bool | The user holds an active seat in at least one group.              |
 | `primary_currency_set` | bool | The user has explicitly chosen a primary display currency.        |
 | `sample_investments`   | bool | Whether the investments section should show its first-run sample. |
 | `sample_expenses`      | bool | Whether the expenses section should show its first-run sample.    |

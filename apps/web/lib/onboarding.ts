@@ -27,11 +27,14 @@ export function hasNoCoreData(status: OnboardingStatus | null): boolean {
 
 /*
  * Whether the first-run checklist has done enough to offer its positive finish instead of nagging.
- * Only investments and finances count. The account and display-currency steps are deliberately
- * OPTIONAL, so requiring either would turn an optional input into a completion demand — which is the
- * completeness pressure the product holds. That is also why `hasAccounts` is absent from
- * `hasNoCoreData` above: an account is deliberately not "core data", so the two definitions agree.
- * Fails closed on a null status, so a failed fetch never claims the user is finished.
+ * Only investments and finances count. The account, display-currency and sharing steps are
+ * deliberately OPTIONAL, so requiring any of them would turn an optional input into a completion
+ * demand — which is the completeness pressure the product holds. That is also why `hasAccounts` is
+ * absent from `hasNoCoreData` above: an account is deliberately not "core data", so the two
+ * definitions agree. `hasGroups` is absent from both for the same reason and a sharper one — every
+ * public user at launch is solo, so gating the finish on a group would leave the whole launch cohort
+ * looking permanently unfinished. Fails closed on a null status, so a failed fetch never claims the
+ * user is finished.
  */
 export function hasCompletedCoreSteps(status: OnboardingStatus | null): boolean {
   return !!status && status.hasInvestments && status.hasFinances;

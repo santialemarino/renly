@@ -17,8 +17,10 @@ import {
   hasOpenBalances,
   suggestionVoice,
 } from '@/app/(protected)/shared/settlement-rules';
+import { ConceptHint } from '@/components/concept-hint';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
+import { HELP_ANCHORS } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type {
   GroupBalances,
@@ -101,6 +103,20 @@ export function GroupBalancesSection({
           </Button>
         )}
       </div>
+
+      {/*
+       * Teaches what a balance IS — the counterpart of a share that already sits in your own expenses,
+       * money rather than a category — and only once there is a balance for it to be about. The
+       * currency rule is in the section's description instead, because that one has to be readable
+       * after the hint is dismissed.
+       */}
+      <ConceptHint
+        storageKey="group-balances-hint-dismissed"
+        anchor={HELP_ANCHORS.settlingUp}
+        show={hasOpenBalances(balances.buckets)}
+      >
+        {t('balances.hint')}
+      </ConceptHint>
 
       {/*
        * The buckets the glance figure could not be converted into. Said out loud rather than left as

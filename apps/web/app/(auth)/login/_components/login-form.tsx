@@ -75,6 +75,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
                     type="email"
                     autoComplete="email"
                     placeholder={t('form.email.placeholder')}
+                    data-testid="login-email-input"
                   />
                 </FormControl>
                 <FormMessage />
@@ -96,6 +97,7 @@ export function LoginForm({ nextPath }: LoginFormProps) {
                     autoComplete="current-password"
                     placeholder={t('form.password.placeholder')}
                     blueEye
+                    data-testid="login-password-input"
                   />
                 </FormControl>
                 <FormMessage />
@@ -122,7 +124,13 @@ export function LoginForm({ nextPath }: LoginFormProps) {
           </div>
         </div>
 
-        <Button blue type="submit" size="lg" disabled={form.formState.isSubmitting}>
+        <Button
+          blue
+          type="submit"
+          size="lg"
+          disabled={form.formState.isSubmitting}
+          data-testid="login-submit"
+        >
           {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
         </Button>
       </form>

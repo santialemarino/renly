@@ -15,6 +15,12 @@ interface RowActionButtonBaseProps {
   // destructive: muted icon turning red on hover (delete). muted: muted icon turning to
   // the foreground color on hover (archive). default: plain ghost (edit / unarchive).
   variant?: 'default' | 'destructive' | 'muted';
+  /*
+   * E2E target, and the reason it is not simply the aria-label: the labels above are hardcoded
+   * English pending the a11y sweep, so a spec keying on them would break the moment they are
+   * translated. One row action per table needs this — the one a spec drives.
+   */
+  testId?: string;
 }
 
 // Either an action (onClick) or pure navigation (href). A row action that only navigates must render
@@ -28,7 +34,7 @@ type RowActionButtonProps = RowActionButtonBaseProps &
 
 // Ghost icon button + tooltip used in table row action cells.
 export function RowActionButton(props: RowActionButtonProps) {
-  const { icon: Icon, tooltip, ariaLabel, disabled, variant = 'default' } = props;
+  const { icon: Icon, tooltip, ariaLabel, disabled, variant = 'default', testId } = props;
   const className = cn(
     'size-8',
     variant === 'destructive' && 'text-muted-foreground hover:text-destructive',
@@ -39,7 +45,14 @@ export function RowActionButton(props: RowActionButtonProps) {
     <Tooltip>
       <TooltipTrigger asChild>
         {props.href ? (
-          <Button variant="ghost" size="icon" className={className} aria-label={ariaLabel} asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={className}
+            aria-label={ariaLabel}
+            data-testid={testId}
+            asChild
+          >
             <Link href={props.href}>
               <Icon className="size-4" />
             </Link>
@@ -52,6 +65,7 @@ export function RowActionButton(props: RowActionButtonProps) {
             onClick={props.onClick}
             disabled={disabled}
             aria-label={ariaLabel}
+            data-testid={testId}
           >
             <Icon className="size-4" />
           </Button>

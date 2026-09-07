@@ -541,19 +541,29 @@ class TestExport:
         # encrypted with into a portable file people email to themselves.
         assert deliberately_excluded & exported == set()
 
-    # Everything the export produces has to be either restorable or REPORTED as skipped. The
-    # notification tables are neither restorable nor silently dropped: a preference set is the same
-    # shape as user_settings (overwriting the target's own answers would be wrong), and a notification
-    # is a record of things that HAPPENED, mostly in groups the restoring account is not in — writing
-    # them would fabricate a history that never reached this person. Saying so is the difference
-    # between a decision and an omission.
-    def test_the_notification_tables_are_reported_as_skipped_rather_than_dropped_silently(self):
+    # Everything the export produces has to be either restorable or REPORTED as skipped. There is no
+    # third state, and the missing third state is the whole point: an exported key that is in neither
+    # list is silently DROPPED — the preview says nothing about it, the result counts nothing for it,
+    # and the user learns what their backup did not carry only by noticing the absence later.
+    #
+    # This started as a two-name check on the notification tables and is now the general invariant,
+    # because the specific version could not see the family it sat next to: thirteen group-scoped tables
+    # were exported and neither restorable nor reported, which is exactly the state this test's own
+    # comment called out for two of them. A per-table assertion agrees with itself forever; the set
+    # difference cannot.
+    def test_every_exported_key_is_either_restorable_or_reported_as_skipped(self):
         from app.domain.restore_specs import RESTORE_SPECS, SKIPPED_ENTITIES
 
         restorable = {spec.key for spec in RESTORE_SPECS}
-        for name in ("notifications", "notification_preferences"):
-            assert name not in restorable
-            assert name in SKIPPED_ENTITIES
+        assert EXPORTED_TABLES - restorable - set(SKIPPED_ENTITIES) == set()
+        # Both directions. A name can only be one or the other — listing a restorable entity as skipped
+        # would report it as dropped while the engine writes its rows, which is a false statement about
+        # the user's own data rather than a harmless duplicate.
+        assert set(SKIPPED_ENTITIES) & restorable == set()
+        # And the skip list cannot rot: a name in it that the export no longer produces is copy nobody
+        # can reach, because `preview_restore` only reports a section the FILE actually holds rows for —
+        # so a stale name would sit here forever without ever reaching a user to be noticed.
+        assert set(SKIPPED_ENTITIES) <= EXPORTED_TABLES
 
     # EXPORTED_TABLES is declared, not derived, so it could claim coverage the queries do not provide
     # (or miss a key they do). Driving the real dump against a stub session pins the two together: add

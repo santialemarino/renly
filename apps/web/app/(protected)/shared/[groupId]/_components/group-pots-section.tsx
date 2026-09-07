@@ -17,10 +17,10 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import { PotFormDialog } from '@/app/(protected)/shared/_components/pot-form-dialog';
-import { DismissableHint } from '@/components/dismissable-hint';
+import { ConceptHint } from '@/components/concept-hint';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
-import { sharedPotPath, sharedSharePath } from '@/config/routes';
+import { HELP_ANCHORS, sharedPotPath, sharedSharePath } from '@/config/routes';
 import type { Group } from '@/lib/api/groups';
 import type { Pot } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -77,12 +77,16 @@ export function GroupPotsSection({ group, pots, preferredCurrencies }: GroupPots
 
       {/*
        * Teaches the one idea the rest of the surface assumes — that a share is a proportion of the
-       * whole, not a pile of money — and only once there is a pot for it to be about. No help deep
-       * link: co-ownership has no help section yet, so ConceptHint would point at nothing.
+       * whole, not a pile of money — and only once there is a pot for it to be about. The "Learn more"
+       * link goes to the co-ownership help section, which explains the same idea at length.
        */}
-      <DismissableHint storageKey="pot-ownership-hint-dismissed" show={pots.length > 0}>
+      <ConceptHint
+        storageKey="pot-ownership-hint-dismissed"
+        anchor={HELP_ANCHORS.sharing}
+        show={pots.length > 0}
+      >
         {t('pots.hint')}
-      </DismissableHint>
+      </ConceptHint>
 
       {pots.length === 0 ? (
         <EmptyState

@@ -10,6 +10,7 @@ import {
   Landmark,
   Sparkles,
   TrendingUp,
+  Users,
   Wallet,
   X,
 } from 'lucide-react';
@@ -113,9 +114,9 @@ interface OnboardingWelcomeProps {
 
 // First-run welcome shown on the dashboard until onboarding is completed. It's a reactive
 // checklist: each step reflects the account's real data, so acting on a step (adding an
-// investment, an expense, an account, choosing currencies) checks it off on the next dashboard load
-// with no per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both gating steps
-// are done — persists the completion flag server-side so the welcome never returns.
+// investment, an expense, an account, choosing currencies, joining a group) checks it off on the next
+// dashboard load with no per-card flag. Dismissing — via the ✕ or the "all set" confirmation once both
+// gating steps are done — persists the completion flag server-side so the welcome never returns.
 export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomeProps) {
   const t = useTranslations('dashboard.onboarding');
   const tTour = useTranslations('dashboard.tour');
@@ -125,6 +126,7 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
   const hasInvestments = status?.hasInvestments ?? false;
   const hasFinances = status?.hasFinances ?? false;
   const hasAccounts = status?.hasAccounts ?? false;
+  const hasGroups = status?.hasGroups ?? false;
   const primaryCurrencySet = status?.primaryCurrencySet ?? false;
 
   // Which steps gate the positive finish lives in one place next to the sidebar/tour's newcomer
@@ -172,6 +174,23 @@ export function OnboardingWelcome({ status, autoStartTour }: OnboardingWelcomePr
       hint: t('steps.currencies.hint'),
       actionLabel: t('steps.currencies.action'),
       href: ROUTES.preferences,
+      optional: true,
+    },
+    /*
+     * Last, and optional. Every public user at launch is solo, so this is the step most of them will
+     * never take — above a universal one it would read as a demand rather than an offer. It is also
+     * deliberately absent from `hasCompletedCoreSteps`, so a solo user still reaches the positive
+     * finish with it open; like the other two optional steps it reports on real data (an active group
+     * seat) and ticks itself off, so nobody has to tell the checklist they are done.
+     */
+    {
+      key: 'sharing',
+      icon: Users,
+      done: hasGroups,
+      label: t('steps.sharing.label'),
+      hint: t('steps.sharing.hint'),
+      actionLabel: t('steps.sharing.action'),
+      href: ROUTES.shared,
       optional: true,
     },
   ];

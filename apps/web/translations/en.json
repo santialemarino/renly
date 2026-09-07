@@ -130,6 +130,7 @@
     "currencyHint": {
       "message": "Values from past months are converted at today's exchange rate, not the historical rate. Amounts may differ from what they were worth at the time."
     },
+    "dismiss": "Dismiss",
     "groupKinds": {
       "household": "Household",
       "couple": "Couple",
@@ -411,6 +412,11 @@
           "label": "Set your display currencies",
           "hint": "Choose the currencies your dashboard converts to.",
           "action": "Set currencies"
+        },
+        "sharing": {
+          "label": "Share money with someone",
+          "hint": "Co-own a portfolio, or split a household's costs, without leaving your own numbers behind.",
+          "action": "Create a group"
         }
       },
       "allSet": {
@@ -2484,6 +2490,7 @@
     "balances": {
       "title": "Balances",
       "description": "Who owes whom, in each currency. Amounts in different currencies are never merged.",
+      "hint": "A balance is the other half of a shared expense: your own part is already in your expenses, and this is what is left between you and the others. It counts as money you are owed or money you owe, and a settlement is a real payment the other person confirms.",
       "empty": {
         "nothingShared": {
           "title": "Nothing shared yet",
@@ -3571,7 +3578,22 @@
         "user_settings": "Settings",
         "card_settlements": "Card settlements",
         "card_reconciliations": "Card reconciliations",
-        "account_reconciliations": "Account reconciliations"
+        "account_reconciliations": "Account reconciliations",
+        "notification_preferences": "Notification preferences",
+        "notifications": "Notifications",
+        "groups": "Groups",
+        "group_members": "Group members",
+        "group_invites": "Group invitations",
+        "group_money_settings": "Group money settings",
+        "shared_expenses": "Shared expenses",
+        "shared_expense_splits": "Shared expense splits",
+        "shared_income": "Shared income",
+        "shared_income_splits": "Shared income splits",
+        "group_settlements": "Settlements",
+        "shared_audit_log": "Group activity",
+        "pots": "Shared pots",
+        "pot_member_permissions": "Pot access",
+        "pot_ownership_events": "Pot ownership history"
       },
       "notRestored": "Not restored by this tool: {entities}.",
       "back": "Choose another file",
@@ -3702,7 +3724,7 @@
   "help": {
     "metadata": {
       "title": "Help & FAQ",
-      "description": "How Renly works and what each metric means — snapshots, returns (TWR and IRR), and the currency model, explained for everyone."
+      "description": "How Renly works and what each metric means — snapshots, returns (TWR and IRR), the currency model, and sharing money with other people, explained for everyone."
     },
     "title": "Help & FAQ",
     "intro": "New to Renly, or to one of its numbers? These short explanations cover how the app works and what each metric means — no finance background needed.",
@@ -3781,6 +3803,26 @@
           "All conversions use today's exchange rate — not the rate from the date of each snapshot. A value from last year shown in pesos uses today's dollar-to-peso rate. This is deliberate: it answers what is this worth to me today, and keeps every number comparable when you view them in a single currency.",
           "If Renly cannot convert an investment to your chosen currency — for example the exchange-rate service is briefly unavailable — that investment is left out of the totals rather than shown with a wrong value, and the dashboard flags which ones were skipped so you know the total is incomplete.",
           "A credit-card balance in a currency other than your own is converted the same way — at your chosen dollar rate. Be aware that the rate you will actually be charged when you pay that bill may be higher: card issuers here apply the “dólar tarjeta” rate, which adds a tax perception on top of the official rate. So a foreign-currency card balance is an estimate of what you owe today, not a quote for what it will cost to settle."
+        ]
+      },
+      {
+        "id": "sharing",
+        "heading": "Sharing money with other people",
+        "paragraphs": [
+          "Some money is not only yours. A portfolio you built with a partner, a flat you own with a sibling, the everyday costs of a household — Renly holds all of that in a group. You create a group, invite the people in it, and from then on each of you sees the shared side of the picture alongside your own.",
+          "Things a group owns together live in a pot. A pot holds investments and accounts the same way your private side does, except nobody owns it outright: each member owns a share of it. The single most important thing to understand about a share is that it is a percentage of the whole, not a fixed amount of money. If two of you own a pot 60/40 and the pot is worth 100,000, your side is 60,000 — and when the pot rises to 110,000, your side becomes 66,000 with nothing to enter. Every share moves with the value, always, because that is what owning a proportion means.",
+          "Shares change only when somebody actually puts money in or takes it out, and each of those is recorded as its own dated event: the opening that first divides a pot, a contribution, a withdrawal, or a re-agreement when the owners simply decide the split should be different from now on. Renly keeps the whole chain, so a percentage on screen is always the result of events you can point at rather than a number somebody typed over the last one.",
+          "Your own screens stay about you. Your net worth counts your share of a pot and not the whole pot, your lists label which rows are shared, and a pot you own nothing of contributes nothing. A group can also decide who sees which pot, so a member may hold a seat in the group and still not see a particular pot at all. Every change anyone makes to a shared thing is recorded in the group's activity, with who did it and when."
+        ]
+      },
+      {
+        "id": "settling-up",
+        "heading": "Splitting costs and settling up",
+        "paragraphs": [
+          "The other half of a group is day-to-day money: the rent, the groceries, the trip somebody paid for. Record it as a shared expense, say how it divides — equally, by percentage, by explicit amounts, or by shares — and Renly turns it into two things at once. Your own part of it appears in your expenses like any other, so your spending is complete. The rest becomes a balance between you and the other members: what you are owed, or what you owe.",
+          "That balance is money, not a category, so it counts in your net worth as a receivable or a payable rather than disappearing into a total nobody can act on. Shared income works the same way in reverse — a payment that arrives for several people divides into each person's part.",
+          "Balances are kept per currency and never mixed. If you are owed 50,000 pesos and owe 200 dollars, Renly shows you both and nets neither, because turning one into the other would mean picking an exchange rate on your behalf and quietly deciding what a debt between two people is worth.",
+          "When it is time to square up, Renly works out the smallest set of payments that clears everybody — not one payment per expense, just the few that actually settle the group. You record a payment, and the person who received it confirms it, so a settlement is something both sides agreed happened rather than one person's claim. Each side can also point their leg at one of their own accounts, so the cash leaves one balance and arrives in the other. And if everyone agrees a small remainder is not worth chasing, it can be written off instead of lingering forever."
         ]
       }
     ]

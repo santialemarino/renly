@@ -5,7 +5,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.repositories import account_repository, expense_repository, income_repository, investment_repository
+from app.repositories import account_repository, expense_repository, group_repository, income_repository, investment_repository
 from app.services import settings_service
 
 logger = logging.getLogger(__name__)
@@ -20,12 +20,15 @@ logger = logging.getLogger(__name__)
 # the create services); this backstops data that entered outside those paths (import / restore /
 # scheduler) by retiring any SAMPLE entity that already has data. Accounts is deliberately not one of
 # them — it has no sample section (it teaches through the first-run empty state instead), so it must
-# stay out of `has_data` below, whose keys index the `samples_retired` map.
+# stay out of `has_data` below, whose keys index the `samples_retired` map. Groups is out of it for
+# exactly the same reason: no sample section, so nothing about it is ever sampled or retired — it is a
+# probe and a checklist tick, nothing else.
 async def get_status(session: AsyncSession, user: User) -> dict:
     has_investments = await investment_repository.exists_by_user(session, user.id)
     has_expenses = await expense_repository.exists_by_user(session, user.id)
     has_income = await income_repository.exists_by_user(session, user.id)
     has_accounts = await account_repository.exists_by_user(session, user.id)
+    has_groups = await group_repository.exists_active_member_by_user(session, user.id)
     current_settings = await settings_service.get_settings(session, user)
     retired = current_settings["samples_retired"]
 
@@ -44,6 +47,7 @@ async def get_status(session: AsyncSession, user: User) -> dict:
         "has_investments": has_investments,
         "has_finances": has_expenses or has_income,
         "has_accounts": has_accounts,
+        "has_groups": has_groups,
         "primary_currency_set": current_settings["primary_currency"] is not None,
         "sample_investments": not has_investments and not retired["investments"],
         "sample_expenses": not has_expenses and not retired["expenses"],

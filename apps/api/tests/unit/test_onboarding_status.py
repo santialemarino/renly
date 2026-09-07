@@ -17,11 +17,12 @@ USER = User(id=1, email="user@test", password_hash="x", session_epoch=0)
 _NONE_RETIRED = {"investments": False, "expenses": False, "income": False}
 
 
-def _patch(monkeypatch, *, investments, expenses, income, primary, accounts=False, retired=None, tour=False):
+def _patch(monkeypatch, *, investments, expenses, income, primary, accounts=False, groups=False, retired=None, tour=False):
     monkeypatch.setattr(onboarding_service.investment_repository, "exists_by_user", AsyncMock(return_value=investments))
     monkeypatch.setattr(onboarding_service.account_repository, "exists_by_user", AsyncMock(return_value=accounts))
     monkeypatch.setattr(onboarding_service.expense_repository, "exists_by_user", AsyncMock(return_value=expenses))
     monkeypatch.setattr(onboarding_service.income_repository, "exists_by_user", AsyncMock(return_value=income))
+    monkeypatch.setattr(onboarding_service.group_repository, "exists_active_member_by_user", AsyncMock(return_value=groups))
     settings = {
         "primary_currency": primary,
         "samples_retired": retired or dict(_NONE_RETIRED),
@@ -44,6 +45,7 @@ class TestChecklist:
             "has_investments": False,
             "has_finances": False,
             "has_accounts": False,
+            "has_groups": False,
             "primary_currency_set": False,
             "sample_investments": True,
             "sample_expenses": True,
@@ -94,6 +96,26 @@ class TestChecklist:
 
         assert result["has_accounts"] is True
         retire.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_groups_step_reflects_an_active_seat(self, monkeypatch):
+        # The sharing step is OPTIONAL and non-gating (the frontend's hasCompletedCoreSteps ignores it),
+        # so like accounts it reports on the step and retires no sample. Whether it gates the welcome's
+        # finish is a frontend rule — see apps/web/lib/onboarding.ts and its vitest.
+        retire = _patch(monkeypatch, investments=False, expenses=False, income=False, primary=None, groups=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["has_groups"] is True
+        retire.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_groups_step_not_done_without_a_seat(self, monkeypatch):
+        _patch(monkeypatch, investments=True, expenses=True, income=True, primary="USD", accounts=True)
+
+        result = await onboarding_service.get_status(AsyncMock(), USER)
+
+        assert result["has_groups"] is False
 
     @pytest.mark.asyncio
     async def test_currency_step_reflects_stored_primary(self, monkeypatch):

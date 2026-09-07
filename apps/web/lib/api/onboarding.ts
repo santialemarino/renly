@@ -10,6 +10,7 @@ interface OnboardingStatusRaw {
   has_investments: boolean;
   has_finances: boolean;
   has_accounts: boolean;
+  has_groups: boolean;
   primary_currency_set: boolean;
   sample_investments: boolean;
   sample_expenses: boolean;
@@ -23,6 +24,7 @@ export interface OnboardingStatus {
   hasInvestments: boolean;
   hasFinances: boolean;
   hasAccounts: boolean;
+  hasGroups: boolean;
   primaryCurrencySet: boolean;
   sampleInvestments: boolean;
   sampleExpenses: boolean;
@@ -37,6 +39,7 @@ function mapOnboardingStatus(raw: OnboardingStatusRaw): OnboardingStatus {
     hasInvestments: raw.has_investments,
     hasFinances: raw.has_finances,
     hasAccounts: raw.has_accounts === true,
+    hasGroups: raw.has_groups === true,
     primaryCurrencySet: raw.primary_currency_set,
     sampleInvestments: raw.sample_investments,
     sampleExpenses: raw.sample_expenses,

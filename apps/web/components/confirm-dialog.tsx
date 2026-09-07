@@ -65,6 +65,7 @@ export function ConfirmDialog<TEntity>({
             disabled={loading}
             variant="destructive"
             className="whitespace-nowrap"
+            data-testid="confirm-dialog-confirm"
           >
             {loading ? loadingLabel : confirmLabel}
           </Button>

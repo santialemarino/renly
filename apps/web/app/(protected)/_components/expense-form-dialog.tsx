@@ -679,6 +679,7 @@ export function ExpenseFormDialog({
                           {...field}
                           currency={watchedCurrency || undefined}
                           placeholder={t('form.amount.placeholder')}
+                          data-testid="expense-form-amount"
                         />
                       </FormControl>
                       <FormMessage />
@@ -889,7 +890,12 @@ export function ExpenseFormDialog({
                   <FormItem>
                     <FormLabel>{t('form.notes.label')}</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder={t('form.notes.placeholder')} rows={2} />
+                      <Textarea
+                        {...field}
+                        placeholder={t('form.notes.placeholder')}
+                        rows={2}
+                        data-testid="expense-form-notes"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -902,7 +908,13 @@ export function ExpenseFormDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               {t('form.cancel')}
             </Button>
-            <Button blue type="submit" form="expense-form" disabled={form.formState.isSubmitting}>
+            <Button
+              blue
+              type="submit"
+              form="expense-form"
+              disabled={form.formState.isSubmitting}
+              data-testid="expense-form-submit"
+            >
               {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
             </Button>
           </DialogFooter>
