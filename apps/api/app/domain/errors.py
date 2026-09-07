@@ -754,20 +754,67 @@ class PotAlreadyDividedError(DomainError):
 # under the first. Adding one raises the pot's value with nobody's units changing, so value that came
 # wholly out of one person's private scope is handed to every owner pro-rata: a silent gift, where
 # taking one out is a silent taking.
-# It is a REFUSAL rather than the correct behaviour, and the correct behaviour is a contribution priced
-# at the move date — the fourth guided flow, which the follow-up track ships. Until then a divided pot
-# cannot gain a holding at all and there is no workaround, so the message points at what IS supported
-# (moving money in, which issues the mover units) rather than implying an asset can be. Mapped to 409.
+# It refuses the UNPRICED move rather than the act. The correct behaviour is a contribution: the
+# holding is valued where it stands, the mover is issued units worth exactly that, and only then does
+# it move — which is what POST /pots/{id}/holdings/contribute does, and what this message points at.
+# Kept as its own code rather than folded into pot_already_divided because the remedy is what makes a
+# refusal usable, and the two remedies are opposites: taking out is a withdrawal, putting in is a
+# contribution. Mapped to 409.
 class PotHoldingAddDividedError(DomainError):
     code = "pot_holding_add_divided"
     status_code = 409
 
     def __init__(self) -> None:
         self.message = (
-            "This pot's ownership is already agreed, so a holding cannot be added to it. "
-            "Contribute money to the pot instead, which issues you units for what you put in."
+            "This pot's ownership is already agreed, so a holding cannot simply be added to it. "
+            "Contribute it instead, which values it and issues you units for exactly that."
         )
         super().__init__(self.message)
+
+
+# A holding offered as a contribution is ARCHIVED. Both NAV queries filter on is_active, so an
+# archived holding contributes nothing to the pot's value — units issued against it would dilute every
+# other owner for value the pot never gains, which is the same coupling
+# pot_movement_account_inactive exists to refuse one leg further along. Mapped to 400.
+class PotHoldingInactiveError(DomainError):
+    code = "pot_holding_inactive"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That is archived, so it is not counted in the pot's value. Restore it before contributing it."
+        super().__init__(self.message)
+
+
+# A holding offered as a contribution has no value on record at the date it would be priced at — an
+# investment nobody has snapshotted on or before it. The units issued ARE its value, so there is
+# nothing to issue; refused rather than treated as zero, the same posture the NAV takes when a holding
+# it contains is unvalued. Mapped to 400.
+class PotHoldingUnvaluedError(DomainError):
+    code = "pot_holding_unvalued"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = "That has no value on record, so there is nothing to issue units against. Record what it is worth first."
+        super().__init__(self.message)
+
+
+# A holding offered as a contribution is worth zero or less — an emptied or overdrawn account, or a
+# figure that rounds to nothing once converted into the pot's base currency. Units are issued FROM the
+# value, so zero issues nothing and a negative would redeem units the contributor may not even hold:
+# a withdrawal wearing a contribution's name. Mapped to 400.
+class PotHoldingNotPositiveError(DomainError):
+    code = "pot_holding_not_positive"
+    status_code = 400
+
+    def __init__(self, value: Decimal, currency: str) -> None:
+        self.value = value
+        self.currency = currency
+        self.message = f"A contribution has to be worth more than zero (that one is worth {value} {currency})."
+        super().__init__(self.message)
+
+    @property
+    def extra(self) -> dict:
+        return {"value": str(self.value), "currency": self.currency}
 
 
 # A cross-currency ownership movement did not record the amount credited to the pot. `amount` is in

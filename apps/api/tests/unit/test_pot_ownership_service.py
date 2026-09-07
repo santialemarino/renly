@@ -26,9 +26,11 @@ from app.domain import (
 from app.domain.errors import AccountCurrencyMismatchError
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
+from app.models.investment import Investment, InvestmentCategory
 from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent
 from app.models.user import User
+from app.schemas.pot import PotHoldingResponse
 from app.services import pot_ownership_service as svc
 
 USER = User(id=1, name="Santi", email="u@test", password_hash="x", session_epoch=0)
@@ -646,6 +648,141 @@ class TestMovements:
 # could reasonably prefill for "all of it" (the reported share value, units x price) is 66.67, and
 # 66.67 / 33.333333 is 2.000100. That is not a contrived corner: over 224,200 plausible pots this
 # division reproduced the holder's balance 4.6% of the time.
+class TestHoldingContribution:
+    # The fourth guided flow's write: a private holding moves into a DIVIDED pot and is paid for in
+    # units, which is what makes it a contribution rather than the silent gift the plain move was
+    # refused for. The valuation itself lives in pot_service and is stubbed here; what this class is
+    # about is the arithmetic, the shape of the row, and the ORDER.
+
+    @staticmethod
+    def _valued(value="55", currency="USD", base_value="55"):
+        return PotHoldingResponse(
+            id=12,
+            name="Fondo",
+            currency=currency,
+            value=Decimal(value),
+            base_value=Decimal(base_value),
+            is_active=True,
+            valued_on=date(2026, 2, 1),
+        )
+
+    @staticmethod
+    def _wire(monkeypatch, *, valued=None, holding=None):
+        monkeypatch.setattr(
+            svc.pot_service,
+            "require_contributable_holding",
+            AsyncMock(return_value=holding or Investment(id=12, user_id=1, name="Fondo", category=InvestmentCategory.fci, base_currency="USD")),
+        )
+        monkeypatch.setattr(svc.pot_service, "value_contributed_holding", AsyncMock(return_value=valued or TestHoldingContribution._valued()))
+        attach = AsyncMock()
+        monkeypatch.setattr(svc.pot_service, "attach_holding", attach)
+        return attach
+
+    @pytest.mark.asyncio
+    async def test_the_units_issued_are_the_holdings_value_at_the_pots_own_price(self, monkeypatch):
+        # The invariant the whole flow exists for, at its smallest: 100 units outstanding against a NAV
+        # of 110 is a price of 1.10, so a holding worth 55 buys exactly 50 units — and 50 units at 1.10
+        # is 55, which is what the contributor put in. Nobody else's value moves; only percentages do.
+        created = _arrange(monkeypatch)
+        self._wire(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        event = created.await_args.args[1]
+        assert event.units == Decimal("50")
+        assert event.unit_price == Decimal("1.10")
+        assert event.base_amount == Decimal("55")
+
+    @pytest.mark.asyncio
+    async def test_the_row_is_a_contribution_for_the_callers_own_seat_dated_today_with_no_account_legs(self, monkeypatch):
+        # Four properties in one row because they are one decision: the asset moved, so no money passed
+        # between accounts; it is the caller's asset, so it is the caller's seat; and it is priced where
+        # it stands, so the date is today and not a field the caller supplies.
+        #
+        # The NULL legs are the load-bearing one and the reason is not obvious. Two money queries turn
+        # an ownership event into account movements — the balance union's `_FROM_AMOUNT`/`_TO_AMOUNT`
+        # and the per-account ledger's `_ownership_branch` — and both branch on `type == contribution`
+        # while keying on these two columns. Naming a leg "helpfully" (the pot account an account
+        # contribution just became) would credit it `base_amount` ON TOP of the balance it already
+        # carries, so the pot would gain the same money twice. The integration suite pins the figure;
+        # this pins the shape.
+        created = _arrange(monkeypatch)
+        self._wire(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        event = created.await_args.args[1]
+        assert event.type == OwnershipEventType.contribution
+        assert event.member_id == SEAT.id
+        assert event.date == date.today()
+        assert (event.from_account_id, event.to_account_id) == (None, None)
+
+    @pytest.mark.asyncio
+    async def test_the_holdings_own_figure_and_currency_are_recorded_beside_the_credited_one(self, monkeypatch):
+        # Both sides, no stored rate — the same shape a cross-currency money movement takes. 66,000 ARS
+        # arriving as 55 USD buys the same 50 units, because units come from the CREDITED figure.
+        created = _arrange(monkeypatch)
+        self._wire(monkeypatch, valued=self._valued(value="66000", currency="ARS", base_value="55"))
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        event = created.await_args.args[1]
+        assert (event.amount, event.amount_currency, event.base_amount) == (Decimal("66000"), "ARS", Decimal("55"))
+        assert event.units == Decimal("50")
+
+    @pytest.mark.asyncio
+    async def test_a_holding_already_in_the_pots_currency_stores_no_currency_at_all(self, monkeypatch):
+        # The column means "a real conversion happened", so it stays null whenever nothing was converted
+        # — exactly what record_movement does with the same column.
+        created = _arrange(monkeypatch)
+        self._wire(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        assert created.await_args.args[1].amount_currency is None
+
+    @pytest.mark.asyncio
+    async def test_the_holding_is_valued_as_at_today_and_really_does_move(self, monkeypatch):
+        # That the move happens at all, and that both halves speak about the same date. The ORDER of
+        # the two — which is what decides whether the arithmetic is right — is asserted in
+        # test_shared_write_ordering.py, where an order assertion has the tracing to be meaningful.
+        _arrange(monkeypatch)
+        attach = self._wire(monkeypatch)
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        attach.assert_awaited_once()
+        assert svc.pot_service.value_contributed_holding.await_args.kwargs["as_of_date"] == date.today()
+
+    @pytest.mark.asyncio
+    async def test_an_undivided_pot_is_refused_because_there_is_no_price(self, monkeypatch):
+        # With no units outstanding there is no unit price, so there is nothing to issue against — and
+        # an undivided pot has the plain move-in for exactly this case.
+        _arrange(monkeypatch, events=[])
+        self._wire(monkeypatch)
+        with pytest.raises(PotNotOpenedError):
+            await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+
+    @pytest.mark.asyncio
+    async def test_a_pot_with_no_known_value_is_refused_rather_than_priced_at_a_guess(self, monkeypatch):
+        _arrange(monkeypatch, nav=None)
+        self._wire(monkeypatch)
+        with pytest.raises(PotValuationRequiredError):
+            await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+
+    @pytest.mark.asyncio
+    async def test_a_read_only_seat_cannot_contribute(self, monkeypatch):
+        _arrange(monkeypatch)
+        self._wire(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
+        with pytest.raises(PotWriteRequiredError):
+            await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+
+    @pytest.mark.asyncio
+    async def test_it_announces_the_credited_figure_in_the_pots_currency(self, monkeypatch):
+        # The same sentence a money contribution sends, and the same figure: what changed for every
+        # reader is what the pot took in, which for a cross-currency holding is not the number the
+        # contributor would recognise as its price.
+        _arrange(monkeypatch)
+        self._wire(monkeypatch, valued=self._valued(value="66000", currency="ARS", base_value="55"))
+        await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        event, _recipients, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.pot_movement
+        assert payload["variant"] == "contribution"
+        assert (payload["amount"], payload["currency"]) == ("55", "USD")
+        assert payload["member"] == SEAT.display_name
+
+
 class TestWholeShareWithdrawal:
     # Two owners holding 2 and 1 of 3 units, valued at 100 — so the price is 33.333333 and the larger
     # holder's share is reported as 66.67.

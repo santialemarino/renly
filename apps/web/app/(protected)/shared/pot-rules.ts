@@ -86,12 +86,64 @@ export function canRecordReagreement(pot: Pot, activeSeatCount: number): boolean
  * this is what keeps the button from being offered — it was reachable in two clicks before, because
  * this predicate asked only about write access.
  *
- * A refusal rather than the right answer, deliberately: the right answer is a contribution priced at
- * the move date, which the follow-up track ships. Until then a divided pot cannot gain a holding at
- * all, and the section's own copy points at what IS supported instead of implying otherwise.
+ * Once the shares ARE agreed the same act is still available, priced: canContributeHolding below, and
+ * the section swaps one control for the other rather than going silent.
  */
 export function canMoveHoldingsIn(pot: Pot, events: PotOwnershipEvent[]): boolean {
   return pot.canWrite && !hasLedger(events);
+}
+
+/*
+ * Whether something can be contributed to this pot — the priced version of moving a holding in, and
+ * the only way a DIVIDED pot can gain one.
+ *
+ * The same conditions a money contribution has and no others, because it is the same act: units are
+ * issued at the pot's unit price, so there has to be one. Deliberately NOT the mirror of
+ * canMoveHoldingsIn — the two are not exclusive by construction but by arithmetic, since a priceable
+ * pot is a divided one and an undivided pot has no price. Writing it as `hasLedger && ...` would tie
+ * the control to the wrong fact: what matters is whether a unit price exists to issue against.
+ */
+export function canContributeHolding(pot: Pot): boolean {
+  return canRecordMovement(pot);
+}
+
+/*
+ * One picker key for two lists. The contribution picker offers investments and accounts in one
+ * control and exactly one row can be chosen, so the value carries which list it came from — ids
+ * collide across the two tables, and an id alone would send an account's number as an investment's.
+ */
+export type HoldingKind = 'investment' | 'account';
+
+export function holdingKey(kind: HoldingKind, id: number): string {
+  return `${kind}:${id}`;
+}
+
+/*
+ * The key back into the pair the API takes, or null when it is not one.
+ *
+ * Null rather than a throw or a guess: this parses a form value, and a form value can be anything on
+ * the way to the server. The caller refuses rather than posting a body with both ids null, which the
+ * API would answer 422 for a reason nobody could act on.
+ */
+export function parseHoldingKey(value: string): { kind: HoldingKind; id: number } | null {
+  const [kind, rawId] = value.split(':');
+  if (kind !== 'investment' && kind !== 'account') return null;
+  const id = Number(rawId);
+  return Number.isInteger(id) && id > 0 ? { kind, id } : null;
+}
+
+// The row a picker key names, or null when it names none — a selection can outlive the list it was
+// made from, since the page re-reads the candidates on every load.
+export function findHolding(holdings: PotHoldings, value: string): PotHolding | null {
+  const parsed = parseHoldingKey(value);
+  if (parsed === null) return null;
+  const rows = parsed.kind === 'investment' ? holdings.investments : holdings.accounts;
+  return rows.find((row) => row.id === parsed.id) ?? null;
+}
+
+// Whether anything at all can be contributed, which decides between the picker and an empty state.
+export function hasContributableHoldings(holdings: PotHoldings): boolean {
+  return holdings.investments.length > 0 || holdings.accounts.length > 0;
 }
 
 /*

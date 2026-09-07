@@ -6,6 +6,7 @@ from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
 from app.schemas.pot import (
     PotCreate,
+    PotHoldingContribute,
     PotHoldingsMove,
     PotHoldingsResponse,
     PotMovementCreate,
@@ -140,6 +141,14 @@ async def list_holdings(pot_id: int, current_user: CurrentUser, session: Session
     return await pot_service.list_holdings(session, pot_id, current_user)
 
 
+# Lists the caller's own private holdings that could be contributed to this pot right now, each with
+# its value and that value in the pot's base currency. Needs pot write access (403), and every row it
+# returns is one POST /holdings/contribute will accept — the picker never offers what the write refuses.
+@router.get("/{pot_id}/holdings/contributable", response_model=PotHoldingsResponse)
+async def list_contributable_holdings(pot_id: int, current_user: CurrentUser, session: SessionDep) -> PotHoldingsResponse:
+    return await pot_service.list_contributable_holdings(session, pot_id, current_user)
+
+
 # Moves holdings into the pot. Needs pot write access (403), and every named holding must be the
 # caller's own private one (404 otherwise — the whole move is refused rather than partly applied).
 # An account with linked entries is refused with 409: its balance derives from one user's rows, so a
@@ -165,6 +174,28 @@ async def remove_holdings(
 ) -> PotResponse:
     return await pot_service.move_holdings(
         session, pot_id, current_user, investment_ids=body.investment_ids, account_ids=body.account_ids, into=False
+    )
+
+
+# Contributes ONE of the caller's private holdings to a DIVIDED pot: it is valued where it stands, the
+# caller's seat is issued units worth exactly that at today's unit price, and only then does it move.
+# Needs pot write access (403), a holding that is the caller's own, private and active (404/400), a pot
+# with an opening baseline and a known value today (400), and — for an account — no linked entries (409).
+# Returns the ledger entry it recorded.
+@router.post("/{pot_id}/holdings/contribute", response_model=PotOwnershipEventResponse, status_code=status.HTTP_201_CREATED)
+async def contribute_holding(
+    pot_id: int,
+    body: PotHoldingContribute,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> PotOwnershipEventResponse:
+    return await pot_ownership_service.contribute_holding(
+        session,
+        pot_id,
+        current_user,
+        investment_id=body.investment_id,
+        account_id=body.account_id,
+        notes=body.notes,
     )
 
 

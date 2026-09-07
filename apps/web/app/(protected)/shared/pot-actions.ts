@@ -8,12 +8,14 @@ import {
 } from '@/app/(protected)/shared/mutation-result';
 import type {
   PotBuyOutFormValues,
+  PotContributeFormValues,
   PotFormValues,
   PotMovementFormValues,
   PotOpeningFormValues,
   PotReagreementFormValues,
   PotTakeOutFormValues,
 } from '@/app/(protected)/shared/pot-form-schema';
+import { parseHoldingKey } from '@/app/(protected)/shared/pot-rules';
 import { mapPot, type Pot, type PotRaw } from '@/lib/api/pots';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
@@ -115,6 +117,35 @@ export async function movePotHoldings(
   // guided flow asks next — what the things just moved in are actually worth. Re-reading for it would
   // be a second round trip for a figure this response already carries.
   return toDataResult<PotRaw, Pot>(res, mapPot, 'Failed to move pot holdings');
+}
+
+/*
+ * Contributes ONE of the caller's private holdings to a pot whose shares are already agreed: it is
+ * valued where it stands, the caller is issued units worth exactly that, and only then does it move.
+ *
+ * The body names one holding and nothing else. There is deliberately no amount (the value is a fact
+ * about the holding, and a typed one higher than it would dilute every other owner), no date (a
+ * holding counts in the pot's value from the moment it moves, so pricing it at an earlier date hands
+ * out the difference) and no member (the holding is the caller's, so the share is too).
+ */
+export async function contributePotHolding(
+  potId: number,
+  values: PotContributeFormValues,
+): Promise<SharedMutationResult> {
+  // A key that does not parse sends two nulls and is refused by the API as the malformed body it is.
+  // Deliberately not caught here: the "exactly one holding" rule lives at the request boundary, and a
+  // second copy of it in the action would be a second thing that can disagree with it — over a state
+  // the picker cannot produce, since every option's value comes from holdingKey.
+  const holding = parseHoldingKey(values.holding);
+  const res = await authenticatedFetch(`/pots/${potId}/holdings/contribute`, {
+    method: 'POST',
+    body: {
+      investment_id: holding?.kind === 'investment' ? holding.id : null,
+      account_id: holding?.kind === 'account' ? holding.id : null,
+      notes: values.notes || null,
+    },
+  });
+  return toResult(res, 'Failed to contribute the holding');
 }
 
 /*

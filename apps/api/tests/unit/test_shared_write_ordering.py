@@ -1,6 +1,6 @@
 # What has to happen BEFORE what, across the shared-money services.
 #
-# Two rules, both cross-cutting and both invisible at the call site that gets them wrong.
+# Three rules, all cross-cutting and all invisible at the call site that gets them wrong.
 #
 #   * A LOCK comes before the read whose answer is acted on. Every guard in this initiative reads
 #     derived state — a ledger, a balance, a settlement's status — and then writes on the strength of
@@ -13,8 +13,12 @@
 #     your own view of one, would refuse the very entry that says you did it — and take the whole
 #     operation down with it, because the entry rides the same transaction.
 #
-# Both are asserted on ORDER rather than on presence, because both are already present in the wrong
-# place in the version that fails.
+#   * A VALUATION comes before the act that CHANGES what it values. A holding contributed to a pot is
+#     priced against the pot without it — the instant it moves, the NAV includes it — so the move is
+#     the last thing that happens.
+#
+# All three are asserted on ORDER rather than on presence, because all three are already present in
+# the wrong place in the version that fails.
 
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
@@ -25,6 +29,7 @@ from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.pot import Pot, PotMemberPermission
 from app.models.user import User
+from app.schemas.pot import PotHoldingResponse
 from app.services import group_service, group_settlement_service, pot_ownership_service, pot_service, shared_audit_service
 
 USER = User(id=1, name="Santi", email="u@test", password_hash="x", session_epoch=0)
@@ -33,6 +38,10 @@ POT = Pot(id=5, group_id=10, base_currency="USD", is_default=True)
 SEAT = GroupMember(id=100, group_id=10, user_id=USER.id, display_name="Santi", role=GroupMemberRole.admin)
 OTHER_SEAT = GroupMember(id=101, group_id=10, user_id=2, display_name="Ana", role=GroupMemberRole.member)
 WRITER = PotMemberPermission(pot_id=5, member_id=100, can_view=True, can_write=True)
+# What a contributed holding is worth, once valued: 55 in the pot's own currency, so no conversion.
+_CONTRIBUTED_HOLDING = PotHoldingResponse(
+    id=12, name="Fondo", currency="USD", value=Decimal("55"), base_value=Decimal("55"), is_active=True, valued_on=None
+)
 
 
 # Records the order calls arrive in. Each stub appends its own name, so a test can assert that one step
@@ -111,6 +120,41 @@ class TestTheLockComesFirst:
 
         await pot_service.move_holdings(AsyncMock(), 5, USER, into=True)
         assert trace.index_of("lock") < trace.index_of("read")
+
+    @pytest.mark.asyncio
+    async def test_a_holding_contribution_prices_the_pot_before_the_holding_moves_into_it(self, monkeypatch):
+        # The third rule this file exists for, and it is the same shape as the other two: both calls are
+        # present in the version that fails, in the wrong order.
+        #
+        # A holding has no pot-membership history — the NAV reads whatever the pot holds NOW — so the
+        # instant it moves, the pot's value includes it. Pricing after the move would divide the pot's
+        # NEW value by its OLD unit count, issuing the contributor units at a price their own
+        # contribution inflated: they pay for it twice and the difference is handed pro-rata to
+        # everybody else. Which is the exact transfer this whole flow exists to close, reintroduced by
+        # two statements being the wrong way round.
+        trace = _Trace()
+        monkeypatch.setattr(pot_ownership_service.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
+        monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
+        monkeypatch.setattr(pot_ownership_service.pot_service, "require_contributable_holding", AsyncMock(return_value=object()))
+        monkeypatch.setattr(pot_ownership_service.exchange_rate_service, "get_user_rate_lookup", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service, "_require_price", trace.stub("price", result=(Decimal("1.10"), {})))
+        monkeypatch.setattr(
+            pot_ownership_service.pot_service,
+            "value_contributed_holding",
+            trace.stub("value", result=_CONTRIBUTED_HOLDING),
+        )
+        monkeypatch.setattr(pot_ownership_service.pot_service, "attach_holding", trace.stub("move"))
+        monkeypatch.setattr(pot_ownership_service.pot_ownership_repository, "create", AsyncMock(return_value=MagicMock(id=1)))
+        monkeypatch.setattr(pot_ownership_service, "_audit", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service, "_pot_audience", AsyncMock(return_value=[]))
+        monkeypatch.setattr(pot_ownership_service.group_repository, "get_by_id", AsyncMock(return_value=GROUP))
+        monkeypatch.setattr(pot_ownership_service.notification_service, "dispatch", AsyncMock())
+        monkeypatch.setattr(pot_ownership_service, "_build_response", MagicMock(return_value="built"))
+
+        await pot_ownership_service.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
+        assert trace.index_of("lock") < trace.index_of("price")
+        assert trace.index_of("price") < trace.index_of("move")
+        assert trace.index_of("value") < trace.index_of("move")
 
     @pytest.mark.asyncio
     async def test_a_write_off_locks_the_group_before_reading_the_balance(self, monkeypatch):

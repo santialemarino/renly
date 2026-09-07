@@ -59,6 +59,34 @@ the one backend-localized exception — no frontend renderer.)
 - **Success responses** don't carry localized prose either — the frontend owns success copy per
   action. Give a success ack a machine field only when a caller must branch on it (e.g. a token type).
 
+### One refusal rule when a picker and a write must agree
+
+Where a surface OFFERS a set of things and a write then refuses some of them, the offer and the refusal
+are the same rule and must be one function — otherwise every condition is a chance for the two to
+disagree, and each disagreement is a row the user picks and is then refused for.
+
+Write it as a function that **RETURNS** the domain error (or `None`) rather than raising:
+
+```python
+# Why this row cannot be used, or None when it can. The write RAISES it, the list FILTERS on it.
+def contribution_refusal(row, base_currency, price) -> Exception | None:
+    if row.value is None:
+        return PotHoldingUnvaluedError()
+    ...
+    return None
+```
+
+The write does `refusal = rule(...)`, `if refusal is not None: raise refusal`; the list read does
+`[row for row in rows if rule(row, ...) is None]`. Two consequences to keep:
+
+- **Any guard the list cannot express as a filter has to be excluded some other way**, and the list's
+  own comment should say which group each condition falls into and count them — a "seven conditions,
+  all seven filtered" claim is checkable, "we filter the important ones" is not.
+- **A guard that raises about a whole batch cannot be reused by a picker.** An existence check
+  (`exists_for_accounts -> bool`) answers about the set, so a picker built on it drops every candidate
+  the moment one qualifies. Return the offending ids instead and put the raising wrapper on top; the
+  enumeration then lives in exactly one place.
+
 ## Currency conversion (services own it)
 
 Display-currency conversion is a service-layer concern. Routers never read the dollar

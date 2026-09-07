@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Coins, Minus, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -16,6 +17,7 @@ import {
   TableRow,
 } from '@repo/ui/components';
 import {
+  canContributeHolding,
   canMoveHoldingsIn,
   canMoveHoldingsOut,
   hasLedger,
@@ -23,6 +25,7 @@ import {
 import { PotHoldingsDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-holdings-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
+import { sharedContributePath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Investment } from '@/lib/api/investments';
 import type { Pot, PotHolding, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
@@ -39,12 +42,16 @@ interface PotHoldingsSectionProps {
 /*
  * What the pot actually holds — the investments and cash accounts whose combined value IS the pot's.
  *
- * NEITHER direction is offered once ownership is agreed, and the two are refused for OPPOSITE reasons.
- * Taking one out would drop the pot's value by the whole of that holding while nobody's units change,
- * so every co-owner's share falls pro-rata and it lands wholly in one person's private scope. Putting
- * one in is the mirror: the value RISES with nobody's units changing, so what one person added out of
- * their own scope is gifted pro-rata to everybody. Once ownership is agreed, taking value out is a
- * withdrawal and putting money in is a contribution — both of which move units and say whose it was.
+ * Neither direction is offered as a PLAIN move once ownership is agreed, and the two are refused for
+ * opposite reasons. Taking one out would drop the pot's value by the whole of that holding while
+ * nobody's units change, so every co-owner's share falls pro-rata and it lands wholly in one person's
+ * private scope. Putting one in is the mirror: the value RISES with nobody's units changing, so what
+ * one person added out of their own scope is gifted pro-rata to everybody.
+ *
+ * Adding is still available afterwards, priced — the button becomes the contribution flow rather than
+ * disappearing, which is the difference between an act that is unsupported and one that has a
+ * different shape. Taking value out has no such counterpart here: it is a withdrawal or a buy-out, one
+ * section up, because what leaves a divided pot is a SHARE rather than a thing.
  */
 export function PotHoldingsSection({
   pot,
@@ -79,16 +86,28 @@ export function PotHoldingsSection({
         />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
           {/*
-           * Hidden once the ledger exists, for the same reason the remove button is and the mirror
-           * reason: adding raises the pot's value with nobody's units changing, so what you added is
-           * gifted pro-rata to every owner. The section description carries the explanation, and the
-           * supported action — contributing money, which issues you units — is one section up.
+           * The same act, two shapes, and which one is offered turns on whether there is a unit price
+           * to issue against. Before the split a plain move is free — nothing has been divided, so
+           * nothing can be given away. After it, the value has to buy units or it is a silent gift, so
+           * the control becomes the guided flow.
+           *
+           * A LINK rather than a button with a router.push: it navigates and nothing else, so
+           * new-tab, middle-click and "link" in a screen reader's list all have to keep working.
            */}
-          {canMoveHoldingsIn(pot, events) && (
+          {canMoveHoldingsIn(pot, events) ? (
             <Button blue onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
               {t('pots.holdings.addCta')}
             </Button>
+          ) : (
+            canContributeHolding(pot) && (
+              <Button blue asChild>
+                <Link href={sharedContributePath(pot.id)} data-testid="pot-contribute-cta">
+                  <Plus className="size-4" />
+                  {t('pots.holdings.contributeCta')}
+                </Link>
+              </Button>
+            )
           )}
           {/*
            * Hidden rather than disabled once the ledger exists: a Radix tooltip never fires on a
@@ -113,9 +132,14 @@ export function PotHoldingsSection({
               ? t('pots.holdings.emptyDescriptionReadOnly')
               : canMoveHoldingsIn(pot, events)
                 ? t('pots.holdings.emptyDescription')
-                : // An empty pot that is already divided is a real state — every holding was moved out
-                  // before the baseline, or the pot was created for a division of value held elsewhere
-                  // — and the generic "add one" line would point at a button that is not there.
+                : /*
+                   * An empty pot that is already divided is a real state — every holding was moved out
+                   * before the baseline, or the pot was created for a division of value held elsewhere.
+                   * It is also the one divided state where NEITHER control is offered: a pot holding
+                   * nothing has no value, so there is no unit price to contribute against either, and
+                   * canContributeHolding is false alongside canMoveHoldingsIn. The line therefore says
+                   * that rather than pointing at the contribution the section description describes.
+                   */
                   t('pots.holdings.emptyDescriptionDivided')
           }
         />

@@ -2394,10 +2394,50 @@
           "oneHolderLeft": "Ahora todo queda en manos de {name}."
         }
       },
+      "contribute": {
+        "metadata": {
+          "title": "Aportar algo tuyo",
+          "description": "Algo tuyo pasa al dinero compartido, se valúa como está y te da una parte que vale exactamente eso."
+        },
+        "title": "Aportar algo tuyo",
+        "subtitle": "A {name}",
+        "steps": {
+          "what": "Qué aportás"
+        },
+        "what": {
+          "title": "¿Qué estás aportando?",
+          "description": "Se valúa tal como está hoy y recibís una parte que vale eso. Nadie más pierde valor: solo cambian los porcentajes, porque el total es más grande.",
+          "holding": {
+            "label": "Qué aportás",
+            "placeholder": "Seleccioná algo tuyo",
+            "empty": "No hay nada tuyo para aportar ahora"
+          },
+          "worth": "Hoy vale {amount}.",
+          "worthConverted": "Hoy vale {amount}, que acá son {credited}.",
+          "valuedOn": "Última valuación el {date}.",
+          "hint": "Solo se puede aportar algo que tenga un valor registrado. Una cuenta con gastos, ingresos o transferencias tampoco se puede compartir: su saldo se leería distinto para cada persona."
+        },
+        "confirm": {
+          "title": "¿Está bien así?",
+          "description": "No se registra nada hasta que confirmes.",
+          "adding": "Aportás",
+          "credited": "Acá cuenta como",
+          "cta": "Aportarlo",
+          "youGet": "Recibís una parte que vale {amount}, exactamente lo que estás poniendo.",
+          "othersUnchanged": "Nadie más pierde un centavo. Sus porcentajes bajan, porque acá hay más de lo que había.",
+          "stale": "Esto no se valúa desde el {date}. Tu parte se calcula contra ese valor, así que actualizalo primero si cambió."
+        },
+        "done": {
+          "title": "Ya está adentro",
+          "added": "{name} ahora es parte del dinero compartido y vale {amount}.",
+          "received": "Recibiste una parte que vale {amount} por eso, y el valor de la parte de los demás no cambió."
+        },
+        "error": "No se pudo aportar."
+      },
       "holdings": {
         "title": "Qué hay acá",
         "description": "Las inversiones y cuentas que esto tiene. La suma de su valor es el total que se reparte.",
-        "dividedNote": "Las partes de acá ya están acordadas, así que no se pueden mover cosas hacia adentro ni hacia afuera directamente: cualquiera de las dos cambiaría la parte de todos sin que se mueva la de nadie. Poné dinero como aporte, o sacalo como retiro.",
+        "dividedNote": "Las partes de acá ya están acordadas, así que no se pueden mover cosas hacia adentro ni hacia afuera directamente: cualquiera de las dos cambiaría la parte de todos sin que se mueva la de nadie. Agregar algo es un aporte: se valúa y te da una parte por exactamente eso. Sacar valor es un retiro.",
         "investments": "Inversiones",
         "accounts": "Cuentas",
         "archived": "Archivada",
@@ -2420,13 +2460,14 @@
         "emptyTitle": "Todavía no hay nada acá",
         "emptyDescription": "Mové acá las inversiones y cuentas que este grupo tiene en conjunto. Hasta entonces no hay nada que valuar.",
         "emptyDescriptionReadOnly": "Todavía no se movió nada acá.",
-        "emptyDescriptionDivided": "Las partes de acá ya están acordadas, así que no se puede mover nada hacia adentro.",
+        "emptyDescriptionDivided": "Las partes de acá ya están acordadas, pero no hay nada acá para valuarlas — así que no se puede agregar ni sacar nada hasta que vuelva a tener algo. Borrar el historial de propiedad es lo que lo vuelve movible.",
         "table": {
           "name": "Nombre",
           "value": "Valor",
           "inBaseCurrency": "En {currency}",
           "valuedOn": "Última valuación"
-        }
+        },
+        "contributeCta": "Aportar algo tuyo"
       },
       "ledger": {
         "title": "Historial",
@@ -3811,7 +3852,7 @@
         "paragraphs": [
           "Hay plata que no es solo tuya: una cartera que armaste con tu pareja, un departamento que tenés con un hermano, los gastos de todos los días de una casa. Todo eso vive en un grupo. Creás el grupo, invitás a las personas que lo integran y, desde ahí, cada uno ve la parte compartida del panorama junto con la propia.",
           "Lo que un grupo tiene en común vive en un fondo compartido. Un fondo contiene inversiones y cuentas igual que tu lado privado, con una diferencia: no es de nadie por entero, cada integrante tiene una parte. Y lo más importante que hay que entender sobre esa parte es que es un porcentaje del total, no un monto fijo. Si entre dos tienen un fondo 60/40 y el fondo vale 100.000, tu lado son 60.000 — y cuando el fondo sube a 110.000, tu lado pasa a ser 66.000 sin que tengas que registrar nada. Todas las partes se mueven con el valor, siempre, porque eso es lo que significa tener una proporción.",
-          "Las partes cambian únicamente cuando alguien pone o saca plata de verdad, y cada uno de esos movimientos queda registrado como un evento con su fecha: la apertura que divide el fondo por primera vez, un aporte, un retiro, o un nuevo acuerdo cuando los dueños simplemente deciden que de ahora en más la división sea otra. Renly guarda toda la cadena, así que un porcentaje en pantalla siempre es el resultado de eventos que podés señalar y no un número que alguien escribió encima del anterior.",
+          "Las partes cambian únicamente cuando alguien pone o saca algo de verdad, y cada uno de esos movimientos queda registrado como un evento con su fecha: la apertura que divide el fondo por primera vez, un aporte — plata, o algo que ya tenías, valuado como está —, un retiro, o un nuevo acuerdo cuando los dueños simplemente deciden que de ahora en más la división sea otra. Renly guarda toda la cadena, así que un porcentaje en pantalla siempre es el resultado de eventos que podés señalar y no un número que alguien escribió encima del anterior.",
           "Tus pantallas siguen siendo sobre vos. Tu patrimonio cuenta tu parte del fondo y no el fondo entero, tus listados marcan qué filas son compartidas, y un fondo del que no tenés nada no aporta nada. Un grupo también puede decidir quién ve cada fondo, así que alguien puede tener su lugar en el grupo y aun así no ver un fondo en particular. Cada cambio que cualquiera hace sobre algo compartido queda registrado en la actividad del grupo, con quién lo hizo y cuándo."
         ]
       },
@@ -4080,10 +4121,13 @@
     "payment_pairing": "Solo se puede asignar una tarjeta de crédito cuando el método de pago es tarjeta de crédito.",
     "plan_required": "Esta función requiere un plan Pro.",
     "pot_already_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente sacar algo. Registrá un retiro, que reduce la parte de quien retira.",
-    "pot_holding_add_divided": "Las partes de acá ya están acordadas, así que no se puede simplemente agregar algo. Su valor subiría la parte de todos a prorrata sin que cambien las unidades de nadie, así que lo que agregues sería un regalo al grupo. Sí podés aportar dinero, que te da una parte por lo que pongas.",
     "pot_already_opened": "Esto ya tiene historial de titularidad, así que no se puede agregar un punto de partida por debajo — el punto de partida es siempre la primera entrada. Para cambiar qué parte es de quién, cambiá el reparto.",
     "pot_base_amount_required": "Un movimiento en {amount_currency} tiene que indicar cuánto se acreditó en {base_currency}. Nunca se asume una cotización.",
     "pot_has_holdings": "Todavía {holding_count, plural, one {hay # cosa} other {hay # cosas}} acá. Sacá eso antes de eliminarlo.",
+    "pot_holding_add_divided": "Las partes de acá ya están acordadas, así que no se puede agregar algo sin más. Su valor subiría la parte de todos a prorrata sin cambiarle la parte a nadie, así que lo que agregues sería un regalo al grupo. Agregalo como un aporte: se valúa y te da una parte por exactamente eso.",
+    "pot_holding_inactive": "Eso está archivado, así que no cuenta en el valor de acá. Restauralo antes de agregarlo.",
+    "pot_holding_not_positive": "Eso vale {value} {currency}, así que no hay parte para darte a cambio.",
+    "pot_holding_unvalued": "Eso no tiene un valor registrado, así que no hay parte para darte a cambio. Registrá primero cuánto vale.",
     "pot_insufficient_units": "Eso es más de lo que tiene esa persona.",
     "pot_movement_account_inactive": "Esa cuenta está archivada, así que no cuenta en el valor de acá. Restaurala antes de mover dinero por ella.",
     "pot_movement_before_account_opened": "La fecha tiene que ser igual o posterior a las fechas de apertura de las cuentas — la más tardía es {opening_date}.",

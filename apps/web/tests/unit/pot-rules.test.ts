@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buyOutLeavesOneHolder,
+  canContributeHolding,
   canDeleteOwnershipEvent,
   canDeletePot,
   canMoveHoldingsIn,
@@ -11,12 +12,16 @@ import {
   canRecordOpening,
   canRecordReagreement,
   canTakeShareOut,
+  findHolding,
+  hasContributableHoldings,
   hasLedger,
   holderShare,
+  holdingKey,
   isDivided,
   isOutgoingEvent,
   isPriceable,
   ownershipEventAmount,
+  parseHoldingKey,
   potFreshnessNotice,
   potLegAccounts,
   potValueDisplay,
@@ -253,6 +258,101 @@ describe('write predicates', () => {
     expect(canDeletePot(true, { investments: [holding({ isActive: false })], accounts: [] })).toBe(
       false,
     );
+  });
+});
+
+describe('canContributeHolding', () => {
+  /*
+   * The priced version of moving a holding in, and the only way a DIVIDED pot can gain one. Its
+   * conditions are a movement's and no others, because it IS a movement — which is also why it is not
+   * written as the mirror of canMoveHoldingsIn: what decides it is whether a unit price exists to
+   * issue against, not whether a ledger row happens to exist.
+   */
+  it('is offered on a divided, priceable pot the caller may write', () => {
+    expect(canContributeHolding(pot())).toBe(true);
+  });
+
+  it('is not offered to a read-only seat', () => {
+    expect(canContributeHolding(pot({ canWrite: false }))).toBe(false);
+  });
+
+  it('is not offered while there is no unit price to issue against', () => {
+    // Both halves of "priceable", because the API refuses each one separately: no units outstanding
+    // is pot_not_opened, and no value is pot_valuation_required.
+    expect(canContributeHolding(pot({ totalUnits: '0' }))).toBe(false);
+    expect(canContributeHolding(pot({ nav: null }))).toBe(false);
+  });
+
+  it('and the plain move-in is the one offered before anything is divided', () => {
+    // The counterweight: the two controls never both appear, and never both vanish on a pot the
+    // caller may write. An undivided pot has no price, so the plain move is what is available.
+    const fresh = pot({ totalUnits: '0', nav: null, shares: [] });
+    expect(canMoveHoldingsIn(fresh, [])).toBe(true);
+    expect(canContributeHolding(fresh)).toBe(false);
+
+    expect(canMoveHoldingsIn(pot(), [event()])).toBe(false);
+    expect(canContributeHolding(pot())).toBe(true);
+  });
+});
+
+describe('holding keys', () => {
+  /*
+   * One picker over two lists, so a chosen row has to say which list it came from: `investments.id`
+   * and `accounts.id` are separate sequences and collide constantly, so an id alone would send an
+   * account's number as an investment's — a 404 at best, and at worst somebody else's row.
+   */
+  it('round-trips both kinds', () => {
+    expect(parseHoldingKey(holdingKey('investment', 12))).toEqual({ kind: 'investment', id: 12 });
+    expect(parseHoldingKey(holdingKey('account', 7))).toEqual({ kind: 'account', id: 7 });
+  });
+
+  it('keeps the two kinds apart at the same id', () => {
+    // The collision the key exists for: same number, different table, different key.
+    expect(holdingKey('investment', 7)).not.toBe(holdingKey('account', 7));
+  });
+
+  it.each([
+    ['', 'an empty value, which is the picker before anything is chosen'],
+    ['12', 'an id with no kind'],
+    ['investment:', 'a kind with no id'],
+    ['investment:abc', 'an id that is not a number'],
+    ['investment:0', 'an id no row can have'],
+    ['investment:-3', 'a negative id'],
+    ['snapshot:12', 'a kind that names no list'],
+  ])('refuses %s (%s)', (value) => {
+    expect(parseHoldingKey(value)).toBeNull();
+  });
+});
+
+describe('findHolding', () => {
+  const holdings: PotHoldings = {
+    investments: [holding({ id: 7, name: 'Fondo' })],
+    accounts: [holding({ id: 7, name: 'Caja' })],
+  };
+
+  it('reads the row from the list the key names, not the other one at the same id', () => {
+    // The whole point of the key. Both lists hold an id 7, and getting this wrong contributes the
+    // wrong thing while showing the right name.
+    expect(findHolding(holdings, holdingKey('investment', 7))?.name).toBe('Fondo');
+    expect(findHolding(holdings, holdingKey('account', 7))?.name).toBe('Caja');
+  });
+
+  it('answers null for a key naming a row that is no longer offered', () => {
+    // Reachable: the page re-reads the candidates on every load, and a holding stops being one the
+    // moment somebody else contributes it or its last snapshot is deleted.
+    expect(findHolding(holdings, holdingKey('investment', 99))).toBeNull();
+  });
+
+  it('answers null for a key that does not parse at all', () => {
+    expect(findHolding(holdings, 'nonsense')).toBeNull();
+  });
+});
+
+describe('hasContributableHoldings', () => {
+  it('is false only when both lists are empty', () => {
+    expect(hasContributableHoldings(NO_HOLDINGS)).toBe(false);
+    expect(hasContributableHoldings({ investments: [holding()], accounts: [] })).toBe(true);
+    expect(hasContributableHoldings({ investments: [], accounts: [holding()] })).toBe(true);
   });
 });
 
