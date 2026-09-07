@@ -91,6 +91,8 @@ export const HELP_ANCHORS = {
   snapshots: 'snapshots',
   returns: 'returns',
   currency: 'currency',
+  sharing: 'sharing',
+  settlingUp: 'settling-up',
 } as const;
 
 export type HelpAnchor = (typeof HELP_ANCHORS)[keyof typeof HELP_ANCHORS];

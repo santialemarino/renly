@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Info, X, XCircle } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useTranslations } from 'next-intl';
 
 import { Hint, Separator } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
@@ -53,6 +54,8 @@ export function StyledHint({
   parentGap = 4,
   className,
 }: StyledHintProps) {
+  const tCommon = useTranslations('common');
+
   const { icon: Icon, iconColor, textColor, bg } = VARIANT_CONFIG[variant];
 
   const content = (
@@ -80,7 +83,7 @@ export function StyledHint({
               'shrink-0 ml-auto p-0.5 rounded opacity-50 transition-[opacity,transform] duration-150 hover:opacity-100 hover:scale-110 focus-visible:outline-none focus-visible:opacity-100 focus-visible:scale-110',
               textColor,
             )}
-            aria-label="Dismiss"
+            aria-label={tCommon('dismiss')}
           >
             <X className="size-3.5" />
           </button>
