@@ -324,6 +324,9 @@ async def record_opening(
     # and its payload while the transaction is still open, so a failure in those reads fails the whole
     # use case with nothing written — an honest error — rather than 500-ing a request whose money write
     # has already landed. After the commit only dispatch() runs, and that swallows everything.
+    # `event_id=None` alone among the ledger's entries, and deliberately: an opening is ONE act written
+    # as one row per owner, so there is no single id that names it. Deleting it takes the whole baseline
+    # for the same reason.
     await _audit(session, pot, user, AuditAction.created, event_id=None, variant=OwnershipEventType.opening)
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)

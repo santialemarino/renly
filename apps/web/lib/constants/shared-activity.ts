@@ -29,6 +29,12 @@ export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
  * Which actions each entity type can carry — the enumerated list that IS the contract between the two
  * sides. `group` has no `deleted`, and that is not an omission: deleting a group cascades its whole
  * trail away, so an entry saying so would be removed by the same statement that provoked it.
+ *
+ * ▸ The exposure this list does NOT close, stated so the next person does not have to find it: the base
+ * sentence below rescues a missing VARIANT, and nothing rescues a missing ACTION. An action the API
+ * writes that is absent here resolves to a key that does not exist, and the entries carrying it are
+ * permanent. Adding one is a same-PR change on both sides, so the realistic way in is removing an
+ * action from here while stored rows still name it — which is what to check before deleting a line.
  */
 export const ACTIVITY_ACTIONS = {
   group: ['created', 'updated'],
@@ -70,9 +76,9 @@ export const ACTIVITY_VARIANTS = {
   'group_member.removed': ['self', 'by_admin'],
   'ownership_event.created': ['opening', 'contribution', 'withdrawal', 'reagreement'],
   'ownership_event.deleted': ['opening', 'contribution', 'withdrawal', 'reagreement'],
+  'pot.permission_set': ['write', 'view', 'none'],
   'settlement.created': ['payment', 'write_off'],
   'settlement.deleted': ['payment', 'write_off'],
-  'pot.permission_set': ['write', 'view', 'none'],
   'settlement.leg_set': ['attached', 'cleared'],
 } as const;
 
