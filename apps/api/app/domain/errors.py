@@ -749,6 +749,27 @@ class PotAlreadyDividedError(DomainError):
         super().__init__(self.message)
 
 
+# A holding cannot be added to a pot that has already been divided either, and it is the SAME state
+# refused for the opposite reason — which is why it is a second code rather than a second sentence
+# under the first. Adding one raises the pot's value with nobody's units changing, so value that came
+# wholly out of one person's private scope is handed to every owner pro-rata: a silent gift, where
+# taking one out is a silent taking.
+# It is a REFUSAL rather than the correct behaviour, and the correct behaviour is a contribution priced
+# at the move date — the fourth guided flow, which the follow-up track ships. Until then a divided pot
+# cannot gain a holding at all and there is no workaround, so the message points at what IS supported
+# (moving money in, which issues the mover units) rather than implying an asset can be. Mapped to 409.
+class PotHoldingAddDividedError(DomainError):
+    code = "pot_holding_add_divided"
+    status_code = 409
+
+    def __init__(self) -> None:
+        self.message = (
+            "This pot's ownership is already agreed, so a holding cannot be added to it. "
+            "Contribute money to the pot instead, which issues you units for what you put in."
+        )
+        super().__init__(self.message)
+
+
 # A cross-currency ownership movement did not record the amount credited to the pot. `amount` is in
 # the private account's currency and the pot's ownership maths runs in its base currency, so with the
 # two differing there is no honest way to derive the credited figure — a stored rate is exactly what

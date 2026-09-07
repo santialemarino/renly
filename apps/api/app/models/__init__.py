@@ -26,6 +26,7 @@ from app.models.payment_obligation import PaymentObligation
 from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent, PotVisibility
 from app.models.push_subscription import PushSubscription
 from app.models.refresh_token import RefreshToken
+from app.models.shared_audit import AuditAction, AuditEntityType, SharedAuditEntry
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
 from app.models.shared_income import IncomeDestination, SharedIncome, SharedIncomeSplit
 from app.models.snapshot import InvestmentSnapshot
@@ -41,6 +42,8 @@ __all__ = [
     "AccountType",
     "ApiKey",
     "AssetPrice",
+    "AuditAction",
+    "AuditEntityType",
     "AuthToken",
     "AuthTokenType",
     "CardReconciliation",
@@ -85,6 +88,7 @@ __all__ = [
     "PotVisibility",
     "PushSubscription",
     "RefreshToken",
+    "SharedAuditEntry",
     "SharedExpense",
     "SharedExpenseSplit",
     "SharedIncome",

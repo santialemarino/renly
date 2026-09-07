@@ -27,7 +27,7 @@ from app.domain.errors import AccountCurrencyMismatchError
 from app.models.account import Account, AccountType
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.notification import NotificationEvent
-from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
+from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent
 from app.models.user import User
 from app.services import pot_ownership_service as svc
 
@@ -36,6 +36,8 @@ GROUP = Group(id=10, name="Casa", kind=GroupKind.household, created_by=USER.id)
 POT = Pot(id=5, group_id=10, base_currency="USD", is_default=True)
 SEAT = GroupMember(id=100, group_id=10, user_id=USER.id, display_name="Santi", role=GroupMemberRole.admin)
 OTHER_SEAT = GroupMember(id=101, group_id=10, user_id=2, display_name="Ana", role=GroupMemberRole.member)
+WRITER = PotMemberPermission(pot_id=5, member_id=100, can_view=True, can_write=True)
+READER = PotMemberPermission(pot_id=5, member_id=100, can_view=True, can_write=False)
 
 
 # One shared dispatch mock, reset per arrangement, so TestWhatIsAnnounced can read it without every
@@ -71,6 +73,10 @@ def _account(
 # holding 100 units, and a NAV of 110 so the unit price is a clean 1.10.
 def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
+    # delete_event asks the WIDER question and resolves the write check itself, because one act there is
+    # not gated on write access at all.
+    monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, WRITER)))
+    monkeypatch.setattr(svc.pot_repository, "lock", AsyncMock())
     monkeypatch.setattr(svc.group_repository, "get_member", AsyncMock(side_effect=lambda _s, _g, mid: {100: SEAT, 101: OTHER_SEAT}.get(mid)))
     # record_opening resolves the whole roster in one query rather than a seat at a time.
     monkeypatch.setattr(svc.group_repository, "list_members", AsyncMock(return_value=[SEAT, OTHER_SEAT]))
@@ -164,14 +170,29 @@ class TestWhatIsAnnounced:
         assert "amount" not in payload
 
     @pytest.mark.asyncio
-    async def test_DELETING_an_event_announces_nothing(self, monkeypatch):
-        # There is no honest sentence for it until the audit log exists: the state after a deletion is
-        # that the movement was never recorded.
+    async def test_DELETING_an_event_announces_it_like_any_other_ownership_change(self, monkeypatch):
+        """Every deletion, not only the counterparty's, and that widening is the point.
+
+        Until now a pot's writer could delete an opening or a contribution and every percentage on the
+        page would change with nobody told. Undoing an act is as much a change to what people own as
+        making it was, and whoever recorded the original has to learn it was undone or they go on
+        believing a split that no longer holds.
+        """
         _arrange(monkeypatch)
         monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
         monkeypatch.setattr(svc.pot_ownership_repository, "delete", AsyncMock())
         await svc.delete_event(AsyncMock(), 5, 1, USER)
-        _DISPATCHED.assert_not_awaited()
+        event, recipients, payload = _DISPATCHED.await_args.args
+        # ownership_changed with a variant rather than an event of its own, so somebody who has switched
+        # pot-ownership news off stays switched off for the undo too.
+        assert event == NotificationEvent.ownership_changed
+        assert recipients == [OTHER_SEAT.user_id]
+        assert payload["variant"] == "deleted"
+        assert payload["actor"] == SEAT.display_name
+        # Which KIND of entry went is deliberately absent: the four event types are named on the web and
+        # nowhere else, so an email would need a second vocabulary of them in both locales. The audit
+        # entry beside this one records the type, for the surface that can read it.
+        assert "entry" not in payload
 
 
 class TestOpening:
@@ -749,7 +770,79 @@ class TestDeletion:
 
     @pytest.mark.asyncio
     async def test_deleting_needs_pot_write_access(self, monkeypatch):
-        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, READER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        with pytest.raises(PotWriteRequiredError):
+            await svc.delete_event(AsyncMock(), 5, 1, USER)
+        delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_named_counterparty_may_delete_a_reagreement_without_write_access(self, monkeypatch):
+        """The remedy, and the reason it has to exist: write access is not granted by ownership.
+
+        create_pot inserts can_write for the CREATOR only and recording the opening grants nobody else
+        write, so the default state of a divided pot is that its creator can move units away from a
+        co-owner who is notified by name and can do nothing about it.
+        """
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, OTHER_SEAT, READER)))
+        # OTHER_SEAT is the counterparty: the seat this re-agreement moved units TO.
+        event = _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+
+        assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 1
+        delete_one.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_giver_of_a_reagreement_may_delete_it_too(self, monkeypatch):
+        # Both named seats, not only the one who lost units: the pair agreed to the split, so either of
+        # them may take the record of it back.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, READER)))
+        event = _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+
+        assert await svc.delete_event(AsyncMock(), 5, 1, USER) == 1
+        delete_one.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_widening_reaches_no_other_event_type(self, monkeypatch):
+        """Only a re-agreement, and the reason is what makes one different from the other three.
+
+        A contribution and a withdrawal move the mover's OWN money, and an opening is the division
+        everybody agreed to — none of them has a counterparty with a claim to undo it. The event this
+        loop builds names the reader on both member columns, so the ONLY thing keeping the delete out is
+        the type check.
+        """
+        for kind in (OwnershipEventType.opening, OwnershipEventType.contribution, OwnershipEventType.withdrawal):
+            _arrange(monkeypatch)
+            monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, READER)))
+            event = _event(type=kind, member_id=SEAT.id, counterparty_member_id=SEAT.id)
+            monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
+            delete_one = AsyncMock()
+            delete_all = AsyncMock(return_value=2)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete_openings", delete_all)
+            with pytest.raises(PotWriteRequiredError):
+                await svc.delete_event(AsyncMock(), 5, 1, USER)
+            delete_one.assert_not_awaited()
+            delete_all.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_member_named_on_neither_side_may_not_delete_a_reagreement(self, monkeypatch):
+        # The other half of the narrowing: being able to SEE the pot is not being party to the deal.
+        _arrange(monkeypatch)
+        third = GroupMember(id=102, group_id=10, user_id=3, display_name="Leo", role=GroupMemberRole.member)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, third, READER)))
+        event = _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
         delete_one = AsyncMock()
         monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
         with pytest.raises(PotWriteRequiredError):
@@ -862,9 +955,11 @@ class TestReading:
         assert [(e.member_id, e.member_name) for e in events] == [(100, "Santi")]
 
     @pytest.mark.asyncio
-    async def test_deleting_an_event_requires_write_access(self, monkeypatch):
-        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(side_effect=PotWriteRequiredError()))
-        with pytest.raises(PotWriteRequiredError):
+    async def test_deleting_an_event_is_refused_to_someone_who_cannot_see_the_pot(self, monkeypatch):
+        # The gate moved from require_writable to require_VISIBLE when the counterparty remedy landed,
+        # so this is what now stops a stranger: invisible reads back as absent, never as forbidden.
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(side_effect=NotFoundError("Pot not found")))
+        with pytest.raises(NotFoundError):
             await svc.delete_event(AsyncMock(), 5, 1, USER)
 
     @pytest.mark.asyncio
@@ -873,7 +968,8 @@ class TestReading:
         # returning None passes whatever the service asks for, so "it raised NotFoundError" would be
         # true even if the pot id were never part of the lookup at all — which is exactly how an event
         # id from another pot would become reachable by guessing.
-        monkeypatch.setattr(svc.pot_service, "require_writable", AsyncMock(return_value=(POT, SEAT)))
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, WRITER)))
+        monkeypatch.setattr(svc.pot_repository, "lock", AsyncMock())
         get_by_id = AsyncMock(return_value=None)
         monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", get_by_id)
         delete = AsyncMock()

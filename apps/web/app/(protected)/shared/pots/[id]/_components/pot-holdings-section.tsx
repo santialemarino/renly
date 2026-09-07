@@ -15,7 +15,11 @@ import {
   TableHeader,
   TableRow,
 } from '@repo/ui/components';
-import { canMoveHoldingsIn, canMoveHoldingsOut } from '@/app/(protected)/shared/pot-rules';
+import {
+  canMoveHoldingsIn,
+  canMoveHoldingsOut,
+  hasLedger,
+} from '@/app/(protected)/shared/pot-rules';
 import { PotHoldingsDialog } from '@/app/(protected)/shared/pots/[id]/_components/pot-holdings-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { SectionHeader } from '@/components/section-header';
@@ -35,10 +39,12 @@ interface PotHoldingsSectionProps {
 /*
  * What the pot actually holds — the investments and cash accounts whose combined value IS the pot's.
  *
- * Taking one out is offered only while nothing has been divided. Afterwards it would drop the pot's
- * value by the whole of that holding while nobody's units change, so every co-owner's share falls
- * pro-rata and it lands wholly in one person's private scope. Once ownership is agreed, taking value
- * out is a withdrawal, which redeems units and says whose money it was.
+ * NEITHER direction is offered once ownership is agreed, and the two are refused for OPPOSITE reasons.
+ * Taking one out would drop the pot's value by the whole of that holding while nobody's units change,
+ * so every co-owner's share falls pro-rata and it lands wholly in one person's private scope. Putting
+ * one in is the mirror: the value RISES with nobody's units changing, so what one person added out of
+ * their own scope is gifted pro-rata to everybody. Once ownership is agreed, taking value out is a
+ * withdrawal and putting money in is a contribution — both of which move units and say whose it was.
  */
 export function PotHoldingsSection({
   pot,
@@ -60,10 +66,25 @@ export function PotHoldingsSection({
       <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-2">
         <SectionHeader
           title={t('pots.holdings.title')}
-          description={t('pots.holdings.description')}
+          /*
+           * The description says WHY both buttons are gone once ownership is agreed, rather than the
+           * section going silent about it: hiding an action without saying why leaves somebody looking
+           * for a control that used to be there. It names the supported acts in the same sentence.
+           */
+          description={
+            hasLedger(events)
+              ? `${t('pots.holdings.description')} ${t('pots.holdings.dividedNote')}`
+              : t('pots.holdings.description')
+          }
         />
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-          {canMoveHoldingsIn(pot) && (
+          {/*
+           * Hidden once the ledger exists, for the same reason the remove button is and the mirror
+           * reason: adding raises the pot's value with nobody's units changing, so what you added is
+           * gifted pro-rata to every owner. The section description carries the explanation, and the
+           * supported action — contributing money, which issues you units — is one section up.
+           */}
+          {canMoveHoldingsIn(pot, events) && (
             <Button blue onClick={() => setAddOpen(true)}>
               <Plus className="size-4" />
               {t('pots.holdings.addCta')}
@@ -88,9 +109,14 @@ export function PotHoldingsSection({
           icon={Coins}
           title={t('pots.holdings.emptyTitle')}
           description={
-            pot.canWrite
-              ? t('pots.holdings.emptyDescription')
-              : t('pots.holdings.emptyDescriptionReadOnly')
+            !pot.canWrite
+              ? t('pots.holdings.emptyDescriptionReadOnly')
+              : canMoveHoldingsIn(pot, events)
+                ? t('pots.holdings.emptyDescription')
+                : // An empty pot that is already divided is a real state — every holding was moved out
+                  // before the baseline, or the pot was created for a division of value held elsewhere
+                  // — and the generic "add one" line would point at a button that is not there.
+                  t('pots.holdings.emptyDescriptionDivided')
           }
         />
       ) : (

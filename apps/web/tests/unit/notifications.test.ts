@@ -29,7 +29,10 @@ const LOCALES = { en, es } as const;
 function allBaseKeys(): string[] {
   return NOTIFICATION_EVENTS.flatMap((event) => {
     const variants = NOTIFICATION_VARIANTS[event as keyof typeof NOTIFICATION_VARIANTS];
-    return variants ? variants.map((variant) => `${event}.${variant}`) : [event];
+    // The bare event is included even when it has variants: that is where a row whose payload names a
+    // variant the web has no copy for resolves, and `notifications` are permanent, so an event that
+    // grows a variant leaves every row written before it with no variant at all.
+    return variants ? [event, ...variants.map((variant) => `${event}.${variant}`)] : [event];
   });
 }
 
@@ -51,9 +54,44 @@ describe('notification copy covers every event', () => {
     const messages = LOCALES[locale as keyof typeof LOCALES];
     const t = createTranslator({ locale, messages, namespace: 'notifications' });
     for (const base of allBaseKeys()) {
-      // A missing key throws here, which is exactly the signal wanted: the alternative is a row that
-      // renders its own key path to the user.
-      expect(t(`events.${base}.title` as never, RENDER_PARAMS as never)).toBeTruthy();
+      /*
+       * Asserted on the key path NOT appearing in the output rather than on the result being truthy.
+       * next-intl answers a missing message by returning its own key path, so `toBeTruthy()` passes on
+       * exactly the failure this test exists to catch — the comment here used to claim it throws, and a
+       * mutation that deleted a real title proved otherwise.
+       */
+      expect(
+        t(`events.${base}.title` as never, RENDER_PARAMS as never),
+        `${locale}: ${base}`,
+      ).not.toContain(base);
+    }
+  });
+
+  it('declares every variant the copy has a block for', () => {
+    /*
+     * The direction allBaseKeys cannot see, and the one that actually shipped broken: adding a variant's
+     * COPY without adding its name to NOTIFICATION_VARIANTS leaves the resolver falling back to the
+     * event's base key — which does not exist — so the row renders the literal string
+     * `notifications.events.ownership_changed.title` to the reader. Every test above passed, because
+     * every one of them iterates the list that was missing the entry.
+     *
+     * Derived from the copy rather than restated: a variant block is a sub-object whose own values are
+     * strings, which is exactly how `title` and `label` differ from it.
+     */
+    const messages = LOCALES.en as unknown as {
+      notifications: { events: Record<string, Record<string, unknown>> };
+    };
+    for (const [event, block] of Object.entries(messages.notifications.events)) {
+      const declared: readonly string[] =
+        NOTIFICATION_VARIANTS[event as keyof typeof NOTIFICATION_VARIANTS] ?? [];
+      for (const [key, value] of Object.entries(block)) {
+        if (typeof value !== 'object' || value === null) continue;
+        if (key === 'title') continue;
+        expect(
+          declared,
+          `notifications.events.${event}.${key} has copy but is not a declared variant`,
+        ).toContain(key);
+      }
     }
   });
 
@@ -61,7 +99,7 @@ describe('notification copy covers every event', () => {
     const messages = LOCALES[locale as keyof typeof LOCALES];
     const t = createTranslator({ locale, messages, namespace: 'notifications' });
     for (const event of NOTIFICATION_EVENTS) {
-      expect(t(`events.${event}.label` as never)).toBeTruthy();
+      expect(t(`events.${event}.label` as never), `${locale}: ${event}`).not.toContain(event);
     }
   });
 
@@ -70,7 +108,8 @@ describe('notification copy covers every event', () => {
     const t = createTranslator({ locale, messages, namespace: 'notifications' });
     for (const [base, suffixes] of Object.entries(NOTIFICATION_DETAIL_KEYS)) {
       for (const suffix of suffixes) {
-        expect(t(`events.${base}.${suffix}` as never, RENDER_PARAMS as never)).toBeTruthy();
+        const rendered = t(`events.${base}.${suffix}` as never, RENDER_PARAMS as never);
+        expect(rendered, `${locale}: ${base}.${suffix}`).not.toContain(base);
       }
     }
   });
@@ -79,7 +118,7 @@ describe('notification copy covers every event', () => {
     const messages = LOCALES[locale as keyof typeof LOCALES];
     const t = createTranslator({ locale, messages, namespace: 'notifications' });
     for (const channel of NOTIFICATION_CHANNELS) {
-      expect(t(`channels.${channel}` as never)).toBeTruthy();
+      expect(t(`channels.${channel}` as never), `${locale}: ${channel}`).not.toContain(channel);
     }
   });
 

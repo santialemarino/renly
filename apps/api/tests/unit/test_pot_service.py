@@ -15,6 +15,7 @@ from app.domain import (
     AccountHasLinkedEntriesError,
     NotFoundError,
     PotHasHoldingsError,
+    PotHoldingAddDividedError,
     PotWriteRequiredError,
 )
 from app.models.account import Account, AccountType
@@ -89,9 +90,9 @@ class TestVisibilityResolution:
 
     def test_write_has_no_visibility_style_default(self):
         # A pot with no permission rows is readable by its group and writable by nobody (V6).
-        assert pot_service._may_write(None) is False
-        assert pot_service._may_write(_permission(can_write=False)) is False
-        assert pot_service._may_write(_permission(can_view=True, can_write=True)) is True
+        assert pot_service.may_write(None) is False
+        assert pot_service.may_write(_permission(can_write=False)) is False
+        assert pot_service.may_write(_permission(can_view=True, can_write=True)) is True
 
 
 class TestVisibilityGate:
@@ -369,11 +370,26 @@ class TestMovingHoldings:
         assert move.await_args.kwargs == {"pot_id": None, "user_id": USER.id}
 
     @pytest.mark.asyncio
-    async def test_moving_IN_is_unaffected_by_the_ledger(self, monkeypatch):
-        # The guard is one-directional on purpose: adding to a divided pot takes nothing from anyone,
-        # it only dilutes percentages in the contributor's favour — which is what a contribution is.
+    async def test_moving_IN_is_refused_once_the_pot_is_divided_too(self, monkeypatch):
+        # The mirror of the move-out refusal, and it is refused for the OPPOSITE reason: adding a
+        # holding raises the pot's value with nobody's units changing, so value that came wholly out of
+        # one person's private scope is handed to every owner pro-rata — a gift, made silently.
+        # A distinct code, because the remedy differs: taking out is a withdrawal, putting in is a
+        # contribution, and one message cannot name both.
         monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
         monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[object()]))
+        move = AsyncMock(return_value=1)
+        monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)
+        with pytest.raises(PotHoldingAddDividedError):
+            await pot_service.move_holdings(AsyncMock(), 5, USER, investment_ids=[1], into=True)
+        move.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_moving_IN_is_free_while_nothing_has_been_divided(self, monkeypatch):
+        # An empty ledger means nothing has been agreed, so neither direction takes anything from
+        # anyone — which is also what keeps "undo a mistaken move-in" possible.
+        monkeypatch.setattr(pot_service, "require_writable", AsyncMock(return_value=(_pot(), SEAT)))
+        monkeypatch.setattr(pot_service.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[]))
         monkeypatch.setattr(pot_service.investment_repository, "get_by_ids_any_scope", AsyncMock(return_value=[self._investment(1)]))
         move = AsyncMock(return_value=1)
         monkeypatch.setattr(pot_service.investment_repository, "move_to_scope", move)

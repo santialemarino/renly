@@ -30,6 +30,7 @@ from app.repositories.pot_repository import pot_repository
 from app.repositories.push_subscription_repository import push_subscription_repository
 from app.repositories.refresh_token_repository import refresh_token_repository
 from app.repositories.restore_repository import restore_repository
+from app.repositories.shared_audit_repository import shared_audit_repository
 from app.repositories.shared_expense_repository import shared_expense_repository
 from app.repositories.shared_income_repository import shared_income_repository
 from app.repositories.snapshot_repository import snapshot_repository
@@ -70,6 +71,7 @@ __all__ = [
     "push_subscription_repository",
     "refresh_token_repository",
     "restore_repository",
+    "shared_audit_repository",
     "shared_expense_repository",
     "shared_income_repository",
     "snapshot_repository",

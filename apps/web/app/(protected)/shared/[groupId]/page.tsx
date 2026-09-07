@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { getTranslations } from 'next-intl/server';
 
+import { GroupActivitySection } from '@/app/(protected)/shared/[groupId]/_components/group-activity-section';
 import { GroupBalancesSection } from '@/app/(protected)/shared/[groupId]/_components/group-balances-section';
 import { GroupExpensesSection } from '@/app/(protected)/shared/[groupId]/_components/group-expenses-section';
 import { GroupHubHeader } from '@/app/(protected)/shared/[groupId]/_components/group-hub-header';
@@ -15,6 +16,7 @@ import { InlineLink } from '@/components/inline-link';
 import { ROUTES } from '@/config/routes';
 import { getAccounts } from '@/lib/api/accounts';
 import { getSupportedCurrencies } from '@/lib/api/exchange-rates';
+import { getGroupActivity } from '@/lib/api/group-activity';
 import {
   getGroupBalances,
   getGroupMoneySettings,
@@ -26,6 +28,7 @@ import { getPageSettings } from '@/lib/api/settings';
 import { getSharedExpenses } from '@/lib/api/shared-expenses';
 import { getSharedIncome } from '@/lib/api/shared-income';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
+import { ACTIVITY_PAGE_SIZE } from '@/lib/constants/shared-activity';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -87,6 +90,7 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
     moneySettings,
     accounts,
     supportedCurrencies,
+    activity,
   ] = await Promise.all([
     getPots(group.id),
     getSharedExpenses(group.id),
@@ -97,6 +101,10 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
     getAccounts({ showArchived: true }),
     // The currency picker degrades to the full ISO list on a fetch error, and the API's 422 guards.
     getSupportedCurrencies().catch(() => undefined),
+    // Caught, unlike the four money reads, and the difference is what each list would say when empty:
+    // "nothing shared yet" about a group that has shared plenty is a lie, while an empty activity
+    // section says only that nothing is being shown — which is true of a failed read.
+    getGroupActivity(group.id, ACTIVITY_PAGE_SIZE).catch(() => []),
   ]);
 
   const groupExpenses = expenses ?? [];
@@ -148,6 +156,12 @@ export default async function GroupHubPage({ params }: GroupHubPageProps) {
         preferredCurrencies={settings?.preferredCurrencies ?? undefined}
       />
       <GroupMembersSection group={group} />
+      {/*
+       * Last on the page, and that is the order §8.1 implies: the sections above answer "where does
+       * this household stand", and this one answers "how did it get here" — the question somebody
+       * asks after reading a figure they did not expect.
+       */}
+      <GroupActivitySection groupId={group.id} entries={activity} />
     </div>
   );
 }

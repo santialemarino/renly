@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain import NotFoundError
 from app.models.group_money_settings import GroupMoneySettings, SplitMethod
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.repositories import group_money_settings_repository
 from app.schemas.group_settlement import GroupMoneySettingsResponse
-from app.services import group_service
+from app.services import group_service, shared_audit_service
 
 
 # The group's money settings. Every group has a row — created with the group and backfilled for the
@@ -46,6 +47,16 @@ async def update_settings(
     if auto_finalise_settlements is not None:
         settings.auto_finalise_settlements = auto_finalise_settlements
     await group_money_settings_repository.save(session, settings)
+    await shared_audit_service.record(
+        session,
+        group_id=group_id,
+        actor=user,
+        entity_type=AuditEntityType.group_money_settings,
+        action=AuditAction.updated,
+        # No entity_id: the settings are keyed BY the group, so the id would restate group_id. And no
+        # values: naming the new split method would need a second vocabulary of their labels in both
+        # locales, where the settings dialog already states them.
+    )
     await session.commit()
     await session.refresh(settings)
     return GroupMoneySettingsResponse.model_validate(settings)
