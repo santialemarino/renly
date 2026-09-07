@@ -39,7 +39,7 @@ export function expenseRow(page: Page, marker: string) {
  * which is precisely the behaviour worth pinning: a spec that filled every field would still pass if
  * the pre-fill stopped working.
  */
-export async function createExpenseViaQuickAdd(page: Page, marker: string, amount = '1234.56') {
+export async function createExpenseViaQuickAdd(page: Page, marker: string, amount: string) {
   await page.getByTestId('quick-add-trigger').click();
   const notes = page.getByTestId('expense-form-notes');
   await expect(notes).toBeVisible();
@@ -55,15 +55,24 @@ export async function createExpenseViaQuickAdd(page: Page, marker: string, amoun
 
 /*
  * Deletes the expense carrying this marker, through the row's own delete action and its confirmation.
- * Safe to call when the row is already gone, so it can sit in an afterEach without knowing whether
- * the test that just ran got as far as creating anything.
+ * Safe to call when the row is already gone, so it can sit in a `finally` without knowing whether the
+ * test that just ran got as far as creating anything.
+ *
+ * It NEVER throws, and that is the load-bearing part: a cleanup called from a `finally` that raises
+ * replaces the assertion error that actually failed the test with its own, so the real cause vanishes.
+ * A cleanup that could not run is reported and moves on — the marker is unique per run, so the worst
+ * case is one identifiable leftover row rather than a lost diagnosis.
  */
 export async function deleteExpenseByMarker(page: Page, marker: string) {
-  await page.goto(EXPENSES);
-  const row = expenseRow(page, marker);
-  if ((await row.count()) === 0) return;
+  try {
+    await page.goto(EXPENSES);
+    const row = expenseRow(page, marker);
+    if ((await row.count()) === 0) return;
 
-  await row.first().getByTestId('expense-delete').click();
-  await page.getByTestId('confirm-dialog-confirm').click();
-  await expect(expenseRow(page, marker)).toHaveCount(0);
+    await row.first().getByTestId('expense-delete').click();
+    await page.getByTestId('confirm-dialog-confirm').click();
+    await expect(expenseRow(page, marker)).toHaveCount(0);
+  } catch (error) {
+    console.warn(`e2e cleanup could not remove the expense marked ${marker}:`, error);
+  }
 }

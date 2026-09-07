@@ -12,7 +12,8 @@
 #     collection-members composite PK). Restore is therefore additive but NOT idempotent: re-restoring the same
 #     file adds everything again, so restore into a fresh account (see docs/public/api-reference.md).
 #   - The circular reconciliation cluster (card_reconciliations and account_reconciliations, both ↔
-#     expense/income) and preference/secret rows are out of scope; see SKIPPED_ENTITIES.
+#     expense/income), preference/secret rows, and everything a GROUP owns are out of scope; see
+#     SKIPPED_ENTITIES, which carries the reason per family.
 #     Expense/income reconciliation and scheduler links are nulled so restored rows are plain historical
 #     entries with no dangling FK and no risk of tripping the scheduler's partial-unique
 #     (subscription_id, date)/(installment_id, date).

@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 # scheduler) by retiring any SAMPLE entity that already has data. Accounts is deliberately not one of
 # them — it has no sample section (it teaches through the first-run empty state instead), so it must
 # stay out of `has_data` below, whose keys index the `samples_retired` map. Groups is out of it for
-# the same reason plus one more: its step is OPTIONAL and non-gating, so nothing about it is ever
-# sampled or retired — it is a probe and a checklist tick, nothing else.
+# exactly the same reason: no sample section, so nothing about it is ever sampled or retired — it is a
+# probe and a checklist tick, nothing else.
 async def get_status(session: AsyncSession, user: User) -> dict:
     has_investments = await investment_repository.exists_by_user(session, user.id)
     has_expenses = await expense_repository.exists_by_user(session, user.id)

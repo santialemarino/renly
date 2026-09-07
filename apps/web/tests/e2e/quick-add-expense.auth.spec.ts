@@ -13,6 +13,10 @@ const DASHBOARD = '/dashboard';
 const EXPENSES = '/expenses';
 const SNAPSHOTS = '/snapshots';
 
+// Any valid amount; the row is found by its marker rather than this figure, because the rendered
+// value is locale-formatted and the run's locale is whatever the stored session carries.
+const EXPENSE_AMOUNT = '1234.56';
+
 /*
  * The repo's first AUTHENTICATED spec, and the one that bootstraps the harness: a session from
  * globalSetup, a factory that writes through a real form, and a cleanup that removes what it wrote.
@@ -49,7 +53,7 @@ test.describe('quick-add expense round trip (signed in)', () => {
       await page.goto(SNAPSHOTS);
       await expect(page.getByTestId('quick-add-trigger')).toBeVisible();
 
-      await createExpenseViaQuickAdd(page, marker);
+      await createExpenseViaQuickAdd(page, marker, EXPENSE_AMOUNT);
 
       await page.goto(EXPENSES);
       const row = expenseRow(page, marker);
