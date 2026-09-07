@@ -108,6 +108,18 @@ async def seeded():
 
         held = await investment(f"{_PREFIX}held", pot_id=pot, user_id=None, value="110.00")
         offered = await investment(f"{_PREFIX}offered", pot_id=None, user_id=user, value="55.00")
+        # A private cash account, for the OTHER branch of the move. 22.00 at a price of 1.10 is exactly
+        # 20 units, so the same fixture stays exact: the contributor goes 60 -> 80 units (66.00 ->
+        # 88.00, +22.00) and the other owner stays at 44.00.
+        cash = (
+            await s.execute(
+                text(
+                    "INSERT INTO accounts (user_id, created_by, name, type, currency, opening_balance, opening_date, is_active) "
+                    "VALUES (:u, :u, :n, 'bank', 'USD', 22.00, :d, TRUE) RETURNING id"
+                ),
+                {"u": user, "n": f"{_PREFIX}cash", "d": _VALUED_ON},
+            )
+        ).scalar_one()
 
         # The baseline: 100 at a nominal 1.00, split 60/40. The pot is worth 110 by the time the
         # contribution happens, which is what makes the price 1.10 rather than a trivial 1.00 — at 1.00
@@ -121,7 +133,17 @@ async def seeded():
                 {"p": pot, "d": _VALUED_ON, "m": member_id, "u": units, "c": user},
             )
         await s.commit()
-        ids = {"user": user, "group": group, "pot": pot, "mine": mine, "theirs": theirs, "held": held, "offered": offered, "maker": maker}
+        ids = {
+            "user": user,
+            "group": group,
+            "pot": pot,
+            "mine": mine,
+            "theirs": theirs,
+            "held": held,
+            "offered": offered,
+            "cash": cash,
+            "maker": maker,
+        }
     yield ids
     async with maker() as s:
         await _cleanup(s)
@@ -137,6 +159,7 @@ async def _cleanup(s: AsyncSession) -> None:
         text("DELETE FROM investment_snapshots WHERE investment_id IN (SELECT id FROM investments WHERE name LIKE :p)"), {"p": f"{_PREFIX}%"}
     )
     await s.execute(text("DELETE FROM investments WHERE name LIKE :p"), {"p": f"{_PREFIX}%"})
+    await s.execute(text("DELETE FROM accounts WHERE name LIKE :p"), {"p": f"{_PREFIX}%"})
     await s.execute(text("DELETE FROM shared_audit_log WHERE group_id IN (SELECT id FROM groups WHERE name = :n)"), {"n": f"{_PREFIX}group"})
     await s.execute(text(f"DELETE FROM pot_ownership_events WHERE pot_id IN ({pots})"), {"n": f"{_PREFIX}group"})
     await s.execute(text(f"DELETE FROM pot_member_permissions WHERE pot_id IN ({pots})"), {"n": f"{_PREFIX}group"})
@@ -208,6 +231,46 @@ class TestNobodysValueMoves:
             pot = await pot_service.get_pot(s, seeded["pot"], user)
         assert pot.unit_price == Decimal("1.100000")
         assert pot.nav == Decimal("165.00")
+
+
+class TestContributingAnAccount:
+    # The other branch of the move, and the one with a money-shaped failure mode a unit test cannot
+    # reach: an account carries its own BALANCE into the pot, so the pot's value must rise by that
+    # balance exactly ONCE. The two queries that turn an ownership event into account movements
+    # (`_FROM_AMOUNT`/`_TO_AMOUNT` in pot_ownership_repository, and `_ownership_branch` in
+    # account_movement_repository) both branch on `type == contribution` and both key on the event's
+    # account legs — so an asset contribution is invisible to them only because it names NEITHER leg.
+    # Populate one "helpfully" and the pot account would be credited base_amount on top of the balance
+    # it already has, double-counting the whole contribution. That is what these assertions pin.
+
+    @pytest.mark.asyncio
+    async def test_the_pot_gains_the_accounts_balance_exactly_once(self, seeded):
+        user = User(id=seeded["user"], name="Santi", email=_EMAIL, password_hash="h", session_epoch=0)
+        async with seeded["maker"]() as s:
+            await pot_ownership_service.contribute_holding(s, seeded["pot"], user, account_id=seeded["cash"])
+
+        after = await _shares(seeded["maker"], seeded["pot"], user)
+        # 110 + 22 = 132 over 120 units, so the price is unchanged at 1.10 and the parts are exact.
+        assert after[seeded["mine"]] == Decimal("88.00")
+        assert after[seeded["theirs"]] == Decimal("44.00")
+        async with seeded["maker"]() as s:
+            pot = await pot_service.get_pot(s, seeded["pot"], user)
+        assert pot.nav == Decimal("132.00")
+        assert pot.unit_price == Decimal("1.100000")
+
+    @pytest.mark.asyncio
+    async def test_the_account_moves_and_the_entry_names_no_leg(self, seeded):
+        # The account really becomes the pot's — the branch a mutation showed no test reached — and the
+        # ledger row names no account on either side, which is what keeps the balance union from
+        # counting the same money a second time.
+        user = User(id=seeded["user"], name="Santi", email=_EMAIL, password_hash="h", session_epoch=0)
+        async with seeded["maker"]() as s:
+            event = await pot_ownership_service.contribute_holding(s, seeded["pot"], user, account_id=seeded["cash"])
+        assert (event.from_account_id, event.to_account_id) == (None, None)
+        assert event.units == Decimal("20.000000")
+        async with seeded["maker"]() as s:
+            row = (await s.execute(text("SELECT user_id, pot_id FROM accounts WHERE id = :i"), {"i": seeded["cash"]})).one()
+        assert (row.user_id, row.pot_id) == (None, seeded["pot"])
 
 
 class TestTheHoldingReallyMoves:

@@ -696,6 +696,14 @@ class TestHoldingContribution:
         # Four properties in one row because they are one decision: the asset moved, so no money passed
         # between accounts; it is the caller's asset, so it is the caller's seat; and it is priced where
         # it stands, so the date is today and not a field the caller supplies.
+        #
+        # The NULL legs are the load-bearing one and the reason is not obvious. Two money queries turn
+        # an ownership event into account movements — the balance union's `_FROM_AMOUNT`/`_TO_AMOUNT`
+        # and the per-account ledger's `_ownership_branch` — and both branch on `type == contribution`
+        # while keying on these two columns. Naming a leg "helpfully" (the pot account an account
+        # contribution just became) would credit it `base_amount` ON TOP of the balance it already
+        # carries, so the pot would gain the same money twice. The integration suite pins the figure;
+        # this pins the shape.
         created = _arrange(monkeypatch)
         self._wire(monkeypatch)
         await svc.contribute_holding(AsyncMock(), 5, USER, investment_id=12)
