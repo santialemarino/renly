@@ -2491,7 +2491,15 @@
         "deleteBaselineTitle": "Delete the baseline",
         "deleteBaselineDescription": "The baseline is one agreement written as one row per owner, so all of its rows go together — half a division would hand the rest of you a share nobody agreed to. Every later movement is kept, and a new baseline can only be recorded once nothing else is on the history.",
         "deleteBaselineConfirm": "Delete the baseline",
-        "deleteBaselineSuccess": "Baseline deleted."
+        "deleteBaselineSuccess": "Baseline deleted.",
+        "agreed": "Agreed",
+        "actions": {
+          "confirm": "Agree to this change of split",
+          "unconfirm": "Withdraw your agreement"
+        },
+        "confirmSuccess": "Change of split agreed. It can no longer be removed unless you withdraw your agreement.",
+        "unconfirmSuccess": "Agreement withdrawn. Nobody's share changed — the entry can be removed again.",
+        "actionError": "Something went wrong. Please try again."
       },
       "permissions": {
         "title": "Who can see and change this",
@@ -2967,7 +2975,9 @@
             "contribution": "{actor} removed a contribution by {member} from {pot}",
             "withdrawal": "{actor} removed a withdrawal by {member} from {pot}",
             "reagreement": "{actor} removed a change of split in {pot}, from {member} to {counterparty}"
-          }
+          },
+          "confirmed": "{actor} agreed to the change of split in {pot}, from {member} to {counterparty}",
+          "unconfirmed": "{actor} withdrew their agreement to the change of split in {pot}, from {member} to {counterparty}"
         },
         "pot": {
           "created": "{actor} created {pot}",
@@ -3187,6 +3197,12 @@
         },
         "deleted": {
           "title": "{actor} removed an entry from {pot}'s ownership history"
+        },
+        "confirmed": {
+          "title": "{actor} agreed to the change of split in {pot}"
+        },
+        "unconfirmed": {
+          "title": "{actor} withdrew their agreement in {pot}"
         }
       },
       "pot_movement": {
@@ -3852,7 +3868,7 @@
         "paragraphs": [
           "Some money is not only yours. A portfolio you built with a partner, a flat you own with a sibling, the everyday costs of a household — Renly holds all of that in a group. You create a group, invite the people in it, and from then on each of you sees the shared side of the picture alongside your own.",
           "Things a group owns together live in a pot. A pot holds investments and accounts the same way your private side does, except nobody owns it outright: each member owns a share of it. The single most important thing to understand about a share is that it is a percentage of the whole, not a fixed amount of money. If two of you own a pot 60/40 and the pot is worth 100,000, your side is 60,000 — and when the pot rises to 110,000, your side becomes 66,000 with nothing to enter. Every share moves with the value, always, because that is what owning a proportion means.",
-          "Shares change only when somebody actually puts something in or takes it out, and each of those is recorded as its own dated event: the opening that first divides a pot, a contribution — money, or a holding you already own, valued as it stands — a withdrawal, or a re-agreement when the owners simply decide the split should be different from now on. Renly keeps the whole chain, so a percentage on screen is always the result of events you can point at rather than a number somebody typed over the last one.",
+          "Shares change only when somebody actually puts something in or takes it out, and each of those is recorded as its own dated event: the opening that first divides a pot, a contribution — money, or a holding you already own, valued as it stands — a withdrawal, or a re-agreement when the owners simply decide the split should be different from now on. Renly keeps the whole chain, so a percentage on screen is always the result of events you can point at rather than a number somebody typed over the last one. A re-agreement is the one of those that moves value between two people, so it is the one you agree to: whoever is giving up part of their share confirms it — or, when they are the person who wrote it down, whoever is receiving it does. Until then either of you can simply remove it; once it is agreed, nobody can, until whoever agreed takes that back.",
           "Your own screens stay about you. Your net worth counts your share of a pot and not the whole pot, your lists label which rows are shared, and a pot you own nothing of contributes nothing. A group can also decide who sees which pot, so a member may hold a seat in the group and still not see a particular pot at all. Every change anyone makes to a shared thing is recorded in the group's activity, with who did it and when."
         ]
       },
@@ -4123,6 +4139,7 @@
     "pot_already_divided": "The shares here are already agreed, so something cannot simply be taken out. Record a withdrawal instead, which reduces the withdrawer's share.",
     "pot_already_opened": "This already has ownership history, so a baseline cannot be added under it — a baseline is only ever the first entry. To change who owns what, change the split instead.",
     "pot_base_amount_required": "A movement in {amount_currency} has to say how much was credited in {base_currency}. Rates are never assumed.",
+    "pot_event_not_confirmable": "Only a change of split is agreed to. A baseline, a contribution and a withdrawal carry no agreement.",
     "pot_has_holdings": "There {holding_count, plural, one {is still # thing} other {are still # things}} in here. Move that out before deleting it.",
     "pot_holding_add_divided": "The shares here are already agreed, so something cannot simply be added in. Its value would raise everyone's share pro-rata without changing anyone's units, so what you added would be a gift to the group. Add it as a contribution instead, which values it and gives you a share for exactly that.",
     "pot_holding_inactive": "That is archived, so it is not counted in the value here. Restore it before adding it.",
@@ -4133,6 +4150,8 @@
     "pot_movement_before_account_opened": "The date has to be on or after the accounts' opening dates — the later one is {opening_date}.",
     "pot_not_opened": "Set the baseline first. Until there is one, there is no share price to record against.",
     "pot_percentages_must_total_100": "The percentages have to add up to 100 — they add up to {total}.",
+    "pot_reagreement_confirmed": "This change of split has been agreed to, so it cannot be removed. The member who agreed has to withdraw their agreement first.",
+    "pot_reagreement_not_yours": "This change of split is not yours to agree to — only the member whose share it moved can.",
     "pot_reagreement_same_member": "A change of split needs two different people.",
     "pot_unsupported_movement": "That is not a movement in or out. Use the baseline or the split change instead.",
     "pot_valuation_required": "There is no known value here on {as_of_date}, so shares cannot be priced. Record what it was worth on that date first.",
