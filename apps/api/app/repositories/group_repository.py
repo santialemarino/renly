@@ -142,6 +142,15 @@ async def list_active_member_ids(session: AsyncSession, user_id: int) -> list[in
     return [row[0] for row in result.all()]
 
 
+# Returns whether the user holds an ACTIVE seat in any group (cheap existence check for the onboarding
+# checklist's optional sharing step). The same predicate as list_active_member_ids narrowed to a LIMIT 1,
+# and active for the same reason the scope controls test it: a former member belongs to no group, so
+# leaving one un-completes the step rather than leaving it ticked on a group they can no longer see.
+async def exists_active_member_by_user(session: AsyncSession, user_id: int) -> bool:
+    result = await session.execute(select(GroupMember.id).where(GroupMember.user_id == user_id, GroupMember.is_active).limit(1))
+    return result.first() is not None
+
+
 # Fetches the seat a user holds in a group, active or not. Returns None when they hold none.
 async def get_member_by_user(session: AsyncSession, group_id: int, user_id: int) -> GroupMember | None:
     result = await session.execute(select(GroupMember).where(GroupMember.group_id == group_id, GroupMember.user_id == user_id))
@@ -182,6 +191,7 @@ class GroupRepository:
     create_member = staticmethod(create_member)
     delete = staticmethod(delete)
     delete_by_ids = staticmethod(delete_by_ids)
+    exists_active_member_by_user = staticmethod(exists_active_member_by_user)
     get_by_id = staticmethod(get_by_id)
     get_by_ids = staticmethod(get_by_ids)
     get_member = staticmethod(get_member)

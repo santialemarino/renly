@@ -24,6 +24,9 @@ class OnboardingStatusResponse(BaseModel):
     has_accounts: bool = Field(
         description="Whether the user has created at least one cash or bank account.",
     )
+    has_groups: bool = Field(
+        description="Whether the user holds an active seat in at least one group.",
+    )
     primary_currency_set: bool = Field(
         description="Whether the user has explicitly chosen a primary display currency.",
     )

@@ -190,6 +190,49 @@ class TestOrphanedGroupDeletion:
             assert (await s.execute(text("SELECT count(*) FROM groups WHERE id = :g"), {"g": group_id})).scalar_one() == 1
 
 
+class TestActiveMembershipProbe:
+    # `exists_active_member_by_user` decides whether the onboarding checklist's sharing step reads as
+    # done, and its whole content is one WHERE clause — which a unit test cannot reach at all, since the
+    # session is mocked and returns whatever it was told to. Both predicates are pinned here, because
+    # each fails in a different direction: without `user_id` the step ticks for somebody else's group,
+    # and without `is_active` it stays ticked on a group the user has already left and can no longer
+    # even see (the membership policy requires an active seat).
+    @pytest.mark.asyncio
+    async def test_an_active_seat_answers_true(self, db):
+        users = db["users"]
+        async with db["factory"]() as s:
+            await _make_group(s, users, "grp_probe_active", [("me", True)])
+            await s.commit()
+            assert await group_repository.exists_active_member_by_user(s, users["me"]) is True
+
+    @pytest.mark.asyncio
+    async def test_a_former_seat_answers_false(self, db):
+        users = db["users"]
+        async with db["factory"]() as s:
+            await _make_group(s, users, "grp_probe_former", [("me", False)])
+            await s.commit()
+            assert await group_repository.exists_active_member_by_user(s, users["me"]) is False
+
+    @pytest.mark.asyncio
+    async def test_somebody_elses_group_answers_false(self, db):
+        users = db["users"]
+        async with db["factory"]() as s:
+            await _make_group(s, users, "grp_probe_theirs", [("other", True)])
+            await s.commit()
+            assert await group_repository.exists_active_member_by_user(s, users["me"]) is False
+
+    @pytest.mark.asyncio
+    async def test_one_active_seat_is_enough_when_another_is_former(self, db):
+        # The near-miss the LIMIT 1 makes possible: somebody who left one group and is still in another
+        # must answer true, so the probe cannot be "no former seats anywhere".
+        users = db["users"]
+        async with db["factory"]() as s:
+            await _make_group(s, users, "grp_probe_left", [("me", False)])
+            await _make_group(s, users, "grp_probe_stayed", [("me", True)])
+            await s.commit()
+            assert await group_repository.exists_active_member_by_user(s, users["me"]) is True
+
+
 class TestConcurrentInviteClaims:
     # A group invite link is deliberately SHAREABLE, so two people can open the same one at once, and
     # the claim path resolves the invite with SELECT ... FOR UPDATE for exactly that reason. This is the

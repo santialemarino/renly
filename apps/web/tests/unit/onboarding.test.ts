@@ -15,6 +15,7 @@ function status(overrides: Partial<OnboardingStatus> = {}): OnboardingStatus {
     hasInvestments: false,
     hasFinances: false,
     hasAccounts: false,
+    hasGroups: false,
     primaryCurrencySet: false,
     sampleInvestments: false,
     sampleExpenses: false,
@@ -51,9 +52,20 @@ describe('hasCompletedCoreSteps', () => {
     expect(hasCompletedCoreSteps(done)).toBe(true);
   });
 
+  /*
+   * The sharing step, and the sharpest case of the three: every public user at launch is solo, so a
+   * finish that waited on a group would leave the entire launch cohort permanently unfinished. Adding
+   * `&& hasGroups` to the predicate fails here.
+   */
+  it('does not wait on the optional sharing step', () => {
+    const done = status({ hasInvestments: true, hasFinances: true, hasGroups: false });
+    expect(hasCompletedCoreSteps(done)).toBe(true);
+  });
+
   it('is not satisfied by an optional step alone', () => {
     expect(hasCompletedCoreSteps(status({ hasAccounts: true }))).toBe(false);
     expect(hasCompletedCoreSteps(status({ primaryCurrencySet: true }))).toBe(false);
+    expect(hasCompletedCoreSteps(status({ hasGroups: true }))).toBe(false);
   });
 
   // A failed status fetch must never claim the user is finished.
@@ -69,6 +81,13 @@ describe('hasNoCoreData', () => {
     const accountOnly = status({ hasAccounts: true });
     expect(hasNoCoreData(accountOnly)).toBe(true);
     expect(hasCompletedCoreSteps(accountOnly)).toBe(false);
+
+    // A group seat is not core data either, on both predicates — so a member who joined somebody
+    // else's group still gets the first-run sidebar and the tour, which is right: they have added
+    // nothing of their own yet.
+    const groupOnly = status({ hasGroups: true });
+    expect(hasNoCoreData(groupOnly)).toBe(true);
+    expect(hasCompletedCoreSteps(groupOnly)).toBe(false);
 
     const coreDone = status({ hasInvestments: true, hasFinances: true });
     expect(hasNoCoreData(coreDone)).toBe(false);
