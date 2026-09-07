@@ -132,9 +132,14 @@ export function PotHoldingsSection({
               ? t('pots.holdings.emptyDescriptionReadOnly')
               : canMoveHoldingsIn(pot, events)
                 ? t('pots.holdings.emptyDescription')
-                : // An empty pot that is already divided is a real state — every holding was moved out
-                  // before the baseline, or the pot was created for a division of value held elsewhere
-                  // — and the generic "add one" line describes the wrong control.
+                : /*
+                   * An empty pot that is already divided is a real state — every holding was moved out
+                   * before the baseline, or the pot was created for a division of value held elsewhere.
+                   * It is also the one divided state where NEITHER control is offered: a pot holding
+                   * nothing has no value, so there is no unit price to contribute against either, and
+                   * canContributeHolding is false alongside canMoveHoldingsIn. The line therefore says
+                   * that rather than pointing at the contribution the section description describes.
+                   */
                   t('pots.holdings.emptyDescriptionDivided')
           }
         />

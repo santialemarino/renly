@@ -2460,7 +2460,7 @@
         "emptyTitle": "Todavía no hay nada acá",
         "emptyDescription": "Mové acá las inversiones y cuentas que este grupo tiene en conjunto. Hasta entonces no hay nada que valuar.",
         "emptyDescriptionReadOnly": "Todavía no se movió nada acá.",
-        "emptyDescriptionDivided": "Las partes de acá ya están acordadas, así que lo que aportes entra como un aporte: se valúa y te da una parte por exactamente eso.",
+        "emptyDescriptionDivided": "Las partes de acá ya están acordadas, pero no hay nada acá para valuarlas — así que no se puede agregar ni sacar nada hasta que vuelva a tener algo. Borrar el historial de propiedad es lo que lo vuelve movible.",
         "table": {
           "name": "Nombre",
           "value": "Valor",

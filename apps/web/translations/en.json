@@ -2460,7 +2460,7 @@
         "emptyTitle": "Nothing in here yet",
         "emptyDescription": "Move in the investments and accounts this group owns together. Until then there is nothing to value.",
         "emptyDescriptionReadOnly": "Nothing has been moved in here yet.",
-        "emptyDescriptionDivided": "The shares here are already agreed, so anything you add comes in as a contribution — it gets valued and gives you a share for exactly that.",
+        "emptyDescriptionDivided": "The shares here are already agreed, but there is nothing in here to value them against — so nothing can be added or taken out until it holds something again. Clearing the ownership history is what makes it movable.",
         "table": {
           "name": "Name",
           "value": "Value",

@@ -12,11 +12,13 @@
 #     event on a date the pot has no valuation for is refused rather than priced at a guess. Same
 #     posture as reconciliation refusing to invent a figure.
 #
-#   * Money crosses a scope boundary here and NOWHERE else. A transfer must stay within one scope
-#     because it is net-worth-neutral by construction; moving joint money into a personal account is
-#     not neutral for the other owners. The contribution and withdrawal mechanics are that same
-#     movement recorded honestly — the private leg really is debited and the pot leg really is
-#     credited, which is what makes the pot's value move with the money.
+#   * VALUE crosses a scope boundary here and NOWHERE else — money, and since contribute_holding a
+#     whole holding as well. A transfer must stay within one scope because it is net-worth-neutral by
+#     construction; moving joint money into a personal account is not neutral for the other owners.
+#     The contribution and withdrawal mechanics are that same movement recorded honestly — for money,
+#     the private leg really is debited and the pot leg really is credited, which is what makes the
+#     pot's value move with it; for a holding, the holding itself moves and the pot's value moves
+#     because the NAV then reads it. Either way the units issued are what say whose the value now is.
 
 from datetime import date as date_type
 from decimal import Decimal

@@ -1207,10 +1207,10 @@ async def move_holdings(
     #
     # Putting one IN is the mirror image: the pot's value RISES with nobody's units changing, so value
     # that came wholly out of one person's private scope is handed to every owner pro-rata — a gift,
-    # made silently, by an action whose name says nothing about giving. That refusal is deliberately a
-    # stop rather than the right answer: the right answer is a contribution priced at the move date,
-    # which the follow-up track ships as the fourth guided flow. Until then a divided pot cannot gain a
-    # holding at all, and the error says what IS supported instead of implying otherwise.
+    # made silently, by an action whose name says nothing about giving. What is refused here is the
+    # UNPRICED move, not the act: contribute_holding does the same thing paired with the units that pay
+    # for it, and the error points at it. This endpoint stays the plain move precisely so a client
+    # cannot issue units by accident from a call whose name says only "add".
     #
     # Before the baseline exists nothing has been divided, so both directions are free — which is also
     # what keeps "undo a mistaken move-in" possible.
@@ -1256,7 +1256,9 @@ async def move_holdings(
 #     to every member depending on whose rows they can see.
 #
 # Takes the pot nowhere: this is entirely a question about the caller's own holding.
-async def require_contributable_holding(session: AsyncSession, user: User, *, investment_id: int | None, account_id: int | None):
+async def require_contributable_holding(
+    session: AsyncSession, user: User, *, investment_id: int | None, account_id: int | None
+) -> Investment | Account:
     if investment_id is not None:
         holding = await investment_repository.get_by_id_any_scope(session, investment_id)
     else:
@@ -1284,7 +1286,7 @@ async def require_contributable_holding(session: AsyncSession, user: User, *, in
 # later. A second valuation rule here would be a second answer to "what is this worth", and the one it
 # got wrong is the one that moves value between owners.
 async def value_contributed_holding(
-    session: AsyncSession, pot: Pot, holding, *, as_of_date: date_type, lookup: RateLookup, price: Decimal
+    session: AsyncSession, pot: Pot, holding: Investment | Account, *, as_of_date: date_type, lookup: RateLookup, price: Decimal
 ) -> PotHoldingResponse:
     rate_map = lookup.get_rate_map_at(as_of_date)
     if isinstance(holding, Investment):
@@ -1306,7 +1308,7 @@ async def value_contributed_holding(
 # prices it, and the ledger entry is what pays for the value it adds. Nothing else may call this — a
 # caller reaching for it to skip move_holdings' guard would be re-creating the silent gift that guard
 # exists to refuse.
-async def attach_holding(session: AsyncSession, pot: Pot, holding) -> None:
+async def attach_holding(session: AsyncSession, pot: Pot, holding: Investment | Account) -> None:
     if isinstance(holding, Investment):
         await investment_repository.move_to_scope(session, [holding.id], pot_id=pot.id, user_id=None)
     else:

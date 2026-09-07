@@ -754,10 +754,12 @@ class PotAlreadyDividedError(DomainError):
 # under the first. Adding one raises the pot's value with nobody's units changing, so value that came
 # wholly out of one person's private scope is handed to every owner pro-rata: a silent gift, where
 # taking one out is a silent taking.
-# It is a REFUSAL rather than the correct behaviour, and the correct behaviour is a contribution priced
-# at the move date — the fourth guided flow, which the follow-up track ships. Until then a divided pot
-# cannot gain a holding at all and there is no workaround, so the message points at what IS supported
-# (moving money in, which issues the mover units) rather than implying an asset can be. Mapped to 409.
+# It refuses the UNPRICED move rather than the act. The correct behaviour is a contribution: the
+# holding is valued where it stands, the mover is issued units worth exactly that, and only then does
+# it move — which is what POST /pots/{id}/holdings/contribute does, and what this message points at.
+# Kept as its own code rather than folded into pot_already_divided because the remedy is what makes a
+# refusal usable, and the two remedies are opposites: taking out is a withdrawal, putting in is a
+# contribution. Mapped to 409.
 class PotHoldingAddDividedError(DomainError):
     code = "pot_holding_add_divided"
     status_code = 409
