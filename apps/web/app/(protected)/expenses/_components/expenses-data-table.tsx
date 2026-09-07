@@ -120,6 +120,7 @@ function RowActions({
             icon={Trash2}
             tooltip={t('actions.delete')}
             ariaLabel="Delete"
+            testId="expense-delete"
             variant="destructive"
             onClick={(e) => {
               e.stopPropagation();

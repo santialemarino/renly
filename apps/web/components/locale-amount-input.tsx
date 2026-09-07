@@ -50,6 +50,10 @@ interface LocaleAmountInputProps {
   // Opt in to a leading minus, for genuinely SIGNED figures (an account's real balance reads negative when overdrawn). Off by default: amounts, quantities, and counts stay non-negative.
   allowNegative?: boolean;
   'aria-invalid'?: boolean | 'true' | 'false';
+  // Declared for the same reason `aria-invalid` is: the props are an explicit list rather than
+  // React's input props, so an undeclared attribute is a type error even though `{...rest}`
+  // would forward it. E2E specs target the amount field through this.
+  'data-testid'?: string;
 }
 
 /*
