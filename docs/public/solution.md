@@ -4,9 +4,11 @@
 
 Renly is a personal web-based financial management app built for the Argentine retail investor. It brings three things that usually live apart -- your investments, your cash and bank balances, and your credit-card debt -- into a single net-worth picture, alongside day-to-day income and expense tracking.
 
+It also handles the money that is not only yours. A portfolio you co-own, a flat held with a sibling, a household's shared costs: Renly tracks those in a **group**, and folds your part of them into the same net-worth figure as everything else -- your share of what the group owns, and what you are owed or owe the people in it.
+
 If you've ever tried to hold all of that in a spreadsheet, Renly replaces that spreadsheet with something faster, smarter, and better-looking.
 
-Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is there because you entered it, imported it, or logged it from the iOS Shortcut. Renly does fill in a few things itself: fetched prices and exchange rates, monthly snapshots of ticker-linked investments once one snapshot with a quantity exists, and the recurring charges of your subscriptions and installment plans (which also move the balance of the account you chose to pay them from). Rather than requiring you to record every movement perfectly, each kind of figure has a way to snap back to the truth: a **snapshot** for an investment, a **reconciliation** for a cash or bank account, a **statement** for a credit card. Those true up a balance, not the history behind it -- see the app's Help page for exactly what a forgotten movement does and does not affect.
+Renly does not connect to your bank, wallet, or broker, and never asks for those credentials. Almost every figure is there because you entered it, imported it, or logged it from the quick-add button that sits in the sidebar of every screen, or from the iOS Shortcut. Renly does fill in a few things itself: fetched prices and exchange rates, monthly snapshots of ticker-linked investments once one snapshot with a quantity exists, and the recurring charges of your subscriptions and installment plans (which also move the balance of the account you chose to pay them from). Rather than requiring you to record every movement perfectly, each kind of figure has a way to snap back to the truth: a **snapshot** for an investment, a **reconciliation** for a cash or bank account, a **statement** for a credit card. Those true up a balance, not the history behind it -- see the app's Help page for exactly what a forgotten movement does and does not affect.
 
 ## Who it's for
 
@@ -18,9 +20,10 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 
 - **Your whole picture** -- Investments, cash and bank balances, and credit-card debt roll up into a single net-worth figure, instead of living in three places that never agree.
 - **Real Argentine context** -- CEDEARs, ARS exchange rates (oficial, MEP, blue), BYMA prices, government bonds like AL30 and GD30. None of this exists in American financial apps.
-- **Fast to keep current** -- You shouldn't spend more than a few minutes a month keeping Renly up to date. Smart defaults, CSV/Excel import, auto-pricing, and the iOS Shortcut make this possible.
+- **Fast to keep current** -- You shouldn't spend more than a few minutes a month keeping Renly up to date. Smart defaults, CSV/Excel import, auto-pricing, a quick-add button on every screen, and the iOS Shortcut make this possible.
 - **Visual clarity** -- Better than Excel. Actionable metrics, clean charts, and a dashboard that tells you what matters at a glance.
 - **Honesty** -- Time-weighted return (TWR) and internal rate of return (IRR) are implemented properly, not approximated, and the app is explicit about where each figure comes from. Renly reflects what you enter; snapshots and reconciliation are how it stays anchored to reality. It never claims a number is authoritative when it is derived from your own entries.
+- **Shared money without a second app** -- Co-owning a portfolio and splitting a household's costs both live inside your own picture, not in a separate expense-splitting app that knows nothing about your net worth. Your share is yours; the rest is a balance you can see and settle.
 - **Extensibility** -- Each new feature builds on what's already there without breaking anything.
 - **Your data stays yours** -- No bank credentials are ever requested or stored, and you can export a copy of your data at any time.
 
@@ -36,6 +39,8 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 | 6     | Utilities           | Planned | Return calculators, goal simulators, scenario comparators                                                                                              |
 | 7     | Automation          | Planned | Assisted expense capture, broker integrations                                                                                                          |
 
+Shared money crosses all of them rather than being a phase of its own: groups, co-owned pots, shared expenses and income, settle-up, and the group's activity trail are **built**, and every screen above understands the difference between what is yours and what is shared.
+
 ## How it works
 
 1. **Add what you own and owe** -- Create entries for each investment holding (stocks, CEDEARs, term deposits, crypto, mutual funds, bonds, dollar positions, real estate, or anything else), for each cash, bank, or wallet account, and for each credit card. Already keep your investments, income, or expenses in a spreadsheet? Import that CSV or Excel file from the **Import & Export** page -- Renly maps your columns, previews what it found, and lets you confirm before anything is saved. (Accounts and cards are quick to add by hand, and have no importer of their own.) You can export a copy of your data from the same page at any time.
@@ -50,7 +55,9 @@ Renly does not connect to your bank, wallet, or broker, and never asks for those
 
 6. **See your dashboard** -- A unified view shows your net worth, cash flow, returns over time, allocation by category, and performance trends. Switch between ARS and USD (or BRL, EUR, GBP) with one click.
 
-7. **Organize with collections** -- Label investments however you want ("Retirement", "Trading", "Kids") and filter your dashboard by collection.
+7. **Share what is shared** -- Create a group for the people you share money with, and Renly keeps two things straight. What you own together goes into a **pot**, where each member holds a percentage rather than a fixed amount, so every share moves with the value and nobody re-enters anything. What you spend or earn together is recorded once and divided: your part joins your own expenses or income, and the remainder becomes a balance -- per currency, never merged -- that Renly settles with the fewest payments that clear everybody. Every change to anything shared is recorded with who made it and when.
+
+8. **Organize with collections** -- Label investments however you want ("Retirement", "Trading", "Kids") and filter your dashboard by collection.
 
 Renly supports five currencies: ARS, USD, BRL, EUR, and GBP. All values are stored in their original currency and converted on the fly using daily exchange rates.
 

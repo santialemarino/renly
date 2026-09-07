@@ -72,7 +72,19 @@ pnpm dev
 
 If `pnpm dev` settles on a port other than 3000 (e.g. Next auto-bumps to 3001 when 3000 is busy), pass `PLAYWRIGHT_BASE_URL=http://localhost:<port>` when running tests. An empty `PLAYWRIGHT_BASE_URL=""` falls back to the default.
 
-**Bootstrap note:** until the first `.spec.ts` is written, `pnpm test:e2e` exits 1 with "No tests found". That is documented Playwright behavior, not a config error. The config is correct — adding the first spec makes the runner exit 0.
+**To run the AUTHENTICATED specs, name an account:**
+
+```bash
+E2E_EMAIL=you@example.com E2E_PASSWORD=... pnpm test:e2e
+```
+
+Without both, the `chromium-authenticated` project does not exist and only the signed-out specs run —
+the suite still exits 0. See "Auth and storage state" below.
+
+**They are shell vars, and deliberately NOT in `.env`.** Playwright reads no dotenv file, so a value
+placed in `apps/web/.env` looks configured and reaches nothing. They also stay out of `.env.example`
+for the same reason the API's four `*_TEST_DATABASE_URL` vars do: they are per-developer test
+credentials rather than deploy-time configuration, and one of them is a real password.
 
 **`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings.
 
@@ -87,17 +99,68 @@ Order of preference:
 3. `getByText('...')` only when the text is stable, untranslated, and unambiguous.
 4. CSS selectors as last resort.
 
-**`data-testid` is a forward-going convention.** The codebase does not yet have testids on existing components. When writing a new spec, add the testids you need to the components you are testing as part of the same PR. Naming convention: kebab-case, scoped to context: `login-email-input`, `investment-create-submit`. Treat the testid addition as a normal frontend change (commit it alongside the spec).
+**`data-testid` is a forward-going convention.** Most components still carry none. When writing a new
+spec, add the testids you need to the components it touches as part of the same PR. Naming convention:
+kebab-case, scoped to context: `login-email-input`, `investment-create-submit`. Treat the testid addition
+as a normal frontend change (commit it alongside the spec).
 
-### Auth and storage state
+Two things about where the attribute goes:
 
-Do not log in via UI in every test. Use a `globalSetup` script that authenticates programmatically once and saves the resulting storage state to `apps/web/tests/e2e/.auth/storage-state.json` (gitignored). Tests load it via `use: { storageState: '...' }`.
+- **A shared primitive takes ONE testid, not one per call site.** `ConfirmDialog`'s confirm button
+  carries `confirm-dialog-confirm`, so every destructive confirm in the app is already reachable.
+- **A component whose props are an explicit list will not forward it.** `LocaleAmountInput` and
+  `RowActionButton` both declare their props rather than extending React's, so `data-testid` is a type
+  error until the prop is declared — `RowActionButton` takes it as `testId` because it chooses which
+  element to put it on. Prefer that over keying on an `aria-label`: the row actions' labels are
+  hardcoded English pending the a11y sweep, so a spec keyed on one breaks when they are translated.
 
-Login flow tests are the exception — they exercise the UI auth path.
+### Auth and storage state — how the harness actually works
+
+Two projects over one `testDir`, split by FILE NAME:
+
+- **`chromium`** runs everything that is not `*.auth.spec.ts` — the signed-OUT specs. It carries a
+  `testIgnore` on that pattern rather than merely omitting a `testMatch`, because a project without one
+  matches every file in `testDir`, so the authenticated specs would otherwise run a second time with no
+  session and fail on pages they never reach.
+- **`chromium-authenticated`** runs `*.auth.spec.ts` with the storage state below, and **exists only
+  when `E2E_EMAIL` and `E2E_PASSWORD` are set**. Unset, the project is absent and the suite still exits
+  0 on the logged-out specs — the same env-gating the API's `tests/integration/` suites use, and for the
+  same reason: a fresh clone has no seeded account, and a suite that fails there teaches people to
+  ignore it. `tests/e2e/helpers/auth.ts` reads both vars, so the config and the setup can never
+  disagree about whether to run.
+
+`globalSetup` (`tests/e2e/global-setup.ts`) logs in ONCE and saves the browser state to
+`tests/e2e/.auth/storage-state.json` (gitignored — it holds a live session cookie). It **drives the real
+login form** rather than posting to NextAuth's credentials callback, which is a deliberate deviation
+from the obvious "authenticate programmatically": the callback needs a CSRF token paired with its own
+cookie and the session cookie's name depends on whether the origin is secure, so a protocol-level login
+is three assumptions about a library's internals, each of which fails by returning 200 and no session.
+One scripted form submission per run costs a second and assumes nothing. The login fields therefore
+carry testids (`login-email-input`, `login-password-input`, `login-submit`) like any other spec target.
+
+**Verify the session in `globalSetup`, and say what failed.** Rejected credentials never leave `/login`,
+so the wait for a URL change times out — catch it and re-throw naming the cause, because a bare
+`waitForURL exceeded` names a symptom. Then load a protected route and check it did not bounce back,
+which catches the other failure (accepted, then unusable — an unverified account, a stale epoch). Saving
+an unauthenticated state instead makes every authenticated spec fail as a redirect to `/login`, N
+confusing failures away from the one real cause. Delete any stale state file before starting, so a
+failed setup cannot leave the previous run's session for the next one to load.
+
+Login flow tests are the exception to reusing the state — they exercise the UI auth path.
 
 ### Seed data
 
-Tests do not assume preexisting state. Use factory helpers in `apps/web/tests/e2e/helpers/factories.ts` to create the data needed at the start of each test. Clean up in `afterEach` or `afterAll` as appropriate.
+Tests do not assume preexisting state, and an authenticated spec runs against a REAL account with real
+history — so it must also never depend on, or leave behind, a row of its own. Factories live in
+`apps/web/tests/e2e/helpers/factories.ts` and the pattern is a **marker**: a per-run unique string
+written into a free-text field (an expense's notes), with every assertion and every cleanup scoped to
+the row carrying it. That is what removes the need for an id, since the marker comes back on the list
+page as something a locator can find. Clean up through the same UI a user would use, in a `finally` or
+an `afterAll`, and make the cleanup a no-op when the row is already gone so it is safe to call
+unconditionally.
+
+**A round trip is ONE test, not two.** Splitting create and delete across tests makes the second depend
+on the first having run — which `workers: 1` happens to guarantee today and no spec should rely on.
 
 ### Headless vs headed
 
