@@ -3,7 +3,7 @@
 # The unit math itself is tested in test_pot_unit_accounting.py against hand-computed values. This
 # file tests the rules AROUND it — the ones that decide whether an event is written at all.
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -13,11 +13,14 @@ from app.domain import (
     NotFoundError,
     PotAlreadyOpenedError,
     PotBaseAmountRequiredError,
+    PotEventNotConfirmableError,
     PotInsufficientUnitsError,
     PotMovementAccountInactiveError,
     PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
+    PotReagreementConfirmedError,
+    PotReagreementNotYoursError,
     PotReagreementSameMemberError,
     PotUnsupportedMovementError,
     PotValuationRequiredError,
@@ -29,6 +32,7 @@ from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.investment import Investment, InvestmentCategory
 from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent
+from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.schemas.pot import PotHoldingResponse
 from app.services import pot_ownership_service as svc
@@ -995,6 +999,400 @@ class TestDeletion:
         with pytest.raises(NotFoundError):
             await svc.delete_event(AsyncMock(), 5, 999, USER)
         delete_one.assert_not_awaited()
+
+
+class TestWhoConfirmsAReagreement:
+    """The affected seat, resolved as ONE expression rather than a set of eligible seats.
+
+    The giver, unless the giver recorded the change, in which case the receiver. What the single
+    expression buys is the case a set would get wrong: a third party with write access recording a
+    change between two other members, where a set of "both named seats" would let the member who GAINED
+    units lock the member who lost them out of their remedy.
+
+    The SQL policy carries the same expression clause for clause, and test_rls_pot_scope pins the two
+    together — this file only proves the Python half.
+    """
+
+    ROSTER = {SEAT.id: SEAT, OTHER_SEAT.id: OTHER_SEAT}
+
+    def _swap(self, **kwargs) -> PotOwnershipEvent:
+        return _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id, **kwargs)
+
+    def test_a_third_party_recording_it_leaves_the_answer_on_the_GIVER(self):
+        # The case the whole rule exists for. USER (3) is neither seat, so the seat with something taken
+        # is the one whose agreement is worth having — and a set of both seats would let the RECEIVER
+        # confirm and take the giver's remedy away.
+        assert svc._confirming_member_id(self._swap(created_by=3), self.ROSTER) == SEAT.id
+
+    def test_the_giver_recording_it_hands_the_answer_to_the_RECEIVER(self):
+        # Nobody vouches for their own act, which is the whole point of a confirm.
+        assert svc._confirming_member_id(self._swap(created_by=SEAT.user_id), self.ROSTER) == OTHER_SEAT.id
+
+    def test_the_receiver_recording_it_leaves_the_answer_on_the_giver(self):
+        assert svc._confirming_member_id(self._swap(created_by=OTHER_SEAT.user_id), self.ROSTER) == SEAT.id
+
+    def test_a_recorder_whose_account_is_gone_leaves_the_answer_on_the_giver(self):
+        # created_by is SET NULL on account deletion. A NULL on either side of the comparison yields
+        # NULL, falls to the ELSE, and leaves the answer on the seat with something taken — which is the
+        # safe direction, and the one the SQL's plain equality produces too.
+        assert svc._confirming_member_id(self._swap(created_by=None), self.ROSTER) == SEAT.id
+
+    def test_a_NAME_ONLY_giver_keeps_the_answer_and_so_nobody_can_confirm(self):
+        # D34's posture for a settlement, unchanged: a name-only seat has no account, so the answer names
+        # a member id no request can ever be. Such a re-agreement is simply never confirmable, and stays
+        # deletable by the real seat instead — which is better than handing the confirm to the other side.
+        placeholder = GroupMember(id=103, group_id=10, user_id=None, display_name="Ana (no account)", role=GroupMemberRole.member)
+        event = _event(type=OwnershipEventType.reagreement, member_id=placeholder.id, counterparty_member_id=SEAT.id, created_by=SEAT.user_id)
+        assert svc._confirming_member_id(event, {placeholder.id: placeholder, SEAT.id: SEAT}) == placeholder.id
+
+    def test_a_NAME_ONLY_giver_AND_a_deleted_recorder_still_leaves_it_with_the_giver(self):
+        """Both sides of the comparison NULL at once, which is the only case the NULL guard decides.
+
+        A mutation sweep is what found this: dropping `giver.user_id is not None` survived every other
+        test, because each of them holds one side non-NULL. With both NULL, `None == None` is True and
+        the answer would flip to the RECEIVER — handing the confirmation to the seat that GAINED units
+        on a row whose giver cannot confirm at all.
+
+        Entirely reachable: a name-only member gives up units, and the account that recorded it is later
+        deleted, which sets created_by NULL. The SQL says the same thing with a plain equality, where
+        NULL = NULL yields NULL and falls to the ELSE.
+        """
+        placeholder = GroupMember(id=103, group_id=10, user_id=None, display_name="Ana (no account)", role=GroupMemberRole.member)
+        event = _event(type=OwnershipEventType.reagreement, member_id=placeholder.id, counterparty_member_id=SEAT.id, created_by=None)
+        assert svc._confirming_member_id(event, {placeholder.id: placeholder, SEAT.id: SEAT}) == placeholder.id
+
+    def test_no_other_event_type_carries_a_confirmation_at_all(self):
+        # The same narrowing the DELETE remedy has, and the same reason: a contribution or a withdrawal
+        # moves the mover's own money and an opening is the division everybody agreed to, so none of them
+        # has an affected seat whose agreement means anything. A table CHECK says it too.
+        for kind in (OwnershipEventType.opening, OwnershipEventType.contribution, OwnershipEventType.withdrawal):
+            event = _event(type=kind, member_id=SEAT.id, created_by=3)
+            assert svc._confirming_member_id(event, self.ROSTER) is None, kind
+
+
+class TestConfirmation:
+    def _swap(self, **kwargs) -> PotOwnershipEvent:
+        # Recorded by USER, who is SEAT — so the affected seat is OTHER_SEAT, the receiver.
+        return _event(
+            type=OwnershipEventType.reagreement,
+            member_id=SEAT.id,
+            counterparty_member_id=OTHER_SEAT.id,
+            created_by=USER.id,
+            **kwargs,
+        )
+
+    # The affected seat's own request: OTHER_SEAT, holding NO write access, which is the configuration
+    # the whole decision is about — write access is granted to a pot's creator and nobody else.
+    def _as_affected_seat(self, monkeypatch, event: PotOwnershipEvent):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, OTHER_SEAT, READER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
+        saved = AsyncMock(side_effect=lambda _s, e: e)
+        monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+        monkeypatch.setattr(svc.shared_audit_service, "record", AsyncMock())
+        return saved
+
+    @pytest.mark.asyncio
+    async def test_a_read_only_affected_seat_may_confirm(self, monkeypatch):
+        """The point of the unit, stated as a test.
+
+        A co-owner with no write access is exactly who this is for: the pot's creator can move units away
+        from them, they are notified by name, and until PR 10 they could do nothing. Gating the confirm on
+        write access would have refused the only person entitled to answer.
+        """
+        event = self._swap()
+        saved = self._as_affected_seat(monkeypatch, event)
+        response = await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        assert event.confirmed_at is not None
+        saved.assert_awaited_once()
+        assert response.confirmed_at is not None
+        # And the seat that just gave it is the one offered the way back out, nobody else.
+        assert (response.can_confirm, response.can_unconfirm, response.can_delete) == (False, True, False)
+
+    @pytest.mark.asyncio
+    async def test_confirming_is_audited_as_its_own_action_naming_both_seats(self, monkeypatch):
+        event = self._swap()
+        self._as_affected_seat(monkeypatch, event)
+        recorded = AsyncMock()
+        monkeypatch.setattr(svc.shared_audit_service, "record", recorded)
+        await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        kwargs = recorded.await_args.kwargs
+        assert kwargs["action"] == AuditAction.confirmed
+        assert kwargs["entity_type"] == AuditEntityType.ownership_event
+        # The pot id is what makes the entry as hidden as the pot itself.
+        assert kwargs["pot_id"] == POT.id
+        assert (kwargs["payload"]["member"], kwargs["payload"]["counterparty"]) == (SEAT.display_name, OTHER_SEAT.display_name)
+
+    @pytest.mark.asyncio
+    async def test_confirming_announces_it_as_an_ownership_change_variant(self, monkeypatch):
+        # ownership_changed with a variant rather than an event of its own, so somebody who has switched
+        # pot-ownership news off stays switched off for the confirmation too — and `notification_event`
+        # is a Postgres enum, so a new value would be a migration for a sentence.
+        self._as_affected_seat(monkeypatch, self._swap())
+        audience = AsyncMock(return_value=[OTHER_SEAT.user_id])
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", audience)
+        await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        event, recipients, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.ownership_changed
+        assert payload["variant"] == "confirmed"
+        assert (payload["from_member"], payload["to_member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
+        assert payload["actor"] == OTHER_SEAT.display_name
+        assert recipients == [OTHER_SEAT.user_id]
+        # Asserted on the ARGUMENT, not on the returned list: the audience read is mocked, so it hands
+        # back the same recipients whatever it is asked — and a mutation dropping the exclusion survived
+        # every outcome assertion here. Nobody is told about their own act; the pot's audience rule is
+        # reused rather than re-derived, so an 'owners' pot still announces nothing to a member who
+        # cannot see it.
+        assert audience.await_args.kwargs["exclude_user_id"] == USER.id
+
+    @pytest.mark.asyncio
+    async def test_no_figure_is_announced(self, monkeypatch):
+        # What was agreed is a change of UNITS, a quantity no surface shows a person (U2), and the
+        # percentage it corresponds to is not stored on the event. Any figure here would be a second
+        # answer to a question the pot page already answers.
+        self._as_affected_seat(monkeypatch, self._swap())
+        await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        payload = _DISPATCHED.await_args.args[2]
+        assert "amount" not in payload and "currency" not in payload
+
+    @pytest.mark.asyncio
+    async def test_the_seat_that_RECORDED_it_cannot_confirm_their_own_act(self, monkeypatch):
+        # SEAT recorded this one, so the answer moved to OTHER_SEAT — and a writer asking anyway is
+        # refused, which is what makes write access not the trust boundary.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=self._swap()))
+        saved = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+        with pytest.raises(PotReagreementNotYoursError):
+            await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_member_named_on_neither_side_cannot_confirm(self, monkeypatch):
+        # Seeing the pot is not being party to the deal — the same narrowing the delete remedy has.
+        _arrange(monkeypatch)
+        third = GroupMember(id=102, group_id=10, user_id=3, display_name="Leo", role=GroupMemberRole.member)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, third, WRITER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=self._swap()))
+        saved = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+        with pytest.raises(PotReagreementNotYoursError):
+            await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_other_event_type_can_be_confirmed(self, monkeypatch):
+        # Reachable only by naming another event's id on the confirm route, which is why it is a coded
+        # refusal rather than a 422 — and a table CHECK refuses the row underneath it.
+        for kind in (OwnershipEventType.opening, OwnershipEventType.contribution, OwnershipEventType.withdrawal):
+            _arrange(monkeypatch)
+            monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=kind)))
+            saved = AsyncMock()
+            monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+            with pytest.raises(PotEventNotConfirmableError):
+                await svc.confirm_event(AsyncMock(), 5, 1, USER)
+            saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_confirming_twice_is_refused(self, monkeypatch):
+        event = self._swap(confirmed_at=datetime(2026, 9, 1, 12, 0))
+        saved = self._as_affected_seat(monkeypatch, event)
+        with pytest.raises(PotReagreementConfirmedError):
+            await svc.confirm_event(AsyncMock(), 5, 1, USER)
+        saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_event_id_from_another_pot_is_not_found(self, monkeypatch):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=None))
+        with pytest.raises(NotFoundError):
+            await svc.confirm_event(AsyncMock(), 5, 999, USER)
+
+
+class TestWithdrawingAConfirmation:
+    def _confirmed(self, *, confirmed_at: datetime | None = datetime(2026, 9, 1, 12, 0)) -> PotOwnershipEvent:
+        return _event(
+            type=OwnershipEventType.reagreement,
+            member_id=SEAT.id,
+            counterparty_member_id=OTHER_SEAT.id,
+            created_by=USER.id,
+            confirmed_at=confirmed_at,
+        )
+
+    def _as_affected_seat(self, monkeypatch, event: PotOwnershipEvent, *, permission=READER):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, OTHER_SEAT, permission)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=event))
+        saved = AsyncMock(side_effect=lambda _s, e: e)
+        monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+        monkeypatch.setattr(svc.shared_audit_service, "record", AsyncMock())
+        return saved
+
+    @pytest.mark.asyncio
+    async def test_the_seat_that_gave_it_may_take_it_back(self, monkeypatch):
+        # The ONLY way out of a confirmed re-agreement, which nobody can delete. Left underivable, one
+        # confirmed by mistake would have no exit at all.
+        event = self._confirmed()
+        saved = self._as_affected_seat(monkeypatch, event)
+        response = await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
+        assert event.confirmed_at is None
+        saved.assert_awaited_once()
+        assert response.confirmed_at is None
+        # Back to deletable by the seat's own remedy, and offered the confirm again.
+        assert (response.can_confirm, response.can_unconfirm, response.can_delete) == (True, False, True)
+
+    @pytest.mark.asyncio
+    async def test_it_is_audited_and_announced_as_its_own_thing(self, monkeypatch):
+        """Announced too, unlike a settlement's un-confirm, which tells nobody.
+
+        Withdrawing a confirmation RE-ARMS a deletion the lock had closed off, so the other seat's
+        standing genuinely changes — and they cannot see it happen on a page they are not looking at.
+        """
+        self._as_affected_seat(monkeypatch, self._confirmed())
+        recorded = AsyncMock()
+        monkeypatch.setattr(svc.shared_audit_service, "record", recorded)
+        await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
+        assert recorded.await_args.kwargs["action"] == AuditAction.unconfirmed
+        event, _, payload = _DISPATCHED.await_args.args
+        assert event == NotificationEvent.ownership_changed
+        assert payload["variant"] == "unconfirmed"
+
+    @pytest.mark.asyncio
+    async def test_there_is_nothing_to_take_back_on_an_unconfirmed_entry(self, monkeypatch):
+        # Mirrors unconfirm_settlement's answer for the same state, and nothing in the app offers the
+        # action on a row that has none.
+        saved = self._as_affected_seat(monkeypatch, self._confirmed(confirmed_at=None))
+        with pytest.raises(NotFoundError):
+            await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
+        saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_nobody_else_may_take_it_back_not_even_a_writer(self, monkeypatch):
+        # It is their word being withdrawn, so it is theirs to withdraw. A pot writer asking is refused
+        # for the same reason they cannot give it.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=self._confirmed()))
+        saved = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "save", saved)
+        with pytest.raises(PotReagreementNotYoursError):
+            await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
+        saved.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_seat_that_also_holds_write_access_is_told_it_may_delete_again(self, monkeypatch):
+        # The affected seat may ALSO be a writer, which is why the confirm path resolves real write
+        # access rather than assuming it has none: reporting can_delete false here would hide an action
+        # the caller genuinely has the moment the lock comes off.
+        writer_seat = PotMemberPermission(pot_id=5, member_id=OTHER_SEAT.id, can_view=True, can_write=True)
+        self._as_affected_seat(monkeypatch, self._confirmed(), permission=writer_seat)
+        response = await svc.unconfirm_event(AsyncMock(), 5, 1, USER)
+        assert response.can_delete is True
+
+
+class TestWhatTheLedgerResponseSaysAboutEachRow:
+    """The three permission fields, read off the ledger list as the surface reads them.
+
+    They live on the response rather than being mirrored on the web for two reasons: `can_confirm`
+    could not be derived by a client at all (the rule reads `created_by`, which the response
+    deliberately does not carry), and `can_delete` now has confirmation as one of its clauses — so
+    splitting them would put half of one rule in each of two places.
+    """
+
+    def _list_as(self, monkeypatch, seat: GroupMember, permission, events: list[PotOwnershipEvent]):
+        _arrange(monkeypatch, events=events)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, seat, permission)))
+        return events
+
+    @pytest.mark.asyncio
+    async def test_the_affected_seat_is_offered_the_confirm_and_nobody_else_is(self, monkeypatch):
+        # Recorded by SEAT, so OTHER_SEAT is the affected seat. Both reads run over the SAME row, so the
+        # difference is the rule and not the fixture.
+        swap = _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id, created_by=USER.id)
+        self._list_as(monkeypatch, OTHER_SEAT, READER, [swap])
+        affected = (await svc.list_events(AsyncMock(), 5, USER))[0]
+        assert (affected.can_confirm, affected.can_unconfirm) == (True, False)
+
+        self._list_as(monkeypatch, SEAT, WRITER, [swap])
+        recorder = (await svc.list_events(AsyncMock(), 5, USER))[0]
+        assert (recorder.can_confirm, recorder.can_unconfirm) == (False, False)
+
+    @pytest.mark.asyncio
+    async def test_a_read_only_seat_may_delete_the_reagreement_it_is_named_on_and_nothing_else(self, monkeypatch):
+        # PR 10's remedy, read off the response. The opening in the same list is what proves the answer
+        # is per-ROW rather than per-caller.
+        swap = _event(id=2, type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
+        self._list_as(monkeypatch, OTHER_SEAT, READER, [_event(id=1), swap])
+        opening, reagreement = await svc.list_events(AsyncMock(), 5, USER)
+        assert (opening.can_delete, reagreement.can_delete) == (False, True)
+
+    @pytest.mark.asyncio
+    async def test_a_confirmed_row_reports_itself_undeletable_to_a_writer(self, monkeypatch):
+        # The lock, as the button sees it: the same writer who may delete every other row is told no here.
+        swap = _event(id=2, type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
+        confirmed = _event(
+            id=3,
+            type=OwnershipEventType.reagreement,
+            member_id=SEAT.id,
+            counterparty_member_id=OTHER_SEAT.id,
+            confirmed_at=datetime(2026, 9, 1, 12, 0),
+        )
+        self._list_as(monkeypatch, SEAT, WRITER, [swap, confirmed])
+        unconfirmed_row, confirmed_row = await svc.list_events(AsyncMock(), 5, USER)
+        assert (unconfirmed_row.can_delete, confirmed_row.can_delete) == (True, False)
+        # And the timestamp travels, because it is what the row's badge states.
+        assert confirmed_row.confirmed_at is not None and unconfirmed_row.confirmed_at is None
+
+
+class TestTheLockOnDeletion:
+    """Confirming closes the delete for EVERYBODY, which is what makes it the trust anchor.
+
+    It changes no arithmetic — a re-agreement counted from the moment it was recorded — so the lock IS
+    what confirmation buys. Both DELETE policies carry the same clause, so the database refuses these
+    too rather than leaving the service the only guard.
+    """
+
+    def _confirmed(self) -> PotOwnershipEvent:
+        return _event(
+            type=OwnershipEventType.reagreement,
+            member_id=SEAT.id,
+            counterparty_member_id=OTHER_SEAT.id,
+            confirmed_at=datetime(2026, 9, 1, 12, 0),
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_pot_WRITER_cannot_delete_a_confirmed_reagreement(self, monkeypatch):
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=self._confirmed()))
+        delete_one = AsyncMock()
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+        # The refusal names the one way out rather than talking about write access, which the caller has.
+        with pytest.raises(PotReagreementConfirmedError):
+            await svc.delete_event(AsyncMock(), 5, 1, USER)
+        delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_neither_named_seat_can_delete_it_either(self, monkeypatch):
+        # The remedy is what a seat has BEFORE they agree, and agreeing is what gives it up.
+        for seat in (SEAT, OTHER_SEAT):
+            _arrange(monkeypatch)
+            monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, seat, READER)))
+            monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=self._confirmed()))
+            delete_one = AsyncMock()
+            monkeypatch.setattr(svc.pot_ownership_repository, "delete", delete_one)
+            with pytest.raises(PotReagreementConfirmedError):
+                await svc.delete_event(AsyncMock(), 5, 1, USER)
+            delete_one.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_refusal_is_the_write_access_one_when_the_row_is_not_confirmed(self, monkeypatch):
+        # Which error, from the row's own state. Both branches asserted, because one message pointing at
+        # a confirmation nobody gave would be a dead end.
+        _arrange(monkeypatch)
+        monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, READER)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "get_by_id", AsyncMock(return_value=_event(type=OwnershipEventType.contribution)))
+        monkeypatch.setattr(svc.pot_ownership_repository, "delete", AsyncMock())
+        with pytest.raises(PotWriteRequiredError):
+            await svc.delete_event(AsyncMock(), 5, 1, USER)
 
 
 class TestReagreement:

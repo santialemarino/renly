@@ -69,6 +69,18 @@ async def create_many(session: AsyncSession, events: list[PotOwnershipEvent]) ->
     return events
 
 
+# Persists a change to an existing event.
+#
+# The ONLY column any caller ever changes is `confirmed_at` (plus the `updated_at` the trigger keeps),
+# which is why the grants narrow UPDATE on this table to exactly those two: the ledger is otherwise
+# append-and-delete, and a row whose units could be rewritten after the fact would make every derived
+# balance a claim about the present rather than a replay of what happened.
+async def save(session: AsyncSession, event: PotOwnershipEvent) -> PotOwnershipEvent:
+    session.add(event)
+    await session.flush()
+    return event
+
+
 # Deletes an event. Balances are derived, so removing one simply recomputes the series — there is no
 # stored total to correct afterwards.
 async def delete(session: AsyncSession, event: PotOwnershipEvent) -> None:
@@ -204,6 +216,7 @@ class PotOwnershipRepository:
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_pot = staticmethod(list_by_pot)
     list_by_pots = staticmethod(list_by_pots)
+    save = staticmethod(save)
     sum_in_by_account_ids = staticmethod(sum_in_by_account_ids)
     sum_in_by_account_ids_dated = staticmethod(sum_in_by_account_ids_dated)
     sum_out_by_account_ids = staticmethod(sum_out_by_account_ids)

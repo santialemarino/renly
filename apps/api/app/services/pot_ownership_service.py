@@ -29,11 +29,14 @@ from app.domain import (
     NotFoundError,
     PotAlreadyOpenedError,
     PotBaseAmountRequiredError,
+    PotEventNotConfirmableError,
     PotInsufficientUnitsError,
     PotMovementAccountInactiveError,
     PotMovementBeforeAccountOpenedError,
     PotNotOpenedError,
     PotPercentagesError,
+    PotReagreementConfirmedError,
+    PotReagreementNotYoursError,
     PotReagreementSameMemberError,
     PotUnsupportedMovementError,
     PotValuationRequiredError,
@@ -51,9 +54,10 @@ from app.domain.pot import ONE_HUNDRED, OPENING_UNIT_PRICE, UNIT_PLACES, Ownersh
 from app.models.account import Account
 from app.models.group import Group, GroupMember
 from app.models.notification import NotificationEvent
-from app.models.pot import OwnershipEventType, Pot, PotMemberPermission, PotOwnershipEvent
+from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
+from app.models.utils import utcnow
 from app.repositories import account_repository, group_repository, pot_ownership_repository, pot_repository
 from app.schemas.pot import PotOwnershipEventResponse
 from app.services import exchange_rate_service, notification_service, pot_service, shared_audit_service
@@ -68,10 +72,79 @@ def _as_entries(events: list[PotOwnershipEvent]) -> list[OwnershipEntry]:
     return [OwnershipEntry(member_id=e.member_id, units=e.units, counterparty_member_id=e.counterparty_member_id) for e in events]
 
 
+# Which seat's agreement a re-agreement waits for, or None for an event that carries no confirmation.
+#
+# The AFFECTED seat, and only one of them: the member losing units, unless they recorded the change
+# themselves, in which case it is the member receiving them. Written as one rule rather than a set of
+# eligible seats because that is what makes the answer always be somebody who did NOT record the row —
+# including the case a set would get wrong, a third party with write access recording a change between
+# two other members, where the seat with something taken is the one whose agreement is worth having.
+#
+# Write access is deliberately absent, and that is the point of the whole unit (§29.1): write access is
+# not granted by ownership — create_pot inserts can_write for the creator only — so a rule keyed on it
+# would let whoever recorded the change also vouch for it.
+#
+# A name-only seat has no account, so a re-agreement whose affected seat is one is never confirmable by
+# anybody and stays deletable by the real seat instead — D34's posture for a settlement, unchanged. The
+# comparison is against `created_by`, which is SET NULL once that account is deleted: a NULL on either
+# side leaves the answer on the GIVER, which is the seat with something taken and therefore the safe
+# direction to fail in. The SQL policy mirrors this expression clause for clause.
+def _confirming_member_id(event: PotOwnershipEvent, members_by_id: dict[int, GroupMember]) -> int | None:
+    if event.type != OwnershipEventType.reagreement:
+        return None
+    giver = members_by_id.get(event.member_id)
+    if giver is not None and giver.user_id is not None and giver.user_id == event.created_by:
+        return event.counterparty_member_id
+    return event.member_id
+
+
+# Who may delete one ledger entry.
+#
+# Write access, as everywhere else in this file — EXCEPT that an UNCONFIRMED re-agreement may always be
+# deleted by either seat it names, with or without it.
+#
+# That exception is not a convenience. Write access is not granted by ownership: create_pot inserts
+# can_write for the CREATOR only, and recording the opening grants nobody else write. So the
+# out-of-the-box state of a divided pot is that its creator can move units away from a co-owner, the
+# co-owner is notified by name, and can do nothing about it — no reject, no undo, no appeal. That is
+# the default configuration rather than an edge case, which is what makes the remedy load-bearing.
+#
+# It is deliberately narrow in three ways. Only a RE-AGREEMENT, because that is the only event type
+# that moves value between two people without money changing hands — a contribution or a withdrawal
+# moves the mover's own money, and an opening is the division everyone agreed to. Only the two seats it
+# NAMES, never any other member. And only DELETE: the counterparty gains no ability to record anything,
+# which the row-level policies enforce separately — the INSERT policy keeps its WITH CHECK on write
+# access, and the UPDATE policy answers a different question entirely (who may CONFIRM).
+#
+# CONFIRMATION closes it again, and closes it for EVERYBODY including a pot writer — which is what makes
+# confirming the trust anchor rather than a label. The re-agreement counted from the moment it was
+# recorded either way (an unapplied one would leave the pot showing percentages everyone agrees are
+# wrong), so what confirmation changes is not the arithmetic but who may undo it. The way back out is
+# the affected seat un-confirming, and nothing else.
+#
+# ONE rule, asked by the write and read off the response as `can_delete`, so the button offered and the
+# answer given cannot disagree. `delete_event` picks WHICH refusal to raise from the row's state.
+def _may_delete_event(event: PotOwnershipEvent, viewer_member_id: int, *, may_write: bool) -> bool:
+    if event.confirmed_at is not None:
+        return False
+    if may_write:
+        return True
+    return event.type == OwnershipEventType.reagreement and viewer_member_id in (event.member_id, event.counterparty_member_id)
+
+
 # Builds one ledger response, naming both members rather than exposing raw seat ids alone — a client
 # rendering a movement history needs the names, and a second round trip per row to get them would be
 # an N+1 pushed onto the frontend.
-def _build_response(event: PotOwnershipEvent, members_by_id: dict[int, GroupMember]) -> PotOwnershipEventResponse:
+#
+# The three permission fields are resolved HERE rather than by the client, because the confirm rule
+# reads `created_by` — a column the response deliberately does not expose — so the web could not derive
+# it at all, and `can_delete` joins them for the reason GroupSettlementResponse resolves its own pair:
+# a second copy of a permission check is a second thing that can disagree with the gate that decides.
+def _build_response(
+    event: PotOwnershipEvent, members_by_id: dict[int, GroupMember], *, viewer_member_id: int, may_write: bool
+) -> PotOwnershipEventResponse:
+    confirming_member_id = _confirming_member_id(event, members_by_id)
+    is_confirming_seat = confirming_member_id is not None and confirming_member_id == viewer_member_id
     counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
     return PotOwnershipEventResponse(
         id=event.id,
@@ -89,6 +162,10 @@ def _build_response(event: PotOwnershipEvent, members_by_id: dict[int, GroupMemb
         unit_price=event.unit_price,
         from_account_id=event.from_account_id,
         to_account_id=event.to_account_id,
+        confirmed_at=event.confirmed_at,
+        can_confirm=is_confirming_seat and event.confirmed_at is None,
+        can_unconfirm=is_confirming_seat and event.confirmed_at is not None,
+        can_delete=_may_delete_event(event, viewer_member_id, may_write=may_write),
         notes=event.notes,
         created_at=event.created_at,
     )
@@ -266,11 +343,12 @@ async def _audit(
 # holding 0% still sees every movement, because partial visibility of something you co-own is not a
 # feature (V5).
 async def list_events(session: AsyncSession, pot_id: int, user: User) -> list[PotOwnershipEventResponse]:
-    pot, _, _ = await pot_service.require_visible(session, pot_id, user)
+    pot, viewer, permission = await pot_service.require_visible(session, pot_id, user)
     events = await pot_ownership_repository.list_by_pot(session, pot.id)
     members = await group_repository.list_members(session, pot.group_id)
     members_by_id = {m.id: m for m in members}
-    return [_build_response(e, members_by_id) for e in events]
+    may_write = pot_service.may_write(permission)
+    return [_build_response(e, members_by_id, viewer_member_id=viewer.id, may_write=may_write) for e in events]
 
 
 # Records the pot's opening baseline: a value and each owner's percentage on a date, issuing units at
@@ -348,7 +426,7 @@ async def record_opening(
         recipients,
         _pot_payload(pot, group, {"variant": "opening", "actor": actor.display_name}),
     )
-    return [_build_response(e, members_by_id) for e in created]
+    return [_build_response(e, members_by_id, viewer_member_id=actor.id, may_write=True) for e in created]
 
 
 # Records a contribution or a withdrawal: money crossing the scope boundary, priced at the pot's unit
@@ -373,7 +451,7 @@ async def record_movement(
 ) -> PotOwnershipEventResponse:
     if type not in (OwnershipEventType.contribution, OwnershipEventType.withdrawal):
         raise PotUnsupportedMovementError(type)
-    pot, _ = await pot_service.require_writable(session, pot_id, user)
+    pot, actor = await pot_service.require_writable(session, pot_id, user)
     # Locked before the price and the balances are derived. Both are read-then-act: the unit price is
     # what the new units are issued at, and a withdrawal is refused for more than the member holds — so
     # two withdrawals racing each other both measure a balance neither will still have, and between
@@ -479,7 +557,7 @@ async def record_movement(
             },
         ),
     )
-    return _build_response(event, {member.id: member})
+    return _build_response(event, {member.id: member}, viewer_member_id=actor.id, may_write=True)
 
 
 # Records a HOLDING contributed to a divided pot: an investment or a cash account moving out of the
@@ -598,7 +676,7 @@ async def contribute_holding(
             },
         ),
     )
-    return _build_response(event, {member.id: member})
+    return _build_response(event, {member.id: member}, viewer_member_id=member.id, may_write=True)
 
 
 # Records a re-agreement: units moving from one member to another with no money at all. Net-zero in
@@ -700,32 +778,141 @@ async def record_reagreement(
             },
         ),
     )
-    return _build_response(event, {giver.id: giver, receiver.id: receiver})
+    return _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
 
 
-# Who may delete one ledger entry.
+# The two seats an event names, as display names, for an audit payload. Three callers read the same
+# pair and each had written its own conditional — one of them in a different style — which is three
+# places for "the seat is gone" to be handled differently.
+def _seat_names(event: PotOwnershipEvent, members_by_id: dict[int, GroupMember]) -> tuple[str | None, str | None]:
+    subject = members_by_id.get(event.member_id)
+    counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    return (subject.display_name if subject is not None else None, counterparty.display_name if counterparty is not None else None)
+
+
+# Resolves the re-agreement a confirm or an un-confirm names, together with the caller's seat and
+# whether the caller is the seat whose agreement it waits for.
 #
-# Write access, as everywhere else in this file — EXCEPT that a re-agreement may always be deleted by
-# either seat it names, with or without it.
+# Gated on require_VISIBLE rather than require_writable, exactly as delete_event is and for the same
+# reason: the affected seat is usually the one WITHOUT write access, so asking the write question here
+# would refuse the only person entitled to answer.
 #
-# That exception is not a convenience. Write access is not granted by ownership: create_pot inserts
-# can_write for the CREATOR only, and recording the opening grants nobody else write. So the
-# out-of-the-box state of a divided pot is that its creator can move units away from a co-owner, the
-# co-owner is notified by name, and can do nothing about it — no reject, no undo, no appeal. That is
-# the default configuration rather than an edge case, which is what makes the remedy load-bearing.
+# Locks the POT, because both callers read a state and act on it — the confirm reads `confirmed_at` and
+# then sets it — and because a deletion racing a confirmation must land wholly before or wholly after
+# it, never between the read and the write. The pot rather than the row: every other ledger write locks
+# the pot, and two lock orders that can meet is how a deadlock is built.
+async def _require_confirmable(
+    session: AsyncSession, pot_id: int, event_id: int, user: User
+) -> tuple[Pot, PotOwnershipEvent, GroupMember, dict[int, GroupMember], bool]:
+    pot, viewer, permission = await pot_service.require_visible(session, pot_id, user)
+    await pot_repository.lock(session, pot.id)
+    event = await pot_ownership_repository.get_by_id(session, pot.id, event_id)
+    if event is None:
+        raise NotFoundError("Ownership event not found")
+    if event.type != OwnershipEventType.reagreement:
+        raise PotEventNotConfirmableError()
+    members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
+    if _confirming_member_id(event, members_by_id) != viewer.id:
+        raise PotReagreementNotYoursError()
+    return (pot, event, viewer, members_by_id, pot_service.may_write(permission))
+
+
+# One announcement for a confirmation or its withdrawal, addressed to everyone who may see the pot
+# minus whoever acted.
 #
-# It is deliberately narrow in three ways. Only a RE-AGREEMENT, because that is the only event type
-# that moves value between two people without money changing hands — a contribution or a withdrawal
-# moves the mover's own money, and an opening is the division everyone agreed to. Only the two seats it
-# NAMES, never any other member. And only DELETE: the counterparty gains no ability to record anything,
-# which the row-level policy enforces separately by keeping its WITH CHECK on write access.
+# It reuses `ownership_changed` with a variant rather than earning an event of its own — the same
+# choice the deletion made, and for the same reason: somebody who has switched pot-ownership news off
+# stays switched off for the confirmation too, and `notification_event` is a Postgres enum, so a new
+# value would be a migration for a sentence.
 #
-# The confirm-and-lock half of the same decision is a later unit; this is the remedy, which is the half
-# that has to exist first.
-def _may_delete_event(event: PotOwnershipEvent, member: GroupMember, permission: PotMemberPermission | None) -> bool:
-    if pot_service.may_write(permission):
-        return True
-    return event.type == OwnershipEventType.reagreement and member.id in (event.member_id, event.counterparty_member_id)
+# It names both seats and no figure. What was agreed is a change of split whose size the pot page
+# already states in percentages; a units figure appears nowhere a person can see (U2), and a second
+# answer to a question the pot page answers is how two surfaces come to disagree.
+async def _announce_confirmation(
+    session: AsyncSession, pot: Pot, event: PotOwnershipEvent, members_by_id: dict[int, GroupMember], actor: GroupMember, user: User, variant: str
+) -> None:
+    recipients = await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
+    group = await group_repository.get_by_id(session, pot.group_id)
+    giver = members_by_id.get(event.member_id)
+    receiver = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    await notification_service.dispatch(
+        NotificationEvent.ownership_changed,
+        recipients,
+        _pot_payload(
+            pot,
+            group,
+            {
+                "variant": variant,
+                "actor": actor.display_name,
+                "from_member": giver.display_name if giver is not None else None,
+                "to_member": receiver.display_name if receiver is not None else None,
+            },
+        ),
+    )
+
+
+# Confirms a re-agreement: the affected seat agreeing to the split that was recorded for them.
+#
+# It changes no arithmetic. The re-agreement counted from the moment it was recorded and still does —
+# PR 3 rejected a PENDING gate on exactly that ground, because an unapplied re-agreement leaves the pot
+# showing percentages everybody agrees are wrong, so BOTH states would lie. What this changes is who
+# may undo it: unconfirmed, either named seat may delete it (the remedy PR 10 shipped, which exists
+# because write access is not granted by ownership); confirmed, nobody may until this same seat takes
+# their word back. Same shape as a settlement's payee-confirm (D28), and the trust anchor rather than
+# a permission.
+async def confirm_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> PotOwnershipEventResponse:
+    pot, event, viewer, members_by_id, may_write = await _require_confirmable(session, pot_id, event_id, user)
+    if event.confirmed_at is not None:
+        raise PotReagreementConfirmedError()
+    event.confirmed_at = utcnow()
+    await pot_ownership_repository.save(session, event)
+    member_name, counterparty_name = _seat_names(event, members_by_id)
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.confirmed,
+        event_id=event.id,
+        variant=event.type,
+        member=member_name,
+        counterparty=counterparty_name,
+    )
+    await session.commit()
+    await session.refresh(event)
+    await _announce_confirmation(session, pot, event, members_by_id, viewer, user, "confirmed")
+    return _build_response(event, members_by_id, viewer_member_id=viewer.id, may_write=may_write)
+
+
+# Takes a confirmation back, returning the re-agreement to deletable so it can be corrected or removed.
+# Only the seat that gave it may, for the same reason only they could give it: it is their word being
+# withdrawn. It is also the ONLY way out of a confirmed re-agreement, which nobody can delete — left
+# underivable, one confirmed by mistake would have no exit at all.
+async def unconfirm_event(session: AsyncSession, pot_id: int, event_id: int, user: User) -> PotOwnershipEventResponse:
+    pot, event, viewer, members_by_id, may_write = await _require_confirmable(session, pot_id, event_id, user)
+    # Mirrors unconfirm_settlement's answer for the same state: there is no confirmation here to take
+    # back, and nothing in the app offers the action on a row that has none.
+    if event.confirmed_at is None:
+        raise NotFoundError("Confirmation not found")
+    event.confirmed_at = None
+    await pot_ownership_repository.save(session, event)
+    member_name, counterparty_name = _seat_names(event, members_by_id)
+    await _audit(
+        session,
+        pot,
+        user,
+        AuditAction.unconfirmed,
+        event_id=event.id,
+        variant=event.type,
+        member=member_name,
+        counterparty=counterparty_name,
+    )
+    await session.commit()
+    await session.refresh(event)
+    # Announced as well, unlike a settlement's un-confirm, which tells nobody. Withdrawing a
+    # confirmation RE-ARMS a deletion the lock had closed off, so the other seat's standing genuinely
+    # changes — and they cannot see it happen on a page they are not looking at.
+    await _announce_confirmation(session, pot, event, members_by_id, viewer, user, "unconfirmed")
+    return _build_response(event, members_by_id, viewer_member_id=viewer.id, may_write=may_write)
 
 
 # Deletes an ownership event. Balances are derived, so removing one recomputes the series with no
@@ -751,14 +938,15 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
     event = await pot_ownership_repository.get_by_id(session, pot.id, event_id)
     if event is None:
         raise NotFoundError("Ownership event not found")
-    if not _may_delete_event(event, viewer, permission):
-        raise PotWriteRequiredError()
+    if not _may_delete_event(event, viewer.id, may_write=pot_service.may_write(permission)):
+        # Which refusal, from the row's own state: a confirmed re-agreement is locked against everybody
+        # and says so with the one way out, while everything else is the plain write-access answer.
+        raise PotReagreementConfirmedError() if event.confirmed_at is not None else PotWriteRequiredError()
     # Everything the announcement and the audit entry need is read off the event BEFORE it goes, so
     # neither depends on an object whose row no longer exists.
     entry_id, entry_type = event.id, event.type
     members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
-    subject = members_by_id.get(event.member_id)
-    counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    subject_name, counterparty_name = _seat_names(event, members_by_id)
     if entry_type == OwnershipEventType.opening:
         deleted = await pot_ownership_repository.delete_openings(session, pot.id)
     else:
@@ -771,8 +959,8 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
         AuditAction.deleted,
         event_id=entry_id,
         variant=entry_type,
-        member=subject.display_name if subject is not None else None,
-        counterparty=counterparty.display_name if counterparty is not None else None,
+        member=subject_name,
+        counterparty=counterparty_name,
     )
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)

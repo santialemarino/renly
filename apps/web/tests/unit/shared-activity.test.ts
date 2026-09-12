@@ -125,6 +125,34 @@ describe('activity copy covers every entity and action', () => {
     }
   });
 
+  it('declares every action the copy has a sentence for', () => {
+    /*
+     * The direction the constant's own comment called out as NOT closed, and a mutation sweep proved
+     * it: removing `confirmed` from ACTIVITY_ACTIONS.ownership_event survived the whole suite, because
+     * every other test here iterates that constant and a shrinking list simply checks fewer keys.
+     *
+     * A missing ACTION is worse than a missing variant — the base sentence rescues a variant, nothing
+     * rescues an action — and entries are permanent, so the row renders its own key path to the reader
+     * forever. This is the same shape as the variant guard above, one level up: the copy is the
+     * evidence that an action exists, so every action with a sentence must be declared.
+     *
+     * It does not close the other direction (an action the API writes that NOBODY has written copy for
+     * yet); adding an action stays a same-PR change on both sides. What it does close is the realistic
+     * way in — deleting a line from the constant while the copy, and the stored rows, still name it.
+     */
+    const messages = LOCALES.en as unknown as {
+      shared: { activity: { entries: Record<string, Record<string, unknown>> } };
+    };
+    for (const [entity, actions] of Object.entries(messages.shared.activity.entries)) {
+      for (const action of Object.keys(actions)) {
+        expect(
+          ACTIVITY_ACTIONS[entity as keyof typeof ACTIVITY_ACTIONS] as readonly string[],
+          `shared.activity.entries.${entity}.${action} has copy but is not a declared action`,
+        ).toContain(action);
+      }
+    }
+  });
+
   it('declares a variant list only for pairs that exist', () => {
     // The other direction: a variant block for an (entity, action) the API never writes is dead copy
     // that reads as coverage, and its keys would pass the sentence test above forever.

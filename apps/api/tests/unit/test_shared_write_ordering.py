@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.domain import NotFoundError
 from app.models.group import Group, GroupKind, GroupMember, GroupMemberRole
 from app.models.group_settlement import GroupSettlement, GroupSettlementStatus
 from app.models.pot import Pot, PotMemberPermission
@@ -212,13 +213,32 @@ class TestTheLockComesFirst:
         monkeypatch.setattr(group_settlement_service.group_settlement_repository, "get_by_id", got)
         monkeypatch.setattr(group_settlement_service.group_repository, "list_members", AsyncMock(return_value=[SEAT]))
 
-        from app.domain import NotFoundError
-
         with pytest.raises(NotFoundError):
             await group_settlement_service.confirm_settlement(AsyncMock(), 10, 1, USER)
         # Asserted on the ARGUMENT rather than on an outcome: a stub returning None raises whether or not
         # the row was locked, so "it raised" would be true of the unlocked version too.
         assert got.await_args.kwargs == {"for_update": True}
+
+    @pytest.mark.asyncio
+    async def test_confirming_a_reagreement_locks_the_pot_before_reading_its_state(self, monkeypatch):
+        """Confirm and un-confirm both read `confirmed_at` and then write it.
+
+        The loss without the lock is a confirmed re-agreement DELETED out from under the seat who
+        vouched for it: the deletion reads an unconfirmed row while the confirmation is mid-flight, and
+        both succeed. The pot rather than the row, because every other ledger write locks the pot and two
+        lock orders that can meet is how a deadlock is built.
+        """
+        for act in (pot_ownership_service.confirm_event, pot_ownership_service.unconfirm_event):
+            trace = _Trace()
+            monkeypatch.setattr(pot_ownership_service.pot_service, "require_visible", AsyncMock(return_value=(POT, SEAT, WRITER)))
+            monkeypatch.setattr(pot_ownership_service.pot_repository, "lock", trace.stub("lock"))
+            # Answers None, so the act raises — which is fine: what is asserted is that the lock was
+            # already taken by then, and an outcome assertion would be true of the unlocked version too.
+            monkeypatch.setattr(pot_ownership_service.pot_ownership_repository, "get_by_id", trace.stub("read", result=None))
+
+            with pytest.raises(NotFoundError):
+                await act(AsyncMock(), 5, 1, USER)
+            assert trace.index_of("lock") < trace.index_of("read"), act.__name__
 
 
 class TestTheAuditEntryComesBeforeARevocation:

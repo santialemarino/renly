@@ -42,7 +42,18 @@ export function expenseRow(page: Page, marker: string) {
 export async function createExpenseViaQuickAdd(page: Page, marker: string, amount: string) {
   await page.getByTestId('quick-add-trigger').click();
   const notes = page.getByTestId('expense-form-notes');
-  await expect(notes).toBeVisible();
+  /*
+   * An explicit budget for the FIRST open after a server start, and the same root cause PR 12 gave the
+   * delete assertion further down this file. The quick-add is the app's one `next/dynamic` call site,
+   * so opening it the first time compiles that chunk on a dev server AND awaits the six reads its open
+   * handler makes, with the trigger sitting in its loading state throughout. That exceeds the 5s
+   * `expect` default — observed twice, once inside a full suite run and once alone immediately after a
+   * cold start — and then passes on every subsequent run (3/3 measured, warm).
+   *
+   * Patience rather than tolerance: the assertion is unchanged, and a production build compiles
+   * nothing here. If this ever fails at 20s, the open genuinely broke.
+   */
+  await expect(notes).toBeVisible({ timeout: 20_000 });
 
   await page.getByTestId('expense-form-amount').fill(amount);
   await notes.fill(marker);

@@ -258,6 +258,8 @@ The **ownership ledger** is a list of dated events, and every balance is derived
 
 Four kinds of event: an **opening** sets the baseline (a value and each owner's percentage on a date — nothing before it is in scope, exactly like an account's opening balance); a **contribution** and a **withdrawal** move real value across the boundary, debiting one account and crediting another so both balances stay right; and a **re-agreement** transfers units between two people with no money at all, which is what a gift or a buy-out is. Conflating the last two would misstate the history: one is an investment, the other is a settlement between people.
 
+A re-agreement is the one event that moves value between two people, so it is the one you can **agree to** — and agreeing to it is what settles it. It counts from the moment it is recorded either way, because an entry waiting for agreement would leave the pot showing percentages everybody already knows are wrong. What agreement changes is who may undo it: until then, either person named may simply delete it; afterwards nobody can, not even whoever maintains the pot, until the person who agreed takes that back. The person whose agreement counts is the one **losing** the units — unless they recorded the change themselves, in which case it is the person receiving them. Either way it is never the person who wrote it down.
+
 A contribution can also be **a thing rather than money** — an investment or a whole cash account you already own, moved in. It is the same event and the same arithmetic: what you hand over is valued as it stands, you are issued units worth exactly that, and nobody else's share loses a cent. Two things follow from the fact that a holding carries no history of _when_ it joined a pot. It is always priced **today**, because the moment it moves it counts in the pot's value — pricing it at an earlier date would give you units for what it was worth then against something the pot gains at what it is worth now, and hand the difference to everyone pro-rata. And it is always **yours**: you cannot record somebody else contributing a thing they own, because the thing has to actually move.
 
 Because the opening is one act recorded as one row per owner, **deleting it removes all of those rows together**. Half a division would leave the remaining owners holding a share nobody agreed to. Later movements are kept, and a new baseline can only be recorded once nothing else is on the ledger — it is only ever the first entry, because it issues units at a nominal 1.00 and movements after it are priced at whatever the pot was worth on their own dates.
@@ -354,8 +356,8 @@ stops. Their other browsers are untouched.
 
 Every group keeps a record of who did what to which shared thing, and when: a group renamed, a member
 added or removed, an invite created or revoked, a pot's settings or somebody's access to it changed,
-holdings moved in or out, an ownership entry recorded or removed, a shared expense or piece of income
-written or edited, a settlement recorded, confirmed or reversed.
+holdings moved in or out, an ownership entry recorded, agreed to or removed, a shared expense or piece
+of income written or edited, a settlement recorded, confirmed or reversed.
 
 **Nothing here names money.** An entry carries an **entity type** (a label like `pot` or `settlement`),
 the **id** of the thing it concerns, an **action**, and a **payload** — the values its sentence
