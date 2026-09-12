@@ -1045,6 +1045,22 @@ class TestWhoConfirmsAReagreement:
         event = _event(type=OwnershipEventType.reagreement, member_id=placeholder.id, counterparty_member_id=SEAT.id, created_by=SEAT.user_id)
         assert svc._confirming_member_id(event, {placeholder.id: placeholder, SEAT.id: SEAT}) == placeholder.id
 
+    def test_a_NAME_ONLY_giver_AND_a_deleted_recorder_still_leaves_it_with_the_giver(self):
+        """Both sides of the comparison NULL at once, which is the only case the NULL guard decides.
+
+        A mutation sweep is what found this: dropping `giver.user_id is not None` survived every other
+        test, because each of them holds one side non-NULL. With both NULL, `None == None` is True and
+        the answer would flip to the RECEIVER — handing the confirmation to the seat that GAINED units
+        on a row whose giver cannot confirm at all.
+
+        Entirely reachable: a name-only member gives up units, and the account that recorded it is later
+        deleted, which sets created_by NULL. The SQL says the same thing with a plain equality, where
+        NULL = NULL yields NULL and falls to the ELSE.
+        """
+        placeholder = GroupMember(id=103, group_id=10, user_id=None, display_name="Ana (no account)", role=GroupMemberRole.member)
+        event = _event(type=OwnershipEventType.reagreement, member_id=placeholder.id, counterparty_member_id=SEAT.id, created_by=None)
+        assert svc._confirming_member_id(event, {placeholder.id: placeholder, SEAT.id: SEAT}) == placeholder.id
+
     def test_no_other_event_type_carries_a_confirmation_at_all(self):
         # The same narrowing the DELETE remedy has, and the same reason: a contribution or a withdrawal
         # moves the mover's own money and an opening is the division everybody agreed to, so none of them
@@ -1113,14 +1129,21 @@ class TestConfirmation:
         # pot-ownership news off stays switched off for the confirmation too — and `notification_event`
         # is a Postgres enum, so a new value would be a migration for a sentence.
         self._as_affected_seat(monkeypatch, self._swap())
+        audience = AsyncMock(return_value=[OTHER_SEAT.user_id])
+        monkeypatch.setattr(svc.pot_service, "list_notifiable_user_ids", audience)
         await svc.confirm_event(AsyncMock(), 5, 1, USER)
         event, recipients, payload = _DISPATCHED.await_args.args
         assert event == NotificationEvent.ownership_changed
         assert payload["variant"] == "confirmed"
         assert (payload["from_member"], payload["to_member"]) == (SEAT.display_name, OTHER_SEAT.display_name)
-        # The actor is the seat that agreed, and they are excluded from their own announcement.
         assert payload["actor"] == OTHER_SEAT.display_name
         assert recipients == [OTHER_SEAT.user_id]
+        # Asserted on the ARGUMENT, not on the returned list: the audience read is mocked, so it hands
+        # back the same recipients whatever it is asked — and a mutation dropping the exclusion survived
+        # every outcome assertion here. Nobody is told about their own act; the pot's audience rule is
+        # reused rather than re-derived, so an 'owners' pot still announces nothing to a member who
+        # cannot see it.
+        assert audience.await_args.kwargs["exclude_user_id"] == USER.id
 
     @pytest.mark.asyncio
     async def test_no_figure_is_announced(self, monkeypatch):

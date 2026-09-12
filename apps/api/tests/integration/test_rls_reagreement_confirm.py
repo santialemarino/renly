@@ -159,15 +159,21 @@ async def seeded():
             # the read policy above it) can refuse them.
             "denied_is_giver": await _reagreement(recorded_by=users["writer"], giver_seat=seats["denied"], day="07"),
         }
-        # The giver's OWN contribution. Their seat matches it, so the `type = 'reagreement'` clause is
-        # the only thing that can refuse a confirmation on it.
+        # A contribution for the giver's seat, recorded by the WRITER — and who recorded it is the whole
+        # point. The affected-seat CASE reads `created_by`: on a row the giver recorded themselves it
+        # resolves to `counterparty_member_id`, which a contribution leaves NULL, so the EXISTS matches
+        # nothing and the row is refused whether or not the policy checks the type. Recorded by somebody
+        # else, the CASE resolves to the giver's own seat — the caller's — so `type = 'reagreement'`
+        # becomes the ONLY clause standing between them and a confirmation on a contribution.
+        # ▸ This is PR 10's finding repeating: a mutation sweep dropped the type clause and every test
+        # stayed green until the fixture could separate it from the seat clause.
         events["contribution"] = (
             await s.execute(
                 text(
                     "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, base_amount, units, unit_price, created_by) "
                     "VALUES (:p, 'contribution', '2026-08-01', :m, 10, 10, 1, :u) RETURNING id"
                 ),
-                {"p": pot, "m": seats["giver"], "u": users["giver"]},
+                {"p": pot, "m": seats["giver"], "u": users["writer"]},
             )
         ).scalar_one()
         await s.commit()
@@ -337,10 +343,14 @@ async def test_a_context_less_session_confirms_nothing(seeded):
 async def test_no_other_event_type_can_be_confirmed(seeded):
     """The type narrowing, isolated from the seat narrowing beside it.
 
-    The contribution seeded here is the giver's OWN, so their seat matches — which means
-    `type = 'reagreement'` is the only clause that can refuse it. A CHECK constraint refuses the row
-    underneath as well, and both directions matter: one keeps the column meaningful, the other keeps
-    the policy honest.
+    The contribution seeded here names the giver's seat and was recorded by somebody else, so the
+    affected-seat CASE resolves to the caller — which leaves `type = 'reagreement'` as the only clause
+    that can refuse it. Seeded any other way the seat clause refuses it first and this assertion passes
+    on a policy with no type check at all, which is exactly what a mutation sweep proved.
+
+    Asserted as a FILTERED no-op rather than a raise, and the distinction is the one being pinned: the
+    CHECK constraint underneath would refuse the row too, but it refuses by ERRORING. The policy refusing
+    first is what keeps a confirmation on a contribution from ever reaching it.
     """
     async with _as(seeded, "giver") as s:
         assert await _confirm(s, seeded["events"]["contribution"]) == 0
