@@ -37,6 +37,26 @@ const UNREACHABLE_POT = 999999;
  */
 test.describe('ownership-ledger reachability (signed in)', () => {
   test('the pot page is unreachable for a pot the account cannot see', async ({ page }) => {
+    /*
+     * A per-TEST budget, not a navigation one — and the distinction is the whole finding. Raising only
+     * `page.goto`'s timeout changes nothing here, because the 30s that expires first is Playwright's
+     * budget for the test as a whole.
+     *
+     * The number is measured, not guessed. This is the only spec that loads `/shared/pots/[id]` itself
+     * — the three flows beside it live on child segments, which a dev server compiles separately — so
+     * this navigation pays that route's FIRST compile, and it is a heavy one (six sections, including
+     * the recharts value series). Read off the dev server's own log across three cold runs, its first
+     * compile costs **6.6s, 7.8s and 27.7s** — the last one 29.6s wall, which is what overran the 30s
+     * default. A range rather than one figure, and the spread is MACHINE LOAD rather than suite
+     * context: the 27.7s and the 6.6s are both full cold suites. Warm and authenticated the same route
+     * answers in 0.26–0.53s, and a production build never pays the compile at all.
+     *
+     * Worth knowing rather than re-deriving: on a fully cold `.next` this cost is suite-wide and
+     * pre-existing — `/signup` compiles in 29.6s and `/shared` in 21.1s in the same run — so a cold
+     * first run fails specs that have nothing to do with this one. Run the suite against a server that
+     * has been up, and give the heaviest route its own budget, which is what this is.
+     */
+    test.setTimeout(120_000);
     await page.goto(`/shared/pots/${UNREACHABLE_POT}`);
 
     /*
