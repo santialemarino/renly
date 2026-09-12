@@ -14,6 +14,15 @@ down_revision = "0024_shared_audit_log"
 branch_labels = None
 depends_on = None
 
+# ▸ `caller.is_active` is REDUNDANT today and kept deliberately. What enforces it is one layer down:
+# this EXISTS runs as the invoking role rather than in a SECURITY DEFINER body, so group_members' own
+# policy (app_is_group_member(), which requires an ACTIVE seat) applies inside it, and the UNIQUE index
+# on (group_id, user_id) means the caller has at most one seat per group. Proven on a row naming a
+# user's INACTIVE seat in ANOTHER group — nothing ties an event's member_id to the pot's group —
+# where app_can_view_pot returns TRUE and the update is refused either way. Kept because that
+# redundancy rests on three artifacts in three places, and wrapping this EXISTS in a SECURITY DEFINER
+# helper would silently remove the first of them. No test can reach it.
+#
 # The affected seat, as one expression rather than a set of two seats — which is what makes the answer
 # always be somebody who did NOT record the row, including a third party with write access recording a
 # change between two other members. The giver, unless the giver recorded it, in which case the receiver.

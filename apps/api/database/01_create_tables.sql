@@ -2120,6 +2120,17 @@ CREATE POLICY pot_ownership_events_scope_delete ON pot_ownership_events FOR DELE
 -- one is absent, so the row has to qualify both before and after either way. Spelling it out twice
 -- would be twenty lines that can never disagree with the twenty above them — and unreachable besides,
 -- since the column grant below leaves nothing the predicate reads writable.
+-- ▸ `caller.is_active` is REDUNDANT today and kept deliberately, which is worth stating so nobody reads
+-- it as the load-bearing check. What actually enforces it is one layer down: this EXISTS runs as the
+-- invoking role rather than in a SECURITY DEFINER body, so group_members' own policy applies inside it
+-- — and that policy is app_is_group_member(), which requires an ACTIVE seat — while the UNIQUE index on
+-- (group_id, user_id) means the caller has at most one seat per group. So a `caller` row that is both
+-- visible and theirs IS that active seat.
+-- Proven rather than assumed: on a row naming a user's INACTIVE seat in ANOTHER group (nothing ties an
+-- event's member_id to the pot's group), app_can_view_pot returns TRUE and the update is still refused,
+-- with the predicate evaluating false with or without this clause. It is kept because that redundancy
+-- rests on three artifacts in three places, and wrapping this EXISTS in a SECURITY DEFINER helper — as
+-- every other shared predicate here is — would silently remove the first of them. No test can reach it.
 CREATE POLICY pot_ownership_events_confirm_update ON pot_ownership_events FOR UPDATE
   USING (
     pot_ownership_events.type = 'reagreement'
