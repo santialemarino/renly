@@ -113,7 +113,8 @@ def _confirming_member_id(event: PotOwnershipEvent, members_by_id: dict[int, Gro
 # that moves value between two people without money changing hands — a contribution or a withdrawal
 # moves the mover's own money, and an opening is the division everyone agreed to. Only the two seats it
 # NAMES, never any other member. And only DELETE: the counterparty gains no ability to record anything,
-# which the row-level policy enforces separately by keeping its WITH CHECK on write access.
+# which the row-level policies enforce separately — the INSERT policy keeps its WITH CHECK on write
+# access, and the UPDATE policy answers a different question entirely (who may CONFIRM).
 #
 # CONFIRMATION closes it again, and closes it for EVERYBODY including a pot writer — which is what makes
 # confirming the trust anchor rather than a label. The re-agreement counted from the moment it was
@@ -780,6 +781,15 @@ async def record_reagreement(
     return _build_response(event, {giver.id: giver, receiver.id: receiver}, viewer_member_id=actor.id, may_write=True)
 
 
+# The two seats an event names, as display names, for an audit payload. Three callers read the same
+# pair and each had written its own conditional — one of them in a different style — which is three
+# places for "the seat is gone" to be handled differently.
+def _seat_names(event: PotOwnershipEvent, members_by_id: dict[int, GroupMember]) -> tuple[str | None, str | None]:
+    subject = members_by_id.get(event.member_id)
+    counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    return (subject.display_name if subject is not None else None, counterparty.display_name if counterparty is not None else None)
+
+
 # Resolves the re-agreement a confirm or an un-confirm names, together with the caller's seat and
 # whether the caller is the seat whose agreement it waits for.
 #
@@ -856,6 +866,7 @@ async def confirm_event(session: AsyncSession, pot_id: int, event_id: int, user:
         raise PotReagreementConfirmedError()
     event.confirmed_at = utcnow()
     await pot_ownership_repository.save(session, event)
+    member_name, counterparty_name = _seat_names(event, members_by_id)
     await _audit(
         session,
         pot,
@@ -863,8 +874,8 @@ async def confirm_event(session: AsyncSession, pot_id: int, event_id: int, user:
         AuditAction.confirmed,
         event_id=event.id,
         variant=event.type,
-        member=members_by_id[event.member_id].display_name if event.member_id in members_by_id else None,
-        counterparty=members_by_id[event.counterparty_member_id].display_name if event.counterparty_member_id in members_by_id else None,
+        member=member_name,
+        counterparty=counterparty_name,
     )
     await session.commit()
     await session.refresh(event)
@@ -884,6 +895,7 @@ async def unconfirm_event(session: AsyncSession, pot_id: int, event_id: int, use
         raise NotFoundError("Confirmation not found")
     event.confirmed_at = None
     await pot_ownership_repository.save(session, event)
+    member_name, counterparty_name = _seat_names(event, members_by_id)
     await _audit(
         session,
         pot,
@@ -891,8 +903,8 @@ async def unconfirm_event(session: AsyncSession, pot_id: int, event_id: int, use
         AuditAction.unconfirmed,
         event_id=event.id,
         variant=event.type,
-        member=members_by_id[event.member_id].display_name if event.member_id in members_by_id else None,
-        counterparty=members_by_id[event.counterparty_member_id].display_name if event.counterparty_member_id in members_by_id else None,
+        member=member_name,
+        counterparty=counterparty_name,
     )
     await session.commit()
     await session.refresh(event)
@@ -934,8 +946,7 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
     # neither depends on an object whose row no longer exists.
     entry_id, entry_type = event.id, event.type
     members_by_id = {member.id: member for member in await group_repository.list_members(session, pot.group_id)}
-    subject = members_by_id.get(event.member_id)
-    counterparty = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    subject_name, counterparty_name = _seat_names(event, members_by_id)
     if entry_type == OwnershipEventType.opening:
         deleted = await pot_ownership_repository.delete_openings(session, pot.id)
     else:
@@ -948,8 +959,8 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
         AuditAction.deleted,
         event_id=entry_id,
         variant=entry_type,
-        member=subject.display_name if subject is not None else None,
-        counterparty=counterparty.display_name if counterparty is not None else None,
+        member=subject_name,
+        counterparty=counterparty_name,
     )
     recipients = await _pot_audience(session, pot, user)
     group = await group_repository.get_by_id(session, pot.group_id)

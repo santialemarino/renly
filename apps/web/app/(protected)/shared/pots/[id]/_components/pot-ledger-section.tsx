@@ -73,11 +73,15 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
   const isBaseline = pendingDelete?.type === 'opening';
 
   /*
-   * One handler for the two one-click acts. Each returns its refusal as data rather than throwing, so
+   * One handler for all three acts on a row. Each returns its refusal as data rather than throwing, so
    * an entry somebody deleted or confirmed while this page sat open explains itself instead of failing
    * silently — the state on screen is a snapshot, and these are the acts most likely to race.
    */
-  async function run(action: () => Promise<SharedMutationResult>, successMessage: string) {
+  async function run(
+    action: () => Promise<SharedMutationResult>,
+    successMessage: string,
+    errorMessage: string = t('pots.ledger.actionError'),
+  ) {
     setPending(true);
     try {
       const result = await action();
@@ -88,31 +92,23 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
       toast.success(successMessage);
       router.refresh();
     } catch {
-      toast.error(t('pots.ledger.actionError'));
+      toast.error(errorMessage);
     } finally {
       setPending(false);
     }
   }
 
+  // The delete runs through the same handler, which is what keeps its refusal, its loading state and
+  // its refresh identical to the two above. It closes the dialog whatever happened — `run` never
+  // throws, so this is the `finally` the inline version used to need.
   async function onDelete() {
     if (!pendingDelete) return;
-    setPending(true);
-    try {
-      const result = await deletePotOwnershipEvent(pot.id, pendingDelete.id);
-      if (!result.ok) {
-        toast.error(result.conflictDetail);
-        return;
-      }
-      toast.success(
-        t(isBaseline ? 'pots.ledger.deleteBaselineSuccess' : 'pots.ledger.deleteSuccess'),
-      );
-      router.refresh();
-    } catch {
-      toast.error(t('pots.ledger.deleteError'));
-    } finally {
-      setPending(false);
-      setDeleteOpen(false);
-    }
+    await run(
+      () => deletePotOwnershipEvent(pot.id, pendingDelete.id),
+      t(isBaseline ? 'pots.ledger.deleteBaselineSuccess' : 'pots.ledger.deleteSuccess'),
+      t('pots.ledger.deleteError'),
+    );
+    setDeleteOpen(false);
   }
 
   return (
