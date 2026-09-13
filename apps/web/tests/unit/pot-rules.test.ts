@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buyOutLeavesOneHolder,
   canContributeHolding,
-  canDeleteOwnershipEvent,
   canDeletePot,
   canMoveHoldingsIn,
   canMoveHoldingsOut,
@@ -99,6 +98,13 @@ function event(over: Partial<PotOwnershipEvent> = {}): PotOwnershipEvent {
     unitPrice: '1.000000',
     fromAccountId: null,
     toAccountId: null,
+    // The four fields the API resolves rather than the rules below deriving: an unconfirmed entry,
+    // deletable, and not the reader's to agree to. No predicate here reads them — they are on the
+    // fixture so it type-checks as a real response.
+    confirmedAt: null,
+    canConfirm: false,
+    canUnconfirm: false,
+    canDelete: true,
     notes: null,
     createdAt: '2026-08-26T00:00:00Z',
     ...over,
@@ -197,44 +203,6 @@ describe('write predicates', () => {
     expect(canMoveHoldingsIn(pot(), [event()])).toBe(false);
     // On the ledger, not the units: a fully bought-out pot must still refuse it.
     expect(canMoveHoldingsIn(pot({ totalUnits: '0.000000', shares: [] }), [event()])).toBe(false);
-  });
-
-  it('lets a writer delete any ledger entry', () => {
-    const writer = pot();
-    for (const type of ['opening', 'contribution', 'withdrawal', 'reagreement'] as const) {
-      expect(canDeleteOwnershipEvent(writer, event({ type }), 999)).toBe(true);
-    }
-  });
-
-  it('lets either seat a re-agreement NAMES delete it without write access', () => {
-    /*
-     * The remedy, and the reason it has to exist: write access is not granted by ownership. A pot's
-     * creator is the only member who gets it and recording the opening grants nobody else, so the
-     * default state of a divided pot is that its creator can move units away from a co-owner who is
-     * notified by name and can do nothing about it.
-     */
-    const readOnly = pot({ canWrite: false });
-    const swap = event({ type: 'reagreement', memberId: 100, counterpartyMemberId: 101 });
-    expect(canDeleteOwnershipEvent(readOnly, swap, 100)).toBe(true);
-    expect(canDeleteOwnershipEvent(readOnly, swap, 101)).toBe(true);
-  });
-
-  it('reaches no other event type, and nobody the re-agreement does not name', () => {
-    /*
-     * The two narrowings, each broken on its own. A contribution and a withdrawal move the mover's own
-     * money and an opening is the division everybody agreed to, so none of them has a counterparty with
-     * a claim to undo it — and seeing the pot is not being party to the deal.
-     */
-    const readOnly = pot({ canWrite: false });
-    for (const type of ['opening', 'contribution', 'withdrawal'] as const) {
-      // Named on BOTH member columns, so the type check is the only thing refusing it.
-      const other = event({ type, memberId: 100, counterpartyMemberId: 100 });
-      expect(canDeleteOwnershipEvent(readOnly, other, 100)).toBe(false);
-    }
-    const swap = event({ type: 'reagreement', memberId: 100, counterpartyMemberId: 101 });
-    expect(canDeleteOwnershipEvent(readOnly, swap, 102)).toBe(false);
-    // A viewer with no seat at all — the group read failed, or they hold none.
-    expect(canDeleteOwnershipEvent(readOnly, swap, null)).toBe(false);
   });
 
   it('lets holdings out only before anything has been divided', () => {

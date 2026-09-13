@@ -41,7 +41,7 @@ export const ACTIVITY_ACTIONS = {
   group_invite: ['created', 'revoked'],
   group_member: ['added', 'joined', 'removed', 'updated'],
   group_money_settings: ['updated'],
-  ownership_event: ['created', 'deleted'],
+  ownership_event: ['created', 'confirmed', 'deleted', 'unconfirmed'],
   pot: [
     'created',
     'updated',
@@ -64,9 +64,10 @@ export const ACTIVITY_ACTIONS = {
  * the row resolves `…<entity>.<action>.<variant>`, so a variant the API sends that the web has no key
  * for would be a blank row.
  *
- * `settlement.confirmed` and `settlement.unconfirmed` are absent on purpose even though their payloads
- * carry a variant: only a payment can be confirmed, so there is one sentence and the payload's value is
- * simply unread — the same way a notification payload carries values a given template does not use.
+ * `settlement.confirmed`/`settlement.unconfirmed` and `ownership_event.confirmed`/`.unconfirmed` are
+ * absent on purpose even though their payloads carry a variant: only a payment can be confirmed and
+ * only a re-agreement can, so each has one sentence and the payload's value is simply unread — the same
+ * way a notification payload carries values a given template does not use.
  *
  * Every pair listed here ALSO carries a `base` sentence in the copy, and that is a requirement rather
  * than a convention: entries are append-only and permanent, so one written before a variant existed

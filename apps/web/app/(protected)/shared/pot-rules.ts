@@ -157,27 +157,21 @@ export function canMoveHoldingsOut(pot: Pot, events: PotOwnershipEvent[]): boole
 }
 
 /*
- * Who may delete one ledger entry.
+ * Deleting, confirming and un-confirming a ledger entry are NOT predicates here — the response carries
+ * `canDelete`, `canConfirm` and `canUnconfirm` already resolved, and the row renders them as given.
  *
- * Write access, as everywhere else on this page — EXCEPT that a re-agreement may always be deleted by
- * either seat it NAMES, with or without it. That exception is not a convenience: write access is not
- * granted by ownership (a pot's creator is the only member who gets it, and recording the opening
- * grants nobody else), so the out-of-the-box state of a divided pot is that its creator can move units
- * away from a co-owner, the co-owner is notified by name, and can do nothing about it.
+ * They are the exception to this module because one of them cannot be mirrored at all: the confirm rule
+ * asks who RECORDED the entry, and the response deliberately does not expose that. Splitting the three
+ * would have put the confirmation clause of the delete rule on the server and the rest of it here, so
+ * the whole trio lives where the gate does. Everything they encode:
  *
- * Narrow in three ways, all mirroring the API and its row-level policy: only a re-agreement, because
- * every other event type moves the mover's own money or is the division everybody agreed to; only the
- * two seats it names; and only DELETE — no counterparty gains the ability to record anything.
+ *   * write access deletes anything, and either named seat of an UNCONFIRMED re-agreement may too —
+ *     the remedy that exists because write access is not granted by ownership (a pot's creator is the
+ *     only member who gets it, and recording the opening grants nobody else);
+ *   * confirming is the AFFECTED seat's alone: the one losing units, unless they recorded the change,
+ *     in which case the one receiving them;
+ *   * a confirmed entry is undeletable by everybody, and un-confirming is the only way back.
  */
-export function canDeleteOwnershipEvent(
-  pot: Pot,
-  event: PotOwnershipEvent,
-  myMemberId: number | null,
-): boolean {
-  if (pot.canWrite) return true;
-  if (event.type !== 'reagreement' || myMemberId === null) return false;
-  return myMemberId === event.memberId || myMemberId === event.counterpartyMemberId;
-}
 
 // Deleting a pot is group administration, not money movement, and the API refuses it while anything is
 // still in there (409 pot_has_holdings) — archived holdings included, since they still point at it.

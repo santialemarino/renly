@@ -47,7 +47,7 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
  * locales.
  */
 export const NOTIFICATION_VARIANTS = {
-  ownership_changed: ['opening', 'reagreement', 'deleted'],
+  ownership_changed: ['opening', 'reagreement', 'deleted', 'confirmed', 'unconfirmed'],
   pot_movement: ['contribution', 'withdrawal'],
   settle_marked_paid: ['payee', 'payer'],
 } as const satisfies Partial<Record<NotificationEvent, readonly string[]>>;

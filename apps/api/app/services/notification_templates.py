@@ -59,6 +59,26 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             ),
             "push": "{actor} recorded a change of split in {pot}",
         },
+        "ownership_changed.confirmed": {
+            "subject": "{actor} agreed to the change of split in {pot}",
+            "body": (
+                '{actor} agreed to the change of split from {from_member} to {to_member} in "{pot}", '
+                'in the group "{group}".\n\n'
+                "The entry is now settled and can no longer be removed unless they take that back.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} agreed to the change of split in {pot}",
+        },
+        "ownership_changed.unconfirmed": {
+            "subject": "{actor} withdrew their agreement to the change of split in {pot}",
+            "body": (
+                '{actor} withdrew their agreement to the change of split from {from_member} to {to_member} in "{pot}", '
+                'in the group "{group}".\n\n'
+                "Nobody's share has changed; the entry can be removed again.\n\n"
+                "See the pot and its ownership here:\n{link}"
+            ),
+            "push": "{actor} withdrew their agreement in {pot}",
+        },
         "ownership_changed.deleted": {
             "subject": "{actor} removed an entry from {pot}'s ownership history",
             "body": (
@@ -162,6 +182,26 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
                 "Podés ver el fondo y su reparto acá:\n{link}"
             ),
             "push": "{actor} registró un cambio de reparto en {pot}",
+        },
+        "ownership_changed.confirmed": {
+            "subject": "{actor} aceptó el cambio de reparto en {pot}",
+            "body": (
+                '{actor} aceptó el cambio de reparto de {from_member} a {to_member} en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La entrada queda acordada y ya no se puede eliminar, salvo que retire esa aceptación.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} aceptó el cambio de reparto en {pot}",
+        },
+        "ownership_changed.unconfirmed": {
+            "subject": "{actor} retiró su aceptación del cambio de reparto en {pot}",
+            "body": (
+                '{actor} retiró su aceptación del cambio de reparto de {from_member} a {to_member} en "{pot}", '
+                'en el grupo "{group}".\n\n'
+                "La parte de cada uno no cambió; la entrada se puede volver a eliminar.\n\n"
+                "Podés ver el fondo y su reparto acá:\n{link}"
+            ),
+            "push": "{actor} retiró su aceptación en {pot}",
         },
         "ownership_changed.deleted": {
             "subject": "{actor} eliminó una entrada del historial de titularidad de {pot}",

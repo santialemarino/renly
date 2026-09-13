@@ -283,8 +283,39 @@ export async function buyPotShareOut(
   return toResult(res, 'Failed to buy the share out');
 }
 
+/*
+ * Confirms a re-agreement — the affected seat agreeing to the split recorded for them.
+ *
+ * It moves no figure. The entry counted from the moment it was recorded, so what confirming changes is
+ * who may undo it: unconfirmed, either named seat may delete it; confirmed, nobody may until this same
+ * seat takes their word back. The refusals worth surfacing are both races a stale page produces —
+ * somebody deleted the entry (404) or already confirmed it (409 pot_reagreement_confirmed).
+ */
+export async function confirmPotOwnershipEvent(
+  potId: number,
+  eventId: number,
+): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/ownership/${eventId}/confirm`, {
+    method: 'POST',
+  });
+  return toResult(res, 'Failed to confirm the change of split');
+}
+
+// Takes a confirmation back, returning the entry to deletable. The seat that gave it only, and the
+// only way out of the lock — a confirmed entry cannot be deleted by anybody.
+export async function unconfirmPotOwnershipEvent(
+  potId: number,
+  eventId: number,
+): Promise<SharedMutationResult> {
+  const res = await authenticatedFetch(`/pots/${potId}/ownership/${eventId}/confirm`, {
+    method: 'DELETE',
+  });
+  return toResult(res, 'Failed to withdraw the agreement');
+}
+
 // Deletes a ledger entry. Unit balances are derived, so the series simply recomputes without it —
 // there is no stored total to correct, which is the same property that makes back-dating safe.
+// Refused with 409 for a CONFIRMED re-agreement, which is locked until its affected seat un-confirms.
 export async function deletePotOwnershipEvent(
   potId: number,
   eventId: number,

@@ -106,6 +106,10 @@ interface PotOwnershipEventRaw {
   unit_price: string;
   from_account_id: number | null;
   to_account_id: number | null;
+  confirmed_at: string | null;
+  can_confirm: boolean;
+  can_unconfirm: boolean;
+  can_delete: boolean;
   notes: string | null;
   created_at: string;
 }
@@ -211,6 +215,19 @@ export interface PotOwnershipEvent {
   unitPrice: string;
   fromAccountId: number | null;
   toAccountId: number | null;
+  /*
+   * A re-agreement's trust anchor: when its affected seat agreed to the split recorded for them, and
+   * null while nobody has. It changes no figure — the entry counted from the moment it was recorded —
+   * so what it marks is that the entry is settled and can no longer be removed.
+   *
+   * The three permission flags beside it are resolved SERVER-SIDE and read as given, the way a
+   * settlement's are. `canConfirm` could not be derived here at all: the rule reads who recorded the
+   * row, which this response deliberately does not carry.
+   */
+  confirmedAt: string | null;
+  canConfirm: boolean;
+  canUnconfirm: boolean;
+  canDelete: boolean;
   notes: string | null;
   createdAt: string;
 }
@@ -300,6 +317,10 @@ function mapOwnershipEvent(raw: PotOwnershipEventRaw): PotOwnershipEvent {
     unitPrice: raw.unit_price,
     fromAccountId: raw.from_account_id,
     toAccountId: raw.to_account_id,
+    confirmedAt: raw.confirmed_at,
+    canConfirm: raw.can_confirm,
+    canUnconfirm: raw.can_unconfirm,
+    canDelete: raw.can_delete,
     notes: raw.notes,
     createdAt: raw.created_at,
   };

@@ -283,9 +283,37 @@ async def record_reagreement(
     )
 
 
+# Confirms a re-agreement: the affected seat agreeing to the split recorded for them, which LOCKS the
+# entry against deletion by anybody until they take it back. Refused with 403 for any other seat
+# (pot_reagreement_not_yours), 409 for an event type that carries no confirmation
+# (pot_event_not_confirmable) or one already confirmed (pot_reagreement_confirmed).
+# It changes no arithmetic — the entry counted from the moment it was recorded.
+@router.post("/{pot_id}/ownership/{event_id}/confirm", response_model=PotOwnershipEventResponse)
+async def confirm_ownership_event(
+    pot_id: int,
+    event_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> PotOwnershipEventResponse:
+    return await pot_ownership_service.confirm_event(session, pot_id, event_id, current_user)
+
+
+# Takes a confirmation back, returning the re-agreement to deletable. The seat that gave it only, and
+# the only way out of the lock — a confirmed entry cannot be deleted by anyone.
+@router.delete("/{pot_id}/ownership/{event_id}/confirm", response_model=PotOwnershipEventResponse)
+async def unconfirm_ownership_event(
+    pot_id: int,
+    event_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+) -> PotOwnershipEventResponse:
+    return await pot_ownership_service.unconfirm_event(session, pot_id, event_id, current_user)
+
+
 # Deletes an ownership event. Balances are derived, so the series simply recomputes without it.
 # Deleting an OPENING takes the whole baseline with it — it is one act written as one row per owner,
-# and half a division is a share nobody agreed to.
+# and half a division is a share nobody agreed to. A CONFIRMED re-agreement is refused with 409 until
+# the seat that agreed to it un-confirms.
 @router.delete("/{pot_id}/ownership/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ownership_event(pot_id: int, event_id: int, current_user: CurrentUser, session: SessionDep) -> None:
     await pot_ownership_service.delete_event(session, pot_id, event_id, current_user)

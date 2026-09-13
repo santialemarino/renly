@@ -78,6 +78,13 @@ class PotMemberPermission(SQLModel, table=True):
 # from_account_id / to_account_id make the event a real MOVEMENT rather than a note about one: the
 # per-account balance union reads both legs, so a contribution genuinely leaves the mover's account
 # and arrives in one the pot holds. This is the transfer mechanic at a different scope.
+#
+# confirmed_at is a RE-AGREEMENT's trust anchor and a CHECK constraint keeps it to that type alone. The
+# row counts from the moment it is recorded whatever the column says — an unapplied re-agreement would
+# leave the pot showing percentages everyone agrees are wrong — so this is a LOCK rather than a gate:
+# unconfirmed, either named seat may delete it (the counterparty's remedy); confirmed, nobody may until
+# the seat that confirmed takes their word back. Exactly GroupSettlement.confirmed_at's shape, and the
+# only column on this table anything ever UPDATEs.
 class PotOwnershipEvent(SQLModel, table=True):
     __tablename__ = "pot_ownership_events"
 
@@ -100,6 +107,9 @@ class PotOwnershipEvent(SQLModel, table=True):
         default=None, foreign_key="accounts.id", description="Account debited: the mover's private one on a contribution."
     )
     to_account_id: int | None = Field(default=None, foreign_key="accounts.id", description="Account credited: one the pot holds on a contribution.")
+    confirmed_at: datetime | None = Field(
+        default=None, description="Reagreement only: when the affected seat agreed to it, which locks the row against deletion."
+    )
     notes: str | None = Field(default=None, description="Optional notes.")
     created_by: int | None = Field(default=None, foreign_key="users.id", description="Who recorded it; NULL once that account is deleted.")
     created_at: datetime = Field(default_factory=utcnow)

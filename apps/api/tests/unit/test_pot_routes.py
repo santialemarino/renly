@@ -144,6 +144,9 @@ class TestSessionWiring:
             "member_name": "Santi",
             "units": "1",
             "unit_price": "1",
+            "can_confirm": False,
+            "can_unconfirm": False,
+            "can_delete": True,
             "created_at": "2026-08-25T00:00:00",
         }
         monkeypatch.setattr(pot_ownership_service, "record_opening", AsyncMock(return_value=[event]))
@@ -153,6 +156,67 @@ class TestSessionWiring:
         response = _client(sessions).post(path, json=body)
         assert response.status_code == 201
         assert sessions["kind"] == "request"
+
+
+# The confirmation's two routes. Its own class rather than a line on the ledger-write enumeration above,
+# because it differs from every write there in three ways at once: it answers 200 rather than 201, it is
+# the ledger's only UPDATE, and the two directions share a path and differ only by METHOD — which is
+# exactly the pairing a copy-paste gets wrong, by wiring both verbs to the same service function.
+class TestTheConfirmationRoutes:
+    _EVENT = {
+        "id": 1,
+        "pot_id": 5,
+        "type": "reagreement",
+        "date": "2026-06-01",
+        "member_id": 100,
+        "member_name": "Santi",
+        "counterparty_member_id": 101,
+        "counterparty_name": "Ana",
+        "units": "-2",
+        "unit_price": "1.100000",
+        "confirmed_at": "2026-09-08T00:00:00",
+        "can_confirm": False,
+        "can_unconfirm": True,
+        "can_delete": False,
+        "created_at": "2026-08-28T00:00:00",
+    }
+
+    @pytest.mark.asyncio
+    async def test_each_verb_reaches_its_own_service_function(self, monkeypatch):
+        confirm = AsyncMock(return_value=self._EVENT)
+        unconfirm = AsyncMock(return_value={**self._EVENT, "confirmed_at": None, "can_confirm": True, "can_unconfirm": False})
+        monkeypatch.setattr(pot_ownership_service, "confirm_event", confirm)
+        monkeypatch.setattr(pot_ownership_service, "unconfirm_event", unconfirm)
+
+        assert _client({}).post("/pots/5/ownership/7/confirm").status_code == 200
+        confirm.assert_awaited_once()
+        unconfirm.assert_not_awaited()
+        # And the pot and event ids arrive from the path, in that order — swapping them would confirm
+        # an entry in a pot the caller named as an event.
+        assert confirm.await_args.args[1:3] == (5, 7)
+
+        assert _client({}).delete("/pots/5/ownership/7/confirm").status_code == 200
+        unconfirm.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_the_confirmation_stays_on_the_request_session(self, monkeypatch):
+        # The confirm's rule is enforced by an RLS policy, which only applies on the request session —
+        # the privileged one would bypass it and let a pot's writer confirm their own act.
+        for verb in ("post", "delete"):
+            sessions: dict = {}
+            monkeypatch.setattr(pot_ownership_service, "confirm_event", AsyncMock(return_value=self._EVENT))
+            monkeypatch.setattr(pot_ownership_service, "unconfirm_event", AsyncMock(return_value=self._EVENT))
+            assert getattr(_client(sessions), verb)("/pots/5/ownership/7/confirm").status_code == 200
+            assert sessions["kind"] == "request", verb
+
+    @pytest.mark.asyncio
+    async def test_the_response_carries_the_timestamp_and_the_three_permission_flags(self, monkeypatch):
+        # The surface renders these as given, so a field dropped from the response model is a badge that
+        # never shows and an action that never appears.
+        monkeypatch.setattr(pot_ownership_service, "confirm_event", AsyncMock(return_value=self._EVENT))
+        body = _client({}).post("/pots/5/ownership/7/confirm").json()
+        assert body["confirmed_at"] == "2026-09-08T00:00:00"
+        assert (body["can_confirm"], body["can_unconfirm"], body["can_delete"]) == (False, True, False)
 
 
 class TestRequestContract:
@@ -194,6 +258,9 @@ class TestOneHoldingPerContribution:
         "member_name": "Santi",
         "units": "50",
         "unit_price": "1.100000",
+        "can_confirm": False,
+        "can_unconfirm": False,
+        "can_delete": True,
         "created_at": "2026-09-07T00:00:00",
     }
 
@@ -240,6 +307,9 @@ class TestWholeShare:
         "member_name": "Santi",
         "units": "-2",
         "unit_price": "33.333333",
+        "can_confirm": False,
+        "can_unconfirm": False,
+        "can_delete": True,
         "created_at": "2026-08-28T00:00:00",
     }
 
