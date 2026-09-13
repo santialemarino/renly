@@ -45,6 +45,16 @@ def _is_adjustment(model):
     return or_(model.account_reconciliation_id.isnot(None), model.reconciliation_id.isnot(None))
 
 
+# The same fact for a SHARED flow row, which is what a pot's account reconciliation posts instead of a
+# private entry. One column rather than two: a shared row can only ever belong to an ACCOUNT
+# reconciliation — a card is never co-owned (§11), so there is no `reconciliation_id` here to check.
+#
+# Kept separate from `_is_adjustment` rather than generalised, because the two answer over different
+# column SETS and a single helper would have to accept a model that may or may not have `reconciliation_id`.
+def _is_shared_adjustment(model):
+    return model.account_reconciliation_id.isnot(None)
+
+
 # One entry branch — income or expense, which are the same query but for the model, the sign, and
 # which kind a non-adjustment row reports. `negate` is where "an expense takes money out" is encoded,
 # so the ledger reads as one signed column instead of asking every reader to know which kinds
@@ -172,12 +182,19 @@ def _transfer_branch(account_id: int, user_id: int, *, outgoing: bool, opening_d
 # No user filter: the row belongs to the group, the membership policy scopes it, and the account leg's
 # own read branch keeps it visible to whoever owns the account. A shared account's ledger must not
 # depend on who is asking, for the same reason its balance must not.
-def _shared_expense_branch(account_id: int, *, opening_date: date_type):
-    return (
+#
+# `kind` is decided per ROW, exactly as the private entry branch decides it: a shared account's
+# reconciliation posts its adjustment HERE rather than in expense_entries, so a row carrying
+# `account_reconciliation_id` is a true-up and must read as one. Without that the `adjustment` filter
+# would answer nothing on a pot's account while its true-ups sat under `expense`.
+def _shared_expense_branch(account_id: int, *, opening_date: date_type, adjustments: bool | None = None):
+    stmt = (
         select(
             SharedExpense.id.label("source_id"),
             literal(MovementSource.shared_expense.value).label("source"),
-            literal(MovementKind.expense.value).label("kind"),
+            case((_is_shared_adjustment(SharedExpense), literal(MovementKind.adjustment.value)), else_=literal(MovementKind.expense.value)).label(
+                "kind"
+            ),
             SharedExpense.date.label("date"),
             (-SharedExpense.amount).label("amount"),
             cast(SharedExpense.category, String).label(_CATEGORY),
@@ -192,6 +209,9 @@ def _shared_expense_branch(account_id: int, *, opening_date: date_type):
             SharedExpense.date >= opening_date,
         )
     )
+    if adjustments is not None:
+        stmt = stmt.where(_is_shared_adjustment(SharedExpense) if adjustments else ~_is_shared_adjustment(SharedExpense))
+    return stmt
 
 
 # A group's shared income paid into this account: money in, and the WHOLE amount rather than the
@@ -199,9 +219,11 @@ def _shared_expense_branch(account_id: int, *, opening_date: date_type):
 # business and never the account's — the mirror of the shared-expense branch above, which reads the
 # parent's amount for the same reason.
 #
-# `kind` is 'income' because from the ACCOUNT's point of view that is exactly what it is: money in,
-# earned. It is deliberately NOT reported as an adjustment — a reconciliation's true-up is the only
-# thing that is, and this is real money.
+# `kind` is 'income' for ordinary shared income, because from the ACCOUNT's point of view that is
+# exactly what it is: money in, earned. ▸ It used to say a shared row is NEVER an adjustment, on the
+# grounds that a reconciliation's true-up is the only thing that is. That stopped being true when a
+# POT's account became reconcilable: its true-up IS a shared row, so the kind is decided per row here
+# too — see the expense branch above.
 #
 # The group is joined for its name so the row can say what it was. INNER rather than outer because a
 # shared-income row's group_id is NOT NULL and cascades, so the row cannot outlive its group.
@@ -209,12 +231,14 @@ def _shared_expense_branch(account_id: int, *, opening_date: date_type):
 # No user filter: the row belongs to the group, the membership policy scopes it, and the account leg's
 # own read branch keeps it visible to whoever owns the account. A shared account's ledger must not
 # depend on who is asking, for the same reason its balance must not.
-def _shared_income_branch(account_id: int, *, opening_date: date_type):
-    return (
+def _shared_income_branch(account_id: int, *, opening_date: date_type, adjustments: bool | None = None):
+    stmt = (
         select(
             SharedIncome.id.label("source_id"),
             literal(MovementSource.shared_income.value).label("source"),
-            literal(MovementKind.income.value).label("kind"),
+            case((_is_shared_adjustment(SharedIncome), literal(MovementKind.adjustment.value)), else_=literal(MovementKind.income.value)).label(
+                "kind"
+            ),
             SharedIncome.date.label("date"),
             SharedIncome.amount.label("amount"),
             cast(SharedIncome.category, String).label(_CATEGORY),
@@ -229,6 +253,9 @@ def _shared_income_branch(account_id: int, *, opening_date: date_type):
             SharedIncome.date >= opening_date,
         )
     )
+    if adjustments is not None:
+        stmt = stmt.where(_is_shared_adjustment(SharedIncome) if adjustments else ~_is_shared_adjustment(SharedIncome))
+    return stmt
 
 
 # One leg of a group settlement. It can never name the same account twice (a DB CHECK enforces it), so
@@ -338,12 +365,26 @@ def _branches(account_id: int, user_id: int, *, kind: MovementKind | None, openi
     income = (IncomeEntry, MovementSource.income, MovementKind.income, False)
     expense = (ExpenseEntry, MovementSource.expense, MovementKind.expense, True)
 
+    # Each of these three filters spans FOUR tables, not two: a reconciliation's adjustment is a private
+    # entry on a private account and a shared flow row on a pot's, so `adjustments` has to be answered on
+    # both sides or the same filter means different things depending on whose account it is.
     if kind == MovementKind.income:
-        return [entry(income, adjustments=False), _shared_income_branch(account_id, opening_date=opening_date)]
+        return [
+            entry(income, adjustments=False),
+            _shared_income_branch(account_id, opening_date=opening_date, adjustments=False),
+        ]
     if kind == MovementKind.expense:
-        return [entry(expense, adjustments=False), _shared_expense_branch(account_id, opening_date=opening_date)]
+        return [
+            entry(expense, adjustments=False),
+            _shared_expense_branch(account_id, opening_date=opening_date, adjustments=False),
+        ]
     if kind == MovementKind.adjustment:
-        return [entry(income, adjustments=True), entry(expense, adjustments=True)]
+        return [
+            entry(income, adjustments=True),
+            entry(expense, adjustments=True),
+            _shared_income_branch(account_id, opening_date=opening_date, adjustments=True),
+            _shared_expense_branch(account_id, opening_date=opening_date, adjustments=True),
+        ]
     if kind == MovementKind.settlement:
         return [_settlement_branch(account_id, user_id, opening_date=opening_date)]
     if kind == MovementKind.group_settlement:
