@@ -59,6 +59,31 @@ the one backend-localized exception — no frontend renderer.)
 - **Success responses** don't carry localized prose either — the frontend owns success copy per
   action. Give a success ack a machine field only when a caller must branch on it (e.g. a token type).
 
+### A rule the database has to hold too
+
+Where a service rule also exists as a row-level policy, the two are one rule in two languages and the
+database is the one that cannot be bypassed. Three facts decide how to write the SQL half, each
+non-obvious and each silent when wrong:
+
+- **Split a policy per COMMAND when the verbs differ.** `FOR ALL` grants SELECT, INSERT, UPDATE and
+  DELETE on one predicate, which is almost never what a table wants — a ledger that is inserted and
+  deleted but never edited should say so, so a later `UPDATE` is refused by the database rather than by
+  nobody. Note Postgres has no `WITH CHECK` for DELETE, so a `FOR ALL` whose `USING` is the read
+  predicate silently lets a read-only caller delete.
+- **A `FOR UPDATE` policy with no `WITH CHECK` reuses its `USING` expression as the check.** So the row
+  must qualify both before and after either way, and spelling the predicate twice is duplication that
+  can never disagree — write `USING` alone.
+- **RLS filters ROWS and never COLUMNS.** A policy cannot say "you may write this column and no other";
+  only `REVOKE UPDATE ON <table>` plus `GRANT UPDATE (<column>)` can. The difference is visible at
+  runtime: a policy refuses by returning "nothing changed", a grant refuses with a permission error.
+  Grant the narrowest column set that is actually written — a column a trigger maintains needs no grant,
+  because column privileges are checked against the statement's own SET list.
+
+And the discipline that keeps the pair honest: **prove a clause is load-bearing by constructing the row
+that would need it** and watching which layer refuses. A clause that looks subsumed by a helper often is
+not, and a clause that genuinely is may still be worth keeping — but say which, in a comment, so nobody
+reads a redundant guard as the one doing the work.
+
 ### One refusal rule when a picker and a write must agree
 
 Where a surface OFFERS a set of things and a write then refuses some of them, the offer and the refusal
