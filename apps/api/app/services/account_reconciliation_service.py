@@ -191,7 +191,7 @@ class _Scope:
 # UPDATEs accounts); a private account has no pot, so only one lock is ever held here.
 async def _lock_parent(session: AsyncSession, account: Account, user: User) -> _Scope | None:
     if account.pot_id is None:
-        await account_repository.lock(session, account.id)
+        await account_repository.lock_private(session, account.id)
         return None
     # The visibility gate, and the one this act is meant to carry: whoever may SEE the pot may reconcile
     # the account it holds. get_account_in_scope has already let the account through on RLS's answer;

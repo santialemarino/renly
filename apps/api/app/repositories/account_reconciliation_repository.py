@@ -38,7 +38,7 @@ async def get_by_id(session: AsyncSession, reconciliation_id: int, account_id: i
 # user_id and answer "never reconciled" to everybody — on the list page AND inside the ordering guard
 # that refuses an out-of-order reconciliation, which is the half that would let a member post one
 # underneath an existing one and skew it.
-async def get_latest_dates_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int | None) -> dict[int, date_type]:
+async def get_latest_dates_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, date_type]:
     if not account_ids:
         return {}
     result = await session.execute(

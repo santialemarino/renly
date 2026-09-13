@@ -137,7 +137,7 @@ def _wire(
 ) -> dict:
     captured: dict = {}
     monkeypatch.setattr(svc.account_service, "get_account_in_scope", AsyncMock(return_value=account))
-    monkeypatch.setattr(svc.account_repository, "lock", AsyncMock())
+    monkeypatch.setattr(svc.account_repository, "lock_private", AsyncMock())
     monkeypatch.setattr(svc.settings_service, "get_user_today", AsyncMock(return_value=today))
     _stub_sums(
         monkeypatch,
@@ -763,7 +763,7 @@ class TestSharedAccountLocking:
 
         svc.pot_repository.lock.assert_awaited_once()
         assert svc.pot_repository.lock.await_args.args[1] == 4
-        svc.account_repository.lock.assert_not_awaited()
+        svc.account_repository.lock_private.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_a_private_account_locks_the_account_row(self, monkeypatch):
@@ -773,8 +773,8 @@ class TestSharedAccountLocking:
 
         await svc.create_reconciliation(AsyncMock(), 7, USER, as_of_date=TODAY, statement_balance=Decimal("800"))
 
-        svc.account_repository.lock.assert_awaited_once()
-        assert svc.account_repository.lock.await_args.args[1] == 7
+        svc.account_repository.lock_private.assert_awaited_once()
+        assert svc.account_repository.lock_private.await_args.args[1] == 7
         svc.pot_repository.lock.assert_not_awaited()
 
     @pytest.mark.asyncio

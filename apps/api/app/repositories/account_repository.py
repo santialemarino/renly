@@ -110,13 +110,14 @@ async def exists_by_user(session: AsyncSession, user_id: int) -> bool:
 # It reads `id` alone rather than the row, so the lock is not confused for a fetch: the caller already
 # holds the account, and a second copy here would be the stale one after the lock waited.
 #
-# ▸ PRIVATE ONLY, and that is the whole reason a pot's account is serialised on its POT instead. A
-# locking read is governed by the UPDATE policy rather than the SELECT one, and accounts_scope_write
-# requires pot WRITE access — which reconciling deliberately does not — so a read-only co-owner calling
-# this on a shared account would match no row and take NO lock, silently. pots_scope_write's USING
-# admits a read-only seat on purpose, so the pot's lock is takeable by everybody who may reconcile, and
-# it serialises every account the pot holds rather than only one. Pinned in tests/integration.
-async def lock(session: AsyncSession, account_id: int) -> None:
+# ▸ The `_private` suffix is a CONTRACT rather than a description, and a pot's account is serialised on
+# its POT instead. A locking read is governed by the UPDATE policy rather than the SELECT one, and
+# accounts_scope_write requires pot WRITE access — which reconciling deliberately does not — so a
+# read-only co-owner calling this on a shared account would match no row and take NO lock, silently.
+# pots_scope_write's USING admits a read-only seat on purpose, so the pot's lock is takeable by
+# everybody who may reconcile, and it serialises every account the pot holds rather than only one.
+# Pinned in tests/integration, in all four directions.
+async def lock_private(session: AsyncSession, account_id: int) -> None:
     await session.execute(select(Account.id).where(Account.id == account_id).with_for_update())
 
 
@@ -193,7 +194,7 @@ class AccountRepository:
     get_by_ids_across_users = staticmethod(get_by_ids_across_users)
     get_by_ids_any_scope = staticmethod(get_by_ids_any_scope)
     list_by_user = staticmethod(list_by_user)
-    lock = staticmethod(lock)
+    lock_private = staticmethod(lock_private)
     move_to_scope = staticmethod(move_to_scope)
     reassign_pots_to_user = staticmethod(reassign_pots_to_user)
     save = staticmethod(save)
