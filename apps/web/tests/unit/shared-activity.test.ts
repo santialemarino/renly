@@ -66,6 +66,7 @@ const RENDER_PARAMS = {
   group: 'Casa',
   pot: 'Depto',
   member: 'Ana',
+  account: 'Caja compartida',
   counterparty: 'Nico',
   from_member: 'Santi',
   to_member: 'Ana',

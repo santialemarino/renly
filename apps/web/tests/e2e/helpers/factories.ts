@@ -3,6 +3,7 @@ import { expect, type Page } from '@playwright/test';
 // Route literals mirror apps/web/config/routes.ts. Kept local like every spec's — the Playwright
 // loader resolves no build-time path aliases.
 const EXPENSES = '/expenses';
+const ACCOUNTS = '/accounts';
 
 /*
  * Factories for the authenticated specs.
@@ -85,5 +86,93 @@ export async function deleteExpenseByMarker(page: Page, marker: string) {
     await expect(expenseRow(page, marker)).toHaveCount(0);
   } catch (error) {
     console.warn(`e2e cleanup could not remove the expense marked ${marker}:`, error);
+  }
+}
+
+/*
+ * An ACCOUNT's marker goes in its NAME rather than its notes, and that is the one place this family of
+ * factories departs from the expense one above. An account has no free-text field the list page
+ * renders — notes exist but no column shows them — so the marker has to travel in the one string the
+ * row actually displays. It stays a marker in every other sense: unique per run, and every assertion
+ * and cleanup scoped to it.
+ */
+
+// The row on /accounts carrying this marker in its name.
+export function accountRow(page: Page, marker: string) {
+  return page.getByRole('row').filter({ hasText: marker });
+}
+
+/*
+ * Creates an account through the list page's own add dialog, with an OPENING BALANCE, and returns
+ * nothing the caller has to remember — the marker is the handle.
+ *
+ * EVERY field is filled, unlike the quick-add factory beside it, and that difference is a property of
+ * the form rather than a choice: the account dialog pre-fills nothing at all — no type, no currency,
+ * no opening date — so a factory that typed only a name would submit an invalid form, and the failure
+ * presents as a dialog that simply never closes. (Which is exactly how it presented.)
+ *
+ * The opening balance matters more here than it would elsewhere: an account's balance is DERIVED, so
+ * an account opened at zero with no movements cannot show a reconciliation moving anything.
+ */
+export async function createAccount(page: Page, marker: string, openingBalance: string) {
+  await page.goto(ACCOUNTS);
+  await page.getByTestId('entity-list-add').click();
+
+  const name = page.getByTestId('account-form-name');
+  // The same first-open budget the quick-add carries, and for the same reason: on a dev server the
+  // first open of a route's dialog compiles it. Patience rather than tolerance — the assertion is
+  // unchanged, and a production build compiles nothing here.
+  await expect(name).toBeVisible({ timeout: 20_000 });
+
+  await name.fill(marker);
+
+  // The type picker. Its options are localized, so the OPTION is chosen by position rather than by
+  // name — any type reconciles identically, and keying on English copy would break the moment this
+  // harness runs under a Spanish session.
+  await page.getByTestId('account-form-type').click();
+  await page.getByRole('option').first().click();
+
+  // The currency picker's options are ISO CODES, which no locale translates — so this one can key on
+  // the name, and pins the currency rather than accepting whichever happens to be first.
+  await page.getByTestId('account-form-currency').click();
+  await page.getByRole('option', { name: /ARS/ }).first().click();
+
+  // The date picker opens on the current month, so today is always in the rendered grid.
+  await page.getByTestId('account-form-opening-date').click();
+  await page.getByRole('gridcell').filter({ hasText: /^\d+$/ }).first().click();
+
+  await page.getByTestId('account-form-opening-balance').fill(openingBalance);
+  await page.getByTestId('account-form-submit').click();
+  /*
+   * The dialog closing is the save's own acknowledgement — see the quick-add factory — and it gets its
+   * own budget for the same measured reason the OPEN above does. The save is a Server Action, so on a
+   * dev server its FIRST invocation compiles before it runs anything; observed overrunning the 5s
+   * `expect` default on a cold `.next`, in a run whose log shows `/signup` compiling in 21.3s and
+   * `/shared` in 20.1s. Patience rather than tolerance: the assertion is unchanged, and a production
+   * build compiles nothing here.
+   */
+  await expect(name).toBeHidden({ timeout: 20_000 });
+}
+
+/*
+ * Deletes the account carrying this marker, through the row's own delete action and its confirmation.
+ * Safe to call when the row is already gone, and it NEVER throws, for the reason the expense cleanup
+ * does not: a cleanup called from a `finally` that raises replaces the assertion error that actually
+ * failed the test with its own.
+ *
+ * Deleting the ACCOUNT is enough to clean up a reconciliation left behind by a failed run: the
+ * reconciliation's account_id FK is ON DELETE CASCADE, and its adjustment entry cascades from there.
+ */
+export async function deleteAccountByMarker(page: Page, marker: string) {
+  try {
+    await page.goto(ACCOUNTS);
+    const row = accountRow(page, marker);
+    if ((await row.count()) === 0) return;
+
+    await row.first().getByTestId('account-delete').click();
+    await page.getByTestId('confirm-dialog-confirm').click();
+    await expect(accountRow(page, marker)).toHaveCount(0);
+  } catch (error) {
+    console.warn(`e2e cleanup could not remove the account marked ${marker}:`, error);
   }
 }

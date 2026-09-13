@@ -66,6 +66,7 @@ function expense(overrides: Partial<SharedExpense> = {}): SharedExpense {
     payerMemberId: 1,
     payerDisplayName: 'Santi',
     myShare: '45000.00',
+    accountReconciliationId: null,
     splits: [
       split({ memberId: 1, displayName: 'Santi', amount: '45000.00', paidAmount: '90000.00' }),
       split({ memberId: 2, displayName: 'Nico', amount: '30000.00', isSelf: false }),

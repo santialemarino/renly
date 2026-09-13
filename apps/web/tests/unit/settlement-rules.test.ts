@@ -98,6 +98,7 @@ function account(overrides: Partial<Account> = {}): Account {
     notes: null,
     hasLinks: false,
     lastReconciledDate: null,
+    canReconcile: true,
     scope: 'private',
     potId: null,
     createdAt: '2026-01-01T00:00:00Z',

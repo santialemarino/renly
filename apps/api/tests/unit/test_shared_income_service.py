@@ -7,6 +7,7 @@ import pytest
 from app.domain import (
     AccountCurrencyMismatchError,
     NotFoundError,
+    ReconciliationOwnedEntryError,
     SharedIncomeBeforeAccountOpenedError,
     SharedIncomeDestinationPotNotDividedError,
     SharedIncomeDestinationScopeError,
@@ -508,3 +509,65 @@ class TestSeatsAreCheckedAgainstThisGroup:
         written = _wire(monkeypatch)
         with pytest.raises(NotFoundError):
             await _create(written, received_by_member_id=404)
+
+
+# The income-side twin of the shared-expense guard: a row a shared account's reconciliation posted is
+# that reconciliation's to revise, so editing or deleting it directly is refused. Both halves are
+# covered because one refusal living in a shared helper is exactly the kind of thing that can be
+# reachable from one caller and not the other.
+class TestAReconciliationsOwnRow:
+    def _owned(self) -> SharedIncome:
+        return SharedIncome(
+            id=88,
+            group_id=GROUP_ID,
+            date=TODAY,
+            amount=Decimal("90.00"),
+            currency="ARS",
+            split_method=SplitMethod.equal,
+            destination=IncomeDestination.joint,
+            account_reconciliation_id=5,
+        )
+
+    @pytest.mark.asyncio
+    async def test_it_cannot_be_edited(self, monkeypatch):
+        _wire(monkeypatch)
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "get_by_id", AsyncMock(return_value=self._owned()))
+
+        with pytest.raises(ReconciliationOwnedEntryError):
+            await shared_income_service.update_income(
+                AsyncMock(),
+                GROUP_ID,
+                88,
+                USER,
+                date=TODAY,
+                amount=Decimal("50.00"),
+                currency="ARS",
+                split_method=SplitMethod.equal,
+                splits=[SharedIncomeSplitInput(member_id=11)],
+                destination=IncomeDestination.joint,
+            )
+
+    @pytest.mark.asyncio
+    async def test_it_cannot_be_deleted(self, monkeypatch):
+        _wire(monkeypatch)
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "get_by_id", AsyncMock(return_value=self._owned()))
+        delete = AsyncMock()
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "delete", delete)
+
+        with pytest.raises(ReconciliationOwnedEntryError):
+            await shared_income_service.delete_income(AsyncMock(), GROUP_ID, 88, USER)
+        delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_ordinary_row_is_still_deletable(self, monkeypatch):
+        # The positive control, without which the two refusals are equally true of a wrong fixture id.
+        _wire(monkeypatch)
+        ordinary = self._owned()
+        ordinary.account_reconciliation_id = None
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "get_by_id", AsyncMock(return_value=ordinary))
+        delete = AsyncMock()
+        monkeypatch.setattr(shared_income_service.shared_income_repository, "delete", delete)
+
+        await shared_income_service.delete_income(AsyncMock(), GROUP_ID, 88, USER)
+
+        delete.assert_awaited_once()
