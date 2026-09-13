@@ -108,6 +108,7 @@ export function notificationRow(
     // The pot's own name when it has one, and the localized default label when it does not.
     pot: text(payload, 'pot') || potFallback,
     actor: text(payload, 'actor'),
+    account: text(payload, 'account'),
     member: text(payload, 'member'),
     inviter: text(payload, 'inviter'),
     invitee: text(payload, 'invitee'),

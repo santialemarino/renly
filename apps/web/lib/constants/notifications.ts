@@ -39,7 +39,9 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 /*
  * The events whose copy has more than one form, and the forms each one takes. A contribution and a
  * withdrawal are the same event; so are a first division and a re-agreement, and a recorded payment
- * read from the payer's seat rather than the payee's.
+ * read from the payer's seat rather than the payee's. A reconciliation of a shared account rides
+ * `pot_movement` too, because what it does to a reader is exactly what those two do — the pot's money
+ * moved — and an event value is a migration where a variant is a line of copy.
  *
  * Declared as data because the feed row resolves its translation key as
  * `notifications.events.<event>.<variant>`, and a variant the API sends that the web has no key for
@@ -48,7 +50,13 @@ export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
  */
 export const NOTIFICATION_VARIANTS = {
   ownership_changed: ['opening', 'reagreement', 'deleted', 'confirmed', 'unconfirmed'],
-  pot_movement: ['contribution', 'withdrawal'],
+  pot_movement: [
+    'contribution',
+    'withdrawal',
+    'reconciliation_surplus',
+    'reconciliation_shortfall',
+    'reconciliation_removed',
+  ],
   settle_marked_paid: ['payee', 'payer'],
 } as const satisfies Partial<Record<NotificationEvent, readonly string[]>>;
 

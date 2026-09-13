@@ -64,6 +64,13 @@ export function AccountReconciliationsSection({
    */
   const latestDate = reconciliations[0]?.asOfDate;
 
+  /*
+   * A shared account's history gains a WHO column and a subtitle that says the difference divides.
+   * Both are withheld on a private account rather than rendered blank: its history has exactly one
+   * possible author, so a column naming them on every row is noise, and the API sends no name for it.
+   */
+  const isShared = account.scope === 'shared';
+
   const load = useCallback(async () => {
     setLoading(true);
     const start = Date.now();
@@ -116,10 +123,12 @@ export function AccountReconciliationsSection({
                 <div className="flex items-start justify-between gap-x-4">
                   <div className="flex flex-col gap-y-0.5">
                     <span className="text-paragraph-sm-medium">{t('title')}</span>
-                    <span className="text-paragraph-xs text-muted-foreground">{t('subtitle')}</span>
+                    <span className="text-paragraph-xs text-muted-foreground">
+                      {isShared ? t('sharedSubtitle') : t('subtitle')}
+                    </span>
                   </div>
-                  {/* Archived accounts are read-only here, matching their hidden row action. */}
-                  {account.isActive && (
+                  {/* The same two conditions the row's own action carries — see accounts-table. */}
+                  {account.canReconcile && account.isActive && (
                     <Button variant="outline" size="sm" onClick={onReconcile}>
                       {t('reconcileButton')}
                     </Button>
@@ -167,6 +176,7 @@ export function AccountReconciliationsSection({
                               {t('table.computedBalance')}
                             </TableHead>
                             <TableHead>{t('table.adjustment')}</TableHead>
+                            {isShared && <TableHead>{t('table.reconciledBy')}</TableHead>}
                             <TableHead className="w-16 text-center">{t('table.actions')}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -187,6 +197,13 @@ export function AccountReconciliationsSection({
                                 <TableCell className="text-paragraph-xs text-muted-foreground">
                                   {adjustmentLabel(reconciliation)}
                                 </TableCell>
+                                {isShared && (
+                                  <TableCell className="text-paragraph-xs text-muted-foreground">
+                                    {/* Null once that seat has no account left, exactly as the group's
+                                        activity trail leaves an actor unnamed for the same reason. */}
+                                    {reconciliation.reconciledBy ?? t('table.reconciledByUnknown')}
+                                  </TableCell>
+                                )}
                                 <TableCell className="text-center">
                                   {/*
                                    * Withhold rather than disable: a Radix tooltip never fires on a
@@ -203,6 +220,7 @@ export function AccountReconciliationsSection({
                                           className="size-7 text-muted-foreground hover:text-destructive"
                                           onClick={() => setDeleteTarget(reconciliation)}
                                           aria-label="Delete reconciliation"
+                                          data-testid="reconciliation-delete"
                                         >
                                           <Trash2 className="size-3.5" />
                                         </Button>

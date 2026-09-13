@@ -100,6 +100,9 @@ interface CurrencyComboboxProps {
   onChange: (code: string) => void;
   onClear?: () => void;
   'aria-invalid'?: boolean | 'true' | 'false';
+  // Declared rather than forwarded: the props are an explicit list, so an undeclared attribute is a
+  // type error. E2E specs target the currency trigger through this.
+  'data-testid'?: string;
 }
 export function CurrencyCombobox({
   value,
@@ -116,6 +119,7 @@ export function CurrencyCombobox({
   onChange,
   onClear,
   'aria-invalid': ariaInvalid,
+  'data-testid': testId,
 }: CurrencyComboboxProps) {
   const locale = useLocale();
   const t = useTranslations('common.currency');
@@ -208,6 +212,7 @@ export function CurrencyCombobox({
           variant="outline"
           size="lg"
           disabled={disabled}
+          data-testid={testId}
           onKeyDown={(e) => {
             if (e.key === 'Backspace' && value && onClear) {
               e.preventDefault();

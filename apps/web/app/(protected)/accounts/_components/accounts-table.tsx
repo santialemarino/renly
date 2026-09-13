@@ -174,33 +174,31 @@ export function AccountsTable({
                 }
                 const a = entry.row;
                 /*
-                 * A shared account does not EXPAND. Both sub-sections it would open — its
-                 * reconciliations and its transfers — are private-only reads, so a pot's account
-                 * would open two empty panels and explain neither. Its row navigates to the ledger
-                 * instead, which is the surface that genuinely answers "how did this money move".
+                 * Every row expands now, shared ones included: a pot's account has a reconciliation
+                 * history its co-owners are meant to read, and the panel below is that history.
+                 *
+                 * It opens ONE panel rather than two. The transfers panel is withheld from a shared
+                 * row because `list_transfers` is still a private-only read — a transfer between two
+                 * accounts of the same pot is legal and would not appear in it — so showing it would
+                 * be an empty list asserting there are none. That gap is pre-existing and not this
+                 * unit's to close; what matters here is not opening a panel that lies.
                  */
                 const isShared = a.scope === 'shared';
                 const canWrite = writableByPot.get(a.potId) ?? true;
-                const isExpanded = !isShared && expandedId === a.id;
+                const isExpanded = expandedId === a.id;
                 return (
                   <Fragment key={entry.key}>
                     <TableRow
                       className={cn('cursor-pointer', !a.isActive && 'opacity-60')}
-                      onClick={() =>
-                        isShared
-                          ? router.push(accountLedgerPath(a.id))
-                          : setExpandedId(isExpanded ? null : a.id)
-                      }
+                      onClick={() => setExpandedId(isExpanded ? null : a.id)}
                     >
                       <TableCell>
-                        {!isShared && (
-                          <ChevronRight
-                            className={cn(
-                              'size-4 transition-transform duration-200',
-                              isExpanded && 'rotate-90',
-                            )}
-                          />
-                        )}
+                        <ChevronRight
+                          className={cn(
+                            'size-4 transition-transform duration-200',
+                            isExpanded && 'rotate-90',
+                          )}
+                        />
                       </TableCell>
                       <TableCell className="text-paragraph-sm-medium">{a.name}</TableCell>
                       <TableCell className="text-muted-foreground">
@@ -227,23 +225,33 @@ export function AccountsTable({
                             href={accountLedgerPath(a.id)}
                           />
                           {/*
-                           * A shared account's editable half is gated on POT WRITE access, which is
-                           * granted per (pot, member) and stated on the section. Reconciling and
-                           * deleting are withheld from everyone on purpose: a reconciliation posts an
-                           * adjustment entry owned by one user, which a pot's account has none of, and
-                           * removing an account a pot holds changes the pot's value — so it belongs on
-                           * the pot's page, beside the ownership it moves.
+                           * Reconciling is offered in BOTH scopes and gated on its own predicate, not
+                           * on write access: whoever may see a pot may correct drift on the money it
+                           * holds, which is the same gate the equivalent manual act already carries.
+                           * `canReconcile` is the API's own answer, so the row cannot offer something
+                           * the endpoint would refuse — false on a pot nobody has divided, because the
+                           * difference is split across owners and there are none on record.
                            *
-                           * The gate wraps the ARCHIVE PAIR, active and archived alike. Nesting it
-                           * inside the active branch alone is the shape this started as, and it left an
-                           * archived shared account offering Unarchive to anybody with the lock that
+                           * `isActive` stays a separate condition and stays client-side: the API has
+                           * always accepted a reconciliation of an archived account and the row has
+                           * always withheld it, in every scope.
+                           *
+                           * A shared account's editable half is gated on POT WRITE access instead,
+                           * which is granted per (pot, member) and stated on the section. Deleting
+                           * stays withheld from everyone: removing an account a pot holds changes the
+                           * pot's value, so it belongs on the pot's page, beside the ownership it moves.
+                           *
+                           * The write gate wraps the ARCHIVE PAIR, active and archived alike. Nesting
+                           * it inside the active branch alone is the shape this started as, and it left
+                           * an archived shared account offering Unarchive to anybody with the lock that
                            * explains the absence nowhere on the row — a write, ungated.
                            */}
-                          {!isShared && a.isActive && (
+                          {a.canReconcile && a.isActive && (
                             <RowActionButton
                               icon={Scale}
                               tooltip={t('actions.reconcile')}
                               ariaLabel="Reconcile"
+                              testId="account-reconcile"
                               onClick={() => setReconcileAccount(a)}
                             />
                           )}
@@ -293,6 +301,7 @@ export function AccountsTable({
                               tooltip={t('actions.delete')}
                               ariaLabel="Delete"
                               variant="destructive"
+                              testId="account-delete"
                               onClick={() => setDeleteState(a)}
                             />
                           )}
@@ -313,7 +322,7 @@ export function AccountsTable({
                     <AccountTransfersSection
                       key={`transfers-${a.id}`}
                       account={a}
-                      expanded={isExpanded}
+                      expanded={isExpanded && !isShared}
                       colSpan={COLUMN_COUNT}
                       reloadToken={reloadToken}
                       onTransfer={() => setTransferAccount(a)}

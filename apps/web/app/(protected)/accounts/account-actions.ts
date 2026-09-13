@@ -6,6 +6,7 @@ import type { TransferFormValues } from '@/app/(protected)/accounts/transfer-for
 import {
   mapAccountComputedBalance,
   mapAccountReconciliation,
+  type AccountComputedBalance,
   type AccountReconciliation,
 } from '@/lib/api/account-reconciliations';
 import { mapTransferList, type Transfer } from '@/lib/api/transfers';
@@ -77,17 +78,19 @@ export async function fetchAccountReconciliations(
   return raw.map(mapAccountReconciliation);
 }
 
-// The account's derived balance at a date, for the reconcile dialog's difference preview.
+// The account's derived balance at a date, plus who a difference would divide between — the two halves
+// of the reconcile dialog's preview. The whole object rather than the bare balance, because on a pot's
+// account the dialog also has to say whose money the act is about to move.
 export async function fetchAccountComputedBalance(
   accountId: number,
   asOfDate: string,
-): Promise<string> {
+): Promise<AccountComputedBalance> {
   const res = await authenticatedFetch(
     `/accounts/${accountId}/computed-balance?as_of_date=${encodeURIComponent(asOfDate)}`,
     { method: 'GET' },
   );
   if (!res.ok) throw new Error('Failed to fetch computed balance');
-  return mapAccountComputedBalance(await res.json()).balance;
+  return mapAccountComputedBalance(await res.json());
 }
 
 /*

@@ -25,6 +25,10 @@ interface DatePickerInputProps {
   // Latest selectable day, as YYYY-MM-DD (e.g. today, for a field that can't be in the future).
   maxDate?: string;
   'aria-invalid'?: boolean | 'true' | 'false';
+  // Declared for the same reason `aria-invalid` is, and for the reason LocaleAmountInput declares it:
+  // the props are an explicit list rather than React's button props, so an undeclared attribute is a
+  // type error even though `{...rest}` would forward it. E2E specs target the date trigger through this.
+  'data-testid'?: string;
 }
 
 // A form-compatible date picker that stores the value as a YYYY-MM-DD string.
@@ -40,6 +44,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
       minDate,
       maxDate,
       'aria-invalid': ariaInvalid,
+      'data-testid': testId,
     },
     ref,
   ) => {
@@ -72,6 +77,7 @@ const DatePickerInput = forwardRef<HTMLButtonElement, DatePickerInputProps>(
             variant="outline"
             disabled={disabled}
             aria-invalid={ariaInvalid}
+            data-testid={testId}
             className={cn(
               'h-9 w-full justify-start gap-x-2 px-3 shadow-xs',
               'text-paragraph-sm font-normal',

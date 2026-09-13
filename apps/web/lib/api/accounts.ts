@@ -24,6 +24,7 @@ interface AccountRaw {
   notes: string | null;
   has_links: boolean;
   last_reconciled_date: string | null;
+  can_reconcile: boolean;
   scope: string;
   pot_id: number | null;
   created_at: string;
@@ -49,6 +50,9 @@ export interface Account {
   notes: string | null;
   hasLinks: boolean;
   lastReconciledDate: string | null;
+  // Whether reconciling is available at all: always on a private account, and on a pot's once that pot
+  // has been divided — an undivided one has no owners on record to bear the difference.
+  canReconcile: boolean;
   // 'shared' when a pot the caller co-owns holds it. `potId` joins the row to its section, which is
   // where the pot's label and the caller's write access are stated — once, not per row.
   scope: 'private' | 'shared';
@@ -85,6 +89,7 @@ function mapAccount(raw: AccountRaw): Account {
     notes: raw.notes,
     hasLinks: raw.has_links,
     lastReconciledDate: raw.last_reconciled_date,
+    canReconcile: raw.can_reconcile,
     scope: raw.scope === 'shared' ? 'shared' : 'private',
     potId: raw.pot_id,
     createdAt: raw.created_at,
