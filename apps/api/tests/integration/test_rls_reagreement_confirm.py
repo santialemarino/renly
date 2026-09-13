@@ -313,6 +313,14 @@ async def test_a_member_denied_the_pot_cannot_confirm_the_change_to_their_OWN_sh
     two got there first. It is the same posture the notification layer takes — a member who cannot view
     a pot is not in its audience either.
     """
+    # RLS refuses by FILTERING, so a bare "0 rows" is also true of a fixture whose id is wrong. Nobody
+    # can confirm this particular event — its affected seat IS the denied member — so the positive
+    # control has to be that the row exists and is the shape under test, asserted as the owner.
+    async with seeded["admin"]() as admin:
+        kind = (
+            await admin.execute(text("SELECT type::text FROM pot_ownership_events WHERE id = :i"), {"i": seeded["events"]["denied_is_giver"]})
+        ).scalar_one()
+        assert kind == "reagreement"
     async with _as(seeded, "denied") as s:
         assert await _confirm(s, seeded["events"]["denied_is_giver"]) == 0
         await s.rollback()
@@ -320,7 +328,14 @@ async def test_a_member_denied_the_pot_cannot_confirm_the_change_to_their_OWN_sh
 
 @pytest.mark.asyncio
 async def test_a_deactivated_seat_cannot_confirm(seeded):
-    # is_active is part of the predicate, so removing a member revokes this with everything else.
+    """Removing a member revokes this with everything else — asserted BEFORE and after.
+
+    A bare "0 rows" afterwards is also true of a policy that never matched, so the same seat confirming
+    the same event while still active is what makes the second assertion mean something.
+    """
+    async with _as(seeded, "giver") as s:
+        assert await _confirm(s, seeded["events"]["by_writer"]) == 1
+        await s.rollback()
     async with seeded["admin"]() as admin:
         await admin.execute(text("UPDATE group_members SET is_active = FALSE WHERE id = :m"), {"m": seeded["seats"]["giver"]})
         await admin.commit()

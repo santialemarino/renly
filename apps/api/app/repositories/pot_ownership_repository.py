@@ -71,10 +71,12 @@ async def create_many(session: AsyncSession, events: list[PotOwnershipEvent]) ->
 
 # Persists a change to an existing event.
 #
-# The ONLY column any caller ever changes is `confirmed_at` (plus the `updated_at` the trigger keeps),
-# which is why the grants narrow UPDATE on this table to exactly those two: the ledger is otherwise
-# append-and-delete, and a row whose units could be rewritten after the fact would make every derived
-# balance a claim about the present rather than a replay of what happened.
+# The ONLY column any caller ever changes is `confirmed_at`, which is why the grants narrow UPDATE on
+# this table to that one column and no other: the ledger is otherwise append-and-delete, and a row whose
+# units could be rewritten after the fact would make every derived balance a claim about the present
+# rather than a replay of what happened. `updated_at` is deliberately NOT in the grant — the BEFORE
+# UPDATE trigger writes it, which needs no privilege of the invoking role, so adding it would widen the
+# grant for nothing.
 async def save(session: AsyncSession, event: PotOwnershipEvent) -> PotOwnershipEvent:
     session.add(event)
     await session.flush()

@@ -857,8 +857,9 @@ class PotEventNotConfirmableError(DomainError):
 
 
 # A confirmed re-agreement was asked to be confirmed again, or to be deleted. ONE error for both, the
-# way GroupSettlementConfirmedError covers the same pair, because the sentence a user needs is the same
-# in both cases: the row is locked and there is exactly one way out of it.
+# way GroupSettlementConfirmedError covers the same pair — and the message therefore states the STATE
+# and its exit rather than naming the refused act, because a message about removal would be the wrong
+# sentence for the caller whose second tab just tried to agree again.
 #
 # The lock is what confirmation IS. The re-agreement counted from the moment it was recorded — an
 # unapplied one would leave the pot showing percentages everyone agrees are wrong — so confirming
@@ -869,7 +870,7 @@ class PotReagreementConfirmedError(DomainError):
     status_code = 409
 
     def __init__(self) -> None:
-        self.message = "This change of split is confirmed. The member who agreed to it has to un-confirm it first."
+        self.message = "This change of split has already been agreed to. The member who agreed has to withdraw their agreement first."
         super().__init__(self.message)
 
 
@@ -890,7 +891,10 @@ class PotReagreementNotYoursError(DomainError):
     status_code = 403
 
     def __init__(self) -> None:
-        self.message = "This change of split is not yours to confirm — only the member whose share it moved can."
+        self.message = (
+            "Only the member giving up part of their share can agree to this change of split "
+            "— or, when they recorded it themselves, the member receiving it."
+        )
         super().__init__(self.message)
 
 

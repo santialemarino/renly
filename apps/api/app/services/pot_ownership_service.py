@@ -828,13 +828,17 @@ async def _require_confirmable(
 # It names both seats and no figure. What was agreed is a change of split whose size the pot page
 # already states in percentages; a units figure appears nowhere a person can see (U2), and a second
 # answer to a question the pot page answers is how two surfaces come to disagree.
+#
+# Both names are safe to interpolate — the email template names them and a null in copy fails by
+# PRINTING. A reagreement always HAS a counterparty (a table CHECK makes `counterparty_member_id NOT
+# NULL` exactly for that type), and both seats belong to the pot's group because `_require_seat` refused
+# anything else when the row was written.
 async def _announce_confirmation(
     session: AsyncSession, pot: Pot, event: PotOwnershipEvent, members_by_id: dict[int, GroupMember], actor: GroupMember, user: User, variant: str
 ) -> None:
     recipients = await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
     group = await group_repository.get_by_id(session, pot.group_id)
-    giver = members_by_id.get(event.member_id)
-    receiver = members_by_id.get(event.counterparty_member_id) if event.counterparty_member_id is not None else None
+    from_member, to_member = _seat_names(event, members_by_id)
     await notification_service.dispatch(
         NotificationEvent.ownership_changed,
         recipients,
@@ -844,8 +848,8 @@ async def _announce_confirmation(
             {
                 "variant": variant,
                 "actor": actor.display_name,
-                "from_member": giver.display_name if giver is not None else None,
-                "to_member": receiver.display_name if receiver is not None else None,
+                "from_member": from_member,
+                "to_member": to_member,
             },
         ),
     )
