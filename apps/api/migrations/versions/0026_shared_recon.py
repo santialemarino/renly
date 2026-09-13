@@ -150,7 +150,8 @@ def upgrade() -> None:
 # survives with its link column gone, so the money stays out of the account and the reconciliation row
 # that explained it no longer points at anything. That is the honest outcome — deleting the adjustment
 # instead would silently move a balance during a schema change — and it is why this is a one-way door
-# in practice. No private reconciliation is affected at all.
+# in practice. A PRIVATE reconciliation loses nothing: `created_by` equals `user_id` on every one of
+# them, by the backfill above and by what the service writes, so the dropped column is re-derivable.
 def downgrade() -> None:
     # The per-column grant goes before the table-level one is restored, so the role never holds both.
     op.execute(f"REVOKE UPDATE ({_ADJUSTMENT_COLUMNS}) ON account_reconciliations FROM renly_app")

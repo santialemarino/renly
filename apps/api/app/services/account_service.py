@@ -72,6 +72,10 @@ async def list_accounts(
 # offers the action and the write that refuses it cannot disagree. True for every private account, so a
 # solo user's page is untouched; false for a pot's account until somebody has divided that pot, because
 # the adjustment is split across owners and an undivided pot has none on record.
+#
+# Omitting `divided_pot_ids` therefore WITHHOLDS the action on a shared row rather than offering it,
+# which is the safe direction for a default — and the one caller that omits it returns a freshly created
+# account, which is always private.
 def to_response(
     account: Account,
     balance: Decimal | None = None,
