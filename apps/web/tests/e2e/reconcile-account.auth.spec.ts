@@ -25,7 +25,7 @@ import { accountRow, createAccount, deleteAccountByMarker, testMarker } from './
  * be stated unconditionally: fifteen API unit tests drive all three, in both directions.
  *
  * Stated rather than implied: **no automated browser test exercises reconciling a SHARED account.**
- * What does cover it is 37 API unit tests, 14 integration tests driving the real policies, grants and
+ * What does cover it is 37 API unit tests and 19 integration tests driving the real policies, grants and
  * CHECK constraints against a real Postgres — including the read-only co-owner's insert and delete, the
  * column grant, and both derivations of the balance over a pot's account holding a row from every
  * source that can reach one — plus a two-account live walk in both locales.
