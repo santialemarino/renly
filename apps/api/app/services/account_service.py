@@ -11,6 +11,7 @@ from app.domain import (
     AccountOpeningDateChangeBlockedError,
     NotFoundError,
     PaymentMethod,
+    reconciliation_refusal,
 )
 from app.domain.list_scope import SCOPE_PRIVATE, SCOPE_SHARED, ListScope, build_sections
 from app.domain.pot import ensure_private_funding
@@ -64,12 +65,19 @@ async def list_accounts(
 
 # One AccountResponse, with the derived balance (defaulting to the opening figure), the has-links flag
 # (whether any money — a transfer on either leg included — links the account, which is what locks its
-# currency on the frontend) and the date of its most recent reconciliation.
+# currency on the frontend), the date of its most recent reconciliation, and whether it can be
+# reconciled at all.
+#
+# `can_reconcile` comes from the SAME function the reconciliation endpoint raises from, so the row that
+# offers the action and the write that refuses it cannot disagree. True for every private account, so a
+# solo user's page is untouched; false for a pot's account until somebody has divided that pot, because
+# the adjustment is split across owners and an undivided pot has none on record.
 def to_response(
     account: Account,
     balance: Decimal | None = None,
     has_links: bool = False,
     last_reconciled_date: date_type | None = None,
+    divided_pot_ids: set[int] | None = None,
 ) -> AccountResponse:
     data = account.model_dump()
     return AccountResponse(
@@ -79,12 +87,13 @@ def to_response(
             "has_links": has_links,
             "last_reconciled_date": last_reconciled_date,
             "scope": SCOPE_PRIVATE if account.pot_id is None else SCOPE_SHARED,
+            "can_reconcile": reconciliation_refusal(account.pot_id, divided_pot_ids or set()) is None,
         }
     )
 
 
 # Responses for a set of accounts, batching every derived field: the balance union, the has-links flag
-# and the last-reconciled date are grouped queries, so cost is independent of count.
+# the last-reconciled date and the divided-pot set are grouped queries, so cost is independent of count.
 async def to_responses(session: AsyncSession, accounts: list[Account], user: User) -> list[AccountResponse]:
     balances, linked = await get_account_summaries(session, accounts, user.id)
     # The reconciliation REPOSITORY rather than its service, because account_reconciliation_service
@@ -94,7 +103,10 @@ async def to_responses(session: AsyncSession, accounts: list[Account], user: Use
     last_reconciled = await account_reconciliation_repository.get_latest_dates_by_account_ids(
         session, [a.id for a in accounts if a.id is not None], user.id
     )
-    return [to_response(a, balances.get(a.id), a.id in linked, last_reconciled.get(a.id)) for a in accounts]
+    # One query for the whole page rather than one per shared row, and none at all for a list with no
+    # shared rows in it — which is every solo user's.
+    divided = await pot_ownership_repository.divided_pot_ids(session, sorted({a.pot_id for a in accounts if a.pot_id is not None}))
+    return [to_response(a, balances.get(a.id), a.id in linked, last_reconciled.get(a.id), divided) for a in accounts]
 
 
 # The accounts list as the page reads it: the rows, grouped by scope, plus each section's label, count

@@ -112,6 +112,13 @@ class SharedExpenseResponse(BaseModel):
     payer_member_id: int | None = Field(default=None, description="Seat that fronted it; null when a shared account did.")
     payer_display_name: str | None = Field(default=None, description="That person's name; null when a shared account fronted it.")
     my_share: Decimal | None = Field(default=None, description="The requesting user's own share; null when they took no part.")
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning account reconciliation when this row is that reconciliation's adjustment. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
     splits: list[SharedExpenseSplitResponse] = Field(description="Every member's position in this expense.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

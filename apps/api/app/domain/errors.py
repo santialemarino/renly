@@ -189,6 +189,25 @@ class AccountReconciliationNotLatestError(DomainError):
         return {"last_reconciled_date": self.last_reconciled_date.isoformat()}
 
 
+# Reconciling a POT's account before anybody has agreed who owns the pot. The adjustment is split
+# across the owners in their ownership proportions, and an undivided pot has no owners on record — so
+# there is nobody to bear the difference, and inventing one (splitting it equally, or charging whoever
+# ran it) would either assert an ownership nobody agreed or leave the group's balances not summing to
+# zero. The same state SharedExpenseFundingPotNotDividedError refuses, with its own code because the
+# remedy sentence is what makes a refusal usable and the two acts are reached from different pages.
+# Mapped to 400 by the API.
+class AccountReconciliationPotNotDividedError(DomainError):
+    code = "account_reconciliation_pot_not_divided"
+    status_code = 400
+
+    def __init__(self) -> None:
+        self.message = (
+            "Nobody has agreed who owns this shared account's money yet, so there is no way to record who the difference belongs to. "
+            "Divide the pot first."
+        )
+        super().__init__(self.message)
+
+
 # A card reconciliation's statement period closes in the future. A reconciliation records the balance
 # printed on a statement the user has actually received, and a period cannot have closed yet. This is
 # the one rule the card and account flows deliberately share — they differ on ordering, not on whether

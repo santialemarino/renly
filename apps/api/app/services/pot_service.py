@@ -48,7 +48,7 @@ from app.domain import (
     units_for_amount,
 )
 from app.models.account import Account
-from app.models.group import GroupMember
+from app.models.group import Group, GroupMember
 from app.models.investment import Investment
 from app.models.pot import Pot, PotCadence, PotMemberPermission, PotVisibility
 from app.models.shared_audit import AuditAction, AuditEntityType
@@ -110,6 +110,19 @@ def _may_view(pot: Pot, permission: PotMemberPermission | None) -> bool:
 # the copy that eventually disagrees with this one.
 def may_write(permission: PotMemberPermission | None) -> bool:
     return permission is not None and permission.can_write
+
+
+# The payload every pot notification carries, plus whatever the specific event adds. One function
+# because the four keys are a CONTRACT with the web's feed renderer and with the email/push templates,
+# and a second producer spelling them out inline is a second copy of that contract.
+#
+# `pot` is the pot's raw name and may be NULL — a group's default pot has none — and it is left NULL
+# rather than filled in here, because the label a nameless pot reads under is LOCALIZED while this
+# payload is shared by every recipient whatever language each of them uses. Each renderer applies its
+# own fallback in the reader's own language: `notification_templates._readable` for email and push, and
+# `notificationRow`'s `potFallback` on the web for the feed.
+def notification_payload(pot: Pot, group: Group | None, extra: dict) -> dict:
+    return {"group_id": pot.group_id, "group": group.name if group else None, "pot_id": pot.id, "pot": pot.name, **extra}
 
 
 # The accounts that should hear about something happening to a pot.

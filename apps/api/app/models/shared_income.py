@@ -64,6 +64,11 @@ class SharedIncome(SQLModel, table=True):
     )
     notes: str | None = Field(default=None, description="Optional notes.")
     created_by: int | None = Field(default=None, foreign_key="users.id", description="Who recorded it; NULL once that account is deleted.")
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        foreign_key="account_reconciliations.id",
+        description="Set only on the adjustment a shared account's reconciliation posted; such a row refuses a direct edit or delete.",
+    )
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

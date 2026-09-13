@@ -46,6 +46,20 @@ async def list_by_pots(session: AsyncSession, pot_ids: list[int]) -> dict[int, l
     return dict(grouped)
 
 
+# WHICH of the given pots have been divided — i.e. have any ownership event at all, which is what
+# makes their owners a matter of record. Returns the subset; a pot absent from the result has nobody on
+# record to bear a share of anything.
+#
+# The batch sibling of "does list_by_pot return anything", and it exists because the accounts list needs
+# the answer for every visible pot at once: asking per row is the N+1 the batch rule forbids. It reads
+# DISTINCT pot_id rather than counting, so a pot with a thousand events costs the same as one with one.
+async def divided_pot_ids(session: AsyncSession, pot_ids: list[int]) -> set[int]:
+    if not pot_ids:
+        return set()
+    result = await session.execute(select(PotOwnershipEvent.pot_id).where(PotOwnershipEvent.pot_id.in_(pot_ids)).distinct())
+    return {pot_id for (pot_id,) in result.all()}
+
+
 # Fetches one event by id, scoped to its pot so an id from another pot cannot be reached by guessing.
 async def get_by_id(session: AsyncSession, pot_id: int, event_id: int) -> PotOwnershipEvent | None:
     result = await session.execute(select(PotOwnershipEvent).where(PotOwnershipEvent.id == event_id, PotOwnershipEvent.pot_id == pot_id))
@@ -214,6 +228,7 @@ class PotOwnershipRepository:
     create_many = staticmethod(create_many)
     delete = staticmethod(delete)
     delete_openings = staticmethod(delete_openings)
+    divided_pot_ids = staticmethod(divided_pot_ids)
     get_by_id = staticmethod(get_by_id)
     linked_account_ids = staticmethod(linked_account_ids)
     list_by_pot = staticmethod(list_by_pot)

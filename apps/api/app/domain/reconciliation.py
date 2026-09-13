@@ -1,11 +1,15 @@
 # Reconciliation rules shared by the expense and income services and their request schemas. Both
 # reconciliation features — card (Phase 3, Step 5) and account (the cash/bank money engine) — post
-# their difference as an ordinary expense_entries / income_entries row linked back to the
-# reconciliation that created it, categorised with a value reserved for true-ups. This module owns the
-# two rules that keep such a row honest: only a reconciliation may own one, and only a reconciliation
-# may write its category.
+# their difference as an ordinary flow row linked back to the reconciliation that created it,
+# categorised with a value reserved for true-ups. Which TABLE that row lives in depends on the
+# account's scope — expense_entries / income_entries for a private account, shared_expenses /
+# shared_income for one a pot holds — but the rules below hold identically for all four.
+#
+# This module owns the three rules that keep the pair honest: only a reconciliation may own such a row,
+# only a reconciliation may write its category, and an account says up front whether it can be
+# reconciled at all.
 
-from app.domain.errors import ReconciliationOwnedEntryError
+from app.domain.errors import AccountReconciliationPotNotDividedError, ReconciliationOwnedEntryError
 from app.models.expense_entry import ExpenseCategory
 from app.models.income_entry import IncomeCategory
 
@@ -46,3 +50,21 @@ SYSTEM_INCOME_CATEGORIES: frozenset[IncomeCategory] = frozenset(
 def ensure_not_reconciliation_owned(reconciliation_id: int | None, account_reconciliation_id: int | None) -> None:
     if reconciliation_id is not None or account_reconciliation_id is not None:
         raise ReconciliationOwnedEntryError()
+
+
+# Why this account cannot be reconciled, or None when it can. The WRITE raises it; the accounts LIST
+# reports it as `can_reconcile`, so the surface that offers the action and the endpoint that refuses it
+# are one rule and cannot disagree.
+#
+# Exactly one condition, and it applies only to a POT's account: the adjustment is split across the
+# pot's owners in their ownership proportions, so a pot nobody has divided has no owners to bear it.
+# `divided_pot_ids` is passed in rather than looked up here because the list needs the answer for many
+# accounts at once and this module holds no session.
+#
+# is_active is deliberately NOT part of this. Reconciling an archived account has always been allowed
+# by the API and withheld only by the row, for every account in every scope, and folding it in here
+# would change that for private accounts too — a rule this unit has no business moving.
+def reconciliation_refusal(pot_id: int | None, divided_pot_ids: set[int]) -> Exception | None:
+    if pot_id is not None and pot_id not in divided_pot_ids:
+        return AccountReconciliationPotNotDividedError()
+    return None

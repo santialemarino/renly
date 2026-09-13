@@ -722,21 +722,49 @@ ALTER TABLE income_entries
 --   matching expense_entries / income_entries.account_reconciliation_id closes the loop with ON DELETE
 --   CASCADE, so deleting a reconciliation always removes the adjustment it created — that is the
 --   supported way to revise one.
+-- A POT's account is reconciled the same way, with ONE difference that follows from where the
+-- adjustment can live: expense_entries / income_entries keep user_id NOT NULL and carry no pot_id at
+-- all (§3 — a shared flow lives in its own table), and the pot account's balance sums filter on that
+-- same user_id — so a private adjustment row naming a pot-owned account would not close the drift it
+-- was posted to close. ▸ Nothing HERE forbids such a row: `ensure_private_funding` in the service is
+-- the only thing that refuses it, which tests/integration proves by inserting one directly and
+-- watching the two balance derivations disagree by the whole amount. A shared account's adjustment is therefore a
+-- shared_expenses / shared_income row of the pot's group, split across the pot's owners in their
+-- ownership proportions on both sides at once — which is why it nets to zero between them: the drift
+-- is the pot's own money, so correcting it creates no debt between the people who hold it.
+-- adjustment_shared_expense_id / adjustment_shared_income_id are the shared half of the back-pointer
+-- pair, mirroring the private half term for term, and the two halves are mutually exclusive per scope
+-- (the CHECKs below), so the column's meaning never depends on who wrote the row.
+-- created_by records whose act it was. On a private row it is the owner and says nothing new; on a
+-- shared one it is the accountability the history panel is read for — a figure somebody typed that
+-- moved every co-owner's share has to say who typed it.
 CREATE TABLE account_reconciliations (
-  id                    BIGSERIAL PRIMARY KEY,
-  user_id               BIGINT REFERENCES users(id) ON DELETE CASCADE,
-  pot_id                BIGINT,
-  account_id            BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  as_of_date            DATE NOT NULL,
-  statement_balance     NUMERIC(18, 2) NOT NULL,
-  computed_balance      NUMERIC(18, 2) NOT NULL,
-  difference            NUMERIC(18, 2) NOT NULL,
-  adjustment_expense_id BIGINT REFERENCES expense_entries(id) ON DELETE SET NULL,
-  adjustment_income_id  BIGINT REFERENCES income_entries(id) ON DELETE SET NULL,
-  reconciled_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT account_reconciliations_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))
+  id                           BIGSERIAL PRIMARY KEY,
+  user_id                      BIGINT REFERENCES users(id) ON DELETE CASCADE,
+  pot_id                       BIGINT,
+  account_id                   BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  as_of_date                   DATE NOT NULL,
+  statement_balance            NUMERIC(18, 2) NOT NULL,
+  computed_balance             NUMERIC(18, 2) NOT NULL,
+  difference                   NUMERIC(18, 2) NOT NULL,
+  adjustment_expense_id        BIGINT REFERENCES expense_entries(id) ON DELETE SET NULL,
+  adjustment_income_id         BIGINT REFERENCES income_entries(id) ON DELETE SET NULL,
+  adjustment_shared_expense_id BIGINT,
+  adjustment_shared_income_id  BIGINT,
+  created_by                   BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  reconciled_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT account_reconciliations_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL)),
+  -- Each scope may only carry its own kind of adjustment. Stated as a constraint rather than left to
+  -- the service so it holds for the privileged session too, and so a row read back says which kind of
+  -- adjustment to look for from its scope alone.
+  CONSTRAINT account_reconciliations_private_adjustment CHECK (
+    pot_id IS NULL OR (adjustment_expense_id IS NULL AND adjustment_income_id IS NULL)
+  ),
+  CONSTRAINT account_reconciliations_shared_adjustment CHECK (
+    user_id IS NULL OR (adjustment_shared_expense_id IS NULL AND adjustment_shared_income_id IS NULL)
+  )
 );
 
 CREATE INDEX idx_account_reconciliations_user_id ON account_reconciliations(user_id);
@@ -1215,6 +1243,15 @@ CREATE TABLE shared_expenses (
   credit_card_id       BIGINT REFERENCES credit_cards(id),
   notes                TEXT,
   created_by           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  -- Set only on the adjustment a SHARED account's reconciliation posts, and the same closed loop the
+  -- private adjustment carries: CASCADE here is what makes deleting the reconciliation remove the row
+  -- it created, which is the escape hatch for a mistyped statement balance. A row carrying this is
+  -- refused a direct edit or delete (409 reconciliation_owned_entry) for the reason the private one is.
+  -- Named explicitly rather than left to Postgres, so this build and the migration produce the same
+  -- constraint name — an inline REFERENCES would auto-name it `..._id_fkey` here and `..._fkey` there.
+  account_reconciliation_id BIGINT,
+  CONSTRAINT shared_expenses_account_reconciliation_fkey
+    FOREIGN KEY (account_reconciliation_id) REFERENCES account_reconciliations(id) ON DELETE CASCADE,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- A shared expense of nothing has nothing to divide, and a negative one is a refund the split
@@ -1232,6 +1269,8 @@ CREATE INDEX idx_shared_expenses_account_date
   ON shared_expenses(paid_from_account_id, date) WHERE paid_from_account_id IS NOT NULL;
 CREATE INDEX idx_shared_expenses_credit_card
   ON shared_expenses(credit_card_id) WHERE credit_card_id IS NOT NULL;
+CREATE INDEX idx_shared_expenses_account_reconciliation_id
+  ON shared_expenses(account_reconciliation_id) WHERE account_reconciliation_id IS NOT NULL;
 
 -- One member's two sides of one shared expense, and the row the whole feature balances on.
 --   * `amount` is what this member CONSUMED — their share, which is the figure that lands in their own
@@ -1369,6 +1408,11 @@ CREATE TABLE shared_income (
   paid_to_account_id   BIGINT REFERENCES accounts(id) ON DELETE SET NULL,
   notes                TEXT,
   created_by           BIGINT REFERENCES users(id) ON DELETE SET NULL,
+  -- The income-side twin of shared_expenses.account_reconciliation_id — see the note there, including
+  -- why the constraint is named explicitly.
+  account_reconciliation_id BIGINT,
+  CONSTRAINT shared_income_account_reconciliation_fkey
+    FOREIGN KEY (account_reconciliation_id) REFERENCES account_reconciliations(id) ON DELETE CASCADE,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Shared income of nothing has nothing to divide, and a negative one is a reversal the split methods
@@ -1391,6 +1435,21 @@ CREATE INDEX idx_shared_income_account_date
 -- moving an investment out of a pot has to find the income that named it.
 CREATE INDEX idx_shared_income_source
   ON shared_income(source_investment_id) WHERE source_investment_id IS NOT NULL;
+CREATE INDEX idx_shared_income_account_reconciliation_id
+  ON shared_income(account_reconciliation_id) WHERE account_reconciliation_id IS NOT NULL;
+
+-- Forward FKs from account_reconciliations to the two shared-flow tables, declared here because
+-- account_reconciliations is created long before either of them exists — the same circular-dependency
+-- reason its private pair is declared beside expense_entries. SET NULL matches that pair too: it is a
+-- safety net for an out-of-band delete, never the supported path, since the endpoints refuse a direct
+-- delete of a reconciliation-owned row and deleting the reconciliation cascades from the other side.
+ALTER TABLE account_reconciliations
+  ADD CONSTRAINT account_reconciliations_adjustment_shared_expense_fkey
+  FOREIGN KEY (adjustment_shared_expense_id) REFERENCES shared_expenses(id) ON DELETE SET NULL;
+
+ALTER TABLE account_reconciliations
+  ADD CONSTRAINT account_reconciliations_adjustment_shared_income_fkey
+  FOREIGN KEY (adjustment_shared_income_id) REFERENCES shared_income(id) ON DELETE SET NULL;
 
 -- One member's two sides of one piece of shared income, and the row the income half balances on.
 --   * `amount` is what this member is ENTITLED to — their share, which is the figure that lands in
@@ -1819,6 +1878,10 @@ GRANT EXECUTE ON FUNCTION app_can_write_pot(BIGINT) TO renly_app;
 -- by app_can_write_pot on both sides. Multiple permissive policies are OR-ed, so SELECT still
 -- resolves to the view predicate (write implies view by CHECK, so the union adds nothing).
 --
+-- FIVE of the six do that. account_reconciliations splits further, into one policy per command, and
+-- its own note below says why: reconciling a pot's account is gated on SEEING the pot rather than on
+-- writing it, so a write predicate here would refuse the very member the service admits.
+--
 -- The children (investment_snapshots, transactions, account_reconciliations, transfers) carry the
 -- same two columns denormalized from their parent, exactly as their user_id already was — a policy
 -- that had to EXISTS-join to the parent would pay that join on every row of every read.
@@ -1850,12 +1913,33 @@ CREATE POLICY accounts_scope_write ON accounts FOR ALL
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
   WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
 
+-- account_reconciliations is the ONE dual-scope table whose write half is not pot WRITE access, and it
+-- is split per COMMAND for that reason. Reconciling a pot's account is gated on being able to SEE the
+-- pot — the same gate the equivalent manual act carries, since a shared expense drawn from that account
+-- needs only group membership and a visible, divided pot — so a policy keyed on app_can_write_pot would
+-- refuse the read-only co-owner the service admits, leaving two halves of one rule disagreeing.
+--
+-- The FOR UPDATE policy exists only because the service patches its own back-pointer immediately after
+-- inserting the row. Admitting a read-only seat to UPDATE the whole row would be a real widening — they
+-- could rewrite a statement balance somebody else recorded, leaving the reconciliation claiming a
+-- difference its adjustment does not match — so the verbs are capped by a COLUMN grant below. RLS
+-- filters rows and never columns; only a REVOKE plus a per-column GRANT can say "this column and no
+-- other". No WITH CHECK on the update: Postgres reuses the USING expression when one is absent, and
+-- nothing the predicate reads is writable anyway.
 ALTER TABLE account_reconciliations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY account_reconciliations_scope_read ON account_reconciliations FOR SELECT
   USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
-CREATE POLICY account_reconciliations_scope_write ON account_reconciliations FOR ALL
-  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)))
-  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_write_pot(pot_id)));
+CREATE POLICY account_reconciliations_scope_insert ON account_reconciliations FOR INSERT
+  WITH CHECK (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY account_reconciliations_scope_update ON account_reconciliations FOR UPDATE
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+CREATE POLICY account_reconciliations_scope_delete ON account_reconciliations FOR DELETE
+  USING (user_id = app_current_user_id() OR (pot_id IS NOT NULL AND app_can_view_pot(pot_id)));
+-- The four back-pointer columns and nothing else: column privileges are checked against a statement's
+-- SET list, and the BEFORE UPDATE trigger writes NEW.updated_at with no privilege of the invoking role.
+REVOKE UPDATE ON account_reconciliations FROM renly_app;
+GRANT UPDATE (adjustment_expense_id, adjustment_income_id, adjustment_shared_expense_id, adjustment_shared_income_id)
+  ON account_reconciliations TO renly_app;
 
 ALTER TABLE transfers ENABLE ROW LEVEL SECURITY;
 CREATE POLICY transfers_scope_read ON transfers FOR SELECT

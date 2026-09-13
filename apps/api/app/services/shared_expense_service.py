@@ -31,6 +31,7 @@ from app.domain import (
     SharedExpenseSharedAccountPayerError,
     SplitEntry,
     compute_shares,
+    ensure_not_reconciliation_owned,
 )
 from app.models.account import Account
 from app.models.group import Group, GroupMember
@@ -113,6 +114,7 @@ def _build_response(
         payer_member_id=sole_payer.member_id if sole_payer else None,
         payer_display_name=_display_name(members_by_id, sole_payer.member_id) if sole_payer else None,
         my_share=my_split.amount if my_split is not None and my_split.amount > ZERO else None,
+        account_reconciliation_id=expense.account_reconciliation_id,
         splits=[
             SharedExpenseSplitResponse(
                 member_id=split.member_id,
@@ -184,11 +186,17 @@ def _account_of(accounts: dict[int, Account], expense: SharedExpense) -> Account
 # Loads a shared expense and the caller's seat in its group, or raises NotFoundError. The expense's own
 # group is what the membership is checked against, so an id from another group answers 404 rather than
 # silently attaching this caller to it.
+#
+# Both callers MUTATE, which is why the reconciliation guard sits here: a row a shared account's
+# reconciliation posted is that reconciliation's to revise, and editing or deleting it directly would
+# leave the reconciliation claiming a difference it no longer applies while the balance snapped back.
+# Placed before anything is read or written, so a refused request changes nothing.
 async def _require_expense(session: AsyncSession, group_id: int, expense_id: int, user: User) -> tuple[SharedExpense, Group, GroupMember]:
     group, viewer = await group_service.require_member(session, group_id, user)
     expense = await shared_expense_repository.get_by_id(session, expense_id)
     if expense is None or expense.group_id != group_id:
         raise NotFoundError("Shared expense not found")
+    ensure_not_reconciliation_owned(None, expense.account_reconciliation_id)
     return (expense, group, viewer)
 
 

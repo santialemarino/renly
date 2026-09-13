@@ -29,6 +29,7 @@ from app.domain.errors import (
     AccountReconciliationBeforeOpeningError,
     AccountReconciliationFutureDateError,
     AccountReconciliationNotLatestError,
+    AccountReconciliationPotNotDividedError,
     CardReconciliationFuturePeriodError,
     CurrencyChangeBlockedError,
     DomainError,
@@ -150,7 +151,7 @@ from app.domain.pot_monitoring import (
     period_grid,
     series_interval,
 )
-from app.domain.reconciliation import ensure_not_reconciliation_owned
+from app.domain.reconciliation import ensure_not_reconciliation_owned, reconciliation_refusal
 from app.domain.shared_flow import (
     SettleTransfer,
     SplitEntry,
@@ -178,6 +179,7 @@ __all__ = [
     "AccountReconciliationBeforeOpeningError",
     "AccountReconciliationFutureDateError",
     "AccountReconciliationNotLatestError",
+    "AccountReconciliationPotNotDividedError",
     "AdvanceResult",
     "CalendarItem",
     "CardBucketBalance",
@@ -316,6 +318,7 @@ __all__ = [
     "period_grid",
     "plan_waterfall",
     "quantize",
+    "reconciliation_refusal",
     "replay_units",
     "series_interval",
     "share_values",

@@ -146,8 +146,9 @@ async def list_movements(
     )
 
 
-# The account's derived balance at a date. Drives the reconcile dialog's difference preview, which
-# has to follow the date the user picks rather than assume today.
+# The account's derived balance at a date, plus who a difference would divide between. Drives the
+# reconcile dialog's difference preview, which has to follow the date the user picks rather than assume
+# today — and on a pot's account also has to say whose money it is about to move.
 @router.get("/{account_id}/computed-balance", response_model=AccountComputedBalanceResponse)
 async def get_computed_balance(
     account_id: int,
@@ -155,9 +156,10 @@ async def get_computed_balance(
     session: SessionDep,
     as_of_date: date_type = Query(description="Date to compute the balance at."),
 ) -> AccountComputedBalanceResponse:
-    account = await account_service.get_account(session, account_id, current_user)
+    account = await account_service.get_account_in_scope(session, account_id, current_user)
     balance = await account_reconciliation_service.compute_account_balance_at(session, account, as_of_date)
-    return AccountComputedBalanceResponse(account_id=account_id, as_of_date=as_of_date, balance=balance)
+    bearers = await account_reconciliation_service.list_difference_bearers(session, account, current_user, as_of_date=as_of_date)
+    return AccountComputedBalanceResponse(account_id=account_id, as_of_date=as_of_date, balance=balance, bearers=bearers)
 
 
 # List an account's reconciliations, newest first.
@@ -167,8 +169,12 @@ async def list_reconciliations(
     current_user: CurrentUser,
     session: SessionDep,
 ) -> list[AccountReconciliationResponse]:
+    account = await account_service.get_account_in_scope(session, account_id, current_user)
     rows = await account_reconciliation_service.list_reconciliations(session, account_id, current_user)
-    return [AccountReconciliationResponse.model_validate(row) for row in rows]
+    # Resolved once for the page rather than per row: a shared history names its author the way the
+    # group does, and every row of one account's history draws from the same roster.
+    names = await account_reconciliation_service.get_reconciler_names(session, account)
+    return [account_reconciliation_service.to_response(row, names) for row in rows]
 
 
 # Reconcile an account: record the real balance as of a date and post the adjustment that closes the gap.
@@ -186,7 +192,9 @@ async def create_reconciliation(
         as_of_date=body.as_of_date,
         statement_balance=body.statement_balance,
     )
-    return AccountReconciliationResponse.model_validate(reconciliation)
+    account = await account_service.get_account_in_scope(session, account_id, current_user)
+    names = await account_reconciliation_service.get_reconciler_names(session, account)
+    return account_reconciliation_service.to_response(reconciliation, names)
 
 
 # Delete a reconciliation. Cascades to its adjustment expense or income, undoing the true-up.
