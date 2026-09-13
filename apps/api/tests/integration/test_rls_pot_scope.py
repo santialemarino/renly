@@ -49,6 +49,17 @@ _SCOPED = (
     ("transfers", "from_account_id"),
 )
 
+# The five whose WRITE half is pot write access. `account_reconciliations` is deliberately absent and is
+# the one exception in this schema: reconciling a pot's account is gated on being able to SEE the pot,
+# because the equivalent manual act — a shared expense drawn from that same account — needs only group
+# membership and a visible, divided pot. Its own suite
+# (tests/integration/test_shared_account_reconciliation.py) pins that, in both directions.
+#
+# Named as an exclusion rather than by listing the five, so a table added to _SCOPED is covered by the
+# write tests below unless somebody deliberately exempts it here.
+_WRITE_GATED_ON_VIEW = {"account_reconciliations"}
+_WRITE_GATED_ON_WRITE = tuple(row for row in _SCOPED if row[0] not in _WRITE_GATED_ON_VIEW)
+
 
 # Seeds one group with five accounts of differing access, a pot holding one shared investment and two
 # shared accounts, and a full set of child rows on each — so every scoped table has a co-owned row to
@@ -233,7 +244,7 @@ async def test_a_zero_percent_member_with_view_reads_it(seeded, table, _fk):
         assert await _count(s, table) >= 1
 
 
-@pytest.mark.parametrize(("table", "_fk"), _SCOPED)
+@pytest.mark.parametrize(("table", "_fk"), _WRITE_GATED_ON_WRITE)
 @pytest.mark.asyncio
 async def test_a_member_without_write_cannot_write(seeded, table, _fk):
     # The zero-owner can SEE every row and must not be able to change one.
@@ -253,7 +264,7 @@ async def test_a_member_without_write_cannot_write(seeded, table, _fk):
         await s.rollback()
 
 
-@pytest.mark.parametrize(("table", "_fk"), _SCOPED)
+@pytest.mark.parametrize(("table", "_fk"), _WRITE_GATED_ON_WRITE)
 @pytest.mark.asyncio
 async def test_a_member_without_write_cannot_DELETE_either(seeded, table, _fk):
     # The reason each table carries TWO policies rather than one. Postgres has no WITH CHECK for

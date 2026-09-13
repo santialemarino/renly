@@ -52,7 +52,7 @@ from app.domain import (
 from app.domain.errors import AccountCurrencyMismatchError
 from app.domain.pot import ONE_HUNDRED, OPENING_UNIT_PRICE, UNIT_PLACES, OwnershipEntry, quantize
 from app.models.account import Account
-from app.models.group import Group, GroupMember
+from app.models.group import GroupMember
 from app.models.notification import NotificationEvent
 from app.models.pot import OwnershipEventType, Pot, PotOwnershipEvent
 from app.models.shared_audit import AuditAction, AuditEntityType
@@ -300,17 +300,6 @@ async def _pot_audience(session: AsyncSession, pot: Pot, user: User) -> list[int
     return await pot_service.list_notifiable_user_ids(session, pot, exclude_user_id=user.id)
 
 
-# The payload every pot notification carries, plus whatever the specific event adds.
-#
-# `pot` is the pot's raw name and may be NULL — a group's default pot has none — and it is left NULL
-# rather than filled in here, because the label a nameless pot reads under is LOCALIZED while this
-# payload is shared by every recipient whatever language each of them uses. Each renderer applies its
-# own fallback in the reader's own language: `notification_templates._readable` for email and push,
-# and `notificationRow`'s `potFallback` on the web for the feed.
-def _pot_payload(pot: Pot, group: Group | None, extra: dict) -> dict:
-    return {"group_id": pot.group_id, "group": group.name if group else None, "pot_id": pot.id, "pot": pot.name, **extra}
-
-
 # One ledger audit entry. `variant` is the event's own type, so the four movements share one action and
 # one sentence with four readings rather than four actions — the split the notification layer already
 # made between an event and its variant.
@@ -424,7 +413,7 @@ async def record_opening(
     await notification_service.dispatch(
         NotificationEvent.ownership_changed,
         recipients,
-        _pot_payload(pot, group, {"variant": "opening", "actor": actor.display_name}),
+        pot_service.notification_payload(pot, group, {"variant": "opening", "actor": actor.display_name}),
     )
     return [_build_response(e, members_by_id, viewer_member_id=actor.id, may_write=True) for e in created]
 
@@ -546,7 +535,7 @@ async def record_movement(
     await notification_service.dispatch(
         NotificationEvent.pot_movement,
         recipients,
-        _pot_payload(
+        pot_service.notification_payload(
             pot,
             group,
             {
@@ -665,7 +654,7 @@ async def contribute_holding(
     await notification_service.dispatch(
         NotificationEvent.pot_movement,
         recipients,
-        _pot_payload(
+        pot_service.notification_payload(
             pot,
             group,
             {
@@ -767,7 +756,7 @@ async def record_reagreement(
     await notification_service.dispatch(
         NotificationEvent.ownership_changed,
         recipients,
-        _pot_payload(
+        pot_service.notification_payload(
             pot,
             group,
             {
@@ -842,7 +831,7 @@ async def _announce_confirmation(
     await notification_service.dispatch(
         NotificationEvent.ownership_changed,
         recipients,
-        _pot_payload(
+        pot_service.notification_payload(
             pot,
             group,
             {
@@ -987,6 +976,6 @@ async def delete_event(session: AsyncSession, pot_id: int, event_id: int, user: 
     await notification_service.dispatch(
         NotificationEvent.ownership_changed,
         recipients,
-        _pot_payload(pot, group, {"variant": "deleted", "actor": viewer.display_name}),
+        pot_service.notification_payload(pot, group, {"variant": "deleted", "actor": viewer.display_name}),
     )
     return deleted

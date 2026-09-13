@@ -217,8 +217,8 @@
       "sharedIncome": "Esta es tu parte de un ingreso compartido. Editalo o eliminalo desde el grupo al que pertenece.",
       "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario.",
       "sharedHolding": "Esta tenencia pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo.",
-      "sharedAccount": "Conciliar esta cuenta y quitarla se hacen en su fondo, junto a la propiedad que mueven.",
-      "sharedAccountReadOnly": "Esta cuenta pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo."
+      "sharedAccount": "Quitar esta cuenta se hace en su fondo, junto a la propiedad que mueve.",
+      "sharedAccountReadOnly": "Editar y archivar esta cuenta requieren permiso de escritura en el fondo: pediselo a un admin del grupo. Quitarla se hace en el fondo."
     },
     "pagination": {
       "previous": "Anterior",
@@ -1058,6 +1058,7 @@
     "reconciliations": {
       "title": "Conciliaciones",
       "subtitle": "Ingresá el saldo real que muestra tu banco o billetera y Renly agrega un ajuste para igualarlo.",
+      "sharedSubtitle": "Ingresá el saldo que la cuenta muestra de verdad. Renly registra un ajuste y lo reparte entre los dueños del fondo según sus partes.",
       "reconcileButton": "Conciliar",
       "loading": "Cargando conciliaciones...",
       "empty": "Todavía no conciliaste esta cuenta.",
@@ -1066,10 +1067,12 @@
         "realBalance": "Saldo real",
         "computedBalance": "Saldo de Renly",
         "adjustment": "Ajuste",
+        "reconciledBy": "Conciliada por",
         "actions": "Acciones",
         "noAdjustment": "Sin ajuste necesario",
         "addedAsIncome": "Se agregó {amount} como ingreso",
-        "addedAsExpense": "Se agregó {amount} como gasto"
+        "addedAsExpense": "Se agregó {amount} como gasto",
+        "reconciledByUnknown": "Alguien"
       },
       "form": {
         "title": "Conciliar {name}",
@@ -1089,6 +1092,7 @@
         "differenceIncomePreview": "Renly va a agregar {amount} {currency} como ingreso para cerrar la diferencia.",
         "differenceExpensePreview": "Renly va a agregar {amount} {currency} como gasto para cerrar la diferencia.",
         "differenceZeroPreview": "Ya coinciden: no se va a agregar nada.",
+        "differenceBearers": "Se reparte entre {members}.",
         "saveLabel": "Conciliar",
         "saveLoading": "Conciliando...",
         "success": "Cuenta conciliada.",
@@ -2940,6 +2944,20 @@
       "emptyDescription": "Cuando alguien registre un gasto, cambie un reparto o salde una deuda, va a aparecer acá.",
       "unknownActor": "Alguien",
       "entries": {
+        "account_reconciliation": {
+          "created": {
+            "base": "{actor} concilió {account}",
+            "matched": "{actor} concilió {account}: coincidía",
+            "surplus": "{actor} concilió {account}: {amount} más de lo registrado",
+            "shortfall": "{actor} concilió {account}: {amount} menos de lo registrado"
+          },
+          "deleted": {
+            "base": "{actor} eliminó una conciliación de {account}",
+            "matched": "{actor} eliminó una conciliación de {account} que coincidía",
+            "surplus": "{actor} eliminó una conciliación de {account} que había sumado {amount}",
+            "shortfall": "{actor} eliminó una conciliación de {account} que había restado {amount}"
+          }
+        },
         "group": {
           "created": "{actor} creó {group}",
           "updated": "{actor} cambió el nombre o el tipo del grupo"
@@ -3213,6 +3231,15 @@
         },
         "withdrawal": {
           "title": "{member} sacó {amount} {currency} de {pot}"
+        },
+        "reconciliation_surplus": {
+          "title": "{actor} concilió {account}: {amount} {currency} más de lo que {pot} tenía registrado"
+        },
+        "reconciliation_shortfall": {
+          "title": "{actor} concilió {account}: {amount} {currency} menos de lo que {pot} tenía registrado"
+        },
+        "reconciliation_removed": {
+          "title": "{actor} eliminó una conciliación de {account} en {pot}"
         }
       },
       "snapshot_due": {
@@ -4186,6 +4213,7 @@
     "transfer_amounts_must_match": "Dentro de una misma moneda, una transferencia tiene que acreditar exactamente lo que debita. Registrá una comisión como un gasto aparte.",
     "transfer_before_account_opened": "Una transferencia tiene que tener fecha igual o posterior a las fechas de apertura de las dos cuentas — la más tardía es {opening_date}.",
     "transfer_cross_scope": "Una transferencia tiene que quedar de un solo lado. El dinero que entra o sale del dinero compartido es un aporte o un retiro, porque cambia lo que le corresponde a cada uno.",
-    "transfer_same_account": "Una transferencia tiene que mover dinero entre dos cuentas distintas."
+    "transfer_same_account": "Una transferencia tiene que mover dinero entre dos cuentas distintas.",
+    "account_reconciliation_pot_not_divided": "Todavía nadie acordó de quién es el dinero de esta cuenta compartida, así que no hay forma de registrar a quién le corresponde la diferencia. Dividí el fondo primero."
   }
 }

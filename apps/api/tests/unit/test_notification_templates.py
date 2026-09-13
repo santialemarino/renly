@@ -22,6 +22,7 @@ _PAYLOAD = {
     "group": "Casa",
     "pot": "Depto Palermo",
     "actor": "Santi",
+    "account": "Caja compartida",
     "member": "Ana",
     "inviter": "Santi",
     "invitee": "Nico",

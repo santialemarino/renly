@@ -217,8 +217,8 @@
       "sharedIncome": "This is your share of shared income. Edit or remove it from the group it belongs to.",
       "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form.",
       "sharedHolding": "This holding belongs to a shared pot. Only a member with write access can change it — ask a group admin for it.",
-      "sharedAccount": "Reconciling this account and removing it happen on its pot, beside the ownership they move.",
-      "sharedAccountReadOnly": "This account belongs to a shared pot. Only a member with write access can change it — ask a group admin for it."
+      "sharedAccount": "Removing this account happens on its pot, beside the ownership it moves.",
+      "sharedAccountReadOnly": "Editing and archiving this account need write access on its pot — ask a group admin. Removing it happens on the pot itself."
     },
     "pagination": {
       "previous": "Previous",
@@ -1058,6 +1058,7 @@
     "reconciliations": {
       "title": "Reconciliations",
       "subtitle": "Enter the balance your bank or wallet actually shows and Renly posts one adjustment to match it.",
+      "sharedSubtitle": "Enter the balance the account actually shows. Renly posts one adjustment and divides it between the pot's owners in their shares.",
       "reconcileButton": "Reconcile",
       "loading": "Loading reconciliations...",
       "empty": "This account hasn't been reconciled yet.",
@@ -1066,10 +1067,12 @@
         "realBalance": "Real balance",
         "computedBalance": "Renly's balance",
         "adjustment": "Adjustment",
+        "reconciledBy": "Reconciled by",
         "actions": "Actions",
         "noAdjustment": "No adjustment needed",
         "addedAsIncome": "Added {amount} as income",
-        "addedAsExpense": "Added {amount} as an expense"
+        "addedAsExpense": "Added {amount} as an expense",
+        "reconciledByUnknown": "Someone"
       },
       "form": {
         "title": "Reconcile {name}",
@@ -1089,6 +1092,7 @@
         "differenceIncomePreview": "Renly will add {amount} {currency} as income to close the gap.",
         "differenceExpensePreview": "Renly will add {amount} {currency} as an expense to close the gap.",
         "differenceZeroPreview": "Already matching — nothing will be added.",
+        "differenceBearers": "It divides between {members}.",
         "saveLabel": "Reconcile",
         "saveLoading": "Reconciling...",
         "success": "Account reconciled.",
@@ -2940,6 +2944,20 @@
       "emptyDescription": "Once somebody records an expense, changes a split or settles up, it shows here.",
       "unknownActor": "Someone",
       "entries": {
+        "account_reconciliation": {
+          "created": {
+            "base": "{actor} reconciled {account}",
+            "matched": "{actor} reconciled {account} — it matched",
+            "surplus": "{actor} reconciled {account} — {amount} more than recorded",
+            "shortfall": "{actor} reconciled {account} — {amount} less than recorded"
+          },
+          "deleted": {
+            "base": "{actor} removed a reconciliation of {account}",
+            "matched": "{actor} removed a reconciliation of {account} that had matched",
+            "surplus": "{actor} removed a reconciliation of {account} that had added {amount}",
+            "shortfall": "{actor} removed a reconciliation of {account} that had taken off {amount}"
+          }
+        },
         "group": {
           "created": "{actor} created {group}",
           "updated": "{actor} changed the group's name or kind"
@@ -3213,6 +3231,15 @@
         },
         "withdrawal": {
           "title": "{member} took {amount} {currency} out of {pot}"
+        },
+        "reconciliation_surplus": {
+          "title": "{actor} reconciled {account} — {amount} {currency} more than {pot} had recorded"
+        },
+        "reconciliation_shortfall": {
+          "title": "{actor} reconciled {account} — {amount} {currency} less than {pot} had recorded"
+        },
+        "reconciliation_removed": {
+          "title": "{actor} removed a reconciliation of {account} in {pot}"
         }
       },
       "snapshot_due": {
@@ -4186,6 +4213,7 @@
     "transfer_amounts_must_match": "Within one currency a transfer must credit exactly what it debits. Record a fee as its own expense.",
     "transfer_before_account_opened": "A transfer has to be dated on or after both accounts' opening dates — the later one is {opening_date}.",
     "transfer_cross_scope": "A transfer has to stay on one side. Money moving into or out of shared money is a contribution or a withdrawal, because it changes what each person owns.",
-    "transfer_same_account": "A transfer must move money between two different accounts."
+    "transfer_same_account": "A transfer must move money between two different accounts.",
+    "account_reconciliation_pot_not_divided": "Nobody has agreed who owns this shared account's money yet, so there's no way to record who the difference belongs to. Divide the pot first."
   }
 }

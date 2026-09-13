@@ -22,10 +22,16 @@ SEAT = GroupMember(id=100, group_id=10, user_id=USER.id, display_name="Santi", r
 OTHER_SEAT = GroupMember(id=101, group_id=10, user_id=2, display_name="Ana", role=GroupMemberRole.member)
 PLACEHOLDER = GroupMember(id=102, group_id=10, user_id=None, display_name="Leo", role=GroupMemberRole.member)
 
-# Which entity type covers each group-scoped table. Declared rather than derived, because the mapping is
-# a judgement — a split is audited through its parent expense, and a permission row through its pot —
-# and the test below is what stops the judgement going stale.
+# Which entity type covers each table the trail has to cover. Declared rather than derived, because the
+# mapping is a judgement — a split is audited through its parent expense, and a permission row through
+# its pot — and the test below is what stops the judgement going stale.
+#
+# It is a SUPERSET of the group-scoped tables: `account_reconciliations` is dual-scope (it carries a
+# user_id, so the derivation correctly leaves it out) and yet a reconciliation of a POT's account is a
+# group act, because the adjustment it posts divides between that pot's owners. A table appears here
+# when some row of it is audited, not when every row is.
 AUDITED_BY = {
+    "account_reconciliations": AuditEntityType.account_reconciliation,
     "groups": AuditEntityType.group,
     "group_members": AuditEntityType.group_member,
     "group_invites": AuditEntityType.group_invite,
@@ -77,10 +83,14 @@ class TestCoverage:
 
     def test_the_derivation_excludes_the_dual_scope_tables(self):
         # Proving the derivation discriminates rather than merely returning what the map already says.
-        # These four point at a pot and are NOT group-scoped: they carry an owner, so a private row is
+        # These five point at a pot and are NOT group-scoped: they carry an owner, so a private row is
         # nobody's group business. If the user_id half of the rule were dropped they would appear here,
         # and the first test would fail — which is what makes it a test rather than a restatement.
-        assert _group_scoped_tables() & {"investments", "accounts", "transfers", "investment_snapshots"} == set()
+        #
+        # `account_reconciliations` is in AUDITED_BY anyway and is the reason that map is a superset: a
+        # reconciliation of a POT's account is a group act, while one of a private account is not, and
+        # no schema-level derivation can tell those two rows apart.
+        assert _group_scoped_tables() & {"investments", "accounts", "transfers", "investment_snapshots", "account_reconciliations"} == set()
 
 
 class TestRecord:

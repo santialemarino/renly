@@ -100,6 +100,7 @@ export function activityRow(
       // leaves a group's default pot unnamed, and a null interpolated into copy fails by PRINTING.
       pot: text(payload, 'pot') || potFallback,
       member: text(payload, 'member'),
+      account: text(payload, 'account'),
       counterparty: text(payload, 'counterparty'),
       from_member: text(payload, 'from_member'),
       to_member: text(payload, 'to_member'),

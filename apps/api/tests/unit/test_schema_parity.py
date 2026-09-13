@@ -79,6 +79,14 @@ class TestScopedTablesCarryTheirGuards:
         missing = [t for t in self.SCOPED if f"CONSTRAINT {t}_single_owner CHECK ((user_id IS NOT NULL) <> (pot_id IS NOT NULL))" not in text]
         assert missing == [], f"tables with pot_id but no single-owner CHECK: {missing}"
 
+    # The one scoped table whose write half is NOT pot write access, and so does not carry a
+    # `_scope_write FOR ALL` policy at all. Reconciling a pot's account is gated on SEEING the pot —
+    # the same gate the equivalent manual act carries — so it splits per command instead: insert,
+    # update and delete each on the view predicate, with a column grant capping what an update may set.
+    # Listed here rather than dropped from SCOPED, because every OTHER assertion in this class still
+    # applies to it.
+    VIEW_GATED_WRITES = ("account_reconciliations",)
+
     def test_every_scoped_table_has_BOTH_a_read_and_a_write_policy(self):
         # Two policies, not one: Postgres has no WITH CHECK for DELETE, so a single FOR ALL policy
         # whose USING named the view helper would let a read-only member delete a shared holding.
@@ -86,9 +94,36 @@ class TestScopedTablesCarryTheirGuards:
         missing = [
             t
             for t in self.SCOPED
-            if f"CREATE POLICY {t}_scope_read ON {t} FOR SELECT" not in text or f"CREATE POLICY {t}_scope_write ON {t} FOR ALL" not in text
+            if t not in self.VIEW_GATED_WRITES
+            and (f"CREATE POLICY {t}_scope_read ON {t} FOR SELECT" not in text or f"CREATE POLICY {t}_scope_write ON {t} FOR ALL" not in text)
         ]
         assert missing == [], f"tables missing a read or write policy: {missing}"
+
+    def test_the_view_gated_table_splits_its_writes_per_command(self):
+        # The exemption is not a hole. Postgres has no WITH CHECK for DELETE, so the same reasoning
+        # that gives every other table two policies gives this one four — and the read-only seat it
+        # deliberately admits makes each verb's predicate load-bearing on its own.
+        text = SCHEMA.read_text()
+        for table in self.VIEW_GATED_WRITES:
+            assert f"CREATE POLICY {table}_scope_write ON {table} FOR ALL" not in text, table
+            for command in ("SELECT", "INSERT", "UPDATE", "DELETE"):
+                policy = f"{table}_scope_{'read' if command == 'SELECT' else command.lower()}"
+                assert f"CREATE POLICY {policy} ON {table} FOR {command}" in text, f"{table}: {command}"
+            # RLS filters rows and never columns, so only a REVOKE plus a per-column GRANT can stop the
+            # read-only seat this table admits from rewriting a figure somebody else recorded. The GRANT
+            # is matched across the line break it is written on and tied to THIS table, so it cannot be
+            # satisfied by a per-column grant somewhere else in the schema.
+            assert f"REVOKE UPDATE ON {table} FROM renly_app" in text, table
+            grant = re.search(rf"GRANT UPDATE \(([^)]*)\)\s*\n?\s*ON {table} TO renly_app", text)
+            assert grant is not None, f"{table}: no per-column UPDATE grant"
+            # Exactly the four back-pointer columns, and `updated_at` deliberately absent: column
+            # privileges are checked against a statement's SET list and the trigger writes that one.
+            assert [c.strip() for c in grant.group(1).split(",")] == [
+                "adjustment_expense_id",
+                "adjustment_income_id",
+                "adjustment_shared_expense_id",
+                "adjustment_shared_income_id",
+            ], table
 
     def test_no_scoped_table_kept_its_old_owner_only_policy(self):
         # A leftover permissive owner-match policy would be OR-ed with the new pair and silently

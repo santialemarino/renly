@@ -50,6 +50,10 @@ class AccountResponse(BaseModel):
     notes: str | None = Field(default=None, description="Optional notes.")
     has_links: bool = Field(default=False, description="Whether any expense/income/settlement/transfer links this account (locks its currency).")
     last_reconciled_date: date_type | None = Field(default=None, description="as_of_date of the most recent reconciliation, if any.")
+    can_reconcile: bool = Field(
+        default=True,
+        description="Whether reconciling is available: always on a private account, and on a pot's once that pot has been divided.",
+    )
     scope: str = Field(default="private", description="'private' when the caller owns it, 'shared' when a pot they co-own does.")
     pot_id: int | None = Field(
         default=None,

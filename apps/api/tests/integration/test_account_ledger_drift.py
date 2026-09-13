@@ -635,6 +635,99 @@ class TestTheScopeCrossingMovements:
         assert by_kind["settlement"] == 0
         assert sum(by_kind.values()) == len(unfiltered)
 
+    @pytest.mark.asyncio
+    async def test_a_shared_accounts_reconciliation_adjustment_reads_as_an_adjustment(self, session, fixtures):
+        """A true-up posted on a POT's account must read as one, not as ordinary shared spending.
+
+        The partition test above cannot see this and neither could its kind-column check: both run on a
+        PRIVATE account, where a reconciliation's adjustment is an expense_entries row and the shared
+        branches carry none. A mislabelled shared row also partitions perfectly cleanly — it just sits
+        under the wrong label, so the `adjustment` filter, the one a user reaches for to separate
+        corrections from real money, answers NOTHING on a pot's account while its true-ups hide under
+        `expense` and `income`.
+
+        The whole failure lives in the SQL — a `literal()` where a `case()` belongs, plus the branch
+        dispatch that decides which branches a filter even asks for — so a mocked session cannot see it
+        either: it would hand back whatever kind it was told.
+        """
+        u, joint, group = fixtures["users"][0], fixtures["joint"], fixtures["group"]
+
+        # The date is bound as a real `date`, not a string: asyncpg refuses a str for a DATE parameter
+        # with an AttributeError about `toordinal`, which reads like a library bug rather than a fixture one.
+        async def reconciliation(as_of: date, statement, computed, difference):
+            return (
+                await session.execute(
+                    text(
+                        "INSERT INTO account_reconciliations "
+                        "(account_id, pot_id, as_of_date, statement_balance, computed_balance, difference, created_by) "
+                        "VALUES (:a, :p, :d, :s, :c, :f, :u) RETURNING id"
+                    ),
+                    {"a": joint, "p": fixtures["pot"], "d": as_of, "s": statement, "c": computed, "f": difference, "u": u},
+                )
+            ).scalar_one()
+
+        adjustment = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses "
+                    "(group_id, date, amount, currency, category, split_method, paid_from_account_id, account_reconciliation_id) "
+                    "VALUES (:g, '2026-07-25', 100, 'ARS', 'account_adjustment', 'percentage', :a, :r) RETURNING id"
+                ),
+                {"g": group, "a": joint, "r": await reconciliation(date(2026, 7, 25), 400, 500, -100)},
+            )
+        ).scalar_one()
+        # An ORDINARY shared expense on the same account, so the assertion discriminates rather than
+        # merely relabelling the whole branch.
+        ordinary = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses (group_id, date, amount, currency, split_method, paid_from_account_id)"
+                    " VALUES (:g, '2026-07-26', 60, 'ARS', 'equal', :a) RETURNING id"
+                ),
+                {"g": group, "a": joint},
+            )
+        ).scalar_one()
+        # And the income direction, which has its own branch and its own `literal()` to get wrong.
+        adjustment_in = (
+            await session.execute(
+                text(
+                    "INSERT INTO shared_income "
+                    "(group_id, date, amount, currency, category, split_method, destination, paid_to_account_id, account_reconciliation_id) "
+                    "VALUES (:g, '2026-07-27', 100, 'ARS', 'account_adjustment', 'percentage', 'joint', :a, :r) RETURNING id"
+                ),
+                {"g": group, "a": joint, "r": await reconciliation(date(2026, 7, 27), 900, 800, 100)},
+            )
+        ).scalar_one()
+        await session.flush()
+
+        account = await account_repository.get_by_id_any_scope(session, joint)
+        bounds = {"opening_date": account.opening_date, "pot_id": account.pot_id, "page_size": 100}
+        rows, _ = await account_movement_repository.list_movements(session, joint, u, **bounds)
+        kinds = {(r.movement.source.value, r.movement.source_id): r.movement.kind.value for r in rows}
+        assert kinds[("shared_expense", adjustment)] == "adjustment"
+        assert kinds[("shared_income", adjustment_in)] == "adjustment"
+        assert kinds[("shared_expense", ordinary)] == "expense"
+
+        async def under(kind):
+            found, _ = await account_movement_repository.list_movements(session, joint, u, kind=kind, **bounds)
+            return {(r.movement.source.value, r.movement.source_id) for r in found}
+
+        # The FILTER has to agree with the label, and in both directions — the half a `case()` alone
+        # leaves broken, because the branch dispatch decides which branches a filter asks for at all.
+        adjustments = await under(MovementKind.adjustment)
+        assert {("shared_expense", adjustment), ("shared_income", adjustment_in)} <= adjustments
+        assert ("shared_expense", ordinary) not in adjustments
+        assert ("shared_expense", ordinary) in await under(MovementKind.expense)
+        assert ("shared_expense", adjustment) not in await under(MovementKind.expense)
+        assert ("shared_income", adjustment_in) not in await under(MovementKind.income)
+
+        # And the partition still holds, so relabelling did not drop a row out of every filter.
+        per_kind = {kind: len(await under(kind)) for kind in MovementKind}
+        assert sum(per_kind.values()) == len(rows)
+        # The balance is untouched by any of this: a label changes what a filter shows, never what the
+        # union sums.
+        await _assert_no_drift(session, joint, u)
+
 
 class TestLedgerWalksBackToOpening:
     @pytest.mark.asyncio

@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
+import { Lock, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -21,6 +21,7 @@ import { expensePayerDisplay } from '@/app/(protected)/shared/shared-expense-rul
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
 import type { Account } from '@/lib/api/accounts';
@@ -28,6 +29,7 @@ import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Group } from '@/lib/api/groups';
 import type { SharedExpense } from '@/lib/api/shared-expenses';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { isReconciliationOwned } from '@/lib/reconciliation';
 
 /*
  * Rows per page. The API returns a group's whole history in one response — a shared expense list has
@@ -266,19 +268,38 @@ function ExpenseRow({
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">
-          <RowActionButton
-            icon={Pencil}
-            tooltip={t('expenses.actions.edit')}
-            ariaLabel="Edit"
-            onClick={onEdit}
-          />
-          <RowActionButton
-            icon={Trash2}
-            tooltip={t('expenses.actions.delete')}
-            ariaLabel="Delete"
-            variant="destructive"
-            onClick={onRemove}
-          />
+          {/*
+           * A row a shared account's RECONCILIATION posted is that reconciliation's to revise, and the
+           * API refuses a direct edit or delete of it (409). Withheld rather than offered-and-refused,
+           * which is the same rule `/expenses` applies to the private adjustment — and the indicator is
+           * what tells the reader where the supported action lives.
+           */}
+          {isReconciliationOwned({
+            reconciliationId: null,
+            accountReconciliationId: expense.accountReconciliationId,
+          }) ? (
+            <RowLockedIndicator
+              icon={Lock}
+              tooltip={tCommon('lockedRow.reconciliationOwned')}
+              ariaLabel="Managed by a reconciliation"
+            />
+          ) : (
+            <>
+              <RowActionButton
+                icon={Pencil}
+                tooltip={t('expenses.actions.edit')}
+                ariaLabel="Edit"
+                onClick={onEdit}
+              />
+              <RowActionButton
+                icon={Trash2}
+                tooltip={t('expenses.actions.delete')}
+                ariaLabel="Delete"
+                variant="destructive"
+                onClick={onRemove}
+              />
+            </>
+          )}
         </div>
       </TableCell>
     </TableRow>

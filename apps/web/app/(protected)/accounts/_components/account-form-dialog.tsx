@@ -115,7 +115,11 @@ export function AccountFormDialog({
                 <FormItem required>
                   <FormLabel>{t('form.name.label')}</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder={t('form.name.placeholder')} />
+                    <Input
+                      {...field}
+                      placeholder={t('form.name.placeholder')}
+                      data-testid="account-form-name"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -138,6 +142,7 @@ export function AccountFormDialog({
                           value: type,
                           label: t(`types.${type}`),
                         }))}
+                        data-testid="account-form-type"
                       />
                     </FormControl>
                     <FormMessage />
@@ -165,6 +170,7 @@ export function AccountFormDialog({
                               searchPlaceholder={t('form.currency.searchPlaceholder')}
                               noResults={t('form.currency.noResults')}
                               onChange={field.onChange}
+                              data-testid="account-form-currency"
                             />
                           </div>
                         </TooltipTrigger>
@@ -194,6 +200,7 @@ export function AccountFormDialog({
                         // An account can be opened already overdrawn, and the API has always
                         // accepted a negative opening balance.
                         allowNegative
+                        data-testid="account-form-opening-balance"
                       />
                     </FormControl>
                     <FormMessage />
@@ -212,6 +219,7 @@ export function AccountFormDialog({
                         value={field.value || undefined}
                         onChange={field.onChange}
                         placeholder={t('form.openingDate.placeholder')}
+                        data-testid="account-form-opening-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -240,7 +248,13 @@ export function AccountFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             {t('form.cancel')}
           </Button>
-          <Button blue type="submit" form="account-form" disabled={form.formState.isSubmitting}>
+          <Button
+            blue
+            type="submit"
+            form="account-form"
+            disabled={form.formState.isSubmitting}
+            data-testid="account-form-submit"
+          >
             {form.formState.isSubmitting ? t('form.cta.loading') : t('form.cta.label')}
           </Button>
         </DialogFooter>

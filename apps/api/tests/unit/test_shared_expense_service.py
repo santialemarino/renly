@@ -7,6 +7,7 @@ import pytest
 from app.domain import (
     AccountCurrencyMismatchError,
     NotFoundError,
+    ReconciliationOwnedEntryError,
     SharedExpenseBeforeAccountOpenedError,
     SharedExpenseFundingPotNotDividedError,
     SharedExpenseFundingScopeError,
@@ -393,3 +394,58 @@ class TestTheCardLeg:
         written = _wire(monkeypatch)
         await _create(written)
         shared_expense_service.card_reconciliation_service.mark_stale_for_date.assert_not_awaited()
+
+
+# A row the RECONCILIATION of a shared account posted is that reconciliation's to revise — re-run or
+# delete it. Editing or deleting the row directly would leave the reconciliation claiming a difference
+# it no longer applies while the balance snapped back, which is exactly what the private pair refuses.
+class TestAReconciliationsOwnRow:
+    @pytest.mark.asyncio
+    async def test_it_cannot_be_edited(self, monkeypatch):
+        _wire(monkeypatch)
+        owned = SharedExpense(
+            id=77, group_id=GROUP_ID, date=TODAY, amount=Decimal("90.00"), currency="ARS", split_method=SplitMethod.equal, account_reconciliation_id=5
+        )
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "get_by_id", AsyncMock(return_value=owned))
+
+        with pytest.raises(ReconciliationOwnedEntryError):
+            await shared_expense_service.update_expense(
+                AsyncMock(),
+                GROUP_ID,
+                77,
+                USER,
+                date=TODAY,
+                amount=Decimal("50.00"),
+                currency="ARS",
+                split_method=SplitMethod.equal,
+                splits=[SharedExpenseSplitInput(member_id=11)],
+                payer_member_id=11,
+            )
+
+    @pytest.mark.asyncio
+    async def test_it_cannot_be_deleted(self, monkeypatch):
+        _wire(monkeypatch)
+        owned = SharedExpense(
+            id=77, group_id=GROUP_ID, date=TODAY, amount=Decimal("90.00"), currency="ARS", split_method=SplitMethod.equal, account_reconciliation_id=5
+        )
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "get_by_id", AsyncMock(return_value=owned))
+        delete = AsyncMock()
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "delete", delete)
+
+        with pytest.raises(ReconciliationOwnedEntryError):
+            await shared_expense_service.delete_expense(AsyncMock(), GROUP_ID, 77, USER)
+        # Refused before anything is read or written, so a rejected request changes nothing.
+        delete.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_ordinary_row_is_still_deletable(self, monkeypatch):
+        # The positive control. Without it the two refusals above are equally true of a wrong fixture.
+        _wire(monkeypatch)
+        ordinary = SharedExpense(id=77, group_id=GROUP_ID, date=TODAY, amount=Decimal("90.00"), currency="ARS", split_method=SplitMethod.equal)
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "get_by_id", AsyncMock(return_value=ordinary))
+        delete = AsyncMock()
+        monkeypatch.setattr(shared_expense_service.shared_expense_repository, "delete", delete)
+
+        await shared_expense_service.delete_expense(AsyncMock(), GROUP_ID, 77, USER)
+
+        delete.assert_awaited_once()

@@ -22,6 +22,7 @@ ACTION_LENGTH = 50
 # migration at all. The values name no money concept in the TABLE — `shared_expense` and `settlement`
 # are entities the money module happens to own, exactly as `notification_event`'s labels are.
 class AuditEntityType(StrEnum):
+    account_reconciliation = "account_reconciliation"
     group = "group"
     group_invite = "group_invite"
     group_member = "group_member"

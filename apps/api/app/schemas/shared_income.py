@@ -112,6 +112,13 @@ class SharedIncomeResponse(BaseModel):
     received_by_member_id: int | None = Field(default=None, description="Seat the money reached; null when it landed in a shared account.")
     received_by_display_name: str | None = Field(default=None, description="That person's name; null when it landed in a shared account.")
     my_share: Decimal | None = Field(default=None, description="The requesting user's own share; null when they take none.")
+    account_reconciliation_id: int | None = Field(
+        default=None,
+        description=(
+            "Owning account reconciliation when this row is that reconciliation's adjustment. "
+            "Non-null means the row is derived: PUT and DELETE are refused with 409 reconciliation_owned_entry."
+        ),
+    )
     splits: list[SharedIncomeSplitResponse] = Field(description="Every member's position in this income.")
     created_at: datetime = Field(description="Creation timestamp.")
     updated_at: datetime = Field(description="Last update timestamp.")

@@ -98,6 +98,36 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "body": ('{member} took {amount} {currency} out of "{pot}", in the group "{group}".\n\nSee the pot and its movements here:\n{link}'),
             "push": "{member} took money out of {pot}",
         },
+        "pot_movement.reconciliation_surplus": {
+            "subject": "{actor} reconciled {account}",
+            "body": (
+                '{actor} checked "{account}", in the pot "{pot}", against what it really holds.\n\n'
+                "It held {amount} {currency} MORE than the pot had recorded, so that much was added and "
+                "divided between the owners in their shares.\n\n"
+                "See the pot and what it holds here:\n{link}"
+            ),
+            "push": "{actor} reconciled {account}",
+        },
+        "pot_movement.reconciliation_shortfall": {
+            "subject": "{actor} reconciled {account}",
+            "body": (
+                '{actor} checked "{account}", in the pot "{pot}", against what it really holds.\n\n'
+                "It held {amount} {currency} LESS than the pot had recorded, so that much was taken off and "
+                "divided between the owners in their shares.\n\n"
+                "See the pot and what it holds here:\n{link}"
+            ),
+            "push": "{actor} reconciled {account}",
+        },
+        "pot_movement.reconciliation_removed": {
+            "subject": "{actor} removed a reconciliation of {account}",
+            "body": (
+                '{actor} removed a reconciliation of "{account}", in the pot "{pot}".\n\n'
+                "Its {amount} {currency} adjustment went with it, so the balance is back to what it was "
+                "before that correction.\n\n"
+                "See the pot and what it holds here:\n{link}"
+            ),
+            "push": "{actor} removed a reconciliation of {account}",
+        },
         "snapshot_due": {
             "subject": "{pot} is due a new valuation",
             "body": (
@@ -221,6 +251,36 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "subject": "{member} sacó dinero de {pot}",
             "body": ('{member} sacó {amount} {currency} de "{pot}", en el grupo "{group}".\n\nPodés ver el fondo y sus movimientos acá:\n{link}'),
             "push": "{member} sacó dinero de {pot}",
+        },
+        "pot_movement.reconciliation_surplus": {
+            "subject": "{actor} concilió {account}",
+            "body": (
+                '{actor} comparó "{account}", en el fondo "{pot}", con lo que realmente tiene.\n\n'
+                "Tenía {amount} {currency} MÁS de lo que el fondo tenía registrado, así que se sumó esa "
+                "diferencia y se repartió entre los dueños según sus partes.\n\n"
+                "Podés ver el fondo y lo que tiene acá:\n{link}"
+            ),
+            "push": "{actor} concilió {account}",
+        },
+        "pot_movement.reconciliation_shortfall": {
+            "subject": "{actor} concilió {account}",
+            "body": (
+                '{actor} comparó "{account}", en el fondo "{pot}", con lo que realmente tiene.\n\n'
+                "Tenía {amount} {currency} MENOS de lo que el fondo tenía registrado, así que se restó esa "
+                "diferencia y se repartió entre los dueños según sus partes.\n\n"
+                "Podés ver el fondo y lo que tiene acá:\n{link}"
+            ),
+            "push": "{actor} concilió {account}",
+        },
+        "pot_movement.reconciliation_removed": {
+            "subject": "{actor} eliminó una conciliación de {account}",
+            "body": (
+                '{actor} eliminó una conciliación de "{account}", en el fondo "{pot}".\n\n'
+                "El ajuste de {amount} {currency} se fue con ella, así que el saldo volvió a ser el de "
+                "antes de esa corrección.\n\n"
+                "Podés ver el fondo y lo que tiene acá:\n{link}"
+            ),
+            "push": "{actor} eliminó una conciliación de {account}",
         },
         "snapshot_due": {
             "subject": "{pot} necesita una nueva valuación",

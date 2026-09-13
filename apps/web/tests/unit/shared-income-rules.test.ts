@@ -55,6 +55,7 @@ function income(overrides: Partial<SharedIncome> = {}): SharedIncome {
     receivedByMemberId: 1,
     receivedByDisplayName: 'Santi',
     myShare: '30000.00',
+    accountReconciliationId: null,
     splits: [
       split({ memberId: 1, receivedAmount: '90000.00' }),
       split({ memberId: 2, displayName: 'Nico' }),

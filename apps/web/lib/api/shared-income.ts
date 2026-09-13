@@ -53,6 +53,7 @@ interface SharedIncomeRaw {
   received_by_member_id: number | null;
   received_by_display_name: string | null;
   my_share: string | null;
+  account_reconciliation_id: number | null;
   splits: SharedIncomeSplitRaw[];
   created_at: string;
   updated_at: string;
@@ -102,6 +103,8 @@ export interface SharedIncome {
   receivedByDisplayName: string | null;
   // The viewer's own share, or null when they are entitled to none of this row.
   myShare: string | null;
+  /** Non-null when this row is a shared account reconciliation's adjustment, which refuses every edit. */
+  accountReconciliationId: number | null;
   splits: SharedIncomeSplit[];
   createdAt: string;
   updatedAt: string;
@@ -138,6 +141,7 @@ function mapSharedIncome(raw: SharedIncomeRaw): SharedIncome {
     receivedByMemberId: raw.received_by_member_id,
     receivedByDisplayName: raw.received_by_display_name,
     myShare: raw.my_share,
+    accountReconciliationId: raw.account_reconciliation_id,
     splits: raw.splits.map(mapSplit),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

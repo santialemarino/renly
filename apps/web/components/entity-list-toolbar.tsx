@@ -118,7 +118,9 @@ export function EntityListToolbar({
             </Pill>
           )}
           {trailing}
-          <Button blue onClick={onAdd} className="min-w-fit flex-1">
+          {/* One testid on the shared primitive, so every list page's add button is already
+              reachable — the same rule ConfirmDialog's confirm button follows. */}
+          <Button blue onClick={onAdd} className="min-w-fit flex-1" data-testid="entity-list-add">
             <Plus className="size-4" />
             {addLabel}
           </Button>

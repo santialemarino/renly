@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CircleDollarSign, Pencil, Plus, Trash2 } from 'lucide-react';
+import { CircleDollarSign, Lock, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
@@ -21,12 +21,14 @@ import { incomeHolderDisplay } from '@/app/(protected)/shared/shared-income-rule
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
+import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
 import type { SharedIncome } from '@/lib/api/shared-income';
 import { useFormatters } from '@/lib/i18n/formatters';
+import { isReconciliationOwned } from '@/lib/reconciliation';
 
 /*
  * Rows per page. The API returns a group's whole history in one response — a shared income list has no
@@ -226,6 +228,7 @@ function IncomeRow({
 }) {
   const fmt = useFormatters();
   const t = useTranslations('shared');
+  const tCommon = useTranslations('common');
 
   const holder = incomeHolderDisplay(income);
 
@@ -266,19 +269,33 @@ function IncomeRow({
       </TableCell>
       <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-center gap-x-1">
-          <RowActionButton
-            icon={Pencil}
-            tooltip={t('income.actions.edit')}
-            ariaLabel="Edit"
-            onClick={onEdit}
-          />
-          <RowActionButton
-            icon={Trash2}
-            tooltip={t('income.actions.delete')}
-            ariaLabel="Delete"
-            variant="destructive"
-            onClick={onRemove}
-          />
+          {/* The income-side twin of the expense list's gate — see the note there. */}
+          {isReconciliationOwned({
+            reconciliationId: null,
+            accountReconciliationId: income.accountReconciliationId,
+          }) ? (
+            <RowLockedIndicator
+              icon={Lock}
+              tooltip={tCommon('lockedRow.reconciliationOwned')}
+              ariaLabel="Managed by a reconciliation"
+            />
+          ) : (
+            <>
+              <RowActionButton
+                icon={Pencil}
+                tooltip={t('income.actions.edit')}
+                ariaLabel="Edit"
+                onClick={onEdit}
+              />
+              <RowActionButton
+                icon={Trash2}
+                tooltip={t('income.actions.delete')}
+                ariaLabel="Delete"
+                variant="destructive"
+                onClick={onRemove}
+              />
+            </>
+          )}
         </div>
       </TableCell>
     </TableRow>

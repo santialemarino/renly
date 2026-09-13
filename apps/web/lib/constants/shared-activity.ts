@@ -12,6 +12,7 @@
 
 /** Every kind of shared thing the trail records, alphabetical as the API's enum is. */
 export const ACTIVITY_ENTITY_TYPES = [
+  'account_reconciliation',
   'group',
   'group_invite',
   'group_member',
@@ -37,6 +38,7 @@ export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
  * action from here while stored rows still name it — which is what to check before deleting a line.
  */
 export const ACTIVITY_ACTIONS = {
+  account_reconciliation: ['created', 'deleted'],
   group: ['created', 'updated'],
   group_invite: ['created', 'revoked'],
   group_member: ['added', 'joined', 'removed', 'updated'],
@@ -74,6 +76,8 @@ export const ACTIVITY_ACTIONS = {
  * carries none at all, and without a base to fall back to it renders its own key path forever.
  */
 export const ACTIVITY_VARIANTS = {
+  'account_reconciliation.created': ['matched', 'surplus', 'shortfall'],
+  'account_reconciliation.deleted': ['matched', 'surplus', 'shortfall'],
   'group_member.removed': ['self', 'by_admin'],
   'ownership_event.created': ['opening', 'contribution', 'withdrawal', 'reagreement'],
   'ownership_event.deleted': ['opening', 'contribution', 'withdrawal', 'reagreement'],

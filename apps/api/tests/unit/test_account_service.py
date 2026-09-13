@@ -177,6 +177,35 @@ class TestListAccountsGrouped:
         assert [(t.currency, t.amount) for t in sections[1].totals] == [("ARS", Decimal("3000.00")), ("USD", Decimal("400.00"))]
 
     @pytest.mark.asyncio
+    async def test_a_private_row_can_always_be_reconciled(self, monkeypatch):
+        # Zero added friction for a solo user: `divided` is empty here, and a private row still says
+        # yes, so the pot branch cannot have leaked into the private answer.
+        _wire(monkeypatch, [_account(id=7)], divided=set())
+        items = (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).items
+        assert [i.can_reconcile for i in items] == [True]
+
+    @pytest.mark.asyncio
+    async def test_a_shared_row_says_no_until_its_pot_is_divided(self, monkeypatch):
+        # The row that OFFERS reconciling and the endpoint that REFUSES it are one rule, so this is the
+        # list's half of it: a pot nobody has divided has no owners on record to bear the difference.
+        # Both pots in one fixture, so the flag discriminates rather than answering the same thing twice.
+        _wire(
+            monkeypatch,
+            [_account(id=8, user_id=None, pot_id=4), _account(id=9, user_id=None, pot_id=5)],
+            divided={4},
+        )
+        items = (await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)).items
+        assert [(i.pot_id, i.can_reconcile) for i in items] == [(4, True), (5, False)]
+
+    @pytest.mark.asyncio
+    async def test_the_divided_lookup_is_one_batched_query_over_the_shared_pots(self, monkeypatch):
+        # Never a lookup per row — and never a query at all for a list with no shared rows in it, which
+        # is every solo user's.
+        _wire(monkeypatch, [_account(id=7)])
+        await account_service.list_accounts_grouped(AsyncMock(), USER, scope=ListScope.all)
+        assert account_service.pot_ownership_repository.divided_pot_ids.await_args.args[1] == []
+
+    @pytest.mark.asyncio
     async def test_the_total_is_the_derived_balance_and_not_the_opening_figure(self, monkeypatch):
         # The opening figure and the derived balance are the same number on an account nothing has
         # moved, so a fixture where they agree could not tell which one the header is summing.
@@ -206,10 +235,16 @@ class TestListAccountsGrouped:
         account_service.pot_service.list_visible_scopes.assert_not_awaited()
 
 
-# Wires the four reads list_accounts_grouped makes.
-def _wire(monkeypatch, accounts: list[Account], *, balances=None, scopes=None) -> None:
+# Wires the five reads list_accounts_grouped makes.
+#
+# `divided` is the set of pots with an ownership ledger, which is what decides `can_reconcile` on a
+# shared row. It defaults to every pot in the fixture, so a test that says nothing about ownership gets
+# the ordinary case rather than a pot nobody has divided.
+def _wire(monkeypatch, accounts: list[Account], *, balances=None, scopes=None, divided=None) -> None:
     monkeypatch.setattr(account_service.account_repository, "list_by_user", AsyncMock(return_value=accounts))
     resolved = balances if balances is not None else {a.id: a.opening_balance for a in accounts}
     monkeypatch.setattr(account_service, "get_account_summaries", AsyncMock(return_value=(resolved, set())))
     monkeypatch.setattr(account_service.account_reconciliation_repository, "get_latest_dates_by_account_ids", AsyncMock(return_value={}))
     monkeypatch.setattr(account_service.pot_service, "list_visible_scopes", AsyncMock(return_value=scopes or []))
+    pots = {a.pot_id for a in accounts if a.pot_id is not None} if divided is None else set(divided)
+    monkeypatch.setattr(account_service.pot_ownership_repository, "divided_pot_ids", AsyncMock(return_value=pots))

@@ -18,6 +18,18 @@ from app.models.utils import utcnow
 # adjustment_expense_id / adjustment_income_id back-reference the adjustment row; the corresponding
 # expense_entries.account_reconciliation_id / income_entries.account_reconciliation_id close the loop
 # with ON DELETE CASCADE, so deleting a reconciliation always removes the adjustment it created.
+#
+# A POT's account carries the same pair one table over: adjustment_shared_expense_id /
+# adjustment_shared_income_id, because a private entry cannot be the adjustment there. expense_entries
+# and income_entries keep user_id NOT NULL and carry no pot_id (§3 — a shared flow lives in its own
+# table), and the pot account's balance sums filter on that same user_id — so such a row would leave
+# the drift open. What refuses it is `ensure_private_funding` in the service rather than any constraint
+# here, which is why that guard is load-bearing rather than decorative.
+# The shared row is split across the pot's owners in their ownership proportions on BOTH sides at once,
+# so it nets to zero between them: the drift is the pot's own money, and correcting it creates no debt
+# between the people who hold it.
+# The two pairs are mutually exclusive per scope, enforced by CHECK constraints rather than by this
+# service, so a row read back says which kind of adjustment to look for from its scope alone.
 class AccountReconciliation(SQLModel, table=True):
     __tablename__ = "account_reconciliations"
 
@@ -41,6 +53,17 @@ class AccountReconciliation(SQLModel, table=True):
         foreign_key="income_entries.id",
         description="Back-pointer to the adjustment income (set when difference > 0).",
     )
+    adjustment_shared_expense_id: int | None = Field(
+        default=None,
+        foreign_key="shared_expenses.id",
+        description="Back-pointer to the shared adjustment expense on a POT's account (set when difference < 0).",
+    )
+    adjustment_shared_income_id: int | None = Field(
+        default=None,
+        foreign_key="shared_income.id",
+        description="Back-pointer to the shared adjustment income on a POT's account (set when difference > 0).",
+    )
+    created_by: int | None = Field(default=None, foreign_key="users.id", description="Who ran it; NULL once that account is deleted.")
     reconciled_at: datetime = Field(default_factory=utcnow, description="When the user ran the reconciliation.")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)

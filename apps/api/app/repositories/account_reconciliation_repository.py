@@ -4,7 +4,9 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
+from app.repositories.utils import account_scope_matches
 
 
 # List all reconciliations for an account, newest first.
@@ -30,12 +32,19 @@ async def get_by_id(session: AsyncSession, reconciliation_id: int, account_id: i
 
 # Latest reconciled date per account, in one grouped query. Returns {account_id: as_of_date}; accounts
 # never reconciled are simply absent. Backs the "last reconciled" column without an N+1.
+#
+# Scoped by account_scope_matches rather than by user_id alone, so a POT's account reports the same
+# date to every member who can see it. A bare owner match would read NULL against a shared row's NULL
+# user_id and answer "never reconciled" to everybody — on the list page AND inside the ordering guard
+# that refuses an out-of-order reconciliation, which is the half that would let a member post one
+# underneath an existing one and skew it.
 async def get_latest_dates_by_account_ids(session: AsyncSession, account_ids: list[int], user_id: int) -> dict[int, date_type]:
     if not account_ids:
         return {}
     result = await session.execute(
         select(AccountReconciliation.account_id, func.max(AccountReconciliation.as_of_date))
-        .where(AccountReconciliation.account_id.in_(account_ids), AccountReconciliation.user_id == user_id)
+        .join(Account, Account.id == AccountReconciliation.account_id)
+        .where(AccountReconciliation.account_id.in_(account_ids), account_scope_matches(AccountReconciliation, user_id))
         .group_by(AccountReconciliation.account_id)
     )
     return {account_id: as_of_date for account_id, as_of_date in result.all()}

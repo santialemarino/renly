@@ -50,6 +50,7 @@ interface SharedExpenseRaw {
   payer_member_id: number | null;
   payer_display_name: string | null;
   my_share: string | null;
+  account_reconciliation_id: number | null;
   splits: SharedExpenseSplitRaw[];
   created_at: string;
   updated_at: string;
@@ -92,6 +93,8 @@ export interface SharedExpense {
   payerDisplayName: string | null;
   // The viewer's own share, or null when they took no part in this expense.
   myShare: string | null;
+  /** Non-null when this row is a shared account reconciliation's adjustment, which refuses every edit. */
+  accountReconciliationId: number | null;
   splits: SharedExpenseSplit[];
   createdAt: string;
   updatedAt: string;
@@ -127,6 +130,7 @@ function mapSharedExpense(raw: SharedExpenseRaw): SharedExpense {
     payerMemberId: raw.payer_member_id,
     payerDisplayName: raw.payer_display_name,
     myShare: raw.my_share,
+    accountReconciliationId: raw.account_reconciliation_id,
     splits: raw.splits.map(mapSplit),
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,

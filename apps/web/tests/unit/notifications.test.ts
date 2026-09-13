@@ -158,6 +158,7 @@ const RENDER_PARAMS = {
   group: 'Casa',
   pot: 'Depto',
   actor: 'Santi',
+  account: 'Caja compartida',
   member: 'Ana',
   inviter: 'Santi',
   invitee: 'Nico',

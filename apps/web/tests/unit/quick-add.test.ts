@@ -23,6 +23,7 @@ function account(overrides: Partial<Account> = {}): Account {
     isActive: true,
     hasLinks: false,
     lastReconciledDate: null,
+    canReconcile: true,
     scope: 'private',
     potId: null,
     notes: null,

@@ -27,6 +27,7 @@ import { DatePickerInput } from '@/components/date-picker-input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
 import { LocaleAmountInput } from '@/components/locale-amount-input';
 import { StyledHint } from '@/components/styled-hint';
+import type { ReconciliationBearer } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { todayInTimezone } from '@/lib/utils/dates';
@@ -64,6 +65,9 @@ export function AccountReconcileDialog({
   });
 
   const [computedBalance, setComputedBalance] = useState<string | null>(null);
+  // Who the difference would divide between on a pot's account, largest share first. Always empty on a
+  // private one, which is what keeps a solo user's dialog exactly as it was.
+  const [bearers, setBearers] = useState<ReconciliationBearer[]>([]);
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -91,6 +95,7 @@ export function AccountReconcileDialog({
     if (open) {
       form.reset({ asOfDate: today, statementBalance: '' });
       setComputedBalance(null);
+      setBearers([]);
       setSubmitError(null);
     }
     // `today` is intentionally not a dep: it changes identity on every render but only matters at open.
@@ -109,11 +114,15 @@ export function AccountReconcileDialog({
     let cancelled = false;
     setLoadingBalance(true);
     fetchAccountComputedBalance(account.id, asOfDate)
-      .then((balance) => {
-        if (!cancelled) setComputedBalance(balance);
+      .then((preview) => {
+        if (cancelled) return;
+        setComputedBalance(preview.balance);
+        setBearers(preview.bearers);
       })
       .catch(() => {
-        if (!cancelled) setComputedBalance(null);
+        if (cancelled) return;
+        setComputedBalance(null);
+        setBearers([]);
       })
       .finally(() => {
         if (!cancelled) setLoadingBalance(false);
@@ -223,6 +232,7 @@ export function AccountReconcileDialog({
                       // A statement balance is a signed figure, not an amount — an overdrawn
                       // account really does read negative.
                       allowNegative
+                      data-testid="account-reconcile-balance"
                     />
                   </FormControl>
                   <FormMessage />
@@ -254,6 +264,25 @@ export function AccountReconcileDialog({
                     })}
                   {diffSide === 'zero' && t('form.differenceZeroPreview')}
                 </span>
+                {/*
+                 * Whose money this moves, stated before it moves. A shared account's difference is
+                 * divided between the pot's owners in their ownership proportions, so the act reaches
+                 * people who are not in the room — and a percentage is what can honestly be shown
+                 * here, because the split's rounding remainder goes to the largest holder and a
+                 * per-person figure computed in the browser would not match the row that gets written.
+                 */}
+                {bearers.length > 0 && diffSide !== 'zero' && (
+                  <span className="text-paragraph-xs text-muted-foreground">
+                    {t('form.differenceBearers', {
+                      members: fmt.list(
+                        bearers.map(
+                          (bearer) =>
+                            `${bearer.displayName} (${fmt.sharePct(Number(bearer.percentage))}%)`,
+                        ),
+                      ),
+                    })}
+                  </span>
+                )}
               </div>
             )}
           </form>
@@ -268,6 +297,7 @@ export function AccountReconcileDialog({
             type="submit"
             form="account-reconcile-form"
             disabled={form.formState.isSubmitting || loadingBalance}
+            data-testid="account-reconcile-submit"
           >
             {form.formState.isSubmitting ? t('form.saveLoading') : t('form.saveLabel')}
           </Button>
