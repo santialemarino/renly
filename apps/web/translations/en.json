@@ -218,7 +218,7 @@
       "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form.",
       "sharedHolding": "This holding belongs to a shared pot. Only a member with write access can change it — ask a group admin for it.",
       "sharedAccount": "Removing this account happens on its pot, beside the ownership it moves.",
-      "sharedAccountReadOnly": "This account belongs to a shared pot. Only a member with write access can change it — ask a group admin for it."
+      "sharedAccountReadOnly": "Editing and archiving this account need write access on its pot — ask a group admin. Removing it happens on the pot itself."
     },
     "pagination": {
       "previous": "Previous",
@@ -1072,7 +1072,7 @@
         "noAdjustment": "No adjustment needed",
         "addedAsIncome": "Added {amount} as income",
         "addedAsExpense": "Added {amount} as an expense",
-        "reconciledByUnknown": "Someone who has left"
+        "reconciledByUnknown": "Someone"
       },
       "form": {
         "title": "Reconcile {name}",

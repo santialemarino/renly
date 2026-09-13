@@ -218,7 +218,7 @@
       "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario.",
       "sharedHolding": "Esta tenencia pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo.",
       "sharedAccount": "Quitar esta cuenta se hace en su fondo, junto a la propiedad que mueve.",
-      "sharedAccountReadOnly": "Esta cuenta pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo."
+      "sharedAccountReadOnly": "Editar y archivar esta cuenta requieren permiso de escritura en el fondo: pediselo a un admin del grupo. Quitarla se hace en el fondo."
     },
     "pagination": {
       "previous": "Anterior",
@@ -1072,7 +1072,7 @@
         "noAdjustment": "Sin ajuste necesario",
         "addedAsIncome": "Se agregó {amount} como ingreso",
         "addedAsExpense": "Se agregó {amount} como gasto",
-        "reconciledByUnknown": "Alguien que ya no está"
+        "reconciledByUnknown": "Alguien"
       },
       "form": {
         "title": "Conciliar {name}",
