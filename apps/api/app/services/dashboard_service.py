@@ -8,15 +8,12 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.account_repository import account_repository
-from app.repositories.card_settlement_repository import card_settlement_repository
 from app.repositories.credit_card_repository import credit_card_repository
-from app.repositories.expense_repository import expense_repository
 from app.repositories.group_repository import group_repository
 from app.repositories.income_repository import income_repository
 from app.repositories.installment_repository import installment_repository
 from app.repositories.investment_repository import investment_repository
 from app.repositories.payment_obligation_repository import payment_obligation_repository
-from app.repositories.shared_expense_repository import shared_expense_repository
 from app.repositories.subscription_repository import subscription_repository
 from app.schemas.dashboard import (
     CompositionItem,
@@ -57,81 +54,85 @@ def _month_end(year: int, month: int) -> date_type:
     return date_type(year, month, _calendar.monthrange(year, month)[1])
 
 
-# Pure computation: builds cumulative monthly card balance from expense and
-# settlement totals. Phase 3 dual-currency model: settlements carry their own
-# currency (bucket they settle), so both inputs are 5-tuples and each tuple's
-# currency converts directly to `target_currency` — each row at its OWN month-end rate
-# (Phase 3 Step C — historical exchange rate conversion). `card_currencies` is no
-# longer load-bearing here (each row knows its own currency) but stays in the
-# signature so callers don't need to rewire — defensive fallback only.
-# Returns ({(year, month): cumulative_balance} in the target currency, skipped currency codes).
+# Forward-fills a by-month map onto each requested month: each month takes the latest entry
+# at-or-before it, so a gap month (and every month after the last entry) keeps the prior value instead
+# of reading `default`, and a month before the first entry reads `default`. `months` must be ascending.
+# Returns one value per requested month, in the same order.
+#
+# Generic over the value because the two series drawn on this grid are shaped differently — the
+# investment side carries one figure per month and the card side a whole bucket map — and a second copy
+# of this cursor would be a second answer to "what does a month with no entry of its own show".
+#
+# It hands back ALIASES, not copies: every gap month shares one object with the entry it carried
+# forward, and every month before the first entry shares `default`. Harmless while both callers only
+# read (the card side sums each bucket map; the investment side holds a Decimal, which is immutable),
+# and stated because a caller that mutated a returned value would silently mutate several months at
+# once. Copy per element here if that ever stops being true.
+def forward_fill_monthly[T](
+    months: list[tuple[int, int]],
+    values_by_month: dict[tuple[int, int], T],
+    default: T,
+) -> list[T]:
+    entry_months = sorted(values_by_month)
+    result: list[T] = []
+    last = default
+    next_idx = 0
+    for year_month in months:
+        while next_idx < len(entry_months) and entry_months[next_idx] <= year_month:
+            last = values_by_month[entry_months[next_idx]]
+            next_idx += 1
+        result.append(last)
+    return result
+
+
+# Pure computation: the card liability at each requested month, in the display currency.
+#
+# Each month's figure is the outstanding BUCKET balance at that month end — one bucket per
+# (card, currency) — converted at THAT month's rate. The same restatement compute_monthly_cash_balances
+# applies to cash, and for the same reason. This used to convert each month's DELTA and accumulate the
+# converted figures, which froze a foreign charge at the rate of the month it landed. Measured on real
+# data, 54 USD of old charges on peso cards put the chart's last point 5,346 ARS below the headline
+# card balance — and 20.24 USD ABOVE it when the same account was viewed in dollars, because the sign
+# follows the display currency rather than the debt. The headline converts every bucket at today's rate,
+# and whenever the requested window ENDS at the current month — no window at all, or any of the period
+# presets, which all end today — the last month's end falls on or after today, `RateLookup` hands it
+# today's rate, and the two agree by construction rather than by two functions being kept in step. A
+# custom range ending in the PAST is the one case where they legitimately differ, and differ correctly:
+# the chart was asked about that month and the headline is still about now. The cash line has behaved
+# this way since it was restated, so nothing here is new except that the card line now joins it.
+#
+# `bucket_by_month` holds cumulative buckets only at months WITH activity, so it is forward-filled onto
+# the grid: a gap month keeps the outstanding balance and a month before any activity reads zero. Each
+# bucket converts on its own, one per (card, currency), which is the granularity the headline converts
+# at — and matching it is what makes the two agree to the cent rather than to a rounding, since
+# convert_value quantizes to the minor unit. A zero bucket contributes nothing and never flags its
+# currency as skipped, mirroring compute_cash_total — a fully settled EUR bucket is not a missing
+# figure. A bucket that cannot convert is skipped for THAT month alone and its code reported; a later
+# month that does have a rate still counts it, which the delta version could not do (one unconvertible
+# row was dropped from every subsequent point).
+# Returns (one balance per requested month, sorted skipped currency codes).
 def compute_monthly_card_balances(
-    expense_monthly: list[tuple[int, int, int, str, float]],
-    settlement_monthly: list[tuple[int, int, int, str, float]],
-    card_currencies: dict[int, str],
+    bucket_by_month: dict[tuple[int, int], dict[tuple[int, str], Decimal]],
+    months: list[tuple[int, int]],
     target_currency: str | None,
     lookup: RateLookup | None,
-) -> tuple[dict[tuple[int, int], Decimal], list[str]]:
-    def _convert_at_month(val: Decimal, currency: str, year: int, month: int) -> Decimal | None:
-        if not (target_currency and lookup) or currency == target_currency:
-            return val
-        rate_map = lookup.get_rate_map_at(_month_end(year, month))
-        if rate_map is None:
-            return None
-        return convert_value(val, currency, target_currency, rate_map)
-
+) -> tuple[list[Decimal], list[str]]:
     skipped: set[str] = set()
-
-    # Aggregate expenses per (year, month), converting each row at its OWN month-end rate.
-    month_expenses: dict[tuple[int, int], Decimal] = {}
-    for _card_id, year, month, currency, total in expense_monthly:
-        val = _convert_at_month(Decimal(str(total)), currency, year, month)
-        if val is None:
-            skipped.add(currency)
-            continue
-        key = (year, month)
-        month_expenses[key] = month_expenses.get(key, ZERO) + val
-
-    # Aggregate settlements per (year, month), converting each row at its OWN month-end rate.
-    month_settlements: dict[tuple[int, int], Decimal] = {}
-    for _card_id, year, month, currency, total in settlement_monthly:
-        val = _convert_at_month(Decimal(str(total)), currency, year, month)
-        if val is None:
-            skipped.add(currency)
-            continue
-        key = (year, month)
-        month_settlements[key] = month_settlements.get(key, ZERO) + val
-
-    # Collect and sort all months, then accumulate running balance.
-    all_months = sorted(set(month_expenses) | set(month_settlements))
-    running = ZERO
-    result: dict[tuple[int, int], Decimal] = {}
-    for ym in all_months:
-        running += month_expenses.get(ym, ZERO) - month_settlements.get(ym, ZERO)
-        result[ym] = running
-    return result, sorted(skipped)
-
-
-# Pure computation: forward-fills the cumulative card balance onto each requested month.
-# `card_balance_by_month` holds cumulative balances only at months WITH card activity; each
-# requested month takes the latest cumulative entry at-or-before it, so gap months (and
-# months after the last activity) keep the prior balance instead of reading zero. Months
-# before any activity read zero. `months` must be ascending. Returns one balance per
-# requested month, same order.
-def forward_fill_card_balances(
-    months: list[tuple[int, int]],
-    card_balance_by_month: dict[tuple[int, int], Decimal],
-) -> list[Decimal]:
-    balance_months = sorted(card_balance_by_month)
-    result: list[Decimal] = []
-    last_balance = ZERO
-    next_idx = 0
-    for ym in months:
-        while next_idx < len(balance_months) and balance_months[next_idx] <= ym:
-            last_balance = card_balance_by_month[balance_months[next_idx]]
-            next_idx += 1
-        result.append(last_balance)
-    return result
+    totals: list[Decimal] = []
+    for (year, month), buckets in zip(months, forward_fill_monthly(months, bucket_by_month, {})):
+        rate_map = lookup.get_rate_map_at(_month_end(year, month)) if lookup else None
+        total = ZERO
+        for (_card_id, currency), balance in buckets.items():
+            val = balance
+            if val and target_currency and currency != target_currency:
+                converted = convert_value(val, currency, target_currency, rate_map) if rate_map else None
+                if converted is None:
+                    skipped.add(currency)
+                    continue
+                val = converted
+            total += val
+        totals.append(total)
+    return totals, sorted(skipped)
 
 
 # Every month from `start` to `end` inclusive, as (year, month) pairs. The grid every series on the
@@ -416,31 +417,17 @@ async def compute_net_worth_evolution(
 
     # Card and cash inputs, loaded before the grid because their earliest activity helps define it.
     # Both include archived rows — their history and any outstanding balance remain part of net worth.
+    # The card side arrives as unconverted per-currency BUCKET balances, from the same three sources
+    # get_card_balances reads for the headline, so the two cannot describe different sets of charges.
     cards = await credit_card_repository.list_by_user(session, user_id, active_only=False)
     card_ids = [c.id for c in cards if c.id is not None]
-    card_currencies = {c.id: c.currency for c in cards if c.id is not None}
-    card_balance_by_month: dict[tuple[int, int], Decimal] = {}
-    if card_ids:
-        expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids, user_id)
-        # A group's shared charge raises the same liability a private one does, and get_card_balances
-        # already merges the two for the CURRENT figure — so the monthly series merges them too, or the
-        # headline card balance and this line describe different sets of charges.
-        expense_monthly = expense_monthly + await shared_expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
-        settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
-        card_balance_by_month, card_skipped = compute_monthly_card_balances(
-            expense_monthly,
-            settlement_monthly,
-            card_currencies,
-            currency,
-            lookup,
-        )
-        skipped.update(card_skipped)
+    card_bucket_by_month = await credit_card_service.get_card_bucket_series(session, card_ids, user_id)
 
     accounts = await account_repository.list_by_user(session, user_id, active_only=False)
 
     months = _evolution_grid(
         portfolio_months=[(p.date.year, p.date.month) for p in portfolio_evo.points],
-        card_months=sorted(card_balance_by_month),
+        card_months=sorted(card_bucket_by_month),
         accounts=accounts,
         shared_start=shared_worth_service.earliest_month(context),
         today=today,
@@ -473,10 +460,13 @@ async def compute_net_worth_evolution(
     # Investments and cards forward-fill onto the grid: each carries its latest known figure into a
     # month that has none, and reads zero before its first. Cash and the shared side are already one
     # figure per month by construction, because both are derived AT each date rather than accumulated
-    # from the movements that happened in it.
+    # from the movements that happened in it — and the card side now is too, one step later: it
+    # forward-fills the outstanding BUCKETS and converts them inside compute_monthly_card_balances, so
+    # every month states the debt at its own rate rather than at the rates the charges landed on.
     investment_by_month = {(p.date.year, p.date.month): p.total_value for p in portfolio_evo.points}
-    investment_balances = forward_fill_card_balances(months, investment_by_month)
-    card_balances = forward_fill_card_balances(months, card_balance_by_month)
+    investment_balances = forward_fill_monthly(months, investment_by_month, ZERO)
+    card_balances, card_skipped = compute_monthly_card_balances(card_bucket_by_month, months, currency, lookup)
+    skipped.update(card_skipped)
     points = [
         NetWorthEvolutionPoint(
             date=date_type(year, month, 1),

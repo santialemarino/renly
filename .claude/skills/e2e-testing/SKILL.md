@@ -86,6 +86,12 @@ placed in `apps/web/.env` looks configured and reaches nothing. They also stay o
 for the same reason the API's four `*_TEST_DATABASE_URL` vars do: they are per-developer test
 credentials rather than deploy-time configuration, and one of them is a real password.
 
+**`E2E_API_URL`** joins them, for the rare spec that asserts something the DOM cannot show — a figure
+the page abbreviates, or two endpoints that must agree. It defaults to `http://localhost:8000`, so it
+is optional, and it stays out of both env files for the same reason the two above do. A spec reaching
+the API has to log in for its OWN bearer token: the browser's session is a NextAuth cookie on the web
+origin, which the API never sees, so a request context cannot borrow it.
+
 **`CI` env var:** the config respects `CI=true`/`1`/`yes` (case-insensitive truthy) to enable `forbidOnly` + `retries: 2`. Explicit `CI=false` or `CI=0` opts out, even though they are non-empty strings.
 
 ## Conventions
@@ -108,11 +114,16 @@ Two things about where the attribute goes:
 
 - **A shared primitive takes ONE testid, not one per call site.** `ConfirmDialog`'s confirm button
   carries `confirm-dialog-confirm`, so every destructive confirm in the app is already reachable.
-- **A component whose props are an explicit list will not forward it.** `LocaleAmountInput` and
-  `RowActionButton` both declare their props rather than extending React's, so `data-testid` is a type
-  error until the prop is declared — `RowActionButton` takes it as `testId` because it chooses which
-  element to put it on. Prefer that over keying on an `aria-label`: the row actions' labels are
-  hardcoded English pending the a11y sweep, so a spec keyed on one breaks when they are translated.
+- **A component whose props are an explicit list will not forward it.** `LocaleAmountInput`,
+  `RowActionButton` and `StyledHint` all declare their props rather than extending React's, so
+  `data-testid` is a type error until the prop is declared — each takes it as `testId` because each
+  chooses which element to put it on. Prefer that over keying on an `aria-label`: the row actions'
+  labels are hardcoded English pending the a11y sweep, so a spec keyed on one breaks when they are
+  translated.
+- **A testid can be DERIVED from a prop the primitive already has.** Every `DismissableHint` renders
+  `hint-<storageKey>`, so all of the app's contextual nudges are reachable from one definition instead
+  of a testid per call site — the currency hint is `hint-currency-hint-dismissed`. Reach for this
+  whenever a family of instances is already distinguished by a prop.
 
 ### Auth and storage state — how the harness actually works
 

@@ -108,6 +108,7 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 | Liquidity-alert fixed commitments (amortised totals)    | today                                         | Same rationale as subscriptions / installments / obligations — the alert evaluates current commitment load against current income.                 |
 | Liquidity-alert monthly income window total             | today (window-end anchor)                     | Single conversion anchor for the multi-currency window sum; matches `_sum_converted` semantics used elsewhere for period totals.                   |
 | Card balance display (running total)                    | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
+| Card liability on the net-worth chart                   | each month-end                                | The month's OUTSTANDING bucket, restated there — so the last point reconciles with the headline row above rather than carrying old charges' rates. |
 | Shared balance glance figure (per currency bucket)      | today                                         | A balance is a live position: the expenses behind it are already reduced to one figure per bucket, with no single date to convert at.              |
 | Overpay waterfall — pricing a bucket the excess reaches | the PAYMENT's `date`                          | A payment happened on a day, and that is the rate at which the money actually moved. Deliberately unlike the row above, which is a live position.  |
 | Finance-metrics period totals (category breakdowns)     | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
@@ -211,7 +212,7 @@ When the dashboard requests metrics in a specific currency (e.g. ARS), investmen
 **Frontend handling:**
 
 - The dashboard shows a `WarningHint` listing skipped investments: _"Some investments were excluded because their currency can't be converted: Name (EUR)."_
-- A `DismissableCurrencyHint` (`InfoHint` with `surface` background) appears on dashboard and snapshots pages when a non-original currency is selected, explaining that past values are converted at today's rate. Dismissable permanently via localStorage (`currency-hint-dismissed` key).
+- A `DismissableCurrencyHint` (`InfoHint` with `surface` background) appears on all six converting pages (both dashboards, the finance dashboard, snapshots, expenses and income) when a non-original currency is selected, stating which rate is used: a figure tied to a past date converts at the rate in force then, a current total at today's. Dismissable permanently via localStorage (`currency-hint-dismissed` key), and reachable in tests as `hint-currency-hint-dismissed` — every `DismissableHint` renders `hint-<storageKey>`.
 - If the API returns 503 (no rates at all), the dashboard shows a generic error fallback: _"Unable to load dashboard data."_
 
 ### 9. Multi-currency pivot conversion
@@ -323,16 +324,43 @@ segments, pro rata to what each holding contributed to the NAV. Converting each 
 summing them leaves the parts a cent or two off the whole, and the whole is the figure the headline
 shows; this way they sum to it exactly, with the odd cent on the largest segment.
 
-**The chart is in a different frame from the headline, on purpose.** Each monthly point converts at
-THAT month's rate, so a foreign-currency account tracks its own currency over time instead of staying
-frozen at the rate of the month its money arrived. Cash and the shared side are derived AT each month
-end and converted there; investments and card debt forward-fill, each carrying the rate of the date its
-figure was recorded. One consequence is worth knowing rather than rediscovering: **a card carrying a
-foreign-currency bucket makes the chart's last point differ from the headline's card figure** — the
-chart accumulates each charge at the rate of the month it landed, the headline restates the whole
-bucket at today's. Measured on real data: 54 USD of old charges on peso cards, a 4,876 ARS gap. Both
-answers are correct for the question each asks, and closing it would mean restating the card series the
-way the cash series now is.
+**Every point on the chart converts at its OWN month's rate, and the last one therefore agrees with
+the headline.** A foreign-currency account and a foreign-currency card bucket each track their own
+currency over time instead of staying frozen at the rate of the month the money arrived. Cash, card
+debt and the shared side are all derived AT each month end and converted there. Investments are the one
+term that forward-fills an already-converted figure, each point carrying the rate of the date its
+snapshot was taken — the card side forward-fills too, but what it carries is the UNCONVERTED bucket, so
+the month it lands in still prices it at its own rate.
+
+**The card side reached that frame last, and by construction rather than by addition.** It used to
+convert each month's DELTA and accumulate the converted figures, which froze a foreign charge at the
+rate of the month it landed. Measured on real data — a `main` API and the fix reading the same database
+— 54 USD of old charges on peso cards left the chart's last point **5,346 ARS below** the headline's
+card figure, and **20.24 USD above** it when the same account was viewed in dollars: the sign follows
+the display currency rather than the debt, so checking one currency sees half the defect. It now takes
+the outstanding bucket balance at each month end, one bucket per **(card, currency)**
+(`credit_card_service.compute_card_bucket_series`, the over-time sibling of `compute_card_balances`,
+reading the same three sources), and converts each at that month's rate.
+`tests/unit/test_card_bucket_series.py` pins the two engines to each other the way
+`test_account_balance_series.py` pins the cash pair.
+
+**Why the per-(card, currency) key rather than per currency.** Two cards' USD buckets convert at one
+rate, so folding them into a single conversion is arithmetically more accurate — and wrong here.
+`convert_value` quantizes to the minor unit and the headline converts one bucket at a time, so the fold
+put the last point 0.01 USD from the headline. When the deliverable is that two figures agree, the
+requirement is to match the other side's granularity, not to improve on it. The cash side has agreed to
+the cent all along for the same reason without anyone having had to notice: it converts per ACCOUNT on
+both sides.
+
+**When the agreement holds, precisely.** Whenever the requested window ENDS at the current month — no
+window at all, or any of the period presets, which all end today — the last grid month's end falls on
+or after today, `RateLookup` hands it today's rate, and the two figures match without either being
+special-cased. A custom range ending in the PAST is the one case where they differ, and they differ
+correctly: the chart was asked about that month and the headline is still about now. Two residuals
+worth knowing rather than rediscovering, both pre-existing and both shared with the cash side: that
+windowed case, and a row dated in a FUTURE month, which is in the headline (neither the card sums nor
+the account sums are bounded above) and not yet in the series. Each is a date bound rather than a
+conversion basis.
 
 ## Data model
 

@@ -40,6 +40,10 @@ interface StyledHintProps {
   onDismiss?: () => void;
   parentGap?: number;
   className?: string;
+  // Declared rather than spread, because this component's props are an explicit list — a caller
+  // passing `data-testid` would be a type error. Lands on the hint's own row, so an assertion sees
+  // the element that carries the copy rather than the animation wrapper around it.
+  testId?: string;
 }
 
 // Animated hint with icon. Supports info (blue), warning (amber) and error (red) variants.
@@ -53,6 +57,7 @@ export function StyledHint({
   onDismiss,
   parentGap = 4,
   className,
+  testId,
 }: StyledHintProps) {
   const tCommon = useTranslations('common');
 
@@ -68,6 +73,7 @@ export function StyledHint({
     >
       {separator && <Separator />}
       <div
+        data-testid={testId}
         className={cn(
           'flex items-center gap-x-2',
           surface && `px-3 py-2 border ${bg} rounded-lg`,

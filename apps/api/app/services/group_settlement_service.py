@@ -653,8 +653,9 @@ async def ensure_no_outstanding_balance(session: AsyncSession, members: list[Gro
 # group's money existed at all, which is what lets the dashboard's chart start where the history does
 # instead of where the private half happens to.
 #
-# The caller forward-fills onto whatever grid it draws, exactly as forward_fill_card_balances already
-# does for the card series: a month with no rows stands where the previous one left it.
+# The caller forward-fills onto whatever grid it draws, exactly as forward_fill_monthly already does
+# for the investment figures and the card buckets: a month with no rows stands where the previous one
+# left it.
 #
 # What this deliberately does NOT do is re-implement the position algebra. Each month's accumulated
 # totals go through _net_positions — the same fold get_balances uses — so a point on the chart cannot
