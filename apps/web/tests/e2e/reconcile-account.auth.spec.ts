@@ -87,7 +87,14 @@ test.describe('reconciling an account (signed in)', () => {
       await page.getByTestId('reconciliation-delete').click();
       await page.getByTestId('confirm-dialog-confirm').click();
       /*
-       * Re-read from the server rather than waiting on the page to catch up. The panel refreshes
+       * Wait for the delete to be ACKNOWLEDGED before re-reading. The history panel drops the row only
+       * after the request resolves, so its disappearance is the write's own receipt — without it the
+       * reload below races the DELETE and can re-render the page from before it landed, which is
+       * exactly how this spec failed on a loaded machine while the API was provably correct.
+       */
+      await expect(page.getByTestId('reconciliation-delete')).toHaveCount(0);
+      /*
+       * Then re-read from the server rather than waiting on the page to catch up. The panel refreshes
        * itself, but the ROW's balance comes from the page's server component, so it changes only once
        * `router.refresh()` lands — and asserting on that window is asserting on a race. Reloading
        * makes the assertion what it should be about: what the database now holds.
