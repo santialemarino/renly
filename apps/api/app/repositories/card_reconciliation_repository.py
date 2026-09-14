@@ -226,6 +226,13 @@ async def list_settlement_daily_sums(
 
 # Sums expenses per (card_id, currency) bucket dated at or before as_of_date, for many cards in
 # one grouped query. Returns {(card_id, currency): sum}; buckets with no rows are simply absent.
+#
+# Unions a group's charges with the owner's own, exactly as sum_expenses_at and list_expense_daily_sums
+# do — the batched variant read only `expense_entries` for two releases, so the Payments Calendar
+# priced a card_due below the bill while the same bucket's statement and its balance on /credit-cards
+# both counted the shared charge. A card's whole charge is its owner's liability whoever consumed what
+# it bought, and there is no user filter for the same reason those two have none: the rows belong to
+# the group, RLS scopes them, and a card only ever carries its own owner's charges.
 async def sum_expenses_by_bucket_at(
     session: AsyncSession,
     card_ids: list[int],
@@ -233,10 +240,19 @@ async def sum_expenses_by_bucket_at(
 ) -> dict[tuple[int, str], Decimal]:
     if not card_ids:
         return {}
+    private = select(
+        ExpenseEntry.credit_card_id.label("card_id"),
+        ExpenseEntry.currency.label("currency"),
+        ExpenseEntry.amount.label("amount"),
+    ).where(ExpenseEntry.credit_card_id.in_(card_ids), ExpenseEntry.date <= as_of_date)
+    shared = select(
+        SharedExpense.credit_card_id.label("card_id"),
+        SharedExpense.currency.label("currency"),
+        SharedExpense.amount.label("amount"),
+    ).where(SharedExpense.credit_card_id.in_(card_ids), SharedExpense.date <= as_of_date)
+    charges = union_all(private, shared).subquery()
     result = await session.execute(
-        select(ExpenseEntry.credit_card_id, ExpenseEntry.currency, func.sum(ExpenseEntry.amount))
-        .where(ExpenseEntry.credit_card_id.in_(card_ids), ExpenseEntry.date <= as_of_date)
-        .group_by(ExpenseEntry.credit_card_id, ExpenseEntry.currency)
+        select(charges.c.card_id, charges.c.currency, func.sum(charges.c.amount)).group_by(charges.c.card_id, charges.c.currency)
     )
     return {(row[0], row[1]): Decimal(str(row[2])) for row in result.all()}
 
@@ -257,9 +273,13 @@ async def sum_settlements_by_bucket_at(
     return {(row[0], row[1]): Decimal(str(row[2])) for row in result.all()}
 
 
-# Earliest date of any activity (expense or settlement) on a card+currency bucket. Returns None
-# when the bucket has no activity yet. Drives the visibility rule for the statements list — we
-# hide pre-history zeros (statements whose period_end is before the bucket existed).
+# Earliest date of any activity (expense, shared expense or settlement) on a card+currency bucket.
+# Returns None when the bucket has no activity yet. Drives the visibility rule for the statements list
+# — we hide pre-history zeros (statements whose period_end is before the bucket existed).
+#
+# A group's charge counts as activity for the same reason it counts in the balance: it is the card
+# owner's liability. Without it a bucket whose only charges are shared reads as having no history at
+# all, and every statement carrying a real balance is hidden as a pre-history zero.
 async def get_first_activity_date(
     session: AsyncSession,
     card_id: int,
@@ -271,13 +291,19 @@ async def get_first_activity_date(
             ExpenseEntry.currency == currency,
         )
     )
+    shared_min = await session.execute(
+        select(func.min(SharedExpense.date)).where(
+            SharedExpense.credit_card_id == card_id,
+            SharedExpense.currency == currency,
+        )
+    )
     settlement_min = await session.execute(
         select(func.min(CardSettlement.date)).where(
             CardSettlement.credit_card_id == card_id,
             CardSettlement.currency == currency,
         )
     )
-    candidates = [d for d in (expense_min.scalar_one(), settlement_min.scalar_one()) if d is not None]
+    candidates = [d for d in (expense_min.scalar_one(), shared_min.scalar_one(), settlement_min.scalar_one()) if d is not None]
     return min(candidates) if candidates else None
 
 
