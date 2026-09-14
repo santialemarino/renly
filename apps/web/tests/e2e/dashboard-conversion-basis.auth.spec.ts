@@ -49,6 +49,17 @@ async function apiToken(request: APIRequestContext): Promise<string> {
   return (await response.json()).access_token;
 }
 
+// The account's own display currencies, in the order the sidebar offers them: primary first, then the
+// optional secondary. "Original" is excluded — it converts nothing, so there is no agreement to check.
+async function displayCurrencies(request: APIRequestContext, token: string): Promise<string[]> {
+  const response = await request.get(`${API_BASE}/settings`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(response.ok()).toBe(true);
+  const settings = await response.json();
+  return [settings.primary_currency, settings.secondary_currency].filter(Boolean);
+}
+
 // The headline and the chart's last point, both in the same display currency.
 async function readTotals(
   request: APIRequestContext,
@@ -86,20 +97,41 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
     const token = await apiToken(request);
 
     /*
-     * Both currencies, because the gap this closed had a DIFFERENT SIGN in each. Measured on the real
-     * account before the change: viewed in ARS the chart understated the card debt by 5,346 (old
+     * TWO display currencies, because the gap this closed had a DIFFERENT SIGN in each. Measured on the
+     * real account before the change: viewed in ARS the chart understated the card debt by 5,346 (old
      * dollar charges frozen at the month they landed, when the peso was stronger); viewed in USD it
      * OVERSTATED it by 20.24, the same charges read the other way round. A spec that checked one
-     * currency would have passed on half of the defect.
+     * currency would have passed on half of the defect. They are the harness account's own two, read
+     * from Settings rather than hardcoded — the invariant is about ANY pair, and naming a pair would
+     * make the spec fail on a differently-configured account for a reason that is not a defect.
      */
-    for (const currency of ['ARS', 'USD']) {
+    const currencies = await displayCurrencies(request, token);
+    expect(
+      currencies.length,
+      'the account needs a second display currency to check both signs',
+    ).toBe(2);
+
+    let anyCardDebt = false;
+    for (const currency of currencies) {
       const { headline, lastPoint } = await readTotals(request, token, currency);
+      anyCardDebt ||= Number(headline.cardBalance) !== 0;
       // String equality on the serialised decimals, not a numeric tolerance: the whole point is that
       // the two agree to the cent, and a tolerance would accept the rounding drift that converting at
       // the wrong granularity produces.
       expect(lastPoint.cardBalance, `card balance in ${currency}`).toBe(headline.cardBalance);
       expect(lastPoint.netWorth, `net worth in ${currency}`).toBe(headline.netWorth);
     }
+
+    /*
+     * An account with no card debt satisfies every assertion above with two zeros, which is a pass that
+     * proves nothing — the defect this pins can only appear on a card that HAS an outstanding bucket.
+     * Reported as a skip rather than swallowed, so a run against such an account says so out loud
+     * instead of banking a green tick.
+     */
+    test.skip(
+      !anyCardDebt,
+      'the harness account carries no card balance, so there is nothing to reconcile',
+    );
   });
 
   test('the conversion hint is shown only while a display currency is active', async ({ page }) => {
@@ -118,16 +150,24 @@ test.describe('the dashboard’s conversion basis (signed in)', () => {
     const switcher = page.getByTestId('currency-switcher');
     await expect(switcher).toBeVisible({ timeout: 30_000 });
 
+    /*
+     * Picked by POSITION rather than by label, because the switcher renders
+     * `[primary, secondary?, original]` — so the first radio is whatever this account's primary is and
+     * the last is always "Original". Naming a currency would tie the spec to one account's settings,
+     * and this way the structure being relied on is the thing asserted.
+     */
+    const radios = switcher.getByRole('radio');
+    const hint = page.getByTestId('hint-currency-hint-dismissed');
+
     // "Original" is the one selection where nothing converts, so the sentence about which rate is used
     // has nothing to explain and the page withholds it.
-    const hint = page.getByTestId('hint-currency-hint-dismissed');
-    await switcher.getByRole('radio', { name: 'X', exact: true }).click();
+    await radios.last().click();
     await expect(hint).toBeHidden();
 
     // Any real currency converts, so the hint returns. Asserting the SENTENCE and not merely the
     // element: this unit rewrote it because the old one described a basis the dashboard stopped using,
     // and an element-only assertion would pass on the copy it was written to replace.
-    await switcher.getByRole('radio', { name: 'ARS', exact: true }).click();
+    await radios.first().click();
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('the exchange rate that was in force then');
   });

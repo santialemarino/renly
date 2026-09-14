@@ -327,23 +327,40 @@ shows; this way they sum to it exactly, with the odd cent on the largest segment
 **Every point on the chart converts at its OWN month's rate, and the last one therefore agrees with
 the headline.** A foreign-currency account and a foreign-currency card bucket each track their own
 currency over time instead of staying frozen at the rate of the month the money arrived. Cash, card
-debt and the shared side are all derived AT each month end and converted there; only investments
-forward-fill a recorded figure, each point carrying the rate of the date its snapshot was taken.
+debt and the shared side are all derived AT each month end and converted there. Investments are the one
+term that forward-fills an already-converted figure, each point carrying the rate of the date its
+snapshot was taken — the card side forward-fills too, but what it carries is the UNCONVERTED bucket, so
+the month it lands in still prices it at its own rate.
 
 **The card side reached that frame last, and by construction rather than by addition.** It used to
-convert each month's DELTA and accumulate the converted figures, which froze an old foreign charge at
-the rate of the month it landed — measured on real data, 54 USD of old charges on peso cards left the
-chart's last point 4,876 ARS away from the headline's card figure. It now takes the outstanding
-per-currency BUCKET balance at each month end (`credit_card_service.compute_card_bucket_series`, the
-over-time sibling of `compute_card_balances`, reading the same three sources) and converts each bucket
-at that month's rate. The last grid month ends on or after today, so `RateLookup` hands it today's rate
-and the two figures agree without either being special-cased. `tests/unit/test_card_bucket_series.py`
-pins the two engines to each other the way `test_account_balance_series.py` pins the cash pair.
+convert each month's DELTA and accumulate the converted figures, which froze a foreign charge at the
+rate of the month it landed. Measured on real data — a `main` API and the fix reading the same database
+— 54 USD of old charges on peso cards left the chart's last point **5,346 ARS below** the headline's
+card figure, and **20.24 USD above** it when the same account was viewed in dollars: the sign follows
+the display currency rather than the debt, so checking one currency sees half the defect. It now takes
+the outstanding bucket balance at each month end, one bucket per **(card, currency)**
+(`credit_card_service.compute_card_bucket_series`, the over-time sibling of `compute_card_balances`,
+reading the same three sources), and converts each at that month's rate.
+`tests/unit/test_card_bucket_series.py` pins the two engines to each other the way
+`test_account_balance_series.py` pins the cash pair.
 
-One residual is worth knowing rather than rediscovering: a row dated in a FUTURE month is in the
-headline (neither the card sums nor the account sums are bounded above) and not yet in the series,
-whose last point is the current month end. That is the same on both sides, and it is a date bound
-rather than a conversion basis.
+**Why the per-(card, currency) key rather than per currency.** Two cards' USD buckets convert at one
+rate, so folding them into a single conversion is arithmetically more accurate — and wrong here.
+`convert_value` quantizes to the minor unit and the headline converts one bucket at a time, so the fold
+put the last point 0.01 USD from the headline. When the deliverable is that two figures agree, the
+requirement is to match the other side's granularity, not to improve on it. The cash side has agreed to
+the cent all along for the same reason without anyone having had to notice: it converts per ACCOUNT on
+both sides.
+
+**When the agreement holds, precisely.** Whenever the requested window ENDS at the current month — no
+window at all, or any of the period presets, which all end today — the last grid month's end falls on
+or after today, `RateLookup` hands it today's rate, and the two figures match without either being
+special-cased. A custom range ending in the PAST is the one case where they differ, and they differ
+correctly: the chart was asked about that month and the headline is still about now. Two residuals
+worth knowing rather than rediscovering, both pre-existing and both shared with the cash side: that
+windowed case, and a row dated in a FUTURE month, which is in the headline (neither the card sums nor
+the account sums are bounded above) and not yet in the series. Each is a date bound rather than a
+conversion basis.
 
 ## Data model
 

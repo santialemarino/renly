@@ -149,18 +149,17 @@ class TestAgreementWithTheHeadline:
 
     @pytest.mark.asyncio
     async def test_the_agreement_breaks_when_a_settlement_stops_reducing_the_debt(self, monkeypatch):
-        # The other half of the control: the sign. A settlement added rather than subtracted still
-        # produces a plausible-looking series, and only the comparison catches it.
+        # The other half of the control, and it is the SIGN rather than a second missing source: a
+        # settlement added instead of subtracted still produces a plausible, monotonic-looking series,
+        # so only the comparison catches it. Driven by handing the real function the settlement rows in
+        # the slot that ADDS, which is the world a flipped sign would produce.
         _stub_grouped(monkeypatch)
-        _stub_monthly(monkeypatch)
-        monkeypatch.setattr(
-            credit_card_service.card_settlement_repository,
-            "sum_by_card_ids_monthly",
-            AsyncMock(return_value=[]),
-        )
         headline = await credit_card_service.get_card_balances(AsyncMock(), CARD_IDS, CARD_CURRENCIES, USER_ID)
-        series = await credit_card_service.get_card_bucket_series(AsyncMock(), CARD_IDS, USER_ID)
-        assert _nonzero(series[max(series)]) != _flatten(headline)
+        sign_flipped = credit_card_service.compute_card_bucket_series(
+            _monthly("expenses", CARD_IDS) + _monthly("shared_expenses", CARD_IDS) + _monthly("settlements", CARD_IDS),
+            [],
+        )
+        assert _nonzero(sign_flipped[max(sign_flipped)]) != _flatten(headline)
 
 
 class TestComputeCardBucketSeries:

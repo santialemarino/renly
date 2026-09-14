@@ -194,7 +194,7 @@ Which rate is used depends on what the figure is.
 
 **A figure tied to a past date uses the rate that was in force then** — a row in your expenses or income, a snapshot's own value, a point on the net-worth evolution chart. Each of those has a date of its own, so the history stays put instead of moving every time the dollar does.
 
-The two meet at the present: the evolution chart's last point converts at the current month's rate, which is today's, so it agrees with the net-worth headline above it.
+The two meet at the present: as long as the chart runs up to today — which it does unless you pick a date range that ends earlier — its last point converts at today's rate and agrees with the net-worth headline above it.
 
 ## Skipped investments
 

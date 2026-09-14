@@ -228,11 +228,14 @@ async def list_settlement_daily_sums(
 # one grouped query. Returns {(card_id, currency): sum}; buckets with no rows are simply absent.
 #
 # Unions a group's charges with the owner's own, exactly as sum_expenses_at and list_expense_daily_sums
-# do — the batched variant read only `expense_entries` for two releases, so the Payments Calendar
-# priced a card_due below the bill while the same bucket's statement and its balance on /credit-cards
-# both counted the shared charge. A card's whole charge is its owner's liability whoever consumed what
-# it bought, and there is no user filter for the same reason those two have none: the rows belong to
-# the group, RLS scopes them, and a card only ever carries its own owner's charges.
+# do. It did not, and the reason is worth keeping: this function was written in July as the batched
+# sibling of sum_expenses_at, BEFORE a shared expense could name a card at all — so when shared money
+# taught the other two about them it was the one nobody thought to look at. A function that predates a
+# feature is exactly where an enumerated list goes stale. The consequence was that the Payments
+# Calendar priced a card_due below the bill while the same bucket's statement and its balance on
+# /credit-cards both counted the shared charge. A card's whole charge is its owner's liability whoever
+# consumed what it bought, and there is no user filter for the same reason those two have none: the
+# rows belong to the group, RLS scopes them, and a card only ever carries its own owner's charges.
 async def sum_expenses_by_bucket_at(
     session: AsyncSession,
     card_ids: list[int],

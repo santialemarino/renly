@@ -969,7 +969,12 @@ class TestTheBucketSnapshotSiblings:
         # accidentally selects a column from `expense_entries` becomes a cartesian product, which on a
         # 1x1 fixture still adds up to the right total. Two private rows double the shared amount
         # instead, so the join that should not exist is visible in the figure.
-        for day, amount in ((date(2026, 6, 3), 600), (date(2026, 6, 5), 400)):
+        #
+        # And a JULY row on each of the three sources, so `date <= as_of_date` is pinned on every leg.
+        # That bound is the whole contract of a point-in-time snapshot, and rewriting the expense sum
+        # into a two-leg union moved it from one WHERE to two — a bound present on only one leg is a
+        # silent bug that a fixture dated entirely inside the window cannot see.
+        for day, amount in ((date(2026, 6, 3), 600), (date(2026, 6, 5), 400), (date(2026, 7, 2), 777)):
             await session.execute(
                 text(
                     "INSERT INTO expense_entries (user_id, date, amount, currency, category, payment_method, credit_card_id)"
@@ -977,13 +982,21 @@ class TestTheBucketSnapshotSiblings:
                 ),
                 {"u": seeded["users"][0], "d": day, "a": amount, "c": card},
             )
-        await session.execute(
-            text(
-                "INSERT INTO shared_expenses (group_id, date, amount, currency, category, split_method, payment_method, credit_card_id)"
-                " VALUES (:g, '2026-06-09', 2500, 'ARS', 'dining', 'equal', 'credit_card', :c)"
-            ),
-            {"g": seeded["group"], "c": card},
-        )
+        for day, amount in ((date(2026, 6, 9), 2500), (date(2026, 7, 3), 888)):
+            await session.execute(
+                text(
+                    "INSERT INTO shared_expenses (group_id, date, amount, currency, category, split_method, payment_method, credit_card_id)"
+                    " VALUES (:g, :d, :a, 'ARS', 'dining', 'equal', 'credit_card', :c)"
+                ),
+                {"g": seeded["group"], "d": day, "a": amount, "c": card},
+            )
+        # A settlement inside the window and one after it: without either, "expenses" and "the balance"
+        # are the same number and a test comparing one to the other proves nothing about the subtraction.
+        for day, amount in ((date(2026, 6, 20), 300), (date(2026, 7, 4), 55)):
+            await session.execute(
+                text("INSERT INTO card_settlements (credit_card_id, user_id, date, amount, currency) VALUES (:c, :u, :d, :a, 'ARS')"),
+                {"c": card, "u": seeded["users"][0], "d": day, "a": amount},
+            )
         await session.flush()
         return card
 
@@ -991,19 +1004,33 @@ class TestTheBucketSnapshotSiblings:
     async def test_the_batched_snapshot_equals_the_single_one_for_the_same_bucket(self, session, bucket):
         # THE assertion. The Payments Calendar reads the batched one and the reconciliation page reads
         # the single one; a card_due below the statement it is due for is the user-visible symptom.
+        # 600 + 400 private + 2500 shared - 300 settled = 3200 inside the window.
         as_of = date(2026, 6, 30)
         single = await card_reconciliation_service.compute_bucket_balance_at(session, bucket, "ARS", as_of)
         batched = await card_reconciliation_service.compute_bucket_balances_at(session, [bucket], as_of)
-        assert single == Decimal("3500")
+        assert single == Decimal("3200")
         assert batched[(bucket, "ARS")] == single
 
     @pytest.mark.asyncio
-    async def test_the_batched_snapshot_also_equals_the_statements_lists_daily_walk(self, session, bucket):
-        # The third query in the family. Its daily sums accumulate into the same figure, so a table
-        # missing from any one of the three shows up here rather than being noticed in production.
+    async def test_both_engines_move_by_the_july_rows_when_the_window_extends(self, session, bucket):
+        # The date bound, on every leg of both. Extending to July has to pull in the private row, the
+        # SHARED row and the second settlement — 3200 + 777 + 888 - 55 — and a bound dropped from one
+        # leg of the union shows up as one of those three going missing on one engine but not the other.
+        as_of = date(2026, 7, 31)
+        single = await card_reconciliation_service.compute_bucket_balance_at(session, bucket, "ARS", as_of)
+        batched = await card_reconciliation_service.compute_bucket_balances_at(session, [bucket], as_of)
+        assert single == Decimal("4810")
+        assert batched[(bucket, "ARS")] == single
+
+    @pytest.mark.asyncio
+    async def test_the_batched_expense_sum_equals_the_statements_lists_daily_walk(self, session, bucket):
+        # The third query in the family, compared like for like: both are EXPENSES, so this must not be
+        # measured against the net balance — with a settlement in the fixture the two are different
+        # numbers, and a test that happened to pass while they were equal was proving nothing.
         daily = await card_reconciliation_repository.list_expense_daily_sums(session, bucket, "ARS", date(2026, 6, 30))
-        batched = await card_reconciliation_service.compute_bucket_balances_at(session, [bucket], date(2026, 6, 30))
-        assert sum(amount for _day, amount in daily) == batched[(bucket, "ARS")]
+        by_bucket = await card_reconciliation_repository.sum_expenses_by_bucket_at(session, [bucket], date(2026, 6, 30))
+        assert sum(amount for _day, amount in daily) == Decimal("3500")
+        assert by_bucket[(bucket, "ARS")] == sum(amount for _day, amount in daily)
 
     @pytest.mark.asyncio
     async def test_a_bucket_whose_only_charge_is_shared_has_a_first_activity_date(self, session, seeded):

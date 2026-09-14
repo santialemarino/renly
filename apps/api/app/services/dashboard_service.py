@@ -62,6 +62,12 @@ def _month_end(year: int, month: int) -> date_type:
 # Generic over the value because the two series drawn on this grid are shaped differently — the
 # investment side carries one figure per month and the card side a whole bucket map — and a second copy
 # of this cursor would be a second answer to "what does a month with no entry of its own show".
+#
+# It hands back ALIASES, not copies: every gap month shares one object with the entry it carried
+# forward, and every month before the first entry shares `default`. Harmless while both callers only
+# read (the card side sums each bucket map; the investment side holds a Decimal, which is immutable),
+# and stated because a caller that mutated a returned value would silently mutate several months at
+# once. Copy per element here if that ever stops being true.
 def forward_fill_monthly[T](
     months: list[tuple[int, int]],
     values_by_month: dict[tuple[int, int], T],
@@ -87,9 +93,13 @@ def forward_fill_monthly[T](
 # converted figures, which froze a foreign charge at the rate of the month it landed. Measured on real
 # data, 54 USD of old charges on peso cards put the chart's last point 5,346 ARS below the headline
 # card balance — and 20.24 USD ABOVE it when the same account was viewed in dollars, because the sign
-# follows the display currency rather than the debt. The headline converts every bucket at today's rate
-# and the last month's end falls on or after today, so the two now agree by construction rather than by
-# two functions being kept in step.
+# follows the display currency rather than the debt. The headline converts every bucket at today's rate,
+# and whenever the requested window ENDS at the current month — no window at all, or any of the period
+# presets, which all end today — the last month's end falls on or after today, `RateLookup` hands it
+# today's rate, and the two agree by construction rather than by two functions being kept in step. A
+# custom range ending in the PAST is the one case where they legitimately differ, and differ correctly:
+# the chart was asked about that month and the headline is still about now. The cash line has behaved
+# this way since it was restated, so nothing here is new except that the card line now joins it.
 #
 # `bucket_by_month` holds cumulative buckets only at months WITH activity, so it is forward-filled onto
 # the grid: a gap month keeps the outstanding balance and a month before any activity reads zero. Each

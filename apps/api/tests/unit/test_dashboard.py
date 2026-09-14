@@ -748,8 +748,8 @@ class TestCompositionFoldsTheSharedShare:
 
 
 class TestTheEvolutionSeriesTerms:
-    # Two terms of a point that no other test reaches, both of which a mutation sweep found could be
-    # deleted with the whole suite still green.
+    # Terms of a point that no other test reaches — each one added because a mutation sweep found it
+    # could be deleted with the whole suite still green.
     def _wire(self, monkeypatch, *, shared_values, card_expenses=(), shared_card=(), cards=()):
         evo = PortfolioEvolutionResponse(points=[EvolutionPoint(date=date_type(2026, 7, 1), total_value=Decimal("1000"))])
         monkeypatch.setattr(dashboard_service.metrics_service, "get_portfolio_evolution", AsyncMock(return_value=evo))
