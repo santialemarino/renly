@@ -188,9 +188,13 @@ The total income you logged over the last **90 days**, normalised to 30 days. Fo
 
 ## Note on currency conversion
 
-All currency conversions use **today's exchange rate**, not the historical rate from the snapshot's date. This means a snapshot from January 2025 displayed in ARS uses today's USD/ARS rate, not January 2025's rate.
+Which rate is used depends on what the figure is.
 
-This is a deliberate design choice: it answers "what is this worth to me today?" rather than "what was it worth back then in local currency?" It keeps all values comparable across time when viewed in a single currency.
+**A current total uses today's rate** — your net worth, an account balance, a credit-card balance, a portfolio value. It answers "what is this worth to me today?"
+
+**A figure tied to a past date uses the rate that was in force then** — a row in your expenses or income, a snapshot's own value, a point on the net-worth evolution chart. Each of those has a date of its own, so the history stays put instead of moving every time the dollar does.
+
+The two meet at the present: the evolution chart's last point converts at the current month's rate, which is today's, so it agrees with the net-worth headline above it.
 
 ## Skipped investments
 

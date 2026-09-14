@@ -323,16 +323,26 @@ segments, pro rata to what each holding contributed to the NAV. Converting each 
 summing them leaves the parts a cent or two off the whole, and the whole is the figure the headline
 shows; this way they sum to it exactly, with the odd cent on the largest segment.
 
-**The chart is in a different frame from the headline, on purpose.** Each monthly point converts at
-THAT month's rate, so a foreign-currency account tracks its own currency over time instead of staying
-frozen at the rate of the month its money arrived. Cash and the shared side are derived AT each month
-end and converted there; investments and card debt forward-fill, each carrying the rate of the date its
-figure was recorded. One consequence is worth knowing rather than rediscovering: **a card carrying a
-foreign-currency bucket makes the chart's last point differ from the headline's card figure** — the
-chart accumulates each charge at the rate of the month it landed, the headline restates the whole
-bucket at today's. Measured on real data: 54 USD of old charges on peso cards, a 4,876 ARS gap. Both
-answers are correct for the question each asks, and closing it would mean restating the card series the
-way the cash series now is.
+**Every point on the chart converts at its OWN month's rate, and the last one therefore agrees with
+the headline.** A foreign-currency account and a foreign-currency card bucket each track their own
+currency over time instead of staying frozen at the rate of the month the money arrived. Cash, card
+debt and the shared side are all derived AT each month end and converted there; only investments
+forward-fill a recorded figure, each point carrying the rate of the date its snapshot was taken.
+
+**The card side reached that frame last, and by construction rather than by addition.** It used to
+convert each month's DELTA and accumulate the converted figures, which froze an old foreign charge at
+the rate of the month it landed — measured on real data, 54 USD of old charges on peso cards left the
+chart's last point 4,876 ARS away from the headline's card figure. It now takes the outstanding
+per-currency BUCKET balance at each month end (`credit_card_service.compute_card_bucket_series`, the
+over-time sibling of `compute_card_balances`, reading the same three sources) and converts each bucket
+at that month's rate. The last grid month ends on or after today, so `RateLookup` hands it today's rate
+and the two figures agree without either being special-cased. `tests/unit/test_card_bucket_series.py`
+pins the two engines to each other the way `test_account_balance_series.py` pins the cash pair.
+
+One residual is worth knowing rather than rediscovering: a row dated in a FUTURE month is in the
+headline (neither the card sums nor the account sums are bounded above) and not yet in the series,
+whose last point is the current month end. That is the same on both sides, and it is a date bound
+rather than a conversion basis.
 
 ## Data model
 

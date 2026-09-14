@@ -18,12 +18,13 @@ from app.schemas.metrics import (
     PortfolioMetricsResponse,
     SkippedInvestment,
 )
-from app.services import dashboard_service, exchange_rate_service, settings_service, shared_worth_service
+from app.services import credit_card_service, dashboard_service, exchange_rate_service, settings_service, shared_worth_service
 from app.services.dashboard_service import (
+    ZERO,
     compute_cash_total,
     compute_monthly_card_balances,
     compute_monthly_cash_balances,
-    forward_fill_card_balances,
+    forward_fill_monthly,
 )
 
 # Rate map: 1 USD = 1200 ARS.
@@ -58,182 +59,212 @@ class _FixedLookup:
 FIXED_LOOKUP = _FixedLookup(RATE_MAP)
 
 
-# --- compute_monthly_card_balances (5-tuple settlement / expense shape) ---
+# A lookup whose rate map DIFFERS per date — the only kind that can tell a series converting at each
+# month's own rate apart from one converting everything at a single rate. A date mapped to None stands
+# for a month with no stored rate at all.
+class _DatedLookup:
+    def __init__(self, by_date: dict[date_type, dict[str, Decimal] | None]) -> None:
+        self._by_date = by_date
+
+    def get_rate_map_at(self, as_of_date: date_type) -> dict[str, Decimal] | None:
+        return self._by_date[as_of_date]
 
 
-class TestComputeMonthlyCardBalances:
-    def test_single_card_single_currency(self):
-        expenses = [
-            (1, 2026, 1, "USD", 100.0),
-            (1, 2026, 2, "USD", 50.0),
-        ]
-        settlements = [
-            (1, 2026, 2, "USD", 80.0),
-        ]
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        # Jan: 100 - 0 = 100. Feb: 100 + 50 - 80 = 70.
-        assert result[(2026, 1)] == Decimal("100")
-        assert result[(2026, 2)] == Decimal("70")
-        assert skipped == []
-
-    def test_multi_card_multi_currency_converts_each_bucket(self):
-        expenses = [
-            (1, 2026, 1, "USD", 100.0),
-            (2, 2026, 1, "ARS", 1200.0),  # 1200 ARS = 1 USD.
-        ]
-        settlements = []
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD", 2: "ARS"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
-        assert result[(2026, 1)] == Decimal("101")
-        assert skipped == []
-
-    def test_cumulative_across_months(self):
-        expenses = [
-            (1, 2026, 1, "USD", 100.0),
-            (1, 2026, 3, "USD", 50.0),
-        ]
-        settlements = []
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        # Jan: 100. Mar: 100 + 50 = 150. Feb has no data, not in result.
-        assert result[(2026, 1)] == Decimal("100")
-        assert (2026, 2) not in result
-        assert result[(2026, 3)] == Decimal("150")
-        assert skipped == []
-
-    def test_settlement_exceeds_expenses(self):
-        expenses = [(1, 2026, 1, "USD", 50.0)]
-        settlements = [(1, 2026, 1, "USD", 100.0)]
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        # Overpayment: 50 - 100 = -50.
-        assert result[(2026, 1)] == Decimal("-50")
-        assert skipped == []
-
-    def test_empty_inputs(self):
-        result, skipped = compute_monthly_card_balances(
-            [],
-            [],
-            card_currencies={},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        assert result == {}
-        assert skipped == []
-
-    def test_no_target_currency_passes_values_through(self):
-        # When no target currency is set, every bucket's value is summed raw.
-        expenses = [
-            (1, 2026, 1, "USD", 100.0),
-            (1, 2026, 1, "ARS", 500.0),
-        ]
-        settlements = []
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD"},
-            target_currency=None,
-            lookup=None,
-        )
-        # No conversion: 100 + 500 = 600.
-        assert result[(2026, 1)] == Decimal("600")
-        assert skipped == []
-
-    def test_foreign_bucket_settled_in_its_own_currency(self):
-        # ARS card with USD bucket activity — both expense and settlement live in USD,
-        # so the USD bucket cancels cleanly without going through card currency.
-        expenses = [(1, 2026, 1, "USD", 50.0)]
-        settlements = [(1, 2026, 1, "USD", 50.0)]
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "ARS"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        assert result[(2026, 1)] == Decimal("0")
-        assert skipped == []
-
-    def test_each_bucket_converts_from_its_own_currency(self):
-        # ARS-currency settlement on a USD card converts directly from ARS, not via card currency.
-        expenses = [(1, 2026, 1, "USD", 100.0)]
-        settlements = [(1, 2026, 1, "ARS", 1200.0)]  # 1200 ARS = 1 USD.
-        result, skipped = compute_monthly_card_balances(
-            expenses,
-            settlements,
-            card_currencies={1: "USD"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        # 100 USD expense - 1 USD settlement (from 1200 ARS) = 99 USD.
-        assert result[(2026, 1)] == Decimal("99")
-        assert skipped == []
-
-    def test_missing_rate_row_is_skipped_and_reported(self):
-        # FIXED_LOOKUP maps only USD/ARS — the EUR expense row must be excluded, not passed through.
-        result, skipped = compute_monthly_card_balances(
-            [(1, 2026, 1, "ARS", 1200.0), (1, 2026, 1, "EUR", 50.0)],
-            [],
-            card_currencies={1: "ARS"},
-            target_currency="USD",
-            lookup=FIXED_LOOKUP,
-        )
-        assert skipped == ["EUR"]
-        # 1200 ARS -> 1 USD at the fake rate; EUR contributes nothing.
-        assert result[(2026, 1)] == Decimal("1")
+# --- forward_fill_monthly ---
 
 
-# --- forward_fill_card_balances ---
-
-
-class TestForwardFillCardBalances:
+class TestForwardFillMonthly:
     def test_months_after_activity_keep_prior_balance(self):
         # Card ran up 500 in Oct 2025; portfolio window starts Jan 2026 with no card
         # activity. Old merge read 0 for Jan/Feb — the outstanding 500 must persist.
-        balances = forward_fill_card_balances(
+        balances = forward_fill_monthly(
             [(2026, 1), (2026, 2)],
             {(2025, 10): Decimal("500")},
+            ZERO,
         )
         assert balances == [Decimal("500"), Decimal("500")]
 
     def test_gap_months_between_activity_forward_fill(self):
-        balances = forward_fill_card_balances(
+        balances = forward_fill_monthly(
             [(2026, 1), (2026, 2), (2026, 3), (2026, 4)],
             {(2026, 1): Decimal("100"), (2026, 3): Decimal("150")},
+            ZERO,
         )
         assert balances == [Decimal("100"), Decimal("100"), Decimal("150"), Decimal("150")]
 
-    def test_months_before_first_activity_read_zero(self):
-        balances = forward_fill_card_balances(
+    def test_months_before_first_activity_read_the_default(self):
+        balances = forward_fill_monthly(
             [(2026, 1), (2026, 2), (2026, 3)],
             {(2026, 3): Decimal("100")},
+            ZERO,
         )
         assert balances == [Decimal("0"), Decimal("0"), Decimal("100")]
 
-    def test_empty_activity_reads_zero(self):
-        assert forward_fill_card_balances([(2026, 1)], {}) == [Decimal("0")]
+    def test_empty_activity_reads_the_default(self):
+        assert forward_fill_monthly([(2026, 1)], {}, ZERO) == [Decimal("0")]
+
+    def test_fills_bucket_maps_as_well_as_figures(self):
+        # The second shape drawn on this grid. The default is an empty bucket map rather than a zero,
+        # which is why the function takes one instead of assuming Decimal.
+        buckets = forward_fill_monthly(
+            [(2026, 1), (2026, 2), (2026, 3)],
+            {(2026, 2): {(1, "USD"): Decimal("40")}},
+            {},
+        )
+        assert buckets == [{}, {(1, "USD"): Decimal("40")}, {(1, "USD"): Decimal("40")}]
+
+
+# --- compute_monthly_card_balances (outstanding buckets, restated at each month's rate) ---
+
+
+class TestComputeMonthlyCardBalances:
+    def test_single_currency_needs_no_conversion(self):
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("100")}, (2026, 2): {(1, "USD"): Decimal("70")}},
+            [(2026, 1), (2026, 2)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        assert totals == [Decimal("100"), Decimal("70")]
+        assert skipped == []
+
+    def test_each_bucket_converts_from_its_own_currency(self):
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("100"), (2, "ARS"): Decimal("1200")}},
+            [(2026, 1)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        # 100 USD + (1200 ARS -> 1 USD) = 101 USD.
+        assert totals == [Decimal("101")]
+        assert skipped == []
+
+    def test_the_whole_outstanding_bucket_restates_at_each_month_rate(self):
+        # THE test, and the reason this PR exists. A US$100 bucket opened in January is still US$100
+        # in February, so February's peso figure must be 100 x FEBRUARY's rate — not January's carried
+        # forward, which is what accumulating converted deltas produced.
+        lookup = _DatedLookup(
+            {
+                date_type(2026, 1, 31): {"USD": Decimal("1"), "ARS": Decimal("1000")},
+                date_type(2026, 2, 28): {"USD": Decimal("1"), "ARS": Decimal("1500")},
+            }
+        )
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("100")}},
+            [(2026, 1), (2026, 2)],
+            "ARS",
+            lookup,
+        )
+        assert totals == [Decimal("100000"), Decimal("150000")]
+        assert skipped == []
+
+    def test_a_gap_month_restates_the_carried_bucket_rather_than_the_carried_figure(self):
+        # The forward-fill carries BUCKETS, not converted totals, so a month with no activity of its
+        # own still prices the outstanding debt at its own rate.
+        lookup = _DatedLookup(
+            {
+                date_type(2026, 1, 31): {"USD": Decimal("1"), "ARS": Decimal("1000")},
+                date_type(2026, 2, 28): {"USD": Decimal("1"), "ARS": Decimal("1200")},
+                date_type(2026, 3, 31): {"USD": Decimal("1"), "ARS": Decimal("1500")},
+            }
+        )
+        totals, _ = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("10")}, (2026, 3): {(1, "USD"): Decimal("20")}},
+            [(2026, 1), (2026, 2), (2026, 3)],
+            "ARS",
+            lookup,
+        )
+        assert totals == [Decimal("10000"), Decimal("12000"), Decimal("30000")]
+
+    def test_months_before_any_activity_read_zero(self):
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 3): {(1, "USD"): Decimal("50")}},
+            [(2026, 1), (2026, 2), (2026, 3)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        assert totals == [ZERO, ZERO, Decimal("50")]
+        assert skipped == []
+
+    def test_two_cards_in_one_currency_convert_separately_the_way_the_headline_does(self):
+        # convert_value quantizes to the minor unit, so converting each card's bucket and adding is not
+        # the same figure as converting their sum. The headline converts one bucket at a time, so this
+        # must too — measured live, folding them cost 0.01 USD against the headline.
+        rate_map = {"USD": Decimal("1"), "ARS": Decimal("3")}
+        totals, _ = compute_monthly_card_balances(
+            {(2026, 1): {(1, "ARS"): Decimal("1"), (2, "ARS"): Decimal("1")}},
+            [(2026, 1)],
+            "USD",
+            _FixedLookup(rate_map),
+        )
+        # 1/3 rounds to 0.33 twice, so the answer is 0.66 — not the 0.67 that converting 2 ARS gives.
+        assert totals == [Decimal("0.66")]
+
+    def test_a_settlement_larger_than_the_charges_is_a_negative_bucket(self):
+        totals, _ = compute_monthly_card_balances(
+            {(2026, 1): {(1, "ARS"): Decimal("-1200")}},
+            [(2026, 1)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        assert totals == [Decimal("-1")]
+
+    def test_a_missing_rate_skips_that_month_alone_and_is_reported(self):
+        # The delta version dropped an unconvertible row from every SUBSEQUENT point too, because the
+        # accumulation ran on converted figures. Restated on buckets, February's missing rate costs
+        # February and nothing else.
+        lookup = _DatedLookup(
+            {
+                date_type(2026, 1, 31): {"USD": Decimal("1"), "ARS": Decimal("1000")},
+                date_type(2026, 2, 28): None,
+                date_type(2026, 3, 31): {"USD": Decimal("1"), "ARS": Decimal("1500")},
+            }
+        )
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("10")}},
+            [(2026, 1), (2026, 2), (2026, 3)],
+            "ARS",
+            lookup,
+        )
+        assert totals == [Decimal("10000"), ZERO, Decimal("15000")]
+        assert skipped == ["USD"]
+
+    def test_an_unsupported_currency_is_skipped_never_passed_through(self):
+        # FIXED_LOOKUP maps only USD/ARS — the EUR bucket must be excluded, not summed at 1:1.
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "ARS"): Decimal("1200"), (1, "EUR"): Decimal("50")}},
+            [(2026, 1)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        assert skipped == ["EUR"]
+        assert totals == [Decimal("1")]
+
+    def test_a_zero_bucket_contributes_nothing_and_never_flags_its_currency(self):
+        # A fully settled EUR bucket is not a missing figure, so it must not appear in
+        # skipped_currencies even though EUR has no rate. Mirrors compute_cash_total.
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("100"), (1, "EUR"): ZERO}},
+            [(2026, 1)],
+            "USD",
+            FIXED_LOOKUP,
+        )
+        assert totals == [Decimal("100")]
+        assert skipped == []
+
+    def test_no_target_currency_sums_every_bucket_raw(self):
+        totals, skipped = compute_monthly_card_balances(
+            {(2026, 1): {(1, "USD"): Decimal("100"), (1, "ARS"): Decimal("500")}},
+            [(2026, 1)],
+            None,
+            None,
+        )
+        assert totals == [Decimal("600")]
+        assert skipped == []
+
+    def test_empty_inputs(self):
+        assert compute_monthly_card_balances({}, [], "USD", FIXED_LOOKUP) == ([], [])
+        assert compute_monthly_card_balances({}, [(2026, 1)], "USD", FIXED_LOOKUP) == ([ZERO], [])
 
 
 # --- get_composition percentage base ---
@@ -723,10 +754,12 @@ class TestTheEvolutionSeriesTerms:
         evo = PortfolioEvolutionResponse(points=[EvolutionPoint(date=date_type(2026, 7, 1), total_value=Decimal("1000"))])
         monkeypatch.setattr(dashboard_service.metrics_service, "get_portfolio_evolution", AsyncMock(return_value=evo))
         monkeypatch.setattr(dashboard_service.credit_card_repository, "list_by_user", AsyncMock(return_value=list(cards)))
-        monkeypatch.setattr(dashboard_service.expense_repository, "sum_by_credit_card_ids_monthly", AsyncMock(return_value=list(card_expenses)))
+        # The card series' three sources now live behind credit_card_service.get_card_bucket_series,
+        # beside the headline that reads the same three — so these are patched where they are read.
+        monkeypatch.setattr(credit_card_service.expense_repository, "sum_by_credit_card_ids_monthly", AsyncMock(return_value=list(card_expenses)))
         shared_monthly = AsyncMock(return_value=list(shared_card))
-        monkeypatch.setattr(dashboard_service.shared_expense_repository, "sum_by_credit_card_ids_monthly", shared_monthly)
-        monkeypatch.setattr(dashboard_service.card_settlement_repository, "sum_by_card_ids_monthly", AsyncMock(return_value=[]))
+        monkeypatch.setattr(credit_card_service.shared_expense_repository, "sum_by_credit_card_ids_monthly", shared_monthly)
+        monkeypatch.setattr(credit_card_service.card_settlement_repository, "sum_by_card_ids_monthly", AsyncMock(return_value=[]))
         monkeypatch.setattr(dashboard_service.account_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(
             dashboard_service.shared_worth_service,

@@ -128,7 +128,7 @@
       "yearSuffix": "A"
     },
     "currencyHint": {
-      "message": "Los valores de meses anteriores se convierten al tipo de cambio de hoy, no al histórico. Los montos pueden diferir de lo que valían en su momento."
+      "message": "Las cifras con una fecha pasada se convierten al tipo de cambio vigente en ese momento; los totales actuales usan el de hoy."
     },
     "dismiss": "Descartar",
     "groupKinds": {
@@ -3884,7 +3884,7 @@
         "heading": "Cómo funciona la conversión de monedas",
         "paragraphs": [
           "Podés ver todo tu portafolio en cualquier moneda soportada usando el selector de la barra lateral. Renly convierte cada valor pasando por el dólar estadounidense detrás de escena.",
-          "Todas las conversiones usan el tipo de cambio de hoy — no el de la fecha de cada snapshot. Un valor del año pasado mostrado en pesos usa el tipo de cambio dólar-peso de hoy. Es a propósito: responde cuánto vale esto para mí hoy, y mantiene todos los números comparables cuando los ves en una sola moneda.",
+          "Qué tipo de cambio se usa depende de qué represente la cifra. Un total actual — tu patrimonio, el saldo de una tarjeta, lo que hay hoy en una cuenta — usa el tipo de cambio de hoy, porque responde cuánto vale esto ahora. Una cifra con una fecha pasada — una fila de tus gastos, un punto del gráfico de patrimonio — usa el tipo de cambio vigente en ese momento, para que tu historial quede quieto en lugar de moverse cada vez que se mueve el dólar.",
           "Si Renly no puede convertir una inversión a la moneda elegida — por ejemplo, si el servicio de tipos de cambio no está disponible por un momento — esa inversión queda fuera de los totales en lugar de mostrarse con un valor incorrecto, y el dashboard señala cuáles se omitieron para que sepas que el total está incompleto.",
           "El saldo de una tarjeta en una moneda distinta a la tuya se convierte igual: a tu tipo de dólar elegido. Tené en cuenta que el tipo de cambio que te van a cobrar realmente cuando pagues ese resumen puede ser más alto: las tarjetas acá aplican el “dólar tarjeta”, que suma una percepción impositiva sobre el oficial. Un saldo de tarjeta en moneda extranjera es entonces una estimación de lo que debés hoy, no un presupuesto de lo que va a costar cancelarlo."
         ]

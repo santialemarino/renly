@@ -29,6 +29,8 @@ from app.repositories import (
 from app.schemas.card_settlement import CardSettlementResponse
 from app.services import account_service, card_reconciliation_service
 
+ZERO = Decimal(0)
+
 # --- Credit cards ---
 
 
@@ -112,6 +114,63 @@ async def get_card_balances(
             card_buckets[currency] = Decimal(str(card_buckets.get(currency, 0))) + Decimal(str(total))
     settlement_grouped = await card_settlement_repository.sum_by_card_ids_grouped(session, card_ids)
     return compute_card_balances(card_ids, card_currencies, expense_grouped, settlement_grouped)
+
+
+# Pure computation: the cumulative bucket balances at the end of every month that MOVED.
+# {(year, month): {(card_id, currency): balance}} — each balance in its OWN currency and never
+# converted, because the caller decides the rate and the evolution chart's answer is one rate per
+# month rather than one per row.
+#
+# The over-time sibling of compute_card_balances, and both exist rather than one because the current
+# figure is a single grouped query per source while a series needs those sources bucketed by month.
+# What stops the two drifting is that they read the SAME three sources and apply the same subtraction,
+# which tests/unit/test_card_bucket_series.py pins by asserting this function's last entry IS what
+# compute_card_balances says the buckets are — the sibling of the parity assertion
+# tests/unit/test_account_balance_series.py makes for the cash side.
+#
+# Keyed by (card_id, currency) rather than by currency alone, and that is not bookkeeping: convert_value
+# quantizes to the minor unit, so converting two cards' USD buckets separately and adding is not always
+# converting their sum. The headline converts one bucket at a time, so this converts one bucket at a
+# time, and the two figures agree to the cent rather than to a rounding. Measured: folding the peso
+# buckets of two cards into one conversion put the chart's last point 0.01 USD away from the headline.
+# The zero-activity primary bucket compute_card_balances always emits has no counterpart here — a month
+# in which nothing moved is not a month this series has an entry for, and a zero adds nothing anyway.
+def compute_card_bucket_series(
+    expense_monthly: list[tuple[int, int, int, str, float]],
+    settlement_monthly: list[tuple[int, int, int, str, float]],
+) -> dict[tuple[int, int], dict[tuple[int, str], Decimal]]:
+    deltas: dict[tuple[int, int], dict[tuple[int, str], Decimal]] = {}
+    for rows, sign in ((expense_monthly, 1), (settlement_monthly, -1)):
+        for card_id, year, month, currency, total in rows:
+            per_month = deltas.setdefault((year, month), {})
+            bucket = (card_id, currency)
+            per_month[bucket] = per_month.get(bucket, ZERO) + Decimal(str(total)) * sign
+    running: dict[tuple[int, str], Decimal] = {}
+    series: dict[tuple[int, int], dict[tuple[int, str], Decimal]] = {}
+    for year_month in sorted(deltas):
+        for bucket, delta in deltas[year_month].items():
+            running[bucket] = running.get(bucket, ZERO) + delta
+        # Copied per month: the running map keeps mutating, and every later month would otherwise
+        # share the final one.
+        series[year_month] = dict(running)
+    return series
+
+
+# Returns the cumulative (card, currency) bucket balances at each month that moved, for the given cards.
+# The dated loader of get_card_balances, reading the SAME three sources: the owner's own charges, a
+# group's charges on the same card (whose whole amount is the owner's liability whoever consumed what
+# it bought), and the settlements that cleared the buckets.
+async def get_card_bucket_series(
+    session: AsyncSession,
+    card_ids: list[int],
+    user_id: int,
+) -> dict[tuple[int, int], dict[tuple[int, str], Decimal]]:
+    if not card_ids:
+        return {}
+    expense_monthly = await expense_repository.sum_by_credit_card_ids_monthly(session, card_ids, user_id)
+    expense_monthly = expense_monthly + await shared_expense_repository.sum_by_credit_card_ids_monthly(session, card_ids)
+    settlement_monthly = await card_settlement_repository.sum_by_card_ids_monthly(session, card_ids)
+    return compute_card_bucket_series(expense_monthly, settlement_monthly)
 
 
 # Returns {card_id: has-at-least-one-linked-expense} for the given cards in one batch query.
