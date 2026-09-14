@@ -19,6 +19,10 @@ interface DismissableHintProps {
  * dismissible-currency-hint pattern so any contextual nudge reuses one dismissal mechanism. Defaults
  * (info + surface + parentGap=16) match the standard `gap-y-4` protected-page column, the only place
  * these nudges render today; override per call site if the surrounding layout differs.
+ *
+ * Its test id is DERIVED from the storage key rather than passed per call site, so every dismissable
+ * hint in the app is reachable from one definition — the shared-primitive rule the e2e conventions
+ * state, applied to the one prop that already distinguishes these hints from each other.
  */
 export function DismissableHint({
   storageKey,
@@ -49,6 +53,7 @@ export function DismissableHint({
       parentGap={parentGap}
       onDismiss={handleDismiss}
       className={className}
+      testId={`hint-${storageKey}`}
     >
       {children}
     </StyledHint>
