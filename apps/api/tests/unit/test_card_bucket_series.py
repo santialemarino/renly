@@ -171,6 +171,17 @@ class TestComputeCardBucketSeries:
         )
         assert series == {(2026, 1): {(1, "USD"): Decimal("100")}, (2026, 3): {(1, "USD"): Decimal("150")}}
 
+    def test_rows_arriving_out_of_order_still_accumulate_chronologically(self):
+        # Not hypothetical: get_card_bucket_series CONCATENATES the private and shared monthly reads,
+        # and each is ordered only within itself — so a shared charge in an earlier month than the last
+        # private one arrives after it. Accumulating in arrival order would put the whole of March
+        # inside January's entry and leave March holding only its own charge.
+        series = credit_card_service.compute_card_bucket_series(
+            [(1, 2026, 3, "USD", 50.0), (1, 2026, 1, "USD", 100.0)],
+            [],
+        )
+        assert series == {(2026, 1): {(1, "USD"): Decimal("100")}, (2026, 3): {(1, "USD"): Decimal("150")}}
+
     def test_a_month_with_no_movement_has_no_entry(self):
         # The caller forward-fills. Emitting a row for every month in between would make this function
         # need a grid it has no business knowing about.

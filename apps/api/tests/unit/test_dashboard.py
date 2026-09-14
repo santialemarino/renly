@@ -796,6 +796,25 @@ class TestTheEvolutionSeriesTerms:
         assert [p.card_balance for p in points] == [Decimal("500")]
 
     @pytest.mark.asyncio
+    async def test_a_card_bucket_that_cannot_be_converted_is_reported_by_the_endpoint(self, monkeypatch):
+        # The card side computes its own skipped set, and the point of computing it is that the caller
+        # UNIONS it into the response — a currency dropped from the chart with nothing saying so is the
+        # failure `skipped_currencies` exists to prevent. FIXED_LOOKUP knows only USD and ARS.
+        card = CreditCard(id=1, user_id=1, name="Visa", closing_day=20, due_day=5, currency="EUR", is_active=True)
+        self._wire(
+            monkeypatch,
+            shared_values=[Decimal("0")],
+            cards=[card],
+            card_expenses=[(1, 2026, 7, "EUR", 80.0)],
+        )
+        points, skipped = await dashboard_service.compute_net_worth_evolution(
+            AsyncMock(), 1, currency="USD", lookup=FIXED_LOOKUP, today=date_type(2026, 7, 15)
+        )
+        assert skipped == ["EUR"]
+        # And the bucket really was left out rather than summed at 1:1.
+        assert [p.card_balance for p in points] == [ZERO]
+
+    @pytest.mark.asyncio
     async def test_the_shared_card_read_is_skipped_when_there_are_no_cards(self, monkeypatch):
         shared_monthly = self._wire(monkeypatch, shared_values=[Decimal("0")])
         await dashboard_service.compute_net_worth_evolution(AsyncMock(), 1, currency=None, lookup=None, today=date_type(2026, 7, 15))

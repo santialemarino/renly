@@ -108,6 +108,7 @@ The `RateLookup` finds "the latest rate where `rate.date <= as_of_date`" per pai
 | Liquidity-alert fixed commitments (amortised totals)    | today                                         | Same rationale as subscriptions / installments / obligations — the alert evaluates current commitment load against current income.                 |
 | Liquidity-alert monthly income window total             | today (window-end anchor)                     | Single conversion anchor for the multi-currency window sum; matches `_sum_converted` semantics used elsewhere for period totals.                   |
 | Card balance display (running total)                    | today                                         | Current state — today's rate is what makes sense for a "what do I owe right now" view.                                                             |
+| Card liability on the net-worth chart                   | each month-end                                | The month's OUTSTANDING bucket, restated there — so the last point reconciles with the headline row above rather than carrying old charges' rates. |
 | Shared balance glance figure (per currency bucket)      | today                                         | A balance is a live position: the expenses behind it are already reduced to one figure per bucket, with no single date to convert at.              |
 | Overpay waterfall — pricing a bucket the excess reaches | the PAYMENT's `date`                          | A payment happened on a day, and that is the rate at which the money actually moved. Deliberately unlike the row above, which is a live position.  |
 | Finance-metrics period totals (category breakdowns)     | `date_to` (period end)                        | Period-summary aggregates lose per-row dates at the DB layer; anchor to period end is a coarser-than-per-row compromise documented in the service. |
@@ -211,7 +212,7 @@ When the dashboard requests metrics in a specific currency (e.g. ARS), investmen
 **Frontend handling:**
 
 - The dashboard shows a `WarningHint` listing skipped investments: _"Some investments were excluded because their currency can't be converted: Name (EUR)."_
-- A `DismissableCurrencyHint` (`InfoHint` with `surface` background) appears on dashboard and snapshots pages when a non-original currency is selected, explaining that past values are converted at today's rate. Dismissable permanently via localStorage (`currency-hint-dismissed` key).
+- A `DismissableCurrencyHint` (`InfoHint` with `surface` background) appears on all six converting pages (both dashboards, the finance dashboard, snapshots, expenses and income) when a non-original currency is selected, stating which rate is used: a figure tied to a past date converts at the rate in force then, a current total at today's. Dismissable permanently via localStorage (`currency-hint-dismissed` key), and reachable in tests as `hint-currency-hint-dismissed` — every `DismissableHint` renders `hint-<storageKey>`.
 - If the API returns 503 (no rates at all), the dashboard shows a generic error fallback: _"Unable to load dashboard data."_
 
 ### 9. Multi-currency pivot conversion

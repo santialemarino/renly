@@ -965,13 +965,18 @@ class TestTheBucketSnapshotSiblings:
                 {"u": seeded["users"][0]},
             )
         ).scalar_one()
-        await session.execute(
-            text(
-                "INSERT INTO expense_entries (user_id, date, amount, currency, category, payment_method, credit_card_id)"
-                " VALUES (:u, '2026-06-03', 1000, 'ARS', 'dining', 'credit_card', :c)"
-            ),
-            {"u": seeded["users"][0], "c": card},
-        )
+        # TWO private charges, not one, and that is the mutation sweep's doing: a `shared` leg that
+        # accidentally selects a column from `expense_entries` becomes a cartesian product, which on a
+        # 1x1 fixture still adds up to the right total. Two private rows double the shared amount
+        # instead, so the join that should not exist is visible in the figure.
+        for day, amount in ((date(2026, 6, 3), 600), (date(2026, 6, 5), 400)):
+            await session.execute(
+                text(
+                    "INSERT INTO expense_entries (user_id, date, amount, currency, category, payment_method, credit_card_id)"
+                    " VALUES (:u, :d, :a, 'ARS', 'dining', 'credit_card', :c)"
+                ),
+                {"u": seeded["users"][0], "d": day, "a": amount, "c": card},
+            )
         await session.execute(
             text(
                 "INSERT INTO shared_expenses (group_id, date, amount, currency, category, split_method, payment_method, credit_card_id)"
