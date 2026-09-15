@@ -8,6 +8,8 @@
 import logging
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
+from decimal import Decimal
+from typing import NamedTuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -16,6 +18,7 @@ from app.domain import PaymentMethod, claimed_installment_cuotas, claimed_subscr
 from app.models.account import Account
 from app.models.expense_entry import ExpenseEntry
 from app.models.installment import Installment
+from app.models.notification import NotificationEvent
 from app.models.subscription import Subscription
 from app.repositories import (
     account_reconciliation_repository,
@@ -24,7 +27,7 @@ from app.repositories import (
     subscription_repository,
     user_settings_repository,
 )
-from app.services import card_reconciliation_service
+from app.services import card_reconciliation_service, notification_service
 from app.utils.dates import (
     add_months,
     advance_by_cycle,
@@ -41,6 +44,24 @@ SOURCE_INSTALLMENT = "installment"
 # pending auto-expenses. The hourly cron checks this against every user's
 # local-time-now and processes only the matching users that tick.
 AUTO_EXPENSES_HOUR_LOCAL = 1
+
+
+# One charge this tick wrote, and everything the notification about it needs.
+#
+# Collected during the two emission passes and dispatched after the commit, rather than announced where
+# it is created: a notification is a side-effect of something that already happened, and dispatch opens
+# its own privileged session, which must not be entangled with the transaction still writing the rows.
+class ChargeAnnouncement(NamedTuple):
+    user_id: int
+    # `subscription` or `installment` — the notification's variant, so one event value covers both and
+    # the two read as different sentences. A plan type, not a new enum member: a variant is a line of
+    # copy where an event value is a migration.
+    variant: str
+    plan_id: int
+    name: str
+    amount: Decimal
+    currency: str
+    charge_date: date_type
 
 
 # Returns the list of cycle dates a subscription should have emitted up to and
@@ -106,13 +127,17 @@ async def generate_auto_expenses(session: AsyncSession, *, now_utc: datetime | N
 
     user_timezones = await user_settings_repository.get_all_timezones(session)
 
-    sub_created, sub_advanced = await _generate_subscription_expenses(session, now_utc, user_timezones)
-    inst_created, inst_advanced = await _generate_installment_expenses(session, now_utc, user_timezones)
+    announcements: list[ChargeAnnouncement] = []
+    sub_created, sub_advanced = await _generate_subscription_expenses(session, now_utc, user_timezones, announcements)
+    inst_created, inst_advanced = await _generate_installment_expenses(session, now_utc, user_timezones, announcements)
 
     # Commit also on emission-free ticks that advanced a cursor (pre-paid cycles): the
     # dedup suppresses the insert but the cursor catch-up must persist.
     if sub_created or inst_created or sub_advanced or inst_advanced:
         await session.commit()
+    # After the commit, never before it: a notification announces something that has ALREADY happened,
+    # and a push service being down must not roll back the charges that produced it.
+    await _announce(announcements)
     return sub_created + inst_created
 
 
@@ -125,6 +150,7 @@ async def _generate_subscription_expenses(
     session: AsyncSession,
     now_utc: datetime,
     user_timezones: dict[int, str],
+    announcements: list[ChargeAnnouncement],
 ) -> tuple[int, int]:
     subscriptions = await subscription_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not subscriptions:
@@ -190,6 +216,7 @@ async def _generate_subscription_expenses(
                 )
             )
             _track_card_bucket(touched_buckets, sub.credit_card_id, sub.currency, d)
+            announcements.append(ChargeAnnouncement(sub.user_id, SOURCE_SUBSCRIPTION, sub.id, sub.name, sub.amount, sub.currency, d))
             created += 1
         # Advance to the first cycle strictly after today — also when every emission was
         # deduped: that is exactly how a pre-paid cycle's frozen cursor catches up.
@@ -298,6 +325,7 @@ async def _generate_installment_expenses(
     session: AsyncSession,
     now_utc: datetime,
     user_timezones: dict[int, str],
+    announcements: list[ChargeAnnouncement],
 ) -> tuple[int, int]:
     installments = await installment_repository.list_active_due(session, _scan_cutoff(now_utc))
     if not installments:
@@ -359,6 +387,9 @@ async def _generate_installment_expenses(
                 )
             )
             _track_card_bucket(touched_buckets, inst.credit_card_id, inst.currency, cuota_date)
+            announcements.append(
+                ChargeAnnouncement(inst.user_id, SOURCE_INSTALLMENT, inst.id, inst.name, inst.installment_amount, inst.currency, cuota_date)
+            )
             created += 1
         # Advance the installment counter past the last emitted index (also when every
         # emission was deduped); flip the plan inactive once past the final installment.
@@ -374,6 +405,39 @@ async def _generate_installment_expenses(
         await _mark_touched_buckets_stale(session, touched_buckets)
         logger.info("Auto-expenses: created %d installment charges at %s UTC.", created, now_utc.isoformat())
     return created, advanced
+
+
+# Tells each owner about the charges this tick recorded for them.
+#
+# ONE notification per CHARGE, not one per plan per tick, and the dedupe key is what makes that safe:
+# `plan:<type>:<id>:<date>` names the cycle, so a back-fill that catches up three missed months says so
+# three times while a re-run says nothing. Per-charge is also the honest granularity — three charges
+# were recorded, and the feed is a log of what happened.
+#
+# The volume that granularity implies is answered by the DEFAULT rather than by sending less: the event
+# is in-app only out of the box (app/domain/notification.py), so the noise lands in a feed nobody is
+# interrupted by, and anybody who turns email on has the daily digest to batch it.
+#
+# Each dispatch is its own call because each charge carries its own payload — `dispatch` fans ONE
+# payload out to many people, which is the opposite shape. It never raises and it returns how many rows
+# it wrote, so a failure here costs the message and not the tick.
+async def _announce(announcements: list[ChargeAnnouncement]) -> None:
+    for charge in announcements:
+        await notification_service.dispatch(
+            NotificationEvent.plan_charged,
+            [charge.user_id],
+            {
+                "variant": charge.variant,
+                "plan_id": charge.plan_id,
+                "name": charge.name,
+                "amount": str(charge.amount),
+                "currency": charge.currency,
+                # The key the copy reads its date from is literally `date` on both sides — the API
+                # spells it out in the email and the web formats it for the feed.
+                "date": charge.charge_date.isoformat(),
+            },
+            dedupe_key=f"plan:{charge.variant}:{charge.plan_id}:{charge.charge_date.isoformat()}",
+        )
 
 
 # Returns {subscription_id: set of linked expense dates} for every expense row linked to

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Query, status
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
 from app.schemas.notification import (
+    NotificationEmailCadenceUpdate,
     NotificationFeedResponse,
     NotificationPreferencesResponse,
     NotificationPreferenceUpdate,
@@ -53,6 +54,13 @@ async def get_preferences(current_user: CurrentUser, session: SessionDep) -> Not
 @router.put("/preferences", response_model=NotificationPreferencesResponse)
 async def set_preference(body: NotificationPreferenceUpdate, current_user: CurrentUser, session: SessionDep) -> NotificationPreferencesResponse:
     return await notification_service.set_preference(session, current_user, event=body.event, channel=body.channel, enabled=body.enabled)
+
+
+# Sets how often the caller wants their emails and returns the whole grid. Its own endpoint rather than
+# a field on the switch above, because it is one answer per PERSON where that one is per (event, channel).
+@router.put("/preferences/email-cadence", response_model=NotificationPreferencesResponse)
+async def set_email_cadence(body: NotificationEmailCadenceUpdate, current_user: CurrentUser, session: SessionDep) -> NotificationPreferencesResponse:
+    return await notification_service.set_email_cadence(session, current_user, cadence=body.cadence)
 
 
 # Registers the calling browser for web push, or refreshes the keys of one already registered. Returns

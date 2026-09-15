@@ -18,7 +18,11 @@
 import 'server-only';
 
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { NotificationChannel, NotificationEvent } from '@/lib/constants/notifications';
+import type {
+  NotificationChannel,
+  NotificationEmailCadence,
+  NotificationEvent,
+} from '@/lib/constants/notifications';
 
 // --- Raw types (API JSON shape, snake_case) ---
 
@@ -45,6 +49,7 @@ interface NotificationPreferenceRaw {
 
 interface NotificationPreferencesRaw {
   preferences: NotificationPreferenceRaw[];
+  email_cadence: NotificationEmailCadence;
   push_available: boolean;
   push_public_key: string | null;
   push_subscriptions: number;
@@ -75,6 +80,7 @@ export interface NotificationPreference {
 
 export interface NotificationPreferences {
   preferences: NotificationPreference[];
+  emailCadence: NotificationEmailCadence;
   pushAvailable: boolean;
   pushPublicKey: string | null;
   pushSubscriptions: number;
@@ -108,6 +114,7 @@ function mapPreference(raw: NotificationPreferenceRaw): NotificationPreference {
 export function mapPreferences(raw: NotificationPreferencesRaw): NotificationPreferences {
   return {
     preferences: raw.preferences.map(mapPreference),
+    emailCadence: raw.email_cadence,
     pushAvailable: raw.push_available,
     pushPublicKey: raw.push_public_key,
     pushSubscriptions: raw.push_subscriptions,

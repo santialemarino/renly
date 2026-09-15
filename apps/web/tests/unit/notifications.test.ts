@@ -153,7 +153,15 @@ describe('notification copy covers every event', () => {
   });
 });
 
-// A payload carrying every value any template interpolates, so a render test exercises them all.
+/*
+ * A payload carrying every value any template interpolates, so a render test exercises them all.
+ *
+ * It has to be COMPLETE, not merely representative, and the reason is sharper than "otherwise the
+ * string looks odd": next-intl answers a formatting error the same way it answers a missing message —
+ * by returning the key path. So a title that interpolates a parameter absent from this object fails the
+ * "does this key exist" assertion above with a message about the key being missing, when the key is
+ * there and the PARAMETER is not. Proven by adding `{name}` and watching exactly that happen.
+ */
 const RENDER_PARAMS = {
   group: 'Casa',
   pot: 'Depto',
@@ -165,6 +173,7 @@ const RENDER_PARAMS = {
   from_member: 'Santi',
   to_member: 'Ana',
   creditor: 'Ana',
+  name: 'Edenor',
   amount: '90.000',
   currency: 'ARS',
   date: '12 Jul',
@@ -239,6 +248,48 @@ describe('a row resolves from its event and payload', () => {
   });
 });
 
+describe('the two private events', () => {
+  // They are the first events in the app that belong to one person rather than to a group, so every
+  // assumption the resolver made about a payload naming a group is newly false for them.
+
+  it('resolves a recorded charge through its plan-type variant', () => {
+    const row = notificationRow(
+      notification('plan_charged', { variant: 'installment', name: 'TV Samsung' }),
+      RENDER,
+    );
+    expect(row.titleKey).toBe('plan_charged.installment.title');
+    expect(row.params.name).toBe('TV Samsung');
+  });
+
+  it('falls back to the base sentence for a plan type it does not know', () => {
+    // `notifications` are permanent, so a row written by a newer API than this build has to render as
+    // something rather than resolve a key that does not exist.
+    const row = notificationRow(notification('plan_charged', { variant: 'lease' }), RENDER);
+    expect(row.titleKey).toBe('plan_charged.title');
+  });
+
+  it("reads both new events' dates from the payload key they actually carry", () => {
+    // `snapshot_due` stores its date under `valued_as_of` and these two under `date`. The map is what
+    // keeps that a one-line difference, and getting it wrong renders an empty date rather than failing.
+    expect(
+      notificationRow(notification('obligation_due', { date: '2026-09-18' }), RENDER).params.date,
+    ).toBe('on 2026-09-18');
+    expect(
+      notificationRow(notification('plan_charged', { date: '2026-06-30' }), RENDER).params.date,
+    ).toBe('on 2026-06-30');
+  });
+
+  it('gives a due bill its second line and a recorded charge none', () => {
+    // The bill's detail is the action it is waiting on; a charge is already recorded and asks nothing.
+    expect(notificationRow(notification('obligation_due', {}), RENDER).detailKey).toBe(
+      'obligation_due.detail',
+    );
+    expect(
+      notificationRow(notification('plan_charged', { variant: 'subscription' }), RENDER).detailKey,
+    ).toBeNull();
+  });
+});
+
 describe('a row links where it is about', () => {
   it('points a pot event at the pot', () => {
     expect(notificationHref(notification('pot_movement', { group_id: 3, pot_id: 5 }))).toBe(
@@ -254,6 +305,23 @@ describe('a row links where it is about', () => {
 
   it('falls back to the group when a pot event names no pot', () => {
     expect(notificationHref(notification('snapshot_due', { group_id: 3 }))).toBe('/shared/3');
+  });
+
+  it('points a private event at its own page rather than anywhere under /shared', () => {
+    // Their payload names no group at all, so without the private branch both would land on the
+    // module's fallback — a link that is not wrong so much as unrelated to what happened.
+    expect(notificationHref(notification('obligation_due', { obligation_id: 4 }))).toBe(
+      '/payment-obligations',
+    );
+    expect(notificationHref(notification('plan_charged', { plan_id: 7 }))).toBe('/expenses');
+  });
+
+  it('keeps a private event private even if a group id somehow rides along', () => {
+    // A restored row, or a payload that grew a field. The event decides the destination, not the
+    // payload — the same precedence the pot branch already has over the group one.
+    expect(notificationHref(notification('plan_charged', { group_id: 3, pot_id: 5 }))).toBe(
+      '/expenses',
+    );
   });
 
   it('falls back to the module when it can name neither', () => {

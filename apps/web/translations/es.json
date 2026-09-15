@@ -3192,9 +3192,26 @@
       "email": "Correo",
       "push": "Push",
       "error": "No se pudo guardar. Probá de nuevo.",
-      "pushUnavailableHint": "Las push no están configuradas en este entorno, así que esos interruptores todavía no hacen nada."
+      "pushUnavailableHint": "Las push no están configuradas en este entorno, así que esos interruptores todavía no hacen nada.",
+      "digestLabel": "Mandame un solo resumen diario",
+      "digestDescription": "Por defecto el correo llega en el momento. Si activás esto, Renly manda un único resumen a la tarde con todo lo de arriba que tenga el correo activado."
     },
     "events": {
+      "obligation_due": {
+        "label": "Se viene el vencimiento de una cuenta tuya",
+        "title": "{name} — {amount} {currency} vence el {date}",
+        "detail": "Marcala como pagada cuando lo hayas hecho."
+      },
+      "plan_charged": {
+        "label": "Se registra una suscripción o una cuota",
+        "title": "Renly registró un cargo de {name}",
+        "subscription": {
+          "title": "Renly registró {name} — {amount} {currency} el {date}"
+        },
+        "installment": {
+          "title": "Renly registró una cuota de {name} — {amount} {currency} el {date}"
+        }
+      },
       "group_invited": {
         "label": "Invitan a alguien a un grupo",
         "title": "{inviter} invitó a {invitee} a {group}"

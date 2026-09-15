@@ -318,8 +318,10 @@ Finally, **your share of a shared expense appears in your ordinary expenses list
 ### Notifications, Notification Preferences and Push Subscriptions
 
 The layer that tells people what happened. Three tables, and all three belong to a **person** rather
-than to a group: group activity is what produces a notification, but the row it becomes is its
-recipient's — which is also why it carries read state, something a shared row could not.
+than to a group: most notifications are produced by group activity, but the row each becomes is its
+recipient's — which is also why it carries read state, something a shared row could not. Two events are
+about nobody but you: a payment obligation coming due, and a subscription or instalment charge Renly has
+just recorded for you.
 
 Nothing here names a group, a pot or an expense. A notification carries an **event** (a label like
 `shared_expense_added`) and a **payload** — the values its sentence interpolates plus the ids its link
@@ -335,7 +337,13 @@ language.
 **A preference row exists only where you have overridden a default.** Nothing is seeded, so a new event
 has an answer for every existing account the day it is added — and a default that changes reaches
 everybody who never expressed an opinion about it. The feed is on for every event; email and push are
-on for the ones about your own money or awaiting your own action.
+on for the ones about your own money **and** awaiting your own action.
+
+**How often email arrives is a separate answer, and one per person rather than per event.** Left alone,
+each email goes out as its notification happens. Set to a daily summary, they are held and sent as one
+message in your own evening instead — which is what makes the noisier events safe to switch on at all.
+It changes only when an email leaves: every notification still reaches your feed the moment it happens,
+and push is never batched, because a summary you are interrupted for is not a summary.
 
 **Fanning one event out writes one row per recipient,** and who those recipients are is decided by the
 entity that produced it, using that entity's own visibility rules: an event about a pot only reaches the
@@ -343,9 +351,11 @@ members who can see that pot, and one about a settlement between two people reac
 A name-only member with no account is never a recipient — there is nothing to reach.
 
 **A repeating notification is deduplicated by a key rather than by tracking what was already sent.** The
-overdue-valuation reminder carries `pot:<id>:<cadence period>`, and the database refuses the second row
-with that key — so the hourly job can attempt it all period and each person is told once. When the next
-period opens the key changes and the reminder is raised again.
+overdue-valuation reminder carries `pot:<id>:<cadence period>`, an upcoming bill carries
+`obligation:<id>:<due date>`, and a recorded charge carries its plan and the cycle it paid. The database
+refuses a second row with the same key — so an hourly job can attempt it all period and each person is
+told once. When the next period opens, or the bill is paid and its due date moves, the key changes and
+the reminder is raised afresh.
 
 **A push subscription belongs to a BROWSER,** not to an account: a laptop and a phone are two rows, and
 turning push off on one leaves the other alone. Its two keys are the secrets a push payload is encrypted

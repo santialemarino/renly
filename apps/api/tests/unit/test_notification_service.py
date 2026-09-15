@@ -5,13 +5,14 @@
 # design — it swallows exceptions so a push outage cannot roll back a money write, which means a
 # dispatch that reaches nobody looks exactly like one that reaches everybody.
 
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
-from app.domain import NotFoundError, PushNotConfiguredError
+from app.domain import EmailCadence, NotFoundError, PushNotConfiguredError
 from app.domain.notification import is_enabled_by_default
 from app.models.notification import Notification, NotificationChannel, NotificationEvent, NotificationPreference
 from app.models.push_subscription import PushSubscription
@@ -22,11 +23,16 @@ from app.services import notification_service as svc
 USER = User(id=1, name="Santi", email="santi@test.local", password_hash="x", session_epoch=0)
 OTHER = User(id=2, name="Ana", email="ana@test.local", password_hash="x", session_epoch=0)
 
-# The five events that reach a person outside the app out of the box, per §7's decision. Restated here
-# as a literal rather than imported from the domain, so a change to the shipped behaviour has to be
-# made twice on purpose instead of once by accident.
+# The six events that reach a person outside the app out of the box, per §7's decision plus PR 16's.
+# Restated here as a literal rather than imported from the domain, so a change to the shipped behaviour
+# has to be made twice on purpose instead of once by accident.
+#
+# `obligation_due` is the one this PR added, and `plan_charged` is deliberately absent: a bill awaits
+# the reader's own action, while a recorded subscription charge is the app doing exactly what they
+# configured — about their own money, but awaiting nothing.
 _OUTSIDE_APP = {
     NotificationEvent.balance_written_off,
+    NotificationEvent.obligation_due,
     NotificationEvent.ownership_changed,
     NotificationEvent.settle_confirmed,
     NotificationEvent.settle_marked_paid,
@@ -56,7 +62,7 @@ _REAL_SEND_PUSH = svc._send_push
 
 # Wires a dispatch: one admin session, the preference read, the insert, and the two out-of-app senders.
 # Returns the mocks the tests assert on.
-def _arrange_dispatch(monkeypatch, *, overrides=None, written=None, subscriptions=None, push_configured=False):
+def _arrange_dispatch(monkeypatch, *, overrides=None, written=None, subscriptions=None, push_configured=False, cadences=None):
     session = AsyncMock()
 
     @asynccontextmanager
@@ -69,6 +75,11 @@ def _arrange_dispatch(monkeypatch, *, overrides=None, written=None, subscription
     monkeypatch.setattr(svc.notification_repository, "create_many", created)
     monkeypatch.setattr(svc.user_repository, "get_by_ids", AsyncMock(return_value={USER.id: USER, OTHER.id: OTHER}))
     monkeypatch.setattr(svc.settings_service, "get_languages_by_user_ids", AsyncMock(side_effect=lambda _s, ids: dict.fromkeys(ids, "en")))
+    monkeypatch.setattr(
+        svc.settings_service,
+        "get_email_cadences_by_user_ids",
+        AsyncMock(side_effect=lambda _s, ids: {user_id: (cadences or {}).get(user_id, EmailCadence.immediate) for user_id in ids}),
+    )
     monkeypatch.setattr(svc.push_subscription_repository, "list_by_user_ids", AsyncMock(return_value=subscriptions or {}))
     monkeypatch.setattr(svc.push_subscription_repository, "delete_by_endpoint", AsyncMock())
     monkeypatch.setattr(svc.push_subscription_repository, "touch", AsyncMock())
@@ -273,6 +284,88 @@ class TestDispatch:
         assert mocks["created"].await_args.args[1][0].created_at == moment
 
 
+class TestTheDigestQueue:
+    # The daily cadence's whole effect at dispatch time: the row is still written, the feed is
+    # untouched, push is untouched, and the EMAIL waits. Each of those is one assertion, because each
+    # is a different way of getting the feature wrong — the worst being an email both queued and sent,
+    # which no single-sided test can see.
+
+    @pytest.mark.asyncio
+    async def test_a_daily_recipients_email_waits_and_their_row_is_queued(self, monkeypatch):
+        mocks = _arrange_dispatch(monkeypatch, cadences={USER.id: EmailCadence.daily})
+        await svc.dispatch(NotificationEvent.snapshot_due, [USER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"})
+        mocks["emails"].assert_not_awaited()
+        assert mocks["created"].await_args.args[1][0].digest_pending is True
+
+    @pytest.mark.asyncio
+    async def test_an_immediate_recipient_is_emailed_now_and_queued_for_nothing(self, monkeypatch):
+        # The control for the test above: without it, a `digest_pending` hardcoded to True would pass
+        # there and break every immediate email in the app.
+        mocks = _arrange_dispatch(monkeypatch, cadences={USER.id: EmailCadence.immediate})
+        await svc.dispatch(NotificationEvent.snapshot_due, [USER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"})
+        mocks["emails"].assert_awaited_once()
+        assert mocks["created"].await_args.args[1][0].digest_pending is False
+
+    @pytest.mark.asyncio
+    async def test_the_cadence_is_per_person_within_one_fan_out(self, monkeypatch):
+        # Two people told about the same event, one on each cadence. The queue flag and the send list
+        # have to disagree about them in opposite directions, which is what makes a single shared
+        # predicate the right shape rather than two independent ones.
+        mocks = _arrange_dispatch(monkeypatch, cadences={OTHER.id: EmailCadence.daily})
+        await svc.dispatch(NotificationEvent.snapshot_due, [USER.id, OTHER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"})
+        assert [call.args[0].id for call in mocks["emails"].await_args_list] == [USER.id]
+        queued = {row.user_id: row.digest_pending for row in mocks["created"].await_args.args[1]}
+        assert queued == {USER.id: False, OTHER.id: True}
+
+    @pytest.mark.asyncio
+    async def test_an_event_whose_email_is_OFF_is_never_queued(self, monkeypatch):
+        # Otherwise the queue fills with rows the digest would then email — turning a cadence into a
+        # subscription to everything, which is the opposite of what somebody asking for fewer emails
+        # wanted. The row is still written (the feed is on), which is what makes this worth asserting.
+        overrides = {USER.id: {(NotificationEvent.pot_movement, NotificationChannel.email): False}}
+        mocks = _arrange_dispatch(monkeypatch, overrides=overrides, cadences={USER.id: EmailCadence.daily})
+        await svc.dispatch(NotificationEvent.pot_movement, [USER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"})
+        row = mocks["created"].await_args.args[1][0]
+        assert (row.user_id, row.digest_pending) == (USER.id, False)
+
+    @pytest.mark.asyncio
+    async def test_push_still_goes_out_immediately_on_the_daily_cadence(self, monkeypatch):
+        # A cadence is about EMAIL. Somebody who asked for fewer emails did not ask for delayed
+        # lock-screen alerts, and a digest of pushes is a contradiction anyway.
+        mocks = _arrange_dispatch(
+            monkeypatch,
+            subscriptions={USER.id: [_subscription(1, USER.id, "https://p/1")]},
+            push_configured=True,
+            cadences={USER.id: EmailCadence.daily},
+        )
+        await svc.dispatch(NotificationEvent.snapshot_due, [USER.id], {"group_id": 1, "group": "Casa", "pot_id": 5, "pot": "P"})
+        mocks["pushes"].assert_awaited_once()
+        mocks["emails"].assert_not_awaited()
+
+
+class TestTheInsertWritesEveryColumn:
+    def test_create_many_names_every_column_the_model_declares(self):
+        # `create_many` lists its columns explicitly rather than dumping the model, and it has to: a
+        # multi-row VALUES with differing keys is not one statement. The cost is that the list is an
+        # enumerated invariant of its own — a column added to the model and not added there is written
+        # as its DEFAULT on every dispatch, silently, with nothing failing anywhere.
+        #
+        # `digest_pending` is the live case: omitted, it would be false for every row, the digest queue
+        # would never fill, and the job would run hourly forever finding nothing to send. A set
+        # difference rather than a check for that one column, so the next one is covered by existing.
+        import inspect
+
+        source = inspect.getsource(notification_repository.create_many)
+        named = set(re.findall(r'"(\w+)": n\.', source))
+        declared = {column.name for column in Notification.__table__.columns}
+        # The two columns an insert must NOT name, each for its own reason rather than as a blanket
+        # exemption: `id` is the database's to assign, and `read_at` is NULL because a notification
+        # nobody has seen yet is exactly what a new one is. A column added to the model has to be either
+        # written by create_many or added here with a reason — which is the decision this test forces.
+        assert declared - named == {"id", "read_at"}
+        assert named - declared == set()
+
+
 class TestLinks:
     def test_a_pot_event_points_at_the_pot(self, monkeypatch):
         monkeypatch.setattr(svc.settings, "web_base_url", "https://renly.test")
@@ -286,6 +379,24 @@ class TestLinks:
         # A link is not worth a 500, so this is a fallback rather than a guard.
         monkeypatch.setattr(svc.settings, "web_base_url", "https://renly.test")
         assert svc._link(NotificationEvent.snapshot_due, {"group_id": 3}) == "https://renly.test/shared/3"
+
+    def test_a_private_event_points_at_a_private_page(self, monkeypatch):
+        # The two events with no group at all. Their payload names no group_id, so without their own
+        # branch the fallback above would hand every email and every push "/shared/None".
+        monkeypatch.setattr(svc.settings, "web_base_url", "https://renly.test")
+        assert svc._link(NotificationEvent.obligation_due, {"obligation_id": 4}) == "https://renly.test/payment-obligations"
+        assert svc._link(NotificationEvent.plan_charged, {"plan_id": 7}) == "https://renly.test/expenses"
+
+    def test_an_event_missing_from_the_private_map_would_link_at_nothing(self, monkeypatch):
+        # The positive control for why that map has to exist, and what a third private event would cost
+        # if somebody forgot it: the group fallback interpolates a `group_id` that is not there, which
+        # does not raise — it prints "None" and ships a 404 in an email.
+        #
+        # Which events ARE private is not derivable from anything on this side, so the set difference
+        # that guards it lives in test_notification_event_surface.py, against the web's own copy.
+        monkeypatch.setattr(svc.settings, "web_base_url", "https://renly.test")
+        monkeypatch.setattr(svc, "_PRIVATE_EVENT_PATHS", {})
+        assert svc._link(NotificationEvent.obligation_due, {"obligation_id": 4}) == "https://renly.test/shared/None"
 
 
 class TestFeed:
@@ -396,6 +507,7 @@ class TestPreferences:
     async def test_the_grid_is_complete_and_says_which_cells_are_defaults(self, monkeypatch):
         overrides = [_preference(USER.id, NotificationEvent.pot_movement, NotificationChannel.email, enabled=True)]
         monkeypatch.setattr(svc.notification_repository, "list_preferences", AsyncMock(return_value=overrides))
+        monkeypatch.setattr(svc.settings_service, "get_email_cadence", AsyncMock(return_value=EmailCadence.immediate))
         monkeypatch.setattr(svc.push_subscription_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(svc.web_push, "is_configured", lambda: False)
         monkeypatch.setattr(svc.web_push, "public_key", lambda: None)
@@ -411,6 +523,7 @@ class TestPreferences:
     async def test_an_unconfigured_deployment_reports_push_as_unavailable(self, monkeypatch):
         # So the surface can say so rather than offering a switch that silently does nothing.
         monkeypatch.setattr(svc.notification_repository, "list_preferences", AsyncMock(return_value=[]))
+        monkeypatch.setattr(svc.settings_service, "get_email_cadence", AsyncMock(return_value=EmailCadence.immediate))
         monkeypatch.setattr(svc.push_subscription_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(svc.web_push, "is_configured", lambda: False)
         monkeypatch.setattr(svc.web_push, "public_key", lambda: None)
@@ -448,6 +561,7 @@ class TestPreferences:
             svc.push_subscription_repository, "list_by_user", AsyncMock(return_value=[_subscription(1, OTHER.id, "https://p/shared")])
         )
         monkeypatch.setattr(svc.notification_repository, "list_preferences", AsyncMock(return_value=[]))
+        monkeypatch.setattr(svc.settings_service, "get_email_cadence", AsyncMock(return_value=EmailCadence.immediate))
         monkeypatch.setattr(svc.web_push, "is_configured", lambda: True)
         monkeypatch.setattr(svc.web_push, "public_key", lambda: "pub")
 
@@ -462,6 +576,7 @@ class TestPreferences:
     async def test_unsubscribing_something_already_gone_is_not_an_error(self, monkeypatch):
         # The caller's intent — "this browser must not be pushed to" — is satisfied either way.
         monkeypatch.setattr(svc.notification_repository, "list_preferences", AsyncMock(return_value=[]))
+        monkeypatch.setattr(svc.settings_service, "get_email_cadence", AsyncMock(return_value=EmailCadence.immediate))
         monkeypatch.setattr(svc.push_subscription_repository, "delete_by_endpoint", AsyncMock())
         monkeypatch.setattr(svc.push_subscription_repository, "list_by_user", AsyncMock(return_value=[]))
         monkeypatch.setattr(svc.web_push, "is_configured", lambda: False)

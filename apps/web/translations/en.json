@@ -3192,9 +3192,26 @@
       "email": "Email",
       "push": "Push",
       "error": "Could not save that. Try again.",
-      "pushUnavailableHint": "Push is not set up on this deployment, so those switches do nothing yet."
+      "pushUnavailableHint": "Push is not set up on this deployment, so those switches do nothing yet.",
+      "digestLabel": "Send one daily summary instead",
+      "digestDescription": "Email arrives as it happens by default. Turn this on and Renly sends a single evening summary of everything above that has email switched on."
     },
     "events": {
+      "obligation_due": {
+        "label": "A bill you track is coming due",
+        "title": "{name} — {amount} {currency} is due on {date}",
+        "detail": "Mark it paid once you have."
+      },
+      "plan_charged": {
+        "label": "A subscription or instalment is recorded",
+        "title": "Renly recorded a {name} charge",
+        "subscription": {
+          "title": "Renly recorded {name} — {amount} {currency} on {date}"
+        },
+        "installment": {
+          "title": "Renly recorded a {name} instalment — {amount} {currency} on {date}"
+        }
+      },
       "group_invited": {
         "label": "Someone is invited to a group",
         "title": "{inviter} invited {invitee} to {group}"

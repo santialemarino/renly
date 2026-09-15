@@ -12,16 +12,28 @@ from app.models.utils import utcnow
 
 # What a notification is about.
 #
-# The values are money events today because shared money is what produces them, but nothing about the
-# TABLES in this file is money-specific: an event is a name, its context travels in `payload`, and no
-# column here is a foreign key to anything the money domain owns. That is the whole entity-agnostic
+# The values are money events today because money is what produces them, but nothing about the TABLES
+# in this file is money-specific: an event is a name, its context travels in `payload`, and no column
+# here is a foreign key to anything the money domain owns. That is the whole entity-agnostic
 # requirement — a second module adds values to this enum and reuses every row, policy and preference
 # below unchanged.
+#
+# Adding a value here is a MIGRATION, which the audit log's `entity_type`/`action` deliberately are
+# not: those are VARCHARs so a second module needs no schema change, while this is bound as a Postgres
+# enum (`SAEnum(..., name="notification_event")`) because a feed row's event decides which copy renders
+# it and a typo must fail at the write rather than at the reader's screen. The list is ALSO transcribed
+# in TypeScript (`apps/web/lib/constants/notifications.ts`) and in `01_create_tables.sql`;
+# `tests/unit/test_notification_event_surface.py` asserts all three agree.
+#
+# `obligation_due` and `plan_charged` are the only two that are PRIVATE — they are about one person's
+# own subscriptions and bills, so their payload names no group and their link is not a group page.
 class NotificationEvent(StrEnum):
     balance_written_off = "balance_written_off"
     group_invited = "group_invited"
     member_joined = "member_joined"
+    obligation_due = "obligation_due"
     ownership_changed = "ownership_changed"
+    plan_charged = "plan_charged"
     pot_movement = "pot_movement"
     settle_confirmed = "settle_confirmed"
     settle_marked_paid = "settle_marked_paid"
@@ -63,6 +75,13 @@ class NotificationPreference(SQLModel, table=True):
 # push bodies are rendered by the API instead, for the same reason transactional emails are: there is
 # no frontend renderer at send time.
 #
+# `digest_pending` is the whole queue behind the daily email digest, and it is a per-ROW fact rather
+# than a per-user cursor for one reason: a cursor has to be initialised when somebody switches modes,
+# and getting that wrong emails them a summary of six months of history. Set at dispatch, only for a
+# recipient whose email is on for the event AND who asked for a daily summary; cleared by the digest
+# job. A row that was never enqueued is never picked up however the user's setting later changes, and
+# rows already enqueued still go out if they switch back — which is right, since the email was owed.
+#
 # `dedupe_key` is what makes a REPEATING notification safe to attempt on every tick. A partial unique
 # index over (user_id, event, dedupe_key) turns the second attempt into a no-op, so the reminder job
 # needs no "last notified" column anywhere and no state of its own — it just asks the database to
@@ -86,4 +105,5 @@ class Notification(SQLModel, table=True):
         description="Identifies a repeating notification so the same one is written at most once; NULL for a one-off.",
     )
     read_at: datetime | None = Field(default=None, description="When the recipient read it; NULL while unread.")
+    digest_pending: bool = Field(default=False, description="True while this row still owes the recipient an email inside their daily digest.")
     created_at: datetime = Field(default_factory=utcnow)

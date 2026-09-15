@@ -15,6 +15,7 @@
 # repository ignores it, which is exactly what a mutation sweep found.
 
 import os
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
@@ -244,3 +245,139 @@ async def test_mark_all_read_respects_the_same_exclusion(seeded):
         assert updated == 2
         assert await notification_repository.count_unread(s, user_id) == 2
         assert await notification_repository.count_unread(s, user_id, exclude_events=hidden) == 0
+
+
+# --- The digest queue (PR 16) ---
+#
+# Three statements that must describe the same rows: who is owed a summary, which rows that summary
+# covers, and which rows to forget afterwards. A mocked session cannot see them disagree — it returns
+# whatever it was told to and passes on the right answer and the wrong one alike — and every way they
+# can disagree is silent. A `clear` that misses a row sends the same summary again tomorrow; a `list`
+# narrower than the `user_ids` read sends an empty email; and the whole queue rides a PARTIAL index
+# whose predicate has to be a plain boolean column for Postgres to use it at all.
+
+
+def _pending(user_ids: list[int], *, pending: bool = True) -> list[Notification]:
+    return [
+        Notification(user_id=user_id, event=NotificationEvent.plan_charged, payload={"name": "Netflix"}, digest_pending=pending)
+        for user_id in user_ids
+    ]
+
+
+@pytest.mark.asyncio
+async def test_the_queue_names_only_people_with_something_pending(seeded):
+    # The tick's first read, and the one that has to be cheap: it decides whether the hour costs
+    # anything at all. Both halves are asserted because a predicate dropped from the WHERE would return
+    # every user who has ever been notified — and then the job would go on to build an empty summary
+    # for each of them.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        await notification_repository.create_many(session, _pending([user_id], pending=False))
+        await session.commit()
+        assert user_id not in await notification_repository.list_digest_pending_user_ids(session)
+
+        await notification_repository.create_many(session, _pending([user_id]))
+        await session.commit()
+        assert user_id in await notification_repository.list_digest_pending_user_ids(session)
+
+
+@pytest.mark.asyncio
+async def test_create_many_actually_persists_the_queue_flag(seeded):
+    # `create_many` names its columns explicitly, so a flag the model carries and the statement omits is
+    # written as its DEFAULT — false — on every dispatch. The unit test asserts the column LIST; this
+    # asserts the value that reaches the database, which is the thing the digest job reads.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        await notification_repository.create_many(session, _pending([user_id]))
+        await session.commit()
+        rows = await notification_repository.list_digest_pending(session, [user_id])
+        assert [row.digest_pending for row in rows[user_id]] == [True]
+
+
+@pytest.mark.asyncio
+async def test_the_rows_read_are_exactly_the_rows_the_queue_promised(seeded):
+    # The two reads share one predicate, and a row in one but not the other is either a summary that
+    # says nothing or a row that is never summarised. Seeded with a settled row beside a pending one so
+    # "returns everything" and "returns the right thing" are different answers.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        await notification_repository.create_many(session, _pending([user_id], pending=False) + _pending([user_id]))
+        await session.commit()
+        rows = await notification_repository.list_digest_pending(session, [user_id])
+        assert len(rows[user_id]) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_queue_is_read_oldest_first(seeded):
+    # A summary reads in the order things happened. Ordered in SQL rather than in Python, so this is the
+    # only place it can be checked — and the fixture inserts out of order, because rows that arrive
+    # sorted never exercise a sort.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        later, earlier = _pending([user_id])[0], _pending([user_id])[0]
+        later.payload = {"name": "second"}
+        later.created_at = datetime(2026, 9, 15, 12, 0)
+        earlier.payload = {"name": "first"}
+        earlier.created_at = datetime(2026, 9, 15, 8, 0)
+        await notification_repository.create_many(session, [later, earlier])
+        await session.commit()
+        rows = await notification_repository.list_digest_pending(session, [user_id])
+        assert [row.payload["name"] for row in rows[user_id]] == ["first", "second"]
+
+
+@pytest.mark.asyncio
+async def test_clearing_empties_the_queue_and_leaves_the_notifications_alone(seeded):
+    # The digest only ever decided WHEN an email left. Clearing must take the row out of the queue and
+    # nothing else — deleting it, or marking it read, would take the record of the event out of the
+    # feed the email points at.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        await notification_repository.create_many(session, _pending([user_id]))
+        await session.commit()
+        rows = await notification_repository.list_digest_pending(session, [user_id])
+        ids = [row.id for row in rows[user_id]]
+
+        assert await notification_repository.clear_digest_pending(session, ids) == 1
+        await session.commit()
+        assert await notification_repository.list_digest_pending_user_ids(session) == []
+        assert await notification_repository.count_by_user(session, user_id) == 1
+        assert await notification_repository.count_unread(session, user_id) == 1
+
+
+@pytest.mark.asyncio
+async def test_clearing_twice_reports_that_the_second_time_changed_nothing(seeded):
+    # The count is what a job would log, so it has to be what actually happened rather than what was
+    # asked for — the same correction PR 7 made to the reminder's own count.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        await notification_repository.create_many(session, _pending([user_id]))
+        await session.commit()
+        ids = [row.id for row in (await notification_repository.list_digest_pending(session, [user_id]))[user_id]]
+        assert await notification_repository.clear_digest_pending(session, ids) == 1
+        await session.commit()
+        assert await notification_repository.clear_digest_pending(session, ids) == 0
+
+
+@pytest.mark.asyncio
+async def test_clearing_one_persons_queue_leaves_another_persons_alone(seeded):
+    # The statement is bounded by ids rather than by user, and it runs on the privileged session where
+    # RLS would not stop it — so a predicate dropped here empties the queue for everybody, and every one
+    # of those people silently never receives the summary they were owed.
+    user_id = seeded["user_id"]
+    async with seeded["factory"]() as session:
+        other_id = (
+            await session.execute(
+                text("INSERT INTO users (name, email, password_hash) VALUES ('E', :e, 'h') RETURNING id"),
+                {"e": "digest_other@test.local"},
+            )
+        ).scalar_one()
+        await notification_repository.create_many(session, _pending([user_id, other_id]))
+        await session.commit()
+        try:
+            mine = [row.id for row in (await notification_repository.list_digest_pending(session, [user_id]))[user_id]]
+            await notification_repository.clear_digest_pending(session, mine)
+            await session.commit()
+            assert await notification_repository.list_digest_pending_user_ids(session) == [other_id]
+        finally:
+            await session.execute(text("DELETE FROM users WHERE id = :i"), {"i": other_id})
+            await session.commit()

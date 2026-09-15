@@ -6,6 +6,7 @@ from typing import NamedTuple
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.domain.currency import DOLLAR_RATE_DEFAULT
+from app.domain.notification import DEFAULT_EMAIL_CADENCE, EmailCadence
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from app.repositories import user_settings_repository
@@ -34,6 +35,7 @@ SETTINGS_KEY_SAMPLES_RETIRED_INVESTMENTS = "samples_retired_investments"
 SETTINGS_KEY_SAMPLES_RETIRED_EXPENSES = "samples_retired_expenses"
 SETTINGS_KEY_SAMPLES_RETIRED_INCOME = "samples_retired_income"
 SETTINGS_KEY_TOUR_COMPLETED = "tour_completed"
+SETTINGS_KEY_EMAIL_CADENCE = "notification_email_cadence"
 
 # Per-entity "first-run sample retired" flags. Each is latched (server-side) when the user first
 # creates that entity or clears that section's sample, so the section's sample shows only until the
@@ -315,3 +317,31 @@ async def retire_sample(session: AsyncSession, user_id: int, entity: str) -> Non
 # Latches the first-run welcome tour as completed so it never auto-shows again. Idempotent; does NOT commit.
 async def complete_tour(session: AsyncSession, user_id: int) -> None:
     await user_settings_repository.latch_flag(session, user_id, SETTINGS_KEY_TOUR_COMPLETED)
+
+
+# Coerces a raw settings value into a supported email cadence, or the default when unset/unknown.
+def _cadence_or_default(value: object) -> EmailCadence:
+    return EmailCadence(value) if value in tuple(EmailCadence) else DEFAULT_EMAIL_CADENCE
+
+
+# Reads how often the user wants Renly to email them. Lives in `user_settings` rather than in
+# `notification_preferences` because it is one answer per PERSON, where that table is keyed by
+# (event, channel) — and it is surfaced on the notifications page rather than through PUT /settings,
+# the same way the onboarding flags above are written by their own service.
+async def get_email_cadence(session: AsyncSession, user_id: int) -> EmailCadence:
+    row = await user_settings_repository.get_by_user_id(session, user_id)
+    return _cadence_or_default(row.settings.get(SETTINGS_KEY_EMAIL_CADENCE) if row and row.settings else None)
+
+
+# Batch variant of get_email_cadence: {user_id: cadence} for every requested id, in one query. The
+# fan-out asks about every recipient of an event at once, so the single-user version inside that loop
+# would be an N+1 that grows with the group.
+async def get_email_cadences_by_user_ids(session: AsyncSession, user_ids: list[int]) -> dict[int, EmailCadence]:
+    stored = await user_settings_repository.get_string_by_user_ids(session, user_ids, SETTINGS_KEY_EMAIL_CADENCE)
+    return {user_id: _cadence_or_default(stored.get(user_id)) for user_id in user_ids}
+
+
+# Records how often the user wants Renly to email them. A targeted JSONB merge, so it cannot clobber a
+# settings write from another tab. Does NOT commit — the caller owns the transaction.
+async def set_email_cadence(session: AsyncSession, user_id: int, cadence: EmailCadence) -> None:
+    await user_settings_repository.set_key(session, user_id, SETTINGS_KEY_EMAIL_CADENCE, cadence.value)

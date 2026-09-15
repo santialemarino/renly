@@ -15,12 +15,16 @@
 # the same payload the web renders the feed from — so the two channels cannot describe one event
 # differently.
 
+import logging
+from datetime import date as date_type
 from decimal import ROUND_HALF_UP, Decimal
 
 from app.models.notification import NotificationEvent
 from app.schemas.settings import SUPPORTED_LANGUAGES
 from app.services.email_service import EmailMessage
 from app.services.email_templates import html_body
+
+logger = logging.getLogger(__name__)
 
 _PRODUCT_NAME = "Renly"
 # Same fallback locale as the transactional emails, derived from the same tuple so the two cannot drift.
@@ -179,8 +183,53 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "body": ('{actor} added shared income of {amount} {currency} to the group "{group}".\n\nSee it and your share here:\n{link}'),
             "push": "{actor} added shared income",
         },
+        # The two PRIVATE events. Both say what Renly DID or what the reader THEMSELVES declared, never
+        # what a third party is about to do: Renly records a subscription charge after the fact, it does
+        # not make it, and the bill below is due because the reader said it was.
+        "plan_charged.subscription": {
+            "subject": "{name} — {amount} {currency} recorded on {date}",
+            "body": (
+                '{product} recorded the "{name}" subscription charge of {amount} {currency}, dated {date}, '
+                "because the plan says it bills then.\n\n"
+                "Nothing was paid on your behalf — this is the expense entry, so your balances stay right "
+                "without you adding it.\n\n"
+                "See it here:\n{link}"
+            ),
+            "push": "{product} recorded your {name} charge",
+        },
+        "plan_charged.installment": {
+            "subject": "{name} — {amount} {currency} instalment recorded on {date}",
+            "body": (
+                '{product} recorded the "{name}" instalment of {amount} {currency}, dated {date}, '
+                "because the plan says that cuota falls then.\n\n"
+                "Nothing was paid on your behalf — this is the expense entry, so your balances stay right "
+                "without you adding it.\n\n"
+                "See it here:\n{link}"
+            ),
+            "push": "{product} recorded your {name} instalment",
+        },
+        "obligation_due": {
+            "subject": "{name} is due on {date}",
+            "body": (
+                '"{name}" — {amount} {currency} — is due on {date}.\n\n'
+                "{product} does not pay it for you. Mark it paid once you have, and the next one moves "
+                "forward on its own.\n\n"
+                "See it here:\n{link}"
+            ),
+            "push": "{name} is due on {date}",
+        },
         "_footer": {
             "text": "You can change which notifications {product} sends you under Settings → Notifications:\n{settings_link}",
+        },
+        # The daily digest's own wrapper, and the only copy it needs: every LINE of it is the event's own
+        # `subject` string above, so an event added later is digestible the day it exists, with nothing
+        # here to remember to extend.
+        "_digest": {
+            "subject_one": "Your {product} summary — 1 update",
+            "subject_other": "Your {product} summary — {count} updates",
+            "intro": "Here is everything {product} has for you since your last summary.",
+            "more": "…and {count} more.",
+            "see_all": "See them all here:\n{link}",
         },
         # What a NAMELESS pot is called. A group's default pot has no name (pots.name is NULL for it),
         # and it is the pot most groups only ever have — so without this the most common reminder of
@@ -329,8 +378,47 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "body": ('{actor} agregó un ingreso compartido de {amount} {currency} al grupo "{group}".\n\nPodés verlo, con tu parte, acá:\n{link}'),
             "push": "{actor} agregó un ingreso compartido",
         },
+        "plan_charged.subscription": {
+            "subject": "{name} — {amount} {currency} registrado el {date}",
+            "body": (
+                '{product} registró el cargo de la suscripción "{name}" por {amount} {currency}, con fecha '
+                "{date}, porque el plan dice que se cobra ese día.\n\n"
+                "No se pagó nada en tu nombre: este es el gasto registrado, así tus saldos quedan bien sin "
+                "que lo cargues vos.\n\n"
+                "Podés verlo acá:\n{link}"
+            ),
+            "push": "{product} registró tu cargo de {name}",
+        },
+        "plan_charged.installment": {
+            "subject": "{name} — cuota de {amount} {currency} registrada el {date}",
+            "body": (
+                '{product} registró la cuota de "{name}" por {amount} {currency}, con fecha {date}, porque '
+                "el plan dice que esa cuota cae ese día.\n\n"
+                "No se pagó nada en tu nombre: este es el gasto registrado, así tus saldos quedan bien sin "
+                "que lo cargues vos.\n\n"
+                "Podés verlo acá:\n{link}"
+            ),
+            "push": "{product} registró tu cuota de {name}",
+        },
+        "obligation_due": {
+            "subject": "{name} vence el {date}",
+            "body": (
+                '"{name}" — {amount} {currency} — vence el {date}.\n\n'
+                "{product} no lo paga por vos. Marcalo como pagado cuando lo hayas hecho y el siguiente "
+                "avanza solo.\n\n"
+                "Podés verlo acá:\n{link}"
+            ),
+            "push": "{name} vence el {date}",
+        },
         "_footer": {
             "text": "Podés cambiar qué notificaciones te manda {product} en Configuración → Notificaciones:\n{settings_link}",
+        },
+        "_digest": {
+            "subject_one": "Tu resumen de {product} — 1 novedad",
+            "subject_other": "Tu resumen de {product} — {count} novedades",
+            "intro": "Esto es todo lo que {product} tiene para vos desde tu último resumen.",
+            "more": "…y {count} más.",
+            "see_all": "Podés verlas todas acá:\n{link}",
         },
         "_pot": {"name": "Dinero compartido"},
     },
@@ -340,6 +428,18 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
 # Thousand separators for the locales this app ships, since Spanish and English disagree about which
 # character does which job.
 _SEPARATORS = {"en": (",", "."), "es": (".", ",")}
+
+# Month names and date order per locale, out here beside the separators rather than inside the catalog
+# for the same reason those are: they are locale DATA, not copy anybody writes per event.
+#
+# Spelling the month out is the whole point. A due date is the most important word in the one event
+# whose email is on by default, and every all-numeric form is ambiguous across exactly the two locales
+# this app ships: 09/07 is 9 July to a Spanish reader and 7 September to an English one.
+_MONTH_NAMES = {
+    "en": ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"),
+    "es": ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"),
+}
+_DATE_PATTERNS = {"en": "{month} {day}, {year}", "es": "{day} de {month} de {year}"}
 
 
 # A money figure as the app itself renders it: grouped thousands, at most two decimals, and no trailing
@@ -374,8 +474,32 @@ def _amount(value: str, locale: str) -> str:
     return f"{sign}{grouped}{decimal}{fraction}" if fraction else f"{sign}{grouped}"
 
 
-# The payload as the templates need to read it: money figures formatted, and a nameless pot given the
-# label it is known by. Applied once per message, by BOTH renderers, so no template has to remember it.
+# An ISO date as a sentence reads it: "September 18, 2026" / "18 de septiembre de 2026".
+#
+# Only a payload key literally called `date` goes through this (see _readable), which is what keeps it
+# from touching `snapshot_due`'s `valued_as_of` — a field whose email does not mention the date at all
+# and whose stored rows predate this rule.
+#
+# The web formats the same value with date-fns and produces a shorter label ("Sep 18, 2026"), and that
+# difference is deliberate rather than drift: an inbox has room for the month and a table cell does
+# not. What must never differ is the DAY, which is why both sides read the date-only string on its own
+# local-midnight anchor and neither shifts it by a timezone.
+#
+# An unparseable value is shown verbatim, for the same reason an unparseable amount is: the sentence
+# around it stays true, and an odd-looking date is visible where a dropped email is not.
+def _date(value: str, locale: str) -> str:
+    try:
+        parsed = date_type.fromisoformat(value)
+    except (TypeError, ValueError):
+        return value
+    months = _MONTH_NAMES.get(locale, _MONTH_NAMES[_DEFAULT_LOCALE])
+    pattern = _DATE_PATTERNS.get(locale, _DATE_PATTERNS[_DEFAULT_LOCALE])
+    return pattern.format(day=parsed.day, month=months[parsed.month - 1], year=parsed.year)
+
+
+# The payload as the templates need to read it: money figures formatted, dates spelled out, and a
+# nameless pot given the label it is known by. Applied once per message, by BOTH renderers, so no
+# template has to remember it.
 #
 # The pot half is the one that bites. `pots.name` is NULL for a group's default pot — which is the pot
 # most groups only ever have — and `"{pot} is due a new valuation".format(pot=None)` does not raise, it
@@ -386,6 +510,8 @@ def _readable(payload: dict, locale: str) -> dict:
     readable = dict(payload)
     if "amount" in readable:
         readable["amount"] = _amount(str(readable["amount"]), locale)
+    if readable.get("date") is not None:
+        readable["date"] = _date(str(readable["date"]), locale)
     if readable.get("pot") is None and "pot" in readable:
         readable["pot"] = _strings("_pot", locale)["name"]
     return readable
@@ -426,3 +552,51 @@ def notification_email(
     text = f"{strings['body'].format(product=_PRODUCT_NAME, link=link, **readable)}\n\n{footer}"
     subject = strings["subject"].format(product=_PRODUCT_NAME, **readable)
     return EmailMessage(to=to, subject=subject, html=html_body(text), text=text)
+
+
+# One line of a digest: an event's own email SUBJECT, which is already the one-sentence form of it.
+#
+# Reusing the subject is what makes the digest need no per-event copy at all — a new event is
+# digestible the day it is added, and the enumerated-list surface this file is full of does not grow by
+# one more list. Returns None for a payload the sentence cannot be built from, so one unrenderable row
+# costs its own line instead of the whole summary; the alternative is a render error inside a job that,
+# like every send in this layer, is not allowed to raise.
+def _digest_line(event: NotificationEvent, payload: dict, locale: str) -> str | None:
+    try:
+        return _strings(template_key(event, payload), locale)["subject"].format(product=_PRODUCT_NAME, **_readable(payload, locale))
+    except Exception:
+        logger.warning("Skipped a '%s' line in a notification digest.", event.value, exc_info=True)
+        return None
+
+
+# Everything one person was told since their last summary, as a single email.
+#
+# `items` is (event, payload) in the order things happened, oldest first. `link` is the notifications
+# page, which is both where the full history lives and what the reader wants after reading a summary.
+#
+# `overflow` is how many further rows exist beyond the ones passed in: the job caps what it renders, so
+# a heavy day produces a readable email rather than a five-hundred-line one, and the count is stated
+# rather than the remainder silently dropped. Rows left out are still in the feed — the link reaches
+# them — which is why capping is safe here in a way that dropping a single immediate email would not be.
+def digest_email(
+    to: str, items: list[tuple[NotificationEvent, dict]], *, link: str, settings_link: str, overflow: int = 0, locale: str = _DEFAULT_LOCALE
+) -> EmailMessage:
+    strings = _strings("_digest", locale)
+    lines = [line for event, payload in items if (line := _digest_line(event, payload, locale)) is not None]
+    body = "\n".join(f"• {line}" for line in lines)
+    if overflow > 0:
+        body = f"{body}\n{strings['more'].format(count=overflow)}"
+    footer = _strings("_footer", locale)["text"].format(product=_PRODUCT_NAME, settings_link=settings_link)
+    text = "\n\n".join(
+        [
+            strings["intro"].format(product=_PRODUCT_NAME),
+            body,
+            strings["see_all"].format(link=link),
+            footer,
+        ]
+    )
+    # The count in the subject is what the reader was TOLD about, so it counts the rows this email
+    # covers — the rendered lines plus the overflow it names — and not the ones it happened to render.
+    count = len(lines) + overflow
+    key = "subject_one" if count == 1 else "subject_other"
+    return EmailMessage(to=to, subject=strings[key].format(product=_PRODUCT_NAME, count=count), html=html_body(text), text=text)

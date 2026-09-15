@@ -8,7 +8,11 @@ import {
 } from '@/app/(protected)/shared/mutation-result';
 import { mapPreferences, type NotificationPreferences } from '@/lib/api/notifications';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
-import type { NotificationChannel, NotificationEvent } from '@/lib/constants/notifications';
+import type {
+  NotificationChannel,
+  NotificationEmailCadence,
+  NotificationEvent,
+} from '@/lib/constants/notifications';
 
 /*
  * Mutations on the notification layer. They reuse the shared-money result helpers rather than a set of
@@ -36,6 +40,19 @@ export async function saveNotificationPreference(
     body: { event, channel, enabled },
   });
   return toDataResult(res, mapPreferences, 'Failed to save notification preference');
+}
+
+// Records how often the caller wants their emails. Its own endpoint rather than a field on the switch
+// above, because it is one answer per PERSON where that one is per (event, channel) — and it returns
+// the whole grid for the same reason every other write here does.
+export async function saveNotificationEmailCadence(
+  cadence: NotificationEmailCadence,
+): Promise<SharedDataResult<NotificationPreferences>> {
+  const res = await authenticatedFetch('/notifications/preferences/email-cadence', {
+    method: 'PUT',
+    body: { cadence },
+  });
+  return toDataResult(res, mapPreferences, 'Failed to save the email cadence');
 }
 
 // Registers this browser for web push. The three values come verbatim from the browser's own

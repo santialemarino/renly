@@ -4,8 +4,12 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import { Switch } from '@repo/ui/components';
-import { saveNotificationPreference } from '@/app/(protected)/notifications/actions';
+import { Label, Switch } from '@repo/ui/components';
+import {
+  saveNotificationEmailCadence,
+  saveNotificationPreference,
+} from '@/app/(protected)/notifications/actions';
+import type { SharedDataResult } from '@/app/(protected)/shared/mutation-result';
 import { SectionHeader } from '@/components/section-header';
 import { InfoHint } from '@/components/styled-hint';
 import type { NotificationPreferences } from '@/lib/api/notifications';
@@ -15,6 +19,15 @@ import {
   type NotificationChannel,
   type NotificationEvent,
 } from '@/lib/constants/notifications';
+
+// The cadence switch's key in the same in-flight-save slot the grid's cells use. A literal rather than
+// an `event.channel` pair because it is neither: it is one answer for the whole email column.
+const CADENCE_CELL = 'email.cadence';
+
+// Ties the switch to its own label, which is the only thing that makes the label clickable and the
+// control announced by name — the grid's cells carry an aria-label instead because they have no
+// visible label of their own.
+const DIGEST_SWITCH_ID = 'notification-email-digest';
 
 interface NotificationChannelsSectionProps {
   initialPreferences: NotificationPreferences;
@@ -32,6 +45,10 @@ interface NotificationChannelsSectionProps {
  * answer is the complete truth rather than a patch. That alone is not enough for two switches flipped
  * in quick succession, though: two saves in flight can ANSWER out of order, and the older answer would
  * then erase the newer one's cell. So only the latest save's answer is applied.
+ *
+ * The email CADENCE switch under the grid shares that ticket, which is the point of it living here
+ * rather than in a section of its own: it writes to a different endpoint but gets the same grid back,
+ * so a cadence save and a cell save racing each other is exactly the out-of-order case above.
  */
 export function NotificationChannelsSection({
   initialPreferences,
@@ -56,11 +73,26 @@ export function NotificationChannelsSection({
     channel: NotificationChannel,
     enabled: boolean,
   ) {
-    const cell = `${event}.${channel}`;
+    await save(`${event}.${channel}`, () => saveNotificationPreference(event, channel, enabled));
+  }
+
+  async function handleCadenceToggle(daily: boolean) {
+    await save(CADENCE_CELL, () => saveNotificationEmailCadence(daily ? 'daily' : 'immediate'));
+  }
+
+  /*
+   * One write, whatever switch made it. Extracted because the cadence control writes to a different
+   * endpoint and returns the same grid, so it needs the identical staleness rule — and two copies of
+   * that rule is two places the "drop a superseded answer" branch can be got wrong.
+   */
+  async function save(
+    cell: string,
+    write: () => Promise<SharedDataResult<NotificationPreferences>>,
+  ) {
     const ticket = (latestSave.current += 1);
     setSaving(cell);
     try {
-      const result = await saveNotificationPreference(event, channel, enabled);
+      const result = await write();
       if (!result.ok) {
         toast.error(result.conflictDetail, { id: 'notification-preference' });
         return;
@@ -104,7 +136,11 @@ export function NotificationChannelsSection({
           </thead>
           <tbody>
             {NOTIFICATION_EVENTS.map((event) => (
-              <tr key={event} className="border-b border-border/60 last:border-b-0">
+              <tr
+                key={event}
+                data-testid={`notification-event-${event}`}
+                className="border-b border-border/60 last:border-b-0"
+              >
                 <th scope="row" className="py-3 pr-4 text-left text-paragraph-sm font-normal">
                   {t(`events.${event}.label`)}
                 </th>
@@ -130,7 +166,31 @@ export function NotificationChannelsSection({
         </table>
       </div>
 
-      {/* Said once, under the grid, rather than on each of the ten push switches. */}
+      {/* The one control that is about WHEN rather than WHETHER, so it sits under the grid rather than
+          inside it — a per-person answer beneath a per-event one. A Switch because there are two
+          values; when a third (weekly) exists it becomes a segmented control and this comment is the
+          reminder that the API already stores a string rather than a boolean. */}
+      <div className="flex w-full items-start justify-between gap-x-6">
+        <div className="flex flex-col gap-y-1">
+          <Label htmlFor={DIGEST_SWITCH_ID} className="text-paragraph-sm-medium">
+            {t('channels.digestLabel')}
+          </Label>
+          <span className="text-paragraph-xs text-muted-foreground">
+            {t('channels.digestDescription')}
+          </span>
+        </div>
+        <Switch
+          blue
+          surface
+          id={DIGEST_SWITCH_ID}
+          data-testid="notification-digest-switch"
+          checked={preferences.emailCadence === 'daily'}
+          disabled={saving === CADENCE_CELL}
+          onCheckedChange={handleCadenceToggle}
+        />
+      </div>
+
+      {/* Said once, under the grid, rather than on every push switch in the column. */}
       {!preferences.pushAvailable && <InfoHint>{t('channels.pushUnavailableHint')}</InfoHint>}
     </section>
   );

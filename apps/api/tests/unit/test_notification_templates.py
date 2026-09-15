@@ -29,8 +29,10 @@ _PAYLOAD = {
     "from_member": "Santi",
     "to_member": "Ana",
     "creditor": "Ana",
+    "name": "Edenor",
     "amount": "90000",
     "currency": "ARS",
+    "date": "2026-09-18",
 }
 _PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
@@ -83,11 +85,12 @@ class TestCatalogStructure:
                 assert "{amount}" not in push and "{currency}" not in push, f"{locale}/{key}"
 
     def test_every_placeholder_a_template_uses_is_one_a_payload_supplies(self):
-        # `{link}`, `{product}` and `{settings_link}` are filled by the builders; everything else has
-        # to come out of the payload, and a name no producer writes is a KeyError at send time.
-        supplied = set(_PAYLOAD) | {"link", "product", "settings_link"}
+        # `{link}`, `{product}`, `{settings_link}` and the digest's `{count}` are filled by the
+        # builders; everything else has to come out of the payload, and a name no producer writes is a
+        # KeyError at send time.
+        supplied = set(_PAYLOAD) | {"link", "product", "settings_link", "count"}
         for locale in _LOCALES:
-            for key in set(_template_keys()) | {"_footer"}:
+            for key in set(_template_keys()) | {"_footer", "_digest"}:
                 for field, text in templates._STRINGS[locale][key].items():
                     assert set(_PLACEHOLDER.findall(text)) <= supplied, f"{locale}/{key}/{field}"
 
@@ -179,6 +182,108 @@ class TestRendering:
         added = templates.push_body(NotificationEvent.pot_movement, {**_PAYLOAD, "variant": "contribution"}, "en")
         took = templates.push_body(NotificationEvent.pot_movement, {**_PAYLOAD, "variant": "withdrawal"}, "en")
         assert added != took and "added" in added and "took" in took
+
+
+class TestDateFormatting:
+    # The other value the backend renders for a person to read, and it exists because `obligation_due`
+    # is the one event whose email is on by default and whose most important word is a date.
+    #
+    # Spelled out rather than numeric, and that is the whole rule: every all-numeric form is ambiguous
+    # across exactly the two locales this app ships — 09/07 is 9 July to a Spanish reader and
+    # 7 September to an English one, and nothing in the message would tell either of them which.
+    @pytest.mark.parametrize(
+        ("value", "locale", "expected"),
+        [
+            ("2026-09-18", "en", "September 18, 2026"),
+            ("2026-09-18", "es", "18 de septiembre de 2026"),
+            ("2026-01-01", "en", "January 1, 2026"),
+            ("2026-01-01", "es", "1 de enero de 2026"),
+            ("2026-12-31", "en", "December 31, 2026"),
+            ("2026-12-31", "es", "31 de diciembre de 2026"),
+        ],
+    )
+    def test_a_date_reads_as_a_sentence_would_say_it(self, value, locale, expected):
+        assert templates._date(value, locale) == expected
+
+    def test_an_unreadable_date_is_shown_verbatim_rather_than_losing_the_email(self):
+        # Same posture as an unreadable amount: the sentence around it is still true, and an odd-looking
+        # date is visible where a dropped email is not.
+        assert templates._date("not a date", "en") == "not a date"
+
+    def test_an_unknown_locale_falls_back_to_english(self):
+        assert templates._date("2026-09-18", "fr") == "September 18, 2026"
+
+    def test_only_a_payload_key_called_date_is_formatted(self):
+        # The narrow rule is deliberate. `snapshot_due` carries `valued_as_of`, whose email does not
+        # mention the date at all and whose stored rows predate this, so a broader rule would start
+        # rewriting a field nothing renders.
+        readable = templates._readable({"date": "2026-09-18", "valued_as_of": "2026-07-12"}, "en")
+        assert readable == {"date": "September 18, 2026", "valued_as_of": "2026-07-12"}
+
+    def test_a_null_date_is_left_alone(self):
+        # A payload may legitimately carry a null date, and `_date(None)` would print "None" rather than
+        # raise — the same shape as the nameless pot.
+        assert templates._readable({"date": None}, "en") == {"date": None}
+
+
+class TestTheDigest:
+    # The digest's own wrapper. Everything else in it is per-event copy that already exists, which is
+    # the property these assert rather than describe.
+    _ITEMS = [
+        (NotificationEvent.plan_charged, {**_PAYLOAD, "variant": "subscription", "name": "Netflix", "amount": "15"}),
+        (NotificationEvent.obligation_due, {**_PAYLOAD, "name": "Edenor"}),
+    ]
+
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_every_line_is_that_events_own_subject(self, locale):
+        # Asserted against the catalog rather than against a literal, which is what makes it a statement
+        # about REUSE: change an event's subject and its digest line changes with it, because they are
+        # the same string.
+        message = templates.digest_email("a@test.local", self._ITEMS, link="https://renly.test/notifications", settings_link="x", locale=locale)
+        for event, payload in self._ITEMS:
+            expected = templates._strings(templates.template_key(event, payload), locale)["subject"].format(
+                product="Renly", **templates._readable(payload, locale)
+            )
+            assert f"• {expected}" in message.text
+
+    @pytest.mark.parametrize("locale", _LOCALES)
+    def test_nothing_in_it_is_left_unrendered(self, locale):
+        message = templates.digest_email(
+            "a@test.local", self._ITEMS, link="https://renly.test/n", settings_link="https://renly.test/n", locale=locale
+        )
+        assert "{" not in message.text and "{" not in message.subject
+
+    def test_the_overflow_line_appears_only_when_there_is_one(self):
+        without = templates.digest_email("a@test.local", self._ITEMS, link="l", settings_link="s")
+        with_more = templates.digest_email("a@test.local", self._ITEMS, link="l", settings_link="s", overflow=7)
+        assert "more" not in without.text
+        assert "…and 7 more." in with_more.text
+
+    def test_the_subject_counts_the_rows_it_covers_rather_than_the_lines_it_drew(self):
+        # A summary that says 2 when 9 things happened is wrong about its own subject, and the capped
+        # remainder is exactly when the two numbers differ.
+        message = templates.digest_email("a@test.local", self._ITEMS, link="l", settings_link="s", overflow=7)
+        assert message.subject == "Your Renly summary — 9 updates"
+
+    def test_one_unrenderable_item_costs_its_own_line_and_nothing_else(self):
+        # Inside a single-event send a bad payload costs one message; here it would cost the whole day.
+        items = [*self._ITEMS, (NotificationEvent.pot_movement, {"variant": "contribution"})]
+        message = templates.digest_email("a@test.local", items, link="l", settings_link="s")
+        assert message.text.count("•") == 2
+        assert message.subject == "Your Renly summary — 2 updates"
+
+    def test_it_still_names_the_preferences_page(self):
+        # An email people cannot find the switch for is an email they mark as spam — and a digest is the
+        # one people are most likely to want to stop.
+        message = templates.digest_email("a@test.local", self._ITEMS, link="l", settings_link="https://renly.test/notifications")
+        assert "https://renly.test/notifications" in message.text
+
+    def test_a_group_name_somebody_chose_is_escaped(self):
+        # A digest interpolates the same user-controlled values every other email does, through the same
+        # wrapper — asserted here because it composes its body differently from notification_email.
+        items = [(NotificationEvent.member_joined, {**_PAYLOAD, "group": "<script>alert(1)</script>"})]
+        message = templates.digest_email("a@test.local", items, link="l", settings_link="s")
+        assert "<script>" not in message.html and "&lt;script&gt;" in message.html
 
 
 class TestAmountFormatting:
