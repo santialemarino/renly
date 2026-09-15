@@ -54,7 +54,6 @@ export function CollectionsToolbar({
             className="min-w-0 flex-1"
           >
             <SearchInput
-              aria-label="Search collections"
               placeholder={t('toolbar.searchPlaceholder')}
               value={search}
               surface

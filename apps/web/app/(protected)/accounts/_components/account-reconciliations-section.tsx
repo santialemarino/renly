@@ -13,12 +13,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
 import { AccountReconciliationDeleteDialog } from '@/app/(protected)/accounts/_components/account-reconciliation-delete-dialog';
 import { fetchAccountReconciliations } from '@/app/(protected)/accounts/account-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import type { AccountReconciliation } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
@@ -212,26 +210,20 @@ export function AccountReconciliationsSection({
                                    * forward-only — delete newest-first.
                                    */}
                                   {isLatest ? (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="size-7 text-muted-foreground hover:text-destructive"
-                                          onClick={() => setDeleteTarget(reconciliation)}
-                                          aria-label="Delete reconciliation"
-                                          data-testid="reconciliation-delete"
-                                        >
-                                          <Trash2 className="size-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{t('delete.tooltip')}</TooltipContent>
-                                    </Tooltip>
+                                    <RowActionButton
+                                      icon={Trash2}
+                                      tooltip={t('delete.tooltip')}
+                                      variant="destructive"
+                                      className="size-7"
+                                      iconClassName="size-3.5"
+                                      testId="reconciliation-delete"
+                                      onClick={() => setDeleteTarget(reconciliation)}
+                                    />
                                   ) : (
                                     <RowLockedIndicator
                                       icon={Lock}
                                       tooltip={t('delete.notLatestTooltip')}
-                                      ariaLabel="Only the latest reconciliation can be deleted"
+                                      label={t('delete.notLatestLabel')}
                                       className="size-7"
                                       iconClassName="size-3.5"
                                     />

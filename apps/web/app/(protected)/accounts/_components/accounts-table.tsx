@@ -221,7 +221,6 @@ export function AccountsTable({
                           <RowActionButton
                             icon={ScrollText}
                             tooltip={t('actions.viewLedger')}
-                            ariaLabel="View ledger"
                             href={accountLedgerPath(a.id)}
                           />
                           {/*
@@ -250,7 +249,6 @@ export function AccountsTable({
                             <RowActionButton
                               icon={Scale}
                               tooltip={t('actions.reconcile')}
-                              ariaLabel="Reconcile"
                               testId="account-reconcile"
                               onClick={() => setReconcileAccount(a)}
                             />
@@ -262,13 +260,11 @@ export function AccountsTable({
                                   <RowActionButton
                                     icon={Pencil}
                                     tooltip={t('actions.edit')}
-                                    ariaLabel="Edit"
                                     onClick={() => setEditAccount(a)}
                                   />
                                   <RowActionButton
                                     icon={Archive}
                                     tooltip={t('actions.archive')}
-                                    ariaLabel="Archive"
                                     variant="muted"
                                     onClick={() => handleArchive(a)}
                                     disabled={archivingId === a.id}
@@ -278,7 +274,6 @@ export function AccountsTable({
                                 <RowActionButton
                                   icon={ArchiveRestore}
                                   tooltip={t('actions.unarchive')}
-                                  ariaLabel="Unarchive"
                                   onClick={() => handleUnarchive(a)}
                                   disabled={archivingId === a.id}
                                 />
@@ -293,13 +288,16 @@ export function AccountsTable({
                                   ? 'lockedRow.sharedAccount'
                                   : 'lockedRow.sharedAccountReadOnly',
                               )}
-                              ariaLabel="Managed by the pot"
+                              label={tCommon(
+                                canWrite
+                                  ? 'lockedRow.sharedAccountLabel'
+                                  : 'lockedRow.sharedAccountReadOnlyLabel',
+                              )}
                             />
                           ) : (
                             <RowActionButton
                               icon={Trash2}
                               tooltip={t('actions.delete')}
-                              ariaLabel="Delete"
                               variant="destructive"
                               testId="account-delete"
                               onClick={() => setDeleteState(a)}

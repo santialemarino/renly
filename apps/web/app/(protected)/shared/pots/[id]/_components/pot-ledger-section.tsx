@@ -267,7 +267,6 @@ function LedgerRow({
             <RowActionButton
               icon={Check}
               tooltip={t('pots.ledger.actions.confirm')}
-              ariaLabel="Agree to this change of split"
               disabled={disabled}
               testId="ledger-confirm"
               onClick={onConfirm}
@@ -277,7 +276,6 @@ function LedgerRow({
             <RowActionButton
               icon={Undo2}
               tooltip={t('pots.ledger.actions.unconfirm')}
-              ariaLabel="Withdraw agreement"
               variant="muted"
               disabled={disabled}
               testId="ledger-unconfirm"
@@ -288,7 +286,6 @@ function LedgerRow({
             <RowActionButton
               icon={Trash2}
               tooltip={t('pots.ledger.deleteTitle')}
-              ariaLabel="Delete ledger entry"
               variant="destructive"
               disabled={disabled}
               testId="ledger-delete"

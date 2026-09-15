@@ -11,6 +11,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -584,7 +585,10 @@ export function ExpenseFormDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent>
+        {/* No DialogDescription: the title names the record and the operation, and every
+            field below carries its own label, so a description would only restate the title.
+            Saying so explicitly is Radix's own opt-out; omitting it warns in the console. */}
+        <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
           </DialogHeader>
@@ -934,14 +938,14 @@ export function ExpenseFormDialog({
           <DialogHeader>
             <DialogTitle>{t('form.novelCurrency.title')}</DialogTitle>
           </DialogHeader>
-          <p className="text-paragraph-sm text-muted-foreground">
+          <DialogDescription>
             {t('form.novelCurrency.description', {
               currency: novelCurrencyDisplay?.currency ?? '',
               cardName: novelCurrencyDisplay
                 ? (selectedNovelCurrencyCardName(novelCurrencyDisplay) ?? '')
                 : '',
             })}
-          </p>
+          </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNovelCurrencyPending(null)}>
               {t('form.cancel')}
@@ -965,12 +969,12 @@ export function ExpenseFormDialog({
           <DialogHeader>
             <DialogTitle>{t('form.autoChargeMatch.title')}</DialogTitle>
           </DialogHeader>
-          <p className="text-paragraph-sm text-muted-foreground">
+          <DialogDescription>
             {t('form.autoChargeMatch.description', {
               planName: autoChargeMatchDisplay?.match.sourcePlan.name ?? '',
               existingDate: autoChargeMatchDisplay?.match.date ?? '',
             })}
-          </p>
+          </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAutoChargeMatch(null)}>
               {t('form.cancel')}
@@ -1001,9 +1005,9 @@ export function ExpenseFormDialog({
           <DialogHeader>
             <DialogTitle>{t('form.cycleAdvance.title')}</DialogTitle>
           </DialogHeader>
-          {cycleAdvanceDisplay && (
-            <p className="text-paragraph-sm text-muted-foreground">
-              {cycleAdvanceDisplay.preview.multiJump
+          <DialogDescription>
+            {cycleAdvanceDisplay &&
+              (cycleAdvanceDisplay.preview.multiJump
                 ? t('form.cycleAdvance.descriptionMultiJump', {
                     planName: cycleAdvanceDisplay.planName,
                     nextExpectedDate: fmt.date(cycleAdvanceDisplay.preview.nextExpectedDate),
@@ -1011,9 +1015,8 @@ export function ExpenseFormDialog({
                 : t('form.cycleAdvance.descriptionBackDated', {
                     planName: cycleAdvanceDisplay.planName,
                     nextExpectedDate: fmt.date(cycleAdvanceDisplay.preview.nextExpectedDate),
-                  })}
-            </p>
-          )}
+                  }))}
+          </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCycleAdvancePending(null)}>
               {t('form.cancel')}

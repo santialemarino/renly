@@ -3,12 +3,15 @@ import { ChevronLeftIcon, ChevronRightIcon, MoreHorizontalIcon } from 'lucide-re
 
 import { cn } from '@repo/ui/lib';
 import { Button } from './button';
+import { useUiLabels } from './ui-labels';
 
 function Pagination({ className, ...props }: React.ComponentProps<'nav'>) {
+  const labels = useUiLabels();
+
   return (
     <nav
       role="navigation"
-      aria-label="pagination"
+      aria-label={labels.pagination}
       data-slot="pagination"
       className={cn('mx-auto flex w-full justify-center', className)}
       {...props}
@@ -53,9 +56,11 @@ function PaginationPrevious({
   text = 'Previous',
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
+  const labels = useUiLabels();
+
   return (
     <PaginationLink
-      aria-label="Go to previous page"
+      aria-label={labels.previousPage}
       size="default"
       className={cn('pl-1.5!', className)}
       {...props}
@@ -71,9 +76,11 @@ function PaginationNext({
   text = 'Next',
   ...props
 }: React.ComponentProps<typeof PaginationLink> & { text?: string }) {
+  const labels = useUiLabels();
+
   return (
     <PaginationLink
-      aria-label="Go to next page"
+      aria-label={labels.nextPage}
       size="default"
       className={cn('pr-1.5!', className)}
       {...props}
@@ -95,8 +102,10 @@ function PaginationEllipsis({ className, ...props }: React.ComponentProps<'span'
       )}
       {...props}
     >
+      {/* No sr-only text: the wrapper is aria-hidden, which is correct — the gap between page
+          links is decorative, and the link list already says which pages exist. A label here would
+          reach nobody. */}
       <MoreHorizontalIcon />
-      <span className="sr-only">More pages</span>
     </span>
   );
 }

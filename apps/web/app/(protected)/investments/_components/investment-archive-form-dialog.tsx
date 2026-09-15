@@ -8,6 +8,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -51,9 +52,7 @@ export function InvestmentArchiveFormDialog({
         <DialogHeader>
           <DialogTitle>{t('archiveForm.title')}</DialogTitle>
         </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
-          {t('archiveForm.confirm', { name: investment.name })}
-        </p>
+        <DialogDescription>{t('archiveForm.confirm', { name: investment.name })}</DialogDescription>
         <DialogFooter>
           <Button
             variant="outline"

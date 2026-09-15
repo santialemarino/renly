@@ -63,7 +63,6 @@ export function InvestmentsToolbar({
     <EntityListToolbar
       route={ROUTES.investments}
       resetPage
-      searchAriaLabel="Search investments"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.addInvestment')}

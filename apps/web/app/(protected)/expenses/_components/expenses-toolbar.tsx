@@ -124,7 +124,6 @@ export function ExpensesToolbar({
     <EntityListToolbar
       route={ROUTES.expenses}
       resetPage
-      searchAriaLabel="Search expenses"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       addLabel={t('toolbar.addExpense')}
       onAdd={handleAdd}

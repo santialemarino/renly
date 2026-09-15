@@ -219,7 +219,6 @@ export function AccountTransfersSection({
                                   <RowActionButton
                                     icon={Trash2}
                                     tooltip={t('delete.tooltip')}
-                                    ariaLabel="Delete transfer"
                                     variant="destructive"
                                     onClick={() => setDeleteTarget(transfer)}
                                   />

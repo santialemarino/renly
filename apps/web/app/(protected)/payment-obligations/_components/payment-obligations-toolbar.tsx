@@ -29,7 +29,6 @@ export function PaymentObligationsToolbar({
   return (
     <EntityListToolbar
       route={ROUTES.paymentObligations}
-      searchAriaLabel="Search payment obligations"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.add')}

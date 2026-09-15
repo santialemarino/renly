@@ -5,6 +5,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { XIcon } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
+import { useUiLabels } from './ui-labels';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -48,6 +49,8 @@ function DialogContent({
   showCloseButton?: boolean;
   closeOnClickOutside?: boolean;
 }) {
+  const labels = useUiLabels();
+
   return (
     <DialogPortal data-slot="dialog-portal">
       {/* No hard-coded z-index — Tailwind `z-50` on both overlay and content
@@ -88,7 +91,7 @@ function DialogContent({
             className="group/dialog-close absolute top-4 right-4 flex p-0.5 rounded-md text-muted-foreground outline-none transition-colors duration-200 hover:text-foreground focus-visible:text-foreground disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <XIcon className="group-focus-visible/dialog-close:animate-focus-bump" />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{labels.close}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

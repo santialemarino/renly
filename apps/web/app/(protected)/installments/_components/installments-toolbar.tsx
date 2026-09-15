@@ -29,7 +29,6 @@ export function InstallmentsToolbar({
   return (
     <EntityListToolbar
       route={ROUTES.installments}
-      searchAriaLabel="Search installments"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.add')}

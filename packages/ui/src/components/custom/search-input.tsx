@@ -5,12 +5,23 @@ import { Search, X } from 'lucide-react';
 
 import { cn } from '@repo/ui/lib';
 import { Input } from '../input';
+import { useUiLabels } from '../ui-labels';
 
+/*
+ * `placeholder` is REQUIRED, and that is the accessibility contract rather than a styling preference:
+ * a search field carries no visible <label> anywhere in this app, so the placeholder is the only thing
+ * naming it. Requiring it makes "this input has an accessible name" a type error to get wrong, which
+ * is why there is no aria-label here — an aria-label equal to the placeholder only makes a screen
+ * reader say the same words twice.
+ */
 interface SearchInputProps extends Omit<React.ComponentProps<typeof Input>, 'endIcon'> {
+  placeholder: string;
   onClear?: () => void;
 }
 
 function SearchInput({ className, containerClassName, onClear, ...props }: SearchInputProps) {
+  const labels = useUiLabels();
+
   const hasValue = Boolean(props.value);
 
   return (
@@ -21,7 +32,7 @@ function SearchInput({ className, containerClassName, onClear, ...props }: Searc
         onClear ? (
           <button
             type="button"
-            aria-label="Clear"
+            aria-label={labels.clear}
             onClick={(e) => {
               onClear();
               // button → absolute endIcon div → Input container div → querySelector input.

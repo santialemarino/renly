@@ -121,7 +121,7 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
                 <Label>{t('apiKeys.dialog.keyLabel')}</Label>
                 <div className="flex items-center gap-x-2">
                   <Input value={rawKey} readOnly className="font-mono text-paragraph-xs" />
-                  <CopyButton value={rawKey} ariaLabel="Copy API key" />
+                  <CopyButton value={rawKey} ariaLabel={t('apiKeys.dialog.copyKey')} />
                 </div>
               </div>
             ) : (
@@ -176,6 +176,7 @@ export function IntegrationsApiKeys({ initialKeys }: IntegrationsApiKeysProps) {
                 variant="ghost"
                 size="icon"
                 onClick={() => setRevokeKey(key)}
+                aria-label={t('apiKeys.revoke.title')}
                 className="shrink-0 text-muted-foreground hover:text-destructive"
               >
                 <Trash2 className="size-4" />

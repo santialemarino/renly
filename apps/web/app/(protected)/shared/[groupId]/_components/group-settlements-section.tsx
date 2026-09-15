@@ -267,7 +267,6 @@ function SettlementRow({
             <RowActionButton
               icon={Check}
               tooltip={t('settlements.actions.confirm')}
-              ariaLabel="Confirm"
               disabled={disabled}
               onClick={onConfirm}
             />
@@ -276,7 +275,6 @@ function SettlementRow({
             <RowActionButton
               icon={Undo2}
               tooltip={t('settlements.actions.unconfirm')}
-              ariaLabel="Un-confirm"
               variant="muted"
               disabled={disabled}
               onClick={onUnconfirm}
@@ -286,7 +284,6 @@ function SettlementRow({
             <RowActionButton
               icon={Wallet}
               tooltip={t('settlements.actions.attachAccount')}
-              ariaLabel="Attach account"
               variant="muted"
               disabled={disabled}
               onClick={onAttach}
@@ -296,7 +293,6 @@ function SettlementRow({
             <RowActionButton
               icon={Trash2}
               tooltip={t('settlements.actions.remove')}
-              ariaLabel="Delete"
               variant="destructive"
               disabled={disabled}
               onClick={onRemove}

@@ -125,7 +125,10 @@ export function CreditCardFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={stacked ? 'sm:max-w-md' : undefined}>
+      {/* No DialogDescription: the title names the record and the operation, and every
+          field below carries its own label, so a description would only restate the title.
+          Saying so explicitly is Radix's own opt-out; omitting it warns in the console. */}
+      <DialogContent className={stacked ? 'sm:max-w-md' : undefined} aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{isEdit ? t('form.titleEdit') : t('form.titleCreate')}</DialogTitle>
         </DialogHeader>

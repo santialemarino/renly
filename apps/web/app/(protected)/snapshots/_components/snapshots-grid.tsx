@@ -6,7 +6,6 @@ import { ArrowDown, ArrowUp, CircleDollarSign, Lock, Minus, Plus, Table2 } from 
 import { useTranslations } from 'next-intl';
 
 import {
-  Button,
   Table,
   TableBody,
   TableCell,
@@ -20,6 +19,7 @@ import {
 import { SnapshotFormDialog } from '@/app/(protected)/snapshots/_components/snapshot-form-dialog';
 import { TRANSACTION_TYPES_OUTGOING } from '@/app/(protected)/snapshots/snapshots-form-schema';
 import { EmptyState } from '@/components/empty-state';
+import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SortIcon } from '@/components/sort-icon';
 import { TableSectionRow } from '@/components/table-section-row';
@@ -163,7 +163,7 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
     setDialogOpen(true);
   }
 
-  function handleAddClick(row: SnapshotGridRow, e: React.MouseEvent) {
+  function handleAddClick(row: SnapshotGridRow, e: React.MouseEvent<HTMLButtonElement>) {
     e.stopPropagation();
     setSelectedRow(row);
     setSelectedCell(undefined);
@@ -298,23 +298,14 @@ export function SnapshotsGrid({ grid, firstRun }: SnapshotsGridProps) {
                       <RowLockedIndicator
                         icon={Lock}
                         tooltip={t('grid.lockedAdd')}
-                        ariaLabel="Managed by the pot"
+                        label={t('grid.lockedAddLabel')}
                       />
                     ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-8"
-                            onClick={(e) => handleAddClick(row, e)}
-                            aria-label="Add snapshot"
-                          >
-                            <Plus className="size-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>{t('grid.addSnapshot')}</TooltipContent>
-                      </Tooltip>
+                      <RowActionButton
+                        icon={Plus}
+                        tooltip={t('grid.addSnapshot')}
+                        onClick={(e) => handleAddClick(row, e)}
+                      />
                     )}
                   </TableCell>
                 </TableRow>

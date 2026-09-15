@@ -168,7 +168,6 @@ function PermissionRow({
           <RowActionButton
             icon={RotateCcw}
             tooltip={t('pots.permissions.reset')}
-            ariaLabel="Reset to the pot default"
             variant="muted"
             disabled={pending}
             onClick={onReset}

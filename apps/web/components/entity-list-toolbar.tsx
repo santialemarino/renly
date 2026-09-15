@@ -13,7 +13,8 @@ interface EntityListToolbarProps {
   route: string;
   // Search/filter changes reset pagination on the paginated list pages (expenses/income/investments).
   resetPage?: boolean;
-  searchAriaLabel: string;
+  // Also the search field's ACCESSIBLE NAME — it has no visible label, so `SearchInput` requires a
+  // placeholder and names itself from it rather than taking a second string that says the same thing.
   searchPlaceholder: string;
   // Renders the archived-toggle pill when provided.
   showArchivedLabel?: string;
@@ -32,7 +33,6 @@ interface EntityListToolbarProps {
 export function EntityListToolbar({
   route,
   resetPage = false,
-  searchAriaLabel,
   searchPlaceholder,
   showArchivedLabel,
   addLabel,
@@ -82,7 +82,6 @@ export function EntityListToolbar({
          */}
         <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-48 flex-1">
           <SearchInput
-            aria-label={searchAriaLabel}
             placeholder={searchPlaceholder}
             value={search}
             surface

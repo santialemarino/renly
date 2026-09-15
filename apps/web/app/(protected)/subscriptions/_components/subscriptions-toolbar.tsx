@@ -31,7 +31,6 @@ export function SubscriptionsToolbar({
   return (
     <EntityListToolbar
       route={ROUTES.subscriptions}
-      searchAriaLabel="Search subscriptions"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.add')}

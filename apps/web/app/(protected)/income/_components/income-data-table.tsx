@@ -72,11 +72,6 @@ function RowActions({
     : reconciliationOwned
       ? ('lockedRow.reconciliationOwned' as const)
       : ('lockedRow.systemCategory' as const);
-  const lockedLabel = shared
-    ? 'Managed by the group'
-    : reconciliationOwned
-      ? 'Managed by a reconciliation'
-      : 'Category is system-generated';
 
   return (
     <>
@@ -85,20 +80,22 @@ function RowActions({
           <RowActionButton
             icon={Pencil}
             tooltip={t('actions.edit')}
-            ariaLabel="Edit"
             onClick={(e) => {
               e.stopPropagation();
               setEditOpen(true);
             }}
           />
         ) : (
-          <RowLockedIndicator icon={Lock} tooltip={tCommon(lockedReason)} ariaLabel={lockedLabel} />
+          <RowLockedIndicator
+            icon={Lock}
+            tooltip={tCommon(lockedReason)}
+            label={tCommon(`${lockedReason}Label`)}
+          />
         )}
         {canDelete && (
           <RowActionButton
             icon={Trash2}
             tooltip={t('actions.delete')}
-            ariaLabel="Delete"
             variant="destructive"
             onClick={(e) => {
               e.stopPropagation();

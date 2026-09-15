@@ -88,7 +88,6 @@ export function IncomeToolbar({
     <EntityListToolbar
       route={ROUTES.income}
       resetPage
-      searchAriaLabel="Search income"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       addLabel={t('toolbar.addIncome')}
       onAdd={handleAdd}

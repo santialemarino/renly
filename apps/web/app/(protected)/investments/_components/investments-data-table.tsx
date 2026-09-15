@@ -75,7 +75,7 @@ function RowActions({
         <RowLockedIndicator
           icon={Lock}
           tooltip={tCommon('lockedRow.sharedHolding')}
-          ariaLabel="Managed by the pot"
+          label={tCommon('lockedRow.sharedHoldingLabel')}
         />
       </div>
     );
@@ -87,7 +87,6 @@ function RowActions({
         <RowActionButton
           icon={ArchiveRestore}
           tooltip={t('actions.unarchive')}
-          ariaLabel="Unarchive"
           onClick={handleUnarchive}
           disabled={unarchiving}
         />
@@ -101,7 +100,6 @@ function RowActions({
         <RowActionButton
           icon={Pencil}
           tooltip={t('actions.edit')}
-          ariaLabel="Edit"
           onClick={(e) => {
             e.stopPropagation();
             setEditOpen(true);
@@ -110,7 +108,6 @@ function RowActions({
         <RowActionButton
           icon={Archive}
           tooltip={t('actions.archive')}
-          ariaLabel="Archive"
           variant="muted"
           onClick={(e) => {
             e.stopPropagation();

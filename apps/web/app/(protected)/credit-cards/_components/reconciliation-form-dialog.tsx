@@ -10,6 +10,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -112,12 +113,12 @@ export function ReconciliationFormDialog({
             bottom of the whole banner block, matching the gap-4 between subsequent siblings. */}
         <DialogHeader>
           <DialogTitle>{t('form.title')}</DialogTitle>
-          <p className="text-paragraph-sm text-muted-foreground">
+          <DialogDescription>
             {t('form.periodRange', {
               start: fmt.date(statement.periodStart),
               end: fmt.date(statement.periodEnd),
             })}
-          </p>
+          </DialogDescription>
           {isStale && <StyledHint variant="warning">{t('form.staleBanner')}</StyledHint>}
           {isReplace && !isStale && statement.reconciliation && (
             <StyledHint variant="info">

@@ -90,7 +90,6 @@ function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void })
             <RowActionButton
               icon={ArrowRight}
               tooltip={t('table.openHub')}
-              ariaLabel="Open group"
               href={sharedGroupPath(group.id)}
             />
             {/* Withheld rather than disabled, per the row-action convention: a Radix tooltip never
@@ -101,13 +100,11 @@ function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void })
                 <RowActionButton
                   icon={Pencil}
                   tooltip={t('form.titleEdit')}
-                  ariaLabel="Edit"
                   onClick={() => setEditOpen(true)}
                 />
                 <RowActionButton
                   icon={Trash2}
                   tooltip={t('delete.title')}
-                  ariaLabel="Delete"
                   variant="destructive"
                   onClick={() => setDeleteOpen(true)}
                 />
@@ -116,7 +113,7 @@ function GroupRow({ group, onSuccess }: { group: Group; onSuccess: () => void })
               <RowLockedIndicator
                 icon={Lock}
                 tooltip={t('table.memberOnly')}
-                ariaLabel="Admin only"
+                label={t('table.memberOnlyLabel')}
               />
             )}
           </div>
