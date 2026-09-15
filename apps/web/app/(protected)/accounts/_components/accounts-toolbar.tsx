@@ -37,7 +37,6 @@ export function AccountsToolbar({ preferredCurrencies, showScope }: AccountsTool
   return (
     <EntityListToolbar
       route={ROUTES.accounts}
-      searchAriaLabel="Search accounts"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.add')}

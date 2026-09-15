@@ -28,7 +28,6 @@ export function CreditCardsToolbar({
   return (
     <EntityListToolbar
       route={ROUTES.creditCards}
-      searchAriaLabel="Search credit cards"
       searchPlaceholder={t('toolbar.searchPlaceholder')}
       showArchivedLabel={t('toolbar.showArchived')}
       addLabel={t('toolbar.addCard')}

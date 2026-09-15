@@ -89,7 +89,6 @@ export function SnapshotsToolbar({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <motion.div layout transition={{ duration: ANIMATION_DEFAULT }} className="min-w-0 flex-1">
           <SearchInput
-            aria-label="Search investments"
             placeholder={t('toolbar.searchPlaceholder')}
             value={search}
             surface

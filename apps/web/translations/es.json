@@ -218,7 +218,14 @@
       "systemCategory": "La categoría de esta entrada la genera el sistema, así que no se puede volver a guardar desde el formulario.",
       "sharedHolding": "Esta tenencia pertenece a un fondo compartido. Solo un integrante con permiso de escritura puede cambiarla: pediselo a un admin del grupo.",
       "sharedAccount": "Quitar esta cuenta se hace en su fondo, junto a la propiedad que mueve.",
-      "sharedAccountReadOnly": "Editar y archivar esta cuenta requieren permiso de escritura en el fondo: pediselo a un admin del grupo. Quitarla se hace en el fondo."
+      "sharedAccountReadOnly": "Editar y archivar esta cuenta requieren permiso de escritura en el fondo: pediselo a un admin del grupo. Quitarla se hace en el fondo.",
+      "reconciliationOwnedLabel": "Gestionado por una conciliación",
+      "sharedExpenseLabel": "Gestionado por el grupo",
+      "sharedIncomeLabel": "Gestionado por el grupo",
+      "systemCategoryLabel": "Categoría generada por el sistema",
+      "sharedHoldingLabel": "Gestionado por el fondo",
+      "sharedAccountLabel": "Gestionado por el fondo",
+      "sharedAccountReadOnlyLabel": "Gestionado por el fondo"
     },
     "pagination": {
       "previous": "Anterior",
@@ -247,6 +254,16 @@
       "weekly": "Semanal",
       "monthly": "Mensual",
       "ad_hoc": "Sin ritmo fijo"
+    },
+    "ui": {
+      "close": "Cerrar",
+      "clear": "Limpiar",
+      "pagination": "Paginación",
+      "previousPage": "Ir a la página anterior",
+      "nextPage": "Ir a la página siguiente",
+      "toggleSidebar": "Mostrar u ocultar el menú lateral",
+      "sidebarTitle": "Menú lateral",
+      "sidebarDescription": "La navegación de la app, que en pantallas chicas se muestra como un panel."
     }
   },
   "login": {
@@ -1106,7 +1123,8 @@
         "confirmButton": "Eliminar",
         "deleting": "Eliminando...",
         "success": "Conciliación eliminada.",
-        "error": "No se pudo eliminar la conciliación."
+        "error": "No se pudo eliminar la conciliación.",
+        "notLatestLabel": "Solo se puede eliminar la última conciliación"
       }
     },
     "transfers": {
@@ -1846,7 +1864,8 @@
       "overdueHint": "Esto está valuado hasta el {date}, y el fondo espera una cifra nueva {cadence}.",
       "neverValued": "Nunca se valuó, y el fondo espera una cifra {cadence}.",
       "lockedAdd": "Solo un integrante con permiso de escritura puede valuar este fondo. Pediselo a un admin del grupo.",
-      "skippedInvestments": "Quedaron afuera porque no se puede convertir su moneda: {names}."
+      "skippedInvestments": "Quedaron afuera porque no se puede convertir su moneda: {names}.",
+      "lockedAddLabel": "Gestionado por el fondo"
     },
     "form": {
       "titleCreate": "Agregar snapshot",
@@ -1927,7 +1946,8 @@
       "memberOnly": "Solo un administrador puede renombrar o eliminar este grupo.",
       "empty": "Todavía no hay grupos.",
       "emptyTitle": "Compartí dinero con las personas con las que compartís la vida",
-      "emptyDescription": "Un grupo son solo las personas: una casa, una pareja, un viaje. Creá uno, agregá a quienes están y nada de lo tuyo se vuelve visible hasta que elijas compartirlo."
+      "emptyDescription": "Un grupo son solo las personas: una casa, una pareja, un viaje. Creá uno, agregá a quienes están y nada de lo tuyo se vuelve visible hasta que elijas compartirlo.",
+      "memberOnlyLabel": "Solo administradores"
     },
     "form": {
       "titleCreate": "Nuevo grupo",
@@ -2050,7 +2070,8 @@
       "done": "Listo",
       "revoke": "Cancelar invitación",
       "revokeSuccess": "Invitación cancelada.",
-      "error": "No se pudo crear la invitación."
+      "error": "No se pudo crear la invitación.",
+      "copyLink": "Copiar el enlace de invitación"
     },
     "pots": {
       "metadata": {
@@ -3389,7 +3410,8 @@
         "keyLabel": "Tu clave API",
         "create": "Crear",
         "creating": "Creando...",
-        "done": "Listo"
+        "done": "Listo",
+        "copyKey": "Copiar tu clave de API"
       }
     },
     "shortcut": {

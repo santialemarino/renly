@@ -169,14 +169,12 @@ export function SubscriptionsTable({
                           <RowActionButton
                             icon={ArchiveRestore}
                             tooltip={t('actions.unarchive')}
-                            ariaLabel="Unarchive"
                             onClick={() => handleUnarchive(sub)}
                             disabled={archivingId === sub.id}
                           />
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(sub)}
                           />
@@ -186,13 +184,11 @@ export function SubscriptionsTable({
                           <RowActionButton
                             icon={Pencil}
                             tooltip={t('actions.edit')}
-                            ariaLabel="Edit"
                             onClick={() => setEditSubscription(sub)}
                           />
                           <RowActionButton
                             icon={Archive}
                             tooltip={t('actions.archive')}
-                            ariaLabel="Archive"
                             variant="muted"
                             onClick={() => handleArchive(sub)}
                             disabled={archivingId === sub.id}
@@ -200,7 +196,6 @@ export function SubscriptionsTable({
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(sub)}
                           />

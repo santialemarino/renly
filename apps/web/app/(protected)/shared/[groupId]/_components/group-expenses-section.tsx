@@ -281,20 +281,18 @@ function ExpenseRow({
             <RowLockedIndicator
               icon={Lock}
               tooltip={tCommon('lockedRow.reconciliationOwned')}
-              ariaLabel="Managed by a reconciliation"
+              label={tCommon('lockedRow.reconciliationOwnedLabel')}
             />
           ) : (
             <>
               <RowActionButton
                 icon={Pencil}
                 tooltip={t('expenses.actions.edit')}
-                ariaLabel="Edit"
                 onClick={onEdit}
               />
               <RowActionButton
                 icon={Trash2}
                 tooltip={t('expenses.actions.delete')}
-                ariaLabel="Delete"
                 variant="destructive"
                 onClick={onRemove}
               />

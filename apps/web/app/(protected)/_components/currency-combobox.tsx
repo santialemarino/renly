@@ -123,6 +123,7 @@ export function CurrencyCombobox({
 }: CurrencyComboboxProps) {
   const locale = useLocale();
   const t = useTranslations('common.currency');
+  const tCommon = useTranslations('common');
   const hasError = ariaInvalid === true || ariaInvalid === 'true';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -269,7 +270,7 @@ export function CurrencyCombobox({
             {onClear && value && (
               <span
                 role="button"
-                aria-label="Clear"
+                aria-label={tCommon('ui.clear')}
                 tabIndex={0}
                 onClick={handleClear}
                 onKeyDown={(e) => {

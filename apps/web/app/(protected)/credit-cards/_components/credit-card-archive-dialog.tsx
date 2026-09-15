@@ -8,6 +8,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -57,9 +58,9 @@ export function CreditCardArchiveDialog({
         <DialogHeader>
           <DialogTitle>{t('archive.title')}</DialogTitle>
         </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">
+        <DialogDescription>
           {t('archive.confirm', { name: displayCard?.name ?? '' })}
-        </p>
+        </DialogDescription>
         <DialogFooter>
           <Button
             variant="outline"

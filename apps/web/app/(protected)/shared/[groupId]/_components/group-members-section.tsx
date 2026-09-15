@@ -207,7 +207,6 @@ function MemberRow({
               <RowActionButton
                 icon={member.hasPendingInvite ? Mail : UserPlus}
                 tooltip={member.hasPendingInvite ? t('invite.resend') : t('invite.title')}
-                ariaLabel="Invite"
                 disabled={pending}
                 onClick={() => setInviteOpen(true)}
               />
@@ -216,7 +215,6 @@ function MemberRow({
               <RowActionButton
                 icon={X}
                 tooltip={t('invite.revoke')}
-                ariaLabel="Revoke invite"
                 variant="muted"
                 disabled={pending}
                 onClick={() =>
@@ -228,7 +226,6 @@ function MemberRow({
               <RowActionButton
                 icon={Pencil}
                 tooltip={t('members.form.titleEdit')}
-                ariaLabel="Edit"
                 disabled={pending}
                 onClick={() => setEditOpen(true)}
               />
@@ -237,7 +234,6 @@ function MemberRow({
               <RowActionButton
                 icon={RotateCcw}
                 tooltip={t('members.reactivate')}
-                ariaLabel="Reactivate"
                 variant="muted"
                 disabled={pending}
                 onClick={() =>
@@ -252,7 +248,6 @@ function MemberRow({
               <RowActionButton
                 icon={member.isSelf ? LogOut : UserMinus}
                 tooltip={member.isSelf ? t('members.leave') : t('members.remove')}
-                ariaLabel={member.isSelf ? 'Leave group' : 'Remove member'}
                 variant="destructive"
                 disabled={pending}
                 onClick={() => setRemoveOpen(true)}

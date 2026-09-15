@@ -218,7 +218,14 @@
       "systemCategory": "This entry's category is system-generated, so it can't be re-saved from the form.",
       "sharedHolding": "This holding belongs to a shared pot. Only a member with write access can change it — ask a group admin for it.",
       "sharedAccount": "Removing this account happens on its pot, beside the ownership it moves.",
-      "sharedAccountReadOnly": "Editing and archiving this account need write access on its pot — ask a group admin. Removing it happens on the pot itself."
+      "sharedAccountReadOnly": "Editing and archiving this account need write access on its pot — ask a group admin. Removing it happens on the pot itself.",
+      "reconciliationOwnedLabel": "Managed by a reconciliation",
+      "sharedExpenseLabel": "Managed by the group",
+      "sharedIncomeLabel": "Managed by the group",
+      "systemCategoryLabel": "Category is system-generated",
+      "sharedHoldingLabel": "Managed by the pot",
+      "sharedAccountLabel": "Managed by the pot",
+      "sharedAccountReadOnlyLabel": "Managed by the pot"
     },
     "pagination": {
       "previous": "Previous",
@@ -247,6 +254,16 @@
       "weekly": "Weekly",
       "monthly": "Monthly",
       "ad_hoc": "No set rhythm"
+    },
+    "ui": {
+      "close": "Close",
+      "clear": "Clear",
+      "pagination": "Pagination",
+      "previousPage": "Go to previous page",
+      "nextPage": "Go to next page",
+      "toggleSidebar": "Toggle sidebar",
+      "sidebarTitle": "Sidebar",
+      "sidebarDescription": "The app's navigation, shown as a panel on small screens."
     }
   },
   "login": {
@@ -1106,7 +1123,8 @@
         "confirmButton": "Delete",
         "deleting": "Deleting...",
         "success": "Reconciliation deleted.",
-        "error": "Failed to delete the reconciliation."
+        "error": "Failed to delete the reconciliation.",
+        "notLatestLabel": "Only the latest reconciliation can be deleted"
       }
     },
     "transfers": {
@@ -1846,7 +1864,8 @@
       "overdueHint": "This is valued up to {date}, and the pot expects a fresh figure {cadence}.",
       "neverValued": "Never valued, and the pot expects a figure {cadence}.",
       "lockedAdd": "Only a member with write access can value this pot. Ask a group admin for it.",
-      "skippedInvestments": "Left out because their currency can't be converted: {names}."
+      "skippedInvestments": "Left out because their currency can't be converted: {names}.",
+      "lockedAddLabel": "Managed by the pot"
     },
     "form": {
       "titleCreate": "Add snapshot",
@@ -1927,7 +1946,8 @@
       "memberOnly": "Only an admin can rename or delete this group.",
       "empty": "No groups yet.",
       "emptyTitle": "Share money with the people you share a life with",
-      "emptyDescription": "A group is just the people — a household, a couple, a trip. Create one, add who is in it, and nothing of yours becomes visible until you choose to share it."
+      "emptyDescription": "A group is just the people — a household, a couple, a trip. Create one, add who is in it, and nothing of yours becomes visible until you choose to share it.",
+      "memberOnlyLabel": "Admin only"
     },
     "form": {
       "titleCreate": "New group",
@@ -2050,7 +2070,8 @@
       "done": "Done",
       "revoke": "Cancel invite",
       "revokeSuccess": "Invite cancelled.",
-      "error": "Failed to create the invite."
+      "error": "Failed to create the invite.",
+      "copyLink": "Copy the invite link"
     },
     "pots": {
       "metadata": {
@@ -3389,7 +3410,8 @@
         "keyLabel": "Your API key",
         "create": "Create",
         "creating": "Creating...",
-        "done": "Done"
+        "done": "Done",
+        "copyKey": "Copy your API key"
       }
     },
     "shortcut": {

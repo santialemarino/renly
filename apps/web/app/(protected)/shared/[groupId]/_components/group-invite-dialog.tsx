@@ -119,7 +119,7 @@ export function GroupInviteDialog({
               <Label>{t('invite.linkLabel')}</Label>
               <div className="flex items-center gap-x-2">
                 <Input readOnly value={issued.url} className="min-w-0 flex-1" />
-                <CopyButton value={issued.url} ariaLabel="Copy invite link" />
+                <CopyButton value={issued.url} ariaLabel={t('invite.copyLink')} />
               </div>
             </div>
             <StyledHint variant="warning">

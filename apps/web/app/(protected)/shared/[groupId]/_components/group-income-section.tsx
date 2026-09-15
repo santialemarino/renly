@@ -277,20 +277,14 @@ function IncomeRow({
             <RowLockedIndicator
               icon={Lock}
               tooltip={tCommon('lockedRow.reconciliationOwned')}
-              ariaLabel="Managed by a reconciliation"
+              label={tCommon('lockedRow.reconciliationOwnedLabel')}
             />
           ) : (
             <>
-              <RowActionButton
-                icon={Pencil}
-                tooltip={t('income.actions.edit')}
-                ariaLabel="Edit"
-                onClick={onEdit}
-              />
+              <RowActionButton icon={Pencil} tooltip={t('income.actions.edit')} onClick={onEdit} />
               <RowActionButton
                 icon={Trash2}
                 tooltip={t('income.actions.delete')}
-                ariaLabel="Delete"
                 variant="destructive"
                 onClick={onRemove}
               />

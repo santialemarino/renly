@@ -3,9 +3,10 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getMessages } from 'next-intl/server';
+import { getLocale, getMessages, getTranslations } from 'next-intl/server';
 import { Toaster } from 'sonner';
 
+import { UiLabelsProvider } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CookieConsent } from '@/components/cookie-consent';
 import { OG_SITE_DEFAULTS, siteConfig, TWITTER_SITE_DEFAULTS } from '@/config/site';
@@ -55,6 +56,24 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = await getMessages();
+  const t = await getTranslations('common.ui');
+
+  /*
+   * The accessible names @repo/ui renders itself (a dialog's close ✕, a search field's clear button,
+   * the pagination arrows). They cannot arrive as props without every call site passing them, so the
+   * package reads them from one context — defaulted to English — and this is the single place the app
+   * translates them. A test asserts these keys, the package's defaults and both locales all agree.
+   */
+  const uiLabels = {
+    close: t('close'),
+    clear: t('clear'),
+    pagination: t('pagination'),
+    previousPage: t('previousPage'),
+    nextPage: t('nextPage'),
+    toggleSidebar: t('toggleSidebar'),
+    sidebarTitle: t('sidebarTitle'),
+    sidebarDescription: t('sidebarDescription'),
+  };
 
   return (
     <html className={plusJakartaSans.className} lang={locale}>
@@ -64,9 +83,11 @@ export default async function RootLayout({
         )}
       >
         <NextIntlClientProvider messages={messages}>
-          {children}
-          <CookieConsent />
-          <Toaster richColors />
+          <UiLabelsProvider labels={uiLabels}>
+            {children}
+            <CookieConsent />
+            <Toaster richColors />
+          </UiLabelsProvider>
         </NextIntlClientProvider>
       </body>
     </html>

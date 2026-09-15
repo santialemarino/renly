@@ -7,9 +7,16 @@ import { cn } from '@repo/ui/lib';
 
 interface RowLockedIndicatorProps {
   icon: LucideIcon;
+  // The explanation, translated. Reaches a keyboard user as the element's DESCRIPTION, since Radix
+  // opens the tooltip on focus and points aria-describedby at it.
   tooltip: string;
-  // Hardcoded English accessible name, matching the RowActionButton convention.
-  ariaLabel: string;
+  /*
+   * The short name, translated, and deliberately NOT the tooltip — which is the opposite of the rule
+   * RowActionButton follows, because the two strings here genuinely differ. A row action's tooltip IS
+   * its name ("Delete"); this one is a whole sentence explaining an absence, and using it as the name
+   * too would make a screen reader read that sentence twice in a row. Name says what, tooltip says why.
+   */
+  label: string;
   // Box size, defaulting to RowActionButton's. Override to match a denser sub-table's own buttons.
   className?: string;
   iconClassName?: string;
@@ -34,7 +41,7 @@ interface RowLockedIndicatorProps {
 export function RowLockedIndicator({
   icon: Icon,
   tooltip,
-  ariaLabel,
+  label,
   className,
   iconClassName,
 }: RowLockedIndicatorProps) {
@@ -44,7 +51,7 @@ export function RowLockedIndicator({
         <span
           role="img"
           tabIndex={0}
-          aria-label={ariaLabel}
+          aria-label={label}
           className={cn(
             'group/locked inline-flex size-8 items-center justify-center text-muted-foreground outline-none',
             className,

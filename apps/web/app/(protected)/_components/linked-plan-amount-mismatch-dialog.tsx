@@ -8,6 +8,7 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -102,7 +103,7 @@ export function LinkedPlanAmountMismatchDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <p className="text-paragraph-sm text-muted-foreground">{description}</p>
+        <DialogDescription>{description}</DialogDescription>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={updating}>
             {declineLabel}

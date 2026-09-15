@@ -204,14 +204,12 @@ export function InstallmentsTable({
                           <RowActionButton
                             icon={ArchiveRestore}
                             tooltip={t('actions.unarchive')}
-                            ariaLabel="Unarchive"
                             onClick={() => handleUnarchive(inst)}
                             disabled={archivingId === inst.id}
                           />
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(inst)}
                           />
@@ -221,13 +219,11 @@ export function InstallmentsTable({
                           <RowActionButton
                             icon={Pencil}
                             tooltip={t('actions.edit')}
-                            ariaLabel="Edit"
                             onClick={() => setEditInstallment(inst)}
                           />
                           <RowActionButton
                             icon={Archive}
                             tooltip={t('actions.archive')}
-                            ariaLabel="Archive"
                             variant="muted"
                             onClick={() => handleArchive(inst)}
                             disabled={archivingId === inst.id}
@@ -235,7 +231,6 @@ export function InstallmentsTable({
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(inst)}
                           />

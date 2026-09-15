@@ -12,9 +12,11 @@ const COPY_RESET_MS = 2000;
 
 interface CopyButtonProps {
   value: string;
-  // Hardcoded English accessible name, matching the RowActionButton convention. Required because the
-  // button is icon-only: without it a screen reader announces an unnamed button, and there are now two
-  // call sites (a raw API key and a group-invite link) that copy different things.
+  /*
+   * The accessible name, translated. Required rather than defaulted because the button is icon-only
+   * and the two call sites copy different things (a raw API key and a group-invite link) — a shared
+   * default would say "Copy" and leave the reader to guess what.
+   */
   ariaLabel: string;
   className?: string;
 }

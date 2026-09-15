@@ -142,13 +142,11 @@ function CollectionRow({
             <RowActionButton
               icon={Pencil}
               tooltip={t('form.editTitle')}
-              ariaLabel="Edit"
               onClick={() => setEditOpen(true)}
             />
             <RowActionButton
               icon={Trash2}
               tooltip={t('delete.title')}
-              ariaLabel="Delete"
               variant="destructive"
               onClick={() => setDeleteOpen(true)}
             />

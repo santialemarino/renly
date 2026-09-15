@@ -6,18 +6,7 @@ import { Archive, ArchiveRestore, BadgeDollarSign, FileText, Pencil, Trash2 } fr
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 
-import {
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@repo/ui/components';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@repo/ui/components';
 import {
   ExpenseFormDialog,
   type PrefillFromObligation,
@@ -255,44 +244,32 @@ export function PaymentObligationsTable({
                           <RowActionButton
                             icon={ArchiveRestore}
                             tooltip={t('actions.unarchive')}
-                            ariaLabel="Unarchive"
                             onClick={() => handleUnarchive(o)}
                             disabled={archivingId === o.id}
                           />
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(o)}
                           />
                         </div>
                       ) : (
                         <div className="flex items-center justify-center gap-x-1">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-muted-foreground hover:text-blue-700"
-                                onClick={() => handleMarkPaid(o)}
-                                aria-label="Mark paid"
-                              >
-                                <BadgeDollarSign className="size-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>{t('actions.markPaid')}</TooltipContent>
-                          </Tooltip>
+                          <RowActionButton
+                            icon={BadgeDollarSign}
+                            tooltip={t('actions.markPaid')}
+                            className="text-muted-foreground hover:text-blue-700"
+                            onClick={() => handleMarkPaid(o)}
+                          />
                           <RowActionButton
                             icon={Pencil}
                             tooltip={t('actions.edit')}
-                            ariaLabel="Edit"
                             onClick={() => setEditObligation(o)}
                           />
                           <RowActionButton
                             icon={Archive}
                             tooltip={t('actions.archive')}
-                            ariaLabel="Archive"
                             variant="muted"
                             onClick={() => handleArchive(o)}
                             disabled={archivingId === o.id}
@@ -300,7 +277,6 @@ export function PaymentObligationsTable({
                           <RowActionButton
                             icon={Trash2}
                             tooltip={t('actions.delete')}
-                            ariaLabel="Delete"
                             variant="destructive"
                             onClick={() => setDeleteState(o)}
                           />

@@ -22,6 +22,7 @@ import {
 import { ReconciliationDeleteDialog } from '@/app/(protected)/credit-cards/_components/reconciliation-delete-dialog';
 import { ReconciliationFormDialog } from '@/app/(protected)/credit-cards/_components/reconciliation-form-dialog';
 import { fetchStatements } from '@/app/(protected)/credit-cards/credit-card-actions';
+import { RowActionButton } from '@/components/row-action-button';
 import type { CardReconciliation, StatementPeriod } from '@/lib/api/card-reconciliations';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
 import { useFormatters } from '@/lib/i18n/formatters';
@@ -237,20 +238,14 @@ export function CreditCardReconciliationsSection({
                                       : t('reconcileButton')}
                                   </Button>
                                   {statement.reconciliation && (
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="size-7 text-muted-foreground hover:text-destructive"
-                                          onClick={() => setDeleteRec(statement.reconciliation)}
-                                          aria-label="Delete reconciliation"
-                                        >
-                                          <Trash2 className="size-3.5" />
-                                        </Button>
-                                      </TooltipTrigger>
-                                      <TooltipContent>{t('delete.tooltip')}</TooltipContent>
-                                    </Tooltip>
+                                    <RowActionButton
+                                      icon={Trash2}
+                                      tooltip={t('delete.tooltip')}
+                                      variant="destructive"
+                                      className="size-7"
+                                      iconClassName="size-3.5"
+                                      onClick={() => setDeleteRec(statement.reconciliation)}
+                                    />
                                   )}
                                 </div>
                               </TableCell>

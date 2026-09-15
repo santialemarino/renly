@@ -117,9 +117,9 @@ Two things about where the attribute goes:
 - **A component whose props are an explicit list will not forward it.** `LocaleAmountInput`,
   `RowActionButton` and `StyledHint` all declare their props rather than extending React's, so
   `data-testid` is a type error until the prop is declared — each takes it as `testId` because each
-  chooses which element to put it on. Prefer that over keying on an `aria-label`: the row actions'
-  labels are hardcoded English pending the a11y sweep, so a spec keyed on one breaks when they are
-  translated.
+  chooses which element to put it on. Prefer that over keying on an accessible name: those are
+  translated, so `getByRole('button', { name: 'Delete' })` passes only in whichever locale the run
+  happened to load, and silently matches nothing in the other.
 - **A testid can be DERIVED from a prop the primitive already has.** Every `DismissableHint` renders
   `hint-<storageKey>`, so all of the app's contextual nudges are reachable from one definition instead
   of a testid per call site — the currency hint is `hint-currency-hint-dismissed`. Reach for this

@@ -23,9 +23,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from '@repo/ui/components';
 import { cn } from '@repo/ui/lib';
 import { CreditCardFormDialog } from '@/app/(protected)/_components/credit-card-form-dialog';
@@ -207,20 +204,14 @@ function SettlementsSection({
                                 {s.notes ?? '—'}
                               </TableCell>
                               <TableCell>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="size-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setDeleteSettlementState(s)}
-                                      aria-label="Delete settlement"
-                                    >
-                                      <Trash2 className="size-3.5" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>{t('settlements.deleteTooltip')}</TooltipContent>
-                                </Tooltip>
+                                <RowActionButton
+                                  icon={Trash2}
+                                  tooltip={t('settlements.deleteTooltip')}
+                                  variant="destructive"
+                                  className="size-7"
+                                  iconClassName="size-3.5"
+                                  onClick={() => setDeleteSettlementState(s)}
+                                />
                               </TableCell>
                             </TableRow>
                           ))}
@@ -409,7 +400,6 @@ export function CreditCardsTable({
                             <RowActionButton
                               icon={ArchiveRestore}
                               tooltip={t('actions.unarchive')}
-                              ariaLabel="Unarchive"
                               onClick={() => handleUnarchive(card)}
                               disabled={unarchiving === card.id}
                             />
@@ -419,14 +409,12 @@ export function CreditCardsTable({
                             <RowActionButton
                               icon={Pencil}
                               tooltip={t('actions.edit')}
-                              ariaLabel="Edit"
                               onClick={() => setEditCard(card)}
                             />
                             {card.hasExpenses ? (
                               <RowActionButton
                                 icon={Archive}
                                 tooltip={t('actions.archive')}
-                                ariaLabel="Archive"
                                 variant="muted"
                                 onClick={() => setArchiveCard(card)}
                               />
@@ -434,7 +422,6 @@ export function CreditCardsTable({
                               <RowActionButton
                                 icon={Trash2}
                                 tooltip={t('actions.delete')}
-                                ariaLabel="Delete"
                                 variant="destructive"
                                 onClick={() => setDeleteCardState(card)}
                               />
