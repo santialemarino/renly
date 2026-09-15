@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import AdminSessionLocal
-from app.domain import DEFAULT_EMAIL_CADENCE, EmailCadence, NotFoundError, PushNotConfiguredError
+from app.domain import EmailCadence, NotFoundError, PushNotConfiguredError
 from app.domain.notification import is_enabled_by_default
 from app.models.notification import Notification, NotificationChannel, NotificationEvent
 from app.models.push_subscription import PushSubscription
@@ -239,11 +239,16 @@ async def _deliver(
     # `digest_pending`, so the digest job owes them this message. PUSH is deliberately not filtered —
     # a batched lock-screen interrupt is a contradiction, and somebody who asked for fewer emails did
     # not ask for delayed alerts.
+    #
+    # `cadences[user_id]` rather than a `.get` with a default: `cadences` is built for `wanted` and
+    # `written` is a subset of it, so a missing key is impossible — and a default there would be a
+    # fallback no test can reach, which is dead code rather than an untested rule. A KeyError is the
+    # honest failure if that invariant ever breaks.
     email_ids = [
         user_id
         for user_id in written
         if _is_enabled(event, NotificationChannel.email, overrides.get(user_id, {}))
-        and not _defers_email(event, overrides.get(user_id, {}), cadences.get(user_id, DEFAULT_EMAIL_CADENCE))
+        and not _defers_email(event, overrides.get(user_id, {}), cadences[user_id])
     ]
     push_ids = (
         [user_id for user_id in written if _is_enabled(event, NotificationChannel.push, overrides.get(user_id, {}))]

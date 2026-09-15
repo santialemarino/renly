@@ -68,12 +68,39 @@ def _schema_enum_labels() -> list[str]:
     return re.findall(r"'([a-z_]+)'", block.group(1))
 
 
+# Every `ADD VALUE` any migration performs on the enum, in revision order, as (label, before) pairs —
+# `before` being the label the new one is inserted ahead of, or None when it is appended.
+#
+# Revision order is the filename's numeric prefix, which is this repo's convention and is also the order
+# `alembic upgrade head` applies them in. A migration that ever branched would break that assumption;
+# nothing here ever has, and the `down_revision` chain is linear.
+def _migration_add_values() -> list[tuple[str, str | None]]:
+    found: list[tuple[str, str, str | None]] = []
+    for path in sorted(_MIGRATIONS.glob("0*.py")):
+        for label, before in re.findall(
+            r"ALTER TYPE notification_event ADD VALUE(?: IF NOT EXISTS)? '([a-z_]+)'(?: BEFORE '([a-z_]+)')?",
+            path.read_text(),
+        ):
+            found.append((path.name, label, before or None))
+    return [(label, before) for _name, label, before in found]
+
+
 # The labels every migration has ever ADDed to the enum, for a database that got there incrementally.
 def _migration_added_labels() -> set[str]:
-    added: set[str] = set()
-    for path in _MIGRATIONS.glob("*.py"):
-        added.update(re.findall(r"ALTER TYPE notification_event ADD VALUE(?: IF NOT EXISTS)? '([a-z_]+)'", path.read_text()))
-    return added
+    return {label for label, _before in _migration_add_values()}
+
+
+# The enum order a database reaches by MIGRATION: `0023`'s CREATE, then each ADD VALUE applied the way
+# Postgres applies it — appended, or inserted ahead of the label a BEFORE clause names.
+def _migrated_enum_order() -> list[str]:
+    created = re.search(r"_EVENTS = \((.*?)\)", (_MIGRATIONS / "0023_notifications.py").read_text(), re.DOTALL)
+    assert created is not None, "0023's _EVENTS tuple not found"
+    order = re.findall(r'"([a-z_]+)"', created.group(1))
+    for label, before in _migration_add_values():
+        if label in order:
+            continue
+        order.insert(order.index(before) if before else len(order), label)
+    return order
 
 
 # The events one of the web's two routing maps names, with the ROUTES member each is pointed at
@@ -132,6 +159,17 @@ class TestTheListIsTheInvariant:
         # the divergence surfaces as a 500 on one deployment and not the other.
         created_by_0023 = set(re.findall(r'"([a-z_]+)",', (_MIGRATIONS / "0023_notifications.py").read_text()))
         assert _python_events() - created_by_0023 - _migration_added_labels() == set()
+
+    def test_a_migrated_database_reaches_the_same_enum_ORDER_as_a_fresh_one(self):
+        # The assertion the `BEFORE 'group_invited'` clauses exist for, and the one nothing else makes.
+        # `ALTER TYPE … ADD VALUE` APPENDS unless told otherwise, so a migration written without the
+        # clause leaves an upgraded database holding the same labels in a different order from one built
+        # by the SQL script — which is real drift between two deployments of the same release, and
+        # invisible until somebody diffs two live schemas.
+        #
+        # Simulated from the migration text rather than run against Postgres so it costs nothing and
+        # fails in the unit suite; verified against a real migrated clone as well.
+        assert _migrated_enum_order() == _schema_enum_labels()
 
     def test_the_declared_ORDER_is_the_same_on_both_sides(self):
         # Order is not cosmetic here: the enum's declared order IS the order the preferences grid

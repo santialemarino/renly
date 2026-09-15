@@ -88,6 +88,15 @@ class TestWhenItFires:
         rows.assert_not_awaited()
 
     @pytest.mark.asyncio
+    async def test_it_counts_SUMMARIES_rather_than_the_rows_in_them(self, monkeypatch):
+        # One person with a busy day is one email, and the scheduler's log says so. Every other fixture
+        # here has a single pending row per person, which makes the two figures the same number — so
+        # without a multi-row person nothing distinguishes "summaries sent" from "things summarised".
+        mocks = _arrange(monkeypatch, pending={1: [_row(10), _row(11), _row(12)]})
+        assert await svc.send_due_digests(AsyncMock(), EVENING_UTC) == 1
+        mocks["sent"].assert_awaited_once()
+
+    @pytest.mark.asyncio
     async def test_one_persons_evening_does_not_drag_another_along(self, monkeypatch):
         # Two people owed a summary, two timezones, one tick.
         mocks = _arrange(monkeypatch, pending={1: [_row(10)], 2: [_row(11, user_id=2)]}, timezones={1: BUENOS_AIRES, 2: "UTC"})

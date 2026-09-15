@@ -103,6 +103,30 @@ class TestWhenItFires:
         assert await svc.send_due_reminders(AsyncMock(), datetime(2026, 9, 15, 9, 0, tzinfo=UTC)) == 1
 
     @pytest.mark.asyncio
+    async def test_the_horizon_is_the_OWNERS_calendar_day_and_not_the_servers(self, monkeypatch):
+        # The two dates are the same in every other fixture here, which is what let a server-date
+        # horizon pass unnoticed. Auckland is UTC+12, so its local 09:00 on the 16th is 21:00 UTC on
+        # the 15th: the owner's today is the 16th while the server's is still the 15th. A bill due on
+        # the 19th is inside the owner's three-day window and outside the server's.
+        _arrange(
+            monkeypatch,
+            obligations=[_obligation(due=date(2026, 9, 19))],
+            timezones={1: "Pacific/Auckland"},
+        )
+        assert await svc.send_due_reminders(AsyncMock(), datetime(2026, 9, 15, 21, 0, tzinfo=UTC)) == 1
+
+    @pytest.mark.asyncio
+    async def test_the_sql_scan_is_bounded_by_the_lead_time(self, monkeypatch):
+        # The bound only prunes — the per-user comparison decides — but an unbounded scan loads every
+        # active obligation in the database on every hourly tick, which nothing else here would notice
+        # because the repository is mocked. One day PAST the lead, because a user's local today can run
+        # up to 14 hours ahead of the UTC date.
+        scan = AsyncMock(return_value=[])
+        monkeypatch.setattr(svc.payment_obligation_repository, "list_active_due", scan)
+        await svc.send_due_reminders(AsyncMock(), NOON_UTC)
+        assert scan.await_args.args[1] == NOON_UTC.date() + timedelta(days=svc.OBLIGATION_REMINDER_LEAD_DAYS + 1)
+
+    @pytest.mark.asyncio
     async def test_no_obligations_at_all_costs_nothing_further(self, monkeypatch):
         # Prune before you measure: an empty scan must not go on to load every timezone in the database.
         timezones = AsyncMock(return_value={})
