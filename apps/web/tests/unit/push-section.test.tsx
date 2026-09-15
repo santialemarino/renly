@@ -41,6 +41,7 @@ vi.mock('@/lib/push', () => ({
 function preferences(subscriptions: number): NotificationPreferences {
   return {
     preferences: [],
+    emailCadence: 'immediate',
     pushAvailable: true,
     pushPublicKey: 'key',
     pushSubscriptions: subscriptions,

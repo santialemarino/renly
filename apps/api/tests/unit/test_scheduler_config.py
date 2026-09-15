@@ -29,7 +29,7 @@ class TestSchedulerConfig:
     # Every job must survive a late tick: hours-scale grace, coalesced to a single run.
     def test_all_jobs_have_misfire_grace_and_coalesce(self, monkeypatch):
         recorder = self._record(monkeypatch)
-        assert len(recorder.calls) == 7
+        assert len(recorder.calls) == 9
         for _func, _trigger, kwargs in recorder.calls:
             assert kwargs["misfire_grace_time"] == scheduler_module.MISFIRE_GRACE_SECONDS
             assert kwargs["coalesce"] is True
@@ -49,3 +49,28 @@ class TestSchedulerConfig:
         job = next(call for call in recorder.calls if call[2]["id"] == "send_pot_reminders")
         assert job[1] == "cron"
         assert job[2]["minute"] == 0 and "hour" not in job[2]
+
+    # The same rule, asserted over EVERY per-user-local-hour job rather than once per job. Each of these
+    # picks its recipients by comparing the tick to a person's own clock, which only works if the tick
+    # comes round every hour — pin an `hour` on any of them and it fires for one timezone and silently
+    # never for the rest. A set difference, so a fourth such job added later is covered by being named
+    # here rather than by somebody remembering to copy a test.
+    def test_every_per_user_local_hour_job_runs_hourly(self, monkeypatch):
+        recorder = self._record(monkeypatch)
+        by_id = {kwargs["id"]: (trigger, kwargs) for _f, trigger, kwargs in recorder.calls}
+        local_hour_jobs = {"generate_auto_expenses", "send_pot_reminders", "send_obligation_reminders", "send_notification_digests"}
+        assert local_hour_jobs - set(by_id) == set()
+        for job_id in local_hour_jobs:
+            trigger, kwargs = by_id[job_id]
+            assert trigger == "cron", job_id
+            assert kwargs["minute"] == 0 and "hour" not in kwargs, job_id
+
+    # The digest runs LATER in the day than the two reminder jobs, and that ordering is the whole reason
+    # a reminder raised this morning lands in tonight's summary rather than tomorrow's. All three filter
+    # on the SAME person's local clock, so the comparison holds in every timezone — which is what makes
+    # it assertable as a plain inequality between three constants rather than as job registration order.
+    def test_the_digest_is_sent_after_the_days_reminders_are_raised(self):
+        from app.services import notification_digest_service, obligation_reminder_service, pot_reminder_service
+
+        assert notification_digest_service.DIGEST_HOUR_LOCAL > obligation_reminder_service.OBLIGATION_REMINDER_HOUR_LOCAL
+        assert notification_digest_service.DIGEST_HOUR_LOCAL > pot_reminder_service.SNAPSHOT_REMINDER_HOUR_LOCAL

@@ -474,7 +474,7 @@ class TestSchedulerHonoursTheDefault:
             AsyncMock(return_value=[_account(currency="ARS", opening_date=date(2026, 8, 1))]),
         )
 
-        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"}, [])
 
         entries = _added_entries(session)
         assert created == 3  # June, July and August cycles
@@ -505,7 +505,7 @@ class TestSchedulerHonoursTheDefault:
             AsyncMock(return_value={7: date(2026, 7, 1)}),
         )
 
-        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"}, [])
 
         assert created == 3
         # June and July are inside the reconciled period; only August moves the balance.
@@ -522,7 +522,7 @@ class TestSchedulerHonoursTheDefault:
         session = _scheduler_session([sub], [])
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(currency="ARS")]))
 
-        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"}, [])
 
         assert created == 1
         assert [e.account_id for e in _added_entries(session)] == [7]
@@ -533,7 +533,7 @@ class TestSchedulerHonoursTheDefault:
         session = _scheduler_session([sub], [])
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(currency="USD")]))
 
-        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"})
+        created, _ = await auto_expense_service._generate_subscription_expenses(session, _tick(), {1: "UTC"}, [])
 
         # The charge still lands — a stale default must never block a scheduled expense.
         assert created == 1
@@ -545,7 +545,7 @@ class TestSchedulerHonoursTheDefault:
         session = _scheduler_session([plan], [])
         monkeypatch.setattr(auto_expense_service.account_repository, "get_by_ids_across_users", AsyncMock(return_value=[_account(currency="ARS")]))
 
-        created, _ = await auto_expense_service._generate_installment_expenses(session, _tick(), {1: "UTC"})
+        created, _ = await auto_expense_service._generate_installment_expenses(session, _tick(), {1: "UTC"}, [])
 
         assert created == 1
         assert [e.account_id for e in _added_entries(session)] == [7]

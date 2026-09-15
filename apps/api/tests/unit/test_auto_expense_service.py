@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from app.models.expense_entry import ExpenseEntry
+from app.models.installment import Installment
+from app.models.notification import NotificationEvent
 from app.models.subscription import Subscription
 from app.services import auto_expense_service
 from app.services.auto_expense_service import (
@@ -266,7 +268,7 @@ class TestSchedulerCycleDedup:
         sub = self._sub()
         session = self._session([sub], [(1, date(2026, 6, 28))])
         now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
-        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"}, [])
         assert created == 0
         assert advanced == 1
         added_entries = [c.args[0] for c in session.add.call_args_list if isinstance(c.args[0], ExpenseEntry)]
@@ -279,7 +281,7 @@ class TestSchedulerCycleDedup:
         sub = self._sub()
         session = self._session([sub], [])
         now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
-        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"}, [])
         assert created == 1
         assert advanced == 1
         added_entries = [c.args[0] for c in session.add.call_args_list if isinstance(c.args[0], ExpenseEntry)]
@@ -294,7 +296,7 @@ class TestSchedulerCycleDedup:
         sub = self._sub()
         session = self._session([sub], [(1, date(2026, 6, 30))])
         now_utc = datetime(2026, 7, 1, 4, 0, tzinfo=UTC)
-        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"})
+        created, advanced = await _generate_subscription_expenses(session, now_utc, {1: "America/Argentina/Buenos_Aires"}, [])
         assert created == 0
         assert advanced == 1
         assert sub.next_billing_date == date(2026, 7, 30)
@@ -347,7 +349,7 @@ class TestScheduledChargesFlagReconciledStatements:
         session = self._session([sub], [])
 
         created, _advanced = await _generate_subscription_expenses(
-            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}, []
         )
 
         assert created == 1
@@ -362,7 +364,7 @@ class TestScheduledChargesFlagReconciledStatements:
         session = self._session([sub], [(1, date(2026, 6, 28))])
 
         created, _advanced = await _generate_subscription_expenses(
-            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}, []
         )
 
         assert created == 0
@@ -379,8 +381,197 @@ class TestScheduledChargesFlagReconciledStatements:
         session = self._session([sub], [])
 
         created, _advanced = await _generate_subscription_expenses(
-            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}
+            session, datetime(2026, 7, 1, 4, 0, tzinfo=UTC), {1: "America/Argentina/Buenos_Aires"}, []
         )
 
         assert created == 1
         stale.assert_not_awaited()
+
+
+# --- What the tick ANNOUNCES (PR 16) ---
+
+
+# The `plan_charged` half. The scheduler writes these rows at the owner's local 01:00 with nobody
+# watching, so before this the only trace of an auto-generated charge was a new row in the expenses
+# list — which is exactly the kind of silent write a feed exists for.
+#
+# Two properties are worth pinning beyond "a notification happens". The dispatch is AFTER the commit,
+# because a notification announces something that has already happened and a push service being down
+# must never roll back a money write; and the event carries the plan's own words, because the copy
+# interpolates them and a missing field is a literal `{name}` on a lock screen.
+class TestChargesAreAnnounced:
+    # A whole tick's queries in order: the subscription scan, its linked-date load, then the same pair
+    # for installments. The linked-date load only happens when the scan found something, so the queue is
+    # built conditionally rather than assuming four — an unconditional list simply hands the wrong Mock
+    # to the wrong query and fails somewhere unrelated.
+    def _session(self, subscriptions, installments, *, sub_linked_rows=()):
+        def _scan(rows):
+            result = Mock()
+            result.scalars.return_value.all.return_value = rows
+            return result
+
+        def _linked(rows):
+            result = Mock()
+            result.all.return_value = list(rows)
+            return result
+
+        queries = [_scan(subscriptions)]
+        if subscriptions:
+            queries.append(_linked(sub_linked_rows))
+        queries.append(_scan(installments))
+        if installments:
+            # No test needs linked installment rows yet; the dedup path is covered on the subscription
+            # side. An empty load is what the service sees when a plan has no linked expenses.
+            queries.append(_linked(()))
+        session = AsyncMock()
+        session.execute = AsyncMock(side_effect=queries)
+        session.add = Mock()
+        session.flush = AsyncMock()
+        return session
+
+    def _sub(self) -> Subscription:
+        return Subscription(
+            id=1,
+            user_id=7,
+            name="Netflix",
+            amount=Decimal("5990.00"),
+            currency="ARS",
+            billing_cycle=BILLING_CYCLE_MONTHLY,
+            next_billing_date=date(2026, 6, 30),
+            anchor_day=30,
+            is_active=True,
+        )
+
+    def _installment(self) -> Installment:
+        return Installment(
+            id=4,
+            user_id=7,
+            name="TV Samsung",
+            total_amount=Decimal("120000.00"),
+            installment_amount=Decimal("10000.00"),
+            currency="ARS",
+            installments_count=12,
+            start_date=date(2026, 6, 30),
+            current_installment=1,
+            is_active=True,
+        )
+
+    # Runs a whole tick with the timezone map and the dispatcher stubbed, and returns the dispatcher.
+    def _arrange(self, monkeypatch):
+        monkeypatch.setattr(
+            auto_expense_service.user_settings_repository,
+            "get_all_timezones",
+            AsyncMock(return_value={7: "America/Argentina/Buenos_Aires"}),
+        )
+        dispatched = AsyncMock(return_value=1)
+        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch", dispatched)
+        return dispatched
+
+    @pytest.mark.asyncio
+    async def test_a_recorded_subscription_charge_is_announced(self, monkeypatch):
+        dispatched = self._arrange(monkeypatch)
+        session = self._session([self._sub()], [])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        dispatched.assert_awaited_once()
+        assert dispatched.await_args.args[0] == NotificationEvent.plan_charged
+        assert dispatched.await_args.args[1] == [7]
+
+    @pytest.mark.asyncio
+    async def test_the_payload_carries_everything_the_copy_interpolates(self, monkeypatch):
+        dispatched = self._arrange(monkeypatch)
+        session = self._session([self._sub()], [])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        assert dispatched.await_args.args[2] == {
+            "variant": "subscription",
+            "plan_id": 1,
+            "name": "Netflix",
+            "amount": "5990.00",
+            "currency": "ARS",
+            "date": "2026-06-30",
+        }
+
+    @pytest.mark.asyncio
+    async def test_an_installment_is_the_same_event_with_its_own_variant(self, monkeypatch):
+        # One event value, two sentences. A variant is a line of copy where an event value is a
+        # migration — and a cuota and a subscription charge are the same fact about the reader's money.
+        dispatched = self._arrange(monkeypatch)
+        session = self._session([], [self._installment()])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        payload = dispatched.await_args.args[2]
+        assert (payload["variant"], payload["name"], payload["amount"]) == ("installment", "TV Samsung", "10000.00")
+
+    @pytest.mark.asyncio
+    async def test_the_installment_amount_is_the_cuota_and_not_the_whole_purchase(self, monkeypatch):
+        # The two are different columns on the same row and the wrong one is 12x the truth — a figure
+        # nothing else in this tick would have caught, since the expense entry is written from the same
+        # field somewhere else entirely.
+        dispatched = self._arrange(monkeypatch)
+        plan = self._installment()
+        session = self._session([], [plan])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        assert dispatched.await_args.args[2]["amount"] == str(plan.installment_amount)
+
+    @pytest.mark.asyncio
+    async def test_the_dedupe_key_names_the_cycle(self, monkeypatch):
+        # Belt and braces over creation's own idempotence: the charge is what is deduped today, so a
+        # re-run announces nothing because it creates nothing. The key is what keeps that true if the
+        # tick ever gains a retry.
+        dispatched = self._arrange(monkeypatch)
+        session = self._session([self._sub()], [])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        assert dispatched.await_args.kwargs["dedupe_key"] == "plan:subscription:1:2026-06-30"
+
+    @pytest.mark.asyncio
+    async def test_a_back_fill_announces_every_cycle_it_recorded(self, monkeypatch):
+        # Three missed months is three charges, so it is three messages — the honest granularity, and
+        # the reason the event is in-app only by default rather than quieter per plan.
+        dispatched = self._arrange(monkeypatch)
+        sub = self._sub()
+        sub.next_billing_date = date(2026, 4, 30)
+        session = self._session([sub], [])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        assert [call.kwargs["dedupe_key"] for call in dispatched.await_args_list] == [
+            "plan:subscription:1:2026-04-30",
+            "plan:subscription:1:2026-05-30",
+            "plan:subscription:1:2026-06-30",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_deduped_cycle_announces_nothing(self, monkeypatch):
+        # Nothing was recorded, so there is nothing to tell anybody about. Without this the cursor
+        # catch-up on a pre-paid cycle would announce a charge that was never written.
+        dispatched = self._arrange(monkeypatch)
+        session = self._session([self._sub()], [], sub_linked_rows=[(1, date(2026, 6, 28))])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        dispatched.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_nothing_is_announced_before_the_charges_are_committed(self, monkeypatch):
+        # The layer's own rule, and the one property a mocked session can still prove: a notification
+        # announces something that has ALREADY happened, so a push service being down must not be able
+        # to roll back the money write that produced it.
+        order: list[str] = []
+        dispatched = self._arrange(monkeypatch)
+        dispatched.side_effect = lambda *_a, **_kw: order.append("dispatch") or 1
+        session = self._session([self._sub()], [])
+        session.commit = AsyncMock(side_effect=lambda: order.append("commit"))
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        assert order == ["commit", "dispatch"]
+
+    @pytest.mark.asyncio
+    async def test_each_owner_is_told_only_about_their_own_plans(self, monkeypatch):
+        # The tick is cluster-wide, so the per-plan owner is the only thing between one person's
+        # subscriptions and another person's feed.
+        monkeypatch.setattr(
+            auto_expense_service.user_settings_repository,
+            "get_all_timezones",
+            AsyncMock(return_value={7: "America/Argentina/Buenos_Aires", 8: "America/Argentina/Buenos_Aires"}),
+        )
+        dispatched = AsyncMock(return_value=1)
+        monkeypatch.setattr(auto_expense_service.notification_service, "dispatch", dispatched)
+        mine, theirs = self._sub(), self._sub()
+        theirs.id, theirs.user_id, theirs.name = 2, 8, "Spotify"
+        session = self._session([mine, theirs], [])
+        await auto_expense_service.generate_auto_expenses(session, now_utc=datetime(2026, 7, 1, 4, 0, tzinfo=UTC))
+        told = {call.args[2]["name"]: call.args[1] for call in dispatched.await_args_list}
+        assert told == {"Netflix": [7], "Spotify": [8]}

@@ -62,6 +62,35 @@ async def count_unread(session: AsyncSession, user_id: int, *, exclude_events: l
     return int(result.scalar_one())
 
 
+# Who is owed a digest email right now — the digest tick's FIRST read, and deliberately the cheapest
+# one available. The partial index holds only pending rows, so a tick with an empty queue costs one
+# index probe and the job returns before loading a single timezone. Same "prune before you measure"
+# shape the overdue-valuation reminder uses.
+#
+# Runs on the PRIVILEGED session: it spans every user, which no request connection may do.
+async def list_digest_pending_user_ids(admin_session: AsyncSession) -> list[int]:
+    result = await admin_session.execute(select(Notification.user_id).where(Notification.digest_pending).distinct())
+    return sorted(result.scalars().all())
+
+
+# The pending rows for the given people, oldest first so a digest reads in the order things happened.
+#
+# Batched over users rather than one query per person, and ordered in SQL rather than in Python: the
+# caller sends one email per user and would otherwise sort N lists it did not have to.
+async def list_digest_pending(admin_session: AsyncSession, user_ids: list[int]) -> dict[int, list[Notification]]:
+    if not user_ids:
+        return {}
+    result = await admin_session.execute(
+        select(Notification)
+        .where(Notification.digest_pending, Notification.user_id.in_(user_ids))
+        .order_by(Notification.created_at.asc(), Notification.id.asc())
+    )
+    by_user: dict[int, list[Notification]] = defaultdict(list)
+    for row in result.scalars().all():
+        by_user[row.user_id].append(row)
+    return dict(by_user)
+
+
 # Fetches one of the caller's notifications, or None. The owner filter is stated as well as enforced by
 # RLS, so the function is correct on the privileged session too.
 async def get_by_id(session: AsyncSession, user_id: int, notification_id: int) -> Notification | None:
@@ -86,6 +115,12 @@ async def get_by_id(session: AsyncSession, user_id: int, notification_id: int) -
 # and push must go to exactly those recipients, never to the ones a previous tick already told. Columns
 # are listed explicitly rather than dumped from the models so every row of the batch carries the same
 # keys — a multi-row VALUES with differing keys is not the same statement.
+#
+# That explicit list is itself an enumerated invariant: a column added to the model and not added here
+# is written as its DEFAULT on every dispatch, silently and with nothing failing. `digest_pending` is
+# the live case — omitted, it would be false for every row, the digest queue would never fill, and the
+# job would run hourly forever finding nothing. `tests/unit/test_notification_service.py` asserts this
+# list against the model's own columns.
 async def create_many(admin_session: AsyncSession, notifications: list[Notification]) -> list[int]:
     if not notifications:
         return []
@@ -98,6 +133,7 @@ async def create_many(admin_session: AsyncSession, notifications: list[Notificat
                     "event": n.event,
                     "payload": n.payload,
                     "dedupe_key": n.dedupe_key,
+                    "digest_pending": n.digest_pending,
                     "created_at": n.created_at,
                 }
                 for n in notifications
@@ -133,6 +169,24 @@ async def mark_all_read(
         update(Notification)
         .where(*_feed_filter(user_id, exclude_events), Notification.read_at.is_(None))
         .values(read_at=now or utcnow())
+        .execution_options(synchronize_session=False)
+    )
+    return int(result.rowcount or 0)
+
+
+# Takes the given rows out of the digest queue, in one statement.
+#
+# Called whether or not the email actually went out, which is the same posture every other send in this
+# layer takes: the notification is already in the recipient's feed, so an email outage must not leave a
+# queue that re-sends the same summary every day until the provider recovers. Returns how many rows
+# changed, so a job can report what it cleared rather than what it asked to clear.
+async def clear_digest_pending(admin_session: AsyncSession, notification_ids: list[int]) -> int:
+    if not notification_ids:
+        return 0
+    result = await admin_session.execute(
+        update(Notification)
+        .where(Notification.id.in_(notification_ids), Notification.digest_pending)
+        .values(digest_pending=False)
         .execution_options(synchronize_session=False)
     )
     return int(result.rowcount or 0)
@@ -179,10 +233,13 @@ class NotificationRepository:
     list_by_user = staticmethod(list_by_user)
     count_by_user = staticmethod(count_by_user)
     count_unread = staticmethod(count_unread)
+    list_digest_pending_user_ids = staticmethod(list_digest_pending_user_ids)
+    list_digest_pending = staticmethod(list_digest_pending)
     get_by_id = staticmethod(get_by_id)
     create_many = staticmethod(create_many)
     mark_read = staticmethod(mark_read)
     mark_all_read = staticmethod(mark_all_read)
+    clear_digest_pending = staticmethod(clear_digest_pending)
     list_preferences = staticmethod(list_preferences)
     preferences_by_user_ids = staticmethod(preferences_by_user_ids)
     save_preference = staticmethod(save_preference)

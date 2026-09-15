@@ -1,3 +1,5 @@
+from datetime import date as date_type
+
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -43,6 +45,19 @@ async def list_by_user(
         default_order=PaymentObligation.next_due_date,
     )
     result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+# List every active payment obligation (cluster-wide) whose next_due_date is at or before `cutoff`
+# (inclusive). Powers the hourly upcoming-bill reminder: the date bound prunes in SQL instead of loading
+# every active obligation into Python each tick. Mirrors subscription_repository.list_active_due.
+async def list_active_due(session: AsyncSession, cutoff: date_type) -> list[PaymentObligation]:
+    result = await session.execute(
+        select(PaymentObligation).where(
+            PaymentObligation.is_active.is_(True),
+            PaymentObligation.next_due_date <= cutoff,
+        )
+    )
     return list(result.scalars().all())
 
 
@@ -95,6 +110,7 @@ async def count_by_default_account(session: AsyncSession, account_id: int, user_
 # Namespace to call repository functions (e.g. payment_obligation_repository.list_by_user).
 class PaymentObligationRepository:
     list_by_user = staticmethod(list_by_user)
+    list_active_due = staticmethod(list_active_due)
     get_by_id = staticmethod(get_by_id)
     create = staticmethod(create)
     save = staticmethod(save)

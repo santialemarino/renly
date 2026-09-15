@@ -14,6 +14,8 @@
 # never expressed an opinion receives. That is deliberate: the alternative is seeding rows per user per
 # event, which turns every new event into a backfill and freezes yesterday's answer forever.
 
+from enum import StrEnum
+
 from app.models.notification import NotificationChannel, NotificationEvent
 
 # Events whose email and push channels are ON out of the box.
@@ -24,21 +26,51 @@ from app.models.notification import NotificationChannel, NotificationEvent
 #   * settle_marked_paid — somebody says they paid you, and confirming it is your move.
 #   * settle_confirmed   — your own payment being acknowledged closes the loop you opened.
 #   * balance_written_off — somebody gave up a claim against you; it changes what you owe.
+#   * obligation_due     — a bill you declared is coming up and nothing pays it for you, so it is
+#     waiting on your own action; the same argument snapshot_due makes, and a reminder that only ever
+#     appears in a feed you were not looking at is the one kind of reminder that cannot work.
 #
 # pot_movement is deliberately NOT here even though ownership_changed is, and the distinction is the
 # reason units exist: a contribution dilutes everyone's PERCENTAGE and moves nobody's VALUE, whereas a
 # re-agreement moves value between people. The rest (group_invited, member_joined,
 # shared_expense_added, shared_income_added) are somebody else recording something — real activity,
 # but a household recording ten expenses a week must not send ten emails to everyone in it.
+#
+# plan_charged is the sharpest case of that last rule and so is NOT here: it is about the reader's own
+# money, which is the test the six above pass, but it awaits no action at all — Renly is recording a
+# charge the reader configured to happen. Somebody with ten subscriptions would get ten emails and ten
+# lock-screen interrupts a month for things going exactly to plan. It is also precisely the event the
+# daily digest exists to make safe to turn on.
 _OUTSIDE_APP_BY_DEFAULT = frozenset(
     {
         NotificationEvent.balance_written_off,
+        NotificationEvent.obligation_due,
         NotificationEvent.ownership_changed,
         NotificationEvent.settle_confirmed,
         NotificationEvent.settle_marked_paid,
         NotificationEvent.snapshot_due,
     }
 )
+
+
+# How often Renly emails one person about the events they have email turned on for.
+#
+# A CADENCE rather than a channel, which is why it is not a fourth `NotificationChannel` value: the two
+# would be mutually exclusive with nothing in the schema saying so. It is also per USER rather than per
+# event — the thing somebody wants is "stop filling my inbox", not a per-event schedule — and it
+# governs email alone. In-app needs no cadence (a feed is already a summary you read when you look) and
+# push has none either (a batched lock-screen interrupt is a contradiction).
+#
+# Stored as a plain string in `user_settings.settings`, so a third value costs no migration.
+class EmailCadence(StrEnum):
+    daily = "daily"
+    immediate = "immediate"
+
+
+# What somebody gets before they express a preference: every email as it happens, which is what the app
+# did before digests existed. A digest delays a message by up to a day, and nobody should have that
+# applied to them without asking.
+DEFAULT_EMAIL_CADENCE = EmailCadence.immediate
 
 
 # Whether a channel is on for an event when the user has expressed no preference about it.

@@ -37,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import AdminSessionLocal
-from app.domain import NotFoundError, PushNotConfiguredError
+from app.domain import EmailCadence, NotFoundError, PushNotConfiguredError
 from app.domain.notification import is_enabled_by_default
 from app.models.notification import Notification, NotificationChannel, NotificationEvent
 from app.models.push_subscription import PushSubscription
@@ -56,9 +56,9 @@ from app.services.email_service import get_email_service
 logger = logging.getLogger(__name__)
 
 # Web paths the outgoing links point at. The API needs absolute URLs for email and push, so it owns a
-# copy of these three — the same reason group_invite_service owns "/join" for the invite link. The
-# in-app feed does NOT use them: the client builds each row's href from its own route constants, from
-# the ids in the payload, so the app's routing stays in one place on the side that routes.
+# copy of these — the same reason group_invite_service owns "/join" for the invite link. The in-app
+# feed does NOT use them: the client builds each row's href from its own route constants, from the ids
+# in the payload, so the app's routing stays in one place on the side that routes.
 _GROUP_PATH = "/shared/{group_id}"
 _POT_PATH = "/shared/pots/{pot_id}"
 _SETTINGS_PATH = "/notifications"
@@ -68,12 +68,26 @@ _SETTINGS_PATH = "/notifications"
 # and is a fallback rather than a guard because a link is not worth a 500.
 _POT_LINKED_EVENTS = frozenset({NotificationEvent.ownership_changed, NotificationEvent.pot_movement, NotificationEvent.snapshot_due})
 
+# The two PRIVATE events, and the page each points at. They need naming here because the group fallback
+# below is not merely a worse link for them — it is a BROKEN one: their payload carries no `group_id`,
+# so without this branch the email and the push would both offer "/shared/None".
+#
+# Each points at where the reader would act, not at what produced it: a recorded charge is an expense
+# they might want to check, and a bill that is due is marked paid on the obligations page.
+_PRIVATE_EVENT_PATHS = {
+    NotificationEvent.obligation_due: "/payment-obligations",
+    NotificationEvent.plan_charged: "/expenses",
+}
+
 # The most rows one feed request may return, whatever it asks for.
 MAX_FEED_PAGE_SIZE = 50
 
 
 # The absolute URL a notification points at, built from the ids its payload carries.
 def _link(event: NotificationEvent, payload: dict) -> str:
+    private_path = _PRIVATE_EVENT_PATHS.get(event)
+    if private_path is not None:
+        return f"{settings.web_base_url}{private_path}"
     pot_id = payload.get("pot_id")
     if event in _POT_LINKED_EVENTS and pot_id is not None:
         return f"{settings.web_base_url}{_POT_PATH.format(pot_id=pot_id)}"
@@ -84,6 +98,16 @@ def _link(event: NotificationEvent, payload: dict) -> str:
 def _is_enabled(event: NotificationEvent, channel: NotificationChannel, overrides: dict[tuple, bool]) -> bool:
     explicit = overrides.get((event, channel))
     return is_enabled_by_default(event, channel) if explicit is None else explicit
+
+
+# Whether this recipient's email for this event WAITS for their daily digest instead of going out now.
+#
+# One predicate rather than two, because the row's `digest_pending` flag and the exclusion from the
+# immediate send are the same decision read from opposite ends: an email that is deferred must be
+# queued, and an email that is queued must not also be sent. Stated once, they cannot disagree — and a
+# disagreement is either a person emailed twice about one event or a person never emailed at all.
+def _defers_email(event: NotificationEvent, overrides: dict[tuple, bool], cadence: EmailCadence) -> bool:
+    return cadence == EmailCadence.daily and _is_enabled(event, NotificationChannel.email, overrides)
 
 
 # The events the caller has switched OFF for the feed, which every feed read excludes. Derived from the
@@ -172,14 +196,24 @@ async def dispatch(
             ]
             if not wanted:
                 return 0
-            rows = [Notification(user_id=user_id, event=event, payload=payload, dedupe_key=dedupe_key) for user_id in wanted]
+            cadences = await settings_service.get_email_cadences_by_user_ids(admin_session, wanted)
+            rows = [
+                Notification(
+                    user_id=user_id,
+                    event=event,
+                    payload=payload,
+                    dedupe_key=dedupe_key,
+                    digest_pending=_defers_email(event, overrides.get(user_id, {}), cadences[user_id]),
+                )
+                for user_id in wanted
+            ]
             if now is not None:
                 for row in rows:
                     row.created_at = now
             written = await notification_repository.create_many(admin_session, rows)
             await admin_session.commit()
             if written:
-                await _deliver(admin_session, event, payload, written, overrides)
+                await _deliver(admin_session, event, payload, written, overrides, cadences)
             return len(written)
     except Exception:
         logger.exception("Notification dispatch failed for event '%s'.", event.value)
@@ -194,9 +228,28 @@ async def dispatch(
 # of six with email on would otherwise be six sequential provider round trips inside the request that
 # produced the event.
 async def _deliver(
-    admin_session: AsyncSession, event: NotificationEvent, payload: dict, written: list[int], overrides: dict[int, dict[tuple, bool]]
+    admin_session: AsyncSession,
+    event: NotificationEvent,
+    payload: dict,
+    written: list[int],
+    overrides: dict[int, dict[tuple, bool]],
+    cadences: dict[int, EmailCadence],
 ) -> None:
-    email_ids = [user_id for user_id in written if _is_enabled(event, NotificationChannel.email, overrides.get(user_id, {}))]
+    # A recipient on the daily cadence is skipped here and nowhere else: their row was written with
+    # `digest_pending`, so the digest job owes them this message. PUSH is deliberately not filtered —
+    # a batched lock-screen interrupt is a contradiction, and somebody who asked for fewer emails did
+    # not ask for delayed alerts.
+    #
+    # `cadences[user_id]` rather than a `.get` with a default: `cadences` is built for `wanted` and
+    # `written` is a subset of it, so a missing key is impossible — and a default there would be a
+    # fallback no test can reach, which is dead code rather than an untested rule. A KeyError is the
+    # honest failure if that invariant ever breaks.
+    email_ids = [
+        user_id
+        for user_id in written
+        if _is_enabled(event, NotificationChannel.email, overrides.get(user_id, {}))
+        and not _defers_email(event, overrides.get(user_id, {}), cadences[user_id])
+    ]
     push_ids = (
         [user_id for user_id in written if _is_enabled(event, NotificationChannel.push, overrides.get(user_id, {}))]
         if web_push.is_configured()
@@ -278,6 +331,7 @@ async def mark_all_read(session: AsyncSession, user: User) -> NotificationReadRe
 async def get_preferences(session: AsyncSession, user: User) -> NotificationPreferencesResponse:
     overrides = await _overrides(session, user.id)
     subscriptions = await push_subscription_repository.list_by_user(session, user.id)
+    cadence = await settings_service.get_email_cadence(session, user.id)
     return NotificationPreferencesResponse(
         preferences=[
             NotificationPreferenceResponse(
@@ -289,6 +343,7 @@ async def get_preferences(session: AsyncSession, user: User) -> NotificationPref
             for event in NotificationEvent
             for channel in NotificationChannel
         ],
+        email_cadence=cadence,
         push_available=web_push.is_configured(),
         push_public_key=web_push.public_key(),
         push_subscriptions=len(subscriptions),
@@ -301,6 +356,19 @@ async def set_preference(
     session: AsyncSession, user: User, *, event: NotificationEvent, channel: NotificationChannel, enabled: bool
 ) -> NotificationPreferencesResponse:
     await notification_repository.save_preference(session, user.id, event, channel, enabled=enabled)
+    await session.commit()
+    return await get_preferences(session, user)
+
+
+# Records how often the caller wants their emails, and returns the whole grid for the same reason
+# set_preference does — one answer, one source for the client to re-render from.
+#
+# Switching TO daily defers only messages raised after this point: the queue is a per-row flag written
+# at dispatch, so nothing already sent is re-sent and nothing already emailed is summarised again.
+# Switching back to immediate leaves rows already queued queued, and the next digest delivers them —
+# the email was owed before the switch, and dropping it would silently lose the only notice of it.
+async def set_email_cadence(session: AsyncSession, user: User, *, cadence: EmailCadence) -> NotificationPreferencesResponse:
+    await settings_service.set_email_cadence(session, user.id, cadence)
     await session.commit()
     return await get_preferences(session, user)
 

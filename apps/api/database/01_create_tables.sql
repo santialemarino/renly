@@ -202,6 +202,11 @@ CREATE TYPE income_destination AS ENUM (
 -- notification TABLES names a money entity, which is what lets a second module (household reminders
 -- and the like) add labels here and reuse every row, policy and preference unchanged.
 CREATE TYPE notification_event AS ENUM (
+  -- The two PRIVATE events lead, and that is the whole reason this list is not alphabetical: they are
+  -- the only ones a user who belongs to no group can ever receive, so a solo account's grid opens on
+  -- the rows that apply to it rather than on ten rows about groups it is not in.
+  'obligation_due',
+  'plan_charged',
   'group_invited',
   'member_joined',
   'ownership_changed',
@@ -1577,6 +1582,11 @@ CREATE TABLE notifications (
   -- Identifies a REPEATING notification so the same one is written at most once; NULL for a one-off.
   dedupe_key VARCHAR(255),
   read_at    TIMESTAMPTZ,
+  -- TRUE while this row still owes its recipient an email inside their daily digest. A per-ROW queue
+  -- rather than a per-user cursor, because a cursor has to be initialised when somebody switches
+  -- cadence and getting that wrong emails them a summary of their whole history. Set at dispatch (only
+  -- when the recipient has email on for the event AND asked for a daily summary), cleared by the job.
+  digest_pending BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- The feed is one user's rows newest first, which is the only way this table is ever read.
@@ -1593,6 +1603,10 @@ CREATE INDEX idx_notifications_user_unread ON notifications(user_id) WHERE read_
 -- must repeat the predicate, or the statement raises.
 CREATE UNIQUE INDEX idx_notifications_dedupe ON notifications(user_id, event, dedupe_key)
   WHERE dedupe_key IS NOT NULL;
+-- The digest job's whole read: which people are owed a summary right now. Partial for the same reason
+-- the unread index is — the queue is a handful of rows against a table that grows forever, so an
+-- hourly tick that finds nothing costs nothing.
+CREATE INDEX ix_notifications_digest_pending ON notifications(user_id) WHERE digest_pending;
 
 -- One BROWSER that has agreed to receive web push for one account — not one user: the Push API mints a
 -- subscription per browser profile per device, so a laptop and a phone are two rows and revoking one

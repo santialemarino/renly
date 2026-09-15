@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from app.domain.notification import EmailCadence
 from app.models.notification import NotificationChannel, NotificationEvent
 from app.schemas.base import RequestBase
 
@@ -19,6 +20,12 @@ class NotificationPreferenceUpdate(RequestBase):
     event: NotificationEvent = Field(description="Which event the switch belongs to.")
     channel: NotificationChannel = Field(description="Which channel the switch belongs to.")
     enabled: bool = Field(description="Whether this event should reach the caller on this channel.")
+
+
+# Body for PUT /notifications/preferences/email-cadence. One answer per person rather than per event,
+# which is why it is its own endpoint and not a field on the switch above.
+class NotificationEmailCadenceUpdate(RequestBase):
+    cadence: EmailCadence = Field(description="Whether email goes out as it happens or once a day.")
 
 
 # Body for POST /notifications/push/subscriptions. The three values come verbatim from the browser's
@@ -89,6 +96,7 @@ class NotificationPreferenceResponse(BaseModel):
 # mismatched.
 class NotificationPreferencesResponse(BaseModel):
     preferences: list[NotificationPreferenceResponse] = Field(description="Every event on every channel, defaults included.")
+    email_cadence: EmailCadence = Field(description="Whether email goes out as it happens or batched into one daily summary.")
     push_available: bool = Field(description="Whether this deployment can send web push at all.")
     push_public_key: str | None = Field(default=None, description="applicationServerKey for the browser; null when push is unavailable.")
     push_subscriptions: int = Field(description="How many browsers the caller currently has subscribed.")

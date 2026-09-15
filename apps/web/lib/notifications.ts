@@ -33,12 +33,31 @@ const POT_LINKED_EVENTS = new Set<NotificationEvent>([
 ]);
 
 /*
- * The payload key each event reads its date from, when it has one. Only `snapshot_due` does today; it
- * is a map rather than a special case so a second dated event needs one line here instead of a branch
- * in the resolver.
+ * The payload key each event reads its date from, when it has one. A map rather than a special case,
+ * which is exactly what let the two events this PR added cost one line each instead of a branch in the
+ * resolver.
+ *
+ * The two newcomers both use the key `date`, and `snapshot_due` keeps `valued_as_of` because
+ * notification rows are permanent: renaming the key its stored rows carry would blank the detail line
+ * on every one written before the rename.
  */
 const DATE_KEYS: Partial<Record<NotificationEvent, string>> = {
   snapshot_due: 'valued_as_of',
+  obligation_due: 'date',
+  plan_charged: 'date',
+};
+
+/*
+ * The events whose link is a PRIVATE page rather than anything under /shared. Named here for the same
+ * reason the API names them: their payload carries no group id at all, so the group fallback below is
+ * not merely a worse link for them, it is a broken one.
+ *
+ * Each points at where the reader would act — a recorded charge is an expense they might want to
+ * check, and a bill is marked paid on the obligations page.
+ */
+const PRIVATE_EVENT_HREFS: Partial<Record<NotificationEvent, string>> = {
+  obligation_due: ROUTES.paymentObligations,
+  plan_charged: ROUTES.expenses,
 };
 
 /** Everything a row needs to render itself, resolved from the stored event and payload. */
@@ -115,6 +134,9 @@ export function notificationRow(
     from_member: text(payload, 'from_member'),
     to_member: text(payload, 'to_member'),
     creditor: text(payload, 'creditor'),
+    // A subscription, installment or bill's own name. Free text the user typed, so it is rendered
+    // exactly as stored and never matched against anything.
+    name: text(payload, 'name'),
     amount: amount ? formatAmount(amount, currency) : '',
     currency,
     date: dateValue ? formatDate(dateValue) : '',
@@ -150,6 +172,8 @@ function detailKeyFor(base: string, dateValue: string): string | null {
  * does — a link is not worth a broken row.
  */
 export function notificationHref(notification: AppNotification): string {
+  const privateHref = PRIVATE_EVENT_HREFS[notification.event];
+  if (privateHref) return privateHref;
   const potId = Number(notification.payload.pot_id);
   if (POT_LINKED_EVENTS.has(notification.event) && Number.isFinite(potId) && potId > 0) {
     return sharedPotPath(potId);

@@ -13,6 +13,8 @@ from app.services import (
     auto_snapshot_service,
     cedear_ratio_service,
     exchange_rate_service,
+    notification_digest_service,
+    obligation_reminder_service,
     pot_reminder_service,
 )
 
@@ -89,6 +91,31 @@ async def _send_pot_reminders() -> None:
                 logger.info("Scheduled pot reminders: %d notifications dispatched.", count)
     except Exception:
         logger.exception("Scheduled pot reminder run failed.")
+
+
+# Tells each person about the bills coming due in the next few days. Prunes in SQL to obligations
+# plausibly due, then filters to owners at their own local reminder hour; the notification's dedupe key
+# names the cycle, so a bill inside the window all week is still announced exactly once.
+async def _send_obligation_reminders() -> None:
+    try:
+        async with AdminSessionLocal() as session:
+            count = await obligation_reminder_service.send_due_reminders(session)
+            if count:
+                logger.info("Scheduled obligation reminders: %d notifications dispatched.", count)
+    except Exception:
+        logger.exception("Scheduled obligation reminder run failed.")
+
+
+# Sends the daily email summary to everyone who asked for one instead of individual emails. Its first
+# read is the pending queue itself, so an hour with nothing owed costs one partial-index probe.
+async def _send_notification_digests() -> None:
+    try:
+        async with AdminSessionLocal() as session:
+            count = await notification_digest_service.send_due_digests(session)
+            if count:
+                logger.info("Scheduled notification digests: %d summaries sent.", count)
+    except Exception:
+        logger.exception("Scheduled notification digest run failed.")
 
 
 # Fetches CEDEAR ratios from Banco Comafi.
@@ -182,6 +209,33 @@ def start_scheduler() -> None:
         coalesce=True,
     )
 
+    # Obligation reminders: run hourly, filtered to users at their own local
+    # OBLIGATION_REMINDER_HOUR_LOCAL (= 9) — the same shape and the same waking hour as the pot
+    # reminder above, because both are messages asking somebody to do something.
+    scheduler.add_job(
+        _send_obligation_reminders,
+        "cron",
+        minute=0,
+        id="send_obligation_reminders",
+        replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
+    )
+
+    # Notification digests: run hourly, filtered to users at their own local DIGEST_HOUR_LOCAL (= 20).
+    # Evening rather than morning on purpose: both reminder jobs above run at the same person's local
+    # 09:00, so anything they raise today is already queued when that person's summary is built —
+    # a relationship that holds in every timezone and depends on no job ordering.
+    scheduler.add_job(
+        _send_notification_digests,
+        "cron",
+        minute=0,
+        id="send_notification_digests",
+        replace_existing=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+        coalesce=True,
+    )
+
     # CEDEAR ratios: run monthly (1st of each month at 00:00 UTC) + on startup.
     scheduler.add_job(
         _update_cedear_ratios,
@@ -213,11 +267,15 @@ def start_scheduler() -> None:
         "auto-snapshots: last day %02d:00 UTC, "
         "auto-expenses: hourly (per-user local 01:00), "
         "pot reminders: hourly (per-user local %02d:00), "
+        "obligation reminders: hourly (per-user local %02d:00), "
+        "notification digests: hourly (per-user local %02d:00), "
         "CEDEAR ratios: now + monthly %dth %02d:00 UTC).",
         EXCHANGE_RATES_INTERVAL_HOURS,
         ASSET_PRICES_HOUR_UTC,
         AUTO_SNAPSHOTS_HOUR_UTC,
         pot_reminder_service.SNAPSHOT_REMINDER_HOUR_LOCAL,
+        obligation_reminder_service.OBLIGATION_REMINDER_HOUR_LOCAL,
+        notification_digest_service.DIGEST_HOUR_LOCAL,
         CEDEAR_RATIOS_DAY_OF_MONTH,
         CEDEAR_RATIOS_HOUR_UTC,
     )
