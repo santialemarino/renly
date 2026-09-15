@@ -190,6 +190,16 @@ class TestTheQueue:
         assert mocks["cleared"].await_args.args[1] == [12]
 
     @pytest.mark.asyncio
+    async def test_a_person_whose_every_row_is_unrenderable_is_not_emailed_but_is_cleared(self, monkeypatch):
+        # The queue still empties — the rows are in their feed either way — but no email goes out,
+        # because a summary with nothing in it is worse than the silence they already had.
+        broken = Notification(id=50, user_id=1, event=NotificationEvent.plan_charged, payload={}, digest_pending=True)
+        mocks = _arrange(monkeypatch, pending={1: [broken]})
+        assert await svc.send_due_digests(AsyncMock(), EVENING_UTC) == 0
+        mocks["sent"].assert_not_awaited()
+        assert mocks["cleared"].await_args.args[1] == [50]
+
+    @pytest.mark.asyncio
     async def test_a_send_that_fails_still_clears(self, monkeypatch):
         # The same posture every other send in this layer takes: the notifications are already in the
         # recipient's feed, so a provider outage must not leave a queue that re-sends the same summary

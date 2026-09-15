@@ -320,7 +320,7 @@ Finally, **your share of a shared expense appears in your ordinary expenses list
 The layer that tells people what happened. Three tables, and all three belong to a **person** rather
 than to a group: most notifications are produced by group activity, but the row each becomes is its
 recipient's — which is also why it carries read state, something a shared row could not. Two events are
-about nobody but you: a payment obligation coming due, and a subscription or instalment charge Renly has
+about nobody but you: a payment obligation coming due, and a subscription or installment charge Renly has
 just recorded for you.
 
 Nothing here names a group, a pot or an expense. A notification carries an **event** (a label like
@@ -337,7 +337,8 @@ language.
 **A preference row exists only where you have overridden a default.** Nothing is seeded, so a new event
 has an answer for every existing account the day it is added — and a default that changes reaches
 everybody who never expressed an opinion about it. The feed is on for every event; email and push are
-on for the ones about your own money **and** awaiting your own action.
+on for the ones about your own money or awaiting your own action — with one deliberate exception:
+a recorded subscription charge is about your own money and is still off, because it awaits nothing.
 
 **How often email arrives is a separate answer, and one per person rather than per event.** Left alone,
 each email goes out as its notification happens. Set to a daily summary, they are held and sent as one

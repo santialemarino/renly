@@ -1,11 +1,13 @@
 # The upcoming-bill reminder, driven by the hourly scheduler.
 #
-# A payment obligation is the one recurring thing in Renly that NOBODY charges automatically. A
-# subscription and an instalment both produce an expense on their own (auto_expense_service writes it,
+# A payment obligation is the one scheduled payment in Renly that NOTHING charges automatically. A
+# subscription and an installment both produce an expense on their own (auto_expense_service writes it,
 # after the fact, because Renly records those charges rather than making them); an obligation sits
 # there until the person pays it in the real world and marks it paid. So it is the only one where a
 # "this is coming up" message is both true and actionable — which is why this job exists and its
-# subscription equivalent deliberately does not.
+# subscription equivalent deliberately does not. (An obligation may be recurring OR one-off; both are
+# announced, and the copy promises nothing about what happens after, because paying a recurring one
+# advances its date while paying a one-off archives it.)
 #
 # Four properties, each of which decides something about the shape below.
 #
@@ -15,13 +17,16 @@
 #
 #   * IT IS IDEMPOTENT THROUGH THE DEDUPE KEY, not through state of its own. Every notification carries
 #     `obligation:<id>:<due date>`, and the partial unique index refuses the second one — so the job may
-#     run any number of times and each cycle is announced exactly once. Paying advances
-#     `next_due_date`, which is what makes the NEXT cycle a different key rather than a repeat.
+#     run any number of times and each cycle is announced exactly once. Paying a RECURRING obligation
+#     advances `next_due_date`, which is what makes the next cycle a different key rather than a repeat;
+#     paying a one-off archives it instead, so it simply leaves the scan.
 #
-#   * IT LOOKS FORWARD AND NEVER BACK. The window is "due within the lead time", with no lower bound,
-#     and that is deliberate rather than an omission: an overdue obligation's key is the key its cycle
-#     already used, so the index refuses it and nobody is nagged about a bill they have already been
-#     told about. A lower bound would only change which rows are scanned, never which are sent.
+#   * THE WINDOW HAS NO LOWER BOUND, which announces an ALREADY-OVERDUE bill as well as an upcoming one.
+#     For a cycle this job has already reported that changes nothing — the key is the same and the index
+#     refuses it. It is NOT a no-op for a cycle that went overdue before this shipped, or during an
+#     outage longer than the lead time: there is no prior row, so it is announced once, late. That is
+#     the intended trade. A lower bound would silence exactly those, which are the ones most worth
+#     saying, and the copy is tense-neutral ("X is due on <date>") so a late one still reads correctly.
 #
 #   * IT PRUNES IN SQL FIRST. The date bound runs in the query, so a tick loads only obligations
 #     plausibly due rather than every active one; the per-user local-date comparison below is the

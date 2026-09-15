@@ -401,10 +401,10 @@ class TestScheduledChargesFlagReconciledStatements:
 # interpolates them and a missing field is a literal `{name}` on a lock screen.
 class TestChargesAreAnnounced:
     # A whole tick's queries in order: the subscription scan, its linked-date load, then the same pair
-    # for instalments. The linked-date load only happens when the scan found something, so the queue is
+    # for installments. The linked-date load only happens when the scan found something, so the queue is
     # built conditionally rather than assuming four — an unconditional list simply hands the wrong Mock
     # to the wrong query and fails somewhere unrelated.
-    def _session(self, subscriptions, installments, *, sub_linked_rows=(), inst_linked_rows=()):
+    def _session(self, subscriptions, installments, *, sub_linked_rows=()):
         def _scan(rows):
             result = Mock()
             result.scalars.return_value.all.return_value = rows
@@ -420,7 +420,9 @@ class TestChargesAreAnnounced:
             queries.append(_linked(sub_linked_rows))
         queries.append(_scan(installments))
         if installments:
-            queries.append(_linked(inst_linked_rows))
+            # No test needs linked installment rows yet; the dedup path is covered on the subscription
+            # side. An empty load is what the service sees when a plan has no linked expenses.
+            queries.append(_linked(()))
         session = AsyncMock()
         session.execute = AsyncMock(side_effect=queries)
         session.add = Mock()
@@ -455,7 +457,7 @@ class TestChargesAreAnnounced:
         )
 
     # Runs a whole tick with the timezone map and the dispatcher stubbed, and returns the dispatcher.
-    def _arrange(self, monkeypatch, *, subscriptions=(), installments=()):
+    def _arrange(self, monkeypatch):
         monkeypatch.setattr(
             auto_expense_service.user_settings_repository,
             "get_all_timezones",
@@ -489,7 +491,7 @@ class TestChargesAreAnnounced:
         }
 
     @pytest.mark.asyncio
-    async def test_an_instalment_is_the_same_event_with_its_own_variant(self, monkeypatch):
+    async def test_an_installment_is_the_same_event_with_its_own_variant(self, monkeypatch):
         # One event value, two sentences. A variant is a line of copy where an event value is a
         # migration — and a cuota and a subscription charge are the same fact about the reader's money.
         dispatched = self._arrange(monkeypatch)
@@ -499,7 +501,7 @@ class TestChargesAreAnnounced:
         assert (payload["variant"], payload["name"], payload["amount"]) == ("installment", "TV Samsung", "10000.00")
 
     @pytest.mark.asyncio
-    async def test_the_instalment_amount_is_the_cuota_and_not_the_whole_purchase(self, monkeypatch):
+    async def test_the_installment_amount_is_the_cuota_and_not_the_whole_purchase(self, monkeypatch):
         # The two are different columns on the same row and the wrong one is 12x the truth — a figure
         # nothing else in this tick would have caught, since the expense entry is written from the same
         # field somewhere else entirely.

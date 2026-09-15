@@ -3203,13 +3203,13 @@
         "detail": "Mark it paid once you have."
       },
       "plan_charged": {
-        "label": "A subscription or instalment is recorded",
+        "label": "A subscription or installment is recorded",
         "title": "Renly recorded a {name} charge",
         "subscription": {
           "title": "Renly recorded {name} — {amount} {currency} on {date}"
         },
         "installment": {
-          "title": "Renly recorded a {name} instalment — {amount} {currency} on {date}"
+          "title": "Renly recorded a {name} installment — {amount} {currency} on {date}"
         }
       },
       "group_invited": {

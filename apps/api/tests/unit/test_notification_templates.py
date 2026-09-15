@@ -143,6 +143,21 @@ class TestRendering:
         web = json.loads((Path(__file__).resolve().parents[3] / "web" / "translations" / f"{locale}.json").read_text())
         assert templates._strings("_pot", locale)["name"] == web["common"]["potDefaultLabel"]
 
+    def test_the_english_copy_spells_a_recurring_purchase_plan_the_way_the_app_does(self):
+        # The app says "installment" in every one of its EN strings, and this catalog is the one place a
+        # British "instalment" slipped in — two surfaces describing the same entity with two spellings,
+        # which a reader notices and no other test can see. Checked across BOTH catalogs (the API's email
+        # and push copy, and the web's notification namespace) because the same sentence is assembled on
+        # each side, and the word reaches a reader from both.
+        import json
+        from pathlib import Path
+
+        api_copy = " ".join(field for block in templates._STRINGS["en"].values() for field in block.values())
+        web = json.loads((Path(__file__).resolve().parents[3] / "web" / "translations" / "en.json").read_text())
+        web_copy = json.dumps(web["notifications"])
+        for label, text in (("API catalog", api_copy), ("web notifications namespace", web_copy)):
+            assert "instalment" not in text.lower(), f'{label} spells it "instalment"; the app spells it "installment"'
+
     def test_an_unknown_locale_falls_back_to_english(self):
         message = templates.notification_email(
             "a@test.local",
@@ -271,6 +286,16 @@ class TestTheDigest:
         message = templates.digest_email("a@test.local", items, link="l", settings_link="s")
         assert message.text.count("•") == 2
         assert message.subject == "Your Renly summary — 2 updates"
+
+    def test_nothing_renderable_produces_no_email_at_all(self):
+        # Reachable: every pending row's payload can fail to render, and the alternative was a message
+        # headed "0 updates" with an empty body. The rows are still in the feed, so silence is honest.
+        assert templates.digest_email("a@test.local", [(NotificationEvent.pot_movement, {})], link="l", settings_link="s") is None
+
+    def test_an_overflow_alone_is_still_not_a_summary(self):
+        # The near-miss: a positive overflow makes the count non-zero, so a guard written on the COUNT
+        # rather than on the lines would send "…and 7 more." under a heading and nothing else.
+        assert templates.digest_email("a@test.local", [], link="l", settings_link="s", overflow=7) is None
 
     def test_it_still_names_the_preferences_page(self):
         # An email people cannot find the switch for is an email they mark as spam — and a digest is the

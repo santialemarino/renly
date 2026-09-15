@@ -22,8 +22,11 @@ from app.models.utils import utcnow
 # not: those are VARCHARs so a second module needs no schema change, while this is bound as a Postgres
 # enum (`SAEnum(..., name="notification_event")`) because a feed row's event decides which copy renders
 # it and a typo must fail at the write rather than at the reader's screen. The list is ALSO transcribed
-# in TypeScript (`apps/web/lib/constants/notifications.ts`) and in `01_create_tables.sql`;
-# `tests/unit/test_notification_event_surface.py` asserts all three agree.
+# in TypeScript (`apps/web/lib/constants/notifications.ts`), in `01_create_tables.sql` for a database
+# built from zero, and in each migration's `ALTER TYPE … ADD VALUE` for one that got there
+# incrementally — where the `BEFORE` clause matters, because ADD VALUE otherwise appends and the two
+# paths end up holding the same labels in a different order.
+# `tests/unit/test_notification_event_surface.py` asserts all four agree, order included.
 #
 # `obligation_due` and `plan_charged` are the only two that are PRIVATE — they are about one person's
 # own subscriptions and bills, so their payload names no group and their link is not a group page.

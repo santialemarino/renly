@@ -134,7 +134,7 @@ export function notificationRow(
     from_member: text(payload, 'from_member'),
     to_member: text(payload, 'to_member'),
     creditor: text(payload, 'creditor'),
-    // A subscription, instalment or bill's own name. Free text the user typed, so it is rendered
+    // A subscription, installment or bill's own name. Free text the user typed, so it is rendered
     // exactly as stored and never matched against anything.
     name: text(payload, 'name'),
     amount: amount ? formatAmount(amount, currency) : '',

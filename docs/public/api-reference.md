@@ -1042,7 +1042,7 @@ server-side, for the same reason transactional emails are: there is no client to
 moment they are sent, so they are localized to your stored language.
 
 **Events.** Two are about your own money alone: `obligation_due` (a payment obligation you track is
-coming due) and `plan_charged` (Renly recorded a subscription charge or an instalment for you). The rest
+coming due) and `plan_charged` (Renly recorded a subscription charge or an installment for you). The rest
 are about a group you are in: `group_invited`, `member_joined`, `ownership_changed` (a pot's first
 division, or a change of split), `pot_movement` (money in or out of a pot), `snapshot_due` (a pot is
 behind on its valuation cadence), `settle_marked_paid`, `settle_confirmed`, `balance_written_off`,
@@ -1081,12 +1081,14 @@ session credentials are.
 
 **Three events nobody triggers.** `snapshot_due` reports a pot whose valuation has fallen behind the
 cadence its group agreed on, to the members who can actually re-value it. `obligation_due` reports a
-payment obligation coming due within three days — the one recurring thing in Renly that nothing charges
-automatically, which is what makes a heads-up both true and actionable. Both reach each person at 09:00
-in their own timezone and at most once per period, so a reminder is never repeated; a pot still overdue
-when the next period opens raises it again, and paying a bill moves its due date, which is what makes
-the next cycle a fresh reminder rather than the same one. `plan_charged` is raised by the job that
-records your subscription and instalment charges, once per charge, at your own local 01:00.
+payment obligation coming due within three days — the one scheduled payment in Renly that nothing
+charges automatically, which is what makes a heads-up both true and actionable. Both reach each person
+at 09:00 in their own timezone and at most once per period, so a reminder is never repeated; a pot still
+overdue when the next period opens raises it again, and paying a recurring bill advances its due date,
+which is what makes the next cycle a fresh reminder rather than the same one (a one-off bill is archived
+when you pay it, so it simply stops). A bill that is already overdue is announced too, once — the
+sentence names the date rather than assuming it is in the future. `plan_charged` is raised by the job that
+records your subscription and installment charges, once per charge, at your own local 01:00.
 
 **A daily summary instead of individual emails.** Setting the cadence to `daily` holds back every email
 you have switched on and sends one message at 20:00 in your own timezone listing them — deliberately

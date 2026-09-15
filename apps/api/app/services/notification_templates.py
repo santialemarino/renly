@@ -198,22 +198,26 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "push": "{product} recorded your {name} charge",
         },
         "plan_charged.installment": {
-            "subject": "{name} — {amount} {currency} instalment recorded on {date}",
+            "subject": "{name} — {amount} {currency} installment recorded on {date}",
             "body": (
-                '{product} recorded the "{name}" instalment of {amount} {currency}, dated {date}, '
+                '{product} recorded the "{name}" installment of {amount} {currency}, dated {date}, '
                 "because the plan says that cuota falls then.\n\n"
                 "Nothing was paid on your behalf — this is the expense entry, so your balances stay right "
                 "without you adding it.\n\n"
                 "See it here:\n{link}"
             ),
-            "push": "{product} recorded your {name} instalment",
+            "push": "{product} recorded your {name} installment",
         },
+        # ONE sentence serves both shapes of obligation, so it may promise nothing about what happens
+        # after: paying a RECURRING one advances its due date, while paying a ONE-OFF archives it, and
+        # the reminder is raised for both. It is also tense-neutral on purpose — the window has no lower
+        # bound, so a bill that is already overdue is announced too, and "is due on <date>" still reads
+        # correctly there where "is coming up" would not. Not machine-checked; this comment is the guard.
         "obligation_due": {
             "subject": "{name} is due on {date}",
             "body": (
                 '"{name}" — {amount} {currency} — is due on {date}.\n\n'
-                "{product} does not pay it for you. Mark it paid once you have, and the next one moves "
-                "forward on its own.\n\n"
+                "{product} does not pay it for you — mark it paid once you have.\n\n"
                 "See it here:\n{link}"
             ),
             "push": "{name} is due on {date}",
@@ -404,8 +408,7 @@ _STRINGS: dict[str, dict[str, dict[str, str]]] = {
             "subject": "{name} vence el {date}",
             "body": (
                 '"{name}" — {amount} {currency} — vence el {date}.\n\n'
-                "{product} no lo paga por vos. Marcalo como pagado cuando lo hayas hecho y el siguiente "
-                "avanza solo.\n\n"
+                "{product} no lo paga por vos: marcalo como pagado cuando lo hayas hecho.\n\n"
                 "Podés verlo acá:\n{link}"
             ),
             "push": "{name} vence el {date}",
@@ -580,9 +583,14 @@ def _digest_line(event: NotificationEvent, payload: dict, locale: str) -> str | 
 # them — which is why capping is safe here in a way that dropping a single immediate email would not be.
 def digest_email(
     to: str, items: list[tuple[NotificationEvent, dict]], *, link: str, settings_link: str, overflow: int = 0, locale: str = _DEFAULT_LOCALE
-) -> EmailMessage:
+) -> EmailMessage | None:
     strings = _strings("_digest", locale)
     lines = [line for event, payload in items if (line := _digest_line(event, payload, locale)) is not None]
+    # None rather than an email, when not one line could be built. Reachable — every pending row's
+    # payload can fail to render — and the alternative is a message headed "0 updates" with nothing
+    # under it, which is worse than the silence the rows already have in the feed.
+    if not lines:
+        return None
     body = "\n".join(f"• {line}" for line in lines)
     if overflow > 0:
         body = f"{body}\n{strings['more'].format(count=overflow)}"

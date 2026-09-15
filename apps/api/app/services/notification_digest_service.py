@@ -93,7 +93,12 @@ async def send_due_digests(session: AsyncSession, now_utc: datetime | None = Non
         user = users.get(user_id)
         if user is None or not rows:
             continue
-        messages.append(_digest_for(user.email, rows, languages[user_id], link))
+        # None when not one of the person's pending rows could be rendered into a line. Their rows are
+        # still cleared above — they are in the feed, which is what the email would have pointed at.
+        message = _digest_for(user.email, rows, languages[user_id], link)
+        if message is None:
+            continue
+        messages.append(message)
         sent += 1
 
     # The sends go out in PARALLEL (independent external calls, per the performance rules) and the
@@ -108,7 +113,8 @@ async def send_due_digests(session: AsyncSession, now_utc: datetime | None = Non
 
 
 # Builds one person's digest from their pending rows, capping what it spells out and naming the rest.
-def _digest_for(email: str, rows: list[Notification], locale: str, link: str) -> EmailMessage:
+# None when nothing in them could be rendered — see digest_email.
+def _digest_for(email: str, rows: list[Notification], locale: str, link: str) -> EmailMessage | None:
     shown = rows[:DIGEST_MAX_ITEMS]
     return notification_templates.digest_email(
         email,
