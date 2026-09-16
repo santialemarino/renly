@@ -17,33 +17,66 @@ from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
-# Maps investment category to its price provider.
-# To swap a provider for a category, change the entry here.
-_CATEGORY_PROVIDERS: dict[InvestmentCategory, PriceProviderInfo] = {
-    InvestmentCategory.cedears: PriceProviderInfo(
-        source=price_providers.SOURCE_YFINANCE,
-        fetch=price_providers.fetch_yfinance,
-        supports_history=True,
+# The providers for each category, in the order the chain tries them (INFRA-9).
+#
+# First entry is the primary; the rest are fallbacks, reached only when the one before it could not
+# ANSWER (PriceProviderUnavailable) — never when it answered that the ticker has no price. To change
+# where a category's prices come from, reorder or edit its tuple; nothing else in the service knows a
+# provider's name.
+#
+# Each chain is built from what the providers actually cover, which differs by market: the US-equity
+# APIs know nothing about BYMA, and data912 knows nothing but BYMA.
+#
+# Every fallback here is independent of the primary it backs, and that is a requirement rather than a
+# coincidence. Calling Yahoo's chart endpoint directly was the obvious extra leg for the equity chains
+# — same data, no library — and measuring it is what disqualified it: the raw endpoint answers 429 for
+# this host while yfinance, which negotiates a cookie and crumb first, succeeds against the same
+# upstream in the same second. A fallback that fails whenever it is reached is worse than no fallback,
+# because it costs a round trip and reports an outage that is its own.
+_YFINANCE = PriceProviderInfo(
+    source=price_providers.SOURCE_YFINANCE,
+    fetch=price_providers.fetch_yfinance,
+    supports_history=True,
+)
+_FINNHUB = PriceProviderInfo(
+    source=price_providers.SOURCE_FINNHUB,
+    fetch=price_providers.fetch_finnhub,
+    supports_history=False,
+    is_configured=price_providers.finnhub_is_configured,
+)
+_DATA912 = PriceProviderInfo(
+    source=price_providers.SOURCE_DATA912,
+    fetch=price_providers.fetch_data912,
+    supports_history=False,
+)
+
+_CATEGORY_PROVIDERS: dict[InvestmentCategory, tuple[PriceProviderInfo, ...]] = {
+    InvestmentCategory.cedears: (_YFINANCE, _DATA912),
+    InvestmentCategory.crypto: (
+        PriceProviderInfo(
+            source=price_providers.SOURCE_COINGECKO,
+            fetch=price_providers.fetch_coingecko,
+            supports_history=False,
+        ),
+        PriceProviderInfo(
+            source=price_providers.SOURCE_COINBASE,
+            fetch=price_providers.fetch_coinbase,
+            supports_history=True,
+        ),
     ),
-    InvestmentCategory.crypto: PriceProviderInfo(
-        source=price_providers.SOURCE_COINGECKO,
-        fetch=price_providers.fetch_coingecko,
-        supports_history=False,
-    ),
-    InvestmentCategory.government_bonds: PriceProviderInfo(
-        source=price_providers.SOURCE_YFINANCE,
-        fetch=price_providers.fetch_yfinance,
-        supports_history=True,
-    ),
-    InvestmentCategory.stocks: PriceProviderInfo(
-        source=price_providers.SOURCE_YFINANCE,
-        fetch=price_providers.fetch_yfinance,
-        supports_history=True,
-    ),
-    InvestmentCategory.fci: PriceProviderInfo(
-        source=price_providers.SOURCE_CAFCI,
-        fetch=price_providers.fetch_fci,
-        supports_history=False,
+    InvestmentCategory.government_bonds: (_YFINANCE, _DATA912),
+    InvestmentCategory.stocks: (_YFINANCE, _FINNHUB),
+    InvestmentCategory.fci: (
+        PriceProviderInfo(
+            source=price_providers.SOURCE_CAFCI,
+            fetch=price_providers.fetch_cafci,
+            supports_history=False,
+        ),
+        PriceProviderInfo(
+            source=price_providers.SOURCE_ARGENTIADATOS,
+            fetch=price_providers.fetch_argentinadatos,
+            supports_history=False,
+        ),
     ),
 }
 
@@ -132,7 +165,59 @@ async def lookup_price(
     )
 
 
-# Fetches prices from the appropriate provider and stores them in the DB.
+# The prices for a ticker and the source that actually served them, or None when no provider could.
+#
+# Walks the category's chain and stops at the first provider that ANSWERS — an empty answer included,
+# because "this ticker has no price today" is a real answer and asking the next provider the same
+# question would only produce a second no. Only PriceProviderUnavailable advances the chain.
+#
+# Returning the source alongside the rows is what keeps the stored source honest. Reading it from the
+# map instead is how every FCI price served by the ArgentinaDatos fallback came to be written down as
+# "cafci" — the row recorded which provider was SUPPOSED to answer, not which one did.
+async def _fetch_through_chain(
+    ticker: str,
+    category: InvestmentCategory,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> tuple[PriceResult, str] | None:
+    chain = _CATEGORY_PROVIDERS.get(category)
+    if not chain:
+        logger.warning("No price provider for category %s (ticker: %s).", category, ticker)
+        return None
+
+    wants_history = start_date is not None and end_date is not None
+    attempted = False
+    for provider in chain:
+        # A provider needing a credential nobody set is not a failure — it is simply not part of this
+        # deployment's chain, and logging it as an error every cycle would train people to ignore it.
+        if not provider.is_configured():
+            continue
+        # A live-quote provider cannot answer "what did this cost in January", and answering for today
+        # instead would be a wrong answer rather than a missing one.
+        if wants_history and not provider.supports_history:
+            continue
+        attempted = True
+        try:
+            return await provider.fetch(ticker, start_date, end_date), provider.source
+        except price_providers.PriceProviderUnavailable as exc:
+            logger.warning("Price provider %s unavailable for %s: %s", provider.source, ticker, exc)
+
+    # Every provider that could have answered failed. This is the outcome INFRA-9 exists to make
+    # visible: prices simply stop updating, the app keeps rendering the last stored value, and until
+    # now the only trace was one warning per provider with nothing saying the ticker went unpriced.
+    if attempted:
+        logger.error(
+            "All %d price providers failed for %s (%s) — the stored price is now stale.",
+            len(chain),
+            ticker,
+            category.value,
+        )
+    else:
+        logger.warning("No usable price provider for %s (%s) with the requested date range.", ticker, category.value)
+    return None
+
+
+# Fetches prices through the category's provider chain and stores them in the DB.
 # Returns the number of prices stored.
 async def fetch_and_store_prices(
     session: AsyncSession,
@@ -141,22 +226,20 @@ async def fetch_and_store_prices(
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> int:
-    provider = _CATEGORY_PROVIDERS.get(category)
-    if provider is None:
-        logger.warning("No price provider for category %s (ticker: %s).", category, ticker)
+    fetched = await _fetch_through_chain(ticker, category, start_date, end_date)
+    if fetched is None:
         return 0
-
-    results = await provider.fetch(ticker, start_date, end_date)
+    results, source = fetched
 
     if not results:
-        logger.info("No prices returned for %s from %s.", ticker, provider.source)
+        logger.info("No prices returned for %s from %s.", ticker, source)
         return 0
 
-    prices = [AssetPrice(ticker=ticker, date=d, price=p, currency=c, source=provider.source) for d, p, c in results]
+    prices = [AssetPrice(ticker=ticker, date=d, price=p, currency=c, source=source) for d, p, c in results]
     count = await asset_price_repository.bulk_upsert(session, prices)
     await session.commit()
 
-    logger.info("Stored %d prices for %s from %s.", count, ticker, provider.source)
+    logger.info("Stored %d prices for %s from %s.", count, ticker, source)
     return count
 
 
@@ -185,6 +268,7 @@ async def refresh_user_prices(session: AsyncSession, user_id: int) -> int:
 async def _refresh_prices_for_investments(session: AsyncSession, investments: list[Investment]) -> int:
     # Clear per-cycle caches so providers re-download fresh data.
     price_providers.clear_fci_cache()
+    price_providers.clear_data912_cache()
 
     unique_pairs = {(inv.ticker, inv.category) for inv in investments if inv.ticker}
     pairs = sorted((ticker, category) for ticker, category in unique_pairs if category in _CATEGORY_PROVIDERS)
@@ -192,27 +276,37 @@ async def _refresh_prices_for_investments(session: AsyncSession, investments: li
     semaphore = asyncio.Semaphore(MAX_CONCURRENT_PRICE_FETCHES)
 
     # Fetch prices from external APIs in bounded parallel (no DB access in fetch functions).
-    async def _fetch_one(ticker: str, category: InvestmentCategory) -> PriceResult:
-        provider = _CATEGORY_PROVIDERS[category]
-        try:
-            async with semaphore:
-                return await provider.fetch(ticker, None, None)
-        except Exception:
-            logger.exception("Failed to fetch prices for %s (%s).", ticker, category)
-            return []
+    # Returns the rows paired with the source that served them, or None when the whole chain failed.
+    async def _fetch_one(ticker: str, category: InvestmentCategory) -> tuple[PriceResult, str] | None:
+        async with semaphore:
+            return await _fetch_through_chain(ticker, category)
 
     fetch_results = await asyncio.gather(*[_fetch_one(ticker, category) for ticker, category in pairs])
 
     # Store results sequentially (DB writes share one session).
     total = 0
-    for (ticker, category), results in zip(pairs, fetch_results):
+    unpriced: list[str] = []
+    for (ticker, _category), fetched in zip(pairs, fetch_results):
+        if fetched is None:
+            unpriced.append(ticker)
+            continue
+        results, source = fetched
         if not results:
             continue
-        provider = _CATEGORY_PROVIDERS[category]
-        prices = [AssetPrice(ticker=ticker, date=d, price=p, currency=c, source=provider.source) for d, p, c in results]
+        prices = [AssetPrice(ticker=ticker, date=d, price=p, currency=c, source=source) for d, p, c in results]
         total += await asset_price_repository.bulk_upsert(session, prices)
 
     if total:
         await session.commit()
         logger.info("Refreshed prices: %d prices across %d unique tickers (%d investments).", total, len(pairs), len(investments))
+
+    # One line naming every ticker left on a stale price, rather than N scattered provider warnings
+    # that never add up to "the refresh did not do its job".
+    if unpriced:
+        logger.error(
+            "Price refresh left %d of %d tickers unpriced (every provider failed): %s",
+            len(unpriced),
+            len(pairs),
+            ", ".join(unpriced),
+        )
     return total

@@ -38,7 +38,7 @@ class TestPriceRefreshDedup:
     async def test_duplicate_tickers_fetch_once_and_concurrency_is_bounded(self, monkeypatch):
         recorder = _FetchRecorder()
         provider = PriceProviderInfo(source="test", fetch=recorder, supports_history=False)
-        monkeypatch.setattr(asset_price_service, "_CATEGORY_PROVIDERS", {InvestmentCategory.cedears: provider})
+        monkeypatch.setattr(asset_price_service, "_CATEGORY_PROVIDERS", {InvestmentCategory.cedears: (provider,)})
 
         stored = {"n": 0}
 

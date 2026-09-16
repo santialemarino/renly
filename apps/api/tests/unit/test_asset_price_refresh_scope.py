@@ -68,7 +68,7 @@ def wiring(monkeypatch):
         return len(prices)
 
     provider = PriceProviderInfo(source="fake", fetch=_fetch, supports_history=True)
-    monkeypatch.setattr(asset_price_service, "_CATEGORY_PROVIDERS", {InvestmentCategory.stocks: provider})
+    monkeypatch.setattr(asset_price_service, "_CATEGORY_PROVIDERS", {InvestmentCategory.stocks: (provider,)})
     monkeypatch.setattr(asset_price_service.asset_price_repository, "bulk_upsert", _bulk_upsert)
     monkeypatch.setattr(price_providers, "clear_fci_cache", MagicMock())
 
