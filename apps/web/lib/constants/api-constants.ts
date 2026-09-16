@@ -15,6 +15,11 @@ export const API_DEFAULT_PAGE_SIZE = 25;
 
 export const API_MAX_PAGE_SIZE = 100;
 
+// The largest page number the API will serve (SEC-11's MAX_PAGE). Mirrored here so a hand-edited URL
+// is refused before a request is made rather than after: past this the page becomes an OFFSET outside
+// Postgres' bigint range, which the API now answers with a 422 instead of a 500.
+export const API_MAX_PAGE = 1_000_000;
+
 // --- DB constraints (expenses / income) ---
 
 export const EXPENSE_NOTES_MAX = 500;

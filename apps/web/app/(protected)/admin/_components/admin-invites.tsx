@@ -54,7 +54,7 @@ interface AdminInvitesProps {
 export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInvitesProps) {
   const fmt = useFormatters();
   const t = useTranslations('admin');
-  const { navigate } = useSearchParamsNavigation(ROUTES.admin);
+  const { navigate, isPending } = useSearchParamsNavigation(ROUTES.admin);
   const tCommon = useTranslations('common');
   const reduceMotion = useReducedMotion();
 
@@ -201,101 +201,103 @@ export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInv
       </Form>
 
       {invites.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('table.email')}</TableHead>
-              <TableHead>{t('table.status')}</TableHead>
-              <TableHead>{t('table.sent')}</TableHead>
-              <TableHead>{t('table.accepted')}</TableHead>
-              <TableHead className="text-right">{t('table.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {invites.map((invite) => {
-              const cooldown = cooldowns[invite.id] ?? 0;
-              const showRevoke = invite.status !== 'accepted' && invite.status !== 'revoked';
-              return (
-                <TableRow key={invite.id}>
-                  <TableCell className="text-paragraph-sm-medium">{invite.email}</TableCell>
-                  <TableCell>
-                    {/* Crossfade the badge when the status changes (revoke / resend-after-revoke). */}
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.span
-                        key={invite.status}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={transition}
-                        className="inline-block"
-                      >
-                        <Badge variant="outline" className={STATUS_CLASS[invite.status]}>
-                          {t(`status.${invite.status}`)}
-                        </Badge>
-                      </motion.span>
-                    </AnimatePresence>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {fmt.timestampDate(invite.createdAt)}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {invite.consumedAt ? fmt.timestampDate(invite.consumedAt) : t('table.never')}
-                  </TableCell>
-                  <TableCell>
-                    {/* popLayout so the row's buttons grow/shrink smoothly as the Revoke action appears/disappears. */}
-                    <div className="flex items-center justify-end gap-x-1">
-                      <AnimatePresence mode="popLayout" initial={false}>
-                        {invite.status !== 'accepted' && (
-                          <motion.div
-                            key="resend"
-                            layout
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            transition={transition}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleResend(invite)}
-                              disabled={actingId === invite.id || cooldown > 0}
-                            >
-                              <Send className="size-4" />
-                              {cooldown > 0
-                                ? t('actions.resendIn', { seconds: cooldown })
-                                : t('actions.resend')}
-                            </Button>
-                          </motion.div>
-                        )}
-                        {showRevoke && (
-                          <motion.div
-                            key="revoke"
-                            layout
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={transition}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRevoke(invite)}
-                              disabled={actingId === invite.id}
-                              className="text-muted-foreground hover:text-destructive"
-                            >
-                              <Ban className="size-4" />
-                              {t('actions.revoke')}
-                            </Button>
-                          </motion.div>
-                        )}
+        <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('table.email')}</TableHead>
+                <TableHead>{t('table.status')}</TableHead>
+                <TableHead>{t('table.sent')}</TableHead>
+                <TableHead>{t('table.accepted')}</TableHead>
+                <TableHead className="text-right">{t('table.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invites.map((invite) => {
+                const cooldown = cooldowns[invite.id] ?? 0;
+                const showRevoke = invite.status !== 'accepted' && invite.status !== 'revoked';
+                return (
+                  <TableRow key={invite.id}>
+                    <TableCell className="text-paragraph-sm-medium">{invite.email}</TableCell>
+                    <TableCell>
+                      {/* Crossfade the badge when the status changes (revoke / resend-after-revoke). */}
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.span
+                          key={invite.status}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          transition={transition}
+                          className="inline-block"
+                        >
+                          <Badge variant="outline" className={STATUS_CLASS[invite.status]}>
+                            {t(`status.${invite.status}`)}
+                          </Badge>
+                        </motion.span>
                       </AnimatePresence>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {fmt.timestampDate(invite.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {invite.consumedAt ? fmt.timestampDate(invite.consumedAt) : t('table.never')}
+                    </TableCell>
+                    <TableCell>
+                      {/* popLayout so the row's buttons grow/shrink smoothly as the Revoke action appears/disappears. */}
+                      <div className="flex items-center justify-end gap-x-1">
+                        <AnimatePresence mode="popLayout" initial={false}>
+                          {invite.status !== 'accepted' && (
+                            <motion.div
+                              key="resend"
+                              layout
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={transition}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleResend(invite)}
+                                disabled={actingId === invite.id || cooldown > 0}
+                              >
+                                <Send className="size-4" />
+                                {cooldown > 0
+                                  ? t('actions.resendIn', { seconds: cooldown })
+                                  : t('actions.resend')}
+                              </Button>
+                            </motion.div>
+                          )}
+                          {showRevoke && (
+                            <motion.div
+                              key="revoke"
+                              layout
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.8 }}
+                              transition={transition}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRevoke(invite)}
+                                disabled={actingId === invite.id}
+                                className="text-muted-foreground hover:text-destructive"
+                              >
+                                <Ban className="size-4" />
+                                {t('actions.revoke')}
+                              </Button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
       ) : (
         <div className="flex items-center justify-center p-6 border border-dashed rounded-lg">
           <p className="text-paragraph-sm text-muted-foreground">{t('table.empty')}</p>

@@ -3,7 +3,6 @@ from fastapi import APIRouter, Request, Response
 from app.deps.auth import AdminUser
 from app.deps.db import AdminSessionDep
 from app.deps.pagination import PageQuery
-from app.models.invite import Invite
 from app.rate_limit import INVITE_LIMIT, limiter
 from app.schemas.invite import CreateInviteRequest, InviteListResponse, InviteResponse
 from app.services import invite_service
@@ -19,30 +18,10 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # inject the X-RateLimit-* headers on the success path (headers_enabled).
 
 
-# Maps an invite row to its response, computing the effective status (pending invites past their
-# expiry read as "expired").
-def _to_response(invite: Invite) -> InviteResponse:
-    return InviteResponse(
-        id=invite.id,
-        email=invite.email,
-        status=invite_service.effective_status(invite),
-        invited_by=invite.invited_by,
-        expires_at=invite.expires_at,
-        consumed_at=invite.consumed_at,
-        created_at=invite.created_at,
-    )
-
-
 # Lists one page of invites with their status (admin invite management view).
 @router.get("/invites", response_model=InviteListResponse)
 async def list_invites(admin: AdminUser, session: AdminSessionDep, page_query: PageQuery) -> InviteListResponse:
-    invites, total = await invite_service.list_invites(session, page=page_query.page, page_size=page_query.page_size)
-    return InviteListResponse(
-        items=[_to_response(invite) for invite in invites],
-        total=total,
-        page=page_query.page,
-        page_size=page_query.page_size,
-    )
+    return await invite_service.list_invites(session, page=page_query.page, page_size=page_query.page_size)
 
 
 # Creates (or re-arms) an invite for an email and emails the signup link. Returns 409 if the email
@@ -53,7 +32,7 @@ async def create_invite(
     request: Request, response: Response, body: CreateInviteRequest, admin: AdminUser, session: AdminSessionDep
 ) -> InviteResponse:
     invite = await invite_service.create_invite(session, body.email, admin.id)
-    return _to_response(invite)
+    return invite_service.to_response(invite)
 
 
 # Re-arms an existing invite with a fresh token and re-sends the link. Returns 404 if unknown, 409 if
@@ -62,7 +41,7 @@ async def create_invite(
 @limiter.limit(INVITE_LIMIT)
 async def resend_invite(request: Request, response: Response, invite_id: int, admin: AdminUser, session: AdminSessionDep) -> InviteResponse:
     invite = await invite_service.resend_invite(session, invite_id)
-    return _to_response(invite)
+    return invite_service.to_response(invite)
 
 
 # Revokes a pending invite so its link no longer works. Returns 404 if unknown, 409 if it was already
@@ -70,4 +49,4 @@ async def resend_invite(request: Request, response: Response, invite_id: int, ad
 @router.post("/invites/{invite_id}/revoke", response_model=InviteResponse)
 async def revoke_invite(invite_id: int, admin: AdminUser, session: AdminSessionDep) -> InviteResponse:
     invite = await invite_service.revoke_invite(session, invite_id)
-    return _to_response(invite)
+    return invite_service.to_response(invite)

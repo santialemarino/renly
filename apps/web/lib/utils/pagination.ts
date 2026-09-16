@@ -4,6 +4,19 @@ const PAGE_NEIGHBOURS = 1;
 export type PageItem = number | 'ellipsis';
 
 /*
+ * How many pages a list of `total` rows fills at `pageSize` — at least one, always.
+ *
+ * The floor of 1 is the whole reason this is a function: an empty list has ZERO pages arithmetically,
+ * and a pager told `totalPages = 0` renders nothing, which is what stranded a reader on a page past
+ * the end with no control to step back. It was written out at thirteen call sites in two spellings
+ * that disagreed at exactly `total === 0`.
+ */
+export function totalPages(total: number, pageSize: number): number {
+  if (pageSize <= 0) return 1;
+  return Math.max(1, Math.ceil(total / pageSize));
+}
+
+/*
  * The page numbers a pager should render: always the first and last, the current page's immediate
  * neighbours, and an `'ellipsis'` marker wherever that leaves a gap. Built from the ~5 visible
  * numbers rather than by filtering every page, so a 200-page ledger doesn't allocate 200 entries on

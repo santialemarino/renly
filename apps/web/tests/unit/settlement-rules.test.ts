@@ -289,8 +289,10 @@ describe('hasAnySharedFlow', () => {
     expect(hasAnySharedFlow({ total: 1 }, { total: 0 })).toBe(true);
     expect(hasAnySharedFlow({ total: 0 }, { total: 1 })).toBe(true);
     expect(hasAnySharedFlow({ total: 1 }, { total: 1 })).toBe(true);
-    // A failed read is not an empty group: null says nothing is KNOWN, and the section renders its
-    // "all square" copy rather than claiming the household has never shared anything.
+    // A failed read reads as no flow, which is the PRE-SEC-11 behaviour (`expenses ?? []`) kept
+    // deliberately rather than a considered choice about outages: `balancesEmptyState(false)` is
+    // 'nothingShared', so a group whose money reads fail is told nothing has been shared. Worth
+    // knowing, and stated here so the next reader does not have to derive it from two files.
     expect(hasAnySharedFlow(null, null)).toBe(false);
   });
 

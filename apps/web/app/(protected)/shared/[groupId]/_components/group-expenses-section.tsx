@@ -74,7 +74,7 @@ export function GroupExpensesSection({
 }: GroupExpensesSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
-  const { navigate } = useSearchParamsNavigation(sharedGroupPath(group.id));
+  const { navigate, isPending } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<SharedExpense | null>(null);
   const [removing, setRemoving] = useState<SharedExpense | null>(null);
@@ -122,7 +122,14 @@ export function GroupExpensesSection({
         </Button>
       </div>
 
-      {expenses.length === 0 ? (
+      {/*
+       * `total`, not the page's own length. The two differ on a page PAST THE END — reachable by a
+       * hand-typed URL and by deleting the last row of the last page — and answering "this page holds
+       * nothing" with "nobody has ever shared anything" is both false and a dead end, because the
+       * pager lives in the other branch. Gating on the total keeps the table (empty) and its pager on
+       * screen, and TablePagination clamps the number so one click returns to real rows.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={Receipt}
           title={t('expenses.emptyTitle')}
@@ -130,28 +137,30 @@ export function GroupExpensesSection({
         />
       ) : (
         <div className="flex flex-col gap-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">{t('expenses.table.date')}</TableHead>
-                <TableHead className="w-44 text-right">{t('expenses.table.amount')}</TableHead>
-                <TableHead>{t('expenses.table.category')}</TableHead>
-                <TableHead>{t('expenses.table.paidBy')}</TableHead>
-                <TableHead>{t('expenses.table.notes')}</TableHead>
-                <TableHead className="w-20 text-center">{t('expenses.table.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {expenses.map((expense) => (
-                <ExpenseRow
-                  key={expense.id}
-                  expense={expense}
-                  onEdit={() => setEditing(expense)}
-                  onRemove={() => setRemoving(expense)}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-32">{t('expenses.table.date')}</TableHead>
+                  <TableHead className="w-44 text-right">{t('expenses.table.amount')}</TableHead>
+                  <TableHead>{t('expenses.table.category')}</TableHead>
+                  <TableHead>{t('expenses.table.paidBy')}</TableHead>
+                  <TableHead>{t('expenses.table.notes')}</TableHead>
+                  <TableHead className="w-20 text-center">{t('expenses.table.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {expenses.map((expense) => (
+                  <ExpenseRow
+                    key={expense.id}
+                    expense={expense}
+                    onEdit={() => setEditing(expense)}
+                    onRemove={() => setRemoving(expense)}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
           <TablePagination
             page={page}

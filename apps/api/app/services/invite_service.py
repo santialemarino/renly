@@ -17,6 +17,7 @@ from app.domain import InvalidInviteError, InviteEmailTakenError, NotFoundError
 from app.models.invite import Invite, InviteStatus
 from app.models.utils import utcnow
 from app.repositories import invite_repository, user_repository
+from app.schemas.invite import InviteListResponse, InviteResponse
 from app.services import email_templates, settings_service
 from app.services.email_service import EmailMessage, get_email_service
 from app.utils.pagination import DEFAULT_PAGE_SIZE
@@ -58,9 +59,24 @@ def effective_status(invite: Invite) -> str:
     return invite.status.value
 
 
+# Maps an invite row to its response, computing the effective status (pending invites past their
+# expiry read as "expired"). Here rather than in the router because the status is this module's rule.
+def to_response(invite: Invite) -> InviteResponse:
+    return InviteResponse(
+        id=invite.id,
+        email=invite.email,
+        status=effective_status(invite),
+        invited_by=invite.invited_by,
+        expires_at=invite.expires_at,
+        consumed_at=invite.consumed_at,
+        created_at=invite.created_at,
+    )
+
+
 # Lists one page of invites, newest first (admin invite management view).
-async def list_invites(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[Invite], int]:
-    return await invite_repository.list_all(session, page=page, page_size=page_size)
+async def list_invites(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> InviteListResponse:
+    invites, total = await invite_repository.list_all(session, page=page, page_size=page_size)
+    return InviteListResponse(items=[to_response(invite) for invite in invites], total=total, page=page, page_size=page_size)
 
 
 # Creates (or re-arms) an invite for an email and emails the signup link. Rejects an address that

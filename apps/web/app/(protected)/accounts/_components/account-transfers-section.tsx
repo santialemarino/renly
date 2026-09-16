@@ -61,24 +61,41 @@ export function AccountTransfersSection({
   const loadedTokenRef = useRef<number | null>(null);
   // The page that token was loaded for, so a page change re-fetches while a re-expand does not.
   const loadedPageRef = useRef<number | null>(null);
+  // Monotonic ticket per fetch; only the newest one may commit its result.
+  const requestRef = useRef(0);
 
+  /*
+   * `requestRef` is what makes the LAST REQUESTED page win rather than the last response to arrive.
+   * Paging made that reachable: two clicks put two fetches in flight, and without the check the slower
+   * one repaints over the newer, leaving the pager and the rows describing different pages with
+   * nothing to resync them. Each call claims a ticket and only the current holder commits.
+   *
+   * The display floor applies to the FIRST load only. It exists to stop a sub-perceptual flash when
+   * the panel opens with nothing on screen; on a page change the rows are already there, so padding
+   * the swap replaces a real table with one line of text for half a second and manufactures the very
+   * layout jump it was added to prevent.
+   */
   const load = useCallback(async () => {
+    const ticket = ++requestRef.current;
+    const isFirstLoad = loadedPageRef.current === null;
     setLoading(true);
     const start = Date.now();
     try {
       const data = await fetchAccountTransfers(account.id, page);
       const elapsed = Date.now() - start;
-      if (elapsed < TRANSFERS_DISPLAY_DELAY_MS) {
+      if (isFirstLoad && elapsed < TRANSFERS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, TRANSFERS_DISPLAY_DELAY_MS - elapsed));
       }
+      if (ticket !== requestRef.current) return;
       setTransfers(data.items);
       setTotal(data.total);
       setPageSize(data.pageSize);
     } catch {
+      if (ticket !== requestRef.current) return;
       setTransfers([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (ticket === requestRef.current) setLoading(false);
     }
   }, [account.id, page]);
 
@@ -149,7 +166,7 @@ export function AccountTransfersSection({
                     >
                       {t('loading')}
                     </motion.p>
-                  ) : transfers.length === 0 ? (
+                  ) : total === 0 ? (
                     <motion.p
                       key="empty"
                       initial={{ opacity: 0 }}

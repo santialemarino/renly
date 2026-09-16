@@ -75,7 +75,7 @@ interface PotLedgerSectionProps {
 export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedgerSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
-  const { navigate } = useSearchParamsNavigation(sharedPotPath(pot.id));
+  const { navigate, isPending } = useSearchParamsNavigation(sharedPotPath(pot.id));
   const [pendingDelete, setPendingDelete] = useState<PotOwnershipEvent | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -127,50 +127,56 @@ export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedg
     <div className="flex flex-col gap-y-4">
       <SectionHeader title={t('pots.ledger.title')} description={t('pots.ledger.description')} />
 
-      {events.length === 0 ? (
+      {/*
+       * `total`, not the page's own length — the two differ on a page past the end, and answering
+       * "this page holds nothing" with "nothing has ever happened here" is false and a dead end.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={History}
           title={t('pots.ledger.emptyTitle')}
           description={t('pots.ledger.emptyDescription')}
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-32">{t('pots.ledger.table.date')}</TableHead>
-              <TableHead className="w-36">{t('pots.ledger.table.type')}</TableHead>
-              <TableHead>{t('pots.ledger.table.who')}</TableHead>
-              <TableHead className="w-44 text-right">{t('pots.ledger.table.amount')}</TableHead>
-              <TableHead className="w-28 text-center">{t('pots.ledger.table.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {events.map((event) => (
-              <LedgerRow
-                key={event.id}
-                pot={pot}
-                event={event}
-                disabled={pending}
-                onConfirm={() =>
-                  run(
-                    () => confirmPotOwnershipEvent(pot.id, event.id),
-                    t('pots.ledger.confirmSuccess'),
-                  )
-                }
-                onUnconfirm={() =>
-                  run(
-                    () => unconfirmPotOwnershipEvent(pot.id, event.id),
-                    t('pots.ledger.unconfirmSuccess'),
-                  )
-                }
-                onDelete={() => {
-                  setPendingDelete(event);
-                  setDeleteOpen(true);
-                }}
-              />
-            ))}
-          </TableBody>
-        </Table>
+        <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-32">{t('pots.ledger.table.date')}</TableHead>
+                <TableHead className="w-36">{t('pots.ledger.table.type')}</TableHead>
+                <TableHead>{t('pots.ledger.table.who')}</TableHead>
+                <TableHead className="w-44 text-right">{t('pots.ledger.table.amount')}</TableHead>
+                <TableHead className="w-28 text-center">{t('pots.ledger.table.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {events.map((event) => (
+                <LedgerRow
+                  key={event.id}
+                  pot={pot}
+                  event={event}
+                  disabled={pending}
+                  onConfirm={() =>
+                    run(
+                      () => confirmPotOwnershipEvent(pot.id, event.id),
+                      t('pots.ledger.confirmSuccess'),
+                    )
+                  }
+                  onUnconfirm={() =>
+                    run(
+                      () => unconfirmPotOwnershipEvent(pot.id, event.id),
+                      t('pots.ledger.unconfirmSuccess'),
+                    )
+                  }
+                  onDelete={() => {
+                    setPendingDelete(event);
+                    setDeleteOpen(true);
+                  }}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
       {total > 0 && (
         <TablePagination

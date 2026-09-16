@@ -38,7 +38,7 @@ interface AdminFeedbackProps {
 export function AdminFeedback({ feedback, total, page, pageSize }: AdminFeedbackProps) {
   const fmt = useFormatters();
   const t = useTranslations('adminFeedback');
-  const { navigate } = useSearchParamsNavigation(ROUTES.adminFeedback);
+  const { navigate, isPending } = useSearchParamsNavigation(ROUTES.adminFeedback);
   const tFeedback = useTranslations('feedback');
 
   /*
@@ -56,34 +56,36 @@ export function AdminFeedback({ feedback, total, page, pageSize }: AdminFeedback
 
   return (
     <div className="flex flex-col w-full max-w-4xl gap-y-6">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t('table.from')}</TableHead>
-            <TableHead>{t('table.category')}</TableHead>
-            <TableHead>{t('table.message')}</TableHead>
-            <TableHead>{t('table.date')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {feedback.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell className="text-paragraph-sm-medium">{item.email}</TableCell>
-              <TableCell>
-                <Badge variant="outline" className={CATEGORY_CLASS[item.category]}>
-                  {tFeedback(`categories.${item.category}`)}
-                </Badge>
-              </TableCell>
-              <TableCell className="max-w-md whitespace-pre-wrap text-muted-foreground">
-                {item.message}
-              </TableCell>
-              <TableCell className="text-muted-foreground">
-                {fmt.timestampDate(item.createdAt)}
-              </TableCell>
+      <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('table.from')}</TableHead>
+              <TableHead>{t('table.category')}</TableHead>
+              <TableHead>{t('table.message')}</TableHead>
+              <TableHead>{t('table.date')}</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {feedback.map((item) => (
+              <TableRow key={item.id}>
+                <TableCell className="text-paragraph-sm-medium">{item.email}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={CATEGORY_CLASS[item.category]}>
+                    {tFeedback(`categories.${item.category}`)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="max-w-md whitespace-pre-wrap text-muted-foreground">
+                  {item.message}
+                </TableCell>
+                <TableCell className="text-muted-foreground">
+                  {fmt.timestampDate(item.createdAt)}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
       <TablePagination
         page={page}
         totalPages={Math.max(1, Math.ceil(total / pageSize))}

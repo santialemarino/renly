@@ -29,6 +29,7 @@ from app.schemas.metrics import (
 )
 from app.services import exchange_rate_service
 from app.utils import metrics as mh
+from app.utils.pagination import MAX_LIST_ROWS
 
 ZERO = Decimal("0")
 ONE = Decimal("1")
@@ -489,7 +490,7 @@ async def get_allocation_by_collection(
         inv_values[inv_id] = v
 
     # Load collections and their memberships — batch query.
-    collections = await collection_repository.list_by_user(session, user_id)
+    collections = await collection_repository.list_by_user(session, user_id, limit=MAX_LIST_ROWS)
     all_collection_ids = [c.id for c in collections if c.id is not None]
     ids_by_collection = await collection_repository.get_investment_ids_by_collections(session, all_collection_ids)
     assigned_inv_ids: set[int] = set()

@@ -30,6 +30,13 @@ DEFAULT_PAGE_SIZE = 25
 # with the request with no signal.
 MAX_PAGE_SIZE = 100
 
+# The largest page number any endpoint will serve. `apply_page` turns a page into an OFFSET, and
+# Postgres types OFFSET as bigint — so an unbounded page number is not merely silly, it is a 500 that
+# any authenticated caller can trigger on every paginated endpoint by typing digits into a query
+# string. At MAX_PAGE_SIZE rows a page the offset stays ten orders of magnitude inside int64, and no
+# real list has a millionth page.
+MAX_PAGE = 1_000_000
+
 # The ceiling on a capped (unpaginated) list. Chosen to sit far above any plausible holding — the
 # busiest dev account has 13 investments and 3 cards — so it bounds the query without ever being the
 # reason a user cannot see a row.

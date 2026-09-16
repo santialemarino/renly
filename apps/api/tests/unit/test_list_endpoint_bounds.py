@@ -32,7 +32,7 @@ from app.deps.auth import get_current_user
 from app.main import app, create_app
 from app.models.user import User
 from app.schemas.pagination import PaginatedResponse
-from app.utils.pagination import DEFAULT_PAGE_SIZE, MAX_LIST_ROWS, MAX_PAGE_SIZE
+from app.utils.pagination import DEFAULT_PAGE_SIZE, MAX_LIST_ROWS, MAX_PAGE, MAX_PAGE_SIZE
 
 USER = User(id=1, name="Tester", email="t@example.com", password_hash="h", is_admin=True)
 
@@ -90,7 +90,11 @@ BOUNDED = {
     ("GET", "/finance-metrics/expense-breakdown"): "One row per expense category, an enumerated constant.",
     ("GET", "/finance-metrics/income-breakdown"): "One row per income category, an enumerated constant.",
     ("GET", "/metrics/allocation"): "One row per investment category, an enumerated constant.",
-    ("GET", "/metrics/allocation/by-collection"): "One row per collection, bounded by CAPPED /collections above.",
+    ("GET", "/metrics/allocation/by-collection"): (
+        "One row per collection. Bounded by the same MAX_LIST_ROWS ceiling as /collections — metrics_service "
+        "reads the collections table directly rather than through collection_service, so the cap is passed at "
+        "its own call site."
+    ),
     ("GET", "/metrics/investments/summary"): "One row per investment category, an enumerated constant.",
 }
 
@@ -164,6 +168,12 @@ class TestTheWindowItself:
     def test_the_row_ceiling_is_pinned(self):
         assert MAX_LIST_ROWS == 500
 
+    def test_the_page_ceiling_keeps_the_offset_inside_bigint(self):
+        # Not a taste question: the page becomes an OFFSET and Postgres types OFFSET as bigint, so this
+        # bound is what stands between a query string and a 500. Asserted as the ARITHMETIC rather than
+        # as the number, so raising either ceiling later cannot quietly reintroduce the overflow.
+        assert (MAX_PAGE - 1) * MAX_PAGE_SIZE < 2**63 - 1
+
 
 class TestEveryListEndpointIsClassified:
     def test_no_list_endpoint_is_left_unbounded(self):
@@ -196,6 +206,17 @@ class TestThePaginatedOnesActuallyPage:
         routes = _routes_by_key()
         for key in sorted(PAGINATED):
             assert {"page", "page_size"} <= set(_query_params(routes[key])), key
+
+    def test_each_takes_its_window_from_the_SHARED_dependency(self):
+        # Provenance, not just values — and the distinction is not academic. Three endpoints declared
+        # `page` and `page_size` inline with constraints that happened to match the shared ones, so the
+        # value assertions above passed them; when `le=MAX_PAGE` was later added to the dependency, those
+        # three silently did not get it and stayed 500-able. A guard that checks what a parameter SAYS
+        # cannot notice a second source of truth saying the same thing.
+        routes = _routes_by_key()
+        for key in sorted(PAGINATED):
+            names = {dep.call.__name__ for dep in routes[key].dependant.dependencies if dep.call is not None}
+            assert "_page_params" in names, f"{key} declares its own page window instead of using PageQuery"
 
     def test_each_response_carries_the_page_fields(self):
         # `total` is what lets a client draw a pager at all; without it a page is just a truncation.
@@ -243,6 +264,18 @@ class TestAnOversizedPageIsRefused:
         # Without ge=1 a page of 0 computes a NEGATIVE offset, which Postgres rejects at runtime — a 500
         # on a query string a client can type.
         assert _client().get("/expenses", params={"page": page}).status_code == 422
+
+    @pytest.mark.parametrize("page", [MAX_PAGE + 1, 10**20])
+    def test_a_page_number_above_the_ceiling_is_a_422(self, page):
+        # The other end, and the one that shipped missing. `?page=100000000000000000000` computes an
+        # OFFSET of 2.5e21; Postgres answers `bigint out of range`, asyncpg raises, and the endpoint
+        # 500s — a denial of service on every paginated endpoint, from a query string, in the change
+        # whose whole purpose is closing one.
+        assert _client().get("/expenses", params={"page": page}).status_code == 422
+
+    def test_the_ceiling_page_itself_is_accepted(self):
+        # The boundary from the other side: a bound that refuses its own maximum is off by one.
+        assert _client().get("/expenses", params={"page": MAX_PAGE}).status_code != 422
 
 
 class TestTheDecoratorAndTheFunctionAgree:

@@ -125,6 +125,6 @@ class SharedIncomeResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
 
-# Response for GET /shared-income.
+# Response for GET /groups/{group_id}/income.
 class SharedIncomeListResponse(PaginatedResponse):
     items: list[SharedIncomeResponse] = Field(description="Income rows on this page, newest first.")

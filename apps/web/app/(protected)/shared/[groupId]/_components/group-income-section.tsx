@@ -70,7 +70,7 @@ export function GroupIncomeSection({
 }: GroupIncomeSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
-  const { navigate } = useSearchParamsNavigation(sharedGroupPath(group.id));
+  const { navigate, isPending } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<SharedIncome | null>(null);
   const [removing, setRemoving] = useState<SharedIncome | null>(null);
@@ -118,7 +118,14 @@ export function GroupIncomeSection({
         </Button>
       </div>
 
-      {income.length === 0 ? (
+      {/*
+       * `total`, not the page's own length. The two differ on a page PAST THE END — reachable by a
+       * hand-typed URL and by deleting the last row of the last page — and answering "this page holds
+       * nothing" with "nobody has ever shared anything" is both false and a dead end, because the
+       * pager lives in the other branch. Gating on the total keeps the table (empty) and its pager on
+       * screen, and TablePagination clamps the number so one click returns to real rows.
+       */}
+      {total === 0 ? (
         <EmptyState
           icon={CircleDollarSign}
           title={t('income.emptyTitle')}
@@ -126,28 +133,30 @@ export function GroupIncomeSection({
         />
       ) : (
         <div className="flex flex-col gap-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">{t('income.table.date')}</TableHead>
-                <TableHead className="w-44 text-right">{t('income.table.amount')}</TableHead>
-                <TableHead>{t('income.table.source')}</TableHead>
-                <TableHead>{t('income.table.wentTo')}</TableHead>
-                <TableHead>{t('income.table.notes')}</TableHead>
-                <TableHead className="w-20 text-center">{t('income.table.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {income.map((row) => (
-                <IncomeRow
-                  key={row.id}
-                  income={row}
-                  onEdit={() => setEditing(row)}
-                  onRemove={() => setRemoving(row)}
-                />
-              ))}
-            </TableBody>
-          </Table>
+          <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-32">{t('income.table.date')}</TableHead>
+                  <TableHead className="w-44 text-right">{t('income.table.amount')}</TableHead>
+                  <TableHead>{t('income.table.source')}</TableHead>
+                  <TableHead>{t('income.table.wentTo')}</TableHead>
+                  <TableHead>{t('income.table.notes')}</TableHead>
+                  <TableHead className="w-20 text-center">{t('income.table.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {income.map((row) => (
+                  <IncomeRow
+                    key={row.id}
+                    income={row}
+                    onEdit={() => setEditing(row)}
+                    onRemove={() => setRemoving(row)}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
 
           <TablePagination
             page={page}

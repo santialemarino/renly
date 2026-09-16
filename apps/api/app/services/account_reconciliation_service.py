@@ -71,7 +71,11 @@ from app.repositories import (
     shared_income_repository,
     transfer_repository,
 )
-from app.schemas.account_reconciliation import AccountReconciliationResponse, ReconciliationBearerResponse
+from app.schemas.account_reconciliation import (
+    AccountReconciliationListResponse,
+    AccountReconciliationResponse,
+    ReconciliationBearerResponse,
+)
 from app.services import (
     account_service,
     notification_service,
@@ -355,9 +359,19 @@ async def list_reconciliations(
     *,
     page: int = 1,
     page_size: int = DEFAULT_PAGE_SIZE,
-) -> tuple[list[AccountReconciliation], int]:
-    await account_service.get_account_in_scope(session, account_id, user)
-    return await account_reconciliation_repository.list_by_account(session, account_id, page=page, page_size=page_size)
+) -> AccountReconciliationListResponse:
+    account = await account_service.get_account_in_scope(session, account_id, user)
+    rows, total = await account_reconciliation_repository.list_by_account(session, account_id, page=page, page_size=page_size)
+    # Resolved once for the page rather than per row: a shared history names its author the way the
+    # group does, and every row of one account's history draws from the same roster.
+    names = await get_reconciler_names(session, account)
+    return AccountReconciliationListResponse(
+        items=[to_response(row, names) for row in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+        latest_as_of_date=await get_latest_reconciled_date(session, account_id, user.id),
+    )
 
 
 # Who ran each of the given reconciliations, as the group names them — `{user_id: display_name}` for one

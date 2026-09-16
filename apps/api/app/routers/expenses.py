@@ -7,6 +7,7 @@ from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.domain import AdvanceResult, ReverseResult
 from app.domain.list_scope import ListScope
 from app.http_errors import CodedHTTPException
@@ -48,6 +49,7 @@ async def list_expenses(
     current_user: CurrentUser,
     session: SessionDep,
     currency: DisplayCurrency,
+    page_query: PageQuery,
     scope: ListScope = Query(
         default=ListScope.all,
         description="Which scopes to return: all (both, grouped — the default), private (own only) or shared (group shares only).",
@@ -59,8 +61,6 @@ async def list_expenses(
     date_to: date_type | None = Query(default=None, description="End date (inclusive)."),
     sort_by: str | None = Query(default=None, description="Column to sort by (date, amount, category, payment_method)."),
     sort_order: str = Query(default="asc", pattern="^(asc|desc)$", description="Sort direction."),
-    page: int = Query(default=1, ge=1, description="Page number."),
-    page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> ExpenseListResponse:
     return await expense_service.list_expenses(
         session,
@@ -74,8 +74,8 @@ async def list_expenses(
         sort_by=sort_by,
         sort_order=sort_order,
         currency=currency,
-        page=page,
-        page_size=page_size,
+        page=page_query.page,
+        page_size=page_query.page_size,
     )
 
 

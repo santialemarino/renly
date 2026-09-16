@@ -125,6 +125,6 @@ class SharedExpenseResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
 
-# Response for GET /shared-expenses.
+# Response for GET /groups/{group_id}/expenses.
 class SharedExpenseListResponse(PaginatedResponse):
     items: list[SharedExpenseResponse] = Field(description="Expenses on this page, newest first.")

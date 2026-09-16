@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { AdminForbiddenError } from '@/lib/api/types';
-import type { Page } from '@/lib/api/types';
+import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { FeedbackCategory } from '@/lib/constants/feedback';
 
@@ -13,13 +13,6 @@ interface FeedbackRaw {
   category: FeedbackCategory;
   message: string;
   created_at: string;
-}
-
-interface FeedbackListRaw {
-  items: FeedbackRaw[];
-  total: number;
-  page: number;
-  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -51,6 +44,6 @@ export async function getFeedback(page = 1): Promise<Page<Feedback>> {
   const res = await authenticatedFetch(`/feedback?page=${page}`, { method: 'GET' });
   if (res.status === 403) throw new AdminForbiddenError();
   if (!res.ok) throw new Error('Failed to fetch feedback');
-  const raw: FeedbackListRaw = await res.json();
+  const raw: PageRaw<FeedbackRaw> = await res.json();
   return { items: raw.items.map(mapFeedback), total: raw.total, pageSize: raw.page_size };
 }

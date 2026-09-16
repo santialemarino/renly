@@ -235,6 +235,37 @@ describe('resolvePageParam', () => {
     expect(resolvePageParam('1.999')).toBe(1);
   });
 
+  it('refuses a page that would stringify into exponent notation', () => {
+    /*
+     * The escape a finiteness check could not see, and the one that produced the exact failure this
+     * function exists to prevent: 1e30 is finite and greater than 1, so it passed — and `String(1e30)`
+     * is "1e+30", which the API's integer parse rejects with a 422. With no error.tsx in apps/web a
+     * rejected fetch in a server component is Next's crash screen.
+     */
+    expect(resolvePageParam('1e30')).toBe(1);
+    expect(resolvePageParam('1e21')).toBe(1);
+    // `2e3` is 2000 — a perfectly good page that stringifies to plain digits, so it is ACCEPTED. The
+    // rule is about what comes out, not how it was written: exponent input is fine, an exponent in
+    // the query string is not.
+    expect(resolvePageParam('2e3')).toBe(2000);
+    // The invariant stated directly: whatever this returns must survive String() as plain digits,
+    // because six fetchers interpolate it into a URL rather than going through URLSearchParams.
+    for (const raw of ['1e30', '1e21', '2e3', '99999999999999999999', '1000000', 'abc', '0']) {
+      expect(String(resolvePageParam(raw))).toMatch(/^\d+$/);
+    }
+  });
+
+  it('refuses a page whose OFFSET would leave bigint range', () => {
+    // The other escape: this one stringifies to plain digits the API accepts, and then overflows the
+    // bigint OFFSET it becomes — `SELECT 1 OFFSET 2500000000000000000000` is `bigint out of range`,
+    // i.e. a 500 on every paginated endpoint from a hand-typed URL.
+    expect(resolvePageParam('99999999999999999999')).toBe(1);
+    expect(resolvePageParam(String(Number.MAX_SAFE_INTEGER))).toBe(1);
+    expect(resolvePageParam('1000001')).toBe(1);
+    // The ceiling itself is still served, so the bound refuses nothing a real list could reach.
+    expect(resolvePageParam('1000000')).toBe(1000000);
+  });
+
   it('does not treat a value below one as a small page', () => {
     // The case the fallback exists for, stated as the failure rather than the input: page 0 computes
     // offset -25, and a negative OFFSET is a runtime error on every one of these endpoints.

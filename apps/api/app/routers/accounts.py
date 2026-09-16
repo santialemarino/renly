@@ -134,17 +134,16 @@ async def list_movements(
     account_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     kind: MovementKind | None = Query(default=None, description="Filter by movement kind."),
-    page: int = Query(default=1, ge=1, description="Page number; clamped to the last page that has rows."),
-    page_size: int = Query(default=25, ge=1, le=100, description="Items per page."),
 ) -> AccountMovementListResponse:
     return await account_movement_service.list_account_movements(
         session,
         account_id,
         current_user,
         kind=kind,
-        page=page,
-        page_size=page_size,
+        page=page_query.page,
+        page_size=page_query.page_size,
     )
 
 
@@ -172,19 +171,8 @@ async def list_reconciliations(
     session: SessionDep,
     page_query: PageQuery,
 ) -> AccountReconciliationListResponse:
-    account = await account_service.get_account_in_scope(session, account_id, current_user)
-    rows, total = await account_reconciliation_service.list_reconciliations(
+    return await account_reconciliation_service.list_reconciliations(
         session, account_id, current_user, page=page_query.page, page_size=page_query.page_size
-    )
-    # Resolved once for the page rather than per row: a shared history names its author the way the
-    # group does, and every row of one account's history draws from the same roster.
-    names = await account_reconciliation_service.get_reconciler_names(session, account)
-    return AccountReconciliationListResponse(
-        items=[account_reconciliation_service.to_response(row, names) for row in rows],
-        total=total,
-        page=page_query.page,
-        page_size=page_query.page_size,
-        latest_as_of_date=await account_reconciliation_service.get_latest_reconciled_date(session, account_id, current_user.id),
     )
 
 

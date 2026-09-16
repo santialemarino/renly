@@ -28,6 +28,21 @@ export interface Page<T> {
   pageSize: number;
 }
 
+/*
+ * The wire shape every paginated endpoint answers with, before mapping. One generic rather than the
+ * same four-field interface restated per entity.
+ *
+ * `page` is declared because the API sends it, and deliberately not carried into `Page<T>`: the caller
+ * already knows which page it asked for — it is the value it put in the URL — so mapping it back would
+ * be a second source of truth for the same number.
+ */
+export interface PageRaw<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 // --- Raw types (API JSON shape, snake_case) ---
 
 interface SectionTotalRaw {

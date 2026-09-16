@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Archive,
@@ -73,6 +73,10 @@ function SettlementsSection({
   const fmt = useFormatters();
   const t = useTranslations('creditCards');
   const router = useRouter();
+  // Monotonic ticket per fetch; only the newest one may commit its result.
+  const requestRef = useRef(0);
+  // Whether anything has loaded yet — the display floor is for the first paint only.
+  const fetchedPageRef = useRef<number | null>(null);
   const [settlements, setSettlements] = useState<CardSettlement[]>([]);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
@@ -81,23 +85,33 @@ function SettlementsSection({
   const [addOpen, setAddOpen] = useState(false);
   const [deleteSettlementState, setDeleteSettlementState] = useState<CardSettlement | null>(null);
 
+  /*
+   * A monotonic ticket so the LAST REQUESTED page wins rather than the last response to arrive, and a
+   * display floor that applies to the first load only — on a page change the rows are already on
+   * screen, so padding the swap manufactures the layout jump the delay was added to prevent.
+   */
   const loadSettlements = useCallback(async () => {
+    const ticket = ++requestRef.current;
+    const isFirstLoad = fetchedPageRef.current === null;
     setLoading(true);
     const start = Date.now();
     try {
       const data = await fetchSettlements(cardId, page);
       const elapsed = Date.now() - start;
-      if (elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
+      if (isFirstLoad && elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, SETTLEMENTS_DISPLAY_DELAY_MS - elapsed));
       }
+      if (ticket !== requestRef.current) return;
+      fetchedPageRef.current = page;
       setSettlements(data.items);
       setTotal(data.total);
       setPageSize(data.pageSize);
     } catch {
+      if (ticket !== requestRef.current) return;
       setSettlements([]);
       setTotal(0);
     } finally {
-      setLoading(false);
+      if (ticket === requestRef.current) setLoading(false);
     }
   }, [cardId, page]);
 
@@ -144,7 +158,7 @@ function SettlementsSection({
                     >
                       {t('settlements.loading')}
                     </motion.p>
-                  ) : settlements.length === 0 ? (
+                  ) : total === 0 ? (
                     <motion.p
                       key="empty"
                       initial={{ opacity: 0 }}
@@ -246,7 +260,15 @@ function SettlementsSection({
                   oficialRate={oficialRate}
                   oficialRateDate={oficialRateDate}
                   onSuccess={() => {
-                    loadSettlements();
+                    // Back to page 1: the list is newest-first, so the row just recorded is there and
+                    // nowhere else. Staying put redraws the current page identically and the user is
+                    // told it saved while seeing no sign of it.
+                    //
+                    // The cache marker is cleared rather than load() being called here, because this
+                    // callback closes over the page that is being left — invoking it would fetch the
+                    // OLD page and could land after the effect's fetch of the new one.
+                    setPage(1);
+                    setFetchedPage(null);
                     router.refresh();
                   }}
                 />
@@ -259,7 +281,8 @@ function SettlementsSection({
                   cardId={cardId}
                   settlement={deleteSettlementState}
                   onSuccess={() => {
-                    loadSettlements();
+                    // A delete stays on the page the reader is looking at; only the rows change.
+                    setFetchedPage(null);
                     router.refresh();
                   }}
                 />

@@ -7,6 +7,7 @@ import {
   mapReconciliation,
   mapStatement,
   type CardReconciliation,
+  type CardReconciliationRaw,
   type StatementPeriod,
 } from '@/lib/api/card-reconciliations';
 import {
@@ -16,7 +17,7 @@ import {
   type CardSettlementRaw,
   type CreditCard,
 } from '@/lib/api/credit-cards';
-import type { Page } from '@/lib/api/types';
+import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
@@ -137,7 +138,7 @@ export async function fetchSettlements(cardId: number, page = 1): Promise<Page<C
     method: 'GET',
   });
   if (!res.ok) throw new Error('Failed to fetch settlements');
-  const raw: { items: CardSettlementRaw[]; total: number; page_size: number } = await res.json();
+  const raw: PageRaw<CardSettlementRaw> = await res.json();
   return { items: raw.items.map(mapSettlement), total: raw.total, pageSize: raw.page_size };
 }
 
@@ -167,7 +168,7 @@ export async function fetchReconciliations(
     { method: 'GET' },
   );
   if (!res.ok) throw new Error('Failed to fetch reconciliations');
-  const raw = await res.json();
+  const raw: PageRaw<CardReconciliationRaw> = await res.json();
   return { items: raw.items.map(mapReconciliation), total: raw.total, pageSize: raw.page_size };
 }
 

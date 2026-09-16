@@ -106,7 +106,12 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
         )}
       </div>
 
-      {rows.length === 0 ? (
+      {/*
+       * `feed.total`, not the rows on this page — the two differ on a page past the end, and the
+       * pager lives in the other branch, so gating on the page length shows "nothing here yet" with
+       * no way back. Pre-dates SEC-11; fixed with the eight surfaces that grew the same shape.
+       */}
+      {feed.total === 0 ? (
         <EmptyState
           icon={BellRing}
           title={t('feed.empty')}

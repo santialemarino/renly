@@ -38,7 +38,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   return (
     <div className="flex flex-col flex-1 items-start p-8 gap-y-4">
       <PageHeader title={t('title')} subtitle={t('subtitle')} />
+      {/*
+       * Keyed on the page so a page change REMOUNTS rather than reconciles. The rows live in state
+       * (the form prepends a new invite, resend and revoke replace one in place), and `useState`
+       * ignores a changed prop — so without this the pager moved the URL and the highlight while the
+       * table kept showing page 1. The notification feed is keyed for the same reason.
+       */}
       <AdminInvites
+        key={resolvePageParam(query.page)}
         initialInvites={invites.items}
         total={invites.total}
         page={resolvePageParam(query.page)}

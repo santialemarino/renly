@@ -61,6 +61,8 @@ export function AccountReconciliationsSection({
   const loadedTokenRef = useRef<number | null>(null);
   // The page that token was loaded for, so a page change re-fetches while a re-expand does not.
   const loadedPageRef = useRef<number | null>(null);
+  // Monotonic ticket per fetch; only the newest one may commit its result.
+  const requestRef = useRef(0);
 
   /*
    * Only the account's most recent reconciliation can be deleted — an older one's adjustment is
@@ -79,25 +81,35 @@ export function AccountReconciliationsSection({
    */
   const isShared = account.scope === 'shared';
 
+  /*
+   * A monotonic ticket so the LAST REQUESTED page wins rather than the last response to arrive — two
+   * pager clicks put two fetches in flight, and without it the slower one repaints over the newer.
+   * The display floor applies to the first load only: it exists to stop a flash when the panel opens
+   * empty, and on a page change it replaces a rendered table with one line of text for half a second.
+   */
   const load = useCallback(async () => {
+    const ticket = ++requestRef.current;
+    const isFirstLoad = loadedPageRef.current === null;
     setLoading(true);
     const start = Date.now();
     try {
       const data = await fetchAccountReconciliations(account.id, page);
       const elapsed = Date.now() - start;
-      if (elapsed < RECONCILIATIONS_DISPLAY_DELAY_MS) {
+      if (isFirstLoad && elapsed < RECONCILIATIONS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, RECONCILIATIONS_DISPLAY_DELAY_MS - elapsed));
       }
+      if (ticket !== requestRef.current) return;
       setReconciliations(data.items);
       setTotal(data.total);
       setPageSize(data.pageSize);
       setLatestDate(data.latestAsOfDate);
     } catch {
+      if (ticket !== requestRef.current) return;
       setReconciliations([]);
       setTotal(0);
       setLatestDate(null);
     } finally {
-      setLoading(false);
+      if (ticket === requestRef.current) setLoading(false);
     }
   }, [account.id, page]);
 
@@ -164,7 +176,7 @@ export function AccountReconciliationsSection({
                     >
                       {t('loading')}
                     </motion.p>
-                  ) : reconciliations.length === 0 ? (
+                  ) : total === 0 ? (
                     <motion.p
                       key="empty"
                       initial={{ opacity: 0 }}

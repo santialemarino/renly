@@ -17,7 +17,7 @@
 
 import 'server-only';
 
-import type { Page } from '@/lib/api/types';
+import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type {
   OwnershipEventType,
@@ -113,13 +113,6 @@ interface PotOwnershipEventRaw {
   can_delete: boolean;
   notes: string | null;
   created_at: string;
-}
-
-interface PotOwnershipEventListRaw {
-  items: PotOwnershipEventRaw[];
-  total: number;
-  page: number;
-  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -431,6 +424,6 @@ export async function getPotOwnershipEvents(
   const res = await authenticatedFetch(`/pots/${potId}/ownership?${qs}`, { method: 'GET' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch pot ownership events');
-  const raw: PotOwnershipEventListRaw = await res.json();
+  const raw: PageRaw<PotOwnershipEventRaw> = await res.json();
   return { items: raw.items.map(mapOwnershipEvent), total: raw.total, pageSize: raw.page_size };
 }

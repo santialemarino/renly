@@ -21,7 +21,7 @@
 
 import 'server-only';
 
-import type { Page } from '@/lib/api/types';
+import type { Page, PageRaw } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { SettlementStatus } from '@/lib/constants/group-settlements';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
@@ -105,13 +105,6 @@ interface GroupMoneySettingsRaw {
   group_id: number;
   default_split_method: SplitMethod;
   auto_finalise_settlements: boolean;
-}
-
-interface GroupSettlementListRaw {
-  items: GroupSettlementRaw[];
-  total: number;
-  page: number;
-  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -360,7 +353,7 @@ export async function getGroupSettlements(
   });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch group settlements');
-  const raw: GroupSettlementListRaw = await res.json();
+  const raw: PageRaw<GroupSettlementRaw> = await res.json();
   return { items: raw.items.map(mapSettlement), total: raw.total, pageSize: raw.page_size };
 }
 
