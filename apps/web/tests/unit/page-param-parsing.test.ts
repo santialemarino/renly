@@ -134,18 +134,43 @@ function paginatedComponents(): [string, string][] {
   return out;
 }
 
+// A ternary whose CONDITION reads a `.length`: optionally negated, optionally compared to a number.
+const DECIDES_ON_A_PAGE_LENGTH = /!?\s*\w+\.length\s*(?:[=!<>]{1,3}\s*\d+\s*)?\?/;
+
 describe('a paginated surface decides its empty state from the total', () => {
   it('no paginated component gates an empty state on the page length', () => {
     /*
-     * Both spellings, because the bug wears two faces: `rows.length === 0 ? <empty> : <table>` and
-     * `rows.length > 0 ? <table> : <empty>` are the same decision, and a guard written for one let the
-     * other ship — /admin used the second and told an admin with 33 invites "No invites yet" on page 2.
-     * `total` is the same test asked of the right number.
+     * Any ternary deciding on a `.length`, rather than the two spellings that happened to occur.
+     *
+     * The bug wore two faces already — `rows.length === 0 ? <empty> : <table>` and its inverse
+     * `rows.length > 0 ? <table> : <empty>`, the same decision written backwards — and a guard matching
+     * only the first let the second ship: /admin told an admin with 33 invites "No invites yet" on page
+     * 2. Enumerating the faces is the same mistake one level up, since `!rows.length ?`, `rows.length ?`
+     * and `rows.length < 1 ?` are all the same decision too. So the pattern states the RULE: on a
+     * surface that paginates, the count on this page decides nothing — `total` does.
      */
     const offenders = paginatedComponents()
-      .filter(([, source]) => /\w+\.length\s*(?:===\s*0|>\s*0)\s*\?/.test(source))
+      .filter(([, source]) => DECIDES_ON_A_PAGE_LENGTH.test(source))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
+  });
+
+  it('recognises the decision however it is spelled, not just how it was spelled', () => {
+    // The lesson from the two faces, asserted on the matcher itself so the next spelling is covered
+    // before it is written rather than after it ships.
+    for (const spelling of [
+      'rows.length === 0 ?',
+      'rows.length > 0 ?',
+      'rows.length !== 0 ?',
+      'rows.length < 1 ?',
+      '!rows.length ?',
+      'rows.length ?',
+    ]) {
+      expect(DECIDES_ON_A_PAGE_LENGTH.test(spelling), spelling).toBe(true);
+    }
+    // And the shapes it must leave alone: the correct decision, and a length read as a value.
+    expect(DECIDES_ON_A_PAGE_LENGTH.test('total === 0 ?')).toBe(false);
+    expect(DECIDES_ON_A_PAGE_LENGTH.test('{rows.length} items')).toBe(false);
   });
 
   it('the scan finds the paginated components', () => {
