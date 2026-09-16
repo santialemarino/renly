@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Pencil, Plus, Receipt, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -24,24 +24,24 @@ import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
 import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
+import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CreditCard } from '@/lib/api/credit-cards';
 import type { Group } from '@/lib/api/groups';
 import type { SharedExpense } from '@/lib/api/shared-expenses';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 import { isReconciliationOwned } from '@/lib/reconciliation';
 
-/*
- * Rows per page. The API returns a group's whole history in one response — a shared expense list has
- * no server-side paging — so this is what keeps a household's second year from rendering as one very
- * long table. It is deliberately the same 25 the server-paged lists use, so the hub does not feel
- * like a different kind of list.
- */
-const PAGE_SIZE = 25;
-
 interface GroupExpensesSectionProps {
   group: Group;
+  // One page of the group's expenses, with the total across every page and the size the server used.
+  // The section renders what it is given and never slices: since SEC-11 the API does the paging, so a
+  // slice here would page a page.
   expenses: SharedExpense[];
+  total: number;
+  page: number;
+  pageSize: number;
   accounts: Account[];
   creditCards?: CreditCard[];
   preferredCurrencies?: string[];
@@ -63,6 +63,9 @@ interface GroupExpensesSectionProps {
 export function GroupExpensesSection({
   group,
   expenses,
+  total,
+  page,
+  pageSize,
   accounts,
   creditCards,
   preferredCurrencies,
@@ -71,22 +74,13 @@ export function GroupExpensesSection({
 }: GroupExpensesSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
-  const [page, setPage] = useState(1);
+  const { navigate } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<SharedExpense | null>(null);
   const [removing, setRemoving] = useState<SharedExpense | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const totalPages = Math.max(1, Math.ceil(expenses.length / PAGE_SIZE));
-  /*
-   * Clamped rather than reset by an effect: deleting the last row of the last page shortens the list
-   * under a page number that no longer exists, and an effect would render one empty frame first.
-   */
-  const safePage = Math.min(page, totalPages);
-  const visible = useMemo(
-    () => expenses.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [expenses, safePage],
-  );
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   /*
    * The row being edited, retained through the dialog's close. Nulling it on close would drop any
@@ -148,7 +142,7 @@ export function GroupExpensesSection({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((expense) => (
+              {expenses.map((expense) => (
                 <ExpenseRow
                   key={expense.id}
                   expense={expense}
@@ -160,10 +154,10 @@ export function GroupExpensesSection({
           </Table>
 
           <TablePagination
-            page={safePage}
+            page={page}
             totalPages={totalPages}
-            totalLabel={t('expenses.table.total', { total: expenses.length })}
-            onPageChange={setPage}
+            totalLabel={t('expenses.table.total', { total })}
+            onPageChange={(next) => navigate({ expensesPage: next === 1 ? null : String(next) })}
           />
         </div>
       )}

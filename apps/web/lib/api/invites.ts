@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { AdminForbiddenError } from '@/lib/api/types';
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 
 // --- Raw types (API JSON shape, snake_case) ---
@@ -13,6 +14,13 @@ export interface InviteRaw {
   expires_at: string;
   consumed_at: string | null;
   created_at: string;
+}
+
+interface InviteListRaw {
+  items: InviteRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -45,10 +53,10 @@ export function mapInvite(raw: InviteRaw): Invite {
 
 // --- API functions ---
 
-export async function getInvites(): Promise<Invite[]> {
-  const res = await authenticatedFetch('/admin/invites', { method: 'GET' });
+export async function getInvites(page = 1): Promise<Page<Invite>> {
+  const res = await authenticatedFetch(`/admin/invites?page=${page}`, { method: 'GET' });
   if (res.status === 403) throw new AdminForbiddenError();
   if (!res.ok) throw new Error('Failed to fetch invites');
-  const raw: InviteRaw[] = await res.json();
-  return raw.map(mapInvite);
+  const raw: InviteListRaw = await res.json();
+  return { items: raw.items.map(mapInvite), total: raw.total, pageSize: raw.page_size };
 }

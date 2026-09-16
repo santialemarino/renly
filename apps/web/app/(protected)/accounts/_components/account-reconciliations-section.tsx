@@ -18,9 +18,11 @@ import { AccountReconciliationDeleteDialog } from '@/app/(protected)/accounts/_c
 import { fetchAccountReconciliations } from '@/app/(protected)/accounts/account-actions';
 import { RowActionButton } from '@/components/row-action-button';
 import { RowLockedIndicator } from '@/components/row-locked-indicator';
+import { TablePagination } from '@/components/table-pagination';
 import type { AccountReconciliation } from '@/lib/api/account-reconciliations';
 import type { Account } from '@/lib/api/accounts';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 // Minimum time (ms) from fetch start before showing the result.
@@ -49,18 +51,26 @@ export function AccountReconciliationsSection({
   const t = useTranslations('accounts.reconciliations');
 
   const [reconciliations, setReconciliations] = useState<AccountReconciliation[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
+  const [latestDate, setLatestDate] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<AccountReconciliation | null>(null);
   // The reloadToken whose data is currently loaded; null until the first fetch.
   const loadedTokenRef = useRef<number | null>(null);
+  // The page that token was loaded for, so a page change re-fetches while a re-expand does not.
+  const loadedPageRef = useRef<number | null>(null);
 
   /*
    * Only the account's most recent reconciliation can be deleted — an older one's adjustment is
-   * already inside every later reconciliation's recorded computed_balance, so removing it would
-   * skew those (the API enforces this too). The list is ordered newest-first, so the deletable rows
-   * are exactly those sharing the newest date.
+   * already inside every later reconciliation's recorded computed_balance, so removing it would skew
+   * those (the API enforces this too). The deletable rows are exactly those sharing the newest date.
+   *
+   * That date comes from the RESPONSE rather than from `reconciliations[0]`, and since SEC-11 it has
+   * to: this list is one page now, so the first row of page 2 is the newest row ON THAT PAGE and not
+   * the account's — the UI would offer a delete the API then refuses with 409.
    */
-  const latestDate = reconciliations[0]?.asOfDate;
 
   /*
    * A shared account's history gains a WHO column and a subtitle that says the difference divides.
@@ -73,18 +83,23 @@ export function AccountReconciliationsSection({
     setLoading(true);
     const start = Date.now();
     try {
-      const data = await fetchAccountReconciliations(account.id);
+      const data = await fetchAccountReconciliations(account.id, page);
       const elapsed = Date.now() - start;
       if (elapsed < RECONCILIATIONS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, RECONCILIATIONS_DISPLAY_DELAY_MS - elapsed));
       }
-      setReconciliations(data);
+      setReconciliations(data.items);
+      setTotal(data.total);
+      setPageSize(data.pageSize);
+      setLatestDate(data.latestAsOfDate);
     } catch {
       setReconciliations([]);
+      setTotal(0);
+      setLatestDate(null);
     } finally {
       setLoading(false);
     }
-  }, [account.id]);
+  }, [account.id, page]);
 
   /*
    * Fetch on first expand; re-expand shows cached data instantly. A bumped reloadToken (a
@@ -92,10 +107,14 @@ export function AccountReconciliationsSection({
    * without a separate "fetched" flag.
    */
   useEffect(() => {
-    if (!expanded || loadedTokenRef.current === reloadToken) return;
+    if (!expanded) return;
+    // The token guard caches across a re-expand; the page is not part of it, because changing page is
+    // a request for different rows rather than a re-open of the ones already loaded.
+    if (loadedTokenRef.current === reloadToken && loadedPageRef.current === page) return;
     loadedTokenRef.current = reloadToken;
+    loadedPageRef.current = page;
     load();
-  }, [expanded, reloadToken, load]);
+  }, [expanded, reloadToken, page, load]);
 
   // Which side the adjustment landed on. Positive means the account held more than Renly knew.
   function adjustmentLabel(reconciliation: AccountReconciliation): string {
@@ -234,6 +253,14 @@ export function AccountReconciliationsSection({
                           })}
                         </TableBody>
                       </Table>
+                      {total > 0 && (
+                        <TablePagination
+                          page={page}
+                          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                          totalLabel={t('table.total', { total })}
+                          onPageChange={setPage}
+                        />
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

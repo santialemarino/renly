@@ -228,11 +228,19 @@ export type BalancesEmptyState = 'nothingShared' | 'allSquare';
  * Whether the group has recorded any shared flow at all — spending or income.
  *
  * Named rather than asked inline at the call site, because it is the input to the sentence above and
- * an inline copy is a second place the question can be asked with one flow missing. Takes both lists
+ * an inline copy is a second place the question can be asked with one flow missing. Takes both PAGES
  * rather than two booleans so a caller cannot pass the same one twice.
+ *
+ * Reads each page's `total` rather than its row count, and that is the whole reason it takes a page at
+ * all: since SEC-11 the hub holds one page of each list, so a length test would answer "has this group
+ * ever shared anything" with "is there anything on the page you are looking at" — which on page 2 of a
+ * list whose last page is empty would say no about a group with a year of history.
  */
-export function hasAnySharedFlow(expenses: unknown[], income: unknown[]): boolean {
-  return expenses.length > 0 || income.length > 0;
+export function hasAnySharedFlow(
+  expenses: { total: number } | null,
+  income: { total: number } | null,
+): boolean {
+  return (expenses?.total ?? 0) > 0 || (income?.total ?? 0) > 0;
 }
 
 export function balancesEmptyState(hasAnyFlow: boolean): BalancesEmptyState {

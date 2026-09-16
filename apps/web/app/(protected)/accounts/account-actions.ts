@@ -10,6 +10,7 @@ import {
   type AccountReconciliation,
 } from '@/lib/api/account-reconciliations';
 import { mapTransferList, type Transfer } from '@/lib/api/transfers';
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { ApiError } from '@/lib/i18n/api-errors';
 import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
@@ -69,13 +70,29 @@ export async function unarchiveAccount(id: number): Promise<void> {
 }
 
 // Drives the Reconciliations sub-section in the expandable account row.
+/*
+ * One page of an account's reconciliations, newest first.
+ *
+ * `latestAsOfDate` travels with the page because only the account's MOST RECENT reconciliation may be
+ * deleted, and that is a property of the whole history rather than of a page: read off the first row
+ * on screen it would offer page 2's newest row as deletable and the API would then refuse it. The API
+ * sends the same date its own guard checks.
+ */
 export async function fetchAccountReconciliations(
   accountId: number,
-): Promise<AccountReconciliation[]> {
-  const res = await authenticatedFetch(`/accounts/${accountId}/reconciliations`, { method: 'GET' });
+  page = 1,
+): Promise<Page<AccountReconciliation> & { latestAsOfDate: string | null }> {
+  const res = await authenticatedFetch(`/accounts/${accountId}/reconciliations?page=${page}`, {
+    method: 'GET',
+  });
   if (!res.ok) throw new Error('Failed to fetch reconciliations');
   const raw = await res.json();
-  return raw.map(mapAccountReconciliation);
+  return {
+    items: raw.items.map(mapAccountReconciliation),
+    total: raw.total,
+    pageSize: raw.page_size,
+    latestAsOfDate: raw.latest_as_of_date,
+  };
 }
 
 // The account's derived balance at a date, plus who a difference would divide between — the two halves
@@ -157,10 +174,13 @@ export async function deleteAccountReconciliation(
 
 // Transfers touching one account, on either leg — an account's history must show money arriving as
 // well as leaving.
-export async function fetchAccountTransfers(accountId: number): Promise<Transfer[]> {
-  const res = await authenticatedFetch(`/transfers?account_id=${accountId}`, { method: 'GET' });
+export async function fetchAccountTransfers(accountId: number, page = 1): Promise<Page<Transfer>> {
+  const res = await authenticatedFetch(`/transfers?account_id=${accountId}&page=${page}`, {
+    method: 'GET',
+  });
   if (!res.ok) throw new Error('Failed to fetch transfers');
-  return mapTransferList(await res.json());
+  const raw = await res.json();
+  return { items: mapTransferList(raw), total: raw.total, pageSize: raw.page_size };
 }
 
 /*

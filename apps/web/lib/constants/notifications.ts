@@ -108,6 +108,3 @@ export type NotificationEmailCadence = (typeof NOTIFICATION_EMAIL_CADENCES)[numb
  * is one click away on the page.
  */
 export const NOTIFICATION_POPOVER_SIZE = 8;
-
-/** How many rows the /notifications page shows per page. The API caps a request at 50. */
-export const NOTIFICATION_PAGE_SIZE = 20;

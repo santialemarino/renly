@@ -11,6 +11,7 @@ import { getAccountMovements } from '@/lib/api/account-movements';
 import { getAccount } from '@/lib/api/accounts';
 import { getPageSettings } from '@/lib/api/settings';
 import { MOVEMENT_KINDS, type MovementKind } from '@/lib/constants/accounts';
+import { resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -42,8 +43,7 @@ export default async function AccountLedgerPage({ params, searchParams }: Accoun
   const kind = MOVEMENT_KINDS.includes(query.kind as MovementKind)
     ? (query.kind as MovementKind)
     : undefined;
-  const requestedPage = Math.trunc(Number(query.page));
-  const page = Number.isFinite(requestedPage) && requestedPage > 1 ? requestedPage : 1;
+  const page = resolvePageParam(query.page);
 
   /*
    * Fetched together rather than in sequence — nothing here depends on the account row, so awaiting it

@@ -21,6 +21,7 @@
 
 import 'server-only';
 
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
 import type { IncomeDestination } from '@/lib/constants/shared-income';
@@ -57,6 +58,13 @@ interface SharedIncomeRaw {
   splits: SharedIncomeSplitRaw[];
   created_at: string;
   updated_at: string;
+}
+
+interface SharedIncomeListRaw {
+  items: SharedIncomeRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -157,10 +165,16 @@ function mapSharedIncome(raw: SharedIncomeRaw): SharedIncome {
  * answers 404 for both, so the hub renders notFound() either way and an id cannot be probed. The whole
  * list comes back unpaginated, which is what the API offers; the hub pages it client-side.
  */
-export async function getSharedIncome(groupId: number): Promise<SharedIncome[] | null> {
-  const res = await authenticatedFetch(`/groups/${groupId}/income`, { method: 'GET' });
+export async function getSharedIncome(
+  groupId: number,
+  page = 1,
+  pageSize?: number,
+): Promise<Page<SharedIncome> | null> {
+  const qs = new URLSearchParams({ page: String(page) });
+  if (pageSize !== undefined) qs.set('page_size', String(pageSize));
+  const res = await authenticatedFetch(`/groups/${groupId}/income?${qs}`, { method: 'GET' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch shared income');
-  const raw: SharedIncomeRaw[] = await res.json();
-  return raw.map(mapSharedIncome);
+  const raw: SharedIncomeListRaw = await res.json();
+  return { items: raw.items.map(mapSharedIncome), total: raw.total, pageSize: raw.page_size };
 }

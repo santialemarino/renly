@@ -31,14 +31,22 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
+import { TablePagination } from '@/components/table-pagination';
+import { sharedGroupPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { GroupSettlement } from '@/lib/api/group-settlements';
 import type { Group } from '@/lib/api/groups';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface GroupSettlementsSectionProps {
   group: Group;
+  // One page of the group's settlements, with the total across every page and the size the server
+  // used. Paginated since SEC-11: a settle-up history grows for as long as the household shares money.
   settlements: GroupSettlement[];
+  total: number;
+  page: number;
+  pageSize: number;
   accounts: Account[];
 }
 
@@ -58,10 +66,14 @@ interface GroupSettlementsSectionProps {
 export function GroupSettlementsSection({
   group,
   settlements,
+  total,
+  page,
+  pageSize,
   accounts,
 }: GroupSettlementsSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
+  const { navigate } = useSearchParamsNavigation(sharedGroupPath(group.id));
   const [pendingAction, setPendingAction] = useState(false);
   const [removing, setRemoving] = useState<GroupSettlement | null>(null);
   const [attaching, setAttaching] = useState<GroupSettlement | null>(null);
@@ -149,6 +161,14 @@ export function GroupSettlementsSection({
             ))}
           </TableBody>
         </Table>
+      )}
+      {settlements.length > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalLabel={t('settlements.table.total', { total })}
+          onPageChange={(next) => navigate({ settlementsPage: next === 1 ? null : String(next) })}
+        />
       )}
 
       <ConfirmDialog

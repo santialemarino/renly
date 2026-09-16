@@ -903,6 +903,7 @@
         "date": "Date",
         "amount": "Amount",
         "paidWith": "{amount} debited",
+        "total": "{total, plural, one {# payment} other {# payments}}",
         "currency": "Currency",
         "account": "Paid from",
         "notes": "Notes"
@@ -1089,7 +1090,8 @@
         "noAdjustment": "No adjustment needed",
         "addedAsIncome": "Added {amount} as income",
         "addedAsExpense": "Added {amount} as an expense",
-        "reconciledByUnknown": "Someone"
+        "reconciledByUnknown": "Someone",
+        "total": "{total, plural, one {# reconciliation} other {# reconciliations}}"
       },
       "form": {
         "title": "Reconcile {name}",
@@ -1141,7 +1143,8 @@
         "actions": "Actions",
         "sentTo": "Sent to {account}",
         "receivedFrom": "Received from {account}",
-        "crossCurrency": "{from} → {to}"
+        "crossCurrency": "{from} → {to}",
+        "total": "{total, plural, one {# transfer} other {# transfers}}"
       },
       "form": {
         "title": "New transfer",
@@ -2511,7 +2514,8 @@
           "type": "What",
           "who": "Who",
           "amount": "Amount",
-          "actions": "Actions"
+          "actions": "Actions",
+          "total": "{total, plural, one {# entry} other {# entries}}"
         },
         "deleteBaselineTitle": "Delete the baseline",
         "deleteBaselineDescription": "The baseline is one agreement written as one row per owner, so all of its rows go together — half a division would hand the rest of you a share nobody agreed to. Every later movement is kept, and a new baseline can only be recorded once nothing else is on the history.",
@@ -2834,7 +2838,8 @@
         "notes": "Notes",
         "actions": "Actions",
         "pair": "{from} → {to}",
-        "leg": "{amount} {currency} through {account}"
+        "leg": "{amount} {currency} through {account}",
+        "total": "{total, plural, one {# settlement} other {# settlements}}"
       },
       "status": {
         "pending": "Pending",
@@ -3817,7 +3822,8 @@
       "from": "From",
       "category": "Category",
       "message": "Message",
-      "date": "Sent"
+      "date": "Sent",
+      "total": "{total, plural, one {# message} other {# messages}}"
     },
     "empty": "No feedback yet."
   },
@@ -4132,7 +4138,8 @@
       "accepted": "Accepted",
       "actions": "Actions",
       "empty": "No invites yet. Invite someone above to get started.",
-      "never": "—"
+      "never": "—",
+      "total": "{total, plural, one {# invite} other {# invites}}"
     },
     "status": {
       "pending": "Pending",

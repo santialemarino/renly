@@ -20,6 +20,7 @@
 
 import 'server-only';
 
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
 
@@ -54,6 +55,13 @@ interface SharedExpenseRaw {
   splits: SharedExpenseSplitRaw[];
   created_at: string;
   updated_at: string;
+}
+
+interface SharedExpenseListRaw {
+  items: SharedExpenseRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -146,10 +154,15 @@ function mapSharedExpense(raw: SharedExpenseRaw): SharedExpense {
  * answers 404 for both, so the hub renders notFound() either way and an id cannot be probed. The
  * whole list comes back unpaginated, which is what the API offers; the hub pages it client-side.
  */
-export async function getSharedExpenses(groupId: number): Promise<SharedExpense[] | null> {
-  const res = await authenticatedFetch(`/groups/${groupId}/expenses`, { method: 'GET' });
+export async function getSharedExpenses(
+  groupId: number,
+  page = 1,
+): Promise<Page<SharedExpense> | null> {
+  const res = await authenticatedFetch(`/groups/${groupId}/expenses?page=${page}`, {
+    method: 'GET',
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch shared expenses');
-  const raw: SharedExpenseRaw[] = await res.json();
-  return raw.map(mapSharedExpense);
+  const raw: SharedExpenseListRaw = await res.json();
+  return { items: raw.items.map(mapSharedExpense), total: raw.total, pageSize: raw.page_size };
 }

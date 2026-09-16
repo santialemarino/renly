@@ -38,10 +38,12 @@ import {
 import { RowActionButton } from '@/components/row-action-button';
 import { SortableTableHead } from '@/components/sortable-table-head';
 import { TableEmptyRow } from '@/components/table-empty-row';
+import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { CardSettlement, CreditCard, CreditCardSortField } from '@/lib/api/credit-cards';
 import { ANIMATION_DEFAULT, ANIMATION_FAST } from '@/lib/constants/animations';
+import { API_DEFAULT_PAGE_SIZE } from '@/lib/constants/api-constants';
 import { useTableSort } from '@/lib/hooks/use-table-sort';
 import { useFormatters } from '@/lib/i18n/formatters';
 
@@ -72,6 +74,9 @@ function SettlementsSection({
   const t = useTranslations('creditCards');
   const router = useRouter();
   const [settlements, setSettlements] = useState<CardSettlement[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(API_DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteSettlementState, setDeleteSettlementState] = useState<CardSettlement | null>(null);
@@ -80,27 +85,31 @@ function SettlementsSection({
     setLoading(true);
     const start = Date.now();
     try {
-      const data = await fetchSettlements(cardId);
+      const data = await fetchSettlements(cardId, page);
       const elapsed = Date.now() - start;
       if (elapsed < SETTLEMENTS_DISPLAY_DELAY_MS) {
         await new Promise((r) => setTimeout(r, SETTLEMENTS_DISPLAY_DELAY_MS - elapsed));
       }
-      setSettlements(data);
+      setSettlements(data.items);
+      setTotal(data.total);
+      setPageSize(data.pageSize);
     } catch {
       setSettlements([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [cardId]);
+  }, [cardId, page]);
 
-  // Fetch on first expand. Re-expand shows cached data instantly.
-  const [fetched, setFetched] = useState(false);
+  // Fetch on first expand. Re-expand shows cached data instantly; a page change asks for different
+  // rows, so it re-fetches rather than reading that cache.
+  const [fetchedPage, setFetchedPage] = useState<number | null>(null);
   useEffect(() => {
-    if (expanded && !fetched) {
-      setFetched(true);
+    if (expanded && fetchedPage !== page) {
+      setFetchedPage(page);
       loadSettlements();
     }
-  }, [expanded, fetched, loadSettlements]);
+  }, [expanded, fetchedPage, page, loadSettlements]);
 
   return (
     <AnimatePresence>
@@ -217,6 +226,12 @@ function SettlementsSection({
                           ))}
                         </TableBody>
                       </Table>
+                      <TablePagination
+                        page={page}
+                        totalPages={Math.max(1, Math.ceil(total / pageSize))}
+                        totalLabel={t('settlements.table.total', { total })}
+                        onPageChange={setPage}
+                      />
                     </motion.div>
                   )}
                 </AnimatePresence>

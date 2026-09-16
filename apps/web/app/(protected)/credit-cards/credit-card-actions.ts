@@ -16,6 +16,7 @@ import {
   type CardSettlementRaw,
   type CreditCard,
 } from '@/lib/api/credit-cards';
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import { isRefusal, localizedApiError } from '@/lib/i18n/api-errors-server';
 
@@ -131,11 +132,13 @@ export async function deleteSettlement(cardId: number, settlementId: number): Pr
 // Fetches settlements for a card (callable from client components). The wire shape and its mapper are
 // imported from lib/api/credit-cards rather than re-declared here — two copies of a wire shape means
 // the next API field reaches one call site and silently misses the other.
-export async function fetchSettlements(cardId: number): Promise<CardSettlement[]> {
-  const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements`, { method: 'GET' });
+export async function fetchSettlements(cardId: number, page = 1): Promise<Page<CardSettlement>> {
+  const res = await authenticatedFetch(`/credit-cards/${cardId}/settlements?page=${page}`, {
+    method: 'GET',
+  });
   if (!res.ok) throw new Error('Failed to fetch settlements');
-  const raw: CardSettlementRaw[] = await res.json();
-  return raw.map(mapSettlement);
+  const raw: { items: CardSettlementRaw[]; total: number; page_size: number } = await res.json();
+  return { items: raw.items.map(mapSettlement), total: raw.total, pageSize: raw.page_size };
 }
 
 // Fetches recent statement periods per bucket with reconciliation status (Phase 3, Step 5).
@@ -157,14 +160,15 @@ export async function fetchStatements(
 export async function fetchReconciliations(
   cardId: number,
   currency: string,
-): Promise<CardReconciliation[]> {
+  page = 1,
+): Promise<Page<CardReconciliation>> {
   const res = await authenticatedFetch(
-    `/credit-cards/${cardId}/reconciliations?currency=${encodeURIComponent(currency)}`,
+    `/credit-cards/${cardId}/reconciliations?currency=${encodeURIComponent(currency)}&page=${page}`,
     { method: 'GET' },
   );
   if (!res.ok) throw new Error('Failed to fetch reconciliations');
   const raw = await res.json();
-  return raw.map(mapReconciliation);
+  return { items: raw.items.map(mapReconciliation), total: raw.total, pageSize: raw.page_size };
 }
 
 // Discriminated result so the reconcile dialog can surface the backend's coded 400 (an unclosed

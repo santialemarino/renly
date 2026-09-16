@@ -32,8 +32,8 @@ import type {
  * gated on, because both are refused by the API the moment one event exists — regardless of whether
  * anyone still holds units.
  */
-export function hasLedger(events: PotOwnershipEvent[]): boolean {
-  return events.length > 0;
+export function hasLedger(events: { total: number } | null): boolean {
+  return (events?.total ?? 0) > 0;
 }
 
 /*
@@ -57,7 +57,7 @@ export function isPriceable(pot: Pot): boolean {
 // --- Write predicates, one named rule each ---
 
 // The opening is the division every later percentage derives from, so there is exactly one.
-export function canRecordOpening(pot: Pot, events: PotOwnershipEvent[]): boolean {
+export function canRecordOpening(pot: Pot, events: { total: number } | null): boolean {
   return pot.canWrite && !hasLedger(events);
 }
 
@@ -89,7 +89,7 @@ export function canRecordReagreement(pot: Pot, activeSeatCount: number): boolean
  * Once the shares ARE agreed the same act is still available, priced: canContributeHolding below, and
  * the section swaps one control for the other rather than going silent.
  */
-export function canMoveHoldingsIn(pot: Pot, events: PotOwnershipEvent[]): boolean {
+export function canMoveHoldingsIn(pot: Pot, events: { total: number } | null): boolean {
   return pot.canWrite && !hasLedger(events);
 }
 
@@ -152,7 +152,7 @@ export function hasContributableHoldings(holdings: PotHoldings): boolean {
  * pro-rata and it lands wholly in one person's private scope — one member taking joint assets, with no
  * cap on the amount. Taking value out of a divided pot is a withdrawal or a buy-out instead.
  */
-export function canMoveHoldingsOut(pot: Pot, events: PotOwnershipEvent[]): boolean {
+export function canMoveHoldingsOut(pot: Pot, events: { total: number } | null): boolean {
   return pot.canWrite && !hasLedger(events);
 }
 
@@ -222,7 +222,9 @@ export type SharePotStage = 'pick' | 'value' | 'shares' | 'confirm' | 'done' | '
 
 export interface SharePotProgress {
   holdings: PotHoldings;
-  events: PotOwnershipEvent[];
+  // The LEDGER PAGE rather than its rows: every question asked of it here is "does any event exist",
+  // which the page's total answers exactly and a page of rows only answers for page 1.
+  events: { total: number } | null;
 }
 
 /*

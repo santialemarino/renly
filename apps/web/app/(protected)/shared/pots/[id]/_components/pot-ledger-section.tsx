@@ -27,12 +27,20 @@ import { EmptyState } from '@/components/empty-state';
 import { RowActionButton } from '@/components/row-action-button';
 import { SectionHeader } from '@/components/section-header';
 import { SignedAmountCell } from '@/components/signed-amount-cell';
+import { TablePagination } from '@/components/table-pagination';
+import { sharedPotPath } from '@/config/routes';
 import type { Pot, PotOwnershipEvent } from '@/lib/api/pots';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface PotLedgerSectionProps {
   pot: Pot;
+  // One page of the ledger, newest first, with the total across every page and the size the server
+  // used. Newest-first since SEC-11: page 1 shows what just happened rather than what happened first.
   events: PotOwnershipEvent[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /*
@@ -61,9 +69,10 @@ interface PotLedgerSectionProps {
  * that rejected a pending gate in the first place. Silence is the honest default; the positive fact is
  * what gets marked.
  */
-export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
+export function PotLedgerSection({ pot, events, total, page, pageSize }: PotLedgerSectionProps) {
   const t = useTranslations('shared');
   const router = useRouter();
+  const { navigate } = useSearchParamsNavigation(sharedPotPath(pot.id));
   const [pendingDelete, setPendingDelete] = useState<PotOwnershipEvent | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -159,6 +168,14 @@ export function PotLedgerSection({ pot, events }: PotLedgerSectionProps) {
             ))}
           </TableBody>
         </Table>
+      )}
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalLabel={t('pots.ledger.table.total', { total })}
+          onPageChange={(next) => navigate({ page: next === 1 ? null : String(next) })}
+        />
       )}
 
       {/*

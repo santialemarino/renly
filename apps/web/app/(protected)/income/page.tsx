@@ -15,7 +15,7 @@ import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
 import { FALLBACK_PRIMARY_CURRENCY } from '@/lib/constants/currency';
 import { getFormatters } from '@/lib/i18n/formatters-server';
-import { resolveListScope } from '@/lib/list-scope';
+import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { resolveActiveCurrency } from '@/lib/stores/currency-store';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
@@ -72,7 +72,7 @@ export default async function IncomePage({ searchParams }: IncomePageProps) {
     dateFrom: params.date_from,
     dateTo: params.date_to,
     currency,
-    page: params.page ? Number(params.page) : 1,
+    page: resolvePageParam(params.page),
     sortBy: params.sort_by as 'date' | 'amount' | 'category' | undefined,
     sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
   });

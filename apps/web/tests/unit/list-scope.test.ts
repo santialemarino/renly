@@ -7,6 +7,7 @@ import {
   hasVisibleSections,
   resolveGridInterval,
   resolveListScope,
+  resolvePageParam,
   sectionedRows,
 } from '@/lib/list-scope';
 
@@ -199,5 +200,45 @@ describe('sectionedRows', () => {
 
   it('returns nothing for no rows', () => {
     expect(sectionedRows([], [OWN, section()], potAccessors)).toEqual([]);
+  });
+});
+
+describe('resolvePageParam', () => {
+  /*
+   * SEC-11's page parameter, read off the URL. The five pages that read one had three different
+   * answers before this existed, and the loosest of them — `page ? Number(page) : 1` — sent the
+   * literal string `NaN` to an API whose `ge=1` then answered 422. `apps/web` has no `error.tsx`, so a
+   * rejected fetch in a server component is Next's crash screen: a hand-edited URL took the page down.
+   */
+  it('reads a real page number', () => {
+    expect(resolvePageParam('2')).toBe(2);
+    expect(resolvePageParam('1')).toBe(1);
+    expect(resolvePageParam('999')).toBe(999);
+  });
+
+  it('falls back to page 1 for anything unusable', () => {
+    // Each of these reached the API as a query parameter before: `undefined` from a first visit,
+    // `abc` and `''` from a hand-edited URL, `0` and `-1` from one edited arithmetically.
+    expect(resolvePageParam(undefined)).toBe(1);
+    expect(resolvePageParam('')).toBe(1);
+    expect(resolvePageParam('abc')).toBe(1);
+    expect(resolvePageParam('0')).toBe(1);
+    expect(resolvePageParam('-1')).toBe(1);
+    expect(resolvePageParam('-5')).toBe(1);
+    expect(resolvePageParam('Infinity')).toBe(1);
+    expect(resolvePageParam('NaN')).toBe(1);
+  });
+
+  it('floors a fractional page rather than forwarding it', () => {
+    // `?page=2.7` would compute a fractional OFFSET, which Postgres rejects — a 500 rather than a page.
+    expect(resolvePageParam('2.7')).toBe(2);
+    expect(resolvePageParam('1.999')).toBe(1);
+  });
+
+  it('does not treat a value below one as a small page', () => {
+    // The case the fallback exists for, stated as the failure rather than the input: page 0 computes
+    // offset -25, and a negative OFFSET is a runtime error on every one of these endpoints.
+    expect(resolvePageParam('0.5')).toBe(1);
+    expect(resolvePageParam('-0')).toBe(1);
   });
 });

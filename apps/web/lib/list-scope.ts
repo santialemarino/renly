@@ -25,6 +25,25 @@ export function resolveListScope(raw: string | undefined): ListScope {
 }
 
 /*
+ * A `?page=` value off the URL, as a page number the API will accept.
+ *
+ * Here rather than inline for the reason `resolveGridInterval` is, and because the hand-rolled copies
+ * had drifted into three different answers: the notifications page clamped correctly, the account
+ * ledger clamped `NaN` but not a fractional page, and `/expenses`, `/income` and `/investments` did
+ * `page ? Number(page) : 1` — which sends the literal string `NaN` for `?page=abc`. The API answers
+ * that with a 422, and since `apps/web` has no `error.tsx` a rejected fetch in a server component is
+ * Next's generic crash screen. A hand-edited URL should show page 1, not break the page.
+ *
+ * Anything unusable — absent, non-numeric, zero, negative, fractional, Infinity — reads as page 1. A
+ * page PAST the end needs nothing here: the API returns an empty page and the true total, which is
+ * what the pager needs to draw itself and step back.
+ */
+export function resolvePageParam(raw: string | undefined): number {
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 1;
+}
+
+/*
  * The snapshots grid's column interval, read from the URL the same way and defaulting to monthly.
  *
  * Here rather than inline because TWO surfaces read it — the page, which sends it to the API, and the

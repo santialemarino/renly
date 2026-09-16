@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { AdminForbiddenError } from '@/lib/api/types';
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { FeedbackCategory } from '@/lib/constants/feedback';
 
@@ -12,6 +13,13 @@ interface FeedbackRaw {
   category: FeedbackCategory;
   message: string;
   created_at: string;
+}
+
+interface FeedbackListRaw {
+  items: FeedbackRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -39,10 +47,10 @@ function mapFeedback(raw: FeedbackRaw): Feedback {
 // --- API functions ---
 
 // Lists all submitted feedback (admin only). Throws AdminForbiddenError on a 403 so the page can 404.
-export async function getFeedback(): Promise<Feedback[]> {
-  const res = await authenticatedFetch('/feedback', { method: 'GET' });
+export async function getFeedback(page = 1): Promise<Page<Feedback>> {
+  const res = await authenticatedFetch(`/feedback?page=${page}`, { method: 'GET' });
   if (res.status === 403) throw new AdminForbiddenError();
   if (!res.ok) throw new Error('Failed to fetch feedback');
-  const raw: FeedbackRaw[] = await res.json();
-  return raw.map(mapFeedback);
+  const raw: FeedbackListRaw = await res.json();
+  return { items: raw.items.map(mapFeedback), total: raw.total, pageSize: raw.page_size };
 }

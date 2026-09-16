@@ -16,6 +16,7 @@ import { getInvestments } from '@/lib/api/investments';
 import { getPot, getPotHoldings, getPotOwnershipEvents, getPotSeries } from '@/lib/api/pots';
 import { getSettings } from '@/lib/api/settings';
 import { API_MAX_PAGE_SIZE } from '@/lib/constants/api-constants';
+import { resolvePageParam } from '@/lib/list-scope';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
 // Its own namespace rather than the group list's, so a pot tab isn't titled "Groups".
@@ -24,6 +25,7 @@ export async function generateMetadata() {
 }
 
 interface PotPageProps {
+  searchParams: Promise<{ page?: string }>;
   params: Promise<{ id: string }>;
 }
 
@@ -32,9 +34,10 @@ interface PotPageProps {
  * it is, and everything that has moved. Whoever may see the pot sees all of it, including a member
  * holding 0% — partial visibility of something you co-own is not a feature.
  */
-export default async function PotPage({ params }: PotPageProps) {
+export default async function PotPage({ params, searchParams }: PotPageProps) {
   const t = await getTranslations('shared');
   const { id } = await params;
+  const query = await searchParams;
 
   // A non-numeric segment never reaches the API — `/shared/pots/nonsense` is a 404, not a 422.
   const potId = Number(id);
@@ -59,7 +62,7 @@ export default async function PotPage({ params }: PotPageProps) {
   const [group, holdings, events, series, accounts, investments, settings] = await Promise.all([
     getGroup(pot.groupId),
     getPotHoldings(potId),
-    getPotOwnershipEvents(potId),
+    getPotOwnershipEvents(potId, resolvePageParam(query.page)),
     getPotSeries(potId),
     getAccounts(),
     getInvestments({ activeOnly: true, pageSize: API_MAX_PAGE_SIZE }),
@@ -89,7 +92,13 @@ export default async function PotPage({ params }: PotPageProps) {
         privateAccounts={accounts}
         privateInvestments={investments.items}
       />
-      <PotLedgerSection pot={pot} events={events} />
+      <PotLedgerSection
+        pot={pot}
+        events={events.items}
+        total={events.total}
+        page={resolvePageParam(query.page)}
+        pageSize={events.pageSize}
+      />
       {group.myRole === 'admin' && <PotPermissionsSection pot={pot} group={group} />}
     </div>
   );

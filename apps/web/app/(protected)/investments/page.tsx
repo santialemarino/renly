@@ -10,7 +10,7 @@ import { getGroups } from '@/lib/api/groups';
 import { getInvestments } from '@/lib/api/investments';
 import { getOnboardingStatus } from '@/lib/api/onboarding';
 import { getSettings } from '@/lib/api/settings';
-import { resolveListScope } from '@/lib/list-scope';
+import { resolveListScope, resolvePageParam } from '@/lib/list-scope';
 import { isFirstRunEmptyState } from '@/lib/onboarding';
 import { generatePageMetadata } from '@/lib/utils/page-metadata';
 
@@ -56,7 +56,7 @@ export default async function InvestmentsPage({ searchParams }: InvestmentsPageP
       collectionIds,
       category: params.category,
       activeOnly: params.show_archived !== 'true',
-      page: params.page ? Number(params.page) : 1,
+      page: resolvePageParam(params.page),
       sortBy: params.sort_by as 'name' | 'category' | 'base_currency' | 'broker' | undefined,
       sortOrder: params.sort_order as 'asc' | 'desc' | undefined,
     }),

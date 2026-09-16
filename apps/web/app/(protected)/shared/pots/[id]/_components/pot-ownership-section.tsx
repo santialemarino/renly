@@ -35,13 +35,14 @@ import { SectionHeader } from '@/components/section-header';
 import { sharedBuyOutPath, sharedSharePath, sharedTakeOutPath } from '@/config/routes';
 import type { Account } from '@/lib/api/accounts';
 import type { Group } from '@/lib/api/groups';
-import type { Pot, PotHoldings, PotOwnershipEvent } from '@/lib/api/pots';
+import type { Pot, PotHoldings } from '@/lib/api/pots';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 interface PotOwnershipSectionProps {
   pot: Pot;
   group: Group;
-  events: PotOwnershipEvent[];
+  // The ledger PAGE, not its rows — everything asked of it here is an existence question.
+  events: { total: number } | null;
   holdings: PotHoldings;
   privateAccounts: Account[];
   timeZone?: string;

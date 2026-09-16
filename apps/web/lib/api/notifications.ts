@@ -37,6 +37,8 @@ interface NotificationRaw {
 interface NotificationFeedRaw {
   items: NotificationRaw[];
   total: number;
+  page: number;
+  page_size: number;
   unread: number;
 }
 
@@ -68,6 +70,9 @@ export interface AppNotification {
 export interface NotificationFeed {
   items: AppNotification[];
   total: number;
+  // The size the server actually used, echoed rather than assumed — a page count derived from it
+  // cannot disagree with the rows on screen.
+  pageSize: number;
   unread: number;
 }
 
@@ -99,7 +104,12 @@ function mapNotification(raw: NotificationRaw): AppNotification {
 }
 
 function mapFeed(raw: NotificationFeedRaw): NotificationFeed {
-  return { items: raw.items.map(mapNotification), total: raw.total, unread: raw.unread };
+  return {
+    items: raw.items.map(mapNotification),
+    total: raw.total,
+    pageSize: raw.page_size,
+    unread: raw.unread,
+  };
 }
 
 function mapPreference(raw: NotificationPreferenceRaw): NotificationPreference {
@@ -124,8 +134,9 @@ export function mapPreferences(raw: NotificationPreferencesRaw): NotificationPre
 // --- API functions ---
 
 /** One page of the caller's notifications, newest first, with the total and the unread count. */
-export async function getNotifications(limit: number, offset = 0): Promise<NotificationFeed> {
-  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+export async function getNotifications(page = 1, pageSize?: number): Promise<NotificationFeed> {
+  const qs = new URLSearchParams({ page: String(page) });
+  if (pageSize !== undefined) qs.set('page_size', String(pageSize));
   const res = await authenticatedFetch(`/notifications?${qs.toString()}`, { method: 'GET' });
   if (!res.ok) throw new Error('Failed to fetch notifications');
   return mapFeed(await res.json());

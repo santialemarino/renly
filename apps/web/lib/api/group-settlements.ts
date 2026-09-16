@@ -21,6 +21,7 @@
 
 import 'server-only';
 
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type { SettlementStatus } from '@/lib/constants/group-settlements';
 import type { SplitMethod } from '@/lib/constants/shared-expenses';
@@ -104,6 +105,13 @@ interface GroupMoneySettingsRaw {
   group_id: number;
   default_split_method: SplitMethod;
   auto_finalise_settlements: boolean;
+}
+
+interface GroupSettlementListRaw {
+  items: GroupSettlementRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -343,12 +351,17 @@ export async function getGroupBalances(
 }
 
 // The group's recorded settlements and write-offs, newest first. Null for the same two reasons.
-export async function getGroupSettlements(groupId: number): Promise<GroupSettlement[] | null> {
-  const res = await authenticatedFetch(`/groups/${groupId}/settlements`, { method: 'GET' });
+export async function getGroupSettlements(
+  groupId: number,
+  page = 1,
+): Promise<Page<GroupSettlement> | null> {
+  const res = await authenticatedFetch(`/groups/${groupId}/settlements?page=${page}`, {
+    method: 'GET',
+  });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch group settlements');
-  const raw: GroupSettlementRaw[] = await res.json();
-  return raw.map(mapSettlement);
+  const raw: GroupSettlementListRaw = await res.json();
+  return { items: raw.items.map(mapSettlement), total: raw.total, pageSize: raw.page_size };
 }
 
 // The money the group holds in common: the split a new expense starts on, and whether a recorded

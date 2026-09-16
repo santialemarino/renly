@@ -903,6 +903,7 @@
         "date": "Fecha",
         "amount": "Monto",
         "paidWith": "{amount} debitados",
+        "total": "{total, plural, one {# pago} other {# pagos}}",
         "currency": "Moneda",
         "account": "Pagado desde",
         "notes": "Notas"
@@ -1089,7 +1090,8 @@
         "noAdjustment": "Sin ajuste necesario",
         "addedAsIncome": "Se agregó {amount} como ingreso",
         "addedAsExpense": "Se agregó {amount} como gasto",
-        "reconciledByUnknown": "Alguien"
+        "reconciledByUnknown": "Alguien",
+        "total": "{total, plural, one {# conciliación} other {# conciliaciones}}"
       },
       "form": {
         "title": "Conciliar {name}",
@@ -1141,7 +1143,8 @@
         "actions": "Acciones",
         "sentTo": "Enviado a {account}",
         "receivedFrom": "Recibido de {account}",
-        "crossCurrency": "{from} → {to}"
+        "crossCurrency": "{from} → {to}",
+        "total": "{total, plural, one {# transferencia} other {# transferencias}}"
       },
       "form": {
         "title": "Nueva transferencia",
@@ -2511,7 +2514,8 @@
           "type": "Qué",
           "who": "Quién",
           "amount": "Monto",
-          "actions": "Acciones"
+          "actions": "Acciones",
+          "total": "{total, plural, one {# movimiento} other {# movimientos}}"
         },
         "deleteBaselineTitle": "Eliminar el punto de partida",
         "deleteBaselineDescription": "El punto de partida es un solo acuerdo escrito como una fila por titular, así que todas sus filas se van juntas — media división les dejaría a los demás una parte que nadie acordó. Todos los movimientos posteriores se mantienen, y un nuevo punto de partida solo se puede registrar cuando no queda nada más en el historial.",
@@ -2834,7 +2838,8 @@
         "notes": "Notas",
         "actions": "Acciones",
         "pair": "{from} → {to}",
-        "leg": "{amount} {currency} a través de {account}"
+        "leg": "{amount} {currency} a través de {account}",
+        "total": "{total, plural, one {# liquidación} other {# liquidaciones}}"
       },
       "status": {
         "pending": "Pendiente",
@@ -3817,7 +3822,8 @@
       "from": "De",
       "category": "Categoría",
       "message": "Mensaje",
-      "date": "Enviado"
+      "date": "Enviado",
+      "total": "{total, plural, one {# mensaje} other {# mensajes}}"
     },
     "empty": "Todavía no hay comentarios."
   },
@@ -4132,7 +4138,8 @@
       "accepted": "Aceptada",
       "actions": "Acciones",
       "empty": "Todavía no hay invitaciones. Invitá a alguien arriba para empezar.",
-      "never": "—"
+      "never": "—",
+      "total": "{total, plural, one {# invitación} other {# invitaciones}}"
     },
     "status": {
       "pending": "Pendiente",

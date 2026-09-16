@@ -22,8 +22,11 @@ import {
 import { createInvite, resendInvite, revokeInvite } from '@/app/(protected)/admin/admin-actions';
 import { inviteFormSchema, type InviteFormData } from '@/app/(protected)/admin/form-schema';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/form';
+import { TablePagination } from '@/components/table-pagination';
+import { ROUTES } from '@/config/routes';
 import type { Invite, InviteStatus } from '@/lib/api/invites';
 import { ANIMATION_FAST } from '@/lib/constants/animations';
+import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 import { useFormatters } from '@/lib/i18n/formatters';
 
 // Seconds before the same invite can be (re)sent again — matches the auth resend cooldown
@@ -39,12 +42,19 @@ const STATUS_CLASS: Record<InviteStatus, string> = {
 };
 
 interface AdminInvitesProps {
+  // One page of invites, with the total across every page and the size the server used. Paginated
+  // since SEC-11: the admin list spans every user, so it grows with the user base rather than with one
+  // person's history.
   initialInvites: Invite[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
-export function AdminInvites({ initialInvites }: AdminInvitesProps) {
+export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInvitesProps) {
   const fmt = useFormatters();
   const t = useTranslations('admin');
+  const { navigate } = useSearchParamsNavigation(ROUTES.admin);
   const tCommon = useTranslations('common');
   const reduceMotion = useReducedMotion();
 
@@ -290,6 +300,14 @@ export function AdminInvites({ initialInvites }: AdminInvitesProps) {
         <div className="flex items-center justify-center p-6 border border-dashed rounded-lg">
           <p className="text-paragraph-sm text-muted-foreground">{t('table.empty')}</p>
         </div>
+      )}
+      {total > 0 && (
+        <TablePagination
+          page={page}
+          totalPages={Math.max(1, Math.ceil(total / pageSize))}
+          totalLabel={t('table.total', { total })}
+          onPageChange={(next) => navigate({ page: next === 1 ? null : String(next) })}
+        />
       )}
     </div>
   );

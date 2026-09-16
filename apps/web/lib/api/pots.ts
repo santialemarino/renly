@@ -17,6 +17,7 @@
 
 import 'server-only';
 
+import type { Page } from '@/lib/api/types';
 import { authenticatedFetch } from '@/lib/authenticated-fetch';
 import type {
   OwnershipEventType,
@@ -112,6 +113,13 @@ interface PotOwnershipEventRaw {
   can_delete: boolean;
   notes: string | null;
   created_at: string;
+}
+
+interface PotOwnershipEventListRaw {
+  items: PotOwnershipEventRaw[];
+  total: number;
+  page: number;
+  page_size: number;
 }
 
 // --- Frontend types (camelCase) ---
@@ -405,12 +413,24 @@ export async function getPotSeries(
   return mapValueSeries(await res.json());
 }
 
-// The pot's ownership ledger in replay order — oldest first, which is the order the unit balances are
-// derived in and therefore the only order the history reads correctly in.
-export async function getPotOwnershipEvents(potId: number): Promise<PotOwnershipEvent[] | null> {
-  const res = await authenticatedFetch(`/pots/${potId}/ownership`, { method: 'GET' });
+/*
+ * One page of the pot's ownership ledger, NEWEST first.
+ *
+ * It used to come back oldest-first, in the order the unit balances are replayed — and that order still
+ * exists, server-side, where the replay happens. What a reader wants from a growing ledger is the other
+ * one: page 1 shows what just happened rather than what happened first. The API keeps the two apart,
+ * so this page order can never be mistaken for a replay.
+ */
+export async function getPotOwnershipEvents(
+  potId: number,
+  page = 1,
+  pageSize?: number,
+): Promise<Page<PotOwnershipEvent> | null> {
+  const qs = new URLSearchParams({ page: String(page) });
+  if (pageSize !== undefined) qs.set('page_size', String(pageSize));
+  const res = await authenticatedFetch(`/pots/${potId}/ownership?${qs}`, { method: 'GET' });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error('Failed to fetch pot ownership events');
-  const raw: PotOwnershipEventRaw[] = await res.json();
-  return raw.map(mapOwnershipEvent);
+  const raw: PotOwnershipEventListRaw = await res.json();
+  return { items: raw.items.map(mapOwnershipEvent), total: raw.total, pageSize: raw.page_size };
 }

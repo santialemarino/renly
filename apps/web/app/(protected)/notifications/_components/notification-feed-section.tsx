@@ -17,7 +17,6 @@ import { SectionHeader } from '@/components/section-header';
 import { TablePagination } from '@/components/table-pagination';
 import { ROUTES } from '@/config/routes';
 import type { NotificationFeed } from '@/lib/api/notifications';
-import { NOTIFICATION_PAGE_SIZE } from '@/lib/constants/notifications';
 import { useSearchParamsNavigation } from '@/lib/hooks/use-search-params-navigation';
 
 interface NotificationFeedSectionProps {
@@ -45,7 +44,7 @@ export function NotificationFeedSection({ feed, page }: NotificationFeedSectionP
   const [saving, setSaving] = useState(false);
   const [isRefreshing, startTransition] = useTransition();
 
-  const totalPages = Math.max(1, Math.ceil(feed.total / NOTIFICATION_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(feed.total / feed.pageSize));
 
   /*
    * Optimistic and un-awaited, deliberately: it fires alongside the row's own navigation, which would

@@ -285,15 +285,18 @@ describe('hasAnySharedFlow', () => {
   // piece of income everyone has been paid their share of is square, not empty, and telling them to
   // add their first expense would be wrong about a ledger they can see right above.
   it('counts either flow, and says nothing shared only when both are empty', () => {
-    expect(hasAnySharedFlow([], [])).toBe(false);
-    expect(hasAnySharedFlow([{}], [])).toBe(true);
-    expect(hasAnySharedFlow([], [{}])).toBe(true);
-    expect(hasAnySharedFlow([{}], [{}])).toBe(true);
+    expect(hasAnySharedFlow({ total: 0 }, { total: 0 })).toBe(false);
+    expect(hasAnySharedFlow({ total: 1 }, { total: 0 })).toBe(true);
+    expect(hasAnySharedFlow({ total: 0 }, { total: 1 })).toBe(true);
+    expect(hasAnySharedFlow({ total: 1 }, { total: 1 })).toBe(true);
+    // A failed read is not an empty group: null says nothing is KNOWN, and the section renders its
+    // "all square" copy rather than claiming the household has never shared anything.
+    expect(hasAnySharedFlow(null, null)).toBe(false);
   });
 
   it('feeds the empty-state sentence, so income alone reads as all square', () => {
-    expect(balancesEmptyState(hasAnySharedFlow([], [{}]))).toBe('allSquare');
-    expect(balancesEmptyState(hasAnySharedFlow([], []))).toBe('nothingShared');
+    expect(balancesEmptyState(hasAnySharedFlow({ total: 0 }, { total: 1 }))).toBe('allSquare');
+    expect(balancesEmptyState(hasAnySharedFlow({ total: 0 }, { total: 0 }))).toBe('nothingShared');
   });
 });
 
