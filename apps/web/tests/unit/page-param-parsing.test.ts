@@ -136,10 +136,14 @@ function paginatedComponents(): [string, string][] {
 
 describe('a paginated surface decides its empty state from the total', () => {
   it('no paginated component gates an empty state on the page length', () => {
-    // `rows.length === 0 ?` in a component that also renders a pager is the shape that strands the
-    // reader. `total === 0 ?` is the same test asked of the right number.
+    /*
+     * Both spellings, because the bug wears two faces: `rows.length === 0 ? <empty> : <table>` and
+     * `rows.length > 0 ? <table> : <empty>` are the same decision, and a guard written for one let the
+     * other ship — /admin used the second and told an admin with 33 invites "No invites yet" on page 2.
+     * `total` is the same test asked of the right number.
+     */
     const offenders = paginatedComponents()
-      .filter(([, source]) => /\)?\s*:?\s*\w+\.length === 0 \?/.test(source))
+      .filter(([, source]) => /\w+\.length\s*(?:===\s*0|>\s*0)\s*\?/.test(source))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
   });

@@ -200,7 +200,12 @@ export function AdminInvites({ initialInvites, total, page, pageSize }: AdminInv
         </form>
       </Form>
 
-      {invites.length > 0 ? (
+      {/*
+       * `total`, not the rows on this page. The pager below is already gated on the total so it stays
+       * reachable, but the message in the other branch is copy — and "No invites yet" on page 2 of a
+       * 33-invite list is simply false.
+       */}
+      {total > 0 ? (
         <div className={isPending ? 'opacity-60 pointer-events-none transition-opacity' : ''}>
           <Table>
             <TableHeader>
