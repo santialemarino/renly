@@ -1,12 +1,20 @@
 # Price provider implementations for fetching asset prices from external APIs.
 # Each provider has the same signature: (ticker, start_date?, end_date?) -> PriceResult.
 # Providers are stateless — they fetch and return, the service handles storage.
-# To swap a provider, change the mapping in asset_price_service._CATEGORY_PROVIDERS.
+# To swap a provider or change its fallbacks, edit the chain in asset_price_service._CATEGORY_PROVIDERS.
+#
+# A provider reports the two outcomes SEPARATELY (INFRA-9), and that distinction is the whole basis of
+# the fallback chain: an empty list means "this provider is fine and the ticker genuinely has no price
+# for that range" (a weekend, a delisting), while PriceProviderUnavailable means "this provider could
+# not answer" — and only the second is a reason to try the next provider. Returning [] for both, as
+# every provider here used to, made a rate-limited API indistinguishable from a quiet market, so a
+# chain built on it would walk every provider on every weekend and still could not report an outage.
 
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import NamedTuple
 
@@ -31,17 +39,31 @@ class RatioFetchResult(NamedTuple):
 # --- Provider metadata ---
 
 
+# Raised by a provider that could not answer at all — an HTTP error, a rate limit, an unparseable
+# payload, a missing credential. Distinct from returning [], which asserts the provider DID answer and
+# the ticker has no price. The chain advances on this and only this.
+class PriceProviderUnavailable(Exception):
+    pass
+
+
 # Describes a price provider: its source name, fetch function, and capabilities.
+# is_configured answers whether the provider can run at all in this deployment — a provider needing a
+# credential that is unset is SKIPPED by the chain rather than counted as a failure, so an optional
+# provider nobody has provisioned does not log an error on every refresh.
 class PriceProviderInfo(NamedTuple):
     source: str
     fetch: Callable[..., Awaitable[PriceResult]]
     supports_history: bool
+    is_configured: Callable[[], bool] = lambda: True
 
 
 # --- Source name constants (stored in the source column of asset_prices/cedear_ratios) ---
 
 SOURCE_YFINANCE = "yfinance"
+SOURCE_FINNHUB = "finnhub"
 SOURCE_COINGECKO = "coingecko"
+SOURCE_COINBASE = "coinbase"
+SOURCE_DATA912 = "data912"
 SOURCE_CAFCI = "cafci"
 COMAFI_SOURCE = "comafi"
 BYMA_SOURCE = "byma"
@@ -62,8 +84,6 @@ async def fetch_yfinance(
     import yfinance as yf
 
     def _fetch() -> PriceResult:
-        from datetime import timedelta
-
         t = yf.Ticker(ticker)
         kwargs: dict = {}
         if start_date and end_date:
@@ -90,13 +110,54 @@ async def fetch_yfinance(
 
     try:
         return await asyncio.to_thread(_fetch)
-    except Exception:
-        logger.exception("yfinance fetch failed for %s.", ticker)
-        return []
+    except Exception as exc:
+        # The library breaking is the failure this chain most expects: yfinance scrapes an endpoint it
+        # does not own, so it breaks independently of Yahoo being up.
+        raise PriceProviderUnavailable(f"yfinance fetch failed for {ticker}: {exc}") from exc
+
+
+# Crypto symbol → CoinGecko coin id, for the assets a Renly user is realistically holding.
+#
+# The two crypto providers disagree about what a ticker IS: CoinGecko addresses a coin by its id
+# ("bitcoin") and 404s on a symbol, while Coinbase wants the symbol ("BTC"). Nothing validates the
+# ticker on entry, so both spellings exist in real data — a holding stored as "BTC" fetched nothing at
+# all, silently, for as long as it had been there. Each provider therefore translates the stored ticker
+# into its own vocabulary rather than the user being asked to know either one.
+_COINGECKO_IDS_BY_SYMBOL = {
+    "ADA": "cardano",
+    "AVAX": "avalanche-2",
+    "BNB": "binancecoin",
+    "BTC": "bitcoin",
+    "DOGE": "dogecoin",
+    "DOT": "polkadot",
+    "ETH": "ethereum",
+    "LINK": "chainlink",
+    "LTC": "litecoin",
+    "SOL": "solana",
+    "TRX": "tron",
+    "USDC": "usd-coin",
+    "USDT": "tether",
+    "XRP": "ripple",
+}
+
+# The same table read the other way, for providers that address a coin by symbol.
+_SYMBOLS_BY_COINGECKO_ID = {coin_id: symbol for symbol, coin_id in _COINGECKO_IDS_BY_SYMBOL.items()}
+
+
+# The CoinGecko coin id for a stored ticker. An unlisted ticker passes through unchanged, so a coin
+# missing from the table still works wherever the stored spelling already matches.
+def to_coingecko_id(ticker: str) -> str:
+    return _COINGECKO_IDS_BY_SYMBOL.get(ticker.strip().upper(), ticker)
+
+
+# The exchange symbol for a stored ticker, for providers that address a coin by symbol.
+def to_crypto_symbol(ticker: str) -> str:
+    cleaned = ticker.strip()
+    return _SYMBOLS_BY_COINGECKO_ID.get(cleaned.lower(), cleaned).upper()
 
 
 # Fetches prices from CoinGecko for crypto assets.
-# ticker should be a CoinGecko coin id (e.g. "bitcoin", "ethereum").
+# Accepts either a CoinGecko coin id ("bitcoin") or an exchange symbol ("BTC") — see to_coingecko_id.
 # start_date/end_date are accepted for signature uniformity but ignored — CoinGecko
 # always returns the last 7 days via the market_chart endpoint.
 async def fetch_coingecko(
@@ -104,16 +165,23 @@ async def fetch_coingecko(
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> PriceResult:
-    url = f"https://api.coingecko.com/api/v3/coins/{ticker}/market_chart"
+    url = f"https://api.coingecko.com/api/v3/coins/{to_coingecko_id(ticker)}/market_chart"
     params = {"vs_currency": "usd", "days": "7", "interval": "daily"}
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(url, params=params)
             response.raise_for_status()
             data = response.json()
-    except httpx.HTTPError:
-        logger.exception("CoinGecko fetch failed for %s.", ticker)
-        return []
+    except httpx.HTTPError as exc:
+        raise PriceProviderUnavailable(f"CoinGecko fetch failed for {ticker}: {exc}") from exc
+
+    # CoinGecko reports a rate limit as HTTP 200 with the error in the BODY, so raise_for_status()
+    # above does not fire and `prices` below is simply absent. Read as an empty answer that is exactly
+    # the shape of a coin with no history — which is how a throttled refresh used to look like a quiet
+    # market. Verified live: three calls in a row were enough to trip it.
+    status = data.get("status")
+    if isinstance(status, dict) and status.get("error_code"):
+        raise PriceProviderUnavailable(f"CoinGecko rate-limited for {ticker}: {status.get('error_message')}")
 
     prices = data.get("prices", [])
     results: PriceResult = []
@@ -121,6 +189,164 @@ async def fetch_coingecko(
         price_date = date_type.fromtimestamp(timestamp_ms / 1000)
         results.append((price_date, Decimal(str(round(price, 6))), "USD"))
     return results
+
+
+# --- Fallback price providers (INFRA-9) ---
+
+# Finnhub quote API. Free tier is 60 calls/minute and needs a key; unset means the chain skips it.
+FINNHUB_QUOTE_URL = "https://finnhub.io/api/v1/quote"
+FINNHUB_TIMEOUT = 15.0
+
+# data912: free, keyless Argentine market data — one call returns every symbol on that board.
+DATA912_BASE = "https://data912.com/live"
+DATA912_BOARDS = ("arg_stocks", "arg_cedears", "arg_bonds")
+DATA912_TIMEOUT = 20.0
+DATA912_BYMA_SUFFIX = ".BA"
+
+# Coinbase's public spot price. No key, and it accepts a date for a historical close.
+COINBASE_SPOT_URL = "https://api.coinbase.com/v2/prices"
+COINBASE_TIMEOUT = 15.0
+
+
+# Whether a Finnhub key is configured. Without one the chain skips the provider entirely.
+def finnhub_is_configured() -> bool:
+    from app.config import settings
+
+    return bool(settings.finnhub_api_key)
+
+
+# Fetches the current US-equity quote from Finnhub.
+#
+# Genuinely independent of Yahoo, which is why it is in the chain at all — but it answers only with a
+# CURRENT quote, so it carries no history and the chain skips it for a dated request.
+async def fetch_finnhub(
+    ticker: str,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> PriceResult:
+    from app.config import settings
+
+    if not settings.finnhub_api_key:
+        raise PriceProviderUnavailable("Finnhub has no API key configured.")
+
+    try:
+        async with httpx.AsyncClient(timeout=FINNHUB_TIMEOUT) as client:
+            response = await client.get(FINNHUB_QUOTE_URL, params={"symbol": ticker, "token": settings.finnhub_api_key})
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPError as exc:
+        raise PriceProviderUnavailable(f"Finnhub fetch failed for {ticker}: {exc}") from exc
+
+    # Finnhub answers an unknown symbol with a 200 and every field zeroed, so a zero current price is
+    # "no such symbol" rather than a real quote — an empty answer, not a provider failure.
+    current = payload.get("c")
+    if not current:
+        return []
+    return [(date_type.today(), Decimal(str(current)), "USD")]
+
+
+# One cached snapshot of every data912 board, keyed by symbol. Cleared per refresh cycle like CAFCI's.
+_data912_prices: dict[str, Decimal] | None = None
+_data912_lock: asyncio.Lock | None = None
+
+
+# Lazily creates the data912 download lock (needs a running loop, so not at import).
+def _get_data912_lock() -> asyncio.Lock:
+    global _data912_lock
+    if _data912_lock is None:
+        _data912_lock = asyncio.Lock()
+    return _data912_lock
+
+
+# Downloads every data912 board once and caches the last price per symbol.
+async def _load_data912_cache() -> None:
+    global _data912_prices
+
+    async def _board(name: str) -> list[dict]:
+        async with httpx.AsyncClient(timeout=DATA912_TIMEOUT) as client:
+            response = await client.get(f"{DATA912_BASE}/{name}")
+            response.raise_for_status()
+            return response.json()
+
+    try:
+        boards = await asyncio.gather(*[_board(name) for name in DATA912_BOARDS])
+    except (httpx.HTTPError, ValueError) as exc:
+        raise PriceProviderUnavailable(f"data912 board download failed: {exc}") from exc
+
+    prices: dict[str, Decimal] = {}
+    for rows in boards:
+        for row in rows:
+            symbol = (row.get("symbol") or "").strip().upper()
+            close = row.get("c")
+            if symbol and close:
+                prices[symbol] = Decimal(str(close))
+    _data912_prices = prices
+    logger.info("data912 cache loaded: %d symbols across %d boards.", len(prices), len(DATA912_BOARDS))
+
+
+# Fetches an Argentine listing's price from data912 (stocks, CEDEARs and bonds).
+#
+# Covers exactly the tickers Yahoo serves with a `.BA` suffix, which is the gap the other fallbacks
+# leave: the US-equity providers know nothing about BYMA. Prices are ARS and the board is a LIVE quote
+# carrying no date of its own, so it answers for today only — hence supports_history=False, and the
+# chain will not call it for a backdated lookup rather than answering the wrong question.
+async def fetch_data912(
+    ticker: str,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> PriceResult:
+    global _data912_prices
+
+    # Renly stores a BYMA listing the way Yahoo spells it (AAPL.BA); data912 uses the bare symbol.
+    symbol = ticker.strip().upper().removesuffix(DATA912_BYMA_SUFFIX)
+
+    if _data912_prices is None:
+        async with _get_data912_lock():
+            # Re-check after the lock — another coroutine may have populated the cache meanwhile.
+            if _data912_prices is None:
+                await _load_data912_cache()
+
+    price = (_data912_prices or {}).get(symbol)
+    if price is None:
+        return []
+    return [(date_type.today(), price, "ARS")]
+
+
+# Clears the data912 cache so the next refresh cycle re-downloads the boards.
+def clear_data912_cache() -> None:
+    global _data912_prices
+    _data912_prices = None
+
+
+# Fetches a crypto spot price from Coinbase's public API.
+#
+# Keyless and far more generous than CoinGecko's free tier, which is what makes it a real fallback
+# rather than a token one. Accepts either spelling of the ticker — see to_crypto_symbol.
+async def fetch_coinbase(
+    ticker: str,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> PriceResult:
+    symbol = to_crypto_symbol(ticker)
+    # Coinbase dates a spot price by query param; with none it answers for now.
+    params = {"date": end_date.isoformat()} if end_date else None
+    price_date = end_date or date_type.today()
+
+    try:
+        async with httpx.AsyncClient(timeout=COINBASE_TIMEOUT) as client:
+            response = await client.get(f"{COINBASE_SPOT_URL}/{symbol}-USD/spot", params=params)
+            if response.status_code == 404:
+                # Coinbase does not list this asset — it answered, so this is an empty result.
+                return []
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPError as exc:
+        raise PriceProviderUnavailable(f"Coinbase fetch failed for {symbol}: {exc}") from exc
+
+    amount = (payload.get("data") or {}).get("amount")
+    if not amount:
+        return []
+    return [(price_date, Decimal(str(amount)), "USD")]
 
 
 # --- CEDEAR ratio provider ---
@@ -420,9 +646,13 @@ def clear_fci_cache() -> None:
     _cafci_registry = None
 
 
-# Fetches the latest FCI cuotaparte price for a given CAFCI code.
-# Primary: CAFCI public Excel (cached per refresh cycle). Fallback: ArgentinaDatos JSON API.
-async def fetch_fci(
+# Fetches the latest FCI cuotaparte price for a given CAFCI code, from the CAFCI public Excel.
+#
+# Its ArgentinaDatos fallback used to live INSIDE this function, and moving it out to a chain entry of
+# its own is what stops the stored source lying: every price served by the fallback was written with
+# source "cafci", because the row's source came from the category map rather than from whoever actually
+# answered. SOURCE_ARGENTIADATOS was declared and never once used.
+async def fetch_cafci(
     ticker: str,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
@@ -440,17 +670,31 @@ async def fetch_fci(
             return [entry] if entry else []
         await _load_cafci_cache()
 
-    if _cafci_prices is not None:
-        entry = _cafci_prices.get(ticker)
-        if entry:
-            return [entry]
+    # A cache that is still None means the download or the parse failed outright — the provider could
+    # not answer, which is what sends the chain to ArgentinaDatos.
+    if _cafci_prices is None:
+        raise PriceProviderUnavailable(f"CAFCI Excel unavailable for {ticker}.")
 
-    logger.warning("CAFCI Excel returned no price for ticker %s. Trying ArgentinaDatos.", ticker)
+    entry = _cafci_prices.get(ticker)
+    return [entry] if entry else []
+
+
+# Fetches an FCI price from the ArgentinaDatos JSON API, the fallback behind CAFCI.
+#
+# Worth knowing before relying on it: it resolves a fund by NAME, and the name comes from the registry
+# that _load_cafci_cache builds — so it covers "CAFCI answered but does not carry this fund" and not
+# "CAFCI is down", where the registry is empty and there is no name to search by. That was equally true
+# when the fallback was nested inside fetch_cafci; it is only visible now.
+async def fetch_argentinadatos(
+    ticker: str,
+    start_date: date_type | None = None,
+    end_date: date_type | None = None,
+) -> PriceResult:
     return await _fetch_fci_from_argentinadatos(ticker)
 
 
 # Downloads the CAFCI Excel and caches all fund prices + registry in module-level dicts.
-# Called once per refresh cycle — subsequent fetch_fci() calls read from cache.
+# Called once per refresh cycle — subsequent fetch_cafci() calls read from cache.
 async def _load_cafci_cache() -> None:
     global _cafci_prices, _cafci_registry
     import asyncio

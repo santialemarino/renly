@@ -4,14 +4,18 @@
 
 Investments with a `ticker` field get automatic price fetching. The ticker determines the data source based on the investment's category:
 
-| Category           | Source    | Ticker format                 | Price currency |
-| ------------------ | --------- | ----------------------------- | -------------- |
-| `stocks`           | yfinance  | US symbols (AAPL, MSFT)       | USD            |
-| `cedears`          | yfinance  | .BA suffix (AAPL.BA)          | ARS            |
-| `crypto`           | CoinGecko | coin id (bitcoin, ethereum)   | USD            |
-| `fci`              | TBD       | fund code                     | ARS            |
-| `government_bonds` | yfinance  | .BA suffix (AL30.BA, GD30.BA) | ARS            |
-| `corporate_bonds`  | Manual    | —                             | —              |
+| Category           | Source    | Fallback (INFRA-9)    | Ticker format                     | Price currency |
+| ------------------ | --------- | --------------------- | --------------------------------- | -------------- |
+| `stocks`           | yfinance  | Finnhub (needs a key) | US symbols (AAPL, MSFT)           | USD            |
+| `cedears`          | yfinance  | data912               | .BA suffix (AAPL.BA)              | ARS            |
+| `crypto`           | CoinGecko | Coinbase              | coin id or symbol (bitcoin, BTC)  | USD            |
+| `fci`              | CAFCI     | ArgentinaDatos        | fund code (CAFCI code, e.g. 2409) | ARS            |
+| `government_bonds` | yfinance  | data912               | .BA suffix (AL30.BA, GD30.BA)     | ARS            |
+| `corporate_bonds`  | Manual    | —                     | —                                 | —              |
+
+A fallback is reached only when the provider before it could not **answer** — not when it answered that
+the ticker has no price. See [external-providers.md](external-providers.md) for that distinction, the
+per-provider notes, and why a crypto ticker works in either spelling.
 
 Investments without a ticker function as manual-entry — the user enters snapshot values directly.
 

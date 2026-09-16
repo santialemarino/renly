@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     # Falls back to web_base_url, which is a valid subject and cannot go stale like a hard-coded address.
     vapid_subject: str | None = None
 
+    # Finnhub API key (INFRA-9): the fallback behind yfinance for US stocks, and the only price source
+    # independent of Yahoo. Unset (default) simply drops it from the chain — every other provider is
+    # keyless, so prices keep working and nothing needs provisioning to run Renly.
+    finnhub_api_key: str | None = None
+
     # Rejects a VAPID key that is not a base64url P-256 scalar, at startup rather than at first use.
     #
     # The realistic mistake is a PEM or a public key pasted in, and without this the deployment starts,
