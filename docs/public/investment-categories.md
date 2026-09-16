@@ -47,16 +47,16 @@ Renly fetches CEDEAR ratios monthly from Banco Comafi, the principal issuing ent
 
 ## Crypto
 
-Cryptocurrencies like Bitcoin (BTC), Ethereum (ETH), Solana (SOL), etc. Prices are fetched from CoinGecko.
+Cryptocurrencies like Bitcoin (BTC), Ethereum (ETH), Solana (SOL), etc. Prices are fetched from CoinGecko, with Coinbase as a backup if CoinGecko is unavailable.
 
-**Ticker:** Yes (e.g., `BTC`, `ETH`)
-**Price history:** No -- only the latest price is fetched. Historical values come from your monthly snapshots.
+**Ticker:** Yes. Either the symbol (`BTC`, `ETH`) or the full CoinGecko coin id (`bitcoin`, `ethereum`) works -- Renly translates between them for you.
+**Price history:** Only the latest price is fetched day to day. Historical values come from your monthly snapshots, though a past date can still be looked up when you enter one.
 
 ## Government Bonds
 
 Argentine sovereign bonds traded on BYMA, such as AL30 (Bonar 2030) and GD30 (Global 2030). These are denominated in ARS or USD depending on the series.
 
-Renly fetches bond prices from Yahoo Finance using the `.BA` suffix (e.g., `AL30.BA`).
+Renly fetches bond prices from Yahoo Finance using the `.BA` suffix (e.g., `AL30.BA`), falling back to Argentine market data when Yahoo is unavailable.
 
 **Ticker:** Yes (e.g., `AL30.BA`, `GD30.BA`)
 **Price history:** Yes -- daily historical prices are available.
@@ -114,7 +114,7 @@ Anything that doesn't fit the categories above: collectibles, private equity, lo
 
 For investments with a ticker (stocks, CEDEARs, crypto, government bonds), Renly:
 
-1. **Fetches prices daily** from the relevant market data provider (Yahoo Finance or CoinGecko).
+1. **Fetches prices daily** from the relevant market data provider (Yahoo Finance or CoinGecko). Each category also has a backup source, used only when the main one cannot be reached, so a single provider having a bad day does not leave your portfolio on yesterday's prices.
 2. **Generates automatic snapshots** at the end of each month. If you hold 50 shares of AAPL and the price on January 31st is $182.50, the app creates a snapshot with a value of $9,125.00 automatically.
 3. **Lets you look up prices** when entering past data. If you're entering a snapshot for November 2025, the app can fetch the price from that date so you don't have to look it up yourself.
 
