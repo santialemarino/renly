@@ -66,6 +66,16 @@ When every provider in a chain fails, the service logs an **error** naming the t
 logs one line listing every ticker left unpriced. Prices simply stop updating otherwise — the app keeps
 rendering the last stored value with nothing saying so.
 
+**Cached providers remember that they failed.** CAFCI and data912 each download one snapshot per refresh
+cycle, and a failed load has to be recorded as a failure rather than as an empty snapshot — a single
+"cache is empty" sentinel cannot say whether the service is down or simply does not list that ticker,
+and the chain needs those apart. Getting it wrong breaks in both directions, and both were real:
+data912 without the flag re-downloaded per ticker (measured at 60 requests to a service already
+answering 502, for 20 tickers), while CAFCI's existing empty-dict sentinel reported an outage as "this
+fund has no price", which is an _answer_ — so the chain stopped and ArgentinaDatos was never reached on
+the one outage it exists for. The flag lives for the cycle and `clear_*_cache()` resets it alongside the
+data.
+
 ### Exchange rate providers (`services/exchange_rate_providers.py`)
 
 **Signature:**

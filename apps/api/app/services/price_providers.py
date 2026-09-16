@@ -248,6 +248,11 @@ async def fetch_finnhub(
 # One cached snapshot of every data912 board, keyed by symbol. Cleared per refresh cycle like CAFCI's.
 _data912_prices: dict[str, Decimal] | None = None
 _data912_lock: asyncio.Lock | None = None
+# Whether this cycle's download already failed, which is a SEPARATE fact from the cache being empty.
+# Without it every ticker falling back to data912 re-attempts the download: measured at 60 requests to
+# a service that was already answering 502, for 20 tickers. The amplification grows with the ticker
+# count, so it is worst on exactly the multi-user instance this chain exists for.
+_data912_load_failed = False
 
 
 # Lazily creates the data912 download lock (needs a running loop, so not at import).
@@ -260,7 +265,7 @@ def _get_data912_lock() -> asyncio.Lock:
 
 # Downloads every data912 board once and caches the last price per symbol.
 async def _load_data912_cache() -> None:
-    global _data912_prices
+    global _data912_prices, _data912_load_failed
 
     async def _board(name: str) -> list[dict]:
         async with httpx.AsyncClient(timeout=DATA912_TIMEOUT) as client:
@@ -268,9 +273,14 @@ async def _load_data912_cache() -> None:
             response.raise_for_status()
             return response.json()
 
+    # All or nothing, deliberately: `gather` without return_exceptions propagates the first failure, so
+    # one dead board discards the other two. Keeping the partial set would be worse than it looks —
+    # every symbol on the missing board would then answer "no price", which is an ANSWER and stops the
+    # chain, rather than the outage it actually is.
     try:
         boards = await asyncio.gather(*[_board(name) for name in DATA912_BOARDS])
     except (httpx.HTTPError, ValueError) as exc:
+        _data912_load_failed = True
         raise PriceProviderUnavailable(f"data912 board download failed: {exc}") from exc
 
     prices: dict[str, Decimal] = {}
@@ -295,14 +305,15 @@ async def fetch_data912(
     start_date: date_type | None = None,
     end_date: date_type | None = None,
 ) -> PriceResult:
-    global _data912_prices
-
     # Renly stores a BYMA listing the way Yahoo spells it (AAPL.BA); data912 uses the bare symbol.
     symbol = ticker.strip().upper().removesuffix(DATA912_BYMA_SUFFIX)
 
     if _data912_prices is None:
         async with _get_data912_lock():
-            # Re-check after the lock — another coroutine may have populated the cache meanwhile.
+            # Re-check after the lock — another coroutine may have populated the cache meanwhile, or
+            # already discovered the service is down, in which case this ticker must not retry it.
+            if _data912_load_failed:
+                raise PriceProviderUnavailable("data912 is unavailable for this refresh cycle.")
             if _data912_prices is None:
                 await _load_data912_cache()
 
@@ -314,8 +325,9 @@ async def fetch_data912(
 
 # Clears the data912 cache so the next refresh cycle re-downloads the boards.
 def clear_data912_cache() -> None:
-    global _data912_prices
+    global _data912_prices, _data912_load_failed
     _data912_prices = None
+    _data912_load_failed = False
 
 
 # Fetches a crypto spot price from Coinbase's public API.
@@ -627,6 +639,12 @@ ARGENTIADATOS_TIMEOUT = 15.0
 # _cafci_prices: code → (date, price, currency). All funds from the latest Excel download.
 # _cafci_registry: code → fund name. Used for ArgentinaDatos fallback.
 _cafci_prices: dict[str, tuple[date_type, Decimal, str]] | None = None
+# Whether this cycle's CAFCI download or parse failed. A failure leaves _cafci_prices as an EMPTY DICT
+# rather than None so a second caller does not re-download — good, but that one sentinel then has to
+# mean two different things, and the chain needs them apart: an empty dict because CAFCI is down must
+# fall through to ArgentinaDatos, while an empty result for a fund CAFCI simply does not list must not.
+# Without this flag a CAFCI outage reads as "this fund has no price" and silently skips the fallback.
+_cafci_load_failed = False
 _cafci_registry: dict[str, str] | None = None
 _cafci_lock: asyncio.Lock | None = None
 
@@ -641,9 +659,10 @@ def _get_cafci_lock() -> asyncio.Lock:
 
 # Clears the CAFCI cache. Called before each refresh cycle so the next fetch re-downloads.
 def clear_fci_cache() -> None:
-    global _cafci_prices, _cafci_registry
+    global _cafci_prices, _cafci_registry, _cafci_load_failed
     _cafci_prices = None
     _cafci_registry = None
+    _cafci_load_failed = False
 
 
 # Fetches the latest FCI cuotaparte price for a given CAFCI code, from the CAFCI public Excel.
@@ -658,21 +677,27 @@ async def fetch_cafci(
     end_date: date_type | None = None,
 ) -> PriceResult:
     # Try cached CAFCI data first (populated by the first call in the refresh cycle).
+    if _cafci_load_failed:
+        raise PriceProviderUnavailable(f"CAFCI Excel unavailable for {ticker}.")
     if _cafci_prices is not None:
         entry = _cafci_prices.get(ticker)
         return [entry] if entry else []
 
     # First call — download and cache. Lock ensures only one download even with concurrent calls.
     async with _get_cafci_lock():
-        # Re-check after acquiring lock (another coroutine may have populated the cache).
+        # Re-check after acquiring lock (another coroutine may have populated the cache, or already
+        # found the service down — in which case this ticker must report that rather than re-download).
+        if _cafci_load_failed:
+            raise PriceProviderUnavailable(f"CAFCI Excel unavailable for {ticker}.")
         if _cafci_prices is not None:
             entry = _cafci_prices.get(ticker)
             return [entry] if entry else []
         await _load_cafci_cache()
 
-    # A cache that is still None means the download or the parse failed outright — the provider could
-    # not answer, which is what sends the chain to ArgentinaDatos.
-    if _cafci_prices is None:
+    # The download or parse failing is the provider not ANSWERING, and it has to say so: the loader
+    # leaves an empty dict behind either way, so reading the dict alone would report a CAFCI outage as
+    # "this fund has no price" and stop the chain before ArgentinaDatos.
+    if _cafci_load_failed or _cafci_prices is None:
         raise PriceProviderUnavailable(f"CAFCI Excel unavailable for {ticker}.")
 
     entry = _cafci_prices.get(ticker)
@@ -696,7 +721,7 @@ async def fetch_argentinadatos(
 # Downloads the CAFCI Excel and caches all fund prices + registry in module-level dicts.
 # Called once per refresh cycle — subsequent fetch_cafci() calls read from cache.
 async def _load_cafci_cache() -> None:
-    global _cafci_prices, _cafci_registry
+    global _cafci_prices, _cafci_registry, _cafci_load_failed
     import asyncio
     import io
 
@@ -708,6 +733,7 @@ async def _load_cafci_cache() -> None:
     except httpx.HTTPError:
         logger.exception("CAFCI Excel fetch failed.")
         _cafci_prices = {}
+        _cafci_load_failed = True
         return
 
     def _parse(data: bytes) -> tuple[dict[str, tuple[date_type, Decimal, str]], dict[str, str]]:
@@ -815,6 +841,7 @@ async def _load_cafci_cache() -> None:
     except Exception:
         logger.exception("Failed to parse CAFCI Excel.")
         _cafci_prices = {}
+        _cafci_load_failed = True
 
 
 # Fetches FCI price from the ArgentinaDatos JSON API (fallback).

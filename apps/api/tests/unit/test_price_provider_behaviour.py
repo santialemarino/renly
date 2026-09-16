@@ -1,3 +1,4 @@
+from datetime import date
 from decimal import Decimal
 
 import httpx
@@ -198,3 +199,76 @@ class TestData912SpeaksBYMASymbols:
         monkeypatch.setattr(price_providers, "_data912_prices", {"AAPL": Decimal("1")})
         price_providers.clear_data912_cache()
         assert price_providers._data912_prices is None
+
+
+class TestACachedProviderRemembersThatItFailed:
+    # Both cached providers keep one snapshot per refresh cycle, and a failed load has to be recorded
+    # as a FAILURE rather than as an empty snapshot. Getting this wrong breaks in two different ways,
+    # one per provider, and neither is visible from a single-ticker test.
+
+    @pytest.mark.asyncio
+    async def test_a_down_data912_is_downloaded_once_per_cycle_not_once_per_ticker(self, monkeypatch):
+        # Measured before the fix: 20 tickers falling back to data912 produced 60 requests to a service
+        # already answering 502, because a failed load left the cache None and every waiting ticker
+        # retried it. The amplification grows with the ticker count, so it is worst on exactly the
+        # multi-user instance this chain exists for.
+        import asyncio
+
+        requests: list[str] = []
+        monkeypatch.setattr(price_providers, "_data912_prices", None)
+        monkeypatch.setattr(price_providers, "_data912_load_failed", False)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(error=httpx.ConnectError("down"), captured=requests))
+
+        results = await asyncio.gather(*[price_providers.fetch_data912(f"T{i}.BA") for i in range(20)], return_exceptions=True)
+
+        assert all(isinstance(r, PriceProviderUnavailable) for r in results), "every ticker must report the outage"
+        assert len(requests) == len(price_providers.DATA912_BOARDS), f"one download per cycle, got {len(requests)} requests"
+
+    @pytest.mark.asyncio
+    async def test_a_down_CAFCI_reports_an_outage_rather_than_an_empty_fund_list(self, monkeypatch):
+        # The failure that silently disabled a fallback. _load_cafci_cache leaves `{}` behind on failure
+        # so a second caller does not re-download — but that sentinel cannot say WHY it is empty, so
+        # reading the dict alone reported "CAFCI is down" as "this fund has no price", which is an
+        # ANSWER and stops the chain. ArgentinaDatos was never reached on the one outage it exists for.
+        monkeypatch.setattr(price_providers, "_cafci_prices", None)
+        monkeypatch.setattr(price_providers, "_cafci_load_failed", False)
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(error=httpx.ConnectError("down")))
+
+        with pytest.raises(PriceProviderUnavailable):
+            await price_providers.fetch_cafci("2409")
+
+    @pytest.mark.asyncio
+    async def test_a_call_arriving_AFTER_the_failed_load_also_reports_the_outage(self, monkeypatch):
+        # The path a mutation sweep found untested: once the load has failed, the cache is `{}` rather
+        # than None, so every LATER caller takes the early cache-hit branch and never reaches the lock.
+        # Without the flag checked there too, fund #2 onwards reads `{}` as "no price for this fund" —
+        # an answer — and the chain stops before ArgentinaDatos. The concurrent test above cannot see
+        # this: those callers all queue on the lock before the cache is set, so they exit by the other
+        # branch entirely.
+        monkeypatch.setattr(price_providers, "_cafci_prices", {})
+        monkeypatch.setattr(price_providers, "_cafci_load_failed", True)
+
+        with pytest.raises(PriceProviderUnavailable):
+            await price_providers.fetch_cafci("2409")
+
+    @pytest.mark.asyncio
+    async def test_a_fund_CAFCI_genuinely_lacks_is_still_an_empty_answer(self, monkeypatch):
+        # The other side, and the reason the flag exists rather than simply raising whenever the dict is
+        # empty: a successful download that does not list this fund must NOT advance the chain, because
+        # ArgentinaDatos resolves a fund by a name only that same download provides.
+        monkeypatch.setattr(price_providers, "_cafci_prices", {"9999": (date(2026, 9, 16), Decimal("10"), "ARS")})
+        monkeypatch.setattr(price_providers, "_cafci_load_failed", False)
+
+        assert await price_providers.fetch_cafci("2409") == []
+
+    @pytest.mark.asyncio
+    async def test_clearing_the_cache_clears_the_failure_too(self, monkeypatch):
+        # Otherwise one bad cycle disables the provider for the life of the process.
+        monkeypatch.setattr(price_providers, "_data912_load_failed", True)
+        monkeypatch.setattr(price_providers, "_cafci_load_failed", True)
+
+        price_providers.clear_data912_cache()
+        price_providers.clear_fci_cache()
+
+        assert price_providers._data912_load_failed is False
+        assert price_providers._cafci_load_failed is False
