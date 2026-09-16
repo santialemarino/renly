@@ -44,8 +44,11 @@ interface PotLedgerSectionProps {
 }
 
 /*
- * Everything that has ever moved this pot's ownership, in replay order — oldest first, which is the
- * order the balances are derived in and therefore the only order the history reads correctly in.
+ * Everything that has ever moved this pot's ownership, NEWEST first — the reading order, which since
+ * SEC-11 is not the replay order. The two used to be one list: the balances are derived by replaying
+ * the ledger oldest-first, so that is how it was shown. Paginating separated them, and each end now
+ * gets the order it needs — the replay still walks forward, server-side, while page 1 here answers
+ * "what just happened" rather than "what happened first".
  *
  * No unit count appears anywhere: percentages go in and percentages come out, with units only in the
  * middle (U2). Each row's figure is the money that actually moved, except a re-agreement, which moves

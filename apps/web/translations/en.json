@@ -2499,7 +2499,7 @@
       },
       "ledger": {
         "title": "History",
-        "description": "Everything that has moved, oldest first. Growth and losses are not entries here — they are shared automatically.",
+        "description": "Everything that has moved, newest first. Growth and losses are not entries here — they are shared automatically.",
         "credited": "Credited: {amount} {currency}",
         "emptyTitle": "Nothing has moved yet",
         "emptyDescription": "Set the baseline, then every contribution, withdrawal and change of split shows up here.",

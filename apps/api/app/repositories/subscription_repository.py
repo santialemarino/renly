@@ -6,7 +6,7 @@ from sqlmodel import select
 
 from app.models.subscription import Subscription
 from app.repositories.utils import apply_listing_filters
-from app.utils.pagination import apply_limit
+from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
     "name": Subscription.name,
@@ -46,7 +46,7 @@ async def list_by_user(
         default_order=Subscription.next_billing_date,
     )
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "subscriptions")
 
 
 # List every active subscription (cluster-wide) whose next_billing_date is at or before `cutoff`

@@ -53,3 +53,40 @@ class TestEveryRepositoryFunctionIsReachable:
         # an empty left side, so a selector that stopped matching (a rename, a move to sync defs) would
         # read as every repository being clean.
         assert sum(len(_module_functions(ast.parse(path.read_text()))) for path in REPOSITORIES) > 100
+
+
+class TestEveryCappedReadReportsWhenTheCeilingBites:
+    # Capping is silent by construction — a query with a LIMIT returns a short list and says nothing —
+    # so `capped()` is the only signal that a list the app assumes is small has stopped being small.
+    # It is also trivially forgettable: the cap still works without it, so nothing fails, and the
+    # warning simply never arrives. It shipped that way once in this very change.
+
+    def test_every_read_that_takes_a_limit_routes_its_rows_through_capped(self):
+        # Matched on the PARAMETER rather than a list of function names: "which reads are capped" is
+        # the thing that changes, so naming them here would need updating by exactly the person who
+        # already forgot the call.
+        offenders = []
+        for path in REPOSITORIES:
+            tree = ast.parse(path.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.AsyncFunctionDef):
+                    continue
+                takes_limit = any(arg.arg == "limit" for arg in node.args.kwonlyargs + node.args.args)
+                if not takes_limit:
+                    continue
+                body = ast.unparse(node)
+                # A paged read takes `limit` only as part of `page_size`; the capped ones apply it directly.
+                if "apply_limit" in body and "capped(" not in body:
+                    offenders.append(f"{path.name}:{node.name}")
+        assert offenders == []
+
+    def test_the_scan_finds_the_capped_reads(self):
+        # The guard on the guard: the assertion above is a filter, so a selector that stopped matching
+        # would report every repository clean rather than none checked. Nine endpoints are capped.
+        found = sum(
+            1
+            for path in REPOSITORIES
+            for node in ast.walk(ast.parse(path.read_text()))
+            if isinstance(node, ast.AsyncFunctionDef) and "apply_limit" in ast.unparse(node)
+        )
+        assert found >= 9

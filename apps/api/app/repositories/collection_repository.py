@@ -8,7 +8,7 @@ from sqlmodel import select
 
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.repositories.utils import apply_sort
-from app.utils.pagination import apply_limit
+from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
     "name": InvestmentCollection.name,
@@ -30,7 +30,7 @@ async def list_by_user(
         stmt = stmt.where(InvestmentCollection.name.ilike(f"%{search}%"))
     stmt = apply_sort(stmt, sort_by, sort_order, sort_columns=_SORT_COLUMNS, default_order=InvestmentCollection.id)
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "collections")
 
 
 # Fetches a single collection by id and user_id. Returns None if not found or not owned.

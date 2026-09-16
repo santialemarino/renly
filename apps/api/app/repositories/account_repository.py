@@ -6,7 +6,7 @@ from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
 from app.repositories.utils import apply_sort, scope_filter
-from app.utils.pagination import apply_limit
+from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
     "name": Account.name,
@@ -57,7 +57,7 @@ async def list_by_user(
         default_order=Account.name,
     )
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "accounts")
 
 
 # Get a single account by id and user_id.

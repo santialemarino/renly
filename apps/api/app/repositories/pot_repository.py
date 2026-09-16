@@ -17,14 +17,14 @@ from sqlmodel import func, select
 from app.models.account import Account
 from app.models.investment import Investment
 from app.models.pot import Pot, PotMemberPermission
-from app.utils.pagination import apply_limit
+from app.utils.pagination import apply_limit, capped
 
 
 # Lists the pots visible to the session, newest first. RLS restricts this to pots the user may see.
 async def list_visible(session: AsyncSession, *, limit: int | None = None) -> list[Pot]:
     stmt = select(Pot).order_by(Pot.created_at.desc(), Pot.id.desc())
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "pots")
 
 
 # Every pot in the database, for the privileged scheduler (the overdue-valuation reminder has to
@@ -40,7 +40,7 @@ async def list_all(session: AsyncSession) -> list[Pot]:
 async def list_by_group(session: AsyncSession, group_id: int, *, limit: int | None = None) -> list[Pot]:
     stmt = select(Pot).where(Pot.group_id == group_id).order_by(Pot.created_at.desc(), Pot.id.desc())
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "pots")
 
 
 # Fetches a pot by id. Returns None when it does not exist or is not visible to the session.

@@ -2499,7 +2499,7 @@
       },
       "ledger": {
         "title": "Historial",
-        "description": "Todo lo que se movió, de lo más viejo a lo más nuevo. Lo que crece o baja no figura acá — se reparte solo.",
+        "description": "Todo lo que se movió, de lo más nuevo a lo más viejo. Lo que crece o baja no figura acá — se reparte solo.",
         "credited": "Acreditado: {amount} {currency}",
         "emptyTitle": "Todavía no se movió nada",
         "emptyDescription": "Definí el punto de partida y acá van a aparecer todos los aportes, retiros y cambios de reparto.",

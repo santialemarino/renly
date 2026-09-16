@@ -49,10 +49,13 @@ def apply_limit(stmt: Select, limit: int | None) -> Select:
     return stmt if limit is None else stmt.limit(limit)
 
 
-# Returns the rows, warning when the ceiling may have bitten. Capping is silent by construction, so
-# this is the only signal that a list the app assumes is small has stopped being small — which is the
-# point at which it needs pagination rather than a bigger number here.
-def capped[T](rows: list[T], what: str) -> list[T]:
-    if len(rows) >= MAX_LIST_ROWS:
-        logger.warning("Capped list %s returned %d rows, the MAX_LIST_ROWS ceiling — it may be truncated.", what, len(rows))
+# Returns the rows, warning when the ceiling actually bit. Capping is silent by construction, so this
+# is the only signal that a list the app assumes is small has stopped being small — which is the point
+# at which it needs pagination rather than a bigger number here.
+#
+# Takes the limit rather than comparing against MAX_LIST_ROWS, so the UNBOUNDED read of the same query
+# — the one the dashboard sums — cannot trip the warning by legitimately holding 500 rows.
+def capped[T](rows: list[T], limit: int | None, what: str) -> list[T]:
+    if limit is not None and len(rows) >= limit:
+        logger.warning("Capped list %s returned %d rows, its ceiling — it may be truncated.", what, len(rows))
     return rows

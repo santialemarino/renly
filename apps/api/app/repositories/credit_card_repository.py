@@ -3,7 +3,7 @@ from sqlmodel import select
 
 from app.models.credit_card import CreditCard
 from app.repositories.utils import apply_listing_filters
-from app.utils.pagination import apply_limit
+from app.utils.pagination import apply_limit, capped
 
 _SORT_COLUMNS = {
     "name": CreditCard.name,
@@ -37,7 +37,7 @@ async def list_by_user(
         default_order=CreditCard.name,
     )
     result = await session.execute(apply_limit(stmt, limit))
-    return list(result.scalars().all())
+    return capped(list(result.scalars().all()), limit, "credit cards")
 
 
 # Get a single credit card by id and user_id.
