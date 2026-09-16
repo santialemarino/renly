@@ -9,13 +9,14 @@ from app.models.api_key import ApiKey
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import api_key_repository, user_repository
+from app.utils.pagination import MAX_LIST_ROWS
 
 KEY_PREFIX_LENGTH = 8
 
 
 # List all active API keys for a user.
 async def list_keys(session: AsyncSession, user: User) -> list[ApiKey]:
-    return await api_key_repository.list_by_user(session, user.id)
+    return await api_key_repository.list_by_user(session, user.id, limit=MAX_LIST_ROWS)
 
 
 # Generate a new API key. Returns the model and the raw key (shown once).

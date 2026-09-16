@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 
 from app.models.feedback import FeedbackCategory
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /feedback.
@@ -25,3 +26,8 @@ class FeedbackResponse(BaseModel):
 # Response for GET /feedback (admin review list); adds the author's email.
 class FeedbackAdminResponse(FeedbackResponse):
     email: str = Field(description="Email of the user who submitted the feedback.")
+
+
+# Response for GET /feedback.
+class FeedbackListResponse(PaginatedResponse):
+    items: list[FeedbackAdminResponse] = Field(description="Feedback on this page, newest first.")

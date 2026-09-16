@@ -6,6 +6,7 @@ from typing import Annotated
 from pydantic import AfterValidator, BaseModel, EmailStr, Field
 
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 # Validated email lowercased so an invite binds to a single canonical address.
 NormalizedEmail = Annotated[EmailStr, AfterValidator(str.lower)]
@@ -26,3 +27,8 @@ class InviteResponse(BaseModel):
     expires_at: datetime = Field(description="When the current invite link expires.")
     consumed_at: datetime | None = Field(default=None, description="When the invite was accepted (null if not yet).")
     created_at: datetime = Field(description="When the invite was first created.")
+
+
+# Response for GET /admin/invites.
+class InviteListResponse(PaginatedResponse):
+    items: list[InviteResponse] = Field(description="Invites on this page, newest first.")

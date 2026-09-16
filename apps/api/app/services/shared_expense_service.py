@@ -46,7 +46,7 @@ from app.repositories import (
     pot_repository,
     shared_expense_repository,
 )
-from app.schemas.shared_expense import SharedExpenseResponse, SharedExpenseSplitInput, SharedExpenseSplitResponse
+from app.schemas.shared_expense import SharedExpenseListResponse, SharedExpenseResponse, SharedExpenseSplitInput, SharedExpenseSplitResponse
 from app.services import (
     card_reconciliation_service,
     exchange_rate_service,
@@ -56,6 +56,7 @@ from app.services import (
     shared_audit_service,
 )
 from app.utils.metrics import RateLookup, convert_optional
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -140,28 +141,41 @@ def _display_name(members_by_id: dict[int, GroupMember], member_id: int) -> str:
 # Lists a group's shared expenses with every member's position in each. Members and splits are
 # batch-loaded once for the whole list, so the response costs a fixed number of queries regardless of
 # how many expenses there are.
-async def list_expenses(session: AsyncSession, group_id: int, user: User, *, currency: str | None = None) -> list[SharedExpenseResponse]:
+async def list_expenses(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> SharedExpenseListResponse:
     _, viewer = await group_service.require_member(session, group_id, user)
-    expenses = await shared_expense_repository.list_by_group(session, group_id)
+    expenses, total = await shared_expense_repository.list_by_group(session, group_id, page=page, page_size=page_size)
     if not expenses:
-        return []
+        return SharedExpenseListResponse(items=[], total=total, page=page, page_size=page_size)
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
     splits_by_expense = await shared_expense_repository.list_splits_by_expense_ids(session, [expense.id for expense in expenses])
     accounts = await _funding_accounts(session, expenses)
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
-    return [
-        _build_response(
-            expense,
-            splits_by_expense.get(expense.id, []),
-            members_by_id,
-            viewer.id,
-            account_name=_account_of(accounts, expense) and _account_of(accounts, expense).name,
-            pot_funded=bool(_account_of(accounts, expense) and _account_of(accounts, expense).pot_id),
-            currency=currency,
-            lookup=lookup,
-        )
-        for expense in expenses
-    ]
+    return SharedExpenseListResponse(
+        items=[
+            _build_response(
+                expense,
+                splits_by_expense.get(expense.id, []),
+                members_by_id,
+                viewer.id,
+                account_name=_account_of(accounts, expense) and _account_of(accounts, expense).name,
+                pot_funded=bool(_account_of(accounts, expense) and _account_of(accounts, expense).pot_id),
+                currency=currency,
+                lookup=lookup,
+            )
+            for expense in expenses
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Every funding account the given expenses draw from, in one query, keyed by id.

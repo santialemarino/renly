@@ -86,7 +86,9 @@ def _arrange(monkeypatch, *, events=None, nav=Decimal("110")):
     monkeypatch.setattr(svc.group_repository, "get_member", AsyncMock(side_effect=lambda _s, _g, mid: {100: SEAT, 101: OTHER_SEAT}.get(mid)))
     # record_opening resolves the whole roster in one query rather than a seat at a time.
     monkeypatch.setattr(svc.group_repository, "list_members", AsyncMock(return_value=[SEAT, OTHER_SEAT]))
-    monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=events if events is not None else [_event()]))
+    rows = events if events is not None else [_event()]
+    monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=rows))
+    monkeypatch.setattr(svc.pot_ownership_repository, "list_page_by_pot", AsyncMock(return_value=(rows, len(rows))))
     monkeypatch.setattr(svc.exchange_rate_service, "get_user_rate_lookup", AsyncMock(return_value=AsyncMock()))
     monkeypatch.setattr(svc.pot_service, "get_nav", AsyncMock(return_value=nav))
 
@@ -1309,11 +1311,11 @@ class TestWhatTheLedgerResponseSaysAboutEachRow:
         # difference is the rule and not the fixture.
         swap = _event(type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id, created_by=USER.id)
         self._list_as(monkeypatch, OTHER_SEAT, READER, [swap])
-        affected = (await svc.list_events(AsyncMock(), 5, USER))[0]
+        affected = (await svc.list_events(AsyncMock(), 5, USER)).items[0]
         assert (affected.can_confirm, affected.can_unconfirm) == (True, False)
 
         self._list_as(monkeypatch, SEAT, WRITER, [swap])
-        recorder = (await svc.list_events(AsyncMock(), 5, USER))[0]
+        recorder = (await svc.list_events(AsyncMock(), 5, USER)).items[0]
         assert (recorder.can_confirm, recorder.can_unconfirm) == (False, False)
 
     @pytest.mark.asyncio
@@ -1322,7 +1324,7 @@ class TestWhatTheLedgerResponseSaysAboutEachRow:
         # is per-ROW rather than per-caller.
         swap = _event(id=2, type=OwnershipEventType.reagreement, member_id=SEAT.id, counterparty_member_id=OTHER_SEAT.id)
         self._list_as(monkeypatch, OTHER_SEAT, READER, [_event(id=1), swap])
-        opening, reagreement = await svc.list_events(AsyncMock(), 5, USER)
+        opening, reagreement = (await svc.list_events(AsyncMock(), 5, USER)).items
         assert (opening.can_delete, reagreement.can_delete) == (False, True)
 
     @pytest.mark.asyncio
@@ -1337,7 +1339,7 @@ class TestWhatTheLedgerResponseSaysAboutEachRow:
             confirmed_at=datetime(2026, 9, 1, 12, 0),
         )
         self._list_as(monkeypatch, SEAT, WRITER, [swap, confirmed])
-        unconfirmed_row, confirmed_row = await svc.list_events(AsyncMock(), 5, USER)
+        unconfirmed_row, confirmed_row = (await svc.list_events(AsyncMock(), 5, USER)).items
         assert (unconfirmed_row.can_delete, confirmed_row.can_delete) == (True, False)
         # And the timestamp travels, because it is what the row's badge states.
         assert confirmed_row.confirmed_at is not None and unconfirmed_row.confirmed_at is None
@@ -1484,9 +1486,9 @@ class TestReading:
         # V5: a member holding 0% still sees every movement. list_events gates on VISIBILITY, never on
         # write access and never on holding units.
         monkeypatch.setattr(svc.pot_service, "require_visible", AsyncMock(return_value=(POT, OTHER_SEAT, None)))
-        monkeypatch.setattr(svc.pot_ownership_repository, "list_by_pot", AsyncMock(return_value=[_event()]))
+        monkeypatch.setattr(svc.pot_ownership_repository, "list_page_by_pot", AsyncMock(return_value=([_event()], 1)))
         monkeypatch.setattr(svc.group_repository, "list_members", AsyncMock(return_value=[SEAT, OTHER_SEAT]))
-        events = await svc.list_events(AsyncMock(), 5, USER)
+        events = (await svc.list_events(AsyncMock(), 5, USER)).items
         assert [(e.member_id, e.member_name) for e in events] == [(100, "Santi")]
 
     @pytest.mark.asyncio

@@ -19,6 +19,7 @@ from app.models.utils import utcnow
 from app.repositories import invite_repository, user_repository
 from app.services import email_templates, settings_service
 from app.services.email_service import EmailMessage, get_email_service
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +58,9 @@ def effective_status(invite: Invite) -> str:
     return invite.status.value
 
 
-# Lists every invite, newest first (admin invite management view).
-async def list_invites(session: AsyncSession) -> list[Invite]:
-    return await invite_repository.list_all(session)
+# Lists one page of invites, newest first (admin invite management view).
+async def list_invites(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[Invite], int]:
+    return await invite_repository.list_all(session, page=page, page_size=page_size)
 
 
 # Creates (or re-arms) an invite for an email and emails the signup link. Rejects an address that

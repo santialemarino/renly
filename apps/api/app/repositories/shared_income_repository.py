@@ -17,17 +17,23 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.shared_income import SharedIncome, SharedIncomeSplit
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# Lists a group's shared income, newest first. Unpaginated on purpose, matching the expense sibling:
-# the group hub shows the group's own activity, and a group's row count is bounded by what a household
-# records rather than by a whole user's history — the paginated view of the same rows is the /income
-# union.
-async def list_by_group(session: AsyncSession, group_id: int) -> list[SharedIncome]:
-    result = await session.execute(
-        select(SharedIncome).where(SharedIncome.group_id == group_id).order_by(SharedIncome.date.desc(), SharedIncome.id.desc())
-    )
-    return list(result.scalars().all())
+# Lists one page of a group's shared income, newest first, with the total across every page. Paginated
+# for the reason the expense sibling is, and in step with it.
+async def list_by_group(
+    session: AsyncSession,
+    group_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[SharedIncome], int]:
+    where = SharedIncome.group_id == group_id
+    count_result = await session.execute(select(func.count()).select_from(SharedIncome).where(where))
+    ordered = select(SharedIncome).where(where).order_by(SharedIncome.date.desc(), SharedIncome.id.desc())
+    result = await session.execute(apply_page(ordered, page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Fetches one piece of shared income by id. Scoped by RLS rather than by an owner filter — the row

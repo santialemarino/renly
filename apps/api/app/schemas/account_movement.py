@@ -6,6 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.domain.account_movement import MovementKind, MovementSource
+from app.schemas.pagination import PaginatedResponse
 
 
 # One row of the ledger. `amount` is signed in the account's currency (positive in, negative out), so
@@ -44,11 +45,8 @@ class AccountMovementResponse(BaseModel):
 # income/expense entry is validated to match the account's currency, each transfer leg is stored in its
 # own account's, and a card settlement records what left the account separately from what it cleared —
 # so the whole ledger is denominated in the account's currency however the movement arose.
-class AccountMovementListResponse(BaseModel):
+class AccountMovementListResponse(PaginatedResponse):
     items: list[AccountMovementResponse] = Field(description="Movements on this page, newest first.")
-    total: int = Field(description="Total movements matching the filter.")
-    page: int = Field(description="Current page (1-based).")
-    page_size: int = Field(description="Items per page.")
     currency: str = Field(description="Currency every movement is denominated in (the account's).")
 
     model_config = {"from_attributes": True}

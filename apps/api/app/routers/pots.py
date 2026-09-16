@@ -4,6 +4,7 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import AdminSessionDep, SessionDep
+from app.deps.pagination import PageQuery
 from app.schemas.pot import (
     PotCreate,
     PotHoldingContribute,
@@ -11,6 +12,7 @@ from app.schemas.pot import (
     PotHoldingsResponse,
     PotMovementCreate,
     PotOpeningCreate,
+    PotOwnershipEventListResponse,
     PotOwnershipEventResponse,
     PotPermissionUpdate,
     PotReagreementCreate,
@@ -199,11 +201,16 @@ async def contribute_holding(
     )
 
 
-# Lists the pot's ownership ledger in replay order. Visible to whoever may see the pot at all,
-# including a member holding 0% of it.
-@router.get("/{pot_id}/ownership", response_model=list[PotOwnershipEventResponse])
-async def list_ownership_events(pot_id: int, current_user: CurrentUser, session: SessionDep) -> list[PotOwnershipEventResponse]:
-    return await pot_ownership_service.list_events(session, pot_id, current_user)
+# Lists one page of the pot's ownership ledger, newest first. Visible to whoever may see the pot at
+# all, including a member holding 0% of it.
+@router.get("/{pot_id}/ownership", response_model=PotOwnershipEventListResponse)
+async def list_ownership_events(
+    pot_id: int,
+    current_user: CurrentUser,
+    session: SessionDep,
+    page_query: PageQuery,
+) -> PotOwnershipEventListResponse:
+    return await pot_ownership_service.list_events(session, pot_id, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Records the pot's opening baseline: its value and each owner's percentage on a date. Refused with

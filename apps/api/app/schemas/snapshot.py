@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.models.investment import Currency
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /investments/{id}/snapshots. Creates or updates snapshot for that date.
@@ -35,3 +36,8 @@ class SnapshotResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /investments/{id}/snapshots.
+class SnapshotListResponse(PaginatedResponse):
+    items: list[SnapshotResponse] = Field(description="Snapshots on this page, newest first.")

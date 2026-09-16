@@ -2,11 +2,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from app.models.api_key import ApiKey
+from app.utils.pagination import apply_limit
 
 
 # List all active API keys for a user.
-async def list_by_user(session: AsyncSession, user_id: int) -> list[ApiKey]:
-    result = await session.execute(select(ApiKey).where(ApiKey.user_id == user_id, ApiKey.is_active.is_(True)).order_by(ApiKey.created_at.desc()))
+async def list_by_user(session: AsyncSession, user_id: int, *, limit: int | None = None) -> list[ApiKey]:
+    stmt = select(ApiKey).where(ApiKey.user_id == user_id, ApiKey.is_active.is_(True)).order_by(ApiKey.created_at.desc())
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 

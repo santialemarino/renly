@@ -80,6 +80,7 @@ from app.services import (
     settings_service,
     shared_audit_service,
 )
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -347,9 +348,16 @@ async def get_latest_reconciled_date(session: AsyncSession, account_id: int, use
 
 # List an account's reconciliations, newest first, in EITHER scope — a pot's account has a history its
 # co-owners are meant to read. Reachability is get_account_in_scope's answer plus RLS's.
-async def list_reconciliations(session: AsyncSession, account_id: int, user: User) -> list[AccountReconciliation]:
+async def list_reconciliations(
+    session: AsyncSession,
+    account_id: int,
+    user: User,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[AccountReconciliation], int]:
     await account_service.get_account_in_scope(session, account_id, user)
-    return await account_reconciliation_repository.list_by_account(session, account_id)
+    return await account_reconciliation_repository.list_by_account(session, account_id, page=page, page_size=page_size)
 
 
 # Who ran each of the given reconciliations, as the group names them — `{user_id: display_name}` for one

@@ -7,6 +7,7 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.card_settlement import CardSettlement
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # What the FUNDING ACCOUNT paid, which is only the same thing as what cleared the card when no conversion
@@ -19,12 +20,19 @@ def settlement_cash_leg():
     return func.coalesce(CardSettlement.account_amount, CardSettlement.amount)
 
 
-# List all settlements for a credit card.
-async def list_by_card(session: AsyncSession, credit_card_id: int) -> list[CardSettlement]:
-    result = await session.execute(
-        select(CardSettlement).where(CardSettlement.credit_card_id == credit_card_id).order_by(CardSettlement.date.desc(), CardSettlement.id.desc())
-    )
-    return list(result.scalars().all())
+# List one page of a credit card's settlements, newest first, with the total across every page.
+async def list_by_card(
+    session: AsyncSession,
+    credit_card_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[CardSettlement], int]:
+    where = CardSettlement.credit_card_id == credit_card_id
+    count_result = await session.execute(select(func.count()).select_from(CardSettlement).where(where))
+    stmt = apply_page(select(CardSettlement).where(where).order_by(CardSettlement.date.desc(), CardSettlement.id.desc()), page, page_size)
+    result = await session.execute(stmt)
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Get a single settlement by id and card.

@@ -26,8 +26,9 @@ from app.repositories import (
     shared_expense_repository,
     subscription_repository,
 )
-from app.schemas.card_settlement import CardSettlementResponse
+from app.schemas.card_settlement import CardSettlementListResponse, CardSettlementResponse
 from app.services import account_service, card_reconciliation_service
+from app.utils.pagination import DEFAULT_PAGE_SIZE, MAX_LIST_ROWS
 
 ZERO = Decimal(0)
 
@@ -51,6 +52,7 @@ async def list_cards(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=active_only,
+        limit=MAX_LIST_ROWS,
     )
 
 
@@ -320,12 +322,24 @@ def _resolve_account_amount(account: Account | None, currency: str, amount: Deci
 
 # List settlements for a credit card (verifies card ownership first), each carrying its funding
 # account's name. Accounts are batch-loaded once for the whole list rather than per row.
-async def list_settlements(session: AsyncSession, card_id: int, user: User) -> list[CardSettlementResponse]:
+async def list_settlements(
+    session: AsyncSession,
+    card_id: int,
+    user: User,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> CardSettlementListResponse:
     await get_card(session, card_id, user)
-    settlements = await card_settlement_repository.list_by_card(session, card_id)
+    settlements, total = await card_settlement_repository.list_by_card(session, card_id, page=page, page_size=page_size)
     referenced = sorted({s.account_id for s in settlements if s.account_id is not None})
     accounts = {a.id: a for a in await account_repository.get_by_ids(session, referenced, user.id) if a.id is not None}
-    return [_to_settlement_response(s, accounts.get(s.account_id) if s.account_id is not None else None) for s in settlements]
+    return CardSettlementListResponse(
+        items=[_to_settlement_response(s, accounts.get(s.account_id) if s.account_id is not None else None) for s in settlements],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Record a new card settlement. The funding account may be denominated differently from the bucket being

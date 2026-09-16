@@ -6,6 +6,7 @@ from sqlmodel import select
 
 from app.models.installment import Installment
 from app.repositories.utils import apply_listing_filters
+from app.utils.pagination import apply_limit
 
 # Derived expression matching the `InstallmentResponse.next_cuota_date` computed field.
 # Lets the table sort by next-installment order without an O(n) post-query Python re-sort —
@@ -44,6 +45,7 @@ async def list_by_user(
     sort_order: str = "asc",
     active_only: bool = True,
     include_ids: list[int] | None = None,
+    limit: int | None = None,
 ) -> list[Installment]:
     stmt = apply_listing_filters(
         select(Installment),
@@ -59,7 +61,7 @@ async def list_by_user(
         # default view aligned with what the table now leads with.
         default_order=_next_cuota_date_expr.desc(),
     )
-    result = await session.execute(stmt)
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 

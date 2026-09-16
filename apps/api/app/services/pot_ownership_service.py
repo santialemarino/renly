@@ -59,9 +59,10 @@ from app.models.shared_audit import AuditAction, AuditEntityType
 from app.models.user import User
 from app.models.utils import utcnow
 from app.repositories import account_repository, group_repository, pot_ownership_repository, pot_repository
-from app.schemas.pot import PotOwnershipEventResponse
+from app.schemas.pot import PotOwnershipEventListResponse, PotOwnershipEventResponse
 from app.services import exchange_rate_service, notification_service, pot_service, shared_audit_service
 from app.utils.metrics import RateLookup
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -328,16 +329,28 @@ async def _audit(
     )
 
 
-# Lists a pot's ownership ledger in replay order. Visible to whoever may see the pot at all: a member
-# holding 0% still sees every movement, because partial visibility of something you co-own is not a
-# feature (V5).
-async def list_events(session: AsyncSession, pot_id: int, user: User) -> list[PotOwnershipEventResponse]:
+# Lists one page of a pot's ownership ledger, newest first. Visible to whoever may see the pot at all: a
+# member holding 0% still sees every movement, because partial visibility of something you co-own is not
+# a feature (V5).
+async def list_events(
+    session: AsyncSession,
+    pot_id: int,
+    user: User,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> PotOwnershipEventListResponse:
     pot, viewer, permission = await pot_service.require_visible(session, pot_id, user)
-    events = await pot_ownership_repository.list_by_pot(session, pot.id)
+    events, total = await pot_ownership_repository.list_page_by_pot(session, pot.id, page=page, page_size=page_size)
     members = await group_repository.list_members(session, pot.group_id)
     members_by_id = {m.id: m for m in members}
     may_write = pot_service.may_write(permission)
-    return [_build_response(e, members_by_id, viewer_member_id=viewer.id, may_write=may_write) for e in events]
+    return PotOwnershipEventListResponse(
+        items=[_build_response(e, members_by_id, viewer_member_id=viewer.id, may_write=may_write) for e in events],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Records the pot's opening baseline: a value and each owner's percentage on a date, issuing units at

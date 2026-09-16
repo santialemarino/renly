@@ -9,6 +9,7 @@ from sqlmodel import select
 
 from app.models.snapshot import InvestmentSnapshot
 from app.models.utils import utcnow
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # Returns True if the investment has at least one snapshot.
@@ -83,15 +84,22 @@ async def list_by_investments(session: AsyncSession, investment_ids: list[int], 
     return list(result.scalars().all())
 
 
-# Lists snapshots for an investment, most recent first.
+# Lists one page of an investment's snapshots, most recent first, with the total across every page.
+#
+# `date` alone is a total order here, so no id tiebreak is needed to stop a row repeating across pages:
+# (investment_id, date) is unique — one snapshot per investment per date is the entity's whole rule.
 async def list_by_investment(
     session: AsyncSession,
     investment_id: int,
-) -> list[InvestmentSnapshot]:
-    result = await session.execute(
-        select(InvestmentSnapshot).where(InvestmentSnapshot.investment_id == investment_id).order_by(InvestmentSnapshot.date.desc())
-    )
-    return list(result.scalars().all())
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[InvestmentSnapshot], int]:
+    where = InvestmentSnapshot.investment_id == investment_id
+    count_result = await session.execute(select(func.count()).select_from(InvestmentSnapshot).where(where))
+    stmt = apply_page(select(InvestmentSnapshot).where(where).order_by(InvestmentSnapshot.date.desc()), page, page_size)
+    result = await session.execute(stmt)
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Fetches a snapshot by investment and date. Returns None if not found.

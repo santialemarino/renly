@@ -2,9 +2,10 @@ from fastapi import APIRouter, Request, Response
 
 from app.deps.auth import AdminUser
 from app.deps.db import AdminSessionDep
+from app.deps.pagination import PageQuery
 from app.models.invite import Invite
 from app.rate_limit import INVITE_LIMIT, limiter
-from app.schemas.invite import CreateInviteRequest, InviteResponse
+from app.schemas.invite import CreateInviteRequest, InviteListResponse, InviteResponse
 from app.services import invite_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -32,11 +33,16 @@ def _to_response(invite: Invite) -> InviteResponse:
     )
 
 
-# Lists every invite with its status (admin invite management view).
-@router.get("/invites", response_model=list[InviteResponse])
-async def list_invites(admin: AdminUser, session: AdminSessionDep) -> list[InviteResponse]:
-    invites = await invite_service.list_invites(session)
-    return [_to_response(invite) for invite in invites]
+# Lists one page of invites with their status (admin invite management view).
+@router.get("/invites", response_model=InviteListResponse)
+async def list_invites(admin: AdminUser, session: AdminSessionDep, page_query: PageQuery) -> InviteListResponse:
+    invites, total = await invite_service.list_invites(session, page=page_query.page, page_size=page_query.page_size)
+    return InviteListResponse(
+        items=[_to_response(invite) for invite in invites],
+        total=total,
+        page=page_query.page,
+        page_size=page_query.page_size,
+    )
 
 
 # Creates (or re-arms) an invite for an email and emails the signup link. Returns 409 if the email

@@ -4,8 +4,9 @@ from fastapi import APIRouter, Query, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.models.investment import InvestmentCategory
-from app.schemas.asset_price import AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
+from app.schemas.asset_price import AssetPriceListResponse, AssetPriceResponse, PriceLookupResponse, RefreshPricesResponse
 from app.services import asset_price_service
 
 router = APIRouter(prefix="/asset-prices", tags=["asset-prices"])
@@ -41,17 +42,17 @@ async def get_latest_price(
     return AssetPriceResponse.model_validate(price)
 
 
-# Returns price history for a ticker with optional date range.
-@router.get("/{ticker}", response_model=list[AssetPriceResponse])
+# Returns one page of a ticker's price history, newest first, with optional date range.
+@router.get("/{ticker}", response_model=AssetPriceListResponse)
 async def get_price_history(
     ticker: str,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     start_date: date_type | None = Query(default=None, description="Start date filter."),
     end_date: date_type | None = Query(default=None, description="End date filter."),
-) -> list[AssetPriceResponse]:
-    prices = await asset_price_service.get_price_history(session, ticker, start_date, end_date)
-    return [AssetPriceResponse.model_validate(p) for p in prices]
+) -> AssetPriceListResponse:
+    return await asset_price_service.get_price_history(session, ticker, start_date, end_date, page=page_query.page, page_size=page_query.page_size)
 
 
 # Triggers an on-demand price refresh for the caller's ticker-linked investments only.

@@ -6,6 +6,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.pagination import PaginatedResponse
+
 
 # Response for a single asset price entry.
 class AssetPriceResponse(BaseModel):
@@ -19,6 +21,12 @@ class AssetPriceResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /asset-prices/{ticker}. `total` counts the rows matching the requested date range,
+# not the ticker's whole history.
+class AssetPriceListResponse(PaginatedResponse):
+    items: list[AssetPriceResponse] = Field(description="Prices on this page, newest first.")
 
 
 # Response for the price lookup endpoint. Includes optional conversion.

@@ -9,10 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.asset_price import AssetPrice
 from app.models.investment import Investment, InvestmentCategory
 from app.repositories.asset_price_repository import asset_price_repository
-from app.schemas.asset_price import PriceLookupResponse
+from app.schemas.asset_price import AssetPriceListResponse, AssetPriceResponse, PriceLookupResponse
 from app.services import exchange_rate_service, price_providers
 from app.services.price_providers import PriceProviderInfo, PriceResult
 from app.utils import metrics as mh
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +60,23 @@ async def get_latest_price(
     return await asset_price_repository.get_latest(session, ticker)
 
 
-# Returns price history for a ticker, optionally filtered by date range.
+# Returns one page of a ticker's price history, optionally filtered by date range.
 async def get_price_history(
     session: AsyncSession,
     ticker: str,
     start_date: date_type | None = None,
     end_date: date_type | None = None,
-) -> list[AssetPrice]:
-    return await asset_price_repository.get_history(session, ticker, start_date, end_date)
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> AssetPriceListResponse:
+    prices, total = await asset_price_repository.get_history(session, ticker, start_date, end_date, page=page, page_size=page_size)
+    return AssetPriceListResponse(
+        items=[AssetPriceResponse.model_validate(p) for p in prices],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Returns the price for a ticker on a date. Fetches from provider if not in DB.

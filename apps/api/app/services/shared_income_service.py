@@ -59,9 +59,10 @@ from app.repositories import (
     pot_repository,
     shared_income_repository,
 )
-from app.schemas.shared_income import SharedIncomeResponse, SharedIncomeSplitInput, SharedIncomeSplitResponse
+from app.schemas.shared_income import SharedIncomeListResponse, SharedIncomeResponse, SharedIncomeSplitInput, SharedIncomeSplitResponse
 from app.services import exchange_rate_service, group_service, notification_service, pot_ownership_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_optional
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 ZERO = Decimal(0)
 
@@ -149,29 +150,42 @@ def _display_name(members_by_id: dict[int, GroupMember], member_id: int) -> str:
 # Lists a group's shared income with every member's position in each row. Members, splits, destination
 # accounts and source assets are batch-loaded once for the whole list, so the response costs a fixed
 # number of queries regardless of how many rows there are.
-async def list_income(session: AsyncSession, group_id: int, user: User, *, currency: str | None = None) -> list[SharedIncomeResponse]:
+async def list_income(
+    session: AsyncSession,
+    group_id: int,
+    user: User,
+    *,
+    currency: str | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> SharedIncomeListResponse:
     _, viewer = await group_service.require_member(session, group_id, user)
-    rows = await shared_income_repository.list_by_group(session, group_id)
+    rows, total = await shared_income_repository.list_by_group(session, group_id, page=page, page_size=page_size)
     if not rows:
-        return []
+        return SharedIncomeListResponse(items=[], total=total, page=page, page_size=page_size)
     members_by_id = {member.id: member for member in await group_repository.list_members(session, group_id)}
     splits_by_income = await shared_income_repository.list_splits_by_income_ids(session, [row.id for row in rows])
     accounts = await _destination_accounts(session, rows)
     sources = await _source_investments(session, rows)
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
-    return [
-        _build_response(
-            row,
-            splits_by_income.get(row.id, []),
-            members_by_id,
-            viewer.id,
-            account_name=_named(accounts, row.paid_to_account_id),
-            source_name=_named(sources, row.source_investment_id),
-            currency=currency,
-            lookup=lookup,
-        )
-        for row in rows
-    ]
+    return SharedIncomeListResponse(
+        items=[
+            _build_response(
+                row,
+                splits_by_income.get(row.id, []),
+                members_by_id,
+                viewer.id,
+                account_name=_named(accounts, row.paid_to_account_id),
+                source_name=_named(sources, row.source_investment_id),
+                currency=currency,
+                lookup=lookup,
+            )
+            for row in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Every destination account the given rows name, in one query, keyed by id.

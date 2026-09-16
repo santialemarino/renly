@@ -8,6 +8,7 @@ from sqlmodel import select
 
 from app.models.investment_collection import InvestmentCollection, InvestmentCollectionMember
 from app.repositories.utils import apply_sort
+from app.utils.pagination import apply_limit
 
 _SORT_COLUMNS = {
     "name": InvestmentCollection.name,
@@ -22,12 +23,13 @@ async def list_by_user(
     search: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "asc",
+    limit: int | None = None,
 ) -> list[InvestmentCollection]:
     stmt = select(InvestmentCollection).where(InvestmentCollection.user_id == user_id)
     if search:
         stmt = stmt.where(InvestmentCollection.name.ilike(f"%{search}%"))
     stmt = apply_sort(stmt, sort_by, sort_order, sort_columns=_SORT_COLUMNS, default_order=InvestmentCollection.id)
-    result = await session.execute(stmt)
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 

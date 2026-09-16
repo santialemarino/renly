@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.schemas.notification import (
     NotificationEmailCadenceUpdate,
     NotificationFeedResponse,
@@ -15,20 +16,15 @@ from app.services import notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-# What the feed returns when a caller does not ask. The bell popover asks for fewer; the page asks for
-# more, up to the service's own cap.
-DEFAULT_FEED_PAGE_SIZE = 20
-
 
 # Returns one page of the caller's notifications, newest first, with the total and the unread count.
 @router.get("", response_model=NotificationFeedResponse)
 async def get_feed(
     current_user: CurrentUser,
     session: SessionDep,
-    limit: int = Query(default=DEFAULT_FEED_PAGE_SIZE, ge=1, le=notification_service.MAX_FEED_PAGE_SIZE, description="Rows per page."),
-    offset: int = Query(default=0, ge=0, description="Rows to skip."),
+    page_query: PageQuery,
 ) -> NotificationFeedResponse:
-    return await notification_service.get_feed(session, current_user, limit=limit, offset=offset)
+    return await notification_service.get_feed(session, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Marks one notification read. Returns 404 for an id that is not the caller's.

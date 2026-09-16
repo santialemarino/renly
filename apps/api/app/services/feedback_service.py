@@ -7,27 +7,33 @@ from app.models.feedback import Feedback, FeedbackCategory
 from app.models.user import User
 from app.repositories.feedback_repository import feedback_repository
 from app.repositories.user_repository import user_repository
-from app.schemas.feedback import FeedbackAdminResponse, FeedbackCreate, FeedbackResponse
+from app.schemas.feedback import FeedbackAdminResponse, FeedbackCreate, FeedbackListResponse, FeedbackResponse
 from app.services import email_templates, settings_service
 from app.services.email_service import get_email_service
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 logger = logging.getLogger(__name__)
 
 
 # Lists all feedback (newest first) with each author's email, for the admin review list. Reads
 # across users, so it runs on the privileged session.
-async def list_feedback(admin_session: AsyncSession) -> list[FeedbackAdminResponse]:
-    rows = await feedback_repository.list_all_with_email(admin_session)
-    return [
-        FeedbackAdminResponse(
-            id=feedback.id,
-            category=feedback.category,
-            message=feedback.message,
-            created_at=feedback.created_at,
-            email=email,
-        )
-        for feedback, email in rows
-    ]
+async def list_feedback(admin_session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> FeedbackListResponse:
+    rows, total = await feedback_repository.list_all_with_email(admin_session, page=page, page_size=page_size)
+    return FeedbackListResponse(
+        items=[
+            FeedbackAdminResponse(
+                id=feedback.id,
+                category=feedback.category,
+                message=feedback.message,
+                created_at=feedback.created_at,
+                email=email,
+            )
+            for feedback, email in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Stores a user's feedback, then notifies every admin by email (best-effort, after commit — an email

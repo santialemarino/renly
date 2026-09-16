@@ -29,6 +29,7 @@ from app.models.user import User
 from app.repositories import account_repository, transfer_repository
 from app.schemas.transfer import TransferListResponse, TransferResponse
 from app.services import account_service
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 
 # Maps a transfer to its response, denormalizing both account names and currencies so a client renders
@@ -92,14 +93,24 @@ async def _load_pair(session: AsyncSession, user: User, from_account_id: int, to
 
 # List a user's transfers, newest first, optionally narrowed to one account (either leg). Accounts are
 # batch-loaded once for the whole page rather than per row.
-async def list_transfers(session: AsyncSession, user: User, *, account_id: int | None = None) -> TransferListResponse:
-    transfers = await transfer_repository.list_by_user(session, user.id, account_id=account_id)
+async def list_transfers(
+    session: AsyncSession,
+    user: User,
+    *,
+    account_id: int | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> TransferListResponse:
+    transfers, total = await transfer_repository.list_by_user(session, user.id, account_id=account_id, page=page, page_size=page_size)
     referenced = {t.from_account_id for t in transfers} | {t.to_account_id for t in transfers}
     # Any-scope, because a transfer BETWEEN two accounts of the same pot is legal and neither carries
     # a user_id to match on. RLS decides what is reachable; ensure_same_scope decides what is legal.
     accounts = {a.id: a for a in await account_repository.get_by_ids_any_scope(session, sorted(referenced)) if a.id is not None}
     items = [_to_response(t, accounts) for t in transfers if t.from_account_id in accounts and t.to_account_id in accounts]
-    return TransferListResponse(items=items, total=len(items))
+    # `total` is the query's count rather than len(items), which is what the pager needs: the filter
+    # above only drops a row whose accounts this session cannot read, and RLS returns the transfer and
+    # its accounts together, so the two agree.
+    return TransferListResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 # Get a single transfer by id. Raises NotFoundError if it doesn't exist or isn't the user's.

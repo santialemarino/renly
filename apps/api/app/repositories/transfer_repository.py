@@ -9,16 +9,25 @@ from sqlmodel import select
 from app.models.account import Account
 from app.models.transfer import Transfer
 from app.repositories.utils import account_scope_matches
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
 # List a user's transfers, newest first. Optionally narrowed to one account, matching EITHER leg —
 # an account's ledger must show money arriving as well as leaving.
-async def list_by_user(session: AsyncSession, user_id: int, *, account_id: int | None = None) -> list[Transfer]:
+async def list_by_user(
+    session: AsyncSession,
+    user_id: int,
+    *,
+    account_id: int | None = None,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[Transfer], int]:
     stmt = select(Transfer).where(Transfer.user_id == user_id)
     if account_id is not None:
         stmt = stmt.where((Transfer.from_account_id == account_id) | (Transfer.to_account_id == account_id))
-    result = await session.execute(stmt.order_by(Transfer.date.desc(), Transfer.id.desc()))
-    return list(result.scalars().all())
+    count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
+    result = await session.execute(apply_page(stmt.order_by(Transfer.date.desc(), Transfer.id.desc()), page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Get a single transfer by id, scoped to its owner.

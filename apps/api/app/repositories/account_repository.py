@@ -6,6 +6,7 @@ from app.domain.list_scope import ListScope
 from app.models.account import Account
 from app.models.account_reconciliation import AccountReconciliation
 from app.repositories.utils import apply_sort, scope_filter
+from app.utils.pagination import apply_limit
 
 _SORT_COLUMNS = {
     "name": Account.name,
@@ -41,6 +42,7 @@ async def list_by_user(
     sort_by: str | None = None,
     sort_order: str = "asc",
     active_only: bool = True,
+    limit: int | None = None,
 ) -> list[Account]:
     stmt = select(Account).where(scope_filter(Account, user_id, pot_ids or [], scope))
     if active_only:
@@ -54,7 +56,7 @@ async def list_by_user(
         sort_columns=_SORT_COLUMNS,
         default_order=Account.name,
     )
-    result = await session.execute(stmt)
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 

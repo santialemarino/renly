@@ -17,11 +17,13 @@ from sqlmodel import func, select
 from app.models.account import Account
 from app.models.investment import Investment
 from app.models.pot import Pot, PotMemberPermission
+from app.utils.pagination import apply_limit
 
 
 # Lists the pots visible to the session, newest first. RLS restricts this to pots the user may see.
-async def list_visible(session: AsyncSession) -> list[Pot]:
-    result = await session.execute(select(Pot).order_by(Pot.created_at.desc(), Pot.id.desc()))
+async def list_visible(session: AsyncSession, *, limit: int | None = None) -> list[Pot]:
+    stmt = select(Pot).order_by(Pot.created_at.desc(), Pot.id.desc())
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 
@@ -35,8 +37,9 @@ async def list_all(session: AsyncSession) -> list[Pot]:
 
 
 # Lists the visible pots belonging to one group.
-async def list_by_group(session: AsyncSession, group_id: int) -> list[Pot]:
-    result = await session.execute(select(Pot).where(Pot.group_id == group_id).order_by(Pot.created_at.desc(), Pot.id.desc()))
+async def list_by_group(session: AsyncSession, group_id: int, *, limit: int | None = None) -> list[Pot]:
+    stmt = select(Pot).where(Pot.group_id == group_id).order_by(Pot.created_at.desc(), Pot.id.desc())
+    result = await session.execute(apply_limit(stmt, limit))
     return list(result.scalars().all())
 
 

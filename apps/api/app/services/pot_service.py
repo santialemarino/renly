@@ -81,6 +81,7 @@ from app.schemas.pot import (
 )
 from app.services import account_service, exchange_rate_service, shared_audit_service
 from app.utils.metrics import RateLookup, convert_value
+from app.utils.pagination import MAX_LIST_ROWS
 
 ZERO = Decimal(0)
 
@@ -497,7 +498,13 @@ def _as_entries(events):
 # rosters are batch-loaded for all pots at once, so the response cost does not grow with pot count.
 # NAV is per pot because each fans out over its own holdings — see the note in get_nav.
 async def list_pots(session: AsyncSession, user: User, *, group_id: int | None = None) -> list[PotResponse]:
-    pots = await pot_repository.list_by_group(session, group_id) if group_id is not None else await pot_repository.list_visible(session)
+    # Capped on BOTH branches: the ceiling belongs to this endpoint's read, and the two other callers
+    # of list_by_group resolve a group's pots for a computation and must keep reading every row.
+    pots = (
+        await pot_repository.list_by_group(session, group_id, limit=MAX_LIST_ROWS)
+        if group_id is not None
+        else await pot_repository.list_visible(session, limit=MAX_LIST_ROWS)
+    )
     if not pots:
         return []
     pot_ids = [p.id for p in pots if p.id is not None]

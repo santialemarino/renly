@@ -17,16 +17,27 @@ from sqlmodel import select
 
 from app.models.account import Account
 from app.models.shared_expense import SharedExpense, SharedExpenseSplit
+from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 
 
-# Lists a group's shared expenses, newest first. Unpaginated on purpose: the group hub shows the
-# group's own activity, and a group's expense count is bounded by what a household records rather than
-# by a whole user's history — the paginated view of the same rows is the /expenses union.
-async def list_by_group(session: AsyncSession, group_id: int) -> list[SharedExpense]:
-    result = await session.execute(
-        select(SharedExpense).where(SharedExpense.group_id == group_id).order_by(SharedExpense.date.desc(), SharedExpense.id.desc())
-    )
-    return list(result.scalars().all())
+# Lists one page of a group's shared expenses, newest first, with the total across every page.
+#
+# This was deliberately unpaginated until SEC-11, on the argument that a group's expense count is
+# bounded by what a household records rather than by a whole user's history. That is true and still
+# beside the point: smaller than another unbounded set is not bounded, and a household that shares
+# money for five years accumulates rows at a steady rate with nothing ever removing them.
+async def list_by_group(
+    session: AsyncSession,
+    group_id: int,
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> tuple[list[SharedExpense], int]:
+    where = SharedExpense.group_id == group_id
+    count_result = await session.execute(select(func.count()).select_from(SharedExpense).where(where))
+    ordered = select(SharedExpense).where(where).order_by(SharedExpense.date.desc(), SharedExpense.id.desc())
+    result = await session.execute(apply_page(ordered, page, page_size))
+    return list(result.scalars().all()), count_result.scalar_one()
 
 
 # Fetches one shared expense by id. Scoped by RLS rather than by an owner filter — the row belongs to

@@ -3,7 +3,8 @@ from fastapi import APIRouter, status
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
-from app.schemas.shared_expense import SharedExpenseCreate, SharedExpenseResponse, SharedExpenseUpdate
+from app.deps.pagination import PageQuery
+from app.schemas.shared_expense import SharedExpenseCreate, SharedExpenseListResponse, SharedExpenseResponse, SharedExpenseUpdate
 from app.services import shared_expense_service
 
 # Nested under the group because a shared expense has no meaning outside one: every seat it names, the
@@ -13,16 +14,20 @@ from app.services import shared_expense_service
 router = APIRouter(prefix="/groups/{group_id}/expenses", tags=["shared money"])
 
 
-# Lists a group's shared expenses, newest first, each with every member's position in it. Returns 404
-# when the group does not exist or the caller is not an active member — the same answer for both.
-@router.get("", response_model=list[SharedExpenseResponse])
+# Lists one page of a group's shared expenses, newest first, each with every member's position in it.
+# Returns 404 when the group does not exist or the caller is not an active member — the same answer
+# for both.
+@router.get("", response_model=SharedExpenseListResponse)
 async def list_shared_expenses(
     group_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     currency: DisplayCurrency = None,
-) -> list[SharedExpenseResponse]:
-    return await shared_expense_service.list_expenses(session, group_id, current_user, currency=currency)
+) -> SharedExpenseListResponse:
+    return await shared_expense_service.list_expenses(
+        session, group_id, current_user, currency=currency, page=page_query.page, page_size=page_query.page_size
+    )
 
 
 # Records a shared expense and divides it. Returns 400 for a split that does not add up, a funding

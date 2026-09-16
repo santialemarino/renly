@@ -3,7 +3,8 @@ from fastapi import APIRouter, status
 from app.deps.auth import CurrentUser
 from app.deps.currency import DisplayCurrency
 from app.deps.db import SessionDep
-from app.schemas.shared_income import SharedIncomeCreate, SharedIncomeResponse, SharedIncomeUpdate
+from app.deps.pagination import PageQuery
+from app.schemas.shared_income import SharedIncomeCreate, SharedIncomeListResponse, SharedIncomeResponse, SharedIncomeUpdate
 from app.services import shared_income_service
 
 # Nested under the group because shared income has no meaning outside one: every seat it names, the
@@ -13,16 +14,20 @@ from app.services import shared_income_service
 router = APIRouter(prefix="/groups/{group_id}/income", tags=["shared money"])
 
 
-# Lists a group's shared income, newest first, each row with every member's position in it. Returns 404
-# when the group does not exist or the caller is not an active member — the same answer for both.
-@router.get("", response_model=list[SharedIncomeResponse])
+# Lists one page of a group's shared income, newest first, each row with every member's position in
+# it. Returns 404 when the group does not exist or the caller is not an active member — the same
+# answer for both.
+@router.get("", response_model=SharedIncomeListResponse)
 async def list_shared_income(
     group_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     currency: DisplayCurrency = None,
-) -> list[SharedIncomeResponse]:
-    return await shared_income_service.list_income(session, group_id, current_user, currency=currency)
+) -> SharedIncomeListResponse:
+    return await shared_income_service.list_income(
+        session, group_id, current_user, currency=currency, page=page_query.page, page_size=page_query.page_size
+    )
 
 
 # Records a piece of shared income and divides it. Returns 400 for a split that does not add up, a

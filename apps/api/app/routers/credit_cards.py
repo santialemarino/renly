@@ -5,13 +5,15 @@ from fastapi import APIRouter, Query, status
 from app.deps.api_key_auth import JwtOrApiKeyUser
 from app.deps.auth import CurrentUser
 from app.deps.db import SessionDep
+from app.deps.pagination import PageQuery
 from app.domain import CardBucketBalance
 from app.schemas.card_reconciliation import (
     CardReconciliationCreate,
+    CardReconciliationListResponse,
     CardReconciliationResponse,
     StatementPeriodResponse,
 )
-from app.schemas.card_settlement import CardSettlementCreate, CardSettlementResponse
+from app.schemas.card_settlement import CardSettlementCreate, CardSettlementListResponse, CardSettlementResponse
 from app.schemas.credit_card import CardBucketBalanceResponse, CreditCardCreate, CreditCardResponse, CreditCardUpdate
 from app.services import card_reconciliation_service, credit_card_service
 
@@ -147,14 +149,15 @@ async def unarchive_card(
 # --- Settlements ---
 
 
-# List settlements for a credit card, each naming the account it was paid from (when linked).
-@router.get("/{card_id}/settlements", response_model=list[CardSettlementResponse])
+# List one page of a credit card's settlements, each naming the account it was paid from (when linked).
+@router.get("/{card_id}/settlements", response_model=CardSettlementListResponse)
 async def list_settlements(
     card_id: int,
     current_user: CurrentUser,
     session: SessionDep,
-) -> list[CardSettlementResponse]:
-    return await credit_card_service.list_settlements(session, card_id, current_user)
+    page_query: PageQuery,
+) -> CardSettlementListResponse:
+    return await credit_card_service.list_settlements(session, card_id, current_user, page=page_query.page, page_size=page_query.page_size)
 
 
 # Record a new settlement for a credit card.
@@ -196,16 +199,18 @@ async def delete_settlement(
 # --- Reconciliations (Phase 3, Step 5) ---
 
 
-# List reconciliations for a card. Optional ?currency= filters to a single bucket.
-@router.get("/{card_id}/reconciliations", response_model=list[CardReconciliationResponse])
+# List one page of a card's reconciliations. Optional ?currency= filters to a single bucket.
+@router.get("/{card_id}/reconciliations", response_model=CardReconciliationListResponse)
 async def list_reconciliations(
     card_id: int,
     current_user: CurrentUser,
     session: SessionDep,
+    page_query: PageQuery,
     currency: str | None = Query(default=None, description="Filter to a single bucket currency."),
-) -> list[CardReconciliationResponse]:
-    rows = await card_reconciliation_service.list_reconciliations(session, card_id, current_user, currency=currency)
-    return [CardReconciliationResponse.model_validate(r) for r in rows]
+) -> CardReconciliationListResponse:
+    return await card_reconciliation_service.list_reconciliations(
+        session, card_id, current_user, currency=currency, page=page_query.page, page_size=page_query.page_size
+    )
 
 
 # List recent statement periods per bucket with reconciliation status. Drives the Reconciliations sub-section UI.

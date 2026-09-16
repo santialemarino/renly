@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.group_money_settings import SplitMethod
 from app.models.group_settlement import GroupSettlementStatus
 from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /groups/{group_id}/settlements — a payment one member made to another.
@@ -224,6 +225,11 @@ class GroupMoneySettingsUpdate(RequestBase):
     auto_finalise_settlements: bool | None = Field(
         default=None, description="When true a recorded settlement is confirmed on the spot instead of waiting on the payee."
     )
+
+
+# Response for GET /groups/{id}/settlements.
+class GroupSettlementListResponse(PaginatedResponse):
+    items: list[GroupSettlementResponse] = Field(description="Settlements on this page, newest first.")
 
 
 # The money settings a group holds in common.

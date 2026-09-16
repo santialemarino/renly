@@ -7,6 +7,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from app.schemas.base import RequestBase
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /credit-cards/{id}/reconciliations. Creates a fresh reconciliation
@@ -44,6 +45,11 @@ class CardReconciliationResponse(BaseModel):
     updated_at: datetime = Field(description="Last update timestamp.")
 
     model_config = {"from_attributes": True}
+
+
+# Response for GET /credit-cards/{id}/reconciliations.
+class CardReconciliationListResponse(PaginatedResponse):
+    items: list[CardReconciliationResponse] = Field(description="Reconciliations on this page, newest first.")
 
 
 # One entry in the GET /credit-cards/{id}/statements response — drives the Reconciliations sub-section UI.

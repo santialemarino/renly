@@ -35,6 +35,7 @@ from app.repositories import (
 from app.schemas.account import AccountListResponse, AccountResponse
 from app.services import pot_service
 from app.services.utils import pot_sections
+from app.utils.pagination import MAX_LIST_ROWS
 
 ZERO = Decimal(0)
 
@@ -60,6 +61,7 @@ async def list_accounts(
         sort_by=sort_by,
         sort_order=sort_order,
         active_only=active_only,
+        limit=MAX_LIST_ROWS,
     )
 
 

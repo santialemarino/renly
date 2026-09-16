@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.domain.pot_monitoring import PotSeriesInterval
 from app.models.pot import OwnershipEventType, PotCadence, PotVisibility
 from app.schemas.base import RequestBase, validate_supported_currency
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /pots.
@@ -292,3 +293,9 @@ class PotOwnershipEventResponse(BaseModel):
     can_delete: bool = Field(description="Whether they may remove it: write access, or either named seat of an unconfirmed re-agreement.")
     notes: str | None = Field(default=None, description="Optional notes.")
     created_at: datetime = Field(description="When it was recorded.")
+
+
+# Response for GET /pots/{id}/ownership. Newest first — the reading order, not the replay order the
+# ownership split is derived in.
+class PotOwnershipEventListResponse(PaginatedResponse):
+    items: list[PotOwnershipEventResponse] = Field(description="Ledger entries on this page, newest first.")

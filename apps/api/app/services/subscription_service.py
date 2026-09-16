@@ -20,6 +20,7 @@ from app.schemas.subscription import SubscriptionResponse
 from app.services import account_service, exchange_rate_service
 from app.utils.dates import advance_by_cycle, step_back_by_cycle
 from app.utils.metrics import RateLookup, convert_optional
+from app.utils.pagination import MAX_LIST_ROWS
 
 
 # Maps a subscription to its response, converting the amount at today's rate when a display
@@ -57,6 +58,7 @@ async def list_subscriptions(
         sort_order=sort_order,
         active_only=active_only,
         include_ids=include_ids,
+        limit=MAX_LIST_ROWS,
     )
     lookup = await exchange_rate_service.get_user_rate_lookup(session, user.id) if currency else None
     # Rate anchor for the converted_* display fields: deliberately server-date, not the user's local

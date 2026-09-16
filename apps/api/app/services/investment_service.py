@@ -16,8 +16,11 @@ from app.repositories import (
     transaction_repository,
 )
 from app.schemas.investment import InvestmentCollectionInfo, InvestmentListResponse, InvestmentResponse
+from app.schemas.snapshot import SnapshotListResponse, SnapshotResponse
+from app.schemas.transaction import TransactionListResponse, TransactionResponse
 from app.services import pot_service, settings_service
 from app.services.utils import pot_sections
+from app.utils.pagination import DEFAULT_PAGE_SIZE
 
 
 # Assembles InvestmentResponse, enriching it with collection info and snapshot presence.
@@ -89,7 +92,7 @@ async def list_investments(
     category: InvestmentCategory | None = None,
     active_only: bool = True,
     page: int = 1,
-    page_size: int = 20,
+    page_size: int = DEFAULT_PAGE_SIZE,
     sort_by: str | None = None,
     sort_order: str = "asc",
 ) -> InvestmentListResponse:
@@ -255,14 +258,23 @@ async def set_investment_collections(
     await session.commit()
 
 
-# Lists snapshots for an investment. Raises 404 if investment not found or not owned.
+# Lists one page of an investment's snapshots. Raises 404 if investment not found or not owned.
 async def list_snapshots(
     session: AsyncSession,
     investment_id: int,
     user: User,
-) -> list[InvestmentSnapshot]:
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> SnapshotListResponse:
     await get_investment(session, investment_id, user)
-    return await snapshot_repository.list_by_investment(session, investment_id)
+    snapshots, total = await snapshot_repository.list_by_investment(session, investment_id, page=page, page_size=page_size)
+    return SnapshotListResponse(
+        items=[SnapshotResponse.model_validate(s) for s in snapshots],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Creates or updates a snapshot for the given investment and date. One per (investment, date).
@@ -315,9 +327,18 @@ async def list_transactions(
     session: AsyncSession,
     investment_id: int,
     user: User,
-) -> list[Transaction]:
+    *,
+    page: int = 1,
+    page_size: int = DEFAULT_PAGE_SIZE,
+) -> TransactionListResponse:
     await get_investment(session, investment_id, user)
-    return await transaction_repository.list_by_investment(session, investment_id)
+    transactions, total = await transaction_repository.list_by_investment(session, investment_id, page=page, page_size=page_size)
+    return TransactionListResponse(
+        items=[TransactionResponse.model_validate(t) for t in transactions],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # Fetches one transaction by id. Raises NotFoundError if investment/transaction not found/owned.

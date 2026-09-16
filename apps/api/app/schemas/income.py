@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.income_entry import IncomeCategory
 from app.schemas.base import RequestBase, validate_supported_currency, validate_user_pickable_income_category
 from app.schemas.list_scope import ListSectionResponse
+from app.schemas.pagination import PaginatedResponse
 
 
 # Body for POST /income.
@@ -92,11 +93,8 @@ class IncomeResponse(BaseModel):
 
 
 # Paginated response for GET /income.
-class IncomeListResponse(BaseModel):
+class IncomeListResponse(PaginatedResponse):
     items: list[IncomeResponse] = Field(description="Income entries on this page.")
-    total: int = Field(description="Total matching entries.")
-    page: int = Field(description="Current page (1-based).")
-    page_size: int = Field(description="Items per page.")
     display_currency: str | None = Field(default=None, description="Target currency for converted amounts (None = original).")
     skipped_currencies: list[str] = Field(
         default_factory=list,

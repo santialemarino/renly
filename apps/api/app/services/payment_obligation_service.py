@@ -18,6 +18,7 @@ from app.schemas.payment_obligation import PaymentObligationResponse
 from app.services import account_service, exchange_rate_service
 from app.utils.dates import OBLIGATION_MONTH_STEP, add_months_anchored
 from app.utils.metrics import RateLookup, convert_optional
+from app.utils.pagination import MAX_LIST_ROWS
 
 
 # Maps an obligation to its response, converting the amount at today's rate when a display
@@ -55,6 +56,7 @@ async def list_obligations(
         sort_order=sort_order,
         active_only=active_only,
         include_ids=include_ids,
+        limit=MAX_LIST_ROWS,
     )
     # Batch-load latest-paid date per obligation in one query so archived one-off rows
     # can display "Paid on YYYY-MM-DD" without an N+1 lookup (Phase 3, Step E, 6.i).
