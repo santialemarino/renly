@@ -119,9 +119,11 @@ async def to_responses(session: AsyncSession, accounts: list[Account], user: Use
 # and per-currency balance total (X2).
 #
 # The totals are folded from the ROWS rather than from an aggregate query, and that is not a shortcut:
-# this list is unpaginated, so the response already IS the whole filtered set, and each row's balance is
-# DERIVED from eleven movement sources rather than stored — an aggregate would have to re-derive every
-# one of them to restate a figure already in hand. Currencies never net, exactly as the group hub's
+# this list is not paginated, so the response already IS the whole filtered set, and each row's balance
+# is DERIVED from eleven movement sources rather than stored — an aggregate would have to re-derive
+# every one of them to restate a figure already in hand. SEC-11's ceiling does not change that: it is
+# 500 rows against a plausible holding of a dozen, so a section total folded from the rows describes
+# the same set the rows do. Currencies never net, exactly as the group hub's
 # balances do not: owing dollars while holding pesos is a real state and one blended figure would hide it.
 #
 # `private` is the default scope for the reason the repository states: seven other pages read this list
@@ -148,8 +150,8 @@ async def list_accounts_grouped(
         active_only=active_only,
     )
     items = await to_responses(session, accounts, user)
-    # One tuple per account, because this list is unpaginated: the rows in hand ARE the whole filtered
-    # set, so the fold needs no aggregate query behind it.
+    # One tuple per account, because this list is capped rather than paginated: the rows in hand ARE
+    # the whole filtered set, so the fold needs no aggregate query behind it.
     counts = [(a.pot_id, a.currency, item.balance, 1) for a, item in zip(accounts, items, strict=True)]
     # No visible pot means no section headers, and an empty `sections` is what tells the page to draw
     # the flat table it always drew — a solo user's accounts page is unchanged by X2.

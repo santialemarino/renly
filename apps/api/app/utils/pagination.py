@@ -20,8 +20,9 @@ from sqlalchemy import Select
 
 logger = logging.getLogger(__name__)
 
-# Rows per page when the caller does not ask. Matches what /expenses, /income and the account ledger
-# already served, so the four lists that were paginated before SEC-11 keep their behaviour.
+# Rows per page when the caller does not ask. The number /expenses, /income and the account ledger
+# already served, so three of the four lists paginated before SEC-11 keep their behaviour exactly;
+# /investments moved 20 -> 25 to join them, which is the whole point of there being one number.
 DEFAULT_PAGE_SIZE = 25
 
 # The largest page any endpoint will serve. A caller asking for more gets a 422 from the Query

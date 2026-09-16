@@ -68,8 +68,8 @@ def _section_order(key: int | None) -> tuple[int, int]:
 # Folds `(key, currency, amount, count)` aggregate rows into ordered sections.
 #
 # One function for both mechanics: a paginated list feeds it a grouped query's rows, while `/accounts`
-# — which is unpaginated, so the response already IS the whole filtered set — feeds it one tuple per
-# account. The renderer therefore has one input shape either way.
+# — which is capped rather than paginated, so the response already IS the whole filtered set — feeds it
+# one tuple per account. The renderer therefore has one input shape either way.
 #
 # A null `currency` means the rows carry no money to total (`/investments`), and the section then
 # reports its count alone. Counts are summed across a key's currency groups because a row belongs to
