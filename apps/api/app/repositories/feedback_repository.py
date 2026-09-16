@@ -13,9 +13,13 @@ from app.utils.pagination import DEFAULT_PAGE_SIZE, apply_page
 # every page, for the admin review list. Reads across users, so it must run on the privileged session
 # (RLS would otherwise hide other rows).
 #
-# The total counts the same JOIN rather than the table: a feedback row whose author no longer exists is
-# not in the list, so counting Feedback alone would page a set the query never returns. The id tiebreak
-# makes the order total — several rows can share a created_at.
+# The total counts the same JOIN the page reads rather than the table, so the two describe one set by
+# construction. Today they cannot disagree — `feedback.user_id` is ON DELETE CASCADE, so a row whose
+# author is gone does not exist — and a mutation sweep confirmed as much by counting the table instead
+# and killing nothing. It is written this way because the equivalence is the FK's to keep, not this
+# query's: relax that constraint and counting the table would page a set the query never returns.
+#
+# The id tiebreak makes the order total — several rows can share a created_at.
 async def list_all_with_email(session: AsyncSession, *, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> tuple[list[tuple[Feedback, str]], int]:
     joined = select(Feedback, User.email).join(User, User.id == Feedback.user_id)
     count_result = await session.execute(select(func.count()).select_from(joined.subquery()))

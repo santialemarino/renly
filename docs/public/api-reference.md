@@ -6,6 +6,41 @@ Base URL: `/api` (all paths below are relative to this).
 
 ---
 
+## How lists are bounded
+
+No endpoint returns an unbounded number of rows. A list is handled in one of two ways, depending on
+whether its row count grows with **time** or only with what you chose to create.
+
+**Paginated lists** take `page` and `page_size`, and answer with an envelope:
+
+```json
+{ "items": [...], "total": 412, "page": 2, "page_size": 25 }
+```
+
+`total` counts every matching row rather than the page, so a client can tell how many pages there are.
+
+| Parameter   | Type | Default | Notes                                                                  |
+| ----------- | ---- | ------- | ---------------------------------------------------------------------- |
+| `page`      | int  | `1`     | 1-based. Below `1` is rejected with `422`.                             |
+| `page_size` | int  | `25`    | Maximum `100`. Asking for more is **rejected with `422`**, not capped. |
+
+A page past the end returns an empty `items` with the true `total` — except the account ledger
+(`/accounts/{id}/movements`), which clamps to the last page that has rows.
+
+These endpoints are paginated: `/expenses`, `/income`, `/investments`,
+`/investments/{id}/snapshots`, `/investments/{id}/transactions`, `/accounts/{id}/movements`,
+`/accounts/{id}/reconciliations`, `/transfers`, `/credit-cards/{id}/settlements`,
+`/credit-cards/{id}/reconciliations`, `/asset-prices/{ticker}`, `/pots/{id}/ownership`,
+`/groups/{id}/expenses`, `/groups/{id}/income`, `/groups/{id}/settlements`, `/notifications`,
+`/admin/invites` and `/feedback`.
+
+**Capped lists** take no pagination parameters and return a plain array, bounded at **500 rows** — far
+above any realistic holding, so in practice you receive everything: `/accounts`, `/api-keys`,
+`/collections`, `/credit-cards`, `/groups`, `/installments`, `/payment-obligations`, `/pots` and
+`/subscriptions`.
+
+---
+
 ## Authentication
 
 | Method | Path                         | Description                                                                                                                                                           |
@@ -61,7 +96,7 @@ Every investment response — list, get-by-id, create and update — carries its
 | `category`       | string  | --      | Filter by category (e.g., `cedears`, `stocks`).            |
 | `active_only`    | boolean | `true`  | Whether to exclude archived investments.                   |
 | `page`           | int     | `1`     | Page number (1-based).                                     |
-| `page_size`      | int     | `20`    | Results per page (max 100).                                |
+| `page_size`      | int     | `25`    | Results per page (max 100).                                |
 | `sort_by`        | string  | --      | Sort field: `name`, `category`, `base_currency`, `broker`. |
 | `sort_order`     | string  | `asc`   | Sort direction: `asc` or `desc`.                           |
 
@@ -133,7 +168,7 @@ Snapshots are nested under an investment. Each snapshot records the value of an 
 
 | Method | Path                          | Description                                                                                      |
 | ------ | ----------------------------- | ------------------------------------------------------------------------------------------------ |
-| `GET`  | `/investments/{id}/snapshots` | List all snapshots for an investment, ordered by date.                                           |
+| `GET`  | `/investments/{id}/snapshots` | One page of an investment's snapshots, newest first.                                             |
 | `POST` | `/investments/{id}/snapshots` | Create or update a snapshot (upsert). If a snapshot already exists for that date, it is updated. |
 
 **Snapshot body fields:** `date`, `value`, `quantity` (optional), `currency`, `notes` (optional).
@@ -146,7 +181,7 @@ Transactions are nested under an investment. They represent money movements: buy
 
 | Method   | Path                                     | Description                                             |
 | -------- | ---------------------------------------- | ------------------------------------------------------- |
-| `GET`    | `/investments/{id}/transactions`         | List all transactions for an investment.                |
+| `GET`    | `/investments/{id}/transactions`         | One page of an investment's transactions, newest first. |
 | `GET`    | `/investments/{id}/transactions/{tx_id}` | Get a single transaction.                               |
 | `POST`   | `/investments/{id}/transactions`         | Create a new transaction.                               |
 | `PUT`    | `/investments/{id}/transactions/{tx_id}` | Update a transaction. Only provided fields are changed. |
@@ -311,7 +346,7 @@ Credit cards are treated as liabilities. The balance is computed as: total expen
 | `DELETE` | `/credit-cards/{id}`                   | Delete a card. Returns 409 if the card has linked expenses.                                   |
 | `POST`   | `/credit-cards/{id}/archive`           | Archive a card (hide from active selection).                                                  |
 | `POST`   | `/credit-cards/{id}/unarchive`         | Restore an archived card.                                                                     |
-| `GET`    | `/credit-cards/{id}/settlements`       | List settlements (payments) for a card.                                                       |
+| `GET`    | `/credit-cards/{id}/settlements`       | One page of a card's settlements (payments), newest first.                                    |
 | `POST`   | `/credit-cards/{id}/settlements`       | Record a new settlement.                                                                      |
 | `DELETE` | `/credit-cards/{id}/settlements/{sid}` | Delete a settlement.                                                                          |
 
@@ -343,7 +378,7 @@ Per-bucket, per-statement true-up against the bank. Captures fees / FX / taxes /
 
 | Method   | Path                                       | Description                                                                                                                                                               |
 | -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/credit-cards/{id}/reconciliations`       | List reconciliations for a card. Optional `currency` filter selects a single bucket.                                                                                      |
+| `GET`    | `/credit-cards/{id}/reconciliations`       | One page of a card's reconciliations, newest first. Optional `currency` filter selects a single bucket.                                                                   |
 | `GET`    | `/credit-cards/{id}/statements`            | List recent statement periods per bucket with `Reconciled` / `Not reconciled` / `Stale` status. Drives the Reconciliations sub-section UI.                                |
 | `POST`   | `/credit-cards/{id}/reconciliations`       | Create-or-replace a reconciliation. If one exists for the same `(currency, period_start, period_end)`, it (and its adjustment) is deleted before the new pair is written. |
 | `DELETE` | `/credit-cards/{id}/reconciliations/{rid}` | Delete a reconciliation. Cascade-deletes its adjustment expense.                                                                                                          |
@@ -399,7 +434,7 @@ Money moving between two accounts you own. Neither income nor an expense — net
 
 | Method   | Path              | Description                                     |
 | -------- | ----------------- | ----------------------------------------------- |
-| `GET`    | `/transfers`      | List your transfers, newest first.              |
+| `GET`    | `/transfers`      | One page of your transfers, newest first.       |
 | `POST`   | `/transfers`      | Record a transfer between two of your accounts. |
 | `GET`    | `/transfers/{id}` | Get a single transfer.                          |
 | `PUT`    | `/transfers/{id}` | Update a transfer. Only provided fields change. |
@@ -430,12 +465,12 @@ The category labels a true-up; it does not hide it. Adjustments still count towa
 
 Reconciling is repeatable, and works forward: a later reconciliation simply appends and the most recent one wins. Re-running the same date is self-correcting — the earlier adjustment is already part of the computed balance, so the difference comes out zero and nothing new is posted. Reconciling a date **earlier** than the account's latest reconciliation is rejected (400 `account_reconciliation_before_last`): its adjustment would post underneath the newer reconciliation, which is bounded to its own date and cannot see it, leaving that newer balance wrong. To revise an older date, delete the newer reconciliation first.
 
-| Method   | Path                                   | Description                                                              |
-| -------- | -------------------------------------- | ------------------------------------------------------------------------ |
-| `GET`    | `/accounts/{id}/computed-balance`      | The account's derived balance at a date (drives the difference preview). |
-| `GET`    | `/accounts/{id}/reconciliations`       | List an account's reconciliations, newest first.                         |
-| `POST`   | `/accounts/{id}/reconciliations`       | Reconcile the account against its real balance.                          |
-| `DELETE` | `/accounts/{id}/reconciliations/{rid}` | Delete a reconciliation (also removes the adjustment it created).        |
+| Method   | Path                                   | Description                                                                                                                                                |
+| -------- | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/accounts/{id}/computed-balance`      | The account's derived balance at a date (drives the difference preview).                                                                                   |
+| `GET`    | `/accounts/{id}/reconciliations`       | One page of an account's reconciliations, newest first. The response also carries `latest_as_of_date` — only a reconciliation on that date may be deleted. |
+| `POST`   | `/accounts/{id}/reconciliations`       | Reconcile the account against its real balance.                                                                                                            |
+| `DELETE` | `/accounts/{id}/reconciliations/{rid}` | Delete a reconciliation (also removes the adjustment it created).                                                                                          |
 
 **Computed-balance query parameters:** `as_of_date` (required) — the date to compute at.
 
@@ -712,7 +747,7 @@ These matter only while `SIGNUP_MODE=invite`. In `open` mode anyone can sign up,
 
 | Method | Path                         | Description                                                                                                                   |
 | ------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/admin/invites`             | Every invite with its effective status. Spans all invites, not only the ones you created.                                     |
+| `GET`  | `/admin/invites`             | One page of invites with their effective status, newest first. Spans all invites, not only the ones you created.              |
 | `POST` | `/admin/invites`             | Invite an email and send it a signup link. Body: `email`. `409 invite_email_taken` if that address already has an account.    |
 | `POST` | `/admin/invites/{id}/resend` | Re-arm the invite with a fresh token and send the link again. `404` if unknown, `409` once it has been accepted.              |
 | `POST` | `/admin/invites/{id}/revoke` | Kill a pending invite's link. `404` if unknown, `409` once accepted — the account exists, so there is nothing left to revoke. |
@@ -829,15 +864,15 @@ A holding must be your own private one to move it in, and naming one you cannot 
 
 Every balance is derived by replaying dated events — nothing is stored as a running total, which is also why back-dating is allowed here (it simply recomputes the series) while account reconciliation is forward-only.
 
-| Method   | Path                                      | Description                                                                                                                                          |
-| -------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/pots/{id}/ownership`                    | The full ledger in replay order. Visible to anyone who may see the pot, including a 0% owner.                                                        |
-| `POST`   | `/pots/{id}/ownership/opening`            | Set the baseline. Body: `date`, `value`, `shares` (percentage per member id), optional `notes`. One event per owner.                                 |
-| `POST`   | `/pots/{id}/ownership/movements`          | Record a `contribution` or `withdrawal`. Body: `type`, `date`, `member_id`, `amount`, optional account legs.                                         |
-| `POST`   | `/pots/{id}/ownership/reagreements`       | Move units between two members with no money. Body: `date`, `from_member_id`, `to_member_id`, and the share as either `percentage` or `whole_share`. |
-| `POST`   | `/pots/{id}/ownership/{event_id}/confirm` | Agree to a re-agreement, which locks the entry against deletion. The affected member only.                                                           |
-| `DELETE` | `/pots/{id}/ownership/{event_id}/confirm` | Withdraw that agreement, returning the entry to deletable. The same member only.                                                                     |
-| `DELETE` | `/pots/{id}/ownership/{event_id}`         | Delete an event; the series recomputes without it. An **opening** takes the whole baseline with it.                                                  |
+| Method   | Path                                      | Description                                                                                                                                                              |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/pots/{id}/ownership`                    | One page of the ledger, **newest first** — the reading order, not the replay order the split is derived in. Visible to anyone who may see the pot, including a 0% owner. |
+| `POST`   | `/pots/{id}/ownership/opening`            | Set the baseline. Body: `date`, `value`, `shares` (percentage per member id), optional `notes`. One event per owner.                                                     |
+| `POST`   | `/pots/{id}/ownership/movements`          | Record a `contribution` or `withdrawal`. Body: `type`, `date`, `member_id`, `amount`, optional account legs.                                                             |
+| `POST`   | `/pots/{id}/ownership/reagreements`       | Move units between two members with no money. Body: `date`, `from_member_id`, `to_member_id`, and the share as either `percentage` or `whole_share`.                     |
+| `POST`   | `/pots/{id}/ownership/{event_id}/confirm` | Agree to a re-agreement, which locks the entry against deletion. The affected member only.                                                                               |
+| `DELETE` | `/pots/{id}/ownership/{event_id}/confirm` | Withdraw that agreement, returning the entry to deletable. The same member only.                                                                                         |
+| `DELETE` | `/pots/{id}/ownership/{event_id}`         | Delete an event; the series recomputes without it. An **opening** takes the whole baseline with it.                                                                      |
 
 **Who may delete a ledger entry is write access — with one exception.** Either member an **unconfirmed re-agreement names** may always delete it, with or without write access to the pot. That is not a convenience: write access is granted to the pot's creator and to nobody else, so out of the box the creator can move units away from a co-owner who is told so by name and would otherwise have no way to undo it. It is narrow in three ways — only a re-agreement (a contribution or a withdrawal moves the mover's own money, and an opening is the division everyone agreed to), only the two seats it names, and only deletion: nobody gains the ability to record anything. **Every deletion is announced** to whoever can see the pot, because undoing an act changes what people own as much as making it did.
 
@@ -883,12 +918,12 @@ The response's `payer_member_id` / `payer_display_name` are derived from the **f
 
 A pot owner who has since **left the group** still fronts their share, and is deliberately not subject to the active-seat check a named participant or payer gets: a named seat is a choice being made now, while a pot owner is a fact already on the ownership ledger. Excluding them would leave the fronted figures short of the total. They hold a real position the remaining members can see and settle, exactly as a name-only member does.
 
-| Method   | Path                                 | Description                                                                                              |
-| -------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/groups/{id}/expenses`              | The group's shared expenses, newest first, each with every member's position in it. Optional `currency`. |
-| `POST`   | `/groups/{id}/expenses`              | Record one and divide it. Returns `201`.                                                                 |
-| `PUT`    | `/groups/{id}/expenses/{expense_id}` | Replace it and its whole split set.                                                                      |
-| `DELETE` | `/groups/{id}/expenses/{expense_id}` | Delete it with its splits. Returns `204`.                                                                |
+| Method   | Path                                 | Description                                                                                                          |
+| -------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/groups/{id}/expenses`              | One page of the group's shared expenses, newest first, each with every member's position in it. Optional `currency`. |
+| `POST`   | `/groups/{id}/expenses`              | Record one and divide it. Returns `201`.                                                                             |
+| `PUT`    | `/groups/{id}/expenses/{expense_id}` | Replace it and its whole split set.                                                                                  |
+| `DELETE` | `/groups/{id}/expenses/{expense_id}` | Delete it with its splits. Returns `204`.                                                                            |
 
 **Body:** `date`, `amount`, `currency`, `split_method`, `splits` (one `{member_id, figure}` per participant), and optionally `category`, `notes`, `payer_member_id`, `paid_from_account_id`, `payment_method`, `credit_card_id`.
 
@@ -910,12 +945,12 @@ The mirror of the section above, with the two sides swapped. A piece of shared i
 
 There is deliberately **no receiver column**, for exactly the reason there is no payer column: money can arrive in a **shared account**, in which case the pot's owners received it in their own ownership proportions and no single member holds it. Those proportions are read from the ownership ledger **at the row's date and pinned onto the split rows**, because the ledger is replayed. The response's `received_by_member_id` / `received_by_display_name` are derived from the **destination** and are null for any joint row — including a pot with exactly one owner, where that owner does receive the whole amount.
 
-| Method   | Path                              | Description                                                                                                |
-| -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/groups/{id}/income`             | The group's shared income, newest first, each row with every member's position in it. Optional `currency`. |
-| `POST`   | `/groups/{id}/income`             | Record one and divide it. Returns `201`.                                                                   |
-| `PUT`    | `/groups/{id}/income/{income_id}` | Replace it and its whole split set.                                                                        |
-| `DELETE` | `/groups/{id}/income/{income_id}` | Delete it with its splits. Returns `204`.                                                                  |
+| Method   | Path                              | Description                                                                                                            |
+| -------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/groups/{id}/income`             | One page of the group's shared income, newest first, each row with every member's position in it. Optional `currency`. |
+| `POST`   | `/groups/{id}/income`             | Record one and divide it. Returns `201`.                                                                               |
+| `PUT`    | `/groups/{id}/income/{income_id}` | Replace it and its whole split set.                                                                                    |
+| `DELETE` | `/groups/{id}/income/{income_id}` | Delete it with its splits. Returns `204`.                                                                              |
 
 **Body:** `date`, `amount`, `currency`, `split_method`, `splits` (one `{member_id, figure}` per participant), `destination`, and optionally `category`, `notes`, `source_investment_id`, `received_by_member_id`, `paid_to_account_id`. The split methods, their `figure` field and their exact-sum guarantee are identical to a shared expense's — the same code divides both.
 
@@ -937,7 +972,7 @@ The default is applied by the **form**, not the API: what gets stored is always 
 | Method   | Path                                     | Description                                                                            |
 | -------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
 | `GET`    | `/groups/{id}/balances`                  | Every member's position per currency, plus the fewest payments that clear each bucket. |
-| `GET`    | `/groups/{id}/settlements`               | Recorded settlements and write-offs, newest first.                                     |
+| `GET`    | `/groups/{id}/settlements`               | One page of recorded settlements and write-offs, newest first.                         |
 | `POST`   | `/groups/{id}/settlements`               | Record a payment one member made to another. Returns `201`.                            |
 | `POST`   | `/groups/{id}/settlements/preview`       | Dry run: where an overpayment would land. Writes nothing.                              |
 | `POST`   | `/groups/{id}/settlements/waterfall`     | Record one payment across every bucket it reaches. Returns `201`.                      |
@@ -1062,7 +1097,7 @@ figure.
 
 | Method   | Path                                       | Description                                                                                                                                                                           |
 | -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/notifications`                           | One page of your notifications, newest first, with `total` and `unread`. Optional `limit` (1–50, default 20) and `offset`.                                                            |
+| `GET`    | `/notifications`                           | One page of your notifications, newest first, with `total`, `page`, `page_size` and `unread`. Paginated like every other list (see **How lists are bounded**).                        |
 | `POST`   | `/notifications/{id}/read`                 | Mark one read. `404` for an id that is not yours — indistinguishable from one that does not exist.                                                                                    |
 | `POST`   | `/notifications/read-all`                  | Mark every notification you can see read. Returns how many changed.                                                                                                                   |
 | `GET`    | `/notifications/preferences`               | The whole grid: every event on every channel, with `is_default` saying which cells you have never touched. Also `push_available` and the `push_public_key` a browser subscribes with. |
@@ -1105,7 +1140,7 @@ The in-app feedback channel. Any authenticated user can submit feedback; the cal
 | Method | Path        | Description                                                                                                                                 |
 | ------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST` | `/feedback` | Submit feedback. Body: `category` (`bug` \| `idea` \| `question` \| `other`), `message` (1–2000 chars). Returns `201` with the created row. |
-| `GET`  | `/feedback` | List all submitted feedback, newest first, each with the author's email. Admin only (`403` otherwise).                                      |
+| `GET`  | `/feedback` | One page of submitted feedback, newest first, each with the author's email. Admin only (`403` otherwise).                                   |
 
 ---
 
@@ -1154,7 +1189,7 @@ Most endpoints also accept these common filters:
 
 | Method | Path                            | Description                                                                                        |
 | ------ | ------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `GET`  | `/asset-prices/{ticker}`        | Price history for a ticker. Optional: `start_date`, `end_date`.                                    |
+| `GET`  | `/asset-prices/{ticker}`        | One page of a ticker's price history, newest first. Optional: `start_date`, `end_date`.            |
 | `GET`  | `/asset-prices/{ticker}/latest` | Latest stored price for a ticker.                                                                  |
 | `GET`  | `/asset-prices/{ticker}/lookup` | Price for a ticker on a specific date. Fetches from the provider if not already stored.            |
 | `POST` | `/asset-prices/refresh`         | Trigger an on-demand price refresh for your own ticker-linked investments. Returns 202 (accepted). |

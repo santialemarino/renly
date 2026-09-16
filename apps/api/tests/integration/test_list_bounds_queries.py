@@ -16,7 +16,7 @@ from sqlalchemy.orm import sessionmaker
 # driven with MAX_LIST_ROWS + 1 rows and the pager with three pages' worth.
 #
 # Owner role, no RLS involved: this is about how much a query returns, not about who may see it.
-from app.repositories import collection_repository, transaction_repository
+from app.repositories import collection_repository, pot_ownership_repository, transaction_repository
 from app.utils.pagination import MAX_LIST_ROWS
 
 DB_URL = os.getenv("LEDGER_TEST_DATABASE_URL")
@@ -27,6 +27,10 @@ pytestmark = pytest.mark.skipif(
 )
 
 _EMAIL = "list_bounds@test.local"
+
+# Ledger entries, all on DIFFERENT dates, so the order assertion below reads dates rather than ids —
+# an id order would pass on a query sorted by insertion, which is not the property under test.
+_LEDGER_EVENTS = 6
 
 # One more than the ceiling, so the ceiling is the only reason a row is missing.
 _OVER_THE_CAP = MAX_LIST_ROWS + 1
@@ -70,8 +74,28 @@ async def seeded():
             ),
             {"i": investment, "u": user, "n": _TRANSACTIONS},
         )
+        group = (
+            await s.execute(text("INSERT INTO groups (name, kind, created_by) VALUES ('bounds_group', 'household', :u) RETURNING id"), {"u": user})
+        ).scalar_one()
+        member = (
+            await s.execute(
+                text("INSERT INTO group_members (group_id, user_id, display_name, role) VALUES (:g, :u, 'bounds_seat', 'admin') RETURNING id"),
+                {"g": group, "u": user},
+            )
+        ).scalar_one()
+        pot = (
+            await s.execute(text("INSERT INTO pots (group_id, base_currency, is_default) VALUES (:g, 'USD', TRUE) RETURNING id"), {"g": group})
+        ).scalar_one()
+        await s.execute(
+            text(
+                "INSERT INTO pot_ownership_events (pot_id, type, date, member_id, units, unit_price, created_by) "
+                "SELECT :p, 'contribution', DATE '2026-01-01' + (i || ' days')::interval, :m, i, 1.00, :u "
+                "FROM generate_series(1, :n) AS i"
+            ),
+            {"p": pot, "m": member, "u": user, "n": _LEDGER_EVENTS},
+        )
         await s.commit()
-    yield {"user": user, "investment": investment, "maker": maker}
+    yield {"user": user, "investment": investment, "pot": pot, "maker": maker}
     async with maker() as s:
         await _cleanup(s)
         await s.commit()
@@ -79,6 +103,11 @@ async def seeded():
 
 
 async def _cleanup(s: AsyncSession) -> None:
+    seeded_pots = "SELECT id FROM pots WHERE group_id IN (SELECT id FROM groups WHERE name = 'bounds_group')"
+    await s.execute(text(f"DELETE FROM pot_ownership_events WHERE pot_id IN ({seeded_pots})"))
+    await s.execute(text("DELETE FROM pots WHERE group_id IN (SELECT id FROM groups WHERE name = 'bounds_group')"))
+    await s.execute(text("DELETE FROM group_members WHERE group_id IN (SELECT id FROM groups WHERE name = 'bounds_group')"))
+    await s.execute(text("DELETE FROM groups WHERE name = 'bounds_group'"))
     await s.execute(text("DELETE FROM transactions WHERE investment_id IN (SELECT id FROM investments WHERE name = 'bounds_inv')"))
     await s.execute(text("DELETE FROM investments WHERE name = 'bounds_inv'"))
     await s.execute(text("DELETE FROM investment_collections WHERE name LIKE 'bounds\\_%'"))
@@ -152,3 +181,40 @@ class TestThePagerSaysWhatEachRowIs:
             rows, _ = await transaction_repository.list_by_investment(s, seeded["investment"], page=2, page_size=_PAGE_SIZE)
         assert [int(row.amount) for row in rows] == list(range(15, 5, -1))
         assert {row.investment_id for row in rows} == {seeded["investment"]}
+
+
+class TestTheLedgerPageReadsNewestFirst:
+    # The pot ledger is the one list SEC-11 REVERSED, and it is a decision rather than a detail: the
+    # replay that derives an ownership split walks the ledger oldest-first, and that is what
+    # `list_by_pot` still returns. The PAGE is the reading order, so page 1 answers "what just
+    # happened" instead of "what happened first" — on a pot with a year of history the old order put
+    # every recent entry on the last page.
+    #
+    # Asserted against a real database because the order lives entirely in the SQL, and a mutation
+    # sweep proved nothing else was holding it: reverting `.desc()` to ascending killed no test.
+
+    @pytest.mark.asyncio
+    async def test_the_paged_read_returns_the_newest_entry_first(self, seeded):
+        async with seeded["maker"]() as s:
+            rows, total = await pot_ownership_repository.list_page_by_pot(s, seeded["pot"], page=1, page_size=_LEDGER_EVENTS)
+        dates = [row.date for row in rows]
+        assert total == _LEDGER_EVENTS
+        assert dates == sorted(dates, reverse=True)
+
+    @pytest.mark.asyncio
+    async def test_the_replay_read_beside_it_still_returns_the_oldest_first(self, seeded):
+        # The other half, and the reason the two are separate functions at all. Seven callers replay
+        # this list to derive who owns what; reversed, every one of them computes a different split.
+        async with seeded["maker"]() as s:
+            rows = await pot_ownership_repository.list_by_pot(s, seeded["pot"])
+        dates = [row.date for row in rows]
+        assert dates == sorted(dates)
+
+    @pytest.mark.asyncio
+    async def test_the_two_orders_really_are_opposite(self, seeded):
+        # Stated as a relationship rather than twice as a sort, so a fixture that happened to be
+        # symmetric could not satisfy both assertions above while the two reads agreed.
+        async with seeded["maker"]() as s:
+            paged, _ = await pot_ownership_repository.list_page_by_pot(s, seeded["pot"], page=1, page_size=_LEDGER_EVENTS)
+            replay = await pot_ownership_repository.list_by_pot(s, seeded["pot"])
+        assert [row.id for row in paged] == [row.id for row in reversed(replay)]
