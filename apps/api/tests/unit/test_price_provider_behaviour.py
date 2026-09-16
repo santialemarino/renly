@@ -159,6 +159,20 @@ class TestFinnhubSeparatesAnUnknownSymbolFromAnOutage:
         with pytest.raises(PriceProviderUnavailable, match="no API key"):
             await price_providers.fetch_finnhub("AAPL")
 
+    @pytest.mark.asyncio
+    async def test_a_REJECTED_key_is_a_provider_failure_rather_than_silence(self, monkeypatch):
+        # The realistic mistake is a mistyped key, and Finnhub answers that with 401 (verified live:
+        # `{"error":"Invalid API key."}`). It has to surface as the provider being unavailable — logged,
+        # and the chain moving on — rather than as "this ticker has no price", which would make a
+        # configuration error look like a quiet market for as long as nobody checked.
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "finnhub_api_key", "mistyped-key")
+        monkeypatch.setattr(price_providers.httpx, "AsyncClient", _fake_client(status=401))
+
+        with pytest.raises(PriceProviderUnavailable):
+            await price_providers.fetch_finnhub("AAPL")
+
     def test_is_configured_follows_the_setting(self, monkeypatch):
         from app.config import settings
 
